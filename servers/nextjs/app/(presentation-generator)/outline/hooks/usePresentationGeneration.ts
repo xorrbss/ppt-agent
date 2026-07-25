@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { usePathname, useRouter } from "next/navigation";
@@ -12,6 +12,10 @@ import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { AUTHORED_TEMPLATE_ID } from "../components/TemplateSelection";
 import { LanguageType } from "../../upload/type";
+import {
+  parseTemplateV2SelectionId,
+  TEMPLATE_V2_SELECTION_PREFIX,
+} from "@/app/hooks/useStructuredTemplates";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -53,6 +57,14 @@ export const usePresentationGeneration = (
   );
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
+  );
+  const generationRunRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      generationRunRef.current += 1;
+    },
+    []
   );
 
   const validateInputs = useCallback(() => {
@@ -102,6 +114,8 @@ export const usePresentationGeneration = (
       return;
     }
     if (!validateInputs()) return;
+    const runId = ++generationRunRef.current;
+    const isActiveRun = () => generationRunRef.current === runId;
 
     // Authored mode: bypass the layout prepare/stream path. Generate via the async
     // endpoint (minutes-long), passing the reviewed outline as slides_markdown so the
@@ -144,6 +158,7 @@ export const usePresentationGeneration = (
           vision_qa: authoredVisionQa,
           authored_style: authoredStyle,
         });
+        if (!isActiveRun()) return;
         const taskId = started?.id;
         if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
 
@@ -154,9 +169,11 @@ export const usePresentationGeneration = (
             throw new Error("생성 시간이 초과되었습니다. 잠시 후 다시 시도하세요.");
           }
           await new Promise((r) => setTimeout(r, AUTHORED_POLL_MS));
+          if (!isActiveRun()) return;
           let task;
           try {
             task = await PresentationGenerationApi.getGenerationStatus(taskId);
+            if (!isActiveRun()) return;
             pollErrors = 0;
           } catch (pollErr) {
             // A single transient blip must not abort a generation still running on the
@@ -181,16 +198,22 @@ export const usePresentationGeneration = (
                 console.warn("Failed to clean up outline shell presentation", e);
               }
             }
+            if (!isActiveRun()) return;
             dispatch(clearPresentationData());
             clearTheme();
             router.replace(`/presentation?id=${newId}`);
             return;
           }
           if (task?.status === "error") {
-            throw new Error(task?.message || "프레젠테이션 생성에 실패했습니다.");
+            throw new Error(
+              task?.error?.detail ||
+                task?.message ||
+                "프레젠테이션 생성에 실패했습니다."
+            );
           }
         }
       } catch (error: any) {
+        if (!isActiveRun()) return;
         console.error("Error in authored generation.", error);
         notify.error(
           "생성 오류",
@@ -198,6 +221,120 @@ export const usePresentationGeneration = (
         );
       } finally {
         setLoadingState(DEFAULT_LOADING_STATE);
+      }
+      return;
+    }
+
+    const templateV2Selection =
+      typeof selectedTemplate === "string"
+        ? parseTemplateV2SelectionId(selectedTemplate)
+        : null;
+    if (
+      typeof selectedTemplate === "string" &&
+      selectedTemplate.startsWith(TEMPLATE_V2_SELECTION_PREFIX) &&
+      !templateV2Selection
+    ) {
+      notify.error(
+        "템플릿 오류",
+        "구조화 템플릿 선택 정보가 올바르지 않습니다. 템플릿을 다시 선택해 주세요."
+      );
+      return;
+    }
+    if (templateV2Selection) {
+      const slides_markdown = (outlines || [])
+        .map((outline) => outline.content)
+        .filter((content) => content && content.trim().length > 0);
+      if (slides_markdown.length === 0) {
+        notify.warning("개요가 비어 있습니다", "먼저 개요를 생성해 주세요.");
+        return;
+      }
+
+      setLoadingState({
+        message: "구조화 템플릿으로 프레젠테이션을 생성하는 중입니다.",
+        isLoading: true,
+        showProgress: true,
+        duration: Math.max(30, slides_markdown.length * 12),
+      });
+
+      try {
+        const started =
+          await PresentationGenerationApi.generateTemplateV2Async({
+            content: slides_markdown[0].slice(0, 200),
+            slides_markdown,
+            language:
+              language && language !== LanguageType.Auto ? language : null,
+            template_v2_id: templateV2Selection.templateId,
+            template_v2_revision: templateV2Selection.revision,
+          });
+        if (!isActiveRun()) return;
+        const taskId = started?.id;
+        if (!taskId) {
+          throw new Error("구조화 템플릿 생성 작업을 시작하지 못했습니다.");
+        }
+
+        const deadlineMs = Date.now() + AUTHORED_TIMEOUT_MS;
+        let pollErrors = 0;
+        while (true) {
+          if (Date.now() > deadlineMs) {
+            throw new Error(
+              "생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요."
+            );
+          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, AUTHORED_POLL_MS)
+          );
+          if (!isActiveRun()) return;
+          let task;
+          try {
+            task = await PresentationGenerationApi.getGenerationStatus(taskId);
+            if (!isActiveRun()) return;
+            pollErrors = 0;
+          } catch (pollError) {
+            pollErrors += 1;
+            if (pollErrors >= AUTHORED_MAX_POLL_ERRORS) throw pollError;
+            continue;
+          }
+
+          if (task?.status === "completed") {
+            const newId = task?.data?.presentation_id;
+            if (!newId) {
+              throw new Error("생성된 프레젠테이션을 찾을 수 없습니다.");
+            }
+            if (presentationId && presentationId !== newId) {
+              try {
+                await DashboardApi.deletePresentation(presentationId);
+              } catch (cleanupError) {
+                console.warn(
+                  "Failed to clean up outline shell presentation",
+                  cleanupError
+                );
+              }
+            }
+            if (!isActiveRun()) return;
+            dispatch(clearPresentationData());
+            clearTheme();
+            router.replace(
+              task?.data?.edit_path || `/presentation?id=${newId}`
+            );
+            return;
+          }
+          if (task?.status === "error") {
+            throw new Error(
+              task?.error?.detail ||
+                task?.message ||
+                "구조화 템플릿 생성에 실패했습니다."
+            );
+          }
+        }
+      } catch (error: any) {
+        if (!isActiveRun()) return;
+        console.error("Error in structured-template generation.", error);
+        notify.error(
+          "생성 오류",
+          error.message || "구조화 템플릿 생성 중 오류가 발생했습니다."
+        );
+      } finally {
+        if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
       return;
     }
@@ -317,9 +454,9 @@ export const usePresentationGeneration = (
         "생성 오류",
         error.message || "프레젠테이션 생성 중 오류가 발생했습니다."
       );
-    } finally {
-      setLoadingState(DEFAULT_LOADING_STATE);
-    }
+      } finally {
+        if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
+      }
   }, [selectedTemplate, validateInputs, pathname, presentationId, outlines, setActiveTab, authoredVisionQa, language, authoredStyle, dispatch, router]);
 
   return { loadingState, handleSubmit };

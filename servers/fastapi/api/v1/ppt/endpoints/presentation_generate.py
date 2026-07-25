@@ -16,7 +16,7 @@ import logging
 import os
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 import dirtyjson
@@ -50,8 +50,20 @@ from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.template_v2_generation_service import (
+    TemplateV2GenerationError,
+    build_template_v2_slides,
+    load_template_v2_generation_target,
+    source_content_sha256,
+)
 from services.webhook_service import WebhookService
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from templates.v2.constants import TEMPLATE_V2_VERSION
+from templates.v2.strategies import (
+    TEMPLATE_V2_STRATEGIES,
+    resolve_presentation_strategies,
+)
 from utils.asset_directory_utils import get_images_directory
 from utils.export_utils import export_presentation
 from utils.get_env import get_next_internal_base_url
@@ -81,6 +93,28 @@ logger = logging.getLogger(__name__)
 PRESENTATION_GENERATE_ROUTER = APIRouter(
     prefix="/presentation", tags=["Presentation"]
 )
+
+
+def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPException:
+    status_by_code = {
+        "template_v2_creation_disabled": 403,
+        "template_v2_allowlist_required": 403,
+        "template_v2_template_not_allowed": 403,
+        "template_v2_template_id_required": 400,
+        "template_v2_rollout_config_invalid": 503,
+        "template_v2_template_not_found": 404,
+        "template_v2_revision_conflict": 409,
+        "template_v2_snapshot_not_found": 409,
+        "template_v2_snapshot_missing": 500,
+        "template_v2_source_invalid": 422,
+        "template_v2_layouts_invalid": 422,
+        "template_v2_fillable_layout_required": 422,
+        "template_v2_generation_invalid": 422,
+    }
+    return HTTPException(
+        status_code=status_by_code.get(error.code, 422),
+        detail=error.code,
+    )
 
 
 async def check_if_api_request_is_valid(
@@ -119,6 +153,53 @@ async def check_if_api_request_is_valid(
             detail="Number of slides cannot be less than 3 if table of contents is included",
         )
 
+    if request.strategy == "template_v2":
+        template_v2_id = (request.template_v2_id or "").strip()
+        if not template_v2_id:
+            raise HTTPException(status_code=400, detail="template_v2_id_required")
+        if request.template_v2_revision is None:
+            raise HTTPException(status_code=400, detail="template_v2_revision_required")
+        if request.template_v2_revision < 1:
+            raise HTTPException(status_code=400, detail="template_v2_revision_invalid")
+        if request.template.lower() != "adaptive":
+            raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+        if request.files or request.web_search:
+            raise HTTPException(
+                status_code=400,
+                detail="template_v2_source_mode_not_supported",
+            )
+        request.template_v2_id = template_v2_id
+        try:
+            # Validate admission, existence, the pinned revision and its strict
+            # fillable schemas before a sync run or async job is started.
+            request._template_v2_generation_target = (
+                await load_template_v2_generation_target(
+                    sql_session,
+                    template_id=template_v2_id,
+                    revision=request.template_v2_revision,
+                )
+            )
+        except TemplateV2GenerationError as error:
+            raise _template_v2_http_exception(error) from error
+        return (presentation_id,)
+
+    if request.template_v2_id is not None or request.template_v2_revision is not None:
+        raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+
+    if request.strategy == "authored":
+        if request.template.lower() not in {"adaptive", AUTHORED_TEMPLATE}:
+            raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+        request.template = AUTHORED_TEMPLATE
+    elif request.strategy == "adaptive":
+        if request.template.lower() != "adaptive":
+            raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+        request.template = "adaptive"
+    elif request.strategy == "legacy" and request.template.lower() in {
+        "adaptive",
+        AUTHORED_TEMPLATE,
+    }:
+        raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+
     # Checking if template is valid. The authored mode reuses the template field as a
     # MODE selector (not a real layout template), so it bypasses layout validation.
     if request.template.lower() == AUTHORED_TEMPLATE:
@@ -142,6 +223,170 @@ async def check_if_api_request_is_valid(
             )
 
     return (presentation_id,)
+
+
+async def _generate_template_v2_presentation(
+    *,
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    presentation_outlines: PresentationOutlineModel,
+    using_slides_markdown: bool,
+    language_to_use: Optional[str],
+    async_status: Optional[AsyncPresentationGenerationTaskModel],
+    export_cookie_header: Optional[str],
+    sql_session: AsyncSession,
+) -> PresentationPathAndEditPath:
+    """Execute the explicit, revision-pinned Template V2 generation branch."""
+
+    if request.template_v2_id is None or request.template_v2_revision is None:
+        raise HTTPException(status_code=400, detail="template_v2_target_required")
+
+    try:
+        target = request._template_v2_generation_target
+        if target is None:
+            raise TemplateV2GenerationError("template_v2_snapshot_missing")
+        if async_status:
+            async_status.message = "Selecting Template V2 layouts"
+            async_status.updated_at = datetime.now()
+            sql_session.add(async_status)
+            await sql_session.commit()
+
+        presentation_outlines, presentation_structure = await build_template_structure(
+            presentation_outlines,
+            target.as_pipeline_layout(),
+            instructions=request.instructions,
+            using_slides_markdown=using_slides_markdown,
+            include_table_of_contents=request.include_table_of_contents,
+            include_title_slide=request.include_title_slide,
+            target_n_slides=request.n_slides,
+        )
+
+        if async_status:
+            async_status.message = "Generating Template V2 slides"
+            async_status.updated_at = datetime.now()
+            sql_session.add(async_status)
+            await sql_session.commit()
+
+        slides = await build_template_v2_slides(
+            target=target,
+            presentation_id=presentation_id,
+            outlines=presentation_outlines,
+            structure=presentation_structure,
+            language=language_to_use,
+            tone=request.tone.value,
+            verbosity=request.verbosity.value,
+            instructions=request.instructions,
+        )
+        created_at = datetime.now(timezone.utc)
+        provenance = target.provenance(
+            source_sha256=source_content_sha256(
+                {
+                    "content": request.content,
+                    "slides_markdown": request.slides_markdown,
+                    "instructions": request.instructions,
+                    "language": request.language,
+                    "tone": request.tone.value,
+                    "verbosity": request.verbosity.value,
+                    "n_slides": request.n_slides,
+                    "include_table_of_contents": request.include_table_of_contents,
+                    "include_title_slide": request.include_title_slide,
+                }
+            ),
+            request_id=str(presentation_id),
+            job_id=(
+                str(async_status.id)
+                if async_status is not None
+                else f"sync:{presentation_id}"
+            ),
+            created_at=created_at,
+        )
+        presentation = PresentationModel(
+            id=presentation_id,
+            content=request.content,
+            n_slides=len(slides),
+            language=language_to_use or "",
+            title=get_presentation_title_from_presentation_outline(
+                presentation_outlines
+            ),
+            file_paths=request.files,
+            outlines=presentation_outlines.model_dump(mode="json"),
+            layout=None,
+            structure=None,
+            tone=request.tone.value,
+            verbosity=request.verbosity.value,
+            instructions=request.instructions,
+            include_table_of_contents=request.include_table_of_contents,
+            include_title_slide=request.include_title_slide,
+            web_search=request.web_search,
+            mode="template",
+            version=TEMPLATE_V2_VERSION,
+            theme={
+                "mode": "template",
+                "template_v2": provenance,
+            },
+        )
+        if resolve_presentation_strategies(presentation, slides) != TEMPLATE_V2_STRATEGIES:
+            raise TemplateV2GenerationError("template_v2_generation_invalid")
+
+        sql_session.add(presentation)
+        sql_session.add_all(slides)
+        await sql_session.commit()
+    except TemplateV2GenerationError as error:
+        raise _template_v2_http_exception(error) from error
+
+    if async_status:
+        async_status.message = "Exporting presentation"
+        async_status.updated_at = datetime.now()
+        sql_session.add(async_status)
+
+    try:
+        presentation_and_path = await export_presentation(
+            presentation_id,
+            presentation.title or str(uuid.uuid4()),
+            request.export_as,
+            cookie_header=export_cookie_header,
+        )
+    except Exception:
+        # The exporter reads through the committed database state. Compensate
+        # immediately so a failed export cannot leave a queryable partial deck.
+        # A future durable worker should replace this short visibility window
+        # with an explicit staging -> published state transition.
+        try:
+            await sql_session.rollback()
+            await sql_session.execute(
+                delete(SlideModel).where(SlideModel.presentation == presentation_id)
+            )
+            await sql_session.execute(
+                delete(PresentationModel).where(PresentationModel.id == presentation_id)
+            )
+            await sql_session.commit()
+        except Exception:
+            logger.exception(
+                "Failed to compensate Template V2 export for presentation %s",
+                presentation_id,
+            )
+        raise
+    response = PresentationPathAndEditPath(
+        **presentation_and_path.model_dump(),
+        edit_path=f"/presentation?id={presentation_id}",
+    )
+
+    if async_status:
+        async_status.message = "Presentation generation completed"
+        async_status.status = "completed"
+        async_status.data = response.model_dump(mode="json")
+        async_status.updated_at = datetime.now()
+        sql_session.add(async_status)
+        await sql_session.commit()
+
+    if request.trigger_webhook:
+        CONCURRENT_SERVICE.run_task(
+            None,
+            WebhookService.send_webhook,
+            WebhookEvent.PRESENTATION_GENERATION_COMPLETED,
+            response.model_dump(mode="json"),
+        )
+    return response
 
 
 async def generate_presentation_handler(
@@ -308,6 +553,18 @@ async def generate_presentation_handler(
             presentation_id,
             presentation_outlines.model_dump(mode="json"),
         )
+
+        if request.strategy == "template_v2":
+            return await _generate_template_v2_presentation(
+                request=request,
+                presentation_id=presentation_id,
+                presentation_outlines=presentation_outlines,
+                using_slides_markdown=using_slides_markdown,
+                language_to_use=language_to_use,
+                async_status=async_status,
+                export_cookie_header=export_cookie_header,
+                sql_session=sql_session,
+            )
 
         # Authored mode (opt-in via template="authored"): the model AUTHORS bespoke
         # HTML per slide instead of filling a React archetype. Self-contained pipeline
@@ -626,6 +883,10 @@ async def generate_presentation_handler(
         return response
 
     except Exception as e:
+        try:
+            await sql_session.rollback()
+        except Exception:
+            logger.exception("Failed to roll back presentation generation session")
         if not isinstance(e, HTTPException):
             traceback.print_exc()
             e = HTTPException(status_code=500, detail="Presentation generation failed")

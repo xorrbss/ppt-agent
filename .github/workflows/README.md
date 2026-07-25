@@ -47,6 +47,9 @@ Protect `main` with these exact, always-present pull-request checks:
 
 - `Test All Applications / Test Main FastAPI (locked + system + binary)`
 - `Test All Applications / Test Main Next.js`
+- `G4 round-trip and release gates / production export runtime stage`
+- `G4 round-trip and release gates / Windows v0.4.2 release gate`
+- `G4 round-trip and release gates / adaptive PPTX round-trip`
 
 The following checks are path- or matrix-scoped and therefore must not be added
 as global branch-protection requirements in their current form; GitHub would
@@ -57,12 +60,17 @@ leave unrelated pull requests waiting for a check that was never created:
 - `Upstream compatibility / template-v2-postgresql`
 - `Template V2 Export Fidelity / ubuntu-latest structural + visual`
 - `Template V2 Export Fidelity / windows-latest structural + visual`
-- `G4 round-trip and release gates / production export runtime stage`
-- `G4 round-trip and release gates / Windows v0.4.2 release gate`
-- `G4 round-trip and release gates / adaptive PPTX round-trip`
 
-Repository ruleset changes remain an administrator action. After changing
-workflow or job `name` fields, update branch protection and this list together.
+GitHub's branch-protection API stores the job-name portion as the check context;
+the workflow-qualified names above mirror the Actions UI and disambiguate their
+source. Bind each required context to the GitHub Actions app (`app_id: 15368`) so
+another integration cannot satisfy it. Require pull requests without requiring
+an approving review, require branches to be current before merge, and prohibit
+force pushes and deletion. This protects `main` without restricting pushes to
+working branches.
+
+After changing workflow or job `name` fields, update branch protection and this
+list together.
 
 ## Workflow roles
 

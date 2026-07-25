@@ -77,7 +77,7 @@ function AuthoredStylePreview({ style }: { style: AuthoredStyleSummary }) {
           alt=""
           fill
           sizes="(max-width: 768px) 100vw, 360px"
-          className="object-cover"
+          className="pointer-events-none object-cover"
           unoptimized
           onError={() => setImageFailed(true)}
         />

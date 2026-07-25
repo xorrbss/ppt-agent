@@ -1,11 +1,16 @@
-from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from typing import Any, List, Literal, Optional
+from pydantic import BaseModel, Field, PrivateAttr
 
 from enums.tone import Tone
 from enums.verbosity import Verbosity
 
 
 class GeneratePresentationRequest(BaseModel):
+    # Admission-only state. This never crosses the HTTP wire, but lets the
+    # in-process background task execute the exact immutable revision that was
+    # accepted instead of re-reading mutable current state.
+    _template_v2_generation_target: Any = PrivateAttr(default=None)
+
     content: str = Field(..., description="The content for generating the presentation")
     slides_markdown: Optional[List[str]] = Field(
         default=None, description="The markdown for the slides"
@@ -28,6 +33,25 @@ class GeneratePresentationRequest(BaseModel):
     )
     template: str = Field(
         default="adaptive", description="Template to use for the presentation"
+    )
+    strategy: Optional[
+        Literal["legacy", "adaptive", "authored", "template_v2"]
+    ] = Field(
+        default=None,
+        description=(
+            "Explicit generation strategy. Omit to preserve the existing "
+            "template-driven behavior."
+        ),
+    )
+    template_v2_id: Optional[str] = Field(
+        default=None,
+        description="Structured Template V2 id (required for strategy=template_v2)",
+    )
+    template_v2_revision: Optional[int] = Field(
+        default=None,
+        description=(
+            "Immutable Template V2 revision (required for strategy=template_v2)"
+        ),
     )
     include_table_of_contents: bool = Field(
         default=False, description="Whether to include a table of contents"

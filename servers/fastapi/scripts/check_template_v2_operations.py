@@ -4,32 +4,42 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from dataclasses import asdict
 import json
 import os
+from dataclasses import asdict
 
-from migrations import migrate_database_on_startup
-from services.database import create_db_and_tables, dispose_engines
+from services.database import dispose_engines
 from services.template_v2_pptx_operations import (
     get_template_v2_operational_status,
+    require_template_v2_database_safety,
 )
 from services.template_v2_pptx_retention_service import (
     cleanup_expired_private_sources,
 )
+from services.template_v2_pptx_storage import get_private_storage_health
 from utils.get_env import get_app_data_directory_env
 
 
 async def _run(mode: str) -> tuple[dict[str, object], bool]:
-    os.makedirs(get_app_data_directory_env(), exist_ok=True)
-    await migrate_database_on_startup()
-    await create_db_and_tables()
+    # Health and rollback are intentionally read-only operational gates. Schema
+    # migration belongs to one explicit deployment/startup owner, never an
+    # inspection command that an operator may run during rollback.
     try:
+        require_template_v2_database_safety(feature_enabled=True)
         if mode == "cleanup":
+            os.makedirs(get_app_data_directory_env(), exist_ok=True)
             summary = await cleanup_expired_private_sources()
             payload = {"mode": mode, **asdict(summary)}
             return payload, summary.failed == 0
+        storage = get_private_storage_health()
+        if mode == "health" and not storage.ready:
+            return {"mode": mode, **storage.as_dict()}, False
         status = await get_template_v2_operational_status()
-        payload = {"mode": mode, **status.as_dict()}
+        payload = {
+            "mode": mode,
+            **status.as_dict(),
+            **storage.as_dict(),
+        }
         return payload, (
             status.rollback_safe if mode == "rollback" else status.healthy
         )

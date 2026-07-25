@@ -80,6 +80,10 @@ const interceptCatalog = (body: unknown = catalogStyles) => {
 describe("<TemplateSelection /> authored style catalog", () => {
   beforeEach(() => {
     cy.viewport(1280, 900);
+    cy.intercept("GET", "**/api/v1/ppt/structured-templates*", {
+      statusCode: 200,
+      body: [],
+    }).as("structuredTemplates");
     cy.stub(TemplateService, "getCustomTemplateSummaries")
       .resolves([])
       .as("customTemplateSummaries");
@@ -186,6 +190,35 @@ describe("<TemplateSelection /> authored style catalog", () => {
     cy.get("@selectTemplate").should(
       "have.been.calledWith",
       "custom-regression"
+    );
+  });
+
+  it("selects an immutable Template V2 revision from the layout catalog", () => {
+    cy.intercept("GET", "**/api/v1/ppt/structured-templates*", {
+      statusCode: 200,
+      body: [
+        {
+          id: "quarterly-review",
+          name: "Quarterly Review",
+          description: "Native editable business template",
+          revision: 12,
+          total_layouts: 4,
+        },
+      ],
+    }).as("structuredTemplatesWithRevision");
+    interceptCatalog();
+    mountSelection();
+
+    cy.wait("@structuredTemplatesWithRevision");
+    cy.get('[data-testid="structured-template-quarterly-review"]')
+      .should("have.attr", "type", "button")
+      .and("have.attr", "aria-pressed", "false")
+      .focus()
+      .should("have.focus")
+      .click();
+    cy.get("@selectTemplate").should(
+      "have.been.calledWith",
+      "template-v2:quarterly-review?revision=12"
     );
   });
 

@@ -80,6 +80,41 @@ class StoredPptx:
         )
 
 
+@dataclass(frozen=True)
+class PrivateStorageHealth:
+    ready: bool
+    code: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "private_storage_ready": self.ready,
+            "private_storage_code": self.code,
+        }
+
+
+def get_private_storage_health() -> PrivateStorageHealth:
+    """Inspect the private volume without reading or creating customer files."""
+
+    try:
+        root = private_import_root()
+    except RuntimeError as error:
+        return PrivateStorageHealth(ready=False, code=str(error))
+    if not root.is_dir():
+        return PrivateStorageHealth(
+            ready=False,
+            code="template_v2_private_storage_missing",
+        )
+    if not os.access(root, os.R_OK | os.W_OK | os.X_OK):
+        return PrivateStorageHealth(
+            ready=False,
+            code="template_v2_private_storage_not_writable",
+        )
+    return PrivateStorageHealth(
+        ready=True,
+        code="template_v2_private_storage_ready",
+    )
+
+
 def get_private_source_retention_ttl() -> timedelta:
     raw = os.getenv(PRIVATE_SOURCE_RETENTION_DAYS_ENV)
     if raw is None or not raw.strip():
