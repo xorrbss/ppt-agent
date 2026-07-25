@@ -1,10 +1,3 @@
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { PresentationConfig } from "../type";
 import { useEffect, useState } from "react";
 import { Check, ChevronUp } from "lucide-react";
@@ -79,6 +72,7 @@ const SlideCountSelect: React.FC<{
                     role="combobox"
                     name="slides"
                     data-testid="slides-select"
+                    aria-controls="slide-count-options"
                     aria-expanded={open}
                     className="shrink-0 min-w-[150px] whitespace-nowrap font-syne font-medium text-[#191919] focus-visible:ring-[#5146E5]/30 flex justify-between items-center gap-2 h-[34px] rounded-full px-3.5 ring-1 ring-inset ring-slate-200 shadow-sm"
                 >
@@ -92,7 +86,7 @@ const SlideCountSelect: React.FC<{
                     <ChevronUp className="ml-2 h-4 w-4 shrink-0" />
                 </button>
             </PopoverTrigger>
-            <PopoverContent className="w-[140px] p-0 font-syne" align="end">
+            <PopoverContent id="slide-count-options" className="w-[140px] p-0 font-syne" align="end">
                 <div
                     className="sticky top-0 z-10 bg-white p-2 border-b"
                     onMouseDown={(e) => e.stopPropagation()}

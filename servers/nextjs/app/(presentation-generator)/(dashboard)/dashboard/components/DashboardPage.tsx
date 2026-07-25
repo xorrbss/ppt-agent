@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowUpDown } from "lucide-react";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePathname } from "next/navigation";
@@ -55,14 +56,7 @@ const DashboardPage: React.FC = () => {
     });
   }, [presentations, deckSortDirection]);
 
-  useEffect(() => {
-    const loadData = async () => {
-      await fetchPresentations();
-    };
-    loadData();
-  }, []);
-
-  const fetchPresentations = async () => {
+  const fetchPresentations = useCallback(async () => {
     let fetchedCount = 0;
     let hasError = false;
     try {
@@ -75,7 +69,7 @@ const DashboardPage: React.FC = () => {
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
       setPresentations(data);
-    } catch (err) {
+    } catch {
       // A real fetch failure (500, timeout, backend unreachable) — NOT an empty
       // list. getPresentations() already returns [] for a genuine 404. Surface a
       // recoverable error so the grid shows its retry UI instead of the
@@ -90,7 +84,11 @@ const DashboardPage: React.FC = () => {
       });
       setIsLoading(false);
     }
-  };
+  }, [pathname]);
+
+  useEffect(() => {
+    void fetchPresentations();
+  }, [fetchPresentations]);
 
   const removePresentation = (presentationId: string) => {
     setPresentations((prev: any) =>
@@ -124,9 +122,11 @@ const DashboardPage: React.FC = () => {
         >
           <FloatingActionCards />
 
-          <img
+          <Image
             src="/create_presentation_bg.png"
             alt="Background of the create presentation card"
+            width={304}
+            height={90}
             className="relative bg-white z-10 h-[89.983px] w-[304px] max-w-full rounded-[10.8px] object-cover"
           />
           <span className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center font-syne text-sm font-medium text-[#191919]">

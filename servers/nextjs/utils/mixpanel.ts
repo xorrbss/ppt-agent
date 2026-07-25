@@ -232,7 +232,7 @@ export function setTelemetryEnabled(enabled: boolean): void {
   }
 }
 
-export default {
+const mixpanelUtils = {
   initMixpanel,
   track,
   trackEvent,
@@ -241,3 +241,5 @@ export default {
   resetTelemetryCache,
   setTelemetryEnabled,
 };
+
+export default mixpanelUtils;

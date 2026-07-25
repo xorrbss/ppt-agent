@@ -5,9 +5,8 @@ DELETE queries the FakeAsyncSession stub can't model)."""
 import asyncio
 import uuid
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.sql.presentation import PresentationModel  # noqa: F401 (metadata)
@@ -123,7 +122,7 @@ def test_restore_replaces_slides_and_checkpoints_current(tmp_path):
 
             # DB now holds exactly the restored slides.
             live = list(
-                await session.scalars(
+                await session.exec(
                     select(SlideModel)
                     .where(SlideModel.presentation == pid)
                     .order_by(SlideModel.index)

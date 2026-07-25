@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Native img nodes are required for crop geometry and arbitrary blob/cross-origin editor sources. */
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -11,7 +12,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Wand2, Upload, Loader2, Delete, Trash, Search } from "lucide-react";
+import { Wand2, Upload, Loader2, Trash, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PresentationGenerationApi } from "../services/api/presentation-generation";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -116,7 +117,7 @@ const ImageEditor = ({
     if (isOpen && !previousGeneratedImages.length && !stockImageProvider) {
       getPreviousGeneratedImage();
     }
-  }, [isOpen, stockImageProvider]);
+  }, [isOpen, previousGeneratedImages.length, stockImageProvider]);
 
   // Handle close with animation
   const handleClose = () => {

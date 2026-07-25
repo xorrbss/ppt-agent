@@ -25,8 +25,7 @@ function isEditableTarget(target: EventTarget | null | undefined): boolean {
 
 export const useKeyboardShortcut = (
   keys: string[],
-  callback: (e: KeyboardEvent) => void,
-  deps: any[] = []
+  callback: (e: KeyboardEvent) => void
 ) => {
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -41,7 +40,7 @@ export const useKeyboardShortcut = (
         callback(event);
       }
     },
-    [callback, ...deps]
+    [callback, keys]
   );
 
   useEffect(() => {
@@ -50,4 +49,4 @@ export const useKeyboardShortcut = (
       document.removeEventListener('keydown', handleKeyPress as any);
     };
   }, [handleKeyPress]);
-}; 
+};

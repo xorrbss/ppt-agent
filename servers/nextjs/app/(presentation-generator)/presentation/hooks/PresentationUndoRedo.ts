@@ -68,8 +68,7 @@ export const usePresentationUndoRedo = () => {
         e.preventDefault();
         onUndo();
       }
-    },
-    [canUndo, onUndo]
+    }
   );
 
   // Handle redo (Ctrl + Shift + Z)
@@ -80,8 +79,7 @@ export const usePresentationUndoRedo = () => {
         e.preventDefault();
         onRedo();
       }
-    },
-    [canRedo, onRedo]
+    }
   );
 
   // Handle redo (Ctrl + Y)
@@ -92,8 +90,7 @@ export const usePresentationUndoRedo = () => {
         e.preventDefault();
         onRedo();
       }
-    },
-    [canRedo, onRedo]
+    }
   );
 
   return { onUndo, onRedo, canUndo, canRedo };

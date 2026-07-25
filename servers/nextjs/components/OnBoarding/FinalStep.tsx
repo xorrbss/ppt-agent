@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { trackEvent, MixpanelEvent, setTelemetryEnabled } from "@/utils/mixpanel";
 import { Switch } from '../ui/switch';
 import confetti from 'canvas-confetti';
+import Image from 'next/image';
 
 const CONFETTI_COLORS = ['#ff00c5', '#f3ff00', '#9500d0', '#00d2f2', '#00ea9b', '#ff7f36'];
 
@@ -80,7 +81,7 @@ const FinalStep = () => {
         <div className='fixed top-0 left-0 w-full h-full flex flex-col items-center justify-center'>
             <div className='flex flex-col items-center justify-center'>
 
-                <img src="/final_onboarding.png" alt="presenton" className='w-[118px] h-[98px]  object-contain' />
+                <Image src="/final_onboarding.png" alt="Presenton" width={118} height={98} className='w-[118px] h-[98px] object-contain' />
                 <h1 className='text-black text-[30px] font-normal font-unbounded py-2.5'>환영합니다!</h1>
                 <p className='text-[#000000CC] text-xl font-normal font-syne'>모든 준비가 끝났습니다. 첫 번째 발표자료를 만들어 보세요.</p>
 

@@ -2,9 +2,8 @@ import asyncio
 import uuid
 from types import SimpleNamespace
 
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel, select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.presentation_outline_model import (

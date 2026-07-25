@@ -45,7 +45,7 @@ const isImageGenerationDisabled = llmConfig?.DISABLE_IMAGE_GENERATION ?? false;
     setAvailableModels([]);
     setModelsChecked(false);
     onInputChange("", "openai_model");
-  }, [apiKey]);
+  }, [apiKey, onInputChange]);
 
   const onApiKeyChange = (value: string) => {
     setApiKey(value);

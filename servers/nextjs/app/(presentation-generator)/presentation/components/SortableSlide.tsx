@@ -27,7 +27,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
         opacity: isDragging ? 0.5 : 1,
     };
 
-    const handleClick = (e: React.MouseEvent) => {
+    const handleClick = () => {
         const now = Date.now();
 
         // Debounce clicks - only allow one click every 300ms

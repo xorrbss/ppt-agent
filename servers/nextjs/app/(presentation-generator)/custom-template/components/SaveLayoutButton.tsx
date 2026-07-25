@@ -1,7 +1,7 @@
 'use client'
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 interface SaveLayoutButtonProps {
   onSave: () => void;
@@ -42,4 +42,4 @@ export const SaveLayoutButton: React.FC<SaveLayoutButtonProps> = ({
       </Button>
     </div>
   );
-}; 
+};

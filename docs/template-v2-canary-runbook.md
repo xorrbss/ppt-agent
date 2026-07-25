@@ -17,6 +17,29 @@ ENABLE_TEMPLATE_V2=true
 TEMPLATE_V2_TEMPLATE_ALLOWLIST=canary-template-a,canary-template-b
 ```
 
+For staging and production, also declare the managed deployment tier:
+
+```text
+TEMPLATE_V2_DEPLOYMENT_TIER=staging
+# or: TEMPLATE_V2_DEPLOYMENT_TIER=production
+DATABASE_URL=postgresql://...
+```
+
+`local` is the default tier so developer and unit-test SQLite remain unchanged.
+`staging` and `production` fail readiness and FastAPI/worker startup when the
+configured database is not PostgreSQL. An unknown tier also fails closed. This
+is an intentional guard against SQLite's measured concurrent-write failures;
+do not bypass it for a managed canary.
+
+The checked-in Compose profiles set this explicitly: `production` and
+`production-gpu` use `production`, while `development` and `development-gpu`
+use `development`. A raw `Dockerfile` image, direct `start.js` launch, systemd,
+or Kubernetes deployment inherits the process environment and cannot infer its
+deployment tier safely, so managed deployments through those paths **must**
+set `TEMPLATE_V2_DEPLOYMENT_TIER=staging|production`. Packaged Electron and
+ordinary desktop/local launches remain `local`; do not use that default as a
+managed deployment classification.
+
 The allowlist is comma-separated. Empty entries, duplicate IDs, `*`, control
 characters, and IDs longer than 128 characters invalidate the entire
 configuration. Values such as `1`, `yes`, and `on` do not merely fail to enable
@@ -65,8 +88,10 @@ uv run python scripts/check_template_v2_canary.py
 
 The command prints content-free JSON and exits `0` only for
 `template_v2_canary_ready`. It never prints template IDs. Exit `2` is a NO-GO;
-use the `code` field to distinguish a disabled feature, missing allowlist, or
-invalid configuration.
+use the `code` field to distinguish a disabled feature, missing allowlist,
+invalid configuration, or `template_v2_managed_canary_requires_postgresql`.
+The output also reports only the database backend and deployment tier, never a
+database URL or credentials.
 
 Before a canary handoff, run:
 
@@ -120,8 +145,21 @@ bootstrap a canary: it requires a presentation already persisted as
    payloads contain only an operation, outcome, and bounded aggregate count.
 
 Both event families are emitted at INFO on the `services.template_v2_rollout` and
-`services.template_v2_pptx_queue_observability` loggers, so `LOG_LEVEL=WARNING`
-silently suppresses them.
+`services.template_v2_pptx_queue_observability` loggers. At
+`LOG_LEVEL=WARNING`, normal volume is suppressed, but recovered stale leases,
+failed dispatcher iterations/import attempts, cleanup failures, and the
+content-free startup `template_v2_pptx_health` signal remain visible.
+
+Operators can query the same aggregate health without enabling Template V2:
+
+```powershell
+uv run python scripts/check_template_v2_operations.py --mode health
+```
+
+The command exits `2` for stale, failed, review-required, or overdue-cleanup
+state and never prints job IDs, tenant identifiers, filenames, or presentation
+content. Health priority is stale, failed, review-required, then overdue
+cleanup.
 
 ## Rollback
 
@@ -131,12 +169,30 @@ dispatcher startup. Existing persisted Template V2 presentations remain
 readable/exportable; rollback is not a data migration. Do not remove stored
 Template V2 rows or source artifacts as part of the flag rollback.
 
-Drain in-flight imports **before** flipping the flag. While the flag is off, an
+Drain imports **before** flipping the flag. The drain gate counts `queued`,
+`processing`, `finalizing`, `confirming`, `review_required`, and `failed` rows:
+
+```powershell
+uv run python scripts/check_template_v2_operations.py --mode rollback
+```
+
+Exit `0` and `template_v2_rollback_drain_complete` are required before rollback.
+The output is aggregate-only. While the flag is off, an
 import in `queued`, `processing`, `finalizing`, `review_required`, or `failed` is
 read-only: its status stays readable, but `confirm`, `cancel`, and `retry` all
-return 403, so the owner can neither finish nor abandon it. Private-source TTL
-cleanup is also paused, because it runs only inside the dispatcher; overdue
-deadlines are honored on the next enabled start, not during the rollback.
+return 403, so the owner can neither finish nor abandon it.
+
+Private-source TTL cleanup is independent from the dispatcher and continues
+while the feature flag is off. It starts with the FastAPI lifespan and uses the
+same durable per-row claims in multi-process deployments. For a maintenance
+host or stopped API, run it explicitly:
+
+```powershell
+uv run python scripts/check_template_v2_operations.py --mode cleanup
+```
+
+The cleanup command is feature-flag independent, content-free, and exits `2`
+when any claimed deletion failed.
 
 To drain without a full rollback, keep `ENABLE_TEMPLATE_V2=true` and shrink
 `TEMPLATE_V2_TEMPLATE_ALLOWLIST` to only the affected template IDs. Confirm,
@@ -187,5 +243,8 @@ reclaimed once `TEMPLATE_V2_PPTX_SOURCE_TTL_DAYS` (default 7) has passed:
 | `review_required`, `failed`, `cancelled` | deleted at TTL |
 | `confirmed` | **retained**, so a materialized template can be audited against the original deck |
 
-Cleanup runs only inside the dispatcher, so it is paused whenever
-`ENABLE_TEMPLATE_V2` is off and resumes on the next enabled start.
+Cleanup runs in an independent FastAPI lifespan service regardless of
+`ENABLE_TEMPLATE_V2`; the dispatcher may also request a cleanup iteration, but
+the shared interval and durable row claims prevent duplicate deletion across
+processes. A standalone maintenance invocation is available through
+`scripts/check_template_v2_operations.py --mode cleanup`.

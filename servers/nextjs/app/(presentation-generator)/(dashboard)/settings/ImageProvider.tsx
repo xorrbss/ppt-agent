@@ -10,6 +10,7 @@ import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageField
 import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, GPT_IMAGE_2_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
 import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
+import Image from 'next/image'
 
 const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setLlmConfig: (config: any) => void }) => {
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
@@ -158,7 +159,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                         <div className='w-[60px] h-[60px] px-[13.5px] py-[14.2px] rounded-[4px] flex items-center justify-center'
                             style={{ backgroundColor: '#F4F3FF' }}
                         >
-                            <img src="/image-markup.svg" className='w-full h-full object-cover' alt='image-markup' />
+                            <Image src="/image-markup.svg" width={33} height={32} className='w-full h-full object-cover' alt='image-markup' />
                         </div>
                         <h3 className="text-xl font-normal text-[#191919] py-2.5">이미지 생성 설정</h3>
                         <p className=" text-sm  text-gray-500">

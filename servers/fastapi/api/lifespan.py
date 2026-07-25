@@ -10,6 +10,14 @@ from services.template_v2_pptx_ingestion_service import (
     start_template_v2_pptx_dispatcher,
     stop_template_v2_pptx_dispatcher,
 )
+from services.template_v2_pptx_operations import (
+    log_template_v2_operational_health,
+    require_template_v2_database_safety,
+)
+from services.template_v2_pptx_retention_service import (
+    start_template_v2_private_source_cleanup,
+    stop_template_v2_private_source_cleanup,
+)
 from services.template_v2_pptx_worker import should_start_embedded_worker
 from templates.v2.policy import get_structured_template_policy
 from utils.get_env import get_app_data_directory_env
@@ -101,24 +109,40 @@ async def app_lifespan(_: FastAPI):
     availability.
     """
     _configure_application_logging()
+    template_v2_policy = get_structured_template_policy()
+    require_template_v2_database_safety(
+        feature_enabled=template_v2_policy.creation_enabled,
+    )
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
     template_v2_dispatcher_started = False
-    template_v2_policy = get_structured_template_policy()
-    if (
-        template_v2_policy.creation_enabled
-        and template_v2_policy.allowed_template_ids
-        and should_start_embedded_worker()
-    ):
-        await start_template_v2_pptx_dispatcher()
-        template_v2_dispatcher_started = True
+    template_v2_cleanup_started = False
     try:
+        try:
+            await log_template_v2_operational_health()
+        except Exception:
+            logger.exception("Template V2 operational health check failed")
+        await start_template_v2_private_source_cleanup()
+        template_v2_cleanup_started = True
+        if (
+            template_v2_policy.creation_enabled
+            and template_v2_policy.allowed_template_ids
+            and should_start_embedded_worker()
+        ):
+            await start_template_v2_pptx_dispatcher()
+            template_v2_dispatcher_started = True
         _bootstrap_auth_from_env()
         await check_llm_and_image_provider_api_or_model_availability()
         yield
     finally:
-        if template_v2_dispatcher_started:
-            await stop_template_v2_pptx_dispatcher()
-        # Release all database connections to prevent stale/leaked pools.
-        await dispose_engines()
+        try:
+            if template_v2_dispatcher_started:
+                await stop_template_v2_pptx_dispatcher()
+        finally:
+            try:
+                if template_v2_cleanup_started:
+                    await stop_template_v2_private_source_cleanup()
+            finally:
+                # Release all database connections to prevent stale/leaked pools.
+                await dispose_engines()

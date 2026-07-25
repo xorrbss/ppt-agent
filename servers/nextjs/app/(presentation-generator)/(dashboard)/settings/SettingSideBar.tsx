@@ -3,6 +3,7 @@ import { LogOut, Shield } from 'lucide-react'
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store/store'
+import Image from 'next/image'
 
 type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'session'
 
@@ -49,13 +50,15 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                     <button className={` w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'text-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('text-provider')}>
                         <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
 
-                            <img src={textProviderIcon} className=' object-cover w-full h-full overflow-hidden' alt='google' />
+                            {textProviderIcon && (
+                                <Image src={textProviderIcon} width={18} height={18} className='object-cover w-full h-full overflow-hidden' alt='text provider' />
+                            )}
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >텍스트 제공자</p>
                     </button>
                     <button className={` w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border  ${selectedProvider === 'image-provider' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`} onClick={() => setSelectedProvider('image-provider')}>
                         <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
-                            <img src={imageProviderIcon} className=' object-cover w-full h-full overflow-hidden' alt='google' />
+                            <Image src={imageProviderIcon} width={18} height={18} className='object-cover w-full h-full overflow-hidden' alt='image provider' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >이미지 제공자</p>
                     </button>
@@ -65,7 +68,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         <button className={` w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border  bg-[#F4F3FF] border-[#D9D6FE]`}>
                             <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
 
-                                <img src='/providers/openai.png' className=' object-cover w-full h-full overflow-hidden' alt='google' />
+                                <Image src='/providers/openai.png' width={18} height={18} className='object-cover w-full h-full overflow-hidden' alt='Nanobanana provider' />
                             </div>
                             <p className='text-[#191919] text-xs  font-medium' >Nanobanana</p>
                         </button>

@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect } from "react";
+import Image from "next/image";
 
 import { Card } from "@/components/ui/card";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
@@ -44,16 +45,13 @@ export const PresentationCard = ({
     router.push(`/presentation?id=${id}&type=standard`);
   };
   useEffect(() => {
-    applyTheme(presentation.theme)
-  }, [])
-  const applyTheme = async (theme: any) => {
     // Unified theme application (base 16 vars + fonts + adaptive tone & manner
     // tokens) so adaptive-deck thumbnails match the editor/export render. Legacy
     // thumbnails are unaffected — base vars are identical, extended tokens are
     // consumed only by the adaptive renderer.
     const element = document.getElementById(`dashboard-presentation-card-${id}`)
-    applyPresentationThemeToElement(element, theme)
-  }
+    applyPresentationThemeToElement(element, presentation.theme)
+  }, [id, presentation.theme])
 
   const handleDelete = async () => {
     if (isDeleting) return;
@@ -91,7 +89,7 @@ export const PresentationCard = ({
           {presentation.type}
         </p> */}
 
-        <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
+        <Image src="/card_bg.svg" alt="" fill className="absolute object-cover" />
         <div className="scale-[0.75] mt-4  border border-gray-300 rounded-lg overflow-hidden">
 
           <SlideScale slide={firstSlide} isClickable={false} />

@@ -4,8 +4,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from models.presentation_with_slides import PresentationWithSlides

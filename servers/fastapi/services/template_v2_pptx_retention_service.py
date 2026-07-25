@@ -52,6 +52,8 @@ class _ClaimedSource:
 
 
 _last_cleanup_monotonic: float | None = None
+_cleanup_task: asyncio.Task | None = None
+_cleanup_stop: asyncio.Event | None = None
 
 
 def _now() -> datetime:
@@ -358,3 +360,43 @@ async def maybe_cleanup_expired_private_sources() -> SourceCleanupSummary | None
     summary = await cleanup_expired_private_sources()
     _last_cleanup_monotonic = current
     return summary
+
+
+async def _private_source_cleanup_loop() -> None:
+    assert _cleanup_stop is not None
+    while not _cleanup_stop.is_set():
+        try:
+            await maybe_cleanup_expired_private_sources()
+        except Exception:
+            logger.exception("Template V2 private-source cleanup iteration failed")
+        try:
+            await asyncio.wait_for(
+                _cleanup_stop.wait(),
+                timeout=SOURCE_CLEANUP_INTERVAL_SECONDS,
+            )
+        except TimeoutError:
+            pass
+
+
+async def start_template_v2_private_source_cleanup() -> None:
+    """Start retention cleanup independently of the Template V2 feature flag."""
+
+    global _cleanup_stop, _cleanup_task
+    if _cleanup_task is not None and not _cleanup_task.done():
+        return
+    _cleanup_stop = asyncio.Event()
+    try:
+        await maybe_cleanup_expired_private_sources()
+    except Exception:
+        logger.exception("Initial Template V2 private-source cleanup failed")
+    _cleanup_task = asyncio.create_task(_private_source_cleanup_loop())
+
+
+async def stop_template_v2_private_source_cleanup() -> None:
+    global _cleanup_stop, _cleanup_task
+    if _cleanup_stop is not None:
+        _cleanup_stop.set()
+    if _cleanup_task is not None:
+        await _cleanup_task
+    _cleanup_task = None
+    _cleanup_stop = None

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/store';
 import { PresentationGenerationApi } from '../../services/api/presentation-generation';
@@ -81,9 +81,9 @@ export const useAutoSave = ({
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-    }, [presentationData, enabled, debouncedSave,isLoading, isStreaming, isLayoutLoading]);
+    }, [presentationData, enabled, debouncedSave, isLoading, isStreaming, isLayoutLoading, dispatch]);
     
     return {
         isSaving,
     };
-}; 
+};

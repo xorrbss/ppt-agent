@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Home, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import "../../utils/prism-languages";
 
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
@@ -31,7 +31,6 @@ const GroupLayoutPreview = () => {
     template: customTemplate,
     loading: customLoading,
     error: customError,
-    fonts: customFonts,
   } = useCustomTemplateDetails({ id: templateParams?.split("custom-")[1] || "", name: "", description: "" });
 
   useEffect(() => {
@@ -119,10 +118,6 @@ const GroupLayoutPreview = () => {
   const templateDescription = isCustom
     ? customTemplate?.template.description || ""
     : staticGroup?.description || "";
-  const layoutCount = isCustom
-    ? customTemplate?.layouts.length || 0
-    : staticTemplates.length;
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />

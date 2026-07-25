@@ -229,7 +229,7 @@ export const usePresentationStreaming = (
                   normalizedPartialData.slides.length;
                 setLoading(false);
               }
-            } catch (error) {
+            } catch {
               // JSON isn't complete yet, continue accumulating
             }
             break;
@@ -267,7 +267,7 @@ export const usePresentationStreaming = (
               newUrl.searchParams.delete("stream");
               newUrl.searchParams.delete("regenerate");
               window.history.replaceState({}, "", newUrl.toString());
-            } catch (error) {
+            } catch {
               if (!scheduleRetry("failed to parse complete payload")) {
                 finalizeFailure("Failed to parse final presentation payload.");
               }

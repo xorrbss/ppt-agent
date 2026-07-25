@@ -1,7 +1,5 @@
 "use client";
 import React from 'react'
-import { Check } from 'lucide-react'
-
 interface FontCardProps {
   font: any
   isSelected: boolean

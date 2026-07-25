@@ -71,7 +71,7 @@ capability-specific integration gates:
 
 | Workflow | Required environment | Role |
 | --- | --- | --- |
-| `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, lint/build, and the selected Cypress component suite. It also validates the local runner's complete dry-run plan. |
+| `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, and the selected Cypress component suite. It also validates the local runner's complete dry-run plan. |
 | `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and the real PostgreSQL migration integration test. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
 | `upstream-intake.yml` | Offline fixture on pull requests; GitHub API on schedule/manual dispatch | Detects upstream movement without merging it. Live intake is intentionally not a pull-request dependency. |
 | `template-v2-export-fidelity.yml` | Ubuntu and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on both operating systems. |
@@ -182,6 +182,7 @@ uv run pytest -q --no-header
 cd ../nextjs
 npm ci
 npm run test:ci-node
+npx tsc --noEmit -p tsconfig.json
 npm run lint
 npm run build
 ```

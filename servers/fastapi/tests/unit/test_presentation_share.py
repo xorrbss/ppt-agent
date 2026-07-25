@@ -5,9 +5,8 @@ import uuid
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.v1.ppt.endpoints import presentation_share as share
 from models.sql.presentation import PresentationModel

@@ -42,7 +42,7 @@ export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
                 clearInterval(progressInterval.current);
             }
         };
-    }, [duration, onComplete]);
+    }, [duration, onComplete, progress]);
 
     return (
         <div className="w-full space-y-2">

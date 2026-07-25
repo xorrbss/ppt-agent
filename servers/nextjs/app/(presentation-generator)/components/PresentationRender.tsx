@@ -40,7 +40,7 @@ const SlideScale = ({
         const safeWidth = Math.max(0, box.w + 20);
         if (!safeWidth) return 1;
         return Math.min((safeWidth / BASE_WIDTH) * 0.98, 1);
-    }, [fixedSize, presentMode, box.w, box.h]);
+    }, [fixedSize, presentMode, box]);
 
     useEffect(() => {
         if (!containerRef.current) return;

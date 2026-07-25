@@ -1,7 +1,8 @@
 "use client";
-import { ArrowRight, Plus, Sparkle, Sparkles } from 'lucide-react'
+import { ArrowRight, Plus, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import React from 'react'
+import Image from 'next/image'
 
 const CustomTabEmpty = () => {
     const router = useRouter()
@@ -12,7 +13,7 @@ const CustomTabEmpty = () => {
             }}
             className='w-[305px] rounded-xl border border-[#EDEEEF] cursor-pointer'>
             <div className='relative h-[250px] flex justify-center items-center '>
-                <img src="/card_bg.svg" alt="" className="absolute top-0 z-[1] left-0 w-full h-full object-cover" />
+                <Image src="/card_bg.svg" alt="" fill className="absolute z-[1] object-cover" />
                 <div className='w-[36px] h-[36px] relative z-[4]  rounded-full bg-[#7A5AF8] flex items-center justify-center'
                     style={{
                         background: 'linear-gradient(90deg, #F00 5.21%, #FF8A00 16.48%, #FFE600 27.74%, #14FF00 39.35%, #00A3FF 49.37%, #0500FF 61.18%, #AD00FF 72.26%, #FF00C7 83.53%, #F00 94.61%), #FFF'

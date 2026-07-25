@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { PresentationCard } from "./PresentationCard";
 import { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
 import { EmptyState } from "./EmptyState";
@@ -19,10 +20,11 @@ export const PresentationGrid = ({
   const ShimmerCard = () => (
     <div className="flex min-h-[216px] flex-col overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-[#F8FBFB] shadow-none animate-pulse">
       <div className="relative flex-1 overflow-hidden p-4">
-        <img
+        <Image
           src="/card_bg.svg"
           alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-70"
+          fill
+          className="absolute object-cover opacity-70"
         />
         <div className="relative mx-auto mt-2 aspect-video w-[88%] rounded-lg border border-gray-200 bg-gray-200" />
       </div>

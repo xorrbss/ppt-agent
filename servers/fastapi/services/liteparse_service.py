@@ -471,6 +471,8 @@ class LiteParseService:
     def _run_plain_bridge_to_text(self, command: list[str]) -> subprocess.CompletedProcess[str]:
         stdout_path = ""
         stderr_tail = BoundedTextBuffer()
+        process: subprocess.Popen[bytes] | None = None
+        stderr_thread: threading.Thread | None = None
         try:
             with tempfile.NamedTemporaryFile(prefix="liteparse-stdout-", delete=False) as stdout_file:
                 stdout_path = stdout_file.name
@@ -514,6 +516,14 @@ class LiteParseService:
                 stderr=stderr_tail.get(),
             )
         finally:
+            if process is not None:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+                if stderr_thread is not None and stderr_thread.is_alive():
+                    stderr_thread.join(timeout=5)
+                if process.stderr is not None:
+                    process.stderr.close()
             if stdout_path:
                 try:
                     os.unlink(stdout_path)

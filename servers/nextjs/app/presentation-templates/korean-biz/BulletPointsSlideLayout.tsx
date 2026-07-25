@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- Slide export captures native img nodes with authored URLs and intrinsic browser sizing. */
 import React from 'react'
 import * as z from "zod";
 import { IconSchema } from '../defaultSchemes';

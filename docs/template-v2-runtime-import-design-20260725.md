@@ -93,28 +93,36 @@ that arrives already element-shaped.
 
 ### Two findings that change what Phase A delivers
 
-**Runtime-imported templates have no fillable slots.** The converter marks every
-`text`/`image`/`table`/`chart` as `decorative: true`, and `templates/v2/schema.py:182-185`
-skips any element whose `decorative is not False`, so `get_template_schema` yields nothing
-to fill. The deterministic assembler instead sets `decorative=False` explicitly
-(`assembler.py:72,99,118`). This is not a defect in either: upstream defers that semantic
-judgement to the vision pass, which is told to classify an element as content when removing
-it would change meaning. Overriding it here would mark branding as editable content, so the
-runtime analyzer must **not** force `decorative=False`.
+**Runtime-imported templates expose only conservatively classified fillable slots.** The
+converter marks every `text`/`image`/`table`/`chart` as `decorative: true`, and
+`templates/v2/schema.py` skips any element whose `decorative is not False`. The runtime
+ingestion path now applies a deterministic Phase B0 classifier before validation: it
+promotes only strongly named text placeholders (`title`, `subtitle`, `body`, or explicit
+`content/text placeholder`) and image names that explicitly contain
+`picture/image/photo placeholder`. Names containing strong decorative tokens such as
+`background`, `logo`, `footer`, or `watermark` remain locked.
 
-The trade-off is therefore real and should be stated wherever the flag is documented:
+This deliberately does not infer semantics from visual position or content. Ordinary text
+boxes, embedded pictures (`picture_1`), tables, charts, and vectors stay decorative until
+review or a future OOXML/vision-aware classifier can identify them. The classifier is
+versioned in `analysis_result.classification`, does not mutate converter output, and is
+reachable only through the already opt-in runtime analyzer.
+
+The trade-off should be stated wherever the flag is documented:
 
 | analyzer | fidelity | fillable slots |
 |---|---|---|
 | `deterministic` | no images, no run styling, no shapes | **yes** |
-| `runtime` | images, per-run styling, vector shapes | **no**, until Phase B classifies |
+| `runtime` | images, per-run styling, vector shapes | **limited** to explicit placeholder-name matches |
 
 **The two analyzers converge at the draft, not at the analysis.** The deterministic pipeline
 stores `analysis_result.candidates` and replays it through the assembler at confirm time
 (`_assemble_confirmed_candidate`, ingestion `:393-407`). The runtime path has no candidates.
 `AssembledTemplateV2Draft` is `{raw_layouts, layouts, contents, manifest}`, all four of which
-the runtime path can produce directly — `contents` being one empty dict per layout, which
-`build_generated_slide` accepts precisely because the schema is empty. So confirm branches on
+the runtime path can produce directly. Runtime analysis stores one `default_contents` mapping
+per layout, seeded from the original text runs and an empty image prompt for each classified
+placeholder. Confirm replays those mappings so schema validation remains active; analyses
+created before the classifier retain their legacy empty mappings. So confirm branches on
 which analysis shape was stored rather than forcing a lossy back-conversion to candidates.
 Repeat-block suggestions are candidate-derived and are simply absent for the runtime path.
 
@@ -122,11 +130,13 @@ Also structural: `_analyze_import_source` is sync and runs under `asyncio.to_thr
 `convert_pptx_to_json` is async. The branch therefore belongs at the async caller
 (`run_template_v2_pptx_import`), not inside the threaded function.
 
-### Phase B — vision re-authoring (separate change, not designed here)
+### Phase B — semantic and vision re-authoring
 
-Adds the LLM component pass and the `previewSlide` self-critique loop, which is where
-`flex`/`grid` and therefore constraint 4 appear. Deferred deliberately: Phase A already
-closes the image/styling/shape gap and is verifiable offline.
+Phase B0 now provides a conservative, offline placeholder-name classifier so clear text and
+image placeholders are fillable without making branding editable. Full Phase B remains a
+separate change: add OOXML placeholder metadata or the LLM component pass plus the
+`previewSlide` self-critique loop. That is where ambiguous content, `flex`/`grid`, and
+constraint 4 can be classified safely.
 
 ## Open decisions
 
@@ -203,10 +213,12 @@ the source file.
 ## Verification plan
 
 - Unit: `convert_pptx_to_json` payload shape including `session_id`; analyzer selection and
-  fail-closed parsing of `TEMPLATE_V2_PPTX_ANALYZER`; assembler cases for `image`/`vector`.
+  fail-closed parsing of `TEMPLATE_V2_PPTX_ANALYZER`; assembler cases for `image`/`vector`;
+  allowlisted placeholder promotion and decorative/ambiguous-name rejection.
 - Integration: import the 5-slide fixture through the runtime path and assert the three
   gaps close — an `image` element exists, text carries per-run `bold`/`italic`/`color`, and
-  the rounded rectangle survives as `vector` with `corner_radii`.
+  the rounded rectangle survives as `vector` with `corner_radii`; confirm replays stored
+  placeholder defaults through `build_generated_slide`.
 - Contract: both analyzer paths satisfy `validate_cross_field_contract`, so the review and
   confirm boundaries are unchanged.
 - Gate: `node scripts/verify-upstream-compatibility.mjs` stays at its pinned check count.

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useRef, useEffect, useState } from 'react';
+import React, { ReactNode, useRef, useEffect, useState, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { updateSlideImage, updateSlideIcon, updateImageProperties } from '@/store/slices/presentationGeneration';
 import ImageEditor from './ImageEditor';
@@ -35,13 +35,14 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement>(null);
-    const [editableElements, setEditableElements] = useState<EditableElement[]>([]);
+    const [, setEditableElements] = useState<EditableElement[]>([]);
+    const editableElementsRef = useRef<EditableElement[]>([]);
     const [activeEditor, setActiveEditor] = useState<EditableElement | null>(null);
 
     /**
      * Recursively searches for ALL image/icon data paths in the slide data structure
      */
-    const findAllDataPaths = (targetUrl: string, data: any, path: string = ''): { path: string; type: 'image' | 'icon'; data: any }[] => {
+    const findAllDataPaths = useCallback((targetUrl: string, data: any, path: string = ''): { path: string; type: 'image' | 'icon'; data: any }[] => {
         if (!data || typeof data !== 'object') return [];
 
         const matches: { path: string; type: 'image' | 'icon'; data: any }[] = [];
@@ -71,12 +72,12 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         }
 
         return matches;
-    };
+    }, []);
 
     /**
      * Finds the best matching data path for a specific DOM element
      */
-    const findBestDataPath = (targetUrl: string, imgElement: HTMLImageElement | SVGElement, data: any): { path: string; type: 'image' | 'icon'; data: any } | null => {
+    const findBestDataPath = useCallback((targetUrl: string, imgElement: HTMLImageElement | SVGElement, data: any): { path: string; type: 'image' | 'icon'; data: any } | null => {
         const allMatches = findAllDataPaths(targetUrl, data);
 
         if (allMatches.length === 0) return null;
@@ -120,7 +121,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
         // Last resort: return the first match
         return allMatches[0];
-    };
+    }, [findAllDataPaths]);
 
     /**
      * Checks if two URLs match using various comparison strategies
@@ -168,7 +169,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     /**
      * Finds and processes images in the DOM, making them editable
      */
-    const findAndProcessImages = () => {
+    const findAndProcessImages = useCallback(() => {
         if (!containerRef.current) return;
 
         const imgElements = containerRef.current.querySelectorAll('img:not([data-editable-processed])');
@@ -317,20 +318,25 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         });
 
 
-        setEditableElements(prev => [...prev, ...newEditableElements]);
-    };
+        setEditableElements(prev => {
+            const next = [...prev, ...newEditableElements];
+            editableElementsRef.current = next;
+            return next;
+        });
+    }, [findBestDataPath, properties, slideData, slideIndex]);
 
     /**
      * Cleanup function to remove event listeners and reset styles
      */
-    const cleanupElements = () => {
-        editableElements.forEach(({ element }) => {
+    const cleanupElements = useCallback(() => {
+        editableElementsRef.current.forEach(({ element }) => {
             if ((element as any)._editableCleanup) {
                 (element as any)._editableCleanup();
             }
         });
+        editableElementsRef.current = [];
         setEditableElements([]);
-    };
+    }, []);
 
     // Wait for LoadableComponent to render and then process images
     useEffect(() => {
@@ -342,7 +348,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
             clearTimeout(timer);
             cleanupElements();
         };
-    }, [slideData, children]);
+    }, [slideData, children, findAndProcessImages, cleanupElements]);
 
     // Re-run when container content changes
     useEffect(() => {
@@ -371,7 +377,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         });
 
         return () => observer.disconnect();
-    }, [slideData]);
+    }, [findAndProcessImages, slideData]);
 
     /**
      * Handles closing the active editor

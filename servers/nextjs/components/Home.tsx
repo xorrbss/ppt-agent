@@ -1,34 +1,14 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
-import { handleSaveLLMConfig } from "@/utils/storeHelpers";
-import {
-  checkIfSelectedOllamaModelIsPulled,
-  pullOllamaModel,
-} from "@/utils/providerUtils";
-import { LLMConfig } from "@/types/llm_config";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { usePathname } from "next/navigation";
 import OnBoardingSlidebar from "./OnBoarding/OnBoardingSlidebar";
 import OnBoardingHeader from "./OnBoarding/OnBoardingHeader";
 import ModeSelectStep from "./OnBoarding/ModeSelectStep";
 import PresentonMode from "./OnBoarding/PresentonMode";
 import GenerationWithImage from "./OnBoarding/GenerationWithImage";
 import FinalStep from "./OnBoarding/FinalStep";
-
-// Button state interface
-interface ButtonState {
-  isLoading: boolean;
-  isDisabled: boolean;
-  text: string;
-  showProgress: boolean;
-  progressPercentage?: number;
-  status?: string;
-}
-
-
 
 export default function Home() {
   const router = useRouter();

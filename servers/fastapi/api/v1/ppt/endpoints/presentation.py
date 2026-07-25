@@ -522,8 +522,12 @@ async def update_presentation(
         validated_slides: list[SlideModel] = []
         for slide_index, slide in enumerate(slides):
             try:
+                raw_slide = {
+                    field_name: getattr(slide, field_name)
+                    for field_name in SlideModel.model_fields
+                }
                 validated_slides.append(
-                    SlideModel.model_validate(slide.model_dump(mode="python"))
+                    SlideModel.model_validate(raw_slide)
                 )
             except ValidationError as error:
                 details = []

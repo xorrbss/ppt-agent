@@ -4,6 +4,7 @@ import React from "react";
 import { LayoutDashboard, Star, Brain, Settings, Palette } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 
 
@@ -37,9 +38,11 @@ const DashboardSidebar = () => {
             <div>
 
                 <Link href={`/dashboard`} className="flex items-center  pb-6 border-b border-[#E1E1E5]   gap-2    ">
-                    <img
+                    <Image
                         src="/logo-with-bg.png"
                         alt="Presenton logo"
+                        width={40}
+                        height={40}
                         className="mx-auto h-[40px] w-[40px] cursor-pointer object-contain"
                     />
                 </Link>

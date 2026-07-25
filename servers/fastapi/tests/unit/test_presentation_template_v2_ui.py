@@ -208,13 +208,13 @@ def test_update_api_returns_422_for_invalid_native_ui_and_preserves_live_slide(
         async with session_factory() as session:
             yield session
 
+    request_slide = live.model_dump(mode="json")
     asyncio.run(setup_database())
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware)
     app.include_router(PRESENTATION_ROUTER, prefix="/api/v1/ppt")
     app.dependency_overrides[get_async_session] = get_test_session
 
-    request_slide = live.model_dump(mode="json")
     request_slide["ui"] = ui
     request_slide["html_content"] = html_content
     with TestClient(app, raise_server_exceptions=False) as client:
@@ -308,13 +308,13 @@ def test_update_api_preserves_valid_nested_native_ui_in_response_and_sqlite(
         async with session_factory() as session:
             yield session
 
+    request_slide = live.model_dump(mode="json")
     asyncio.run(setup_database())
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware)
     app.include_router(PRESENTATION_ROUTER, prefix="/api/v1/ppt")
     app.dependency_overrides[get_async_session] = get_test_session
 
-    request_slide = live.model_dump(mode="json")
     request_slide["ui"] = deepcopy(updated_ui)
     with TestClient(app) as client:
         response = client.patch(

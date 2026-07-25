@@ -320,18 +320,7 @@ export const usePresentationGeneration = (
     } finally {
       setLoadingState(DEFAULT_LOADING_STATE);
     }
-  }, [
-    validateInputs,
-    presentationId,
-    outlines,
-    dispatch,
-    router,
-    selectedTemplate,
-    authoredVisionQa,
-    authoredStyle,
-    language,
-    pathname,
-  ]);
+  }, [selectedTemplate, validateInputs, pathname, presentationId, outlines, setActiveTab, authoredVisionQa, language, authoredStyle, dispatch, router]);
 
   return { loadingState, handleSubmit };
 };

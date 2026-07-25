@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, PlusIcon, Trash2, Pencil, Trash } from "lucide-react";
+import { Loader2, PlusIcon, Pencil, Trash } from "lucide-react";
 import {
   Popover,
   PopoverContent,

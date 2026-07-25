@@ -218,13 +218,6 @@ const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
   },
 ];
 
-const quickPrompts = [
-  "Expand each section",
-  "Reorder for storytelling",
-  "Add missing sections",
-  "Convert to pitch flow",
-];
-
 type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "error";

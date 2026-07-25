@@ -516,17 +516,92 @@ async function downloadAndInstallRuntime(tag) {
   return { tag, downloadUrl };
 }
 
-function assertElectronSharpLoadable(cwd = __dirname) {
+function detectBundledSharpVersion(runtimeRoot = targetRoot) {
+  const fallback = "0.34.4";
   try {
-    execFileSync(process.execPath, ["-e", "require('sharp')"], {
-      cwd,
+    const bundle = fs.readFileSync(path.join(runtimeRoot, "index.js"), "utf8");
+    const match = bundle.match(
+      /@img\/sharp-[a-z0-9-]+"\s*:\s*"(\d+\.\d+\.\d+)"/
+    );
+    return (match && match[1]) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function canLoadElectronRuntimeSharp(runtimeRoot = targetRoot) {
+  const sharpRoot = path.join(runtimeRoot, "node_modules", "sharp");
+  const packagePath = path.join(sharpRoot, "package.json");
+  try {
+    const installedVersion = JSON.parse(fs.readFileSync(packagePath, "utf8")).version;
+    if (installedVersion !== detectBundledSharpVersion(runtimeRoot)) {
+      return false;
+    }
+    execFileSync(process.execPath, ["-e", `require(${JSON.stringify(sharpRoot)})`], {
+      cwd: runtimeRoot,
       stdio: "ignore",
     });
-  } catch (err) {
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function assertElectronSharpLoadable(runtimeRoot = targetRoot) {
+  if (!canLoadElectronRuntimeSharp(runtimeRoot)) {
     throw new Error(
-      `Electron export runtime requires a loadable sharp native addon: ${err.message}`
+      "Electron export runtime requires a loadable sharp native addon matching the version embedded in its bundle."
     );
   }
+}
+
+function ensureElectronRuntimeSharp() {
+  if (canLoadElectronRuntimeSharp()) return;
+
+  const version = detectBundledSharpVersion();
+  const installArgs = [
+    "install",
+    "--prefix",
+    targetRoot,
+    "--no-save",
+    "--no-audit",
+    "--no-fund",
+    `sharp@${version}`,
+  ];
+  let npmCommand = "npm";
+  let npmArgs = installArgs;
+  if (process.platform === "win32") {
+    const npmCliCandidates = [
+      process.env.npm_execpath,
+      path.join(
+        path.dirname(process.execPath),
+        "node_modules",
+        "npm",
+        "bin",
+        "npm-cli.js"
+      ),
+    ].filter(Boolean);
+    const npmCli = npmCliCandidates.find((candidate) => fs.existsSync(candidate));
+    if (!npmCli) {
+      throw new Error(
+        `Could not locate npm-cli.js. Install sharp@${version} under electron/resources/export manually.`
+      );
+    }
+    npmCommand = process.execPath;
+    npmArgs = [npmCli, ...installArgs];
+  }
+
+  console.log(
+    `[export-runtime] Installing isolated sharp@${version} (${process.platform}/${process.arch})`
+  );
+  try {
+    execFileSync(npmCommand, npmArgs, { stdio: "inherit" });
+  } catch (err) {
+    throw new Error(
+      `Could not install export-runtime sharp@${version}: ${err.message}`
+    );
+  }
+  assertElectronSharpLoadable();
 }
 
 function finalizeRuntimeInstall(
@@ -557,7 +632,7 @@ async function main() {
   }
 
   if (existing.ok && !forceDownload) {
-    assertElectronSharpLoadable();
+    ensureElectronRuntimeSharp();
     console.log("[export-runtime] Using existing runtime artifacts:");
     console.log(`  - ${targetIndex}`);
     console.log(`  - ${existing.converterPath}`);
@@ -569,6 +644,7 @@ async function main() {
   }
 
   const { tag, downloadUrl } = await downloadAndInstallRuntime(targetVersion);
+  ensureElectronRuntimeSharp();
   finalizeRuntimeInstall(tag);
 
   const installed = validateExistingRuntime(targetVersion);
@@ -591,6 +667,7 @@ if (require.main === module) {
 } else {
   module.exports = {
     assertElectronSharpLoadable,
+    ensureElectronRuntimeSharp,
     finalizeRuntimeInstall,
     readInstalledVersion,
     validateExistingRuntime,

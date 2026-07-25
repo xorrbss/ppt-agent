@@ -156,6 +156,80 @@
       ]
     },
     {
+      "id": "template-v2-operational-safety",
+      "category": "operations",
+      "rationale": "Preserve explicit deployment tiers, the managed PostgreSQL gate, content-free rollback and health checks, durable dispatcher and analysis extraction, and feature-flag-independent private-source retention cleanup.",
+      "files": [
+        {
+          "path": "docker-compose.yml",
+          "requiredContains": [
+            "TEMPLATE_V2_DEPLOYMENT_TIER=production",
+            "TEMPLATE_V2_DEPLOYMENT_TIER=development"
+          ]
+        },
+        {
+          "path": "servers/fastapi/services/template_v2_pptx_operations.py",
+          "requiredContains": [
+            "TEMPLATE_V2_DEPLOYMENT_TIER",
+            "template_v2_managed_canary_requires_postgresql",
+            "get_template_v2_operational_status",
+            "template_v2_review_required_imports_require_attention",
+            "template_v2_pptx_health"
+          ]
+        },
+        {
+          "path": "servers/fastapi/services/template_v2_pptx_dispatcher.py",
+          "requiredContains": [
+            "class IngestionRuntimeDependencies",
+            "recover_stalled_template_v2_pptx_imports",
+            "run_template_v2_pptx_import",
+            "start_template_v2_pptx_dispatcher"
+          ]
+        },
+        {
+          "path": "servers/fastapi/services/template_v2_pptx_analysis_service.py",
+          "requiredContains": [
+            "_INGESTION_MODULE = \"services.template_v2_pptx_ingestion_service\"",
+            "def build_runtime_analysis(",
+            "async def persist_analysis(",
+            "def assemble_confirmed_candidate("
+          ]
+        },
+        {
+          "path": "servers/fastapi/services/template_v2_pptx_ingestion_service.py",
+          "requiredContains": [
+            "from services import template_v2_pptx_dispatcher as _dispatcher_runtime",
+            "from services.template_v2_pptx_analysis_service import (",
+            "def _runtime_dependencies()",
+            "_dispatcher_runtime.run_template_v2_pptx_import"
+          ]
+        },
+        {
+          "path": "servers/fastapi/services/template_v2_pptx_retention_service.py",
+          "requiredContains": [
+            "start_template_v2_private_source_cleanup",
+            "stop_template_v2_private_source_cleanup"
+          ]
+        },
+        {
+          "path": "servers/fastapi/scripts/check_template_v2_operations.py",
+          "requiredContains": [
+            "choices=(\"rollback\", \"health\", \"cleanup\")",
+            "rollback_safe"
+          ]
+        },
+        {
+          "path": "servers/fastapi/tests/unit/test_template_v2_pptx_operations.py",
+          "requiredContains": [
+            "test_managed_canary_requires_postgresql_but_local_sqlite_remains_valid",
+            "test_operational_status_blocks_rollback_and_reports_warning_aggregates",
+            "test_review_required_import_is_degraded_when_no_higher_priority_issue",
+            "test_operations_cli_uses_exit_two_for_unsafe_rollback"
+          ]
+        }
+      ]
+    },
+    {
       "id": "authored-editability-fidelity",
       "category": "authored-hybrid",
       "rationale": "Preserve the 9pt editable text floor, axis-aligned straight lines, explicit clipping bounds, and no-autofit behavior without treating the word clip alone as a regression.",

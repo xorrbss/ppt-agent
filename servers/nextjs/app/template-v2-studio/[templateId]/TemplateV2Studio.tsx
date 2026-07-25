@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 
 import {
   EMPTY_TEMPLATE_V2_STUDIO_STATE,
@@ -8,231 +8,50 @@ import {
   findTemplateV2Layout,
   getSelectedElement,
   getTemplateV2Scene,
-  isJsonRecord,
   listTemplateV2Components,
   listTemplateV2Layouts,
   parseTemplateV2SelectionKey,
-  records,
-  templateV2SelectionKey,
   templateV2StudioReducer,
   type ElementPath,
-  type JsonRecord,
   type StudioSelection,
   type TemplateV2AlignDirection,
   type TemplateV2DistributeDirection,
   type TemplateV2ReorderDirection,
 } from "@/lib/template-v2-studio";
-import { elementPosition, stringValue } from "@/lib/template-v2-konva";
-import {
-  createTemplateV2AutosaveScheduler,
-  type TemplateV2AutosaveContext,
-  type TemplateV2AutosaveScheduler,
-} from "@/lib/template-v2-studio-autosave";
+import { elementPosition } from "@/lib/template-v2-konva";
 import { getTemplateV2HistoryKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
-import type { TemplateV2ConflictSnapshot } from "@/lib/template-v2-studio-conflict";
-import {
-  adaptUpstreamTemplateV2LayoutsToStudio,
-  serializeStudioLayoutsForUpstream,
-  type TemplateV2LayoutsCompatibilityDocument,
-} from "@/lib/template-v2-upstream-compat";
-import { getApiUrl } from "@/utils/api";
 import TemplateV2Canvas from "./TemplateV2Canvas";
 import TemplateV2ConflictRecovery from "./TemplateV2ConflictRecovery";
 import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
+import TemplateV2ElementTree, {
+  getTemplateV2SelectionControls,
+  pathLabel,
+} from "./TemplateV2ElementTree";
 import TemplateV2GeometryInspector from "./TemplateV2GeometryInspector";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
-
-interface StructuredTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  layouts: JsonRecord;
-  layoutsDocument: TemplateV2LayoutsCompatibilityDocument;
-  revision: number;
-  updated_at: string;
-}
-
-const TEMPLATE_V2_AUTOSAVE_DEBOUNCE_MS = 800;
-
-function errorMessage(status: number, payload: unknown): string {
-  if (isJsonRecord(payload)) {
-    if (typeof payload.detail === "string") return payload.detail;
-    if (
-      isJsonRecord(payload.detail) &&
-      payload.detail.code === "template_v2_revision_conflict"
-    ) {
-      return "This template changed in another session. Your local edits were preserved.";
-    }
-  }
-  return `Request failed (${status})`;
-}
-
-async function readResponse(response: Response): Promise<unknown> {
-  const contentType = response.headers.get("content-type") ?? "";
-  return contentType.includes("application/json")
-    ? response.json()
-    : response.text();
-}
-
-function pathLabel(path: ElementPath): string {
-  return path.map(String).join(" / ");
-}
-
-function elementChildren(
-  element: JsonRecord,
-  path: ElementPath
-): Array<{ element: JsonRecord; path: ElementPath }> {
-  if (element.type === "container" && isJsonRecord(element.child)) {
-    return [{ element: element.child, path: [...path, "child"] }];
-  }
-  if (element.type === "group") {
-    return records(element.children).map((child, index) => ({
-      element: child,
-      path: [...path, "children", index],
-    }));
-  }
-  return [];
-}
-
-function elementAtPath(
-  elements: JsonRecord[],
-  path: ElementPath
-): JsonRecord | null {
-  let value: unknown = elements;
-  for (const part of path) {
-    value =
-      typeof part === "number" && Array.isArray(value)
-        ? value[part]
-        : typeof part === "string" && isJsonRecord(value)
-          ? value[part]
-          : null;
-  }
-  return isJsonRecord(value) ? value : null;
-}
-
-function pathStartsWith(path: ElementPath, prefix: ElementPath): boolean {
-  return (
-    path.length >= prefix.length &&
-    prefix.every((part, index) => path[index] === part)
-  );
-}
-
-function ElementBranch({
-  element,
-  path,
-  selectedPathKeys,
-  lockedPathKeys,
-  onSelect,
-}: {
-  element: JsonRecord;
-  path: ElementPath;
-  selectedPathKeys: ReadonlySet<string>;
-  lockedPathKeys: ReadonlySet<string>;
-  onSelect(path: ElementPath, additive: boolean): void;
-}) {
-  const children = elementChildren(element, path);
-  const key = JSON.stringify(path);
-  const selected = selectedPathKeys.has(key);
-  const locked = lockedPathKeys.has(key);
-
-  return (
-    <li className="my-1">
-      <button
-        type="button"
-        aria-pressed={selected}
-        onClick={(event) => onSelect(path, event.ctrlKey || event.metaKey)}
-        className={`w-full rounded px-2 py-1 text-left text-xs ${
-          selected
-            ? "bg-violet-500/30 text-violet-100"
-            : "text-slate-300 hover:bg-slate-800"
-        }`}
-      >
-        {stringValue(element.name, stringValue(element.type, "element"))}
-        <span className="ml-1 text-slate-500">({pathLabel(path)})</span>
-        {locked ? (
-          <span className="ml-1 text-amber-300" aria-label="Locked">
-            Locked
-          </span>
-        ) : null}
-      </button>
-      {children.length ? (
-        <ul className="ml-3 border-l border-slate-700 pl-2">
-          {children.map((child) => (
-            <ElementBranch
-              key={pathLabel(child.path)}
-              element={child.element}
-              path={child.path}
-              selectedPathKeys={selectedPathKeys}
-              lockedPathKeys={lockedPathKeys}
-              onSelect={onSelect}
-            />
-          ))}
-        </ul>
-      ) : null}
-    </li>
-  );
-}
-
-function ElementTree({
-  elements,
-  selectedPathKeys,
-  lockedPathKeys,
-  onSelect,
-}: {
-  elements: JsonRecord[];
-  selectedPathKeys: ReadonlySet<string>;
-  lockedPathKeys: ReadonlySet<string>;
-  onSelect(path: ElementPath, additive: boolean): void;
-}) {
-  return (
-    <ul>
-      {elements.map((element, index) => (
-        <ElementBranch
-          key={index}
-          element={element}
-          path={[index]}
-          selectedPathKeys={selectedPathKeys}
-          lockedPathKeys={lockedPathKeys}
-          onSelect={onSelect}
-        />
-      ))}
-    </ul>
-  );
-}
+import { useTemplateV2StudioPersistence } from "./useTemplateV2StudioPersistence";
 
 export default function TemplateV2Studio({
   templateId,
 }: {
   templateId: string;
 }) {
-  const [template, setTemplate] = useState<StructuredTemplate | null>(null);
   const [state, dispatch] = useReducer(
     templateV2StudioReducer,
     EMPTY_TEMPLATE_V2_STUDIO_STATE
   );
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [conflict, setConflict] =
-    useState<TemplateV2ConflictSnapshot | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const saveTokenRef = useRef(0);
-  const mountedRef = useRef(true);
-  const lifecycleFlushRef = useRef(false);
-  const conflictRef = useRef(false);
-  const templateRef = useRef<StructuredTemplate | null>(null);
-  const stateRef = useRef(state);
-  const persistRef = useRef<
-    (
-      layouts: JsonRecord,
-      context: TemplateV2AutosaveContext
-    ) => Promise<void>
-  >(async () => undefined);
-  const autosaveRef = useRef<TemplateV2AutosaveScheduler<JsonRecord> | null>(
-    null
-  );
+  const {
+    template,
+    loading,
+    saving,
+    notice,
+    setNotice,
+    error,
+    conflict,
+    flushAutosave,
+    reloadServerVersion,
+  } = useTemplateV2StudioPersistence({ templateId, state, dispatch });
 
   const activeLayout = findTemplateV2Layout(
     state.layouts,
@@ -274,238 +93,16 @@ export default function TemplateV2Studio({
         .map((selection) => JSON.stringify(selection.elementPath))
     );
   }, [lockedSelections, scene]);
-  const selectionControls = useMemo(() => {
-    const selections = state.selectionSet;
-    const selectedElements = scene
-      ? selections.map((selection) =>
-          selection.layoutId === String(scene.layout.id) &&
-          selection.componentId === String(scene.component.id)
-            ? elementAtPath(scene.elements, selection.elementPath)
-            : null
-        )
-      : [];
-    const exactLocked = selections.some((selection) =>
-      state.lockedElementKeys.has(templateV2SelectionKey(selection))
-    );
-    const lockConflict = selections.some((selection) =>
-      lockedSelections.some(
-        (locked) =>
-          locked.layoutId === selection.layoutId &&
-          locked.componentId === selection.componentId &&
-          (pathStartsWith(locked.elementPath, selection.elementPath) ||
-            pathStartsWith(selection.elementPath, locked.elementPath))
-      )
-    );
-    const allLocked =
-      selections.length > 0 &&
-      selections.every((selection) =>
-        state.lockedElementKeys.has(templateV2SelectionKey(selection))
-      );
-
-    let siblingCount = 0;
-    let indices: number[] = [];
-    if (scene && selections.length > 0) {
-      const parentPath = selections[0].elementPath.slice(0, -1);
-      let siblings: unknown = scene.elements;
-      for (const part of parentPath) {
-        siblings =
-          typeof part === "number" && Array.isArray(siblings)
-            ? siblings[part]
-            : typeof part === "string" && isJsonRecord(siblings)
-              ? siblings[part]
-              : null;
-      }
-      if (Array.isArray(siblings)) {
-        siblingCount = siblings.length;
-        indices = selections
-          .map((selection) => selection.elementPath.at(-1))
-          .filter((index): index is number => typeof index === "number");
-      }
-    }
-    const selectedIndices = new Set(indices);
-    const canReorder =
-      selections.length > 0 &&
-      indices.length === selections.length &&
-      selectedElements.every(Boolean) &&
-      !lockConflict;
-    const canAlign =
-      selections.length >= 2 &&
-      indices.length === selections.length &&
-      selectedElements.every(Boolean) &&
-      !lockConflict;
-    const canDistribute =
-      selections.length >= 3 &&
-      indices.length === selections.length &&
-      selectedElements.every(Boolean) &&
-      !lockConflict;
-    const canMoveForward =
-      canReorder &&
-      indices.some(
-        (index) =>
-          index < siblingCount - 1 && !selectedIndices.has(index + 1)
-      );
-    const canMoveBackward =
-      canReorder &&
-      indices.some((index) => index > 0 && !selectedIndices.has(index - 1));
-
-    return {
-      allLocked,
-      canAlign,
-      canDistribute,
-      canGroup:
-        selections.length >= 2 &&
-        selectedElements.every(Boolean) &&
-        !lockConflict,
-      canUngroup:
-        selections.length > 0 &&
-        selectedElements.every((element) => element?.type === "group") &&
-        !lockConflict,
-      canMoveForward,
-      canMoveBackward,
-      canBringToFront: canMoveForward,
-      canSendToBack: canMoveBackward,
-      hasSelection: selections.length > 0,
-      exactLocked,
-      lockConflict,
-    };
-  }, [
-    lockedSelections,
-    scene,
-    state.lockedElementKeys,
-    state.selectionSet,
-  ]);
-
-  useEffect(() => {
-    templateRef.current = template;
-    stateRef.current = state;
-    persistRef.current = persistLayouts;
-  });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    autosaveRef.current?.discardPending();
-    conflictRef.current = false;
-    setLoading(true);
-    setError(null);
-    setConflict(null);
-    fetch(
-      getApiUrl(
-        `/api/v1/ppt/structured-templates/${encodeURIComponent(templateId)}`
-      ),
-      { credentials: "include", signal: controller.signal }
-    )
-      .then(async (response) => {
-        const payload = await readResponse(response);
-        if (!response.ok) throw new Error(errorMessage(response.status, payload));
-        if (
-          !isJsonRecord(payload) ||
-          typeof payload.id !== "string" ||
-          typeof payload.name !== "string" ||
-          typeof payload.revision !== "number"
-        ) {
-          throw new Error("Structured template response is invalid");
-        }
-        const layoutsDocument =
-          adaptUpstreamTemplateV2LayoutsToStudio(payload.layouts);
-        const nextTemplate: StructuredTemplate = {
-          id: payload.id,
-          name: payload.name,
-          description:
-            typeof payload.description === "string" ? payload.description : null,
-          layouts: layoutsDocument.studioLayouts,
-          layoutsDocument,
-          revision: payload.revision,
-          updated_at: stringValue(payload.updated_at, ""),
-        };
-        templateRef.current = nextTemplate;
-        setTemplate(nextTemplate);
-        dispatch({ type: "load", layouts: nextTemplate.layouts });
-      })
-      .catch((requestError: unknown) => {
-        if (
-          requestError instanceof DOMException &&
-          requestError.name === "AbortError"
-        ) {
-          return;
-        }
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load structured template"
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [templateId, reloadKey]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    const scheduler = createTemplateV2AutosaveScheduler<JsonRecord, void>({
-      debounceMs: TEMPLATE_V2_AUTOSAVE_DEBOUNCE_MS,
-      save: (layouts, context) => persistRef.current(layouts, context),
-    });
-    autosaveRef.current = scheduler;
-
-    function scheduleCurrentSnapshot(): boolean {
-      const current = stateRef.current;
-      if (!current.dirty || !current.layouts) return false;
-      return scheduler.schedule(current.layouts);
-    }
-
-    function flushForLifecycle(event?: BeforeUnloadEvent) {
-      if (
-        conflictRef.current ||
-        scheduler.getState().blockedByError ||
-        !scheduleCurrentSnapshot()
-      ) {
-        return;
-      }
-      lifecycleFlushRef.current = true;
-      if (event) {
-        event.preventDefault();
-        event.returnValue = "";
-      }
-      void scheduler.flush().finally(() => {
-        if (mountedRef.current) lifecycleFlushRef.current = false;
-      });
-    }
-
-    function onBeforeUnload(event: BeforeUnloadEvent) {
-      flushForLifecycle(event);
-    }
-
-    function onPageHide() {
-      flushForLifecycle();
-    }
-
-    window.addEventListener("beforeunload", onBeforeUnload);
-    window.addEventListener("pagehide", onPageHide);
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload);
-      window.removeEventListener("pagehide", onPageHide);
-      mountedRef.current = false;
-      lifecycleFlushRef.current = true;
-      autosaveRef.current = null;
-      const schedulerState = scheduler.getState();
-      void scheduler
-        .dispose({
-          flush:
-            !conflictRef.current &&
-            !schedulerState.blockedByError,
-        })
-        .catch(() => {
-          // The mounted UI already reported the persistence failure. A
-          // lifecycle cleanup must not create an unhandled rejection.
-        });
-    };
-  }, [templateId]);
-
-  useEffect(() => {
-    if (!state.dirty || !state.layouts || !template) return;
-    autosaveRef.current?.schedule(state.layouts);
-  }, [state.dirty, state.layouts, template]);
+  const selectionControls = useMemo(
+    () =>
+      getTemplateV2SelectionControls({
+        scene,
+        selections: state.selectionSet,
+        lockedSelections,
+        lockedElementKeys: state.lockedElementKeys,
+      }),
+    [lockedSelections, scene, state.lockedElementKeys, state.selectionSet]
+  );
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -520,134 +117,6 @@ export default function TemplateV2Studio({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [state.future.length, state.past.length]);
-
-  async function persistLayouts(
-    layoutsSnapshot: JsonRecord,
-    context: TemplateV2AutosaveContext
-  ) {
-    const currentTemplate = templateRef.current;
-    if (!currentTemplate) throw new Error("Structured template is unavailable");
-    const saveToken = ++saveTokenRef.current;
-    const revisionSnapshot = currentTemplate.revision;
-    dispatch({
-      type: "begin-save",
-      token: saveToken,
-      layouts: layoutsSnapshot,
-    });
-    if (mountedRef.current) {
-      setSaving(true);
-      setError(null);
-      setNotice(null);
-      setConflict(null);
-    }
-    conflictRef.current = false;
-    const serializedLayouts = serializeStudioLayoutsForUpstream(
-      currentTemplate.layoutsDocument,
-      layoutsSnapshot
-    );
-    try {
-      const response = await fetch(
-        getApiUrl(
-          `/api/v1/ppt/structured-templates/${encodeURIComponent(currentTemplate.id)}`
-        ),
-        {
-          method: "PATCH",
-          credentials: "include",
-          keepalive:
-            lifecycleFlushRef.current || context.trigger === "dispose",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            layouts: serializedLayouts,
-            expected_revision: revisionSnapshot,
-          }),
-        }
-      );
-      const payload = await readResponse(response);
-      if (!response.ok) {
-        if (
-          response.status === 409 &&
-          isJsonRecord(payload) &&
-          isJsonRecord(payload.detail) &&
-          payload.detail.code === "template_v2_revision_conflict"
-        ) {
-          conflictRef.current = true;
-          const currentRevision =
-            typeof payload.detail.current_revision === "number"
-              ? payload.detail.current_revision
-              : revisionSnapshot;
-          if (mountedRef.current) {
-            setConflict({
-              templateId: currentTemplate.id,
-              expectedRevision: revisionSnapshot,
-              currentRevision,
-              layouts: serializedLayouts,
-            });
-          }
-        }
-        throw new Error(errorMessage(response.status, payload));
-      }
-      if (
-        !isJsonRecord(payload) ||
-        typeof payload.revision !== "number"
-      ) {
-        throw new Error("Structured template save response is invalid");
-      }
-      const layoutsDocument =
-        adaptUpstreamTemplateV2LayoutsToStudio(payload.layouts);
-      const nextTemplate: StructuredTemplate = {
-        ...currentTemplate,
-        layouts: layoutsDocument.studioLayouts,
-        layoutsDocument,
-        revision: payload.revision,
-        updated_at: stringValue(
-          payload.updated_at,
-          currentTemplate.updated_at
-        ),
-      };
-      templateRef.current = nextTemplate;
-      dispatch({
-        type: "save-succeeded",
-        token: saveToken,
-        layouts: layoutsDocument.studioLayouts,
-      });
-      if (mountedRef.current) {
-        setTemplate(nextTemplate);
-        setNotice(
-          context.trigger === "debounce" || context.trigger === "queued"
-            ? "Saved automatically"
-            : "Saved"
-        );
-      }
-    } catch (saveError) {
-      dispatch({ type: "save-failed", token: saveToken });
-      if (mountedRef.current) {
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Unable to save structured template"
-        );
-      }
-      throw saveError;
-    } finally {
-      if (mountedRef.current) setSaving(false);
-    }
-  }
-
-  async function flushAutosave() {
-    if (!state.layouts || !state.dirty || conflict) return;
-    const scheduler = autosaveRef.current;
-    if (!scheduler) return;
-    scheduler.schedule(state.layouts);
-    scheduler.resume();
-    try {
-      await scheduler.flush();
-    } catch {
-      // persistLayouts reports the actionable error and preserves the snapshot.
-    }
-  }
 
   function selectElement(path: ElementPath | null, additive = false) {
     if (!path || !scene) {
@@ -828,13 +297,7 @@ export default function TemplateV2Studio({
           {conflict ? (
             <TemplateV2ConflictRecovery
               snapshot={conflict}
-              onReload={() => {
-                autosaveRef.current?.discardPending();
-                conflictRef.current = false;
-                setConflict(null);
-                setError(null);
-                setReloadKey((value) => value + 1);
-              }}
+              onReload={reloadServerVersion}
             />
           ) : null}
         </div>
@@ -907,7 +370,7 @@ export default function TemplateV2Studio({
             <>
               <h3 className="mt-6 text-sm font-semibold">Elements</h3>
               <div className="mt-2">
-                <ElementTree
+                <TemplateV2ElementTree
                   elements={scene.elements}
                   selectedPathKeys={selectedPathKeys}
                   lockedPathKeys={lockedPathKeys}

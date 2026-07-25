@@ -66,7 +66,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
             const template = getLayoutByLayoutId(slide.layout, slide.layout_group);
             return template?.component ?? null;
         }
-    }, [isCustomTemplate, customTemplate, slide.layout]);
+    }, [isCustomTemplate, customTemplate, slide.layout, slide.layout_group]);
 
     // Authored mode: slides are model-authored HTML rendered to a full-bleed image
     // (no React layout template). Display the stored slide image so authored decks are
@@ -86,6 +86,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
                     className="aspect-video h-full w-full overflow-hidden bg-white"
                 >
                     {src ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- Authored slide images may be backend, data, or blob URLs and must render unchanged.
                         <img
                             src={src}
                             alt={`Slide ${slide.index + 1}`}

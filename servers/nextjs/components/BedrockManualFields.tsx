@@ -43,7 +43,7 @@ export default function BedrockManualFields({
 
   useEffect(() => {
     if (hasAdvancedContent(llmConfig)) setAdvancedOpen(true);
-  }, [llmConfig.BEDROCK_AWS_SESSION_TOKEN, llmConfig.BEDROCK_PROFILE_NAME]);
+  }, [llmConfig, llmConfig.BEDROCK_AWS_SESSION_TOKEN, llmConfig.BEDROCK_PROFILE_NAME]);
 
   const inputClass =
     'w-full min-w-0 rounded-lg border border-gray-300 px-3 py-3 text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20';

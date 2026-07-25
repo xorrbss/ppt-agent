@@ -17,7 +17,7 @@ import { LLMConfig } from "@/types/llm_config";
 import { getApiUrl } from "@/utils/api";
 import { LLM_PROVIDERS } from "@/utils/providerConstants";
 import { Check, Loader2, Eye, EyeOff, ChevronUp } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notify } from "@/components/ui/sonner";
 import CodexConfig from "./SettingCodex";
 import VertexAzureManualFields from "@/components/VertexAzureManualFields";
@@ -169,16 +169,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     if (currentModelField) {
       onInputChange("", currentModelField);
     }
-  }, [
-    selectedProvider,
-    currentApiKey,
-    currentCustomUrl,
-    currentLitellmUrl,
-    currentLmStudioUrl,
-    currentFireworksUrl,
-    currentTogetherUrl,
-    currentModelField,
-  ]);
+  }, [selectedProvider, currentApiKey, currentCustomUrl, currentLitellmUrl, currentLmStudioUrl, currentFireworksUrl, currentTogetherUrl, currentModelField, onInputChange]);
 
   const onApiKeyChange = (llm: keyof typeof LLM_PROVIDERS, value: string) => {
     if (llm === "ollama") {
@@ -219,7 +210,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     }
   };
 
-  const fetchAvailableModels = async () => {
+  const fetchAvailableModels = useCallback(async () => {
     if (isManualModelProvider) return;
     if (selectedProvider === "openai" && !currentApiKey) return;
     if (selectedProvider === "google" && !currentApiKey) return;
@@ -391,13 +382,27 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     } finally {
       setModelsLoading(false);
     }
-  };
+  }, [
+    currentApiKey,
+    currentCustomUrl,
+    currentFireworksUrl,
+    currentLitellmUrl,
+    currentLmStudioUrl,
+    currentModel,
+    currentModelField,
+    currentTogetherUrl,
+    isManualModelProvider,
+    modelLabel,
+    onInputChange,
+    selectedProvider,
+    selectedProviderMeta?.url,
+  ]);
 
   useEffect(() => {
     if (selectedProvider === "ollama" && !modelsChecked && !modelsLoading) {
       fetchAvailableModels();
     }
-  }, [selectedProvider, modelsChecked, modelsLoading]);
+  }, [selectedProvider, modelsChecked, modelsLoading, fetchAvailableModels]);
 
   return (
     <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">

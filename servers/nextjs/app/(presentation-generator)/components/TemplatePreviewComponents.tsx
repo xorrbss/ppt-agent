@@ -3,6 +3,7 @@ import React, { memo, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { TemplateWithData } from "@/app/presentation-templates/utils";
 import { CompiledLayout } from "@/app/hooks/compileLayout";
+import Image from "next/image";
 
 
 
@@ -10,10 +11,11 @@ import { CompiledLayout } from "@/app/hooks/compileLayout";
 export function TemplatePreviewStage({ children }: { children: React.ReactNode }) {
     return (
         <div className="relative overflow-hidden px-5 pb-5 pt-5 h-[230px]">
-            <img
+            <Image
                 src="/card_bg.svg"
                 alt=""
-                className="absolute top-0 left-0 w-full h-full object-cover"
+                fill
+                className="absolute object-cover"
             />
             {children}
         </div>

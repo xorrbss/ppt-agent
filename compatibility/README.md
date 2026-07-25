@@ -165,6 +165,19 @@ paths above), and the grafts go on its non-copied children.
   work: 92.4 ops/s, 18.0 failures, p99 3573ms, versus 88.1 ops/s, 24.3 failures,
   p99 4434ms with the flag off. The flag-on arm scored slightly better on every
   metric and the per-round ranges overlap completely, so the difference is noise.
+- SQLite remains supported for the default `local`, `development`, and `test`
+  deployment tiers. An enabled Template V2 canary in an explicitly declared
+  `staging` or `production` tier must use PostgreSQL; readiness and process
+  startup fail closed otherwise. Checked-in Compose services declare their
+  production/development tier. Raw Docker images, `start.js`, Electron, and
+  custom process supervisors inherit the environment; managed uses of those
+  paths must set `TEMPLATE_V2_DEPLOYMENT_TIER` explicitly.
+- `scripts/check_template_v2_operations.py` is the content-free operational
+  contract for aggregate health, pre-rollback drain, and standalone private
+  source cleanup. Rollback remains blocked while any import is queued, active,
+  confirming, awaiting review, or failed. Stale, failed, review-required, and
+  overdue-cleanup states degrade health in that priority order. Retention
+  cleanup runs independently of the Template V2 creation flag.
 - PostgreSQL is verified by a dedicated live-database CI gate. It runs the
   official Alembic lineage from an empty database and covers Template V2
   upgrade/downgrade/re-upgrade, legacy and populated-data preservation,
