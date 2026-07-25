@@ -84,9 +84,14 @@ function fontStyle(font) {
   if (!isRecord(font)) return [];
   const lineHeight = finite(font.line_height);
   return [
-    typeof font.family === "string" ? `font-family:${JSON.stringify(font.family)}` : "",
+    // Escaped because these land inside a double-quoted style attribute: the quotes
+    // JSON.stringify adds would otherwise close it and drop every later declaration
+    // -- size, colour and weight included. Same pattern as the mask-image URL below.
+    typeof font.family === "string"
+      ? `font-family:${escapeHtml(JSON.stringify(font.family))}`
+      : "",
     font.size ? `font-size:${finite(font.size)}px` : "",
-    typeof font.color === "string" ? `color:${font.color}` : "",
+    typeof font.color === "string" ? `color:${escapeHtml(font.color)}` : "",
     font.bold ? "font-weight:700" : "",
     font.italic ? "font-style:italic" : "",
     font.underline ? "text-decoration:underline" : "",

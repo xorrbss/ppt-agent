@@ -415,7 +415,11 @@ function planVector(element, path) {
     "template_v2_render_plan_invalid_vector_curve",
     `${path}.curve`
   );
-  if (element.curve !== undefined && curve.type !== "smooth") {
+  // `null` means absent, exactly as optionalRecord and the sampling branch below
+  // already treat it. Producers that serialise optional fields -- pydantic's
+  // model_dump(mode="json") among them -- emit null rather than omitting the key,
+  // and rejecting that killed the whole deck over one shape.
+  if (element.curve !== undefined && element.curve !== null && curve.type !== "smooth") {
     fail("template_v2_render_plan_invalid_vector_curve", `${path}.curve.type`);
   }
   const tension = curve.tension ?? 0.5;
