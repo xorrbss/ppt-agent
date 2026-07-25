@@ -115,6 +115,95 @@ def test_relocation_tolerates_a_media_free_run_but_not_a_missing_output(
     )
 
 
+def test_relocation_refuses_a_directory_the_runtime_did_not_allocate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Relocation deletes the run directory on every exit, so it must own it first.
+
+    `output_dir` is `""` by default on the converter's response model and `Path("")`
+    is the server's working directory -- a real directory, which the discard would
+    otherwise remove.
+    """
+
+    app_data = tmp_path / "app-data"
+    (app_data / "pptx-to-json").mkdir(parents=True)
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    unowned = tmp_path / "server-working-directory"
+    (unowned / "images").mkdir(parents=True)
+    (unowned / "presentation.json").write_text("{}", encoding="utf-8")
+    monkeypatch.chdir(unowned)
+
+    _assert_rejection(
+        "runtime_output_directory_untrusted",
+        lambda: relocate_runtime_assets("", import_id=uuid.uuid4()),
+    )
+    _assert_rejection(
+        "runtime_output_directory_untrusted",
+        lambda: relocate_runtime_assets(unowned, import_id=uuid.uuid4()),
+    )
+    assert (unowned / "presentation.json").is_file()
+
+
+@pytest.mark.parametrize(
+    ("plant_directory", "entry_name", "code"),
+    [
+        (True, "nested", "unsupported_runtime_asset_entry"),
+        (False, "notes.txt", "unsafe_runtime_asset_name"),
+    ],
+)
+def test_a_rejected_relocation_still_discards_the_run_directory(
+    tmp_path: Path,
+    monkeypatch,
+    plant_directory: bool,
+    entry_name: str,
+    code: str,
+) -> None:
+    """A rejection must not strand `presentation.json` on the served mount.
+
+    The run directory holds the deck's full extracted text and lives under
+    `/app_data`, outside the private tree retention manages; the bundled runtime
+    only removes it when the converter itself fails. So a rejection that left it
+    behind would outlive the cleanup that reclaims the source deck.
+    """
+
+    app_data = tmp_path / "app-data"
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    output_directory = _runtime_output(app_data, "image1-9f3.png")
+    planted = output_directory / "images" / entry_name
+    if plant_directory:
+        planted.mkdir()
+    else:
+        planted.write_bytes(b"not-an-image")
+
+    _assert_rejection(
+        code,
+        lambda: relocate_runtime_assets(output_directory, import_id=uuid.uuid4()),
+    )
+
+    assert not (output_directory / "presentation.json").exists()
+    assert not output_directory.exists()
+
+
+def test_a_media_free_run_directory_is_discarded_as_well(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The early return owns the run directory exactly like the success path."""
+
+    app_data = tmp_path / "app-data"
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    output_directory = app_data / "pptx-to-json" / uuid.uuid4().hex
+    output_directory.mkdir(parents=True)
+    (output_directory / "presentation.json").write_text("{}", encoding="utf-8")
+
+    relocated = relocate_runtime_assets(output_directory, import_id=uuid.uuid4())
+
+    assert relocated.asset_names == ()
+    assert not (output_directory / "presentation.json").exists()
+    assert not output_directory.exists()
+
+
 @pytest.mark.parametrize(
     ("suffix", "code"),
     [

@@ -39,6 +39,7 @@ _MAX_DISPLAY_FILENAME_CHARACTERS = 240
 # directory keeps one retention path for the source deck and its extracted media.
 PRIVATE_ASSET_URL_PREFIX = "/api/v1/ppt/structured-templates/imports"
 _PRIVATE_ASSET_DIRECTORY = "assets"
+_RUNTIME_OUTPUT_DIRECTORY = "pptx-to-json"
 _RUNTIME_ASSET_DIRECTORY = "images"
 _SAFE_ASSET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 _ASSET_SUFFIXES = (
@@ -244,6 +245,15 @@ class RelocatedRuntimeAssets:
         return private_asset_reference(self.import_id, leaf)
 
 
+def _runtime_output_root() -> Path:
+    """Return the directory the export runtime allocates its `pptx-to-json` runs under."""
+
+    raw_app_data = (get_app_data_directory_env() or "").strip()
+    if not raw_app_data:
+        raise RuntimeError("app_data_directory_required")
+    return Path(raw_app_data).resolve() / _RUNTIME_OUTPUT_DIRECTORY
+
+
 def _discard_runtime_output(run_directory: Path) -> None:
     """Drop the converter's run directory once its media has been taken over.
 
@@ -275,41 +285,52 @@ def relocate_runtime_assets(
     runtime_root = Path(output_directory)
     if not runtime_root.is_dir():
         raise PptxUploadRejected("runtime_output_directory_missing")
-    runtime_media = runtime_root / _RUNTIME_ASSET_DIRECTORY
-    if runtime_media.is_symlink():
-        raise PptxUploadRejected("runtime_asset_symlink_forbidden")
-    if not runtime_media.is_dir():
-        return RelocatedRuntimeAssets(import_id=import_id, asset_names=())
-    asset_names: list[str] = []
-    for entry in sorted(runtime_media.iterdir()):
-        if entry.is_symlink():
+    # The `finally` below deletes this directory, so establish ownership before arming
+    # it: `output_dir` defaults to "" in the converter's response model, and Path("")
+    # is the process working directory, which is a directory and would be removed.
+    if runtime_root.resolve().parent != _runtime_output_root():
+        raise PptxUploadRejected("runtime_output_directory_untrusted")
+    try:
+        runtime_media = runtime_root / _RUNTIME_ASSET_DIRECTORY
+        if runtime_media.is_symlink():
             raise PptxUploadRejected("runtime_asset_symlink_forbidden")
-        if not entry.is_file():
-            raise PptxUploadRejected("unsupported_runtime_asset_entry")
-        asset_names.append(_asset_name(entry.name))
-    _private_asset_directory(import_id).mkdir(parents=True, exist_ok=True)
-    for asset_name in asset_names:
-        target = resolve_private_asset(
-            private_asset_reference(import_id, asset_name),
-            expected_import_id=import_id,
+        if not runtime_media.is_dir():
+            return RelocatedRuntimeAssets(import_id=import_id, asset_names=())
+        asset_names: list[str] = []
+        for entry in sorted(runtime_media.iterdir()):
+            if entry.is_symlink():
+                raise PptxUploadRejected("runtime_asset_symlink_forbidden")
+            if not entry.is_file():
+                raise PptxUploadRejected("unsupported_runtime_asset_entry")
+            asset_names.append(_asset_name(entry.name))
+        _private_asset_directory(import_id).mkdir(parents=True, exist_ok=True)
+        for asset_name in asset_names:
+            target = resolve_private_asset(
+                private_asset_reference(import_id, asset_name),
+                expected_import_id=import_id,
+            )
+            # Unique per call: a lapsed lease can leave two attempts for the same
+            # import relocating concurrently into this directory, and a fixed name
+            # let them interleave writes into one temp file and publish the mixed
+            # result, or let one attempt's cleanup delete the other's file mid-flight.
+            temporary = target.with_name(f"{asset_name}.{uuid.uuid4().hex}.relocating")
+            try:
+                shutil.copyfile(runtime_media / asset_name, temporary)
+                temporary.replace(target)
+            except Exception:
+                temporary.unlink(missing_ok=True)
+                raise
+            (runtime_media / asset_name).unlink()
+        return RelocatedRuntimeAssets(
+            import_id=import_id,
+            asset_names=tuple(asset_names),
         )
-        # Unique per call: a lapsed lease can leave two attempts for the same import
-        # relocating concurrently into this directory, and a fixed name let them
-        # interleave writes into one temp file and publish the mixed result, or let
-        # one attempt's cleanup delete the other's file mid-flight.
-        temporary = target.with_name(f"{asset_name}.{uuid.uuid4().hex}.relocating")
-        try:
-            shutil.copyfile(runtime_media / asset_name, temporary)
-            temporary.replace(target)
-        except Exception:
-            temporary.unlink(missing_ok=True)
-            raise
-        (runtime_media / asset_name).unlink()
-    _discard_runtime_output(runtime_media.parent)
-    return RelocatedRuntimeAssets(
-        import_id=import_id,
-        asset_names=tuple(asset_names),
-    )
+    finally:
+        # Once the directory exists this call owns it, so every exit discards it --
+        # a rejected entry or a failed copy would otherwise strand the run's
+        # `presentation.json` on the served mount for good, since the bundled
+        # runtime only removes the directory when the converter itself fails.
+        _discard_runtime_output(runtime_root)
 
 
 def _display_filename(filename: str | None) -> str:
