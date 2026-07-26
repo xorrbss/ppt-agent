@@ -28,7 +28,9 @@ export type TemplateV2RunTarget =
   | { kind: "chart-series-name"; seriesIndex: number }
   | { kind: "chart-series-value"; seriesIndex: number; valueIndex: number }
   | { kind: "asset-data" }
-  | { kind: "asset-fit" };
+  | { kind: "asset-fit" }
+  | { kind: "asset-focus"; axis: "x" | "y" }
+  | { kind: "asset-crop-scale" };
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -237,10 +239,32 @@ function updateAsset(
     }
     return { ...element, data: text };
   }
-  if (!["fill", "contain", "cover"].includes(text) || element.fit === text) {
+  if (target.kind === "asset-fit") {
+    if (!["fill", "contain", "cover"].includes(text) || element.fit === text) {
+      return element;
+    }
+    return { ...element, fit: text };
+  }
+  const normalized = text.trim();
+  if (!normalized) return element;
+  const numericValue = Number(normalized);
+  if (!Number.isFinite(numericValue)) return element;
+  if (target.kind === "asset-focus") {
+    if (numericValue < 0 || numericValue > 100) return element;
+    const property = target.axis === "x" ? "focus_x" : "focus_y";
+    return element[property] === numericValue
+      ? element
+      : { ...element, [property]: numericValue };
+  }
+  if (
+    numericValue < 1 ||
+    numericValue > 6 ||
+    (element.color != null && numericValue !== 1) ||
+    element.crop_scale === numericValue
+  ) {
     return element;
   }
-  return { ...element, fit: text };
+  return { ...element, crop_scale: numericValue };
 }
 
 export function updateTemplateV2ContentRun(

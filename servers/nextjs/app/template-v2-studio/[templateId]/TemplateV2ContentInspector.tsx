@@ -12,6 +12,8 @@ interface EditableField {
   value: string;
   target: TemplateV2RunTarget;
   control: "text" | "number" | "textarea" | "fit" | "alignment" | "color";
+  min?: number;
+  max?: number;
 }
 
 interface TemplateV2ContentInspectorProps {
@@ -286,6 +288,39 @@ function assetFields(element: JsonRecord): EditableField[] {
       target: { kind: "asset-fit" },
       control: "fit",
     },
+    {
+      key: "asset-focus-x",
+      label: "Horizontal focus (%)",
+      value: String(
+        typeof element.focus_x === "number" ? element.focus_x : 50,
+      ),
+      target: { kind: "asset-focus", axis: "x" },
+      control: "number",
+      min: 0,
+      max: 100,
+    },
+    {
+      key: "asset-focus-y",
+      label: "Vertical focus (%)",
+      value: String(
+        typeof element.focus_y === "number" ? element.focus_y : 50,
+      ),
+      target: { kind: "asset-focus", axis: "y" },
+      control: "number",
+      min: 0,
+      max: 100,
+    },
+    {
+      key: "asset-crop-scale",
+      label: "Crop scale",
+      value: String(
+        typeof element.crop_scale === "number" ? element.crop_scale : 1,
+      ),
+      target: { kind: "asset-crop-scale" },
+      control: "number",
+      min: 1,
+      max: 6,
+    },
   ];
 }
 
@@ -326,7 +361,7 @@ export default function TemplateV2ContentInspector({
   return (
     <div className="mt-5 space-y-4">
       <p className="text-sm font-medium">Editable content · {pathLabel}</p>
-      {fields.map(({ key, label, value, target, control }) => {
+      {fields.map(({ key, label, value, target, control, min, max }) => {
         const shared = {
           value,
           disabled,
@@ -366,6 +401,8 @@ export default function TemplateV2ContentInspector({
                 {...shared}
                 type={control}
                 step={control === "number" ? "any" : undefined}
+                min={min}
+                max={max}
               />
             )}
           </label>
@@ -374,7 +411,8 @@ export default function TemplateV2ContentInspector({
       {element.type === "image" ? (
         <p className="text-xs text-slate-500">
           Asset sources must be an app-relative path or an inline image data URI.
-          Remote URLs are rejected.
+          Remote URLs are rejected. Focus is bounded to 0–100% and crop scale
+          to 1–6; tinted icons cannot be cropped.
         </p>
       ) : null}
       {element.type === "table" ? (

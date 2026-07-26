@@ -311,3 +311,70 @@ test("edits image source and fit only for renderer-safe asset values", () => {
   assert.equal(isSafeTemplateV2AssetSource("/\\example.com/image.png"), false);
   assert.equal(isSafeTemplateV2AssetSource("/images/unsafe\nname.png"), false);
 });
+
+test("edits image focus and crop only within renderer bounds", () => {
+  const element = {
+    type: "image",
+    data: "/app_data/images/hero.png",
+    focus_x: 50,
+    focus_y: 50,
+    crop_scale: 1,
+    future_image_field: { retained: true },
+  };
+  const focusX = updateTemplateV2ContentRun(
+    element,
+    { kind: "asset-focus", axis: "x" },
+    "25.5",
+  );
+  const focusY = updateTemplateV2ContentRun(
+    focusX,
+    { kind: "asset-focus", axis: "y" },
+    "75",
+  );
+  const cropped = updateTemplateV2ContentRun(
+    focusY,
+    { kind: "asset-crop-scale" },
+    "1.75",
+  );
+
+  assert.deepEqual(cropped, {
+    type: "image",
+    data: "/app_data/images/hero.png",
+    focus_x: 25.5,
+    focus_y: 75,
+    crop_scale: 1.75,
+    future_image_field: { retained: true },
+  });
+  for (const [target, value] of [
+    [{ kind: "asset-focus", axis: "x" }, "-0.1"],
+    [{ kind: "asset-focus", axis: "y" }, "100.1"],
+    [{ kind: "asset-crop-scale" }, "0.99"],
+    [{ kind: "asset-crop-scale" }, "6.01"],
+    [{ kind: "asset-crop-scale" }, ""],
+  ] as const) {
+    assert.equal(updateTemplateV2ContentRun(cropped, target, value), cropped);
+  }
+});
+
+test("rejects icon crop changes that would violate the render contract", () => {
+  const icon = {
+    type: "image",
+    data: "/app_data/icons/mark.svg",
+    is_icon: true,
+    color: { color: "#1d4ed8" },
+    future_image_field: "retained",
+  };
+
+  assert.equal(
+    updateTemplateV2ContentRun(
+      icon,
+      { kind: "asset-crop-scale" },
+      "1.5",
+    ),
+    icon,
+  );
+  assert.deepEqual(
+    updateTemplateV2ContentRun(icon, { kind: "asset-crop-scale" }, "1"),
+    { ...icon, crop_scale: 1 },
+  );
+});

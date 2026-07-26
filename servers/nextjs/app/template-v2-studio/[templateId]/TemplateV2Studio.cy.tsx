@@ -355,6 +355,15 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("label", "Asset fit")
       .find("select")
       .select("contain", { force: true });
+    cy.contains("label", "Horizontal focus (%)")
+      .find("input")
+      .type("{selectall}25.5", { waitForAnimations: false });
+    cy.contains("label", "Vertical focus (%)")
+      .find("input")
+      .type("{selectall}75", { waitForAnimations: false });
+    cy.contains("label", "Crop scale")
+      .find("input")
+      .type("{selectall}1.75", { waitForAnimations: false });
     cy.contains("button", "Save").click({ waitForAnimations: false });
 
     cy.wait("@saveEditableTemplate")
@@ -364,6 +373,9 @@ describe("TemplateV2Studio API integration", () => {
           ...unsupportedImage,
           data: "/app_data/images/updated.png",
           fit: "contain",
+          focus_x: 25.5,
+          focus_y: 75,
+          crop_scale: 1.75,
         });
         expect(elements[2]).to.deep.equal({
           type: "chart",
