@@ -262,6 +262,11 @@ describe("TemplateV2Studio API integration", () => {
           values: [10, 20],
           future_series_field: { retained: true },
         },
+        {
+          name: "Forecast",
+          values: [12, 24],
+          future_series_field: { retained: "second" },
+        },
       ],
       future_chart_field: "retained",
     });
@@ -331,6 +336,9 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("label", "Series 1, value 2")
       .find("input")
       .type("{selectall}42.5", { waitForAnimations: false });
+    cy.get('button[aria-label="Move series 2 up"]').click({
+      waitForAnimations: false,
+    });
 
     cy.contains("button[aria-pressed]", /^forecast table/).click({
       waitForAnimations: false,
@@ -386,6 +394,11 @@ describe("TemplateV2Studio API integration", () => {
           title: "Bookings",
           categories: ["Q1", "FY26 Q2"],
           series: [
+            {
+              name: "Forecast",
+              values: [12, 24],
+              future_series_field: { retained: "second" },
+            },
             {
               name: "Forecast",
               values: [10, 42.5],

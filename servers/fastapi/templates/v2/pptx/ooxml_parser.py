@@ -12,6 +12,10 @@ from .models import (
 )
 from .package_reader import PptxPackageReader, UnsafePptxPackage
 from .relationship_graph import build_relationship_graph_evidence
+from .smartart_parser import (
+    parse_smartart_data_model,
+    unavailable_smartart_evidence,
+)
 from .style_graph import build_style_graph_evidence
 
 
@@ -28,6 +32,15 @@ SLIDE_REL_TYPE = (
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"
 )
 CANVAS_WIDTH = 1280.0
+SMARTART_DATA_REL_TYPES = frozenset(
+    {
+        "http://schemas.microsoft.com/office/2006/relationships/diagramData",
+        (
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+            "diagramData"
+        ),
+    }
+)
 
 
 def _safe_part_target(source_part: str, target: str) -> str:
@@ -258,12 +271,33 @@ def _parse_graphic_frame(
     if table is None:
         smart_art = shape.find("./a:graphic/a:graphicData/dgm:relIds", NS)
         if smart_art is not None:
+            data_relationship_id = smart_art.get(f"{REL_NS}dm")
+            relationship = relationships.get(data_relationship_id or "")
+            if not data_relationship_id or relationship is None:
+                evidence = unavailable_smartart_evidence(
+                    "data_relationship_missing"
+                )
+            elif relationship[0] not in SMARTART_DATA_REL_TYPES:
+                evidence = unavailable_smartart_evidence(
+                    "data_relationship_invalid"
+                )
+            elif relationship[1] not in reader.member_names:
+                evidence = unavailable_smartart_evidence(
+                    "data_part_missing",
+                    data_part=relationship[1],
+                )
+            else:
+                evidence = parse_smartart_data_model(
+                    reader.read_xml(relationship[1]),
+                    data_part=relationship[1],
+                )
             return ShapeCandidate(
                 source_id=source_id,
                 name=name,
                 kind="unsupported",
                 confidence=0,
                 unsupported_reason="unsupported_ooxml:smartArt",
+                smartart_evidence=evidence,
                 **transform,
             )
         chart_ref = shape.find("./a:graphic/a:graphicData/c:chart", NS)

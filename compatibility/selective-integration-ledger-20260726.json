@@ -206,6 +206,125 @@
       "Docker is unavailable on the local workstation, so clean-container packaging is delegated to required PR CI."
     ]
   },
+  "secondFollowupBoundedImplementation": {
+    "implementedAt": "2026-07-26",
+    "branch": "codex/template-v2-followup-2-20260726",
+    "baseSha": "d0123f69045c9f183116598337c006209c595b14",
+    "directCherryPickUsed": false,
+    "wholesaleMergeUsed": false,
+    "commits": [
+      "2d4665a6d8a5e479ccd5616db0460d7bfcc01862",
+      "ed6931a4c348627b9b982afe13209ec72bc6e092",
+      "ddb3def21c2aff9185a22b0e93eead1da79c5fb5",
+      "081b90b8fd8d5f0cb1886e59bb453d587a4e56a2"
+    ],
+    "slices": [
+      {
+        "id": "template-v2-chart-series-reorder",
+        "contentEvidence": [
+          "4bedd0e3",
+          "47f1c805",
+          "c10b18d0",
+          "da946fee",
+          "91345910",
+          "d7d469a9"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Adds only object-preserving series up/down transforms through the existing strict content updater. Invalid indices and no-op moves preserve identity, unknown chart and series metadata survive, and undo, dirty state, autosave, and revision behavior continue through the existing edit callback."
+      },
+      {
+        "id": "template-v2-smartart-bounded-evidence",
+        "contentEvidence": [
+          "fork-local-no-upstream-structured-smartart-basis"
+        ],
+        "disposition": "retain-local-bounded-extension",
+        "evidence": "Parses only inert SmartArt data-model evidence under explicit node, edge, and text limits. SmartArt remains non-editable, source-preserved, manual-rebuild content; missing or partial evidence fails closed and no Vision provider is invoked."
+      },
+      {
+        "id": "legacy-preview-pptx-preflight",
+        "contentEvidence": [
+          "11ab0d7521a5a0e53b99cfecfd44ec9910a65a97",
+          "2238110c2a2dc8fc36d9af01e93b2d0b71d7d880"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Streams legacy preview uploads with a 100 MiB cap and reuses the fork package reader for signature, required OOXML, encrypted, active-content, traversal, symlink, and expansion limits before font parsing or conversion. Template V2 storage and malware lifecycle are unchanged."
+      },
+      {
+        "id": "packaging-production-audit-gates",
+        "contentEvidence": [
+          "fork-release-policy-and-lockfiles-retained",
+          "upstream-package-and-lockfile-replacement-rejected"
+        ],
+        "disposition": "retain-local-bounded-gate",
+        "evidence": "Runs root, Next.js, and Electron production-only audits after locked installs and before packaging, and tests workflow path triggers and ordering. No dependency or lockfile changed; presentation-export remains v0.4.2 and the 16 dev/build-only high findings remain explicitly separated from production total 0."
+      }
+    ],
+    "verification": {
+      "fastapi": {
+        "passed": 1029,
+        "skipped": 6
+      },
+      "templateV2AndSharedNode": {
+        "passed": 131
+      },
+      "authoredHybridNode": {
+        "passed": 83,
+        "platformSkipped": 1
+      },
+      "cypressChromeSelected": {
+        "specs": 14,
+        "passed": 81
+      },
+      "templateV2StudioCypress": {
+        "passed": 12
+      },
+      "exportFidelity": {
+        "passed": 12,
+        "actualFixturesPassed": 4
+      },
+      "nextStaticPages": {
+        "generated": 29
+      },
+      "standaloneServer": {
+        "rootStatus": 200,
+        "templateV2StudioStatus": 200
+      },
+      "presentationExporterSync": {
+        "passed": 19,
+        "installedVersion": "v0.4.2"
+      },
+      "electronReleaseWorkflowPolicy": {
+        "passed": 3
+      },
+      "electronReleaseAuditParser": {
+        "passed": 3
+      },
+      "electronPackagePreflight": {
+        "passed": 24
+      },
+      "electronStandaloneCopy": {
+        "passed": 13,
+        "platformSkipped": 1
+      },
+      "electronBuildConfig": {
+        "passed": 2
+      },
+      "productionAuditTotals": {
+        "root": 0,
+        "nextjs": 0,
+        "electron": 0
+      },
+      "electronDevBuildHigh": 16
+    },
+    "externalBlockers": [
+      "Managed PostgreSQL credentials are absent; no managed lease, canary, alert, or flag-OFF rollback completion is claimed.",
+      "Vision provider credentials and approved egress are absent; no real or paid Vision call was attempted.",
+      "R2 credentials are absent; no upload was attempted.",
+      "CSC_LINK and fork-owned AppX identity/publisher are absent; Windows signing and publication were not attempted.",
+      "Apple signing and notarization identity are absent; macOS signing and notarization were not attempted.",
+      "Docker is unavailable locally; clean-container and cross-platform packaging evidence is delegated to required PR CI."
+    ]
+  },
   "decisions": [
     {
       "sha": "443d691d95ca90b4d183641d8a4b15b29a5cbf46",

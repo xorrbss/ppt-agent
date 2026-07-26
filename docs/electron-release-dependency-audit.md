@@ -20,8 +20,13 @@ npm run audit:release
 ```
 
 The gate runs before Electron build validation in
-`.github/workflows/g4-pptx-roundtrip.yml` and in
-`npm run test:local -- --with-electron`.
+`.github/workflows/g4-pptx-roundtrip.yml`, before any resource or Electron
+build in `.github/workflows/cross-platform-packaging-security.yml`, and in
+`npm run test:local -- --with-electron`. The cross-platform packaging workflow
+also runs fail-closed production-only audits for the root and Next.js lockfiles.
+Changes to the root package manifest or lockfile trigger that packaging
+workflow, so the release candidate cannot bypass the gate by changing a
+dependency outside `electron/`.
 
 ## Current finding and exposure
 
