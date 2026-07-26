@@ -10,6 +10,7 @@ from fastapi import HTTPException, UploadFile
 from pydantic import BaseModel
 
 from services.documents_loader import DocumentsLoader
+from templates.legacy_pptx_preflight import stage_legacy_preview_pptx
 from templates.pptx_convert import convert_pptx_to_pdf
 from templates.pptx_font_utils import (
     FontDetail,
@@ -287,10 +288,9 @@ async def check_fonts_in_pptx_handler(pptx_file: UploadFile) -> FontCheckRespons
         )
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Save uploaded PPTX file
+        # Stage and preflight the uploaded PPTX before any parser or converter sees it.
         pptx_path = os.path.join(temp_dir, "presentation.pptx")
-        pptx_content = await pptx_file.read()
-        await asyncio.to_thread(_write_bytes_to_path, pptx_path, pptx_content)
+        await stage_legacy_preview_pptx(pptx_file, pptx_path)
         font_variants_by_name = await asyncio.to_thread(
             extract_used_font_variants_from_pptx, pptx_path
         )
@@ -372,10 +372,9 @@ async def upload_fonts_and_preview_handler(
         contextlib.nullcontext(temp_dir) if temp_dir else tempfile.TemporaryDirectory()
     )
     with temp_dir_context as temp_dir:
-        # Save uploaded PPTX file
+        # Stage and preflight the uploaded PPTX before any parser or converter sees it.
         pptx_path = os.path.join(temp_dir, "presentation.pptx")
-        pptx_content = await pptx_file.read()
-        await asyncio.to_thread(_write_bytes_to_path, pptx_path, pptx_content)
+        await stage_legacy_preview_pptx(pptx_file, pptx_path)
         logger.info(f"Saved PPTX file to {pptx_path}")
         variants_by_normalized_name = await asyncio.to_thread(
             _font_variants_by_normalized_name, pptx_path
