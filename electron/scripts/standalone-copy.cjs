@@ -271,10 +271,33 @@ function atomicReplaceDirectory(tempDirectory, targetDirectory) {
   if (hadTarget) fs.rmSync(backup, { recursive: true, force: true })
 }
 
+function materializeTreeInPlace(rootDirectory) {
+  const root = path.resolve(rootDirectory)
+  const links = collectLinks(root)
+  if (links.length === 0) {
+    validateLinkFreeTree(root)
+    return 0
+  }
+
+  const temp = `${root}.materialized-${process.pid}-${Date.now()}`
+  try {
+    copyTreeSafe(root, temp, { materializeLinks: true })
+    atomicReplaceDirectory(temp, root)
+    validateLinkFreeTree(root)
+  } catch (error) {
+    if (fs.existsSync(temp)) {
+      fs.rmSync(temp, { recursive: true, force: true })
+    }
+    throw error
+  }
+  return links.length
+}
+
 module.exports = {
   atomicReplaceDirectory,
   copyTreeSafe,
   isWithin,
+  materializeTreeInPlace,
   removeMaterializedPnpmStore,
   validateCopiedLinks,
   validateLinkFreeTree,

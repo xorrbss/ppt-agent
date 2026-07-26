@@ -8,6 +8,7 @@ const { pathToFileURL } = require("node:url")
 const {
   atomicReplaceDirectory,
   copyTreeSafe,
+  materializeTreeInPlace,
   removeMaterializedPnpmStore,
   validateCopiedLinks,
   validateLinkFreeTree,
@@ -93,6 +94,60 @@ test("materializes internal directory links for link-free packagers", (t) => {
     "ok"
   )
   validateLinkFreeTree(destination)
+})
+
+test("materializes a macOS framework-style link hierarchy in place", {
+  skip: process.platform === "win32",
+}, (t) => {
+  const root = fixture(t)
+  const framework = path.join(root, "Python.framework")
+  const version = path.join(framework, "Versions", "3.11")
+  fs.mkdirSync(version, { recursive: true })
+  fs.writeFileSync(path.join(version, "Python"), "framework-binary")
+  directoryLink("3.11", path.join(framework, "Versions", "Current"))
+  fs.symlinkSync(
+    path.join("Versions", "Current", "Python"),
+    path.join(framework, "Python"),
+    "file"
+  )
+
+  assert.equal(materializeTreeInPlace(root), 2)
+  validateLinkFreeTree(root)
+  assert.equal(
+    fs.readFileSync(path.join(framework, "Python"), "utf8"),
+    "framework-binary"
+  )
+  assert.equal(
+    fs.readFileSync(
+      path.join(framework, "Versions", "Current", "Python"),
+      "utf8"
+    ),
+    "framework-binary"
+  )
+})
+
+test("materializes an internal directory link in place", (t) => {
+  const root = fixture(t)
+  const target = path.join(root, "Versions", "3.11")
+  fs.mkdirSync(target, { recursive: true })
+  fs.writeFileSync(path.join(target, "marker.txt"), "ok")
+  directoryLink("3.11", path.join(root, "Versions", "Current"))
+
+  assert.equal(materializeTreeInPlace(root), 1)
+  validateLinkFreeTree(root)
+  assert.equal(
+    fs.readFileSync(path.join(root, "Versions", "Current", "marker.txt"), "utf8"),
+    "ok"
+  )
+})
+
+test("does not rewrite an already link-free resource tree", (t) => {
+  const root = fixture(t)
+  const marker = path.join(root, "fastapi")
+  fs.writeFileSync(marker, "binary")
+
+  assert.equal(materializeTreeInPlace(root), 0)
+  assert.equal(fs.readFileSync(marker, "utf8"), "binary")
 })
 
 test("removes a pnpm store only after packages are materialized", (t) => {
