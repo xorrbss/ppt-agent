@@ -76,9 +76,9 @@ function response(payloadLayouts = layouts(), revision = 1) {
 }
 
 function settleSuccessfulPersistence() {
-  cy.contains("button", /^(Save now|Saving…)$/).then(($button) => {
-    if (!$button.is(":disabled")) cy.wrap($button).click();
-  });
+  // The debounced autosave may finish between querying the button and clicking
+  // it. Waiting on the user-visible dirty state covers both the pending-save
+  // and already-saved paths without racing the disabled button transition.
   cy.contains("Unsaved changes").should("not.exist");
 }
 

@@ -2,6 +2,7 @@ export interface TemplateV2ConflictSnapshot {
   templateId: string;
   expectedRevision: number;
   currentRevision: number;
+  baseLayouts?: unknown;
   layouts: unknown;
 }
 
@@ -12,6 +13,7 @@ export interface TemplateV2ConflictRecoveryBundle {
   expected_revision: number;
   current_revision: number;
   captured_at: string;
+  base_layouts?: unknown;
   layouts: unknown;
 }
 
@@ -43,6 +45,9 @@ export function createTemplateV2ConflictRecoveryBundle(
     ),
     current_revision: revision(snapshot.currentRevision, "currentRevision"),
     captured_at: capturedAt.toISOString(),
+    ...(snapshot.baseLayouts === undefined
+      ? {}
+      : { base_layouts: structuredClone(snapshot.baseLayouts) }),
     layouts: structuredClone(snapshot.layouts),
   };
 }

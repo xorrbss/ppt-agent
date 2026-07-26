@@ -122,6 +122,32 @@ test("load and navigation use stable layout and component ids without dirtying",
   assert.equal(getTemplateV2Scene(switched.layouts, "layout-2", null), null);
 });
 
+test("restoring a browser journal keeps the server snapshot and marks the draft dirty", () => {
+  const serverLayouts = fixture();
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: serverLayouts,
+  });
+  const draftLayouts = structuredClone(serverLayouts);
+  const draftElements = (
+    ((draftLayouts.layouts as JsonRecord[])[0].components as JsonRecord[])[0]
+      .elements as JsonRecord[]
+  );
+  draftElements.push(createTemplateV2Rectangle());
+
+  const restored = templateV2StudioReducer(loaded, {
+    type: "restore-draft",
+    layouts: draftLayouts,
+  });
+
+  assert.equal(restored.layouts, draftLayouts);
+  assert.equal(restored.savedLayouts, serverLayouts);
+  assert.equal(restored.dirty, true);
+  assert.equal(restored.past.length, 1);
+  assert.equal(restored.activeLayoutId, "layout-1");
+  assert.equal(restored.activeComponentId, "component-1");
+});
+
 test("path update changes only a nested element and preserves group-only geometry", () => {
   const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
     type: "load",
