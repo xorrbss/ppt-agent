@@ -87,6 +87,125 @@
       "bounded text-run selection helpers from c513e612 and dabe968c"
     ]
   },
+  "subsequentBoundedManualPorts": {
+    "implementedAt": "2026-07-26",
+    "headBeforeImplementation": "f1596f2ecc9cfa60787449115283976da363c784",
+    "upstreamContentReviewedAtSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "directCherryPickUsed": false,
+    "wholesaleMergeUsed": false,
+    "slices": [
+      {
+        "id": "template-v2-image-focus-crop",
+        "upstreamEvidence": [
+          "31a6af10"
+        ],
+        "files": [
+          "servers/nextjs/lib/template-v2-studio-content.ts",
+          "servers/nextjs/lib/template-v2-studio-content.test.ts",
+          "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2ContentInspector.tsx",
+          "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2Studio.cy.tsx"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Adds only numeric focus_x/focus_y and crop_scale controls already accepted by the strict renderer contract. Values fail closed outside 0..100 and 1..6, tinted icon crops above 1 are rejected, unknown metadata and no-op identity are preserved, and no upload or remote asset trust path was added."
+      },
+      {
+        "id": "eot-font-offset-and-width-family-normalization",
+        "upstreamEvidence": [
+          "c4d426f76ef116e0e6812b5a44ce3ff5788671b9"
+        ],
+        "files": [
+          "servers/fastapi/templates/pptx_font_utils.py",
+          "servers/fastapi/tests/test_pptx_font_utils.py"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Uses validated EOT size fields to bound embedded font extraction, retains an earliest-signature legacy fallback, and preserves width-family tokens while still removing weight tokens."
+      },
+      {
+        "id": "temp-file-service-confinement",
+        "upstreamEvidence": [
+          "484b50e1709975e75193e821819b67963791c394",
+          "0f65ad6b05835b0daa1b410cd4de839113c91b5c"
+        ],
+        "files": [
+          "servers/fastapi/services/temp_file_service.py",
+          "servers/fastapi/tests/unit/test_temp_file_service.py"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Adds injectable canonical temp roots, POSIX/Windows basename handling, realpath/commonpath confinement, existing-path checks, cross-drive rejection, and guarded symlink-aware cleanup without replacing routers or widening app-data access."
+      },
+      {
+        "id": "presentation-export-override-opt-in",
+        "upstreamEvidence": [
+          "2702ed921cc62f0c01753dfc2db232f67c0eb5a1"
+        ],
+        "files": [
+          "scripts/sync-presentation-export.cjs",
+          "scripts/sync-presentation-export.test.cjs"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Ambient EXPORT_RUNTIME_VERSION is ignored unless --allow-version-override is explicit. Unknown options fail closed while the fork checksum, Sharp ABI, platform, atomic marker, and read-only check contracts remain intact."
+      }
+    ],
+    "verification": {
+      "fastapi": {
+        "passed": 1020,
+        "skipped": 6
+      },
+      "fastapiFocusedCrossStream": {
+        "passed": 106,
+        "skipped": 1
+      },
+      "templateV2Node": {
+        "passed": 129
+      },
+      "cypressCiSelected": {
+        "specs": 14,
+        "passed": 81
+      },
+      "cypressChromeFull": {
+        "specs": 24,
+        "passed": 105
+      },
+      "exportFidelity": {
+        "passed": 12,
+        "actualFixturesPassed": 4
+      },
+      "nextStaticPages": {
+        "generated": 29
+      },
+      "postgresqlLocalEquivalent": {
+        "version": "15",
+        "passed": 5,
+        "managedEvidence": false
+      },
+      "presentationExporterSync": {
+        "passed": 19
+      },
+      "electronReleasePolicy": {
+        "passed": 2
+      },
+      "electronPackagePreflight": {
+        "passed": 24
+      },
+      "electronStandaloneCopy": {
+        "passed": 13,
+        "platformSkipped": 1
+      },
+      "electronBuildConfig": {
+        "passed": 2
+      },
+      "electronProductionAuditTotal": 0,
+      "electronDevBuildHigh": 16
+    },
+    "externalBlockers": [
+      "Managed PostgreSQL credentials are absent, so the real canary and flag-OFF rollback remain unverified.",
+      "CSC_LINK and fork-owned AppX identity/publisher are absent, so signed Windows publication was not attempted.",
+      "R2_ACCOUNT_ID, R2_ACCESS_KEY, and R2_SECRET_KEY are absent, so upload was not attempted.",
+      "Vision provider credentials and approved egress are absent, so no real or paid provider call was attempted.",
+      "Apple signing and notarization identity are absent, so macOS signing and notarization remain unverified.",
+      "Docker is unavailable on the local workstation, so clean-container packaging is delegated to required PR CI."
+    ]
+  },
   "decisions": [
     {
       "sha": "443d691d95ca90b4d183641d8a4b15b29a5cbf46",

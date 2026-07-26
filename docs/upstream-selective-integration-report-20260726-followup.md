@@ -12,8 +12,8 @@
   contents and product contracts.
 - Wholesale merge, file replacement, and blind cherry-pick are prohibited.
   A recommended item means a separately tested, bounded manual port into the
-  fork implementation. This review did not expand the current implementation
-  slice.
+  fork implementation. The original review did not expand its implementation
+  slice; the later, explicitly bounded results are recorded below.
 
 ## Executive decision
 
@@ -229,15 +229,39 @@ approved for direct cherry-pick.
   upgraded alone and pass the full 105 component tests on all supported
   platforms before adoption.
 
+## Subsequent bounded implementation result
+
+Four independent slices were manually implemented after the content review.
+No upstream commit was cherry-picked and no upstream branch was merged.
+
+| Slice | Upstream content basis | Fork result | Verification |
+| --- | --- | --- | --- |
+| Template V2 image focus/crop | `31a6af10` numeric image controls | Added `focus_x/y` (0–100) and `crop_scale` (1–6) to the existing strict content updater and inspector. Invalid and unchanged edits preserve identity and unknown metadata; tinted icon crops above 1 fail closed. No upload, remote URL, or asset-retention path was added. | Template V2 Node `129/129`; Studio Cypress `12/12`; full Chrome component suite `105/105` |
+| EOT extraction and family-width normalization | `c4d426f76ef116e0e6812b5a44ce3ff5788671b9` | Added bounded header-derived font offsets with an earliest-signature legacy fallback; width tokens such as Condensed and Narrow remain part of the family while weight tokens are removed. | Focused FastAPI cross-stream `106 passed, 1 skipped`; full FastAPI `1020 passed, 6 skipped` |
+| TempFileService confinement | `484b50e1709975e75193e821819b67963791c394`, `0f65ad6b05835b0daa1b410cd4de839113c91b5c` | Added injectable canonical roots, Windows/POSIX basename handling, realpath/commonpath confinement, existing-path checks, cross-drive rejection, and symlink-aware cleanup. Routers and app-data access were not replaced or widened. | Focused FastAPI cross-stream `106 passed, 1 skipped`; full FastAPI `1020 passed, 6 skipped` |
+| Exporter override opt-in | `2702ed921cc62f0c01753dfc2db232f67c0eb5a1` | Ambient `EXPORT_RUNTIME_VERSION` is ignored unless `--allow-version-override` is explicit; unknown flags fail closed. Fork checksum, Sharp ABI, platform, atomic marker, and read-only validation remain intact. | Exporter sync `19/19`; installed `v0.4.2` read-only check passed |
+
+Integrated regression evidence also includes real LibreOffice/Poppler export
+fidelity `12/12` with four visual fixtures, Next production generation `29/29`
+pages, Electron release policy `2/2`, package preflight `24/24`, standalone
+copy `13 passed / 1 platform skip`, build config `2/2`, and production
+dependency audit `0` (dev/build-only high findings remain `16`).
+
+The local PostgreSQL 15 equivalent used a newly created disposable database and
+passed both integration files (`5/5`); that database was removed immediately
+afterward. This is not evidence of a managed canary or a deployed flag-OFF
+rollback.
+
 ## Final selective-integration disposition
 
 - No upstream commit is approved for direct cherry-pick or wholesale merge.
-- The eight bounded candidates above are backlog inputs, not part of this
-  follow-up implementation.
-- Highest-value next manual ports are:
-  1. exporter override opt-in gate;
-  2. EOT font offset/family normalization;
-  3. shared temp-file confinement;
-  4. bounded text-run selection helpers.
-- Managed PostgreSQL canary, real Windows signing, R2 upload, paid Vision calls,
-  and Apple signing remain external-authority work and were not attempted.
+- The four slices above are integrated bounded manual ports. The remaining
+  candidates stay backlog inputs.
+- Highest-value remaining manual ports are bounded text-run selection helpers,
+  compatible chart axis/legend controls, table object-preserving row/column
+  transforms, Uvicorn handler reuse, and legacy preview PPTX package preflight.
+- ARM64 exporter, bundled Chromium/ImageMagick, Cypress 15, and macOS signing
+  remain held behind their compatibility, package, and credential gates.
+- Managed PostgreSQL canary, real Windows signing, R2 upload, real or paid
+  Vision calls, and Apple signing/notarization remain external-authority work
+  and were not attempted.
