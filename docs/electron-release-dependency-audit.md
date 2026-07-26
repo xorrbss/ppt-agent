@@ -32,6 +32,13 @@ audit reports zero. The findings are in the development/build chain rooted at
 `@electron/asar`, `@electron/universal`, `ejs`, `minimatch`, and
 `brace-expansion`.
 
+The registry's stable `latest` tag was rechecked on 2026-07-26 and remains
+`electron-builder@26.15.3`, which is already locked. The `v26` channel points
+to `26.15.7`, while the next major is still an alpha. Neither a channel-only
+build nor a prerelease is a bounded security upgrade for release packaging, and
+npm's audit remediation still proposes the prohibited 25.x downgrade. No
+dependency change was made.
+
 The current package configuration reduces practical exposure:
 
 - Electron Builder is a development dependency and is not a runtime

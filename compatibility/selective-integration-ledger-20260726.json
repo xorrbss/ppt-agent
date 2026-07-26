@@ -87,7 +87,34 @@
     "officialGithubRelease": "https://github.com/lovell/sharp/releases/tag/v0.35.3",
     "bundledPresentationExportVersion": "v0.4.2",
     "bundledPresentationExportSharpVersionObserved": "0.34.4",
+    "officialExporterReleaseRecheckedAt": "2026-07-26",
+    "officialExporterTagCommit": "c0375365b11dcad89db71df39f6b303dcf0cd33f",
+    "newerOfficialExporterObserved": false,
     "disposition": "blocked-pending-new-official-presentation-export",
     "reason": "A root dependency release does not change the ABI bundled inside the pinned presentation-export archive."
+  },
+  "releaseAutomation": {
+    "artifactActions": {
+      "uploadArtifact": {
+        "version": "v7.0.1",
+        "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        "runtime": "node24"
+      },
+      "downloadArtifact": {
+        "version": "v8.0.1",
+        "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "runtime": "node24"
+      }
+    },
+    "r2Disposition": "fail-closed-workflow-ready-external-execution-blocked",
+    "r2ExternalBlocker": "Protected sync_r2 environment credentials are not available in the repository session.",
+    "windowsSigningExternalBlocker": "A trusted code-signing certificate and fork-owned AppX identity are not available in the repository session.",
+    "electronBuilder": {
+      "lockedVersion": "26.15.3",
+      "stableLatestObserved": "26.15.3",
+      "fullAuditHigh": 16,
+      "productionAuditTotal": 0,
+      "disposition": "retain-pending-stable-compatible-remediation"
+    }
   }
 }

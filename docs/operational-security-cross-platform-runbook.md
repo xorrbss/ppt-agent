@@ -100,6 +100,26 @@ The strict command remains blocked until all of the following are true:
 The preflight reports only presence booleans. Never print or persist secret
 values. The G4 signed gate and R2 sync workflow call this same preflight.
 
+The R2 sync job now fails closed before external mutation: it validates secret
+presence, verifies the exact published GitHub release and a path-safe version,
+requires at least one installer plus a checksum manifest, and checks every
+manifest before touching R2. It then performs a reversible write/read/delete
+probe under the release prefix, uploads with environment-only rclone
+configuration, and runs `rclone check` against the destination. The job no
+longer pipes a network installer to a privileged shell or writes a plaintext
+rclone configuration file.
+
+This repository does not contain the signing certificate or protected R2
+credentials. Therefore no signed build or real R2 probe/upload was run in this
+follow-up; those remain external operator actions and must not be inferred from
+the local workflow-contract test.
+
+GitHub artifact actions are pinned to the reviewed Node 24 releases:
+`actions/upload-artifact@v7.0.1` and
+`actions/download-artifact@v8.0.1`. Their exact commit SHAs are enforced by
+`npm run test:release-workflows`; the Node 24 action runtime requires a
+self-hosted runner version of at least `2.327.1`.
+
 ## Linux and macOS package/visual gates
 
 `cross-platform-packaging-security.yml` performs full Next.js, FastAPI, and

@@ -36,6 +36,7 @@
     "check:main-no-undef": "node scripts/check-main-no-undef.cjs",
     "audit:release": "node scripts/audit-release-dependencies.cjs",
     "test:audit-release": "node --test scripts/audit-release-dependencies.test.cjs",
+    "test:release-workflows": "node --test scripts/release-workflow-policy.test.cjs",
     "preflight:package": "node scripts/verify-packaging-inputs.cjs",
     "test:package-preflight": "node --test scripts/verify-packaging-inputs.test.cjs",
     "smoke:packaged-servers": "node scripts/smoke-packaged-servers.cjs",

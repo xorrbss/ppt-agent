@@ -22,3 +22,11 @@ version and every asset checksum in `compatibility/upstream-compatibility.json`,
 sync on Linux/macOS/Windows, require runtime load checks, and pass the
 cross-platform fidelity and package matrices. Until then this is a tracked
 external blocker, not a dependency to fabricate.
+
+The official exporter release feed was rechecked on 2026-07-26. Its latest
+release remains
+[`v0.4.2`](https://github.com/presenton/presenton-export/releases/tag/v0.4.2),
+whose tag resolves to commit
+`c0375365b11dcad89db71df39f6b303dcf0cd33f`. No official `v0.4.3` tag or
+Sharp 0.35-compatible exporter release exists, so the pinned exporter was not
+changed.
