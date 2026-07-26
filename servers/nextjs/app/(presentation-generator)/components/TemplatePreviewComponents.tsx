@@ -16,6 +16,7 @@ export function TemplatePreviewStage({ children }: { children: React.ReactNode }
                 alt=""
                 fill
                 className="pointer-events-none absolute object-cover"
+                style={{ pointerEvents: "none" }}
             />
             {children}
         </div>

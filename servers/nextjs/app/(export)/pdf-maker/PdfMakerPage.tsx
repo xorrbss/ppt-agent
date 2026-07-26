@@ -154,19 +154,6 @@ const PresentationPage = ({
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (presentationData?.slides?.[0]?.layout?.includes("custom")) {
-      const existingScript = document.querySelector(
-        'script[src*="tailwindcss.com"]'
-      );
-      if (!existingScript) {
-        const script = document.createElement("script");
-        script.src = "https://cdn.tailwindcss.com";
-        script.async = true;
-        document.head.appendChild(script);
-      }
-    }
-  }, [presentationData]);
-  useEffect(() => {
     if (normalizedInitialPresentationData) {
       dispatch(setPresentationData(normalizedInitialPresentationData as any));
       if ((normalizedInitialPresentationData as any).fonts) {

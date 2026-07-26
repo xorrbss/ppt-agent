@@ -2,7 +2,7 @@
 
 
 
-import React, { useEffect, useCallback, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 
 
@@ -12,7 +12,6 @@ import { useTemplateCreation } from "./hooks/useTemplateCreation";
 import { useLayoutSaving } from "./hooks/useLayoutSaving";
 
 import { ProcessedSlide } from "./types";
-import { TAILWIND_CDN_URL } from "./constants";
 import { TemplateStudioHeader } from "./components/TemplateStudioHeader";
 import { TemplateCreationProgress } from "./components/TemplateCreationProgress";
 import { Step2FontManagement } from "./components/steps/Step2FontManagement";
@@ -60,17 +59,6 @@ const CustomTemplatePage = () => {
         closeSaveModal,
         saveLayout,
     } = useLayoutSaving(slides);
-
-
-    useEffect(() => {
-        const existingScript = document.querySelector('script[src*="tailwindcss.com"]');
-        if (!existingScript) {
-            const script = document.createElement("script");
-            script.src = TAILWIND_CDN_URL;
-            script.async = true;
-            document.head.appendChild(script);
-        }
-    }, []);
 
 
     /**

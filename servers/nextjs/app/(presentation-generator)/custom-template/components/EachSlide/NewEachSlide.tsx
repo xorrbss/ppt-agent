@@ -6,6 +6,7 @@ import { useSlideUndoRedo } from "../../hooks/useSlideUndoRedo";
 import { EachSlideProps } from "../../types";
 import { SlideContentDisplay } from "./SlideContentDisplay";
 import { useSlideEdit } from "../../hooks/useSlideEdit";
+import { ensureRuntimeTailwindCss } from "@/lib/runtime-tailwind-client";
 import {
   Trash2,
   X,
@@ -49,6 +50,13 @@ const EachSlide: React.FC<EachSlideProps> = ({
 
   // Compile layout once and share with child components
   const compiledLayout = useCompiledLayout(slide.react);
+
+  useEffect(() => {
+    if (!slide.react) return;
+    ensureRuntimeTailwindCss([slide.react]).catch((error) => {
+      console.error("Failed to prepare runtime Tailwind styles:", error);
+    });
+  }, [slide.react]);
 
   // Auto-retry once if compilation fails
   const hasAutoRetriedCompile = useRef(false);

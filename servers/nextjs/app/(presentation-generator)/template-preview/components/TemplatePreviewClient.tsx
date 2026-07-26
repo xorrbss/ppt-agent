@@ -33,16 +33,6 @@ const GroupLayoutPreview = () => {
     error: customError,
   } = useCustomTemplateDetails({ id: templateParams?.split("custom-")[1] || "", name: "", description: "" });
 
-  useEffect(() => {
-    const existingScript = document.querySelector('script[src*="tailwindcss.com"]');
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "https://cdn.tailwindcss.com";
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  }, [templateParams]);
-
   // Keep backend-served assets on the active origin in Docker/nginx preview mode.
   useEffect(() => {
     const observer = setupImageUrlConverter();

@@ -14,7 +14,13 @@ const CreateCustomTemplate = () => {
             }}
             className='w-full rounded-[22px] border border-[#EDEEEF] cursor-pointer font-syne'>
             <div className='relative h-[215px] flex justify-center items-center '>
-                <Image src="/card_bg.svg" alt="" fill className="absolute z-[1] object-cover" />
+                <Image
+                    src="/card_bg.svg"
+                    alt=""
+                    fill
+                    className="absolute z-[1] object-cover pointer-events-none"
+                    style={{ pointerEvents: 'none' }}
+                />
                 <div className='w-[36px] h-[36px] relative z-[4]  rounded-full bg-[#7A5AF8] flex items-center justify-center'
                     style={{
                         background: 'linear-gradient(0deg, rgba(0, 0, 0, 0.20) 0%, rgba(0, 0, 0, 0.20) 100%), #FFF'
