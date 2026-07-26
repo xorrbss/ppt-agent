@@ -487,6 +487,16 @@ for (const script of ["typecheck", "build:ts", "check:main-no-undef"]) {
     preconditionDescription: "Windows and electron npm ci",
   });
 }
+runStep({
+  name: "Electron MSIX export runtime isolation",
+  command: process.execPath,
+  args: ["--test", "tests/export-msix-runtime.test.cjs"],
+  cwd: electronDirectory,
+  selected: electronSelected,
+  notRunReason: "requires --with-electron on Windows",
+  precondition: electronPrecondition,
+  preconditionDescription: "Windows, compiled Electron TypeScript, and electron npm ci",
+});
 
 const g4Selected = requested("--with-g4");
 const g4Script = String.raw`set -euo pipefail
