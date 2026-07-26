@@ -20,6 +20,14 @@ function fixture(t) {
 }
 
 function directoryLink(target, linkPath) {
+  if (process.platform === "win32") {
+    // Directory symlinks require Developer Mode or elevation on Windows.
+    // Junctions exercise the same lstat/readlink/realpath code paths without
+    // making the standalone-copy suite depend on machine-wide privileges.
+    const absoluteTarget = path.resolve(path.dirname(linkPath), target)
+    fs.symlinkSync(absoluteTarget, linkPath, "junction")
+    return
+  }
   fs.symlinkSync(target, linkPath, "dir")
 }
 

@@ -157,7 +157,15 @@ function copyTreeSafe(sourceRoot, destinationRoot, options = {}) {
       const relativeTarget =
         path.relative(path.dirname(destinationPath), destinationTarget) || "."
       fs.mkdirSync(path.dirname(destinationPath), { recursive: true })
-      fs.symlinkSync(relativeTarget, destinationPath, linkTypeFor(sourceTarget))
+      const linkType = linkTypeFor(sourceTarget)
+      if (process.platform === "win32" && linkType === "dir") {
+        // Creating directory symlinks requires Developer Mode or elevation on
+        // Windows. Junctions preserve link semantics for standalone package
+        // directories and accept the absolute destination target directly.
+        fs.symlinkSync(destinationTarget, destinationPath, "junction")
+      } else {
+        fs.symlinkSync(relativeTarget, destinationPath, linkType)
+      }
       return
     }
     if (stat.isDirectory()) {
