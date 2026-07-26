@@ -432,7 +432,18 @@ runStep({
   precondition: electronPrecondition,
   preconditionDescription: "Windows, Node 22, and npm",
 });
+runStep({
+  name: "Electron release dependency audit",
+  command: npm,
+  args: ["run", "audit:release"],
+  cwd: electronDirectory,
+  selected: electronSelected,
+  notRunReason: "requires --with-electron on Windows",
+  precondition: electronPrecondition,
+  preconditionDescription: "Windows and electron npm ci",
+});
 for (const script of [
+  "test:audit-release",
   "test:standalone-copy",
   "test:package-preflight",
   "test:build-config",

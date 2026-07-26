@@ -74,6 +74,12 @@ jobs:
       - name: Test v0.4.2 export runtime synchronization
         run: npm run test:presentation-export-sync
 
+      - name: Gate Electron release dependencies
+        working-directory: electron
+        run: |
+          npm run test:audit-release
+          npm run audit:release
+
       - name: Test link-free standalone staging and package preflight
         working-directory: electron
         run: |
