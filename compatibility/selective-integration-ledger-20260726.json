@@ -416,5 +416,56 @@
       "productionAuditTotal": 0,
       "disposition": "retain-pending-stable-compatible-remediation"
     }
+  },
+  "aiTemplateV2Roadmap20260727": {
+    "base": {
+      "pullRequest": 89,
+      "state": "OPEN",
+      "head": "2531750fce1dea646f0f99f35b17fdef1cb16f39",
+      "branchDisposition": "stacked-follow-up"
+    },
+    "upstreamDisposition": {
+      "wholesaleMerge": false,
+      "directCherryPick": false,
+      "method": "bounded-content-level-local-implementation"
+    },
+    "slices": [
+      {
+        "id": "selected-run-ai-rewrite",
+        "disposition": "integrated-bounded-local-contract",
+        "evidence": "Grapheme-safe selected-run split/patch/adjacent merge, two or three candidates, diff, fit preflight, preview/apply/cancel, deterministic fake provider, revision CAS, idempotency, and existing Studio history/autosave integration."
+      },
+      {
+        "id": "chart-copilot",
+        "disposition": "integrated-bounded-local-contract",
+        "evidence": "Strict compatible controls, object-preserving series operations, bounded CSV/TSV/table import, deterministic recommendation, and fail-closed provider and incompatible-control boundaries."
+      },
+      {
+        "id": "table-transforms",
+        "disposition": "integrated-bounded-local-contract",
+        "evidence": "Object-preserving row/column/header/transpose operations, bounded paste/import, stale and tamper-safe previews, separate table-to-chart apply, and deterministic split suggestions."
+      },
+      {
+        "id": "quality-inspection",
+        "disposition": "integrated-bounded-local-contract",
+        "evidence": "Deterministic reason-coded findings with inspection separated from strict, revision-checked fix preview and explicit apply."
+      },
+      {
+        "id": "local-image-replacement",
+        "disposition": "integrated-bounded-local-contract",
+        "evidence": "Magic-byte and decoded-format validation, byte/pixel/dimension caps, sidecar provenance, deferred retention, and three bounded crop candidates. No URL fetch, R2, or eager orphan deletion."
+      },
+      {
+        "id": "slide-variants",
+        "disposition": "integrated-bounded-local-contract",
+        "evidence": "Exactly two or three slide-scoped visual candidates with semantic/render digests, preview/apply/cancel/restore, revision CAS, and journal snapshots. Presentation clone and semantic/server metadata changes are rejected."
+      }
+    ],
+    "externalBlockers": [
+      "No approved LLM or Vision credential and egress; only deterministic injectable fakes are exercised.",
+      "No R2 credential; no object upload or remote fetch is attempted.",
+      "No managed PostgreSQL credential; no managed deployment or canary is claimed.",
+      "No Windows, AppX, or Apple signing identity; signing and notarization are not attempted."
+    ]
   }
 }
