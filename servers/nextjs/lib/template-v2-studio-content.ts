@@ -1,3 +1,5 @@
+import { isTemplateV2SafeColor } from "./template-v2-render-plan.mjs";
+
 export type JsonRecord = Record<string, unknown>;
 
 export type TemplateV2RunTarget =
@@ -5,10 +7,21 @@ export type TemplateV2RunTarget =
   | { kind: "list-item"; itemIndex: number; runIndex: number }
   | { kind: "table-column"; columnIndex: number; runIndex: number }
   | {
+      kind: "table-column-style";
+      columnIndex: number;
+      property: "alignment" | "color";
+    }
+  | {
       kind: "table-cell";
       rowIndex: number;
       columnIndex: number;
       runIndex: number;
+    }
+  | {
+      kind: "table-cell-style";
+      rowIndex: number;
+      columnIndex: number;
+      property: "alignment" | "color";
     }
   | { kind: "chart-title" }
   | { kind: "chart-category"; categoryIndex: number }
@@ -57,14 +70,33 @@ function updateListItem(
 
 function updateTableCell(
   element: JsonRecord,
-  target: Extract<TemplateV2RunTarget, { kind: "table-column" | "table-cell" }>,
+  target: Extract<
+    TemplateV2RunTarget,
+    {
+      kind:
+        | "table-column"
+        | "table-column-style"
+        | "table-cell"
+        | "table-cell-style";
+    }
+  >,
   text: string,
 ): JsonRecord {
   if (element.type !== "table") return element;
-  if (target.kind === "table-column") {
+  if (
+    target.kind === "table-column" ||
+    target.kind === "table-column-style"
+  ) {
     if (!Array.isArray(element.columns)) return element;
     const column = element.columns[target.columnIndex];
     if (!isRecord(column)) return element;
+    if (target.kind === "table-column-style") {
+      const updated = updateTableCellStyle(column, target.property, text);
+      if (updated === column) return element;
+      const columns = element.columns.slice();
+      columns[target.columnIndex] = updated;
+      return { ...element, columns };
+    }
     const runs = updateRun(column.runs, target.runIndex, text);
     if (!runs) return element;
     const columns = element.columns.slice();
@@ -77,6 +109,15 @@ function updateTableCell(
   if (!Array.isArray(row)) return element;
   const cell = row[target.columnIndex];
   if (!isRecord(cell)) return element;
+  if (target.kind === "table-cell-style") {
+    const updated = updateTableCellStyle(cell, target.property, text);
+    if (updated === cell) return element;
+    const rows = element.rows.slice();
+    const cells = row.slice();
+    cells[target.columnIndex] = updated;
+    rows[target.rowIndex] = cells;
+    return { ...element, rows };
+  }
   const runs = updateRun(cell.runs, target.runIndex, text);
   if (!runs) return element;
   const rows = element.rows.slice();
@@ -84,6 +125,30 @@ function updateTableCell(
   cells[target.columnIndex] = { ...cell, runs };
   rows[target.rowIndex] = cells;
   return { ...element, rows };
+}
+
+export function isSafeTemplateV2Color(value: string): boolean {
+  return isTemplateV2SafeColor(value);
+}
+
+function updateTableCellStyle(
+  cell: JsonRecord,
+  property: "alignment" | "color",
+  value: string,
+): JsonRecord {
+  if (property === "alignment") {
+    if (
+      !["left", "center", "right"].includes(value) ||
+      cell.alignment === value
+    ) {
+      return cell;
+    }
+    return { ...cell, alignment: value };
+  }
+  if (!isSafeTemplateV2Color(value)) return cell;
+  const color = isRecord(cell.color) ? cell.color : {};
+  if (color.color === value) return cell;
+  return { ...cell, color: { ...color, color: value } };
 }
 
 function updateArrayValue(
@@ -191,7 +256,12 @@ export function updateTemplateV2ContentRun(
   if (target.kind === "list-item") {
     return updateListItem(element, target, text);
   }
-  if (target.kind === "table-column" || target.kind === "table-cell") {
+  if (
+    target.kind === "table-column" ||
+    target.kind === "table-column-style" ||
+    target.kind === "table-cell" ||
+    target.kind === "table-cell-style"
+  ) {
     return updateTableCell(element, target, text);
   }
   if (target.kind.startsWith("chart-")) {

@@ -82,6 +82,26 @@ function settleSuccessfulPersistence() {
   cy.contains("Unsaved changes").should("not.exist");
 }
 
+function setColorInput(label: string, color: string) {
+  cy.contains("label", label)
+    .find('input[type="color"]')
+    .then(($input) => {
+      const input = $input[0] as HTMLInputElement;
+      const view = input.ownerDocument.defaultView;
+      const setter = view
+        ? Object.getOwnPropertyDescriptor(
+            view.HTMLInputElement.prototype,
+            "value"
+          )?.set
+        : undefined;
+      expect(setter, "native color value setter").to.be.a("function");
+      setter?.call(input, color);
+      input.dispatchEvent(new view!.Event("input", { bubbles: true }));
+      input.dispatchEvent(new view!.Event("change", { bubbles: true }));
+    })
+    .should("have.value", color);
+}
+
 describe("TemplateV2Studio API integration", () => {
   it("edits a nested upstream envelope and saves its original shape and unknown fields", () => {
     const nestedLayouts = {
@@ -226,7 +246,7 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("Saved").should("be.visible");
   });
 
-  it("edits chart data and safe image assets through the autosave contract", () => {
+  it("edits chart data, table styles, and safe image assets through autosave", () => {
     const editableLayouts = layouts();
     editableLayouts.layouts[0].components[0].elements.push({
       type: "chart",
@@ -244,6 +264,33 @@ describe("TemplateV2Studio API integration", () => {
         },
       ],
       future_chart_field: "retained",
+    });
+    editableLayouts.layouts[0].components[0].elements.push({
+      type: "table",
+      name: "forecast table",
+      position: { x: 500, y: 260 },
+      size: { width: 300, height: 180 },
+      columns: [
+        {
+          runs: [{ text: "Metric", future_run_field: "retained" }],
+          alignment: "left",
+          color: { color: "#ffffff", opacity: 0.8 },
+        },
+      ],
+      rows: [
+        [
+          {
+            runs: [{ text: "Revenue" }],
+            alignment: "right",
+            future_cell_field: { retained: true },
+          },
+        ],
+      ],
+      min_columns: 1,
+      max_columns: 1,
+      min_rows: 1,
+      max_rows: 1,
+      decorative: false,
     });
     cy.intercept(
       "GET",
@@ -285,6 +332,18 @@ describe("TemplateV2Studio API integration", () => {
       .find("input")
       .type("{selectall}42.5", { waitForAnimations: false });
 
+    cy.contains("button[aria-pressed]", /^forecast table/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Header 1 alignment")
+      .find("select")
+      .select("center", { force: true });
+    setColorInput("Header 1 fill", "#1d4ed8");
+    cy.contains("label", "Row 1, cell 1 alignment")
+      .find("select")
+      .select("left", { force: true });
+    setColorInput("Row 1, cell 1 fill", "#fee2e2");
+
     cy.contains("button[aria-pressed]", /^hero/).click({
       waitForAnimations: false,
     });
@@ -323,6 +382,34 @@ describe("TemplateV2Studio API integration", () => {
           ],
           future_chart_field: "retained",
         });
+        expect(elements[3]).to.include({
+          type: "table",
+          name: "forecast table",
+          min_columns: 1,
+          max_columns: 1,
+          min_rows: 1,
+          max_rows: 1,
+          decorative: false,
+        });
+        expect(elements[3].position).to.deep.equal({ x: 500, y: 260 });
+        expect(elements[3].size).to.deep.equal({ width: 300, height: 180 });
+        expect(elements[3].columns).to.deep.equal([
+          {
+            runs: [{ text: "Metric", future_run_field: "retained" }],
+            alignment: "center",
+            color: { color: "#1d4ed8", opacity: 0.8 },
+          },
+        ]);
+        expect(elements[3].rows).to.deep.equal([
+          [
+            {
+              runs: [{ text: "Revenue" }],
+              alignment: "left",
+              color: { color: "#fee2e2" },
+              future_cell_field: { retained: true },
+            },
+          ],
+        ]);
       });
   });
 

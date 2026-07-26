@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   isSafeTemplateV2AssetSource,
+  isSafeTemplateV2Color,
   updateTemplateV2ContentRun,
 } from "./template-v2-studio-content.ts";
 
@@ -70,6 +71,118 @@ test("updates table headers and body cells while retaining cell metadata", () =>
       },
     ],
   ]);
+});
+
+test("updates table header and body styles without replacing runs or color metadata", () => {
+  const element = {
+    type: "table",
+    columns: [
+      {
+        runs: [{ text: "Header", future_run_field: "retained" }],
+        alignment: "left",
+        color: { color: "#ffffff", opacity: 0.75 },
+      },
+    ],
+    rows: [
+      [
+        {
+          runs: [{ text: "Body", font: { italic: true } }],
+          alignment: "right",
+          future_cell_field: { retained: true },
+        },
+      ],
+    ],
+  };
+  const header = updateTemplateV2ContentRun(
+    element,
+    {
+      kind: "table-column-style",
+      columnIndex: 0,
+      property: "alignment",
+    },
+    "center",
+  );
+  const headerColor = updateTemplateV2ContentRun(
+    header,
+    { kind: "table-column-style", columnIndex: 0, property: "color" },
+    "#1d4ed8",
+  );
+  const body = updateTemplateV2ContentRun(
+    headerColor,
+    {
+      kind: "table-cell-style",
+      rowIndex: 0,
+      columnIndex: 0,
+      property: "alignment",
+    },
+    "left",
+  );
+  const bodyColor = updateTemplateV2ContentRun(
+    body,
+    {
+      kind: "table-cell-style",
+      rowIndex: 0,
+      columnIndex: 0,
+      property: "color",
+    },
+    "rgba(255, 238, 238, 0.8)",
+  );
+
+  assert.deepEqual(headerColor.columns, [
+    {
+      runs: [{ text: "Header", future_run_field: "retained" }],
+      alignment: "center",
+      color: { color: "#1d4ed8", opacity: 0.75 },
+    },
+  ]);
+  assert.deepEqual(bodyColor.rows, [
+    [
+      {
+        runs: [{ text: "Body", font: { italic: true } }],
+        alignment: "left",
+        color: { color: "rgba(255, 238, 238, 0.8)" },
+        future_cell_field: { retained: true },
+      },
+    ],
+  ]);
+});
+
+test("rejects invalid table styles without creating history-worthy changes", () => {
+  const element = {
+    type: "table",
+    columns: [
+      {
+        runs: [{ text: "Header" }],
+        alignment: "left",
+        color: { color: "#ffffff" },
+      },
+    ],
+    rows: [],
+  };
+
+  assert.equal(
+    updateTemplateV2ContentRun(
+      element,
+      {
+        kind: "table-column-style",
+        columnIndex: 0,
+        property: "alignment",
+      },
+      "justify",
+    ),
+    element,
+  );
+  assert.equal(
+    updateTemplateV2ContentRun(
+      element,
+      { kind: "table-column-style", columnIndex: 0, property: "color" },
+      '#fff";background:url(https://example.com)',
+    ),
+    element,
+  );
+  assert.equal(isSafeTemplateV2Color("#1d4ed8"), true);
+  assert.equal(isSafeTemplateV2Color("rgba(255, 255, 255, 0.5)"), true);
+  assert.equal(isSafeTemplateV2Color("var(--unsafe-color)"), false);
 });
 
 test("returns the original element for invalid targets and unchanged text", () => {

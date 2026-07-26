@@ -11,7 +11,7 @@ interface EditableField {
   label: string;
   value: string;
   target: TemplateV2RunTarget;
-  control: "text" | "number" | "textarea" | "fit";
+  control: "text" | "number" | "textarea" | "fit" | "alignment" | "color";
 }
 
 interface TemplateV2ContentInspectorProps {
@@ -68,9 +68,67 @@ function listRuns(element: JsonRecord): EditableField[] {
   );
 }
 
+function colorInputValue(value: unknown): string {
+  const color = stringValue(
+    isJsonRecord(value) ? value.color : undefined,
+    "",
+  );
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+  const shorthand = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(color);
+  return shorthand
+    ? `#${shorthand[1]}${shorthand[1]}${shorthand[2]}${shorthand[2]}${shorthand[3]}${shorthand[3]}`
+    : "#ffffff";
+}
+
+function tableCellStyleFields(
+  cell: JsonRecord,
+  key: string,
+  label: string,
+  alignmentTarget: TemplateV2RunTarget,
+  colorTarget: TemplateV2RunTarget,
+): EditableField[] {
+  return [
+    {
+      key: `${key}-alignment`,
+      label: `${label} alignment`,
+      value: ["left", "center", "right"].includes(String(cell.alignment))
+        ? String(cell.alignment)
+        : "left",
+      target: alignmentTarget,
+      control: "alignment",
+    },
+    {
+      key: `${key}-color`,
+      label: `${label} fill`,
+      value: colorInputValue(cell.color),
+      target: colorTarget,
+      control: "color",
+    },
+  ];
+}
+
 function tableRuns(element: JsonRecord): EditableField[] {
   if (element.type !== "table") return [];
   const columns = Array.isArray(element.columns) ? element.columns : [];
+  const headerStyles = columns.flatMap((column, columnIndex) =>
+    isJsonRecord(column)
+      ? tableCellStyleFields(
+          column,
+          `header-${columnIndex}`,
+          `Header ${columnIndex + 1}`,
+          {
+            kind: "table-column-style",
+            columnIndex,
+            property: "alignment",
+          },
+          {
+            kind: "table-column-style",
+            columnIndex,
+            property: "color",
+          },
+        )
+      : [],
+  );
   const headers = columns.flatMap((column, columnIndex) =>
     isJsonRecord(column) && Array.isArray(column.runs)
       ? column.runs.flatMap((run, runIndex) =>
@@ -93,6 +151,31 @@ function tableRuns(element: JsonRecord): EditableField[] {
       : [],
   );
   const rows = Array.isArray(element.rows) ? element.rows : [];
+  const cellStyles = rows.flatMap((row, rowIndex) =>
+    Array.isArray(row)
+      ? row.flatMap((cell, columnIndex) =>
+          isJsonRecord(cell)
+            ? tableCellStyleFields(
+                cell,
+                `cell-${rowIndex}-${columnIndex}`,
+                `Row ${rowIndex + 1}, cell ${columnIndex + 1}`,
+                {
+                  kind: "table-cell-style",
+                  rowIndex,
+                  columnIndex,
+                  property: "alignment",
+                },
+                {
+                  kind: "table-cell-style",
+                  rowIndex,
+                  columnIndex,
+                  property: "color",
+                },
+              )
+            : [],
+        )
+      : [],
+  );
   const cells = rows.flatMap((row, rowIndex) =>
     Array.isArray(row)
       ? row.flatMap((cell, columnIndex) =>
@@ -119,7 +202,7 @@ function tableRuns(element: JsonRecord): EditableField[] {
         )
       : [],
   );
-  return [...headers, ...cells];
+  return [...headerStyles, ...headers, ...cellStyles, ...cells];
 }
 
 function chartFields(element: JsonRecord): EditableField[] {
@@ -262,11 +345,21 @@ export default function TemplateV2ContentInspector({
             {label}
             {control === "textarea" ? (
               <textarea {...shared} className={`${shared.className} min-h-20`} />
-            ) : control === "fit" ? (
+            ) : control === "fit" || control === "alignment" ? (
               <select {...shared}>
-                <option value="fill">Fill</option>
-                <option value="contain">Contain</option>
-                <option value="cover">Cover</option>
+                {control === "fit" ? (
+                  <>
+                    <option value="fill">Fill</option>
+                    <option value="contain">Contain</option>
+                    <option value="cover">Cover</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </>
+                )}
               </select>
             ) : (
               <input
@@ -282,6 +375,12 @@ export default function TemplateV2ContentInspector({
         <p className="text-xs text-slate-500">
           Asset sources must be an app-relative path or an inline image data URI.
           Remote URLs are rejected.
+        </p>
+      ) : null}
+      {element.type === "table" ? (
+        <p className="text-xs text-slate-500">
+          Table fills use a schema-safe color picker. Existing opacity and
+          unsupported cell metadata remain lossless.
         </p>
       ) : null}
     </div>
