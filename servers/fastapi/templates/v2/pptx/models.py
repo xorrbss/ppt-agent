@@ -14,6 +14,18 @@ class ChartSeriesCandidate(PptxCandidateModel):
     values: list[float]
 
 
+class TextRunCandidate(PptxCandidateModel):
+    """Explicit DrawingML run properties that can be edited without inheritance."""
+
+    text: str
+    font_size: float | None = Field(default=None, gt=0)
+    font_family: str | None = None
+    font_color: str | None = None
+    bold: bool | None = None
+    italic: bool | None = None
+    underline: bool | None = None
+
+
 class ShapeCandidate(PptxCandidateModel):
     source_id: str
     name: str
@@ -24,6 +36,7 @@ class ShapeCandidate(PptxCandidateModel):
     height: float = 0
     rotation: float = 0
     text: str | None = None
+    text_runs: list[TextRunCandidate] | None = None
     table_rows: list[list[str]] | None = None
     chart_type: str | None = None
     chart_categories: list[str] | None = None
@@ -61,6 +74,7 @@ class RelationshipGraphEvidence(PptxCandidateModel):
     missing_parts: list[str] = Field(default_factory=list)
     cycle_count: int = Field(default=0, ge=0)
     skipped_relationship_count: int = Field(default=0, ge=0)
+    blocked_relationship_kind_counts: dict[str, int] = Field(default_factory=dict)
     local_render_enabled: bool = False
     ocr_enabled: bool = False
     external_model_access: bool = False

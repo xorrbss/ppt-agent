@@ -11,6 +11,7 @@ from templates.v2.models.elements import (
     ChartType,
     Container,
     Fill,
+    Font,
     Group,
     Position,
     Size,
@@ -63,12 +64,26 @@ def _element(
     size = Size(width=max(candidate.width, 1), height=max(candidate.height, 1))
     if candidate.kind == "text":
         text = candidate.text or ""
+        runs = [
+            TextRun(
+                text=run.text,
+                font=Font(
+                    size=run.font_size,
+                    family=run.font_family,
+                    color=run.font_color,
+                    bold=run.bold,
+                    italic=run.italic,
+                    underline=run.underline,
+                ),
+            )
+            for run in candidate.text_runs or []
+        ]
         return Text(
             type="text",
             position=position,
             size=size,
             rotation=candidate.rotation,
-            runs=[TextRun(text=text)],
+            runs=runs or [TextRun(text=text)],
             decorative=False,
             name=_slot_name(candidate),
             min_length=0,
@@ -308,6 +323,11 @@ def assemble_template_v2_draft(
                         "source_id": shape.source_id,
                         "name": shape.name,
                         "reason": shape.unsupported_reason,
+                        "contract": {
+                            "editable": False,
+                            "source_preserved": True,
+                            "action": "manual_rebuild",
+                        },
                     }
                     for shape in unsupported
                 ],

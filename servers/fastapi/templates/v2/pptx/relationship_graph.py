@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import posixpath
 from collections import Counter
 from dataclasses import dataclass
-import posixpath
 from pathlib import PurePosixPath
 
 from .models import RelationshipEvidence, RelationshipGraphEvidence
@@ -77,6 +77,18 @@ _KNOWN_EXTERNAL_RELATIONSHIPS = {
         "video"
     ),
 }
+_BLOCKED_INTERNAL_RELATIONSHIPS = {
+    "http://schemas.microsoft.com/office/2006/relationships/activeXControl": (
+        "active_x"
+    ),
+    "http://schemas.microsoft.com/office/2006/relationships/vbaProject": "vba",
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    "control": "control",
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    "oleObject": "ole_object",
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    "package": "embedded_package",
+}
 
 
 @dataclass(frozen=True)
@@ -140,6 +152,7 @@ def build_relationship_graph_evidence(
     missing_parts: set[str] = set()
     cycle_count = 0
     skipped_relationship_count = 0
+    blocked_relationship_kind_counts: Counter[str] = Counter()
     edge_count = 0
 
     def visit(source_part: str, depth: int) -> None:
@@ -196,6 +209,12 @@ def build_relationship_graph_evidence(
                 )
                 if relationship_kind is None:
                     skipped_relationship_count += 1
+                    blocked_relationship_kind_counts[
+                        _BLOCKED_INTERNAL_RELATIONSHIPS.get(
+                            relationship_type,
+                            "unrecognized",
+                        )
+                    ] += 1
                     continue
                 if target_part not in members:
                     missing_parts.add(target_part)
@@ -240,6 +259,9 @@ def build_relationship_graph_evidence(
         missing_parts=sorted(missing_parts),
         cycle_count=cycle_count,
         skipped_relationship_count=skipped_relationship_count,
+        blocked_relationship_kind_counts=dict(
+            sorted(blocked_relationship_kind_counts.items())
+        ),
     )
 
 
@@ -292,6 +314,14 @@ def relationship_graph_manifest_summary(
         "cycles": cycles[:max_items],
         "cycles_omitted": max(0, len(cycles) - max_items),
         "skipped_relationship_count": evidence.skipped_relationship_count,
+        "blocked_relationship_kind_counts": (
+            evidence.blocked_relationship_kind_counts
+        ),
+        "embedded_content_policy": {
+            "dereference_enabled": False,
+            "execution_enabled": False,
+            "retained_target_identifiers": False,
+        },
         "processing": {
             "local_render_enabled": evidence.local_render_enabled,
             "ocr_enabled": evidence.ocr_enabled,

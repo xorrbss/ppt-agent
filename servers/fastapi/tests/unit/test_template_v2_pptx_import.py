@@ -198,7 +198,74 @@ def test_smartart_is_an_explicit_manual_review_fallback(tmp_path: Path) -> None:
     assert draft.manifest["slides"][0]["unsupported"][0]["reason"] == (
         "unsupported_ooxml:smartArt"
     )
+    assert draft.manifest["slides"][0]["unsupported"][0]["contract"] == {
+        "editable": False,
+        "source_preserved": True,
+        "action": "manual_rebuild",
+    }
     assert draft.manifest["slides"][0]["fallback"]["kind"] == "manual_review"
+
+
+def test_explicit_text_run_styles_survive_static_ooxml_import(
+    tmp_path: Path,
+) -> None:
+    styled_slide = b"""\
+<p:sld
+ xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+ <p:cSld><p:spTree>
+  <p:nvGrpSpPr/><p:grpSpPr/>
+  <p:sp>
+   <p:nvSpPr><p:cNvPr id="2" name="Styled headline"/></p:nvSpPr>
+   <p:spPr><a:xfrm><a:off x="1219200" y="685800"/>
+    <a:ext cx="6096000" cy="914400"/></a:xfrm>
+    <a:prstGeom prst="rect"/>
+   </p:spPr>
+   <p:txBody>
+    <a:p>
+     <a:r><a:rPr sz="2400" b="1"><a:solidFill><a:srgbClr val="123ABC"/>
+      </a:solidFill><a:latin typeface="Aptos"/></a:rPr><a:t>Styled</a:t></a:r>
+     <a:r><a:rPr i="true" u="sng"/><a:t> run</a:t></a:r>
+    </a:p>
+    <a:p><a:r><a:t>Second line</a:t></a:r></a:p>
+   </p:txBody>
+  </p:sp>
+ </p:spTree></p:cSld>
+</p:sld>"""
+    source = tmp_path / "styled-runs.pptx"
+    payload = _pptx_bytes(slide_xml=styled_slide)
+    source.write_bytes(payload)
+
+    candidates = parse_presentation_candidates(
+        PptxPackageReader(source),
+        source_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    shape = candidates.slides[0].shapes[0]
+
+    assert shape.text == "Styled run\nSecond line"
+    assert [run.text for run in shape.text_runs or []] == [
+        "Styled",
+        " run",
+        "\n",
+        "Second line",
+    ]
+    first = (shape.text_runs or [])[0]
+    assert first.font_size == 24
+    assert first.font_family == "Aptos"
+    assert first.font_color == "#123ABC"
+    assert first.bold is True
+    assert (shape.text_runs or [])[1].italic is True
+    assert (shape.text_runs or [])[1].underline is True
+
+    draft = assemble_template_v2_draft(candidates)
+    runs = draft.raw_layouts.layouts[0].elements[0].runs
+    assert "".join(run.text for run in runs) == shape.text
+    assert runs[0].font.size == 24
+    assert runs[0].font.family == "Aptos"
+    assert runs[0].font.color == "#123ABC"
+    assert runs[0].font.bold is True
+    assert runs[1].font.italic is True
+    assert runs[1].font.underline is True
 
 
 def test_worker_analysis_binds_source_and_separates_inventory(
