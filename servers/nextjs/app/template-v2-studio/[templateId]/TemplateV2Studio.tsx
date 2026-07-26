@@ -22,6 +22,7 @@ import { elementPosition } from "@/lib/template-v2-konva";
 import { getTemplateV2HistoryKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
 import TemplateV2Canvas from "./TemplateV2Canvas";
+import TemplateV2AiRewritePanel from "./TemplateV2AiRewritePanel";
 import TemplateV2ConflictRecovery from "./TemplateV2ConflictRecovery";
 import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
 import TemplateV2DraftRecovery from "./TemplateV2DraftRecovery";
@@ -609,6 +610,26 @@ export default function TemplateV2Studio({
                     geometry,
                   });
                   setNotice(null);
+                }}
+              />
+              <TemplateV2AiRewritePanel
+                key={`${state.selection.layoutId}:${state.selection.componentId}:${pathLabel(
+                  state.selection.elementPath
+                )}`}
+                element={selectedElement}
+                targetId={`${state.selection.layoutId}:${state.selection.componentId}:${pathLabel(
+                  state.selection.elementPath
+                )}`}
+                revision={template.revision}
+                disabled={selectionControls.lockConflict}
+                onApply={(patch, historyKey) => {
+                  dispatch({
+                    type: "apply-text-selection-patch",
+                    selection: state.selection as StudioSelection,
+                    patch,
+                    historyKey,
+                  });
+                  setNotice("AI rewrite applied. Autosave scheduled.");
                 }}
               />
               <TemplateV2ContentInspector

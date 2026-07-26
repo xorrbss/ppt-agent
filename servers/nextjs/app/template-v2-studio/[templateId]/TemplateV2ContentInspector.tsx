@@ -419,6 +419,7 @@ export default function TemplateV2ContentInspector({
         const shared = {
           value,
           disabled,
+          "aria-label": `${label} content`,
           onFocus: handleFocus,
           onBlur,
           onChange: (
