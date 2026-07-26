@@ -8,6 +8,10 @@ import {
   extractAuthoredSlideDom,
   resolveAuthoredHybridChromeExecutable,
 } from "./index.ts";
+import { runAuthoredHybridChrome } from "./chrome-runner.ts";
+
+const COMPLETE_ONE_PIXEL_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
 
 test("legacy static HTML is extracted without leaving Chrome temp artifacts", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
@@ -74,3 +78,49 @@ test("a timed-out capture still removes its Chrome work directory", async (t) =>
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test(
+  "a completed screenshot is harvested when headless Chrome stays alive",
+  { skip: process.platform === "win32" ? "POSIX headless-process regression" : false },
+  async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "presenton-hybrid-hung-"));
+  const fakeChromeScript = path.join(root, "fake-chrome.mjs");
+  const fakeChromeExecutable = path.join(root, "fake-chrome");
+  await fs.writeFile(
+    fakeChromeScript,
+    `import fs from "node:fs";
+const output = process.argv.find((arg) => arg.startsWith("--screenshot="))?.slice(13);
+if (!output) process.exit(2);
+fs.writeFileSync(output, Buffer.from("${COMPLETE_ONE_PIXEL_PNG}", "base64"));
+setInterval(() => {}, 1000);
+`,
+    "utf8"
+  );
+  await fs.writeFile(
+    fakeChromeExecutable,
+    `#!/bin/sh\nexec "${process.execPath}" "${fakeChromeScript}" "$@"\n`,
+    { encoding: "utf8", mode: 0o755 }
+  );
+
+  const startedAt = Date.now();
+  try {
+    const capture = await runAuthoredHybridChrome({
+      chromeExecutable: fakeChromeExecutable,
+      timeoutMs: 5_000,
+      dumpDom: false,
+      screenshot: true,
+      html: "<!doctype html><body>complete screenshot</body>",
+    });
+    assert.deepEqual(
+      capture.screenshotPng,
+      Buffer.from(COMPLETE_ONE_PIXEL_PNG, "base64")
+    );
+    assert.ok(
+      Date.now() - startedAt < 3_000,
+      "completed screenshot should return before the outer watchdog"
+    );
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+  }
+);

@@ -9,12 +9,10 @@ import { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discover
 export { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
-// Chrome's documented wall-clock capture limit is separate from
-// --virtual-time-budget. Without it, a pending resource/load event can leave the
-// macOS unified-headless process alive until our outer watchdog kills it, even
-// though the slide is otherwise ready to paint.
-const PAGE_CAPTURE_TIMEOUT_MS = 10_000;
 const MAX_CAPTURE_OUTPUT_BYTES = 64 * 1024 * 1024;
+const COMPLETE_PNG_SUFFIX = Buffer.from([
+  0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+]);
 
 export interface AuthoredHybridChromeOptions {
   chromeExecutable?: string;
@@ -131,7 +129,8 @@ function appendBounded(
 async function spawnChrome(
   executable: string,
   args: string[],
-  timeoutMs: number
+  timeoutMs: number,
+  completedScreenshotPath?: string
 ): Promise<{ stdout: Buffer; stderr: Buffer }> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
@@ -143,14 +142,18 @@ async function spawnChrome(
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
+    let screenshotPollInFlight = false;
+    let screenshotPoll: ReturnType<typeof setInterval> | undefined;
+    let timer: ReturnType<typeof setTimeout>;
 
     const finish = (callback: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (screenshotPoll) clearInterval(screenshotPoll);
       callback();
     };
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       finish(() => {
         void terminateChrome(child).then(() =>
           reject(
@@ -161,6 +164,40 @@ async function spawnChrome(
         );
       });
     }, timeoutMs);
+    if (completedScreenshotPath) {
+      // Chrome's macOS unified-headless process can leave the requested PNG
+      // complete on disk but keep the browser process alive indefinitely. IEND
+      // is the definitive end of a PNG stream, so harvest that completed output
+      // and terminate the otherwise-idle process instead of waiting for the
+      // outer watchdog. This path is used only for screenshot-only captures;
+      // combined DOM + screenshot runs still require Chrome to close normally.
+      screenshotPoll = setInterval(() => {
+        if (screenshotPollInFlight || settled) return;
+        screenshotPollInFlight = true;
+        void fs
+          .readFile(completedScreenshotPath)
+          .then((png) => {
+            if (
+              png.length >= 24 &&
+              png.subarray(-COMPLETE_PNG_SUFFIX.length).equals(COMPLETE_PNG_SUFFIX)
+            ) {
+              finish(() => {
+                void terminateChrome(child).then(() =>
+                  resolve({
+                    stdout: Buffer.concat(stdout),
+                    stderr: Buffer.concat(stderr),
+                  })
+                );
+              });
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            screenshotPollInFlight = false;
+          });
+      }, 100);
+      screenshotPoll.unref?.();
+    }
 
     child.stdout?.on("data", (chunk: Buffer) => {
       try {
@@ -246,7 +283,6 @@ export async function runAuthoredHybridChrome(
       `--window-size=${windowSize.width},${windowSize.height}`,
       "--run-all-compositor-stages-before-draw",
       "--virtual-time-budget=8000",
-      `--timeout=${PAGE_CAPTURE_TIMEOUT_MS}`,
       "--default-background-color=00000000",
       `--user-data-dir=${profilePath}`,
     ];
@@ -257,7 +293,8 @@ export async function runAuthoredHybridChrome(
     const completed = await spawnChrome(
       executable,
       args,
-      options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+      options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      options.screenshot && !options.dumpDom ? screenshotPath : undefined
     );
     const result: ChromeRunResult = {};
     if (options.dumpDom) result.serializedDom = completed.stdout.toString("utf8");
