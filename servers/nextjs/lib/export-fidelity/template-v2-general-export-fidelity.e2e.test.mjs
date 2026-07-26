@@ -11,7 +11,11 @@ import { readPptxArchive } from "../authored-hybrid/pptx-archive.ts";
 import { resolveAuthoredHybridChromeExecutable } from "../authored-hybrid/chrome-runtime-discovery.ts";
 import { executeExportAtProductionBoundary } from "../presentation-export-boundary.ts";
 import { renderTemplateV2GeneralPresentationHtml } from "../template-v2-general-renderer.mjs";
-import { compareSlidePngs, writeFidelityFailureArtifacts } from "./image-compare.mjs";
+import {
+  compareSlidePngs,
+  writeFidelityComparisonErrorArtifacts,
+  writeFidelityFailureArtifacts,
+} from "./image-compare.mjs";
 import { renderPptxToPngPages, resolvePptxRenderTools } from "./pptx-render.mjs";
 import { renderTemplateV2SourceHtml } from "./source-render.mjs";
 
@@ -320,9 +324,24 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
           pageCount: 1,
           tools,
         });
-        const comparison = await compareSlidePngs(sourcePng, pptxPng, {
-          tolerances: { ...manifest.defaults, ...fixture.tolerances },
-        });
+        let comparison;
+        try {
+          comparison = await compareSlidePngs(sourcePng, pptxPng, {
+            tolerances: { ...manifest.defaults, ...fixture.tolerances },
+          });
+        } catch (error) {
+          const artifacts = await writeFidelityComparisonErrorArtifacts({
+            outputDirectory: process.env.TEST_ARTIFACT_DIR || path.join(tempRoot, "artifacts"),
+            label: fixture.id,
+            sourcePng,
+            pptxPng,
+            error,
+          });
+          regressions.push(
+            `${fixture.id} visual comparison error; artifacts: ${artifacts}; error: ${error instanceof Error ? error.message : String(error)}`
+          );
+          continue;
+        }
         console.log(`fidelity ${fixture.id}: ${comparison.passed ? "pass" : "FAIL"} ${JSON.stringify(comparison.metrics)}`);
         if (!comparison.passed) {
           const artifacts = await writeFidelityFailureArtifacts({
