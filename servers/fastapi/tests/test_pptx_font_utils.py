@@ -1,6 +1,7 @@
 import asyncio
 import os
 from pathlib import Path
+import struct
 import zipfile
 
 import pytest
@@ -39,6 +40,48 @@ def test_build_google_fonts_stylesheet_url_includes_regular_and_bold_weights():
 
 def test_normalize_font_family_name_strips_localized_bold_token():
     assert pptx_font_utils.normalize_font_family_name("Arial Gras") == "Arial"
+
+
+def test_normalize_font_family_name_preserves_width_tokens():
+    assert (
+        pptx_font_utils.normalize_font_family_name("Latin Condensed")
+        == "Latin Condensed"
+    )
+    assert (
+        pptx_font_utils.normalize_font_family_name("Roboto Condensed Bold")
+        == "Roboto Condensed"
+    )
+    assert (
+        pptx_font_utils.normalize_font_family_name("Arial Narrow Bold")
+        == "Arial Narrow"
+    )
+
+
+def test_extract_font_from_eot_uses_header_font_data_offset(tmp_path):
+    embedded_font = b"\x00\x01\x00\x00valid-font-data"
+    header_body = b"metadata-before-font\x00\x01\x00\x00not-the-font"
+    eot_size = 8 + len(header_body) + len(embedded_font)
+    font_data_size = len(embedded_font)
+    eot_path = tmp_path / "font.fntdata"
+    eot_path.write_bytes(
+        struct.pack("<II", eot_size, font_data_size) + header_body + embedded_font
+    )
+
+    assert pptx_font_utils.extract_font_from_eot(eot_path) == embedded_font
+
+
+def test_extract_font_from_eot_fallback_uses_earliest_sfnt_signature(tmp_path):
+    eot_path = tmp_path / "legacy-font.eot"
+    eot_path.write_bytes(
+        b"legacy-wrapper"
+        b"\x00\x01\x00\x00first-font"
+        b"padding"
+        b"OTTOlater-font"
+    )
+
+    assert pptx_font_utils.extract_font_from_eot(eot_path) == (
+        b"\x00\x01\x00\x00first-fontpaddingOTTOlater-font"
+    )
 
 
 def test_build_google_fonts_stylesheet_url_sorts_and_deduplicates_weights():
