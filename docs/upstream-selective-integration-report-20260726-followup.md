@@ -259,9 +259,46 @@ rollback.
   candidates stay backlog inputs.
 - Highest-value remaining manual ports are bounded text-run selection helpers,
   compatible chart axis/legend controls, table object-preserving row/column
-  transforms, Uvicorn handler reuse, and legacy preview PPTX package preflight.
+  transforms, and Uvicorn handler reuse.
 - ARM64 exporter, bundled Chromium/ImageMagick, Cypress 15, and macOS signing
   remain held behind their compatibility, package, and credential gates.
 - Managed PostgreSQL canary, real Windows signing, R2 upload, real or paid
   Vision calls, and Apple signing/notarization remain external-authority work
   and were not attempted.
+
+## Second follow-up bounded implementation result
+
+The new `codex/template-v2-followup-2-20260726` branch starts at the merged
+`origin/main` commit `d0123f69045c9f183116598337c006209c595b14`.
+No upstream branch was merged and no upstream commit was cherry-picked.
+
+| Slice | Content-level decision basis | Result | Verification |
+| --- | --- | --- | --- |
+| Chart series reorder | The reviewed upstream chart editor commits (`4bedd0e3`, `47f1c805`, `c10b18d0`, `da946fee`, `91345910`, `d7d469a9`) were used only as interaction evidence. Their editor stack and permissive defaults were not copied. | Added object-preserving up/down transforms through the existing strict Template V2 updater. Bounds, no-op identity, unknown metadata, undo, dirty state, autosave, and revision contracts remain intact. | Content reducer `43/43`; Studio Chrome component tests `12/12`; selected Chrome suite `81/81` |
+| SmartArt bounded evidence | The review found no upstream structured SmartArt basis, so this is a fork-local bounded extension rather than an upstream port. | Parses only inert data-model nodes and edges under explicit limits (128 nodes, 256 edges, 20,000 text characters). SmartArt remains non-editable, source-preserved, manual-rebuild content; partial evidence fails closed and no Vision provider is called. | Focused ingestion `43/43`; Template V2 PPTX unit selection `204 passed`; full FastAPI `1029 passed, 6 skipped` |
+| Legacy preview PPTX preflight | Manually adapted only the size/package boundary identified in `11ab0d7521a5a0e53b99cfecfd44ec9910a65a97` and `2238110c2a2dc8fc36d9af01e93b2d0b71d7d880`; Nginx, Template V2 storage, and malware lifecycle were not replaced. | Streams in 1 MiB chunks with a 100 MiB cap, then reuses the fork package reader for ZIP/OOXML, traversal, symlink, encryption, active-content, and expansion limits before legacy parsing/conversion. | New preflight `6/6`; preview/font selection `32/32`; package-reader security `35/35`; full FastAPI included above |
+| Packaging production audit gates | The review explicitly rejected upstream package/lockfile replacement and retained fork release policy. | Root, Next.js, and Electron production-only audits now run after locked installs and before packaging. Workflow triggers/order are pinned by tests. No dependency or lockfile changed; presentation-export stays `v0.4.2`. | Workflow policy `3/3`; audit parser `3/3`; root/Next/Electron production audit totals `0/0/0`; Electron dev/build high remains `16` |
+
+Integrated verification additionally passed the authored/hybrid Node selection
+(`83 passed, 1 platform skip`), Template V2/shared Node tests (`131/131`),
+real LibreOffice/Poppler export fidelity (`12/12`, four visual fixtures),
+Next.js production generation (`29/29`), standalone HTTP smoke (`/` and
+`/template-v2-studio/smoke-template` both `200`), exporter sync (`19/19`,
+installed `v0.4.2`), Electron package preflight (`24/24`), standalone copy
+(`13 passed, 1 platform skip`), and build config (`2/2`).
+
+### Second follow-up disposition
+
+- P0: the selected chart, SmartArt, legacy preflight, and production audit
+  slices are implemented in commits `2d4665a6`, `ed6931a4`, `ddb3def2`, and
+  `081b90b8`.
+- P1: bounded text-run editing, chart type/axis/legend and series
+  add/delete beyond reorder, table row/column transforms, Uvicorn handler
+  reuse, and local PostgreSQL drill automation remain candidates for later
+  independent slices.
+- P2/held: ARM64 exporter, bundled Chromium/ImageMagick, Cypress 15,
+  presentation-export replacement, and dependency upgrades remain behind
+  official compatibility, full-platform, or signed-package evidence.
+- External authority remains unchanged: managed PostgreSQL, Vision provider
+  egress, R2, Windows/AppX signing, and Apple signing/notarization were not
+  attempted and are not claimed complete.
