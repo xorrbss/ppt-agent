@@ -27,6 +27,7 @@ export type TemplateV2RunTarget =
   | { kind: "chart-category"; categoryIndex: number }
   | { kind: "chart-series-name"; seriesIndex: number }
   | { kind: "chart-series-value"; seriesIndex: number; valueIndex: number }
+  | { kind: "chart-series-order"; seriesIndex: number }
   | { kind: "asset-data" }
   | { kind: "asset-fit" }
   | { kind: "asset-focus"; axis: "x" | "y" }
@@ -190,6 +191,24 @@ function updateChart(
     return categories ? { ...element, categories } : element;
   }
   if (!Array.isArray(element.series)) return element;
+  if (target.kind === "chart-series-order") {
+    const destinationIndex = Number(text.trim());
+    if (
+      !Number.isInteger(target.seriesIndex) ||
+      target.seriesIndex < 0 ||
+      target.seriesIndex >= element.series.length ||
+      !Number.isInteger(destinationIndex) ||
+      destinationIndex < 0 ||
+      destinationIndex >= element.series.length ||
+      destinationIndex === target.seriesIndex
+    ) {
+      return element;
+    }
+    const series = element.series.slice();
+    const [moved] = series.splice(target.seriesIndex, 1);
+    series.splice(destinationIndex, 0, moved);
+    return { ...element, series };
+  }
   const series = element.series[target.seriesIndex];
   if (!isRecord(series)) return element;
   let nextSeries: JsonRecord = series;
