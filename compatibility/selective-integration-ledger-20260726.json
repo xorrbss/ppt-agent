@@ -11,7 +11,7 @@
     "liveIntakeResult": "unchanged",
     "historicalDivergenceWithLocalReplaceRefs": {
       "upstreamOnlyCommits": 850,
-      "forkOnlyCommitsAtReview": 463,
+      "forkOnlyCommitsAtReview": 483,
       "note": "These are history counts after the documented content-equivalent replace refs; they are not a request to wholesale merge either history."
     }
   },
@@ -21,9 +21,71 @@
     "reviewBranch": "codex/template-v2-followup-20260726",
     "integrationMergeSha": "107572512192bf8548034e8de2ab201b82a685e8",
     "originMainDivergenceAfterIntegration": {
-      "ahead": 9,
+      "ahead": 29,
       "behind": 0
     }
+  },
+  "followupSlice": {
+    "headBeforeLedgerCommit": "596e7df423b9dc878cdc2674b22978fdd74c382d",
+    "commits": [
+      "c4b1c798",
+      "a93c8750",
+      "b8115f66",
+      "596e7df4"
+    ],
+    "verification": {
+      "fastapi": {
+        "passed": 1007,
+        "skipped": 6
+      },
+      "templateV2Node": {
+        "passed": 127
+      },
+      "authoredHybridNode": {
+        "passed": 83,
+        "platformSkipped": 1
+      },
+      "cypressChrome": {
+        "passed": 105
+      },
+      "exportFidelity": {
+        "passed": 12,
+        "actualFixturesPassed": 4
+      },
+      "nextStaticPages": {
+        "generated": 29
+      },
+      "postgresqlLocalEquivalent": {
+        "version": "15.18",
+        "passed": 3
+      },
+      "electronReleasePolicy": {
+        "passed": 2
+      },
+      "electronPackagePreflight": {
+        "passed": 24
+      },
+      "electronProductionAuditTotal": 0
+    },
+    "externalBlockers": [
+      "Managed PostgreSQL credentials are absent, so the real canary and flag-OFF rollback were not claimed.",
+      "CSC_LINK and fork-owned AppX identity/publisher are absent, so signed Windows publication was not attempted.",
+      "R2_ACCOUNT_ID, R2_ACCESS_KEY, and R2_SECRET_KEY are absent, so upload was not attempted.",
+      "Vision provider credentials and approved egress are absent, so only the mock contract was verified."
+    ]
+  },
+  "upstreamSelectiveIntegrationFollowup": {
+    "report": "docs/upstream-selective-integration-report-20260726-followup.md",
+    "contentReviewedAtSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "directCherryPickApproved": false,
+    "wholesaleMergeApproved": false,
+    "recommendedDisposition": "bounded-manual-port-with-focused-tests",
+    "highestValueCandidates": [
+      "presentation-export version override opt-in gate from 2702ed921cc62f0c01753dfc2db232f67c0eb5a1",
+      "EOT font offset and family-width normalization from c4d426f76ef116e0e6812b5a44ce3ff5788671b9",
+      "TempFileService path confinement from 484b50e1709975e75193e821819b67963791c394 and 0f65ad6b05835b0daa1b410cd4de839113c91b5c",
+      "bounded text-run selection helpers from c513e612 and dabe968c"
+    ]
   },
   "decisions": [
     {
