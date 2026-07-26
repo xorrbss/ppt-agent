@@ -299,8 +299,21 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
       // regression hides the others, so a shift that moves the whole corpus takes
       // one CI round trip per fixture to discover and gets retoleranced blind.
       const regressions = [];
+      // GitHub's hosted macOS ARM runners have repeatedly needed just over the
+      // normal 60-second cold-start ceiling. Keep production and other CI
+      // platforms unchanged while retaining a finite infrastructure timeout.
+      const sourceCaptureTimeoutMs =
+        process.env.CI === "true" && process.platform === "darwin"
+          ? 120_000
+          : undefined;
       for (const fixture of manifest.cases) {
-        const sourcePng = await renderTemplateV2SourceHtml(renderedHtml.get(fixture.id), { chromeExecutable: chrome });
+        const sourcePng = await renderTemplateV2SourceHtml(
+          renderedHtml.get(fixture.id),
+          {
+            chromeExecutable: chrome,
+            timeoutMs: sourceCaptureTimeoutMs,
+          }
+        );
         const [pptxPng] = await renderPptxToPngPages({
           pptxPath: exported.get(fixture.id),
           outputDirectory: path.join(tempRoot, "rendered", fixture.id),
