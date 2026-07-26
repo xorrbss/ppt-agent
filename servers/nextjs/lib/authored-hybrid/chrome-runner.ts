@@ -9,6 +9,11 @@ import { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discover
 export { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
+// Chrome's documented wall-clock capture limit is separate from
+// --virtual-time-budget. Without it, a pending resource/load event can leave the
+// macOS unified-headless process alive until our outer watchdog kills it, even
+// though the slide is otherwise ready to paint.
+const PAGE_CAPTURE_TIMEOUT_MS = 10_000;
 const MAX_CAPTURE_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 export interface AuthoredHybridChromeOptions {
@@ -241,6 +246,7 @@ export async function runAuthoredHybridChrome(
       `--window-size=${windowSize.width},${windowSize.height}`,
       "--run-all-compositor-stages-before-draw",
       "--virtual-time-budget=8000",
+      `--timeout=${PAGE_CAPTURE_TIMEOUT_MS}`,
       "--default-background-color=00000000",
       `--user-data-dir=${profilePath}`,
     ];
