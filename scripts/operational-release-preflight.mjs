@@ -23,10 +23,18 @@ function parseArgs(argv) {
     else if (argument === "--require-r2") options.requireR2 = true;
     else throw new Error(`Unknown argument: ${argument}`);
   }
-  if (!["canary", "rollback-drain", "verify-off", "release"].includes(command)) {
+  if (
+    ![
+      "canary",
+      "rollback-drain",
+      "verify-off",
+      "local-drill",
+      "release",
+    ].includes(command)
+  ) {
     throw new Error(
       "Usage: operational-release-preflight.mjs " +
-        "<canary|rollback-drain|verify-off|release> [options]"
+        "<canary|rollback-drain|verify-off|local-drill|release> [options]"
     );
   }
   return options;
@@ -112,6 +120,58 @@ function runOperationalGate(options, environment = process.env, runner = spawnSy
   return { ...summary, status: "passed" };
 }
 
+function runLocalRollbackDrill(
+  options,
+  environment = process.env,
+  runner = spawnSync
+) {
+  if (!options.allowLocalRehearsal) {
+    throw new Error(
+      "local-drill requires --allow-local-rehearsal to acknowledge disposable local PostgreSQL"
+    );
+  }
+  const database = databaseDescriptor(environment, true);
+  if (database.hostKind !== "local") {
+    throw new Error(
+      "local-drill rejects managed PostgreSQL; run the three managed gates around the real deployment flag change"
+    );
+  }
+  const enabledEnvironment = {
+    ...environment,
+    ENABLE_TEMPLATE_V2: "true",
+  };
+  const disabledEnvironment = {
+    ...environment,
+    ENABLE_TEMPLATE_V2: "false",
+  };
+  const phases = [
+    runOperationalGate(
+      { ...options, command: "canary" },
+      enabledEnvironment,
+      runner
+    ),
+    runOperationalGate(
+      { ...options, command: "rollback-drain" },
+      enabledEnvironment,
+      runner
+    ),
+    runOperationalGate(
+      { ...options, command: "verify-off" },
+      disabledEnvironment,
+      runner
+    ),
+  ];
+  return {
+    status: options.dryRun ? "dry-run" : "passed",
+    phase: "local-drill",
+    scope: "disposable-local-equivalent",
+    database,
+    phases,
+    note:
+      "This does not change or validate a deployed service flag and is not evidence of a managed canary.",
+  };
+}
+
 function matchBuildValue(source, property) {
   const match = source.match(new RegExp(`\\b${property}:\\s*["']([^"']+)["']`));
   return match?.[1] ?? null;
@@ -159,10 +219,14 @@ async function checkReleaseInputs(options, environment = process.env) {
 
 async function main(argv = process.argv.slice(2), environment = process.env) {
   const options = parseArgs(argv);
-  const result =
-    options.command === "release"
-      ? await checkReleaseInputs(options, environment)
-      : runOperationalGate(options, environment);
+  let result;
+  if (options.command === "release") {
+    result = await checkReleaseInputs(options, environment);
+  } else if (options.command === "local-drill") {
+    result = runLocalRollbackDrill(options, environment);
+  } else {
+    result = runOperationalGate(options, environment);
+  }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (result.status === "blocked") process.exitCode = 2;
   return result;
@@ -173,6 +237,7 @@ export {
   databaseDescriptor,
   main,
   parseArgs,
+  runLocalRollbackDrill,
   runOperationalGate,
   validateDeployment,
 };

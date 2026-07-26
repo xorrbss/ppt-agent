@@ -5,6 +5,7 @@ import {
   checkReleaseInputs,
   databaseDescriptor,
   parseArgs,
+  runLocalRollbackDrill,
   runOperationalGate,
   validateDeployment,
 } from "./operational-release-preflight.mjs";
@@ -55,6 +56,55 @@ test("OFF verification requires an explicit false flag and uses health gate", ()
     ENABLE_TEMPLATE_V2: "false",
   });
   assert.deepEqual(result.command.slice(-3), ["scripts/check_template_v2_operations.py", "--mode", "health"]);
+});
+
+test("local rollback drill fixes canary, drain, and OFF verification order", () => {
+  const calls = [];
+  const local = {
+    ...managed,
+    DATABASE_URL: "postgresql://operator:secret@127.0.0.1/presenton_test",
+  };
+  const runner = (executable, args, options) => {
+    calls.push({
+      command: [executable, ...args],
+      enabled: options.env.ENABLE_TEMPLATE_V2,
+    });
+    return { status: 0 };
+  };
+
+  const result = runLocalRollbackDrill(
+    parseArgs(["local-drill", "--allow-local-rehearsal"]),
+    local,
+    runner
+  );
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.scope, "disposable-local-equivalent");
+  assert.deepEqual(
+    result.phases.map((phase) => phase.phase),
+    ["canary", "rollback-drain", "verify-off"]
+  );
+  assert.deepEqual(
+    calls.map((call) => call.enabled),
+    ["true", "true", "false"]
+  );
+  assert.match(result.note, /not evidence of a managed canary/);
+  assert.doesNotMatch(JSON.stringify(result), /operator|secret/);
+});
+
+test("local rollback drill rejects missing acknowledgement and managed hosts", () => {
+  assert.throws(
+    () => runLocalRollbackDrill(parseArgs(["local-drill"]), managed),
+    /requires --allow-local-rehearsal/
+  );
+  assert.throws(
+    () =>
+      runLocalRollbackDrill(
+        parseArgs(["local-drill", "--allow-local-rehearsal"]),
+        managed
+      ),
+    /rejects managed PostgreSQL/
+  );
 });
 
 test("release preflight never returns secret values and blocks required groups", async () => {

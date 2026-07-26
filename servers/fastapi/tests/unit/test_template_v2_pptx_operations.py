@@ -70,6 +70,20 @@ def test_managed_canary_requires_postgresql_but_local_sqlite_remains_valid():
     assert invalid_url.database_backend == "invalid"
 
 
+def test_queue_alert_threshold_is_bounded_and_rejects_ambiguous_values():
+    assert operations.get_template_v2_queued_alert_threshold({}) == timedelta(
+        minutes=5
+    )
+    assert operations.get_template_v2_queued_alert_threshold(
+        {"TEMPLATE_V2_PPTX_QUEUED_ALERT_SECONDS": "30"}
+    ) == timedelta(seconds=30)
+    for value in ("29", "86401", "-1", "30.5", " thirty "):
+        with pytest.raises(RuntimeError):
+            operations.get_template_v2_queued_alert_threshold(
+                {"TEMPLATE_V2_PPTX_QUEUED_ALERT_SECONDS": value}
+            )
+
+
 def test_enabled_managed_canary_fails_closed_on_sqlite():
     try:
         operations.require_template_v2_database_safety(
@@ -186,6 +200,55 @@ def test_review_required_import_is_degraded_when_no_higher_priority_issue(
             logger = Mock()
             await operations.log_template_v2_operational_health(logger=logger)
             logger.warning.assert_called_once()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_aged_queue_and_expired_cleanup_claim_have_actionable_health_codes(
+    tmp_path,
+    monkeypatch,
+):
+    async def scenario() -> None:
+        now = get_current_utc_datetime()
+        engine = create_async_engine(
+            f"sqlite+aiosqlite:///{tmp_path / 'alert-thresholds.db'}"
+        )
+        maker = async_sessionmaker(
+            engine,
+            class_=SQLModelAsyncSession,
+            expire_on_commit=False,
+        )
+        monkeypatch.setattr(operations, "_get_session_maker", lambda: maker)
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(
+                    TemplateV2PptxImport.metadata.create_all,
+                )
+            async with maker() as session:
+                aged = _import_job(state="queued", now=now)
+                aged.created_at = now - timedelta(minutes=6)
+                stale_cleanup = _import_job(
+                    state="cancelled",
+                    now=now,
+                    retention_at=now - timedelta(minutes=1),
+                )
+                stale_cleanup.source_cleanup_token = "dead-cleaner"
+                stale_cleanup.source_cleanup_lease_expires_at = now - timedelta(
+                    seconds=1
+                )
+                session.add_all([aged, stale_cleanup])
+                await session.commit()
+
+            status = await operations.get_template_v2_operational_status(now=now)
+
+            assert status.queued_count == 1
+            assert status.aged_queued_count == 1
+            assert status.stale_cleanup_claim_count == 1
+            assert status.overdue_cleanup_count == 0
+            assert status.health_code == "template_v2_stale_cleanup_claims_detected"
+            assert status.rollback_safe is False
         finally:
             await engine.dispose()
 
