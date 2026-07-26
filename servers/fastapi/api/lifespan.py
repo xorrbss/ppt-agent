@@ -6,6 +6,10 @@ from fastapi import FastAPI
 
 from migrations import migrate_database_on_startup
 from services.database import create_db_and_tables, dispose_engines
+from services.presentation_generation_job_service import (
+    start_presentation_generation_dispatcher,
+    stop_presentation_generation_dispatcher,
+)
 from services.template_v2_pptx_ingestion_service import (
     start_template_v2_pptx_dispatcher,
     stop_template_v2_pptx_dispatcher,
@@ -118,6 +122,7 @@ async def app_lifespan(_: FastAPI):
     await create_db_and_tables()
     template_v2_dispatcher_started = False
     template_v2_cleanup_started = False
+    presentation_generation_dispatcher_started = False
     try:
         try:
             await log_template_v2_operational_health()
@@ -125,6 +130,8 @@ async def app_lifespan(_: FastAPI):
             logger.exception("Template V2 operational health check failed")
         await start_template_v2_private_source_cleanup()
         template_v2_cleanup_started = True
+        await start_presentation_generation_dispatcher()
+        presentation_generation_dispatcher_started = True
         if (
             template_v2_policy.creation_enabled
             and template_v2_policy.allowed_template_ids
@@ -141,8 +148,12 @@ async def app_lifespan(_: FastAPI):
                 await stop_template_v2_pptx_dispatcher()
         finally:
             try:
-                if template_v2_cleanup_started:
-                    await stop_template_v2_private_source_cleanup()
+                if presentation_generation_dispatcher_started:
+                    await stop_presentation_generation_dispatcher()
             finally:
-                # Release all database connections to prevent stale/leaked pools.
-                await dispose_engines()
+                try:
+                    if template_v2_cleanup_started:
+                        await stop_template_v2_private_source_cleanup()
+                finally:
+                    # Release all database connections to prevent stale/leaked pools.
+                    await dispose_engines()

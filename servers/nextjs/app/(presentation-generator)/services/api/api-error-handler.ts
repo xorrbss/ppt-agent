@@ -1,8 +1,96 @@
 // API Error Response Interface
+interface StructuredApiError {
+  status_code?: number;
+  detail?: unknown;
+  code?: string;
+  message?: string;
+  request_id?: string | null;
+}
+
 interface ApiErrorResponse {
   detail?: unknown;
   message?: string;
-  error?: string;
+  error?: string | StructuredApiError;
+  request_id?: string | null;
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly requestId?: string;
+  readonly detail?: unknown;
+
+  constructor(
+    message: string,
+    options: {
+      status?: number;
+      code?: string;
+      requestId?: string | null;
+      detail?: unknown;
+    } = {}
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = options.status ?? 0;
+    this.code = options.code;
+    this.requestId = options.requestId || undefined;
+    this.detail = options.detail;
+  }
+}
+
+const TEMPLATE_V2_ERROR_MESSAGES: Record<string, string> = {
+  template_v2_revision_invalid:
+    "The selected template revision is invalid. Please select the template again.",
+  template_v2_revision_conflict:
+    "The selected template has changed. Please select the latest revision and retry.",
+  template_v2_source_invalid:
+    "The structured template source is invalid. Please repair or republish the template.",
+  template_v2_layouts_invalid:
+    "The structured template layout schema is invalid. Please repair or republish the template.",
+  template_v2_generation_invalid:
+    "The generated content did not match the structured template schema.",
+};
+
+export function apiErrorFromPayload(
+  payload: unknown,
+  fallbackMessage: string,
+  fallbackStatus = 500,
+  fallbackRequestId?: string | null
+): ApiError {
+  const error =
+    payload && typeof payload === "object"
+      ? (payload as StructuredApiError)
+      : undefined;
+  const detail = error?.detail;
+  const detailMessage =
+    typeof detail === "string" && detail.length > 0 ? detail : undefined;
+  return new ApiError(error?.message || detailMessage || fallbackMessage, {
+    status: error?.status_code ?? fallbackStatus,
+    code: error?.code || detailMessage,
+    requestId: error?.request_id || fallbackRequestId,
+    detail,
+  });
+}
+
+export function getApiErrorDisplayMessage(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  const apiError =
+    error instanceof ApiError
+      ? error
+      : new ApiError(
+          error instanceof Error && error.message
+            ? error.message
+            : fallbackMessage
+        );
+  const message =
+    (apiError.code && TEMPLATE_V2_ERROR_MESSAGES[apiError.code]) ||
+    apiError.message ||
+    fallbackMessage;
+  return apiError.requestId
+    ? `${message} (Request ID: ${apiError.requestId})`
+    : message;
 }
 
 // API Response Handler Utility
@@ -67,6 +155,10 @@ export class ApiResponseHandler {
     
     try {
       const errorData: ApiErrorResponse = await response.json();
+      const structuredError =
+        errorData.error && typeof errorData.error === "object"
+          ? errorData.error
+          : undefined;
       
       // Extract error message in order of preference
       const normalizedDetail = this.normalizeErrorDetail(errorData.detail);
@@ -74,16 +166,38 @@ export class ApiResponseHandler {
         errorMessage = normalizedDetail;
       } else if (errorData.message) {
         errorMessage = errorData.message;
-      } else if (errorData.error) {
+      } else if (typeof errorData.error === "string") {
         errorMessage = errorData.error;
+      } else if (structuredError?.message) {
+        errorMessage = structuredError.message;
       }
-    } catch {
-      // If JSON parsing fails, use status-based messages
-      errorMessage = this.getStatusBasedErrorMessage(response.status, defaultErrorMessage);
+
+      throw new ApiError(errorMessage, {
+        status: structuredError?.status_code ?? response.status,
+        code: structuredError?.code,
+        requestId:
+          structuredError?.request_id ||
+          errorData.request_id ||
+          response.headers.get("x-request-id") ||
+          response.headers.get("x-correlation-id"),
+        detail: structuredError?.detail ?? errorData.detail,
+      });
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      // If JSON parsing fails, use status-based messages.
+      errorMessage = this.getStatusBasedErrorMessage(
+        response.status,
+        defaultErrorMessage
+      );
     }
 
     // Throw error with appropriate message
-    throw new Error(errorMessage);
+    throw new ApiError(errorMessage, {
+      status: response.status,
+      requestId:
+        response.headers.get("x-request-id") ||
+        response.headers.get("x-correlation-id"),
+    });
   }
 
 
@@ -99,6 +213,10 @@ export class ApiResponseHandler {
       
       try {
         const errorData: ApiErrorResponse = await response.json();
+        const structuredError =
+          errorData.error && typeof errorData.error === "object"
+            ? errorData.error
+            : undefined;
         
         // Extract error message in order of preference
         const normalizedDetail = this.normalizeErrorDetail(errorData.detail);
@@ -106,8 +224,10 @@ export class ApiResponseHandler {
           errorMessage = normalizedDetail;
         } else if (errorData.message) {
           errorMessage = errorData.message;
-        } else if (errorData.error) {
+        } else if (typeof errorData.error === "string") {
           errorMessage = errorData.error;
+        } else if (structuredError?.message) {
+          errorMessage = structuredError.message;
         }
       } catch {
         // If JSON parsing fails, use status-based messages
@@ -157,4 +277,4 @@ export class ApiResponseHandler {
   }
 }
 
-export type { ApiErrorResponse };
+export type { ApiErrorResponse, StructuredApiError };

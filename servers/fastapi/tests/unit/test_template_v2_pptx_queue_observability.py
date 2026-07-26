@@ -20,6 +20,20 @@ def test_queue_observation_contains_only_bounded_aggregate_fields():
     }
 
 
+def test_recovery_observation_can_include_bounded_latency():
+    assert build_pptx_queue_observation(
+        operation="recover",
+        outcome="completed",
+        count=2,
+        duration_ms=12.5,
+    ) == {
+        "operation": "recover",
+        "outcome": "completed",
+        "count": 2,
+        "duration_ms": 12.5,
+    }
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -27,6 +41,22 @@ def test_queue_observation_contains_only_bounded_aggregate_fields():
         ({"operation": "dispatch", "outcome": "tenant@example.com"}, "outcome"),
         ({"operation": "dispatch", "outcome": "completed", "count": -1}, "count"),
         ({"operation": "dispatch", "outcome": "completed", "count": True}, "count"),
+        (
+            {
+                "operation": "recover",
+                "outcome": "completed",
+                "duration_ms": float("inf"),
+            },
+            "duration_ms",
+        ),
+        (
+            {
+                "operation": "recover",
+                "outcome": "completed",
+                "duration_ms": True,
+            },
+            "duration_ms",
+        ),
     ],
 )
 def test_queue_observation_rejects_unbounded_values(kwargs, message):

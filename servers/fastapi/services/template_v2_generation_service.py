@@ -26,6 +26,13 @@ from services.template_v2_service import (
 from services.template_v2_revision_service import SNAPSHOT_FIELDS, get_revision
 from templates.v2.generation import build_generated_slide
 from templates.v2.models.layouts import SlideLayout
+from templates.v2.pptx.native_compiler import (
+    TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME,
+    TEMPLATE_V2_NATIVE_PPTX_COMPILER_VERSION,
+    TEMPLATE_V2_NATIVE_PPTX_SCHEMA_VERSION,
+    TemplateV2NativePptxCompileError,
+    compile_template_v2_pptx,
+)
 from templates.v2.policy import (
     StructuredTemplatePolicyError,
     get_structured_template_policy,
@@ -76,6 +83,46 @@ class TemplateV2GenerationLayout:
 
 
 @dataclass(frozen=True, slots=True)
+class TemplateV2NativePptxPreflight:
+    """Serializable evidence from the non-exporting native compiler preflight."""
+
+    status: str
+    structural_sha256: str | None = None
+    package_sha256: str | None = None
+    unsupported_code: str | None = None
+    unsupported_path: str | None = None
+
+    def to_provenance(self) -> dict[str, Any]:
+        return {
+            "schema_version": TEMPLATE_V2_NATIVE_PPTX_SCHEMA_VERSION,
+            "compiler_name": TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME,
+            "compiler_version": TEMPLATE_V2_NATIVE_PPTX_COMPILER_VERSION,
+            "status": self.status,
+            # Native export has not been promoted. The existing general exporter
+            # remains an explicit strategy, not an implicit capability fallback.
+            "selected_for_export": False,
+            "structural_sha256": (
+                f"sha256:{self.structural_sha256}"
+                if self.structural_sha256 is not None
+                else None
+            ),
+            "package_sha256": (
+                f"sha256:{self.package_sha256}"
+                if self.package_sha256 is not None
+                else None
+            ),
+            "unsupported": (
+                {
+                    "code": self.unsupported_code,
+                    "path": self.unsupported_path,
+                }
+                if self.status == "unsupported"
+                else None
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class TemplateV2GenerationTarget:
     template_id: str
     revision: int
@@ -107,8 +154,9 @@ class TemplateV2GenerationTarget:
         request_id: str,
         job_id: str,
         created_at: datetime,
+        native_pptx_preflight: TemplateV2NativePptxPreflight | None = None,
     ) -> dict[str, Any]:
-        return {
+        provenance = {
             "schema": "presenton.template-v2-generation-provenance/v1",
             "schema_version": TEMPLATE_V2_GENERATION_SCHEMA_VERSION,
             "request_strategy": "template_v2",
@@ -129,6 +177,55 @@ class TemplateV2GenerationTarget:
             "template_v2_revision": self.revision,
             "template_snapshot_sha256": f"sha256:{self.snapshot_sha256}",
         }
+        if native_pptx_preflight is not None:
+            provenance["native_pptx_preflight"] = (
+                native_pptx_preflight.to_provenance()
+            )
+        return provenance
+
+    def to_durable_payload(self) -> dict[str, Any]:
+        """Serialize the exact admitted snapshot for a restart-safe worker."""
+
+        return {
+            "template_id": self.template_id,
+            "revision": self.revision,
+            "name": self.name,
+            "snapshot_sha256": self.snapshot_sha256,
+            "layouts": [
+                {
+                    "layout": item.layout.model_dump(mode="json"),
+                    "content_schema": deepcopy(item.content_schema),
+                }
+                for item in self.layouts
+            ],
+        }
+
+    @classmethod
+    def from_durable_payload(
+        cls, payload: dict[str, Any]
+    ) -> "TemplateV2GenerationTarget":
+        """Rehydrate a previously admitted immutable target without policy rereads."""
+
+        try:
+            layouts = tuple(
+                TemplateV2GenerationLayout(
+                    layout=SlideLayout.model_validate(item["layout"]),
+                    content_schema=deepcopy(item["content_schema"]),
+                )
+                for item in payload["layouts"]
+            )
+            target = cls(
+                template_id=str(payload["template_id"]),
+                revision=int(payload["revision"]),
+                name=str(payload["name"]),
+                snapshot_sha256=str(payload["snapshot_sha256"]),
+                layouts=layouts,
+            )
+        except (KeyError, TypeError, ValueError, PydanticValidationError) as error:
+            raise TemplateV2GenerationError("template_v2_snapshot_invalid") from error
+        if not target.layouts or len(target.snapshot_sha256) != 64:
+            raise TemplateV2GenerationError("template_v2_snapshot_invalid")
+        return target
 
 
 class TemplateV2GenerationError(ValueError):
@@ -294,12 +391,50 @@ async def build_template_v2_slides(
     return slides
 
 
+def preflight_template_v2_native_pptx(
+    *,
+    target: TemplateV2GenerationTarget,
+    slides: list[SlideModel],
+) -> TemplateV2NativePptxPreflight:
+    """Compile transient native OOXML and return an explicit capability result."""
+
+    layouts_by_id = {item.layout.id: item.layout for item in target.layouts}
+    if len(layouts_by_id) != len(target.layouts):
+        raise TemplateV2GenerationError("template_v2_generation_invalid")
+
+    compile_input: list[tuple[SlideLayout, dict[str, Any]]] = []
+    for slide in slides:
+        layout = layouts_by_id.get(slide.layout)
+        if layout is None or not isinstance(slide.content, dict):
+            raise TemplateV2GenerationError("template_v2_generation_invalid")
+        compile_input.append((layout, deepcopy(slide.content)))
+
+    try:
+        compilation = compile_template_v2_pptx(compile_input)
+    except TemplateV2NativePptxCompileError as error:
+        return TemplateV2NativePptxPreflight(
+            status="unsupported",
+            unsupported_code=error.code,
+            unsupported_path=error.path,
+        )
+    except (ValueError, JSONSchemaValidationError) as error:
+        raise TemplateV2GenerationError("template_v2_generation_invalid") from error
+
+    return TemplateV2NativePptxPreflight(
+        status="compiled",
+        structural_sha256=compilation.structural_sha256,
+        package_sha256=compilation.package_sha256,
+    )
+
+
 __all__ = [
     "TemplateV2GenerationError",
     "TemplateV2GenerationLayout",
+    "TemplateV2NativePptxPreflight",
     "TemplateV2GenerationTarget",
     "build_template_v2_slides",
     "load_template_v2_generation_target",
+    "preflight_template_v2_native_pptx",
     "require_template_v2_generation_admission",
     "source_content_sha256",
 ]

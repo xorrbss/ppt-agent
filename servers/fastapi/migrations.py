@@ -43,6 +43,28 @@ REVISION_TEMPLATE_V2_LOCAL_STATE = "f9a0b1c2d3e4"
 REVISION_TEMPLATE_V2_DELETE_SAFETY = "0a1b2c3d4e5f"
 REVISION_TEMPLATE_V2_IMPORT_REVIEW = "1b2c3d4e5f6a"
 REVISION_TEMPLATE_V2_REVISION_JOURNAL = "2c3d4e5f6a7b"
+REVISION_DURABLE_GENERATION_JOBS = "3d4e5f6a7b8c"
+PRESENTATION_GENERATION_JOB_COLUMNS = {
+    "id",
+    "task_id",
+    "presentation_id",
+    "idempotency_key_hash",
+    "request_id",
+    "request_sha256",
+    "request_payload",
+    "template_v2_target",
+    "export_cookie_required",
+    "state",
+    "attempt_number",
+    "attempt_token",
+    "lease_expires_at",
+    "heartbeat_at",
+    "last_started_at",
+    "published_at",
+    "failed_at",
+    "created_at",
+    "updated_at",
+}
 TEMPLATE_V2_IMPORT_LEASE_COLUMNS = {
     "attempt_number",
     "attempt_token",
@@ -371,7 +393,27 @@ def _infer_revision_from_schema(
                 raise RuntimeError(
                     "Template V2 PPTX owner request-key index is missing"
                 )
-            return REVISION_TEMPLATE_V2_IMPORT_REVIEW
+            if "template_v2_revisions" not in tables:
+                return REVISION_TEMPLATE_V2_IMPORT_REVIEW
+            has_job_table = "presentation_generation_jobs" in tables
+            has_lifecycle = "lifecycle_status" in presentation_columns
+            if not has_job_table and not has_lifecycle:
+                return REVISION_TEMPLATE_V2_REVISION_JOURNAL
+            if has_job_table != has_lifecycle:
+                raise RuntimeError(
+                    "Durable generation schema is only partially applied"
+                )
+            job_columns = {
+                column["name"]
+                for column in inspector.get_columns(
+                    "presentation_generation_jobs"
+                )
+            }
+            if not PRESENTATION_GENERATION_JOB_COLUMNS.issubset(job_columns):
+                raise RuntimeError(
+                    "Durable generation job schema is only partially applied"
+                )
+            return REVISION_DURABLE_GENERATION_JOBS
         raise RuntimeError(
             "Template V2 presentation ownership FKs have unsupported or "
             "mixed delete actions: "
@@ -436,7 +478,17 @@ def _infer_revision_from_schema(
             raise RuntimeError(
                 "Template V2 PPTX review schema is only partially applied"
             )
-        return REVISION_TEMPLATE_V2_IMPORT_REVIEW
+        if "template_v2_revisions" not in tables:
+            return REVISION_TEMPLATE_V2_IMPORT_REVIEW
+        has_job_table = "presentation_generation_jobs" in tables
+        has_lifecycle = "lifecycle_status" in presentation_columns
+        if not has_job_table and not has_lifecycle:
+            return REVISION_TEMPLATE_V2_REVISION_JOURNAL
+        if has_job_table != has_lifecycle:
+            raise RuntimeError(
+                "Durable generation schema is only partially applied"
+            )
+        return REVISION_DURABLE_GENERATION_JOBS
     if delete_action != sidecar_delete_action:
         raise RuntimeError(
             "Template V2 presentation ownership FKs have mixed delete actions"
@@ -487,6 +539,7 @@ def _is_unversioned_populated_database(database_url: str) -> bool:
         "template_create_infos",
         "chat_history_messages",
         "presentation_versions",
+        "presentation_generation_jobs",
         "template_v2",
         "template_v2_local_state",
         "template_v2_pptx_imports",

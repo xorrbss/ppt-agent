@@ -11,6 +11,9 @@ from models.slide_spec_model import PresentationComposition
 from utils.datetime_utils import get_current_utc_datetime
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 
+PRESENTATION_LIFECYCLE_STAGING = "staging"
+PRESENTATION_LIFECYCLE_PUBLISHED = "published"
+
 
 class PresentationModel(SQLModel, table=True):
     __tablename__ = "presentations"
@@ -65,6 +68,17 @@ class PresentationModel(SQLModel, table=True):
         ),
         default=LEGACY_PRESENTATION_VERSION,
     )
+    # Generation writes may be committed for the internal exporter while still
+    # hidden from discovery/share APIs. Only a successful export publishes them.
+    lifecycle_status: str = Field(
+        sa_column=Column(
+            String,
+            nullable=False,
+            default=PRESENTATION_LIFECYCLE_PUBLISHED,
+            server_default=PRESENTATION_LIFECYCLE_PUBLISHED,
+        ),
+        default=PRESENTATION_LIFECYCLE_PUBLISHED,
+    )
     # Read-only public share link. NULL = not shared. When set, the unguessable
     # token serves this deck (only) via GET /presentation/public/{share_token}
     # without the admin session (see SessionAuthMiddleware exemption).
@@ -94,6 +108,7 @@ class PresentationModel(SQLModel, table=True):
             # legacy authored sentinel) on /derive.
             mode=self.mode,
             version=self.version,
+            lifecycle_status=self.lifecycle_status,
             theme=self.theme,
         )
 

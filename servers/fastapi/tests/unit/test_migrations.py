@@ -473,11 +473,13 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
             )
             template_indexes = db_inspector.get_indexes("template_v2")
 
-        assert revision == migrations.REVISION_TEMPLATE_V2_REVISION_JOURNAL
+        assert revision == migrations.REVISION_DURABLE_GENERATION_JOBS
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
+        assert "presentation_generation_jobs" in tables
         assert "version" in presentation_columns
+        assert "lifecycle_status" in presentation_columns
         assert "ui" in slide_columns
         assert "ck_slides_native_ui_or_authored_html" in check_names
         assert "v1-standard" in version_default
@@ -1577,8 +1579,13 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_REVISION_JOURNAL
+                == migrations.REVISION_DURABLE_GENERATION_JOBS
             )
+            assert "presentation_generation_jobs" in inspector.get_table_names()
+            assert "lifecycle_status" in {
+                column["name"]
+                for column in inspector.get_columns("presentations")
+            }
             assert migrations.TEMPLATE_V2_EXPECTED_COLUMNS.issubset(
                 {
                     column["name"]
@@ -1616,9 +1623,10 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_REVISION_JOURNAL
+                == migrations.REVISION_DURABLE_GENERATION_JOBS
             )
             assert "template_v2" in inspector.get_table_names()
+            assert "presentation_generation_jobs" in inspector.get_table_names()
             assert migrations.SLIDE_UI_CHECK_CONSTRAINT in {
                 constraint["name"]
                 for constraint in inspector.get_check_constraints("slides")

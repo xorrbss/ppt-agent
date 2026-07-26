@@ -9,7 +9,10 @@ from sqlmodel import select
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from models.presentation_with_slides import PresentationWithSlides
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_PUBLISHED,
+    PresentationModel,
+)
 from models.sql.slide import SlideModel
 from services.database import get_async_session
 
@@ -32,7 +35,10 @@ async def get_share_status(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
     presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
+    if (
+        not presentation
+        or presentation.lifecycle_status != PRESENTATION_LIFECYCLE_PUBLISHED
+    ):
         raise HTTPException(status_code=404, detail="Presentation not found")
     return ShareInfo(
         shared=bool(presentation.share_token), share_token=presentation.share_token
@@ -48,7 +54,10 @@ async def enable_share(
     """Enable read-only sharing (idempotent). `regenerate=true` rotates the token,
     which immediately voids the previous link."""
     presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
+    if (
+        not presentation
+        or presentation.lifecycle_status != PRESENTATION_LIFECYCLE_PUBLISHED
+    ):
         raise HTTPException(status_code=404, detail="Presentation not found")
 
     if regenerate or not presentation.share_token:
@@ -63,7 +72,10 @@ async def disable_share(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
     presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
+    if (
+        not presentation
+        or presentation.lifecycle_status != PRESENTATION_LIFECYCLE_PUBLISHED
+    ):
         raise HTTPException(status_code=404, detail="Presentation not found")
 
     if presentation.share_token is not None:
@@ -88,7 +100,9 @@ async def get_shared_presentation(
 
     result = await sql_session.scalars(
         select(PresentationModel).where(
-            PresentationModel.share_token == share_token
+            PresentationModel.share_token == share_token,
+            PresentationModel.lifecycle_status
+            == PRESENTATION_LIFECYCLE_PUBLISHED,
         )
     )
     presentation = result.first()

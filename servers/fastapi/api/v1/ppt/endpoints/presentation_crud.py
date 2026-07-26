@@ -16,7 +16,10 @@ from constants.presentation import MAX_NUMBER_OF_SLIDES
 from enums.tone import Tone
 from enums.verbosity import Verbosity
 from models.presentation_with_slides import PresentationWithSlides
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_PUBLISHED,
+    PresentationModel,
+)
 from models.sql.slide import SlideModel
 from services.database import get_async_session
 from services.presentation_deletion_service import (
@@ -35,6 +38,10 @@ PRESENTATION_CRUD_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation
 async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
     query = (
         select(PresentationModel, SlideModel)
+        .where(
+            PresentationModel.lifecycle_status
+            == PRESENTATION_LIFECYCLE_PUBLISHED
+        )
         .join(
             SlideModel,
             (SlideModel.presentation == PresentationModel.id) & (SlideModel.index == 0),

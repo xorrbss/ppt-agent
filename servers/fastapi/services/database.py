@@ -17,6 +17,7 @@ from models.sql.key_value import KeyValueSqlModel
 from models.sql.ollama_pull_status import OllamaPullStatus
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
 from models.sql.template_v2 import TemplateV2
@@ -69,6 +70,7 @@ async def create_db_and_tables():
                     sync_conn,
                     tables=[
                         PresentationModel.__table__,
+                        PresentationGenerationJob.__table__,
                         PresentationVersionModel.__table__,
                         SlideModel.__table__,
                         KeyValueSqlModel.__table__,

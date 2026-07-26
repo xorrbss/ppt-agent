@@ -156,13 +156,18 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_TEMPLATE_V2_REVISION_JOURNAL
+                == migrations.REVISION_DURABLE_GENERATION_JOBS
             )
             assert set(inspector.get_table_names()) >= {
+                "presentation_generation_jobs",
                 "template_v2",
                 "template_v2_local_state",
                 "template_v2_pptx_imports",
                 "template_v2_revisions",
+            }
+            assert "lifecycle_status" in {
+                column["name"]
+                for column in inspector.get_columns("presentations")
             }
             assert {
                 column["name"]
@@ -238,7 +243,7 @@ def test_complete_schema_inference_recognizes_local_state_head(tmp_path):
                     set(inspector.get_table_names()),
                     "ignored-future-head",
                 )
-                == migrations.REVISION_TEMPLATE_V2_IMPORT_REVIEW
+                == migrations.REVISION_DURABLE_GENERATION_JOBS
             )
     finally:
         engine.dispose()

@@ -661,6 +661,12 @@ def test_dispatch_iteration_recovers_stalled_work_after_restart(
             "run_template_v2_pptx_import",
             record_dispatch,
         )
+        queue_events: list[dict[str, object]] = []
+        monkeypatch.setattr(
+            ingestion,
+            "log_pptx_queue_observation",
+            lambda **event: queue_events.append(event),
+        )
         try:
             import_id, task_id = await _insert_import(
                 maker,
@@ -673,6 +679,12 @@ def test_dispatch_iteration_recovers_stalled_work_after_restart(
             assert await ingestion.dispatch_template_v2_pptx_imports_once() == 1
             await asyncio.sleep(0)
             assert dispatched == [(import_id, task_id)]
+            recovery_event = next(
+                event for event in queue_events if event["operation"] == "recover"
+            )
+            assert recovery_event["count"] == 1
+            assert isinstance(recovery_event["duration_ms"], float)
+            assert recovery_event["duration_ms"] >= 0
             async with maker() as session:
                 job = await session.get(TemplateV2PptxImport, import_id)
                 task = await session.get(

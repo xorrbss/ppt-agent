@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 from starlette.responses import FileResponse
 
+from api.error_handling import install_api_error_handling
 from api.lifespan import app_lifespan
 from api.middlewares import SessionAuthMiddleware, UserConfigEnvUpdateMiddleware
 from api.v1.auth.router import API_V1_AUTH_ROUTER
@@ -55,6 +56,7 @@ def _maybe_init_sentry() -> None:
 _maybe_init_sentry()
 
 app = FastAPI(lifespan=app_lifespan)
+install_api_error_handling(app)
 
 # Routers
 app.include_router(API_V1_PPT_ROUTER)
