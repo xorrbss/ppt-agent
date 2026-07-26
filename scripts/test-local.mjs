@@ -389,10 +389,12 @@ runStep({
     "-q",
     "--no-header",
     "tests/integration/test_postgresql_template_v2_migrations.py",
+    "tests/integration/test_postgresql_template_v2_canary_rollback.py",
   ],
   cwd: fastapiDirectory,
   selected: postgresSelected,
-  notRunReason: "requires --with-postgres and a disposable PPT_AGENT_POSTGRES_TEST_URL",
+  notRunReason:
+    "requires --with-postgres and a disposable PPT_AGENT_POSTGRES_TEST_URL; never use a shared or managed database",
   env: {
     ...(postgresUrl ? { PPT_AGENT_POSTGRES_TEST_URL: postgresUrl } : {}),
     PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION: "1",
@@ -413,7 +415,8 @@ runStep({
     }
     return null;
   },
-  preconditionDescription: "running disposable PostgreSQL database whose name ends in test/tests",
+  preconditionDescription:
+    "running disposable PostgreSQL database whose name ends in test/tests; never a shared or managed database",
 });
 
 const electronSelected = requested("--with-electron");

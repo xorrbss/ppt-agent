@@ -7,6 +7,7 @@ on:
       - "scripts/verify-upstream-compatibility.mjs"
       - "scripts/verify-upstream-compatibility.test.mjs"
       - "scripts/sync-presentation-export.cjs"
+      - "scripts/test-local.mjs"
       - "package.json"
       - "docker-compose.yml"
       - "presentation-export/.installed-version"
@@ -21,7 +22,9 @@ on:
       - "servers/nextjs/next.config.mjs"
       - "servers/fastapi/api/v1/ppt/**"
       - "servers/fastapi/api/v1/auth/**"
+      - "servers/fastapi/api/lifespan.py"
       - "servers/fastapi/api/middlewares.py"
+      - "servers/fastapi/templates/v2/policy.py"
       - "servers/fastapi/utils/validators.py"
       - "servers/fastapi/utils/db_utils.py"
       - "servers/fastapi/alembic/versions/**"
@@ -32,13 +35,18 @@ on:
       - "servers/fastapi/services/template_v2_pptx_ingestion_service.py"
       - "servers/fastapi/services/template_v2_pptx_operations.py"
       - "servers/fastapi/services/template_v2_pptx_retention_service.py"
+      - "servers/fastapi/services/template_v2_pptx_worker.py"
+      - "servers/fastapi/scripts/check_template_v2_canary.py"
       - "servers/fastapi/scripts/check_template_v2_operations.py"
       - "servers/fastapi/template_v2_schema_contract.py"
       - "servers/fastapi/tests/unit/test_migrations.py"
       - "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py"
       - "servers/fastapi/tests/unit/test_presentation_delete_safety.py"
       - "servers/fastapi/tests/unit/test_template_v2_pptx_operations.py"
+      - "servers/fastapi/tests/integration/test_postgresql_template_v2_canary_rollback.py"
       - "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
+      - "docs/template-v2-canary-rehearsal-prompt-20260725.md"
+      - "docs/template-v2-canary-runbook.md"
       - "electron/app/main.ts"
       - "electron/app/utils/resource-root.ts"
       - "electron/scripts/verify-packaging-inputs.cjs"
@@ -124,3 +132,4 @@ jobs:
         run: >-
           uv run pytest -q --no-header
           tests/integration/test_postgresql_template_v2_migrations.py
+          tests/integration/test_postgresql_template_v2_canary_rollback.py
