@@ -9,7 +9,13 @@ export type TemplateV2RunTarget =
       rowIndex: number;
       columnIndex: number;
       runIndex: number;
-    };
+    }
+  | { kind: "chart-title" }
+  | { kind: "chart-category"; categoryIndex: number }
+  | { kind: "chart-series-name"; seriesIndex: number }
+  | { kind: "chart-series-value"; seriesIndex: number; valueIndex: number }
+  | { kind: "asset-data" }
+  | { kind: "asset-fit" };
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -80,6 +86,98 @@ function updateTableCell(
   return { ...element, rows };
 }
 
+function updateArrayValue(
+  value: unknown,
+  index: number,
+  nextValue: string | number,
+): unknown[] | null {
+  if (
+    !Array.isArray(value) ||
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= value.length ||
+    value[index] === nextValue
+  ) {
+    return null;
+  }
+  const next = value.slice();
+  next[index] = nextValue;
+  return next;
+}
+
+function updateChart(
+  element: JsonRecord,
+  target: Extract<TemplateV2RunTarget, { kind: `chart-${string}` }>,
+  text: string,
+): JsonRecord {
+  if (element.type !== "chart") return element;
+  if (target.kind === "chart-title") {
+    return element.title === text ? element : { ...element, title: text };
+  }
+  if (target.kind === "chart-category") {
+    const categories = updateArrayValue(
+      element.categories,
+      target.categoryIndex,
+      text,
+    );
+    return categories ? { ...element, categories } : element;
+  }
+  if (!Array.isArray(element.series)) return element;
+  const series = element.series[target.seriesIndex];
+  if (!isRecord(series)) return element;
+  let nextSeries: JsonRecord = series;
+  if (target.kind === "chart-series-name") {
+    if (series.name === text) return element;
+    nextSeries = { ...series, name: text };
+  } else {
+    const normalized = text.trim();
+    if (!normalized) return element;
+    const numericValue = Number(normalized);
+    if (!Number.isFinite(numericValue)) return element;
+    const values = updateArrayValue(
+      series.values,
+      target.valueIndex,
+      numericValue,
+    );
+    if (!values) return element;
+    nextSeries = { ...series, values };
+  }
+  const nextSeriesList = element.series.slice();
+  nextSeriesList[target.seriesIndex] = nextSeries;
+  return { ...element, series: nextSeriesList };
+}
+
+export function isSafeTemplateV2AssetSource(source: string): boolean {
+  if (
+    source.startsWith("/") &&
+    !source.startsWith("//") &&
+    !source.startsWith("/\\") &&
+    !/[\u0000-\u001f\u007f\\]/.test(source)
+  ) {
+    return true;
+  }
+  return /^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(source) ||
+    /^data:image\/svg\+xml(?:;base64)?,/i.test(source);
+}
+
+function updateAsset(
+  element: JsonRecord,
+  target: Extract<TemplateV2RunTarget, { kind: `asset-${string}` }>,
+  text: string,
+): JsonRecord {
+  if (element.type !== "image") return element;
+  if (target.kind === "asset-data") {
+    if (!isSafeTemplateV2AssetSource(text) || element.data === text) {
+      return element;
+    }
+    return { ...element, data: text };
+  }
+  if (!["fill", "contain", "cover"].includes(text) || element.fit === text) {
+    return element;
+  }
+  return { ...element, fit: text };
+}
+
 export function updateTemplateV2ContentRun(
   element: JsonRecord,
   target: TemplateV2RunTarget,
@@ -93,5 +191,19 @@ export function updateTemplateV2ContentRun(
   if (target.kind === "list-item") {
     return updateListItem(element, target, text);
   }
-  return updateTableCell(element, target, text);
+  if (target.kind === "table-column" || target.kind === "table-cell") {
+    return updateTableCell(element, target, text);
+  }
+  if (target.kind.startsWith("chart-")) {
+    return updateChart(
+      element,
+      target as Extract<TemplateV2RunTarget, { kind: `chart-${string}` }>,
+      text,
+    );
+  }
+  return updateAsset(
+    element,
+    target as Extract<TemplateV2RunTarget, { kind: `asset-${string}` }>,
+    text,
+  );
 }

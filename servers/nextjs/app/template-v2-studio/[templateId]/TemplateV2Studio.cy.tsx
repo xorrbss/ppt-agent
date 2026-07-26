@@ -226,6 +226,106 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("Saved").should("be.visible");
   });
 
+  it("edits chart data and safe image assets through the autosave contract", () => {
+    const editableLayouts = layouts();
+    editableLayouts.layouts[0].components[0].elements.push({
+      type: "chart",
+      name: "revenue",
+      position: { x: 40, y: 260 },
+      size: { width: 420, height: 240 },
+      chart_type: "bar",
+      title: "Revenue",
+      categories: ["Q1", "Q2"],
+      series: [
+        {
+          name: "Actual",
+          values: [10, 20],
+          future_series_field: { retained: true },
+        },
+      ],
+      future_chart_field: "retained",
+    });
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response(editableLayouts) }
+    ).as("loadEditableTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("saveEditableTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadEditableTemplate");
+    cy.contains("button[aria-pressed]", /^revenue/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Chart title")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("Bookings", { waitForAnimations: false });
+    cy.contains("label", "Category 2")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("FY26 Q2", { waitForAnimations: false });
+    cy.contains("label", "Series 1 name")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("Forecast", { waitForAnimations: false });
+    cy.contains("label", "Series 1, value 2")
+      .find("input")
+      .type("{selectall}42.5", { waitForAnimations: false });
+
+    cy.contains("button[aria-pressed]", /^hero/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Asset source")
+      .find("textarea")
+      .type("{selectall}/app_data/images/updated.png", {
+        waitForAnimations: false,
+      });
+    cy.contains("label", "Asset fit")
+      .find("select")
+      .select("contain", { force: true });
+    cy.contains("button", "Save").click({ waitForAnimations: false });
+
+    cy.wait("@saveEditableTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements")
+      .then((elements) => {
+        expect(elements[1]).to.deep.equal({
+          ...unsupportedImage,
+          data: "/app_data/images/updated.png",
+          fit: "contain",
+        });
+        expect(elements[2]).to.deep.equal({
+          type: "chart",
+          name: "revenue",
+          position: { x: 40, y: 260 },
+          size: { width: 420, height: 240 },
+          chart_type: "bar",
+          title: "Bookings",
+          categories: ["Q1", "FY26 Q2"],
+          series: [
+            {
+              name: "Forecast",
+              values: [10, 42.5],
+              future_series_field: { retained: true },
+            },
+          ],
+          future_chart_field: "retained",
+        });
+      });
+  });
+
   it("keeps local edits and offers an explicit reload after a revision conflict", () => {
     cy.intercept(
       "GET",
@@ -299,8 +399,16 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("button", "Bring to front").should("be.disabled");
     cy.contains("button", "Unlock selected").should("be.enabled");
     cy.get('[aria-label="Locked"]').should("have.length", 2);
+    cy.get('[role="application"]')
+      .should("have.attr", "data-konva-move-enabled", "false")
+      .and("have.attr", "data-konva-resize-enabled", "false")
+      .and("have.attr", "data-konva-rotate-enabled", "false");
 
     cy.contains("button", "Unlock selected").click({ waitForAnimations: false });
+    cy.get('[role="application"]')
+      .should("have.attr", "data-konva-move-enabled", "true")
+      .and("have.attr", "data-konva-resize-enabled", "true")
+      .and("have.attr", "data-konva-rotate-enabled", "true");
     cy.contains("button", "Bring to front").click({
       waitForAnimations: false,
     });
