@@ -8,6 +8,10 @@ import {
   updateTemplateV2ContentRun,
   type TemplateV2RunTarget,
 } from "./template-v2-studio-content.ts";
+import {
+  applyTemplateV2TextSelectionPatch,
+  type TemplateV2TextSelectionPatch,
+} from "./template-v2-ai-rewrite.ts";
 import { translateTemplateV2Vector } from "./template-v2-vector.ts";
 
 export type JsonRecord = Record<string, unknown>;
@@ -152,6 +156,12 @@ export type TemplateV2StudioAction =
       target: TemplateV2RunTarget;
       text: string;
       historyKey?: string;
+    }
+  | {
+      type: "apply-text-selection-patch";
+      selection: StudioSelection;
+      patch: TemplateV2TextSelectionPatch;
+      historyKey: string;
     }
   | {
       type: "add-rectangle";
@@ -771,6 +781,27 @@ export function templateV2StudioReducer(
             action.text
           )
         ),
+        action.historyKey
+      );
+    case "apply-text-selection-patch":
+      if (!state.layouts) return state;
+      if (
+        isTemplateV2SelectionLocked(
+          state.lockedElementKeys,
+          action.selection
+        )
+      ) {
+        return state;
+      }
+      return commit(
+        state,
+        updateTemplateV2Element(state.layouts, action.selection, (element) => {
+          const result = applyTemplateV2TextSelectionPatch(
+            element,
+            action.patch
+          );
+          return result.ok ? result.element : element;
+        }),
         action.historyKey
       );
     case "add-rectangle":
