@@ -24,6 +24,8 @@ _ALLOWED_INTERNAL_RELATIONSHIPS = {
     "http://schemas.microsoft.com/office/2006/relationships/diagramData": (
         "diagram_data"
     ),
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    "diagramData": "diagram_data",
     "http://schemas.microsoft.com/office/2006/relationships/diagramLayout": (
         "diagram_layout"
     ),
