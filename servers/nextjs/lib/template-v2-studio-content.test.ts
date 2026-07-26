@@ -7,6 +7,66 @@ import {
   updateTemplateV2ContentRun,
 } from "./template-v2-studio-content.ts";
 
+test("reorders chart series without changing series or chart metadata", () => {
+  const first = {
+    name: "Actual",
+    values: [10, 20],
+    future_series_field: { retained: "first" },
+  };
+  const second = {
+    name: "Forecast",
+    values: [12, 24],
+    future_series_field: { retained: "second" },
+  };
+  const element = {
+    type: "chart",
+    chart_type: "bar",
+    categories: ["Q1", "Q2"],
+    series: [first, second],
+    future_chart_field: { retained: true },
+  };
+
+  const updated = updateTemplateV2ContentRun(
+    element,
+    { kind: "chart-series-order", seriesIndex: 1 },
+    "0",
+  );
+
+  assert.deepEqual(updated.series, [second, first]);
+  assert.equal(updated.series[0], second);
+  assert.equal(updated.series[1], first);
+  assert.deepEqual(updated.future_chart_field, { retained: true });
+});
+
+test("rejects out-of-bounds chart series reorders", () => {
+  const element = {
+    type: "chart",
+    chart_type: "bar",
+    series: [
+      { name: "Actual", values: [10] },
+      { name: "Forecast", values: [12] },
+    ],
+  };
+
+  for (const [seriesIndex, destination] of [
+    [-1, "0"],
+    [0, "-1"],
+    [0, "2"],
+    [0, "0"],
+    [0, "0.5"],
+    [2, "0"],
+  ] as const) {
+    assert.equal(
+      updateTemplateV2ContentRun(
+        element,
+        { kind: "chart-series-order", seriesIndex },
+        destination,
+      ),
+      element,
+    );
+  }
+});
+
 test("updates a text-list run without changing sibling runs or item metadata", () => {
   const element = {
     type: "text-list",

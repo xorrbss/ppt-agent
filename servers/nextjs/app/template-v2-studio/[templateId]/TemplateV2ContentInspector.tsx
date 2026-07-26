@@ -24,7 +24,7 @@ interface TemplateV2ContentInspectorProps {
   onEdit: (
     target: TemplateV2RunTarget,
     text: string,
-    historyKey: string,
+    historyKey?: string,
   ) => void;
 }
 
@@ -349,6 +349,10 @@ export default function TemplateV2ContentInspector({
     onEdit(target, value, `content-${transaction}`);
   };
   const fields = editableFields(element);
+  const series =
+    element.type === "chart" && Array.isArray(element.series)
+      ? element.series
+      : [];
   if (fields.length === 0) {
     return (
       <p className="mt-5 rounded-lg bg-slate-950 p-3 text-sm text-slate-400">
@@ -361,6 +365,56 @@ export default function TemplateV2ContentInspector({
   return (
     <div className="mt-5 space-y-4">
       <p className="text-sm font-medium">Editable content · {pathLabel}</p>
+      {series.length > 1 ? (
+        <fieldset className="space-y-2 rounded-lg border border-slate-800 p-3">
+          <legend className="px-1 text-xs font-medium text-slate-400">
+            Series order
+          </legend>
+          {series.map((item, seriesIndex) => (
+            <div
+              key={seriesIndex}
+              className="flex items-center justify-between gap-2 text-xs text-slate-300"
+            >
+              <span className="truncate">
+                {seriesIndex + 1}.{" "}
+                {isJsonRecord(item)
+                  ? stringValue(item.name, `Series ${seriesIndex + 1}`)
+                  : `Series ${seriesIndex + 1}`}
+              </span>
+              <span className="flex shrink-0 gap-1">
+                <button
+                  type="button"
+                  disabled={disabled || seriesIndex === 0}
+                  aria-label={`Move series ${seriesIndex + 1} up`}
+                  onClick={() =>
+                    onEdit(
+                      { kind: "chart-series-order", seriesIndex },
+                      String(seriesIndex - 1),
+                    )
+                  }
+                  className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
+                >
+                  Up
+                </button>
+                <button
+                  type="button"
+                  disabled={disabled || seriesIndex === series.length - 1}
+                  aria-label={`Move series ${seriesIndex + 1} down`}
+                  onClick={() =>
+                    onEdit(
+                      { kind: "chart-series-order", seriesIndex },
+                      String(seriesIndex + 1),
+                    )
+                  }
+                  className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
+                >
+                  Down
+                </button>
+              </span>
+            </div>
+          ))}
+        </fieldset>
+      ) : null}
       {fields.map(({ key, label, value, target, control, min, max }) => {
         const shared = {
           value,
