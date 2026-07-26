@@ -85,3 +85,26 @@ credentials or network calls. Selection rewrite is also connected to the
 existing Studio reducer. Dedicated end-user panels, provider approval/egress,
 managed asset storage, and deployment remain separate future slices; none is
 claimed here.
+
+## Validation evidence
+
+The stacked follow-up was validated from the PR #89 head with the external
+provider, remote fetch, R2, signing, and deployment paths still disabled:
+
+- FastAPI: 1,040 passed and 6 skipped; the 11 new roadmap tests also pass in
+  isolation.
+- Next.js: the Template V2 Node group passes 161 tests, including the 30 new
+  roadmap tests; typecheck, lint, production build, and 29/29 page generation
+  pass.
+- Browser: the full Chrome component suite passes 105/105 across 24 specs.
+- Export: all 12 fidelity tests pass, including four real
+  LibreOffice/Poppler comparisons through presentation-export v0.4.2.
+- Packaging: 48 packaging/release policy tests pass with one macOS-only skip;
+  production dependency findings are zero; Windows NSIS and AppX artifacts
+  build with publishing disabled and without a signing certificate; packaged
+  FastAPI, Next.js, and runtime Tailwind smoke checks pass.
+
+The first Next.js build attempt was interrupted only by a transient Google
+Fonts network connection failure. An unchanged retry completed successfully.
+Managed PostgreSQL, production credentials/egress, R2, release publication,
+code signing, notarization, and deployment were not run and are not claimed.
