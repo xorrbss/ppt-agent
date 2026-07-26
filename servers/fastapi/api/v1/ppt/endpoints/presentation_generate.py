@@ -17,10 +17,19 @@ import os
 import traceback
 import uuid
 from datetime import datetime, timezone
+from time import perf_counter
 from typing import List, Optional, Tuple
 
 import dirtyjson
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Path,
+    Request,
+)
 
 from constants.presentation import DEFAULT_TEMPLATES, MAX_NUMBER_OF_SLIDES
 from enums.webhook_event import WebhookEvent
@@ -35,7 +44,12 @@ from models.slide_spec_model import archetype_to_layout_id, spec_to_blocks
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_PUBLISHED,
+    PRESENTATION_LIFECYCLE_STAGING,
+    PresentationModel,
+)
+from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
 from models.sql.template import TemplateModel
 from services.authored_presentation_service import (
@@ -50,14 +64,27 @@ from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.presentation_generation_job_service import (
+    claim_generation_job,
+    finalize_generation_job,
+    heartbeat_generation_job_loop,
+    idempotency_key_hash,
+    release_generation_job,
+    request_sha256,
+)
 from services.template_v2_generation_service import (
     TemplateV2GenerationError,
     build_template_v2_slides,
     load_template_v2_generation_target,
+    preflight_template_v2_native_pptx,
     source_content_sha256,
 )
+from services.template_v2_generation_observability import (
+    log_template_v2_generation_observation,
+)
 from services.webhook_service import WebhookService
-from sqlalchemy import delete
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.strategies import (
@@ -233,6 +260,7 @@ async def _generate_template_v2_presentation(
     using_slides_markdown: bool,
     language_to_use: Optional[str],
     async_status: Optional[AsyncPresentationGenerationTaskModel],
+    generation_job: Optional[PresentationGenerationJob],
     export_cookie_header: Optional[str],
     sql_session: AsyncSession,
 ) -> PresentationPathAndEditPath:
@@ -241,6 +269,7 @@ async def _generate_template_v2_presentation(
     if request.template_v2_id is None or request.template_v2_revision is None:
         raise HTTPException(status_code=400, detail="template_v2_target_required")
 
+    generation_started_at = perf_counter()
     try:
         target = request._template_v2_generation_target
         if target is None:
@@ -277,6 +306,10 @@ async def _generate_template_v2_presentation(
             verbosity=request.verbosity.value,
             instructions=request.instructions,
         )
+        native_pptx_preflight = preflight_template_v2_native_pptx(
+            target=target,
+            slides=slides,
+        )
         created_at = datetime.now(timezone.utc)
         provenance = target.provenance(
             source_sha256=source_content_sha256(
@@ -299,6 +332,7 @@ async def _generate_template_v2_presentation(
                 else f"sync:{presentation_id}"
             ),
             created_at=created_at,
+            native_pptx_preflight=native_pptx_preflight,
         )
         presentation = PresentationModel(
             id=presentation_id,
@@ -320,6 +354,7 @@ async def _generate_template_v2_presentation(
             web_search=request.web_search,
             mode="template",
             version=TEMPLATE_V2_VERSION,
+            lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             theme={
                 "mode": "template",
                 "template_v2": provenance,
@@ -330,15 +365,45 @@ async def _generate_template_v2_presentation(
 
         sql_session.add(presentation)
         sql_session.add_all(slides)
+        if generation_job is not None:
+            generation_job.state = "staging"
+            generation_job.updated_at = datetime.now(timezone.utc)
+            sql_session.add(generation_job)
         await sql_session.commit()
+        log_template_v2_generation_observation(
+            operation="generate",
+            outcome="success",
+            template_id=request.template_v2_id,
+            template_revision=request.template_v2_revision,
+            duration_ms=(perf_counter() - generation_started_at) * 1000,
+        )
     except TemplateV2GenerationError as error:
+        log_template_v2_generation_observation(
+            operation="generate",
+            outcome="failure",
+            template_id=request.template_v2_id,
+            template_revision=request.template_v2_revision,
+            duration_ms=(perf_counter() - generation_started_at) * 1000,
+            code=error.code,
+        )
         raise _template_v2_http_exception(error) from error
+    except Exception:
+        log_template_v2_generation_observation(
+            operation="generate",
+            outcome="failure",
+            template_id=request.template_v2_id,
+            template_revision=request.template_v2_revision,
+            duration_ms=(perf_counter() - generation_started_at) * 1000,
+            code="template_v2_unexpected_failure",
+        )
+        raise
 
     if async_status:
         async_status.message = "Exporting presentation"
         async_status.updated_at = datetime.now()
         sql_session.add(async_status)
 
+    export_started_at = perf_counter()
     try:
         presentation_and_path = await export_presentation(
             presentation_id,
@@ -346,7 +411,24 @@ async def _generate_template_v2_presentation(
             request.export_as,
             cookie_header=export_cookie_header,
         )
+        log_template_v2_generation_observation(
+            operation="export",
+            outcome="success",
+            template_id=request.template_v2_id,
+            template_revision=request.template_v2_revision,
+            duration_ms=(perf_counter() - export_started_at) * 1000,
+            export_type=request.export_as,
+        )
     except Exception:
+        log_template_v2_generation_observation(
+            operation="export",
+            outcome="failure",
+            template_id=request.template_v2_id,
+            template_revision=request.template_v2_revision,
+            duration_ms=(perf_counter() - export_started_at) * 1000,
+            export_type=request.export_as,
+            code="template_v2_export_failed",
+        )
         # The exporter reads through the committed database state. Compensate
         # immediately so a failed export cannot leave a queryable partial deck.
         # A future durable worker should replace this short visibility window
@@ -370,6 +452,8 @@ async def _generate_template_v2_presentation(
         **presentation_and_path.model_dump(),
         edit_path=f"/presentation?id={presentation_id}",
     )
+    presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
+    sql_session.add(presentation)
 
     if async_status:
         async_status.message = "Presentation generation completed"
@@ -377,7 +461,7 @@ async def _generate_template_v2_presentation(
         async_status.data = response.model_dump(mode="json")
         async_status.updated_at = datetime.now()
         sql_session.add(async_status)
-        await sql_session.commit()
+    await sql_session.commit()
 
     if request.trigger_webhook:
         CONCURRENT_SERVICE.run_task(
@@ -394,6 +478,7 @@ async def generate_presentation_handler(
     presentation_id: uuid.UUID,
     async_status: Optional[AsyncPresentationGenerationTaskModel],
     export_cookie_header: Optional[str] = None,
+    generation_job: Optional[PresentationGenerationJob] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     try:
@@ -562,6 +647,7 @@ async def generate_presentation_handler(
                 using_slides_markdown=using_slides_markdown,
                 language_to_use=language_to_use,
                 async_status=async_status,
+                generation_job=generation_job,
                 export_cookie_header=export_cookie_header,
                 sql_session=sql_session,
             )
@@ -891,7 +977,9 @@ async def generate_presentation_handler(
             traceback.print_exc()
             e = HTTPException(status_code=500, detail="Presentation generation failed")
 
-        api_error_model = APIErrorModel.from_exception(e)
+        api_error_model = APIErrorModel.from_exception(
+            e, request_id=request._request_id
+        )
 
         # Triggering webhook on failure (opt-in via request.trigger_webhook)
         if request.trigger_webhook:
@@ -922,6 +1010,7 @@ async def generate_presentation_sync(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    request._request_id = getattr(request_http.state, "request_id", None)
     try:
         (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
         return await generate_presentation_handler(
@@ -938,26 +1027,85 @@ async def generate_presentation_sync(
         raise HTTPException(status_code=500, detail="Presentation generation failed")
 
 
-async def _run_async_generation(
-    request: GeneratePresentationRequest,
-    presentation_id: uuid.UUID,
-    async_status_id: str,
+async def run_generation_job(
+    job_id: uuid.UUID,
     export_cookie_header: Optional[str],
 ):
-    """Background entry for /generate/async. A FastAPI BackgroundTask runs AFTER
-    the request's yield-dependency session is torn down, so generation must not
-    borrow that session — open a fresh one and re-fetch the status row by id."""
-    async with async_session_maker() as session:
-        async_status = await session.get(
-            AsyncPresentationGenerationTaskModel, async_status_id
-        )
-        await generate_presentation_handler(
-            request,
-            presentation_id,
-            async_status=async_status,
-            export_cookie_header=export_cookie_header,
-            sql_session=session,
-        )
+    """Claim a durable job and execute it with a fresh database session.
+
+    The worker uses persisted request state and never persists session cookies.
+    """
+    claimed = await claim_generation_job(
+        job_id,
+        allow_auth_resume=export_cookie_header is not None,
+    )
+    if claimed is None:
+        return
+    task_id, attempt_token = claimed
+    heartbeat = asyncio.create_task(
+        heartbeat_generation_job_loop(job_id, attempt_token)
+    )
+    succeeded = False
+    cancelled = False
+    try:
+        async with async_session_maker() as session:
+            job = await session.get(PresentationGenerationJob, job_id)
+            async_status = await session.get(
+                AsyncPresentationGenerationTaskModel, task_id
+            )
+            if job is None or async_status is None:
+                raise RuntimeError("presentation_generation_job_missing")
+            request = GeneratePresentationRequest.model_validate(job.request_payload)
+            request._request_id = job.request_id
+            if job.template_v2_target is not None:
+                from services.template_v2_generation_service import (
+                    TemplateV2GenerationTarget,
+                )
+
+                request._template_v2_generation_target = (
+                    TemplateV2GenerationTarget.from_durable_payload(
+                        job.template_v2_target
+                    )
+                )
+            await generate_presentation_handler(
+                request,
+                job.presentation_id,
+                async_status=async_status,
+                export_cookie_header=export_cookie_header,
+                generation_job=job,
+                sql_session=session,
+            )
+            await session.refresh(async_status)
+            succeeded = async_status.status == "completed"
+    except asyncio.CancelledError:
+        cancelled = True
+        raise
+    except Exception as error:
+        logger.exception("Durable presentation generation job %s failed", job_id)
+        async with async_session_maker() as failure_session:
+            status = await failure_session.get(
+                AsyncPresentationGenerationTaskModel, task_id
+            )
+            if status is not None and status.status not in {"completed", "error"}:
+                status.status = "error"
+                status.message = "Presentation generation failed"
+                status.error = APIErrorModel.from_exception(error).model_dump(
+                    mode="json"
+                )
+                status.updated_at = datetime.now(timezone.utc)
+                failure_session.add(status)
+                await failure_session.commit()
+    finally:
+        heartbeat.cancel()
+        await asyncio.gather(heartbeat, return_exceptions=True)
+        if cancelled:
+            await release_generation_job(job_id, attempt_token)
+        else:
+            await finalize_generation_job(
+                job_id,
+                attempt_token,
+                succeeded=succeeded,
+            )
 
 
 async def queue_presentation_generation(
@@ -965,23 +1113,108 @@ async def queue_presentation_generation(
     background_tasks: BackgroundTasks,
     sql_session: AsyncSession,
     export_cookie_header: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
 ) -> AsyncPresentationGenerationTaskModel:
-    """Validate and enqueue one presentation generation job."""
+    """Validate and atomically enqueue one durable, idempotent generation job."""
+    submitted_payload = request.model_dump(mode="json")
+    fingerprint = request_sha256(submitted_payload)
+    try:
+        key_hash = (
+            idempotency_key_hash(idempotency_key)
+            if idempotency_key is not None
+            else None
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    if key_hash is not None:
+        existing = (
+            await sql_session.execute(
+                select(PresentationGenerationJob).where(
+                    PresentationGenerationJob.idempotency_key_hash == key_hash
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            if existing.request_sha256 != fingerprint:
+                raise HTTPException(
+                    status_code=409,
+                    detail="idempotency_key_payload_conflict",
+                )
+            existing_status = await sql_session.get(
+                AsyncPresentationGenerationTaskModel, existing.task_id
+            )
+            if existing_status is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="idempotency_record_incomplete",
+                )
+            if existing.state == "awaiting_resume":
+                background_tasks.add_task(
+                    run_generation_job,
+                    existing.id,
+                    export_cookie_header,
+                )
+            return existing_status
+
     (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
+    # Validation may normalize legacy template identifiers. Persist the exact
+    # admitted request that the worker will execute. The fingerprint remains
+    # tied to the caller's canonical submitted payload for stable replay.
+    payload = request.model_dump(mode="json")
 
     async_status = AsyncPresentationGenerationTaskModel(
         status="pending",
         message="Queued for generation",
         data=None,
     )
+    target = request._template_v2_generation_target
+    job = PresentationGenerationJob(
+        task_id=async_status.id,
+        presentation_id=presentation_id,
+        idempotency_key_hash=key_hash,
+        request_id=request._request_id,
+        request_sha256=fingerprint,
+        request_payload=payload,
+        template_v2_target=(
+            target.to_durable_payload() if target is not None else None
+        ),
+        export_cookie_required=export_cookie_header is not None,
+        state="queued",
+    )
     sql_session.add(async_status)
-    await sql_session.commit()
+    sql_session.add(job)
+    try:
+        await sql_session.commit()
+    except IntegrityError:
+        await sql_session.rollback()
+        if key_hash is None:
+            raise
+        existing = (
+            await sql_session.execute(
+                select(PresentationGenerationJob).where(
+                    PresentationGenerationJob.idempotency_key_hash == key_hash
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is None or existing.request_sha256 != fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail="idempotency_key_payload_conflict",
+            )
+        existing_status = await sql_session.get(
+            AsyncPresentationGenerationTaskModel, existing.task_id
+        )
+        if existing_status is None:
+            raise HTTPException(
+                status_code=409,
+                detail="idempotency_record_incomplete",
+            )
+        return existing_status
 
     background_tasks.add_task(
-        _run_async_generation,
-        request,
-        presentation_id,
-        async_status.id,
+        run_generation_job,
+        job.id,
         export_cookie_header,
     )
     return async_status
@@ -994,14 +1227,20 @@ async def generate_presentation_async(
     request_http: Request,
     request: GeneratePresentationRequest,
     background_tasks: BackgroundTasks,
+    idempotency_key: Optional[str] = Header(
+        default=None,
+        alias="Idempotency-Key",
+    ),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    request._request_id = getattr(request_http.state, "request_id", None)
     try:
         return await queue_presentation_generation(
             request,
             background_tasks,
             sql_session,
             export_cookie_header=build_export_cookie_header(request_http),
+            idempotency_key=idempotency_key,
         )
 
     except Exception as e:

@@ -29,6 +29,7 @@ from services.template_v2_generation_service import (
     TemplateV2GenerationTarget,
     build_template_v2_slides,
     load_template_v2_generation_target,
+    preflight_template_v2_native_pptx,
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.models.layouts import SlideLayout
@@ -112,6 +113,46 @@ def _target() -> TemplateV2GenerationTarget:
                     "required": ["hero"],
                     "additionalProperties": False,
                 },
+            ),
+        ),
+    )
+
+
+def _unsupported_chart_target() -> TemplateV2GenerationTarget:
+    layout = SlideLayout.model_validate(
+        {
+            "id": "chart-slide",
+            "description": "Native compiler capability boundary",
+            "components": [
+                {
+                    "id": "chart-panel",
+                    "description": "Editable chart component",
+                    "position": {"x": 0, "y": 0},
+                    "elements": [
+                        {
+                            "type": "chart",
+                            "position": {"x": 80, "y": 80},
+                            "size": {"width": 640, "height": 360},
+                            "chart_type": "bar",
+                            "categories": ["A"],
+                            "series": [{"name": "Series", "values": [1]}],
+                            "decorative": False,
+                            "name": "chart",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    return TemplateV2GenerationTarget(
+        template_id="chart-template",
+        revision=1,
+        name="Chart Template",
+        snapshot_sha256="c" * 64,
+        layouts=(
+            TemplateV2GenerationLayout(
+                layout=layout,
+                content_schema={"type": "object"},
             ),
         ),
     )
@@ -343,6 +384,50 @@ def test_generated_content_is_json_schema_validated_before_slide_persistence():
     assert exc.value.code == "template_v2_generation_invalid"
 
 
+def test_native_pptx_preflight_records_explicit_unsupported_capability():
+    target = _unsupported_chart_target()
+    preflight = preflight_template_v2_native_pptx(
+        target=target,
+        slides=[
+            SlideModel(
+                presentation=uuid.uuid4(),
+                layout_group="native",
+                layout="chart-slide",
+                index=0,
+                content={
+                    "chart-panel": {
+                        "chart": {
+                            "chart_type": "bar",
+                            "categories": ["A"],
+                            "series": [{"name": "Series", "values": [1]}],
+                        }
+                    }
+                },
+            )
+        ],
+    )
+
+    provenance = target.provenance(
+        source_sha256="b" * 64,
+        request_id="request-id",
+        job_id="job-id",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        native_pptx_preflight=preflight,
+    )
+    capability = provenance["native_pptx_preflight"]
+    assert capability["schema_version"] == "presenton.template-v2-native-pptx/v1"
+    assert capability["compiler_name"] == "presenton-template-v2-native-ooxml"
+    assert capability["compiler_version"] == "1"
+    assert capability["status"] == "unsupported"
+    assert capability["selected_for_export"] is False
+    assert capability["structural_sha256"] is None
+    assert capability["package_sha256"] is None
+    assert capability["unsupported"]["code"] == (
+        "template_v2_native_pptx_element_unsupported"
+    )
+    assert capability["unsupported"]["path"].endswith(".type=chart")
+
+
 def test_handler_persists_v2_identity_provenance_and_native_ui():
     presentation_id = uuid.uuid4()
     request = GeneratePresentationRequest(
@@ -357,8 +442,14 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
     )
     session = RecordingSession()
     request._template_v2_generation_target = _target()
+    observations: list[dict[str, object]] = []
 
     with (
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "log_template_v2_generation_observation",
+            new=lambda **event: observations.append(event),
+        ),
         patch(
             "api.v1.ppt.endpoints.presentation_generate."
             "MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context",
@@ -406,6 +497,7 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
     assert response.presentation_id == presentation_id
     assert presentation.version == TEMPLATE_V2_VERSION
     assert presentation.mode == "template"
+    assert presentation.lifecycle_status == "published"
     assert presentation.layout is None
     assert presentation.structure is None
     assert presentation.theme["template_v2"]["request_strategy"] == "template_v2"
@@ -415,6 +507,21 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
     assert presentation.theme["template_v2"]["request_id"] == str(presentation_id)
     assert presentation.theme["template_v2"]["job_id"] == f"sync:{presentation_id}"
     assert presentation.theme["template_v2"]["compiler_version"] == "1"
+    native_preflight = presentation.theme["template_v2"][
+        "native_pptx_preflight"
+    ]
+    assert native_preflight["schema_version"] == (
+        "presenton.template-v2-native-pptx/v1"
+    )
+    assert native_preflight["compiler_name"] == (
+        "presenton-template-v2-native-ooxml"
+    )
+    assert native_preflight["compiler_version"] == "1"
+    assert native_preflight["status"] == "compiled"
+    assert native_preflight["selected_for_export"] is False
+    assert native_preflight["structural_sha256"].startswith("sha256:")
+    assert native_preflight["package_sha256"].startswith("sha256:")
+    assert native_preflight["unsupported"] is None
     assert presentation.theme["template_v2"]["source_content_sha256"].startswith(
         "sha256:"
     )
@@ -422,6 +529,17 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
     assert slide.layout_group == "native"
     assert slide.ui["id"] == "title-slide"
     assert slide.content == {"hero": {"title": "Generated title"}}
+    assert [event["operation"] for event in observations] == [
+        "generate",
+        "export",
+    ]
+    assert all(event["outcome"] == "success" for event in observations)
+    assert all(
+        isinstance(event["duration_ms"], float) and event["duration_ms"] >= 0
+        for event in observations
+    )
+    assert observations[1]["export_type"] == "pptx"
+    assert all("code" not in event for event in observations)
 
 
 def test_async_export_failure_removes_partial_deck_and_rolls_back_session():
@@ -442,8 +560,14 @@ def test_async_export_failure_removes_partial_deck_and_rolls_back_session():
         message="Queued for generation",
     )
     session = RecordingSession()
+    observations: list[dict[str, object]] = []
 
     with (
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "log_template_v2_generation_observation",
+            new=lambda **event: observations.append(event),
+        ),
         patch(
             "api.v1.ppt.endpoints.presentation_generate."
             "MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context",
@@ -486,3 +610,15 @@ def test_async_export_failure_removes_partial_deck_and_rolls_back_session():
     assert len(session.executed) == 2
     assert "slides" in str(session.executed[0]).lower()
     assert "presentations" in str(session.executed[1]).lower()
+    assert [event["operation"] for event in observations] == [
+        "generate",
+        "export",
+    ]
+    assert observations[0]["outcome"] == "success"
+    assert observations[1]["outcome"] == "failure"
+    assert observations[1]["export_type"] == "pptx"
+    assert observations[1]["code"] == "template_v2_export_failed"
+    assert all(
+        isinstance(event["duration_ms"], float) and event["duration_ms"] >= 0
+        for event in observations
+    )

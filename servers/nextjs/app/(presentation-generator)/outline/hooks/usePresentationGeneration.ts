@@ -16,6 +16,11 @@ import {
   parseTemplateV2SelectionId,
   TEMPLATE_V2_SELECTION_PREFIX,
 } from "@/app/hooks/useStructuredTemplates";
+import {
+  ApiError,
+  apiErrorFromPayload,
+  getApiErrorDisplayMessage,
+} from "../../services/api/api-error-handler";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -166,7 +171,11 @@ export const usePresentationGeneration = (
         let pollErrors = 0;
         while (true) {
           if (Date.now() > deadlineMs) {
-            throw new Error("생성 시간이 초과되었습니다. 잠시 후 다시 시도하세요.");
+            throw new ApiError("Presentation generation timed out.", {
+              status: 504,
+              code: "generation_timeout",
+              requestId: started?.request_id,
+            });
           }
           await new Promise((r) => setTimeout(r, AUTHORED_POLL_MS));
           if (!isActiveRun()) return;
@@ -205,10 +214,11 @@ export const usePresentationGeneration = (
             return;
           }
           if (task?.status === "error") {
-            throw new Error(
-              task?.error?.detail ||
-                task?.message ||
-                "프레젠테이션 생성에 실패했습니다."
+            throw apiErrorFromPayload(
+              task?.error,
+              task?.message || "Presentation generation failed.",
+              500,
+              task?.request_id
             );
           }
         }
@@ -217,10 +227,13 @@ export const usePresentationGeneration = (
         console.error("Error in authored generation.", error);
         notify.error(
           "생성 오류",
-          error.message || "AI 저작 생성 중 오류가 발생했습니다."
+          getApiErrorDisplayMessage(
+            error,
+            "An error occurred while generating the presentation."
+          )
         );
       } finally {
-        setLoadingState(DEFAULT_LOADING_STATE);
+        if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
       return;
     }
@@ -276,9 +289,11 @@ export const usePresentationGeneration = (
         let pollErrors = 0;
         while (true) {
           if (Date.now() > deadlineMs) {
-            throw new Error(
-              "생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요."
-            );
+            throw new ApiError("Presentation generation timed out.", {
+              status: 504,
+              code: "generation_timeout",
+              requestId: started?.request_id,
+            });
           }
           await new Promise((resolve) =>
             setTimeout(resolve, AUTHORED_POLL_MS)
@@ -319,10 +334,11 @@ export const usePresentationGeneration = (
             return;
           }
           if (task?.status === "error") {
-            throw new Error(
-              task?.error?.detail ||
-                task?.message ||
-                "구조화 템플릿 생성에 실패했습니다."
+            throw apiErrorFromPayload(
+              task?.error,
+              task?.message || "Structured-template generation failed.",
+              500,
+              task?.request_id
             );
           }
         }
@@ -331,7 +347,10 @@ export const usePresentationGeneration = (
         console.error("Error in structured-template generation.", error);
         notify.error(
           "생성 오류",
-          error.message || "구조화 템플릿 생성 중 오류가 발생했습니다."
+          getApiErrorDisplayMessage(
+            error,
+            "An error occurred during structured-template generation."
+          )
         );
       } finally {
         if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);

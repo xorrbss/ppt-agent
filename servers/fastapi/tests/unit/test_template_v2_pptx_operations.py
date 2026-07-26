@@ -141,7 +141,10 @@ def test_operational_status_blocks_rollback_and_reports_warning_aggregates(
             logger.warning.assert_called_once()
             payload = logger.warning.call_args.args[1]
             assert "private.pptx" not in payload
-            assert json.loads(payload)["stale_active_count"] == 1
+            event = json.loads(payload)
+            assert event["stale_active_count"] == 1
+            assert event["rollback_safe"] is False
+            assert event["rollback_code"] == "template_v2_rollback_drain_required"
         finally:
             await engine.dispose()
 

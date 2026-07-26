@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import json
 import logging
+from math import isfinite
 from typing import Literal
 
 
@@ -16,6 +17,7 @@ QueueOutcome = Literal["completed", "failed"]
 _OPERATIONS = {"dispatch", "recover"}
 _OUTCOMES = {"completed", "failed"}
 _MAX_COUNT = 1_000_000
+_MAX_DURATION_MS = 86_400_000.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,9 +25,14 @@ class PptxQueueObservation:
     operation: QueueOperation
     outcome: QueueOutcome
     count: int
+    duration_ms: float | None = None
 
     def as_event(self) -> dict[str, object]:
-        return asdict(self)
+        return {
+            key: value
+            for key, value in asdict(self).items()
+            if value is not None
+        }
 
 
 def build_pptx_queue_observation(
@@ -33,6 +40,7 @@ def build_pptx_queue_observation(
     operation: QueueOperation,
     outcome: QueueOutcome,
     count: int = 0,
+    duration_ms: float | None = None,
 ) -> dict[str, object]:
     """Build a bounded queue metric without job or tenant identifiers."""
 
@@ -47,10 +55,19 @@ def build_pptx_queue_observation(
         or count > _MAX_COUNT
     ):
         raise ValueError("PPTX queue count must be a bounded integer")
+    if duration_ms is not None and (
+        isinstance(duration_ms, bool)
+        or not isinstance(duration_ms, (int, float))
+        or not isfinite(duration_ms)
+        or duration_ms < 0
+        or duration_ms > _MAX_DURATION_MS
+    ):
+        raise ValueError("PPTX queue duration_ms must be a bounded millisecond value")
     return PptxQueueObservation(
         operation=operation,
         outcome=outcome,
         count=count,
+        duration_ms=None if duration_ms is None else float(duration_ms),
     ).as_event()
 
 
@@ -59,12 +76,14 @@ def log_pptx_queue_observation(
     operation: QueueOperation,
     outcome: QueueOutcome,
     count: int = 0,
+    duration_ms: float | None = None,
     logger: logging.Logger = LOGGER,
 ) -> dict[str, object]:
     event = build_pptx_queue_observation(
         operation=operation,
         outcome=outcome,
         count=count,
+        duration_ms=duration_ms,
     )
     logger.info(
         "template_v2_pptx_queue %s",

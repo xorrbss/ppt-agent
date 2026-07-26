@@ -10,6 +10,7 @@ class GeneratePresentationRequest(BaseModel):
     # in-process background task execute the exact immutable revision that was
     # accepted instead of re-reading mutable current state.
     _template_v2_generation_target: Any = PrivateAttr(default=None)
+    _request_id: Optional[str] = PrivateAttr(default=None)
 
     content: str = Field(..., description="The content for generating the presentation")
     slides_markdown: Optional[List[str]] = Field(

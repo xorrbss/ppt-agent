@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from time import perf_counter
 from typing import Any, Protocol
 import uuid
 
@@ -242,10 +243,12 @@ def track_import_task(
 async def dispatch_template_v2_pptx_imports_once(
     dependencies: IngestionRuntimeDependencies,
 ) -> int:
+    recovery_started_at = perf_counter()
     async with dependencies.async_session_maker() as session:
         recovered = await dependencies.recover_stalled_template_v2_pptx_imports(
             session
         )
+        recovery_duration_ms = (perf_counter() - recovery_started_at) * 1000
         queued = (
             await session.execute(
                 select(
@@ -267,6 +270,7 @@ async def dispatch_template_v2_pptx_imports_once(
         operation="recover",
         outcome="completed",
         count=recovered,
+        duration_ms=recovery_duration_ms,
     )
     dependencies.log_pptx_queue_observation(
         operation="dispatch",

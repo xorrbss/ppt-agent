@@ -265,10 +265,15 @@ export class PresentationGenerationApi {
         }
       );
 
-      return await ApiResponseHandler.handleResponse(
+      const result = await ApiResponseHandler.handleResponse(
         response,
         "Failed to start authored generation"
       );
+      return {
+        ...result,
+        request_id:
+          result?.request_id || response.headers.get("x-request-id") || undefined,
+      };
     } catch (error) {
       console.error("error starting authored generation", error);
       throw error;
@@ -301,10 +306,15 @@ export class PresentationGenerationApi {
         }
       );
 
-      return await ApiResponseHandler.handleResponse(
+      const result = await ApiResponseHandler.handleResponse(
         response,
         "Failed to start structured-template generation"
       );
+      return {
+        ...result,
+        request_id:
+          result?.request_id || response.headers.get("x-request-id") || undefined,
+      };
     } catch (error) {
       console.error("error starting structured-template generation", error);
       throw error;
@@ -322,10 +332,15 @@ export class PresentationGenerationApi {
         }
       );
 
-      return await ApiResponseHandler.handleResponse(
+      const result = await ApiResponseHandler.handleResponse(
         response,
         "Failed to get generation status"
       );
+      return {
+        ...result,
+        request_id:
+          result?.request_id || response.headers.get("x-request-id") || undefined,
+      };
     } catch (error) {
       console.error("error polling generation status", error);
       throw error;
