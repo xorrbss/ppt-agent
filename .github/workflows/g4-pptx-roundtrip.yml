@@ -149,11 +149,7 @@ jobs:
 
       - name: Validate signed-release inputs
         if: ${{ inputs.require_signed }}
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:CSC_LINK)) {
-            throw "require_signed=true requires the CSC_LINK repository secret"
-          }
+        run: node scripts/operational-release-preflight.mjs release --require-signing
 
       - name: Build packaged Next.js application resource
         working-directory: electron

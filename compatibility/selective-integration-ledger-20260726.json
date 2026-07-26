@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-07-26",
+  "policy": "selective-integration-only",
+  "upstream": {
+    "repository": "presenton/presenton",
+    "branch": "main",
+    "observedSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "pinnedBaselineSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "changeSincePinnedBaseline": false,
+    "liveIntakeResult": "unchanged",
+    "historicalDivergenceWithLocalReplaceRefs": {
+      "upstreamOnlyCommits": 850,
+      "forkOnlyCommitsAtReview": 463,
+      "note": "These are history counts after the documented content-equivalent replace refs; they are not a request to wholesale merge either history."
+    }
+  },
+  "fork": {
+    "repository": "xorrbss/ppt-agent",
+    "originMainSha": "61c13e90eb6d68a77edf268a896accdef127c76e",
+    "reviewBranch": "codex/template-v2-followup-20260726",
+    "integrationMergeSha": "107572512192bf8548034e8de2ab201b82a685e8",
+    "originMainDivergenceAfterIntegration": {
+      "ahead": 9,
+      "behind": 0
+    }
+  },
+  "decisions": [
+    {
+      "sha": "443d691d95ca90b4d183641d8a4b15b29a5cbf46",
+      "subject": "test: harden Template V2 canary rollback gate",
+      "disposition": "retain-local",
+      "evidence": "Fail-closed PostgreSQL canary and rollback checks protect the fork operational contract."
+    },
+    {
+      "sha": "95df8e950c33c036a78332a04546d0b4efb06caf",
+      "subject": "feat: classify Template V2 slots from OOXML evidence",
+      "disposition": "retain-local",
+      "evidence": "Bounded OOXML semantics improve imports without replacing the fork ingestion pipeline."
+    },
+    {
+      "sha": "f0129034d9792c745640844c941af14332460785",
+      "subject": "fix: isolate MSIX presentation export runtime",
+      "disposition": "retain-local",
+      "evidence": "Windows Store runtime isolation is a fork-specific packaging invariant."
+    },
+    {
+      "sha": "6d393d9a74acaca03b39450d474da47125dd6981",
+      "subject": "test: gate Electron release dependency audit",
+      "disposition": "retain-local",
+      "evidence": "The allowlisted release audit is safer than a forced, incompatible transitive downgrade."
+    },
+    {
+      "sha": "f04f1c0a807576b43f24c7d67ff3177bb7a4a26e",
+      "subject": "fix: make Windows standalone packaging privilege-free",
+      "disposition": "retain-local",
+      "evidence": "Link-free materialization is required by AppX and avoids junction privileges."
+    },
+    {
+      "sha": "9a684cf31e5c8c6741956d369650fbb47d685d75",
+      "subject": "fix: preserve application logging across migrations",
+      "disposition": "retain-local",
+      "evidence": "Operational telemetry must survive Alembic configuration."
+    },
+    {
+      "sha": "09797d243f0bf34b67d807fbe489c65245871889",
+      "subject": "fix: keep authenticated first run in model setup",
+      "disposition": "retain-local",
+      "evidence": "Preserves the fork public-auth first-run redirect contract."
+    },
+    {
+      "sha": "40da39c048f2fd67c15b5f01fb9d5626f5b2465e",
+      "subject": "feat: compile generated template Tailwind CSS server-side",
+      "disposition": "retain-local",
+      "evidence": "Removes runtime CDN execution while preserving authored and hybrid rendering fidelity."
+    },
+    {
+      "sha": "107572512192bf8548034e8de2ab201b82a685e8",
+      "subject": "Merge remote-tracking branch 'origin/main' into codex/template-v2-followup-20260726",
+      "disposition": "integrated-origin-main",
+      "evidence": "Non-destructive merge resolved the one-commit origin/main gap without claiming the unrelated upstream history."
+    }
+  ],
+  "sharp": {
+    "rootRequestedVersion": "0.35.3",
+    "officialNpmPublishedAt": "2026-07-01T11:28:34.077Z",
+    "officialGithubRelease": "https://github.com/lovell/sharp/releases/tag/v0.35.3",
+    "bundledPresentationExportVersion": "v0.4.2",
+    "bundledPresentationExportSharpVersionObserved": "0.34.4",
+    "disposition": "blocked-pending-new-official-presentation-export",
+    "reason": "A root dependency release does not change the ABI bundled inside the pinned presentation-export archive."
+  }
+}

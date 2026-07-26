@@ -51,6 +51,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+          - macos-14
           - windows-latest
 
     steps:
@@ -73,6 +74,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium fonts-liberation fonts-noto-cjk libreoffice poppler-utils
+
+      - name: Install macOS visual dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew list --cask libreoffice >/dev/null 2>&1 || brew install --cask libreoffice
+          brew list poppler >/dev/null 2>&1 || brew install poppler
+          test -x /Applications/LibreOffice.app/Contents/MacOS/soffice
+          echo "SOFFICE_PATH=/Applications/LibreOffice.app/Contents/MacOS/soffice" >> "$GITHUB_ENV"
+          echo "PDFTOCAIRO_PATH=$(command -v pdftocairo)" >> "$GITHUB_ENV"
 
       - name: Install Windows visual dependencies
         if: runner.os == 'Windows'

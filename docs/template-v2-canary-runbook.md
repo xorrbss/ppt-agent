@@ -360,6 +360,14 @@ every other template is blocked exactly as it would be by a full rollback.
 
 ## Recovery and rollback drill
 
+The repository-root wrapper adds a redacted managed/local boundary around the
+commands below. From the repository root, use
+`node scripts/operational-release-preflight.mjs canary`,
+`rollback-drain`, and `verify-off`; see
+`docs/operational-security-cross-platform-runbook.md`. It rejects loopback
+PostgreSQL unless `--allow-local-rehearsal` is explicit and never prints the
+database URL or credentials.
+
 Run this drill in a dedicated staging tenant with a synthetic template and
 synthetic content. Do not force lease expiry or edit queue rows in production.
 Target recovery objectives are RPO 0 for committed presentations and confirmed

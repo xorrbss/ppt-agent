@@ -74,6 +74,13 @@ disposition entries be changed together. Never silence a warning by updating
 only an expected SHA, and never use wholesale merge or cherry-pick as the
 baseline-update procedure.
 
+The dated selective-integration decision record for the 2026-07-26 follow-up is
+[`selective-integration-ledger-20260726.json`](selective-integration-ledger-20260726.json).
+It records the live unchanged upstream observation, the non-destructive
+`origin/main` reconciliation, local patch dispositions, and the separate Sharp
+runtime blocker. Dated records are evidence snapshots; the executable
+compatibility registries above remain the gates.
+
 ## Git ancestry (merge base with upstream)
 
 This fork's history is a filtered copy of upstream: the import removed large

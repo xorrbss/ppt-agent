@@ -12,6 +12,8 @@ app_data
 tmp
 debug
 .fastembed_cache
+*.tsbuildinfo
+*.py[cod]
 
 generated_models
 nltk
@@ -58,6 +60,11 @@ servers/fastapi/dist/
 electron/servers/
 servers/nextjs/cypress/screenshots/
 servers/nextjs/cypress/videos/
+
+# Release candidates are generated and quarantined by CI. Only signed release
+# manifests deliberately added through the release process belong in Git.
+electron/dist/
+test-artifacts/
 
 # This project is npm-based (package-lock.json). Block stray pnpm artifacts left
 # by a one-off `pnpm install` so they cannot cause dual-lockfile drift.
