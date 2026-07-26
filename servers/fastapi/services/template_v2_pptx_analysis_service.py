@@ -111,6 +111,7 @@ def build_runtime_analysis(
     document,
     *,
     import_id: uuid.UUID,
+    source_path: str | None = None,
     source_filename: str,
     source_media_type: str,
     source_size_bytes: int,
@@ -127,8 +128,28 @@ def build_runtime_analysis(
         document.layouts,
         relocated,
     )
+    if source_path is None:
+        placeholder_evidence = (
+            dependencies.unavailable_runtime_placeholder_evidence(
+                "source_path_not_provided"
+            )
+        )
+    else:
+        try:
+            placeholder_evidence = (
+                dependencies.extract_runtime_placeholder_evidence(source_path)
+            )
+        except (dependencies.UnsafePptxPackage, OSError):
+            placeholder_evidence = (
+                dependencies.unavailable_runtime_placeholder_evidence(
+                    "source_package_not_readable"
+                )
+            )
     classified_layouts, classification = (
-        dependencies.classify_runtime_fillable_layouts(private_layouts)
+        dependencies.classify_runtime_fillable_layouts(
+            private_layouts,
+            placeholder_evidence,
+        )
     )
     imported = dependencies.build_runtime_slide_layouts(classified_layouts)
     layouts = imported.raw_layouts.layouts
@@ -167,6 +188,11 @@ def build_runtime_analysis(
             "review_required": True,
         },
         "classification": classification.as_manifest(),
+        "placeholder_evidence": placeholder_evidence.as_manifest(),
+        "visual_evidence": {
+            "status": "not_evaluated",
+            "reason": "semantic_visual_provider_not_configured",
+        },
         "raw_layouts": imported.raw_layouts.model_dump(mode="json"),
         "layouts": imported.layouts.model_dump(mode="json"),
         "default_contents": dependencies.runtime_default_contents(imported.layouts),
@@ -221,6 +247,7 @@ async def analyze_import_source_via_runtime(
             dependencies._build_runtime_analysis,
             document,
             import_id=import_id,
+            source_path=str(source),
             source_filename=source_filename,
             source_media_type=source_media_type,
             source_size_bytes=source_size_bytes,

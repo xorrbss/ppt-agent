@@ -19,6 +19,11 @@ from templates.v2.pptx.runtime_layouts import (
     classify_runtime_fillable_layouts,
     runtime_default_contents,
 )
+from templates.v2.pptx.placeholder_evidence import (
+    PlaceholderAttributes,
+    RuntimePlaceholderEvidence,
+    ShapePlaceholderEvidence,
+)
 
 
 IMAGE_URL = (
@@ -290,15 +295,109 @@ def test_classifier_promotes_only_clear_text_and_image_placeholders():
     assert classified[2]["elements"][0]["decorative"] is True
     # Strong decorative tokens fail closed even when "placeholder" is present.
     assert classified[3]["elements"][0]["decorative"] is True
-    assert summary.as_manifest() == {
-        "version": 1,
-        "strategy": "conservative-placeholder-name",
-        "fillable_element_count": 2,
-        "text_placeholder_count": 1,
-        "image_placeholder_count": 1,
-    }
+    manifest = summary.as_manifest()
+    assert manifest["version"] == 2
+    assert manifest["strategy"] == (
+        "ooxml-placeholder-structure-with-legacy-name-fallback"
+    )
+    assert manifest["fillable_element_count"] == 2
+    assert manifest["text_placeholder_count"] == 1
+    assert manifest["image_placeholder_count"] == 1
+    assert manifest["legacy_name_fallback_count"] == 2
     assert original[0]["elements"][0]["decorative"] is True
     assert original[1]["elements"][0]["decorative"] is True
+
+
+def test_classifier_prefers_structural_placeholder_type_over_shape_name():
+    layout = _styled_text_layout()
+    layout["elements"][0]["name"] = "사용자 지정 제목"
+    source = PlaceholderAttributes(
+        part="ppt/slides/slide1.xml",
+        idx="7",
+        type=None,
+        orient="vert",
+        size="half",
+    )
+    inherited = PlaceholderAttributes(
+        part="ppt/slideLayouts/slideLayout1.xml",
+        idx="7",
+        type="title",
+        orient=None,
+        size=None,
+    )
+    evidence = RuntimePlaceholderEvidence(
+        slide_count=1,
+        shapes=(
+            ShapePlaceholderEvidence(
+                slide_index=1,
+                slide_part="ppt/slides/slide1.xml",
+                shape_path="spTree/sp[1]",
+                shape_name="사용자 지정 제목",
+                shape_kind="text",
+                geometry={
+                    "x": 144.0,
+                    "y": 408.01,
+                    "width": 672.02,
+                    "height": 184.0,
+                },
+                slide_placeholder=source,
+                layout_placeholder=inherited,
+                master_placeholder=None,
+                resolved_type="title",
+                status="resolved",
+                reason="placeholder_type_resolved",
+            ),
+        ),
+    )
+    original = copy.deepcopy(layout)
+
+    classified, summary = classify_runtime_fillable_layouts([layout], evidence)
+
+    assert classified[0]["elements"][0]["decorative"] is False
+    assert summary.structural_match_count == 1
+    assert summary.structural_fillable_count == 1
+    assert summary.legacy_name_fallback_count == 0
+    assert summary.slot_evidence[0]["confidence"] == "high"
+    assert layout == original
+
+
+def test_classifier_blocks_structural_footer_even_when_named_title():
+    layout = _styled_text_layout()
+    layout["elements"][0]["name"] = "Title 1"
+    placeholder = PlaceholderAttributes(
+        part="ppt/slides/slide1.xml",
+        idx="9",
+        type="ftr",
+        orient=None,
+        size=None,
+    )
+    evidence = RuntimePlaceholderEvidence(
+        slide_count=1,
+        shapes=(
+            ShapePlaceholderEvidence(
+                slide_index=1,
+                slide_part="ppt/slides/slide1.xml",
+                shape_path="spTree/sp[1]",
+                shape_name="Title 1",
+                shape_kind="text",
+                geometry=None,
+                slide_placeholder=placeholder,
+                layout_placeholder=None,
+                master_placeholder=None,
+                resolved_type="ftr",
+                status="resolved",
+                reason="placeholder_type_resolved",
+            ),
+        ),
+    )
+
+    classified, summary = classify_runtime_fillable_layouts([layout], evidence)
+
+    assert classified[0]["elements"][0]["decorative"] is True
+    assert summary.fillable_element_count == 0
+    assert summary.review_items[0]["reason"] == (
+        "structural_placeholder_requires_review"
+    )
 
 
 def test_classified_placeholders_produce_schema_valid_seed_content():
