@@ -302,3 +302,35 @@ installed `v0.4.2`), Electron package preflight (`24/24`), standalone copy
 - External authority remains unchanged: managed PostgreSQL, Vision provider
   egress, R2, Windows/AppX signing, and Apple signing/notarization were not
   attempted and are not claimed complete.
+
+## AI Template / Template V2 roadmap follow-up (2026-07-27)
+
+This stacked follow-up starts from the exact open PR #89 head
+`2531750fce1dea646f0f99f35b17fdef1cb16f39`. No upstream commit was
+cherry-picked, no upstream branch was merged, and package locks and the pinned
+presentation-export `v0.4.2` runtime were not changed.
+
+The previously reviewed content candidates were implemented as bounded local
+contracts:
+
+- Grapheme-safe selected-run rewrite with deterministic fake-provider
+  injection, two or three candidates, diff, text-fit preflight, revision CAS,
+  idempotency, explicit preview/apply/cancel, and the existing Studio
+  undo/redo/autosave path.
+- Strict chart controls, object-preserving series operations, bounded CSV/TSV
+  and table import, deterministic recommendations, and incompatible-control
+  rejection.
+- Object-preserving table transforms, bounded CSV/TSV paste, table-to-chart
+  preview/apply separation, and deterministic long-table split suggestions.
+- Deterministic, reason-coded quality inspection separated from fix
+  preview/apply.
+- Magic-byte and decoded-format local image validation, bounded dimensions,
+  sidecar provenance/deferred retention, and three deterministic crop
+  candidates. No remote fetch or R2 operation was added.
+- Slide-scoped visual variants with semantic/render digests, explicit
+  preview/apply/cancel/restore, revision CAS, and journal snapshots.
+
+These are content-level implementations informed by the existing ledger's
+candidate analysis, not copied editor stacks or permissive upstream defaults.
+The full contract and remaining UI boundary are documented in
+`docs/template-v2-ai-roadmap-contracts-20260727.md`.
