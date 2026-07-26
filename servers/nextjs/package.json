@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:ci-node": "node --experimental-strip-types lib/adaptiveBlockEdit.test.mjs && node --experimental-strip-types --test lib/export-render-url.test.mjs lib/app-data-directory.test.mjs && node --experimental-strip-types --test lib/authored-hybrid/contract.test.mjs lib/authored-hybrid/chrome.test.mjs lib/authored-hybrid/mode.test.mjs lib/authored-hybrid/security.test.mjs lib/authored-hybrid/pptx-archive.test.mjs lib/authored-hybrid/native-plan.test.mjs lib/authored-hybrid/pptx-assembler.test.mjs lib/authored-hybrid/cleanup.test.mjs && node --experimental-strip-types \"app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs\" && node --experimental-strip-types --test --test-concurrency=1 lib/template-v2-upstream-compat.test.ts lib/template-v2-import-review.test.ts lib/template-v2-studio.test.ts lib/template-v2-studio-content.test.ts lib/template-v2-studio-conflict.test.ts lib/template-v2-studio-geometry.test.ts lib/template-v2-studio-ui.test.ts lib/template-v2-studio-autosave.test.ts lib/template-v2-studio-keyboard.test.ts lib/template-v2-snapping.test.ts lib/template-v2-konva.test.ts lib/template-v2-studio-plan.test.ts lib/template-v2-render-plan.test.mjs lib/template-v2-general-renderer.test.mjs lib/template-v2-upstream-render-compat.test.mjs lib/template-v2-runtime-import-render.test.ts",
+    "test:ci-node": "node --experimental-strip-types --test components/Auth/authenticatedLanding.test.ts && node --experimental-strip-types lib/adaptiveBlockEdit.test.mjs && node --experimental-strip-types --test lib/export-render-url.test.mjs lib/app-data-directory.test.mjs lib/runtime-tailwind-css.test.ts && node --experimental-strip-types --test lib/authored-hybrid/contract.test.mjs lib/authored-hybrid/chrome.test.mjs lib/authored-hybrid/mode.test.mjs lib/authored-hybrid/security.test.mjs lib/authored-hybrid/pptx-archive.test.mjs lib/authored-hybrid/native-plan.test.mjs lib/authored-hybrid/pptx-assembler.test.mjs lib/authored-hybrid/cleanup.test.mjs && node --experimental-strip-types \"app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs\" && node --experimental-strip-types --test --test-concurrency=1 lib/template-v2-upstream-compat.test.ts lib/template-v2-import-review.test.ts lib/template-v2-studio.test.ts lib/template-v2-studio-content.test.ts lib/template-v2-studio-conflict.test.ts lib/template-v2-studio-journal.test.ts lib/template-v2-studio-geometry.test.ts lib/template-v2-studio-ui.test.ts lib/template-v2-studio-autosave.test.ts lib/template-v2-studio-keyboard.test.ts lib/template-v2-snapping.test.ts lib/template-v2-konva.test.ts lib/template-v2-studio-plan.test.ts lib/template-v2-render-plan.test.mjs lib/template-v2-general-renderer.test.mjs lib/template-v2-upstream-render-compat.test.mjs lib/template-v2-runtime-import-render.test.ts",
     "test:template-v2-export-fidelity": "node --test lib/template-v2-general-renderer.test.mjs lib/export-fidelity/*.test.mjs"
   },
   "dependencies": {
@@ -60,6 +60,7 @@
     "mixpanel-browser": "^2.67.0",
     "next": "16.2.11",
     "next-themes": "^0.4.6",
+    "postcss": "8.5.23",
     "prismjs": "^1.30.0",
     "react": "19.2.6",
     "react-colorful": "^5.6.1",
@@ -71,6 +72,7 @@
     "sharp": "0.35.3",
     "sonner": "^2.0.6",
     "tailwind-merge": "^2.5.3",
+    "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "tiptap-markdown": "^0.8.10",
     "uuid": "^11.1.1",
@@ -94,7 +96,6 @@
     "esbuild": "0.25.8",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
-    "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "webpack": "^5.107.2"
   },

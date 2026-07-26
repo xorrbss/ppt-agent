@@ -76,10 +76,30 @@ function response(payloadLayouts = layouts(), revision = 1) {
 }
 
 function settleSuccessfulPersistence() {
-  cy.contains("button", /^(Save now|Saving…)$/).then(($button) => {
-    if (!$button.is(":disabled")) cy.wrap($button).click();
-  });
+  // The debounced autosave may finish between querying the button and clicking
+  // it. Waiting on the user-visible dirty state covers both the pending-save
+  // and already-saved paths without racing the disabled button transition.
   cy.contains("Unsaved changes").should("not.exist");
+}
+
+function setColorInput(label: string, color: string) {
+  cy.contains("label", label)
+    .find('input[type="color"]')
+    .then(($input) => {
+      const input = $input[0] as HTMLInputElement;
+      const view = input.ownerDocument.defaultView;
+      const setter = view
+        ? Object.getOwnPropertyDescriptor(
+            view.HTMLInputElement.prototype,
+            "value"
+          )?.set
+        : undefined;
+      expect(setter, "native color value setter").to.be.a("function");
+      setter?.call(input, color);
+      input.dispatchEvent(new view!.Event("input", { bubbles: true }));
+      input.dispatchEvent(new view!.Event("change", { bubbles: true }));
+    })
+    .should("have.value", color);
 }
 
 describe("TemplateV2Studio API integration", () => {
@@ -226,6 +246,185 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("Saved").should("be.visible");
   });
 
+  it("edits chart data, table styles, and safe image assets through autosave", () => {
+    const editableLayouts = layouts();
+    editableLayouts.layouts[0].components[0].elements.push({
+      type: "chart",
+      name: "revenue",
+      position: { x: 40, y: 260 },
+      size: { width: 420, height: 240 },
+      chart_type: "bar",
+      title: "Revenue",
+      categories: ["Q1", "Q2"],
+      series: [
+        {
+          name: "Actual",
+          values: [10, 20],
+          future_series_field: { retained: true },
+        },
+      ],
+      future_chart_field: "retained",
+    });
+    editableLayouts.layouts[0].components[0].elements.push({
+      type: "table",
+      name: "forecast table",
+      position: { x: 500, y: 260 },
+      size: { width: 300, height: 180 },
+      columns: [
+        {
+          runs: [{ text: "Metric", future_run_field: "retained" }],
+          alignment: "left",
+          color: { color: "#ffffff", opacity: 0.8 },
+        },
+      ],
+      rows: [
+        [
+          {
+            runs: [{ text: "Revenue" }],
+            alignment: "right",
+            future_cell_field: { retained: true },
+          },
+        ],
+      ],
+      min_columns: 1,
+      max_columns: 1,
+      min_rows: 1,
+      max_rows: 1,
+      decorative: false,
+    });
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response(editableLayouts) }
+    ).as("loadEditableTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("saveEditableTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadEditableTemplate");
+    cy.contains("button[aria-pressed]", /^revenue/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Chart title")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("Bookings", { waitForAnimations: false });
+    cy.contains("label", "Category 2")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("FY26 Q2", { waitForAnimations: false });
+    cy.contains("label", "Series 1 name")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("Forecast", { waitForAnimations: false });
+    cy.contains("label", "Series 1, value 2")
+      .find("input")
+      .type("{selectall}42.5", { waitForAnimations: false });
+
+    cy.contains("button[aria-pressed]", /^forecast table/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Header 1 alignment")
+      .find("select")
+      .select("center", { force: true });
+    setColorInput("Header 1 fill", "#1d4ed8");
+    cy.contains("label", "Row 1, cell 1 alignment")
+      .find("select")
+      .select("left", { force: true });
+    setColorInput("Row 1, cell 1 fill", "#fee2e2");
+
+    cy.contains("button[aria-pressed]", /^hero/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Asset source")
+      .find("textarea")
+      .type("{selectall}/app_data/images/updated.png", {
+        waitForAnimations: false,
+      });
+    cy.contains("label", "Asset fit")
+      .find("select")
+      .select("contain", { force: true });
+    cy.contains("label", "Horizontal focus (%)")
+      .find("input")
+      .type("{selectall}25.5", { waitForAnimations: false });
+    cy.contains("label", "Vertical focus (%)")
+      .find("input")
+      .type("{selectall}75", { waitForAnimations: false });
+    cy.contains("label", "Crop scale")
+      .find("input")
+      .type("{selectall}1.75", { waitForAnimations: false });
+    cy.contains("button", "Save").click({ waitForAnimations: false });
+
+    cy.wait("@saveEditableTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements")
+      .then((elements) => {
+        expect(elements[1]).to.deep.equal({
+          ...unsupportedImage,
+          data: "/app_data/images/updated.png",
+          fit: "contain",
+          focus_x: 25.5,
+          focus_y: 75,
+          crop_scale: 1.75,
+        });
+        expect(elements[2]).to.deep.equal({
+          type: "chart",
+          name: "revenue",
+          position: { x: 40, y: 260 },
+          size: { width: 420, height: 240 },
+          chart_type: "bar",
+          title: "Bookings",
+          categories: ["Q1", "FY26 Q2"],
+          series: [
+            {
+              name: "Forecast",
+              values: [10, 42.5],
+              future_series_field: { retained: true },
+            },
+          ],
+          future_chart_field: "retained",
+        });
+        expect(elements[3]).to.include({
+          type: "table",
+          name: "forecast table",
+          min_columns: 1,
+          max_columns: 1,
+          min_rows: 1,
+          max_rows: 1,
+          decorative: false,
+        });
+        expect(elements[3].position).to.deep.equal({ x: 500, y: 260 });
+        expect(elements[3].size).to.deep.equal({ width: 300, height: 180 });
+        expect(elements[3].columns).to.deep.equal([
+          {
+            runs: [{ text: "Metric", future_run_field: "retained" }],
+            alignment: "center",
+            color: { color: "#1d4ed8", opacity: 0.8 },
+          },
+        ]);
+        expect(elements[3].rows).to.deep.equal([
+          [
+            {
+              runs: [{ text: "Revenue" }],
+              alignment: "left",
+              color: { color: "#fee2e2" },
+              future_cell_field: { retained: true },
+            },
+          ],
+        ]);
+      });
+  });
+
   it("keeps local edits and offers an explicit reload after a revision conflict", () => {
     cy.intercept(
       "GET",
@@ -299,8 +498,16 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("button", "Bring to front").should("be.disabled");
     cy.contains("button", "Unlock selected").should("be.enabled");
     cy.get('[aria-label="Locked"]').should("have.length", 2);
+    cy.get('[role="application"]')
+      .should("have.attr", "data-konva-move-enabled", "false")
+      .and("have.attr", "data-konva-resize-enabled", "false")
+      .and("have.attr", "data-konva-rotate-enabled", "false");
 
     cy.contains("button", "Unlock selected").click({ waitForAnimations: false });
+    cy.get('[role="application"]')
+      .should("have.attr", "data-konva-move-enabled", "true")
+      .and("have.attr", "data-konva-resize-enabled", "true")
+      .and("have.attr", "data-konva-rotate-enabled", "true");
     cy.contains("button", "Bring to front").click({
       waitForAnimations: false,
     });

@@ -74,6 +74,13 @@ disposition entries be changed together. Never silence a warning by updating
 only an expected SHA, and never use wholesale merge or cherry-pick as the
 baseline-update procedure.
 
+The dated selective-integration decision record for the 2026-07-26 follow-up is
+[`selective-integration-ledger-20260726.json`](selective-integration-ledger-20260726.json).
+It records the live unchanged upstream observation, the non-destructive
+`origin/main` reconciliation, local patch dispositions, and the separate Sharp
+runtime blocker. Dated records are evidence snapshots; the executable
+compatibility registries above remain the gates.
+
 ## Git ancestry (merge base with upstream)
 
 This fork's history is a filtered copy of upstream: the import removed large
@@ -177,11 +184,17 @@ paths above), and the grafts go on its non-copied children.
   source cleanup. Rollback remains blocked while any import is queued, active,
   confirming, awaiting review, or failed. Stale, failed, review-required, and
   overdue-cleanup states degrade health in that priority order. Retention
-  cleanup runs independently of the Template V2 creation flag.
+  cleanup runs independently of the Template V2 creation flag. The health and
+  canary commands also fail closed when a configured required malware scanner
+  executable cannot be resolved; rollback drain and cleanup remain available
+  during a scanner outage.
 - PostgreSQL is verified by a dedicated live-database CI gate. It runs the
   official Alembic lineage from an empty database and covers Template V2
   upgrade/downgrade/re-upgrade, legacy and populated-data preservation,
-  foreign keys, unique constraints, indexes, and child-first delete safety.
+  foreign keys, unique constraints, indexes, and child-first delete safety. The
+  canary/rollback suite additionally uses four independent `NullPool` engines
+  to race 12 durable import claims and verifies heartbeat lease extension,
+  exactly-once stale recovery, re-claim, and stale-owner fencing.
 - MySQL and MariaDB are not supported by this compatibility contract. Upstream
   URL adapters and defensive dialect branches are retained, but there is no
   documented server/version/CI contract and a clean Alembic SQL compilation
@@ -193,9 +206,12 @@ ends in `test` or `tests`:
 ```bash
 cd servers/fastapi
 export PPT_AGENT_POSTGRES_TEST_URL='postgresql+psycopg://user:password@127.0.0.1:5432/presenton_test'
-uv run pytest -q --no-header tests/integration/test_postgresql_template_v2_migrations.py
+uv run pytest -q --no-header tests/integration/test_postgresql_template_v2_migrations.py tests/integration/test_postgresql_template_v2_canary_rollback.py
 ```
 
 Without the URL, local collection skips this destructive integration test with
 an explicit reason. CI also sets `PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION=1`, so
 the dedicated job fails instead of skipping if its service URL is missing.
+This disposable-database gate is local equivalence evidence only; it does not
+replace a non-destructive managed PostgreSQL canary and flag-off rollback
+rehearsal with operator-supplied credentials.

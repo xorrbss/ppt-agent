@@ -364,6 +364,44 @@ test("rejects an internal standalone link that AppX cannot map", (t) => {
   }
 });
 
+test("rejects a FastAPI framework link that was not materialized", (t) => {
+  const fixture = createFixture();
+  const fastapiRoot = path.join(
+    fixture.electronRoot,
+    "resources",
+    "fastapi"
+  );
+  const target = path.join(fastapiRoot, "_internal", "Python.framework", "3.11");
+  const linkPath = path.join(
+    fastapiRoot,
+    "_internal",
+    "Python.framework",
+    "Current"
+  );
+  try {
+    writeFile(path.join(target, "Python"), "fixture");
+    try {
+      fs.symlinkSync(
+        target,
+        linkPath,
+        process.platform === "win32" ? "junction" : "dir"
+      );
+    } catch (error) {
+      if (error.code === "EPERM" || error.code === "EACCES") {
+        t.skip(`Link creation is unavailable: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    assert.throws(
+      () => validate(fixture),
+      /must be link-free for AppX compatibility/
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("rejects a packaging scan root that is itself a workspace-internal link", (t) => {
   const fixture = createFixture();
   const sharedNext = path.join(fixture.electronRoot, "shared-nextjs");

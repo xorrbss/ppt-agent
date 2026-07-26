@@ -59,7 +59,11 @@ leave unrelated pull requests waiting for a check that was never created:
 - `Upstream compatibility / delete-safety-windows`
 - `Upstream compatibility / template-v2-postgresql`
 - `Template V2 Export Fidelity / ubuntu-latest structural + visual`
+- `Template V2 Export Fidelity / macos-14 structural + visual`
 - `Template V2 Export Fidelity / windows-latest structural + visual`
+- `Cross-platform packaging and malware gate / Unsigned package (ubuntu-latest)`
+- `Cross-platform packaging and malware gate / Unsigned package (macos-14)`
+- `Cross-platform packaging and malware gate / ClamAV scan of package candidates`
 
 GitHub's branch-protection API stores the job-name portion as the check context;
 the workflow-qualified names above mirror the Actions UI and disambiguate their
@@ -82,7 +86,8 @@ capability-specific integration gates:
 | `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, and the selected Cypress component suite. It also validates the local runner's complete dry-run plan. |
 | `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and the real PostgreSQL migration integration test. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
 | `upstream-intake.yml` | Offline fixture on pull requests; GitHub API on schedule/manual dispatch | Detects upstream movement without merging it. Live intake is intentionally not a pull-request dependency. |
-| `template-v2-export-fidelity.yml` | Ubuntu and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on both operating systems. |
+| `template-v2-export-fidelity.yml` | Ubuntu, macOS, and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on all three operating systems. |
+| `cross-platform-packaging-security.yml` | Ubuntu and macOS unsigned builders; Ubuntu ClamAV scanner | Rebuilds FastAPI, Next.js, and Electron artifacts from a clean checkout, records SHA-256 manifests, retains quarantined candidates for seven days, and fails closed when the downstream ClamAV scan cannot complete. |
 | `g4-pptx-roundtrip.yml` | Ubuntu Docker; Windows for release gates | Pinned export-runtime contract, Windows Electron/resource safety tests, optional manual Windows packaging, and required adaptive plus legacy end-to-end PPTX round trips. |
 | `sync-releaes-to-r2.yml` | Release event and deployment credentials | Publishes release artifacts. This is a deployment workflow, not a pull-request test gate. |
 

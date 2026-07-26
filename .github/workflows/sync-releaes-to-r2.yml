@@ -28,6 +28,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
+      - name: Validate R2 credentials
+        env:
+          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: node scripts/operational-release-preflight.mjs release --require-r2
+
+      - name: Validate published release and resolve version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_json="$(gh release view "$RELEASE_TAG" --json isDraft,tagName)"
+          actual_tag="$(jq -r '.tagName' <<<"$release_json")"
+          is_draft="$(jq -r '.isDraft' <<<"$release_json")"
+          if [ "$actual_tag" != "$RELEASE_TAG" ] || [ "$is_draft" != "false" ]; then
+            echo "Release must exist, match the requested tag exactly, and be published." >&2
+            exit 1
+          fi
+
+          VERSION="${RELEASE_TAG#electron-v}"
+          if [ "$VERSION" = "$RELEASE_TAG" ]; then
+            VERSION="${RELEASE_TAG#v}"
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9][0-9A-Za-z._-]*$ ]]; then
+            echo "Release tag does not resolve to a safe version identifier." >&2
+            exit 1
+          fi
+          echo "Resolved version: $VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Download release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,50 +75,65 @@ jobs:
           echo "Downloaded files:"
           ls -lh assets/
 
-      - name: Resolve release version
+      - name: Verify release asset checksums
         run: |
           set -euo pipefail
-          VERSION="${RELEASE_TAG#electron-v}"
-          if [ "$VERSION" = "$RELEASE_TAG" ]; then
-            VERSION="${RELEASE_TAG#v}"
-          fi
-          if [ -z "$VERSION" ]; then
-            echo "Could not resolve a version from release tag: $RELEASE_TAG" >&2
+          mapfile -t installers < <(find assets -maxdepth 1 -type f \
+            \( -name '*.deb' -o -name '*.dmg' -o -name '*.exe' -o -name '*.appx' \) \
+            -print)
+          mapfile -t manifests < <(find assets -maxdepth 1 -type f \
+            -name 'SHA256SUMS*.txt' -print)
+          if [ "${#installers[@]}" -eq 0 ] || [ "${#manifests[@]}" -eq 0 ]; then
+            echo "Release synchronization requires installers and a SHA256SUMS manifest." >&2
             exit 1
           fi
-          echo "Resolved version: $VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          for manifest in "${manifests[@]}"; do
+            (
+              cd assets
+              sha256sum --check "$(basename "$manifest")"
+            )
+          done
 
       - name: Install rclone
         run: |
-          curl https://rclone.org/install.sh | sudo bash
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes rclone
+          rclone version
 
-      - name: Validate R2 credentials
+      - name: Probe R2 write, read, and delete access
         env:
-          R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
-          R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_KEY }}
+          RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
           set -euo pipefail
-          for name in R2_ACCESS_KEY R2_SECRET_KEY R2_ACCOUNT_ID; do
-            if [ -z "${!name:-}" ]; then
-              echo "Missing required sync_r2 environment secret: $name" >&2
-              exit 1
-            fi
-          done
+          probe_dir="$(mktemp -d)"
+          probe_remote="r2:presenton-desktop/${VERSION}/.preflight/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.txt"
+          cleanup() {
+            rclone deletefile "$probe_remote" --s3-no-check-bucket >/dev/null 2>&1 || true
+            rm -rf -- "$probe_dir"
+          }
+          trap cleanup EXIT
+          printf 'run=%s attempt=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$probe_dir/sent.txt"
+          rclone copyto "$probe_dir/sent.txt" "$probe_remote" --s3-no-check-bucket
+          rclone copyto "$probe_remote" "$probe_dir/received.txt" --s3-no-check-bucket
+          cmp "$probe_dir/sent.txt" "$probe_dir/received.txt"
+          rclone deletefile "$probe_remote" --s3-no-check-bucket
+          trap - EXIT
+          rm -rf -- "$probe_dir"
 
-      - name: Configure R2
+      - name: Upload files to R2 and verify remote contents
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_KEY }}
+          RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
-          mkdir -p ~/.config/rclone
-          cat <<EOF > ~/.config/rclone/rclone.conf
-          [r2]
-          type = s3
-          provider = Cloudflare
-          access_key_id = ${{ secrets.R2_ACCESS_KEY }}
-          secret_access_key = ${{ secrets.R2_SECRET_KEY }}
-          endpoint = https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          EOF
-
-      - name: Upload files to R2
-        run: |
-          rclone copy assets "r2:presenton-desktop/${VERSION}" --progress --transfers=8
+          set -euo pipefail
+          destination="r2:presenton-desktop/${VERSION}"
+          rclone copy assets "$destination" --s3-no-check-bucket --transfers=8
+          rclone check assets "$destination" --one-way --s3-no-check-bucket

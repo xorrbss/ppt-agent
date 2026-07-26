@@ -2,12 +2,14 @@
  * Download presenton-export release (Linux x64) into repo-root `presentation-export/`.
  * Same release host as Electron (`electron/sync_export_runtime.js`); Docker uses this at build time.
  *
- * Version resolution (first match):
- *   1. EXPORT_RUNTIME_VERSION env
- *   2. package.json → presentationExportVersion
+ * Version resolution defaults to package.json → presentationExportVersion.
+ * EXPORT_RUNTIME_VERSION is only honored with --allow-version-override so an
+ * ambient build environment cannot silently replace the pinned runtime.
  *
  * CLI: --force  re-download even if valid runtime already exists
  *       --check-only  verify installed version + runtime files and exit 0/1
+ *       --allow-version-override  permit EXPORT_RUNTIME_VERSION to replace the pin
+ *       --help  show usage
  *
  * Normal sync repairs index.cjs from index.js. --check-only is read-only and
  * rejects a missing or stale CommonJS entrypoint.
@@ -44,9 +46,37 @@ function getExportAssetName() {
 }
 const exportAssetName = getExportAssetName();
 
-const cliArgs = new Set(process.argv.slice(2));
-const forceDownload = cliArgs.has("--force");
-const checkOnly = cliArgs.has("--check-only");
+const helpText = [
+  "Usage: node scripts/sync-presentation-export.cjs [options]",
+  "",
+  "Options:",
+  "  --force                   Re-download even when the runtime is valid",
+  "  --check-only              Verify the installed runtime without changing it",
+  "  --allow-version-override  Honor EXPORT_RUNTIME_VERSION instead of the package pin",
+  "  --help                    Show this help",
+].join("\n");
+
+function parseCliArgs(args = process.argv.slice(2)) {
+  const supported = new Set([
+    "--force",
+    "--check-only",
+    "--allow-version-override",
+    "--help",
+  ]);
+  const unknown = args.filter((arg) => !supported.has(arg));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown option${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}\n\n${helpText}`
+    );
+  }
+  const parsed = new Set(args);
+  return {
+    forceDownload: parsed.has("--force"),
+    checkOnly: parsed.has("--check-only"),
+    allowVersionOverride: parsed.has("--allow-version-override"),
+    showHelp: parsed.has("--help"),
+  };
+}
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -90,14 +120,19 @@ function readPinnedVersion() {
   return v;
 }
 
-async function getTargetVersion() {
-  const fromEnv = (process.env.EXPORT_RUNTIME_VERSION || "").trim();
-  if (fromEnv) {
-    return fromEnv === "latest" ? await resolveLatestTag() : fromEnv;
+async function getTargetVersion({
+  env = process.env,
+  allowOverride = false,
+  readPinned = readPinnedVersion,
+  resolveLatest = resolveLatestTag,
+} = {}) {
+  const fromEnv = (env.EXPORT_RUNTIME_VERSION || "").trim();
+  if (allowOverride && fromEnv) {
+    return fromEnv === "latest" ? await resolveLatest() : fromEnv;
   }
-  const pinned = readPinnedVersion();
+  const pinned = readPinned();
   if (pinned === "latest") {
-    return await resolveLatestTag();
+    return await resolveLatest();
   }
   return pinned;
 }
@@ -583,8 +618,20 @@ function finalizeRuntimeInstall(
   writeMarker(tag);
 }
 
-async function main() {
-  const targetVersion = await getTargetVersion();
+async function main(args = process.argv.slice(2)) {
+  const {
+    forceDownload,
+    checkOnly,
+    allowVersionOverride,
+    showHelp,
+  } = parseCliArgs(args);
+  if (showHelp) {
+    console.log(helpText);
+    return;
+  }
+  const targetVersion = await getTargetVersion({
+    allowOverride: allowVersionOverride,
+  });
   const existing = validateExistingRuntime(targetVersion, targetRoot, {
     repair: !checkOnly,
   });
@@ -638,6 +685,9 @@ if (require.main === module) {
     installedVersionFileName,
     assertRuntimeSharpLoadable,
     finalizeRuntimeInstall,
+    getTargetVersion,
+    helpText,
+    parseCliArgs,
     readInstalledVersion,
     writeInstalledVersionAtomic,
     validateExistingRuntime,

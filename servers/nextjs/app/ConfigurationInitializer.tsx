@@ -100,7 +100,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         if (llmConfig.LLM === 'ollama' && llmConfig.OLLAMA_MODEL) {
           const isPulled = await checkIfSelectedOllamaModelIsPulled(llmConfig.OLLAMA_MODEL);
           if (!isPulled) {
-            router.push('/');
+            router.replace('/?setup=llm');
             setLoadingToFalseAfterNavigatingTo('/');
             return;
           }
@@ -108,7 +108,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         if (llmConfig.LLM === 'custom') {
           const isAvailable = await checkIfSelectedCustomModelIsAvailable(llmConfig);
           if (!isAvailable) {
-            router.push('/');
+            router.replace('/?setup=llm');
             setLoadingToFalseAfterNavigatingTo('/');
             return;
           }
@@ -120,7 +120,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
           setIsLoading(false);
         }
       } else if (route !== '/') {
-        router.push('/');
+        router.replace('/?setup=llm');
         setLoadingToFalseAfterNavigatingTo('/');
       } else {
         setIsLoading(false);

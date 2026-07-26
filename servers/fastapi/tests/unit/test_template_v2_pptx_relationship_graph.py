@@ -163,7 +163,13 @@ def test_external_targets_are_not_retained_or_dereferenced(tmp_path: Path) -> No
         }
     ]
     assert evidence.skipped_relationship_count == 1
+    assert evidence.blocked_relationship_kind_counts == {"ole_object": 1}
     assert "ppt/embeddings/workbook.xlsx" not in evidence.nodes
+    assert summary["embedded_content_policy"] == {
+        "dereference_enabled": False,
+        "execution_enabled": False,
+        "retained_target_identifiers": False,
+    }
 
 
 def test_cycles_and_missing_parts_are_bounded_anomalies(tmp_path: Path) -> None:

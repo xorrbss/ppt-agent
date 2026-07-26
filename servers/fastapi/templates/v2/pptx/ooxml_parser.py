@@ -4,7 +4,12 @@ import posixpath
 from pathlib import PurePosixPath
 
 from .chart_parser import parse_cached_chart
-from .models import PresentationCandidates, ShapeCandidate, SlideCandidate
+from .models import (
+    PresentationCandidates,
+    ShapeCandidate,
+    SlideCandidate,
+    TextRunCandidate,
+)
 from .package_reader import PptxPackageReader, UnsafePptxPackage
 from .relationship_graph import build_relationship_graph_evidence
 from .style_graph import build_style_graph_evidence
@@ -16,6 +21,7 @@ NS = {
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     "pr": "http://schemas.openxmlformats.org/package/2006/relationships",
     "c": "http://schemas.openxmlformats.org/drawingml/2006/chart",
+    "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
 }
 REL_NS = f"{{{NS['r']}}}"
 SLIDE_REL_TYPE = (
@@ -114,13 +120,64 @@ def _shape_identity(shape, index: int) -> tuple[str, str]:
     return props.get("id") or str(index), props.get("name") or f"shape_{index}"
 
 
+def _ooxml_bool(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    return value.lower() in {"1", "true", "on"}
+
+
+def _run_candidate(node) -> TextRunCandidate | None:
+    text = node.find("./a:t", NS)
+    if text is None:
+        return None
+    properties = node.find("./a:rPr", NS)
+    size = _number(properties.get("sz")) / 100 if properties is not None else 0
+    family = properties.find("./a:latin", NS) if properties is not None else None
+    color = (
+        properties.find("./a:solidFill/a:srgbClr", NS)
+        if properties is not None
+        else None
+    )
+    raw_color = color.get("val") if color is not None else None
+    underline = properties.get("u") if properties is not None else None
+    return TextRunCandidate(
+        text=text.text or "",
+        font_size=size or None,
+        font_family=family.get("typeface") if family is not None else None,
+        font_color=(
+            f"#{raw_color[:6].upper()}"
+            if raw_color and len(raw_color) in {6, 8}
+            else None
+        ),
+        bold=_ooxml_bool(properties.get("b") if properties is not None else None),
+        italic=_ooxml_bool(properties.get("i") if properties is not None else None),
+        underline=(underline != "none") if underline is not None else None,
+    )
+
+
+def _text_runs(shape) -> list[TextRunCandidate]:
+    runs: list[TextRunCandidate] = []
+    paragraphs = shape.findall(".//a:p", NS)
+    for paragraph_index, paragraph in enumerate(paragraphs):
+        paragraph_runs: list[TextRunCandidate] = []
+        for child in list(paragraph):
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag in {"r", "fld"}:
+                candidate = _run_candidate(child)
+                if candidate is not None:
+                    paragraph_runs.append(candidate)
+            elif tag == "br":
+                paragraph_runs.append(TextRunCandidate(text="\n"))
+        if not paragraph_runs:
+            continue
+        if runs and paragraph_index > 0:
+            runs.append(TextRunCandidate(text="\n"))
+        runs.extend(paragraph_runs)
+    return runs
+
+
 def _text(shape) -> str:
-    paragraphs: list[str] = []
-    for paragraph in shape.findall(".//a:p", NS):
-        value = "".join(node.text or "" for node in paragraph.findall(".//a:t", NS))
-        if value:
-            paragraphs.append(value)
-    return "\n".join(paragraphs)
+    return "".join(run.text for run in _text_runs(shape))
 
 
 def _fill_color(shape) -> str | None:
@@ -152,13 +209,15 @@ def _parse_shape(
     source_id, name = _shape_identity(shape, index)
     transform = _shape_transform(shape, slide_cx, slide_cy, **space)
     transform.pop("_canvas_height", None)
-    text = _text(shape)
+    text_runs = _text_runs(shape)
+    text = "".join(run.text for run in text_runs)
     if text:
         return ShapeCandidate(
             source_id=source_id,
             name=name,
             kind="text",
             text=text,
+            text_runs=text_runs,
             confidence=0.92,
             **transform,
         )
@@ -197,6 +256,16 @@ def _parse_graphic_frame(
     transform.pop("_canvas_height", None)
     table = shape.find("./a:graphic/a:graphicData/a:tbl", NS)
     if table is None:
+        smart_art = shape.find("./a:graphic/a:graphicData/dgm:relIds", NS)
+        if smart_art is not None:
+            return ShapeCandidate(
+                source_id=source_id,
+                name=name,
+                kind="unsupported",
+                confidence=0,
+                unsupported_reason="unsupported_ooxml:smartArt",
+                **transform,
+            )
         chart_ref = shape.find("./a:graphic/a:graphicData/c:chart", NS)
         relationship_id = (
             chart_ref.get(f"{REL_NS}id") if chart_ref is not None else None

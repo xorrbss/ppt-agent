@@ -1,0 +1,142 @@
+name: Cross-platform packaging and malware gate
+
+on:
+  pull_request:
+    paths:
+      - "electron/**"
+      - "servers/fastapi/**"
+      - "servers/nextjs/**"
+      - "presentation-export/**"
+      - "scripts/sync-presentation-export.cjs"
+      - "scripts/operational-release-preflight.mjs"
+      - "scripts/operational-release-preflight.test.mjs"
+      - ".github/workflows/cross-platform-packaging-security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cross-platform-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Unsigned package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-14
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      CYPRESS_INSTALL_BINARY: "0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            electron/package-lock.json
+            servers/nextjs/package-lock.json
+
+      - name: Install uv and Python 3.11
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+          working-directory: servers/fastapi
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools rpm
+
+      - name: Install locked dependencies
+        run: |
+          npm ci
+          npm ci --prefix servers/nextjs
+          npm ci --prefix electron
+          uv sync --frozen --directory servers/fastapi
+
+      - name: Test operational preflight policy
+        run: node --test scripts/operational-release-preflight.test.mjs
+
+      - name: Build packaged Next.js resource
+        working-directory: electron
+        run: npm run build:nextjs
+
+      - name: Build packaged FastAPI resource
+        working-directory: electron
+        run: npm run build:fastapi
+
+      - name: Package Electron without publishing or signing
+        working-directory: electron
+        run: npm run build:electron
+
+      - name: Create SHA-256 manifest
+        shell: bash
+        run: |
+          find electron/dist -maxdepth 1 -type f -print |
+            LC_ALL=C sort |
+            while IFS= read -r file; do shasum -a 256 "$file"; done \
+              > electron/dist/SHA256SUMS.cross-platform.txt
+          test -s electron/dist/SHA256SUMS.cross-platform.txt
+
+      - name: Upload quarantined package candidates
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-${{ runner.os }}-${{ github.sha }}
+          path: |
+            electron/dist/*.AppImage
+            electron/dist/*.deb
+            electron/dist/*.dmg
+            electron/dist/SHA256SUMS.cross-platform.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  malware-scan:
+    name: ClamAV scan of package candidates
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download candidates
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: unsigned-*-${{ github.sha }}
+          path: candidates
+
+      - name: Install and update ClamAV
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clamav
+          sudo systemctl stop clamav-freshclam.service 2>/dev/null || true
+          sudo freshclam || {
+            echo "ClamAV signatures could not be refreshed; refusing a stale or unknown scan" >&2
+            exit 1
+          }
+
+      - name: Scan archives and installers
+        run: clamscan --recursive --infected --scan-archive=yes candidates
+
+      - name: Publish scan summary
+        if: always()
+        run: |
+          {
+            echo "## Package malware gate"
+            echo
+            echo "- Source commit: \`${GITHUB_SHA}\`"
+            echo "- Candidates are unsigned, quarantined CI artifacts retained for 7 days."
+            echo "- A release workflow must rebuild/sign and regenerate checksums; these files are not promotable."
+          } >> "$GITHUB_STEP_SUMMARY"

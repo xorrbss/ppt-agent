@@ -27,17 +27,26 @@ const linkFreeRuntimeTrace = [
   "node_modules/source-map-js/**/*",
   "node_modules/styled-jsx/**/*",
 ];
+const runtimeTailwindTrace = [
+  // Tailwind reads this file with fs.readFileSync while constructing its core
+  // plugins. Next's JS tracer cannot infer that runtime path for standalone.
+  "node_modules/tailwindcss/lib/css/**/*",
+];
 
 const nextConfig = {
   reactStrictMode: false,
   distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
   output: "standalone",
+  // Runtime template CSS compilation needs Tailwind's real package __dirname.
+  // Bundling it can bake the build machine path into fs.readFileSync calls.
+  serverExternalPackages: ["postcss", "tailwindcss"],
   outputFileTracingRoot: repositoryRoot,
   outputFileTracingIncludes: {
     "/*": [
       ...semverRuntimeTrace,
       ...sharpNativeRuntimeTrace,
       ...linkFreeRuntimeTrace,
+      ...runtimeTailwindTrace,
     ],
     "/api/export-presentation": exportRuntimeTrace,
   },

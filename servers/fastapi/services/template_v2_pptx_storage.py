@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
+from typing import Mapping
 import unicodedata
 from urllib.parse import unquote, urlsplit
 import uuid
@@ -27,6 +29,8 @@ DEFAULT_PRIVATE_SOURCE_RETENTION_DAYS = 7
 MIN_PRIVATE_SOURCE_RETENTION_DAYS = 1
 MAX_PRIVATE_SOURCE_RETENTION_DAYS = 90
 PRIVATE_SOURCE_RETENTION_DAYS_ENV = "TEMPLATE_V2_PPTX_SOURCE_TTL_DAYS"
+PPTX_MALWARE_SCAN_MODE_ENV = "TEMPLATE_V2_PPTX_MALWARE_SCAN_MODE"
+PPTX_MALWARE_SCANNER_ENV = "TEMPLATE_V2_PPTX_MALWARE_SCANNER"
 PPTX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 )
@@ -90,6 +94,101 @@ class PrivateStorageHealth:
             "private_storage_ready": self.ready,
             "private_storage_code": self.code,
         }
+
+
+@dataclass(frozen=True)
+class MalwareScanHealth:
+    ready: bool
+    code: str
+    mode: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "malware_scan_ready": self.ready,
+            "malware_scan_code": self.code,
+            "malware_scan_mode": self.mode,
+        }
+
+
+def _malware_scan_executable(
+    environ: Mapping[str, str] | None = None,
+    *,
+    which=shutil.which,
+) -> str | None:
+    values = os.environ if environ is None else environ
+    configured = (values.get(PPTX_MALWARE_SCANNER_ENV) or "").strip()
+    return which(configured or "clamscan")
+
+
+def get_malware_scan_health(
+    environ: Mapping[str, str] | None = None,
+    *,
+    which=shutil.which,
+) -> MalwareScanHealth:
+    """Report whether the opt-in upload scanner can enforce its policy."""
+
+    values = os.environ if environ is None else environ
+    mode = (values.get(PPTX_MALWARE_SCAN_MODE_ENV) or "disabled").strip().lower()
+    if mode not in {"disabled", "required"}:
+        return MalwareScanHealth(
+            ready=False,
+            code="template_v2_pptx_malware_scan_mode_invalid",
+            mode="invalid",
+        )
+    if mode == "disabled":
+        return MalwareScanHealth(
+            ready=True,
+            code="template_v2_pptx_malware_scan_disabled",
+            mode=mode,
+        )
+    if _malware_scan_executable(values, which=which) is None:
+        return MalwareScanHealth(
+            ready=False,
+            code="template_v2_pptx_malware_scanner_unavailable",
+            mode=mode,
+        )
+    return MalwareScanHealth(
+        ready=True,
+        code="template_v2_pptx_malware_scan_required",
+        mode=mode,
+    )
+
+
+def scan_private_pptx(
+    source: Path,
+    *,
+    environ: Mapping[str, str] | None = None,
+    runner=subprocess.run,
+    which=shutil.which,
+) -> str:
+    """Scan a staged upload before it is promoted into retained private storage."""
+
+    values = os.environ if environ is None else environ
+    health = get_malware_scan_health(values, which=which)
+    if health.mode == "disabled" and health.ready:
+        return health.code
+    if not health.ready:
+        raise PptxUploadRejected(health.code)
+    executable = _malware_scan_executable(values, which=which)
+    if executable is None:  # Defensive: health and execution must agree.
+        raise PptxUploadRejected("template_v2_pptx_malware_scanner_unavailable")
+    try:
+        result = runner(
+            [executable, "--no-summary", "--infected", str(source)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise PptxUploadRejected(
+            "template_v2_pptx_malware_scan_failed"
+        ) from error
+    if result.returncode == 0:
+        return "template_v2_pptx_malware_scan_clean"
+    if result.returncode == 1:
+        raise PptxUploadRejected("template_v2_pptx_malware_detected")
+    raise PptxUploadRejected("template_v2_pptx_malware_scan_failed")
 
 
 def get_private_storage_health() -> PrivateStorageHealth:
@@ -434,6 +533,7 @@ async def store_private_pptx(
             PptxPackageReader(temporary).preflight()
         except UnsafePptxPackage as error:
             raise PptxUploadRejected(error.code) from error
+        scan_private_pptx(temporary)
         temporary.replace(target)
     except Exception:
         temporary.unlink(missing_ok=True)

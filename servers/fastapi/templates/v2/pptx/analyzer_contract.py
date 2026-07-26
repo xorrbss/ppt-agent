@@ -37,6 +37,16 @@ class ValidatedChartSeriesCandidate(AnalyzerContractModel):
     values: list[FiniteFloat]
 
 
+class ValidatedTextRunCandidate(AnalyzerContractModel):
+    text: StrictStr
+    font_size: PositiveFinite | None = None
+    font_family: StrictStr | None = None
+    font_color: StrictStr | None = None
+    bold: StrictBool | None = None
+    italic: StrictBool | None = None
+    underline: StrictBool | None = None
+
+
 class ValidatedShapeCandidate(AnalyzerContractModel):
     source_id: NonEmptyString
     name: NonEmptyString
@@ -47,6 +57,7 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     height: NonNegativeFinite = 0
     rotation: FiniteFloat = 0
     text: StrictStr | None = None
+    text_runs: list[ValidatedTextRunCandidate] | None = None
     table_rows: list[list[StrictStr]] | None = None
     chart_type: StrictStr | None = None
     chart_categories: list[StrictStr] | None = None
@@ -62,6 +73,14 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             raise ValueError("text_candidate_requires_text")
         if self.kind != "text" and self.text is not None:
             raise ValueError("non_text_candidate_cannot_contain_text")
+        if self.kind == "text":
+            if self.text_runs is not None:
+                if not self.text_runs:
+                    raise ValueError("text_candidate_runs_cannot_be_empty")
+                if "".join(run.text for run in self.text_runs) != self.text:
+                    raise ValueError("text_candidate_run_content_mismatch")
+        elif self.text_runs is not None:
+            raise ValueError("non_text_candidate_cannot_contain_text_runs")
         if self.kind == "table":
             if not self.table_rows or not self.table_rows[0]:
                 raise ValueError("table_candidate_requires_cells")
@@ -164,6 +183,9 @@ class ValidatedRelationshipGraphEvidence(AnalyzerContractModel):
     missing_parts: list[NonEmptyString] = Field(default_factory=list)
     cycle_count: Annotated[StrictInt, Field(ge=0)] = 0
     skipped_relationship_count: Annotated[StrictInt, Field(ge=0)] = 0
+    blocked_relationship_kind_counts: dict[
+        NonEmptyString, Annotated[StrictInt, Field(ge=1)]
+    ] = Field(default_factory=dict)
     local_render_enabled: StrictBool = False
     ocr_enabled: StrictBool = False
     external_model_access: StrictBool = False
@@ -228,8 +250,25 @@ class ValidatedPresentationCandidates(AnalyzerContractModel):
 def candidate_payload_sha256(
     candidates: ValidatedPresentationCandidates,
 ) -> str:
+    payload_value = candidates.model_dump(mode="json")
+
+    def remove_empty_additive_fields(shape: dict[str, Any]) -> None:
+        if shape.get("text_runs") is None:
+            shape.pop("text_runs", None)
+        for child in shape.get("children") or []:
+            remove_empty_additive_fields(child)
+
+    for slide in payload_value["slides"]:
+        for shape in slide["shapes"]:
+            remove_empty_additive_fields(shape)
+    relationship_graph = payload_value.get("relationship_graph")
+    if (
+        relationship_graph is not None
+        and not relationship_graph.get("blocked_relationship_kind_counts")
+    ):
+        relationship_graph.pop("blocked_relationship_kind_counts", None)
     payload = json.dumps(
-        candidates.model_dump(mode="json"),
+        payload_value,
         ensure_ascii=False,
         allow_nan=False,
         separators=(",", ":"),

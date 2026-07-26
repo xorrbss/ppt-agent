@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Loader2, PlusIcon, Pencil, Trash } from "lucide-react";
 import {
   Popover,
@@ -115,20 +115,6 @@ const SlideContent = ({
       notify.error("슬라이드를 삭제할 수 없습니다", error.message || "슬라이드를 삭제하는 중 문제가 발생했습니다.");
     }
   };
-  useEffect(() => {
-    if (slide.layout.includes("custom")) {
-      const existingScript = document.querySelector(
-        'script[src*="tailwindcss.com"]'
-      );
-      if (!existingScript) {
-        const script = document.createElement("script");
-        script.src = "https://cdn.tailwindcss.com";
-        script.async = true;
-        document.head.appendChild(script);
-      }
-    }
-  }, [slide, isStreaming]);
-
   return (
     <>
       <div

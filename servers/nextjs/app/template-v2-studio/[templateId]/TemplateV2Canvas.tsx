@@ -366,6 +366,9 @@ export default function TemplateV2Canvas({
       className="relative h-[68vh] min-h-[360px] w-full overflow-hidden rounded-lg bg-slate-800 outline-none"
       tabIndex={0}
       role="application"
+      data-konva-move-enabled={String(capabilities.move)}
+      data-konva-resize-enabled={String(capabilities.resize)}
+      data-konva-rotate-enabled={String(capabilities.rotate)}
       aria-label="Slide canvas. Arrow keys nudge the selection, Shift plus arrow nudges by the grid step, Escape clears the selection, and holding Space pans the view."
       onKeyDown={(event) => {
         if (event.code === "Space") {

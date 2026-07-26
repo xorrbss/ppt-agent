@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-07-26",
+  "policy": "selective-integration-only",
+  "upstream": {
+    "repository": "presenton/presenton",
+    "branch": "main",
+    "observedSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "pinnedBaselineSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "changeSincePinnedBaseline": false,
+    "liveIntakeResult": "unchanged",
+    "historicalDivergenceWithLocalReplaceRefs": {
+      "upstreamOnlyCommits": 850,
+      "forkOnlyCommitsAtReview": 483,
+      "note": "These are history counts after the documented content-equivalent replace refs; they are not a request to wholesale merge either history."
+    }
+  },
+  "fork": {
+    "repository": "xorrbss/ppt-agent",
+    "originMainSha": "61c13e90eb6d68a77edf268a896accdef127c76e",
+    "reviewBranch": "codex/template-v2-followup-20260726",
+    "integrationMergeSha": "107572512192bf8548034e8de2ab201b82a685e8",
+    "originMainDivergenceAfterIntegration": {
+      "ahead": 29,
+      "behind": 0
+    }
+  },
+  "followupSlice": {
+    "headBeforeLedgerCommit": "596e7df423b9dc878cdc2674b22978fdd74c382d",
+    "commits": [
+      "c4b1c798",
+      "a93c8750",
+      "b8115f66",
+      "596e7df4"
+    ],
+    "verification": {
+      "fastapi": {
+        "passed": 1007,
+        "skipped": 6
+      },
+      "templateV2Node": {
+        "passed": 127
+      },
+      "authoredHybridNode": {
+        "passed": 83,
+        "platformSkipped": 1
+      },
+      "cypressChrome": {
+        "passed": 105
+      },
+      "exportFidelity": {
+        "passed": 12,
+        "actualFixturesPassed": 4
+      },
+      "nextStaticPages": {
+        "generated": 29
+      },
+      "postgresqlLocalEquivalent": {
+        "version": "15.18",
+        "passed": 3
+      },
+      "electronReleasePolicy": {
+        "passed": 2
+      },
+      "electronPackagePreflight": {
+        "passed": 24
+      },
+      "electronProductionAuditTotal": 0
+    },
+    "externalBlockers": [
+      "Managed PostgreSQL credentials are absent, so the real canary and flag-OFF rollback were not claimed.",
+      "CSC_LINK and fork-owned AppX identity/publisher are absent, so signed Windows publication was not attempted.",
+      "R2_ACCOUNT_ID, R2_ACCESS_KEY, and R2_SECRET_KEY are absent, so upload was not attempted.",
+      "Vision provider credentials and approved egress are absent, so only the mock contract was verified."
+    ]
+  },
+  "upstreamSelectiveIntegrationFollowup": {
+    "report": "docs/upstream-selective-integration-report-20260726-followup.md",
+    "contentReviewedAtSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "directCherryPickApproved": false,
+    "wholesaleMergeApproved": false,
+    "recommendedDisposition": "bounded-manual-port-with-focused-tests",
+    "highestValueCandidates": [
+      "presentation-export version override opt-in gate from 2702ed921cc62f0c01753dfc2db232f67c0eb5a1",
+      "EOT font offset and family-width normalization from c4d426f76ef116e0e6812b5a44ce3ff5788671b9",
+      "TempFileService path confinement from 484b50e1709975e75193e821819b67963791c394 and 0f65ad6b05835b0daa1b410cd4de839113c91b5c",
+      "bounded text-run selection helpers from c513e612 and dabe968c"
+    ]
+  },
+  "subsequentBoundedManualPorts": {
+    "implementedAt": "2026-07-26",
+    "headBeforeImplementation": "f1596f2ecc9cfa60787449115283976da363c784",
+    "upstreamContentReviewedAtSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "directCherryPickUsed": false,
+    "wholesaleMergeUsed": false,
+    "slices": [
+      {
+        "id": "template-v2-image-focus-crop",
+        "upstreamEvidence": [
+          "31a6af10"
+        ],
+        "files": [
+          "servers/nextjs/lib/template-v2-studio-content.ts",
+          "servers/nextjs/lib/template-v2-studio-content.test.ts",
+          "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2ContentInspector.tsx",
+          "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2Studio.cy.tsx"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Adds only numeric focus_x/focus_y and crop_scale controls already accepted by the strict renderer contract. Values fail closed outside 0..100 and 1..6, tinted icon crops above 1 are rejected, unknown metadata and no-op identity are preserved, and no upload or remote asset trust path was added."
+      },
+      {
+        "id": "eot-font-offset-and-width-family-normalization",
+        "upstreamEvidence": [
+          "c4d426f76ef116e0e6812b5a44ce3ff5788671b9"
+        ],
+        "files": [
+          "servers/fastapi/templates/pptx_font_utils.py",
+          "servers/fastapi/tests/test_pptx_font_utils.py"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Uses validated EOT size fields to bound embedded font extraction, retains an earliest-signature legacy fallback, and preserves width-family tokens while still removing weight tokens."
+      },
+      {
+        "id": "temp-file-service-confinement",
+        "upstreamEvidence": [
+          "484b50e1709975e75193e821819b67963791c394",
+          "0f65ad6b05835b0daa1b410cd4de839113c91b5c"
+        ],
+        "files": [
+          "servers/fastapi/services/temp_file_service.py",
+          "servers/fastapi/tests/unit/test_temp_file_service.py"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Adds injectable canonical temp roots, POSIX/Windows basename handling, realpath/commonpath confinement, existing-path checks, cross-drive rejection, and guarded symlink-aware cleanup without replacing routers or widening app-data access."
+      },
+      {
+        "id": "presentation-export-override-opt-in",
+        "upstreamEvidence": [
+          "2702ed921cc62f0c01753dfc2db232f67c0eb5a1"
+        ],
+        "files": [
+          "scripts/sync-presentation-export.cjs",
+          "scripts/sync-presentation-export.test.cjs"
+        ],
+        "disposition": "integrated-bounded-manual-port",
+        "evidence": "Ambient EXPORT_RUNTIME_VERSION is ignored unless --allow-version-override is explicit. Unknown options fail closed while the fork checksum, Sharp ABI, platform, atomic marker, and read-only check contracts remain intact."
+      }
+    ],
+    "verification": {
+      "fastapi": {
+        "passed": 1020,
+        "skipped": 6
+      },
+      "fastapiFocusedCrossStream": {
+        "passed": 106,
+        "skipped": 1
+      },
+      "templateV2Node": {
+        "passed": 129
+      },
+      "cypressCiSelected": {
+        "specs": 14,
+        "passed": 81
+      },
+      "cypressChromeFull": {
+        "specs": 24,
+        "passed": 105
+      },
+      "exportFidelity": {
+        "passed": 12,
+        "actualFixturesPassed": 4
+      },
+      "nextStaticPages": {
+        "generated": 29
+      },
+      "postgresqlLocalEquivalent": {
+        "version": "15",
+        "passed": 5,
+        "managedEvidence": false
+      },
+      "presentationExporterSync": {
+        "passed": 19
+      },
+      "electronReleasePolicy": {
+        "passed": 2
+      },
+      "electronPackagePreflight": {
+        "passed": 24
+      },
+      "electronStandaloneCopy": {
+        "passed": 13,
+        "platformSkipped": 1
+      },
+      "electronBuildConfig": {
+        "passed": 2
+      },
+      "electronProductionAuditTotal": 0,
+      "electronDevBuildHigh": 16
+    },
+    "externalBlockers": [
+      "Managed PostgreSQL credentials are absent, so the real canary and flag-OFF rollback remain unverified.",
+      "CSC_LINK and fork-owned AppX identity/publisher are absent, so signed Windows publication was not attempted.",
+      "R2_ACCOUNT_ID, R2_ACCESS_KEY, and R2_SECRET_KEY are absent, so upload was not attempted.",
+      "Vision provider credentials and approved egress are absent, so no real or paid provider call was attempted.",
+      "Apple signing and notarization identity are absent, so macOS signing and notarization remain unverified.",
+      "Docker is unavailable on the local workstation, so clean-container packaging is delegated to required PR CI."
+    ]
+  },
+  "decisions": [
+    {
+      "sha": "443d691d95ca90b4d183641d8a4b15b29a5cbf46",
+      "subject": "test: harden Template V2 canary rollback gate",
+      "disposition": "retain-local",
+      "evidence": "Fail-closed PostgreSQL canary and rollback checks protect the fork operational contract."
+    },
+    {
+      "sha": "95df8e950c33c036a78332a04546d0b4efb06caf",
+      "subject": "feat: classify Template V2 slots from OOXML evidence",
+      "disposition": "retain-local",
+      "evidence": "Bounded OOXML semantics improve imports without replacing the fork ingestion pipeline."
+    },
+    {
+      "sha": "f0129034d9792c745640844c941af14332460785",
+      "subject": "fix: isolate MSIX presentation export runtime",
+      "disposition": "retain-local",
+      "evidence": "Windows Store runtime isolation is a fork-specific packaging invariant."
+    },
+    {
+      "sha": "6d393d9a74acaca03b39450d474da47125dd6981",
+      "subject": "test: gate Electron release dependency audit",
+      "disposition": "retain-local",
+      "evidence": "The allowlisted release audit is safer than a forced, incompatible transitive downgrade."
+    },
+    {
+      "sha": "f04f1c0a807576b43f24c7d67ff3177bb7a4a26e",
+      "subject": "fix: make Windows standalone packaging privilege-free",
+      "disposition": "retain-local",
+      "evidence": "Link-free materialization is required by AppX and avoids junction privileges."
+    },
+    {
+      "sha": "9a684cf31e5c8c6741956d369650fbb47d685d75",
+      "subject": "fix: preserve application logging across migrations",
+      "disposition": "retain-local",
+      "evidence": "Operational telemetry must survive Alembic configuration."
+    },
+    {
+      "sha": "09797d243f0bf34b67d807fbe489c65245871889",
+      "subject": "fix: keep authenticated first run in model setup",
+      "disposition": "retain-local",
+      "evidence": "Preserves the fork public-auth first-run redirect contract."
+    },
+    {
+      "sha": "40da39c048f2fd67c15b5f01fb9d5626f5b2465e",
+      "subject": "feat: compile generated template Tailwind CSS server-side",
+      "disposition": "retain-local",
+      "evidence": "Removes runtime CDN execution while preserving authored and hybrid rendering fidelity."
+    },
+    {
+      "sha": "107572512192bf8548034e8de2ab201b82a685e8",
+      "subject": "Merge remote-tracking branch 'origin/main' into codex/template-v2-followup-20260726",
+      "disposition": "integrated-origin-main",
+      "evidence": "Non-destructive merge resolved the one-commit origin/main gap without claiming the unrelated upstream history."
+    }
+  ],
+  "sharp": {
+    "rootRequestedVersion": "0.35.3",
+    "officialNpmPublishedAt": "2026-07-01T11:28:34.077Z",
+    "officialGithubRelease": "https://github.com/lovell/sharp/releases/tag/v0.35.3",
+    "bundledPresentationExportVersion": "v0.4.2",
+    "bundledPresentationExportSharpVersionObserved": "0.34.4",
+    "officialExporterReleaseRecheckedAt": "2026-07-26",
+    "officialExporterTagCommit": "c0375365b11dcad89db71df39f6b303dcf0cd33f",
+    "newerOfficialExporterObserved": false,
+    "disposition": "blocked-pending-new-official-presentation-export",
+    "reason": "A root dependency release does not change the ABI bundled inside the pinned presentation-export archive."
+  },
+  "releaseAutomation": {
+    "artifactActions": {
+      "uploadArtifact": {
+        "version": "v7.0.1",
+        "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+        "runtime": "node24"
+      },
+      "downloadArtifact": {
+        "version": "v8.0.1",
+        "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "runtime": "node24"
+      }
+    },
+    "r2Disposition": "fail-closed-workflow-ready-external-execution-blocked",
+    "r2ExternalBlocker": "Protected sync_r2 environment credentials are not available in the repository session.",
+    "windowsSigningExternalBlocker": "A trusted code-signing certificate and fork-owned AppX identity are not available in the repository session.",
+    "electronBuilder": {
+      "lockedVersion": "26.15.3",
+      "stableLatestObserved": "26.15.3",
+      "fullAuditHigh": 16,
+      "productionAuditTotal": 0,
+      "disposition": "retain-pending-stable-compatible-remediation"
+    }
+  }
+}

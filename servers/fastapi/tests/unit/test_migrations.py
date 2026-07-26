@@ -1,5 +1,6 @@
 import ast
 import json
+import logging.config
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,29 @@ def _script_head(database_url: str) -> str:
     # The current alembic head, resolved from the migration scripts — so these
     # "upgrade to head" assertions don't go stale each time a migration is added.
     return ScriptDirectory.from_config(_alembic_config(database_url)).get_current_head()
+
+
+def test_alembic_ini_preserves_existing_application_loggers(tmp_path, monkeypatch):
+    """Loading the CLI config must not disable loggers imported by the app."""
+    fastapi_root = Path(__file__).resolve().parents[2]
+    config = Config(str(fastapi_root / "alembic.ini"))
+    config.set_main_option("script_location", str(fastapi_root / "alembic"))
+    config.set_main_option(
+        "sqlalchemy.url",
+        f"sqlite:///{tmp_path / 'logging-config.db'}",
+    )
+    disable_existing_loggers_values = []
+
+    def record_file_config(_filename, *args, **kwargs):
+        disable_existing_loggers_values.append(
+            kwargs.get("disable_existing_loggers", True)
+        )
+
+    monkeypatch.setattr(logging.config, "fileConfig", record_file_config)
+
+    command.upgrade(config, "head")
+
+    assert disable_existing_loggers_values == [False]
 
 
 def test_postgresql_migration_owner_lock_unlocks_and_disposes_on_failure(

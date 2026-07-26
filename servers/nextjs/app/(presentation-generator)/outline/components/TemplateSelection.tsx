@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useCallback, memo } from "react";
+import React, { useMemo, useCallback, memo } from "react";
 
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { selectableTemplates } from "@/app/presentation-templates";
@@ -70,18 +70,6 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   selectedTemplate,
   onSelectTemplate,
 }) {
-  useEffect(() => {
-    const existingScript = document.querySelector(
-      'script[src*="tailwindcss.com"]'
-    );
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "https://cdn.tailwindcss.com";
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  }, []);
-
   const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
   const { templates: structuredTemplates, loading: structuredLoading } =
     useStructuredTemplateSummaries();

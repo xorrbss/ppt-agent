@@ -51,6 +51,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+          - macos-14
           - windows-latest
 
     steps:
@@ -73,6 +74,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium fonts-liberation fonts-noto-cjk libreoffice poppler-utils
+
+      - name: Install macOS visual dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew list --cask libreoffice >/dev/null 2>&1 || brew install --cask libreoffice
+          brew list poppler >/dev/null 2>&1 || brew install poppler
+          test -x /Applications/LibreOffice.app/Contents/MacOS/soffice
+          echo "SOFFICE_PATH=/Applications/LibreOffice.app/Contents/MacOS/soffice" >> "$GITHUB_ENV"
+          echo "PDFTOCAIRO_PATH=$(command -v pdftocairo)" >> "$GITHUB_ENV"
 
       - name: Install Windows visual dependencies
         if: runner.os == 'Windows'
@@ -125,7 +135,7 @@ jobs:
 
       - name: Upload fidelity failure artifacts
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: template-v2-fidelity-${{ runner.os }}
           path: test-artifacts/template-v2-${{ runner.os }}

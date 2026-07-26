@@ -24,6 +24,7 @@ import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
 import TemplateV2Canvas from "./TemplateV2Canvas";
 import TemplateV2ConflictRecovery from "./TemplateV2ConflictRecovery";
 import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
+import TemplateV2DraftRecovery from "./TemplateV2DraftRecovery";
 import TemplateV2ElementTree, {
   getTemplateV2SelectionControls,
   pathLabel,
@@ -49,8 +50,13 @@ export default function TemplateV2Studio({
     setNotice,
     error,
     conflict,
+    recoveryDraft,
+    rebasing,
     flushAutosave,
     reloadServerVersion,
+    restoreRecoveryDraft,
+    discardRecoveryDraft,
+    rebaseConflict,
   } = useTemplateV2StudioPersistence({ templateId, state, dispatch });
 
   const activeLayout = findTemplateV2Layout(
@@ -286,6 +292,16 @@ export default function TemplateV2Studio({
         </div>
       </header>
 
+      {recoveryDraft ? (
+        <TemplateV2DraftRecovery
+          draft={recoveryDraft}
+          serverRevision={template.revision}
+          safeToRestore={JSON.stringify(recoveryDraft.baseLayouts) === JSON.stringify(template.layouts)}
+          onRestore={restoreRecoveryDraft}
+          onDiscard={discardRecoveryDraft}
+        />
+      ) : null}
+
       <TemplateV2PptxImportPanel currentTemplateId={template.id} />
 
       {error ? (
@@ -298,6 +314,8 @@ export default function TemplateV2Studio({
             <TemplateV2ConflictRecovery
               snapshot={conflict}
               onReload={reloadServerVersion}
+              onRebase={() => void rebaseConflict()}
+              rebasing={rebasing}
             />
           ) : null}
         </div>

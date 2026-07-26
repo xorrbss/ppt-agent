@@ -21,6 +21,14 @@ import {
 } from "@/lib/template-v2-studio-autosave";
 import type { TemplateV2ConflictSnapshot } from "@/lib/template-v2-studio-conflict";
 import {
+  createTemplateV2StudioJournalEntry,
+  readTemplateV2StudioJournal,
+  removeTemplateV2StudioJournal,
+  templateV2LayoutsEqual,
+  writeTemplateV2StudioJournal,
+  type TemplateV2StudioJournalEntry,
+} from "@/lib/template-v2-studio-journal";
+import {
   adaptUpstreamTemplateV2LayoutsToStudio,
   serializeStudioLayoutsForUpstream,
   type TemplateV2LayoutsCompatibilityDocument,
@@ -75,6 +83,9 @@ export function useTemplateV2StudioPersistence({
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] =
     useState<TemplateV2ConflictSnapshot | null>(null);
+  const [recoveryDraft, setRecoveryDraft] =
+    useState<TemplateV2StudioJournalEntry | null>(null);
+  const [rebasing, setRebasing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const saveTokenRef = useRef(0);
   const mountedRef = useRef(true);
@@ -137,6 +148,25 @@ export function useTemplateV2StudioPersistence({
         templateRef.current = nextTemplate;
         setTemplate(nextTemplate);
         dispatch({ type: "load", layouts: nextTemplate.layouts });
+        try {
+          const draft = readTemplateV2StudioJournal(
+            window.localStorage,
+            nextTemplate.id
+          );
+          if (
+            draft &&
+            templateV2LayoutsEqual(draft.layouts, nextTemplate.layouts)
+          ) {
+            removeTemplateV2StudioJournal(window.localStorage, nextTemplate.id);
+            setRecoveryDraft(null);
+          } else {
+            setRecoveryDraft(draft);
+          }
+        } catch {
+          // Storage can be unavailable under privacy policies. Network
+          // persistence remains authoritative and must continue to work.
+          setRecoveryDraft(null);
+        }
       })
       .catch((requestError: unknown) => {
         if (
@@ -219,6 +249,19 @@ export function useTemplateV2StudioPersistence({
 
   useEffect(() => {
     if (!state.dirty || !state.layouts || !template) return;
+    try {
+      writeTemplateV2StudioJournal(
+        window.localStorage,
+        createTemplateV2StudioJournalEntry({
+          templateId: template.id,
+          baseRevision: template.revision,
+          baseLayouts: template.layouts,
+          layouts: state.layouts,
+        })
+      );
+    } catch {
+      // A full or policy-disabled localStorage must not block server autosave.
+    }
     autosaveRef.current?.schedule(state.layouts);
   }, [state.dirty, state.layouts, template]);
 
@@ -283,6 +326,7 @@ export function useTemplateV2StudioPersistence({
               templateId: currentTemplate.id,
               expectedRevision: revisionSnapshot,
               currentRevision,
+              baseLayouts: currentTemplate.layouts,
               layouts: serializedLayouts,
             });
           }
@@ -309,6 +353,27 @@ export function useTemplateV2StudioPersistence({
       });
       if (mountedRef.current) {
         setTemplate(nextTemplate);
+        try {
+          const latestState = stateRef.current;
+          if (latestState.layouts === layoutsSnapshot) {
+            removeTemplateV2StudioJournal(
+              window.localStorage,
+              nextTemplate.id
+            );
+          } else if (latestState.layouts) {
+            writeTemplateV2StudioJournal(
+              window.localStorage,
+              createTemplateV2StudioJournalEntry({
+                templateId: nextTemplate.id,
+                baseRevision: nextTemplate.revision,
+                baseLayouts: nextTemplate.layouts,
+                layouts: latestState.layouts,
+              })
+            );
+          }
+        } catch {
+          // The successful server save remains valid when journal cleanup fails.
+        }
         setNotice(
           context.trigger === "debounce" || context.trigger === "queued"
             ? "Saved automatically"
@@ -347,8 +412,115 @@ export function useTemplateV2StudioPersistence({
     autosaveRef.current?.discardPending();
     conflictRef.current = false;
     setConflict(null);
+    setRecoveryDraft(null);
     setError(null);
+    try {
+      removeTemplateV2StudioJournal(window.localStorage, templateId);
+    } catch {
+      // Reload still discards the in-memory draft when storage is unavailable.
+    }
     setReloadKey((value) => value + 1);
+  }
+
+  function restoreRecoveryDraft() {
+    if (!recoveryDraft || !template) return;
+    if (!templateV2LayoutsEqual(recoveryDraft.baseLayouts, template.layouts)) {
+      setError(
+        "Automatic draft recovery was blocked because server layouts changed."
+      );
+      return;
+    }
+    dispatch({ type: "restore-draft", layouts: recoveryDraft.layouts });
+    setRecoveryDraft(null);
+    setNotice("Browser draft restored");
+  }
+
+  function discardRecoveryDraft() {
+    try {
+      removeTemplateV2StudioJournal(window.localStorage, templateId);
+    } catch {
+      // The in-memory prompt can still be dismissed.
+    }
+    setRecoveryDraft(null);
+    setNotice("Browser draft discarded");
+  }
+
+  async function rebaseConflict() {
+    const currentConflict = conflict;
+    const currentTemplate = templateRef.current;
+    if (!currentConflict || !currentTemplate || rebasing) return;
+    setRebasing(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        getApiUrl(
+          `/api/v1/ppt/structured-templates/${encodeURIComponent(currentTemplate.id)}`
+        ),
+        { credentials: "include" }
+      );
+      const payload = await readResponse(response);
+      if (!response.ok) {
+        throw new Error(errorMessage(response.status, payload));
+      }
+      if (
+        !isJsonRecord(payload) ||
+        typeof payload.id !== "string" ||
+        typeof payload.name !== "string" ||
+        typeof payload.revision !== "number"
+      ) {
+        throw new Error("Structured template response is invalid");
+      }
+      const latestDocument = adaptUpstreamTemplateV2LayoutsToStudio(
+        payload.layouts
+      );
+      const baseLayouts = currentConflict.baseLayouts;
+      if (
+        !isJsonRecord(baseLayouts) ||
+        !templateV2LayoutsEqual(
+          baseLayouts,
+          latestDocument.studioLayouts
+        )
+      ) {
+        throw new Error(
+          "Automatic rebase stopped because server layouts also changed. Download the local edits and resolve them manually."
+        );
+      }
+      const localDocument = adaptUpstreamTemplateV2LayoutsToStudio(
+        currentConflict.layouts
+      );
+      const latestTemplate: StructuredTemplate = {
+        id: payload.id,
+        name: payload.name,
+        description:
+          typeof payload.description === "string" ? payload.description : null,
+        layouts: latestDocument.studioLayouts,
+        layoutsDocument: latestDocument,
+        revision: payload.revision,
+        updated_at: stringValue(payload.updated_at, currentTemplate.updated_at),
+      };
+      autosaveRef.current?.discardPending();
+      autosaveRef.current?.resume();
+      conflictRef.current = false;
+      templateRef.current = latestTemplate;
+      setTemplate(latestTemplate);
+      setConflict(null);
+      dispatch({ type: "load", layouts: latestTemplate.layouts });
+      dispatch({
+        type: "restore-draft",
+        layouts: localDocument.studioLayouts,
+      });
+      setNotice(
+        `Local draft rebased onto revision ${latestTemplate.revision}; saving…`
+      );
+    } catch (rebaseError) {
+      setError(
+        rebaseError instanceof Error
+          ? rebaseError.message
+          : "Unable to rebase local edits"
+      );
+    } finally {
+      setRebasing(false);
+    }
   }
 
   return {
@@ -359,7 +531,12 @@ export function useTemplateV2StudioPersistence({
     setNotice,
     error,
     conflict,
+    recoveryDraft,
+    rebasing,
     flushAutosave,
     reloadServerVersion,
+    restoreRecoveryDraft,
+    discardRecoveryDraft,
+    rebaseConflict,
   };
 }

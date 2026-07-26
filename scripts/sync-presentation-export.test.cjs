@@ -8,6 +8,9 @@ const {
   installedVersionFileName,
   assertRuntimeSharpLoadable,
   finalizeRuntimeInstall,
+  getTargetVersion,
+  helpText,
+  parseCliArgs,
   readInstalledVersion,
   writeInstalledVersionAtomic,
   validateExistingRuntime,
@@ -21,6 +24,61 @@ const {
 
 const rootPackage = require("../package.json");
 const electronPackage = require("../electron/package.json");
+
+test("CLI accepts only documented presentation-export sync options", () => {
+  assert.deepEqual(parseCliArgs(["--force", "--allow-version-override"]), {
+    forceDownload: true,
+    checkOnly: false,
+    allowVersionOverride: true,
+    showHelp: false,
+  });
+  assert.throws(
+    () => parseCliArgs(["--allow-ambient-override"]),
+    /Unknown option: --allow-ambient-override/
+  );
+  assert.match(helpText, /--allow-version-override\s+Honor EXPORT_RUNTIME_VERSION/);
+});
+
+test("ambient export version override is ignored without explicit opt-in", async () => {
+  let latestRequests = 0;
+  const version = await getTargetVersion({
+    env: { EXPORT_RUNTIME_VERSION: "latest" },
+    allowOverride: false,
+    readPinned: () => "v0.4.2",
+    resolveLatest: async () => {
+      latestRequests += 1;
+      return "v9.9.9";
+    },
+  });
+  assert.equal(version, "v0.4.2");
+  assert.equal(latestRequests, 0);
+});
+
+test("explicit export version override supports pinned and latest values", async () => {
+  assert.equal(
+    await getTargetVersion({
+      env: { EXPORT_RUNTIME_VERSION: "v0.4.3" },
+      allowOverride: true,
+      readPinned: () => "v0.4.2",
+    }),
+    "v0.4.3"
+  );
+
+  let latestRequests = 0;
+  assert.equal(
+    await getTargetVersion({
+      env: { EXPORT_RUNTIME_VERSION: "latest" },
+      allowOverride: true,
+      readPinned: () => "v0.4.2",
+      resolveLatest: async () => {
+        latestRequests += 1;
+        return "v0.4.4";
+      },
+    }),
+    "v0.4.4"
+  );
+  assert.equal(latestRequests, 1);
+});
 
 function createRuntimeFixture(version) {
   const runtimeRoot = fs.mkdtempSync(

@@ -113,6 +113,7 @@ export type TemplateV2StudioCommand =
 
 export type TemplateV2StudioAction =
   | { type: "load"; layouts: JsonRecord }
+  | { type: "restore-draft"; layouts: JsonRecord }
   | { type: "begin-save"; token: number; layouts: JsonRecord }
   | { type: "save-succeeded"; token: number; layouts: JsonRecord }
   | { type: "save-failed"; token: number }
@@ -583,6 +584,26 @@ export function templateV2StudioReducer(
         savedLayouts: action.layouts,
         activeLayoutId: active.layoutId,
         activeComponentId: active.componentId,
+      };
+    }
+    case "restore-draft": {
+      if (!state.savedLayouts) return state;
+      const active = defaultActiveIds(action.layouts);
+      return {
+        ...state,
+        layouts: action.layouts,
+        activeLayoutId: active.layoutId,
+        activeComponentId: active.componentId,
+        selection: null,
+        selectionSet: [],
+        lockedElementKeys: new Set<string>(),
+        past: state.layouts ? [state.layouts] : [],
+        pastSessionHistory: [],
+        future: [],
+        futureSessionHistory: [],
+        pendingSave: null,
+        lastHistoryKey: null,
+        dirty: action.layouts !== state.savedLayouts,
       };
     }
     case "begin-save":
