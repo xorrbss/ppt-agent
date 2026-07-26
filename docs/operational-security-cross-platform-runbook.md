@@ -134,14 +134,28 @@ assertions.
 ## Generated-file hygiene
 
 `.gitignore` excludes `*.tsbuildinfo`, Python bytecode, package output, and
-visual test artifacts. `servers/nextjs/tsconfig.tsbuildinfo` is already tracked,
-so ignore rules alone do not remove it from the index. This follow-up
-intentionally does not delete or rewrite that user-owned tracked file. A later
-dedicated commit may run:
+visual test artifacts. The previously tracked
+`servers/nextjs/tsconfig.tsbuildinfo` was reviewed, removed from the index in a
+dedicated commit, and remains an ignored local build cache.
 
-```bash
-git rm --cached servers/nextjs/tsconfig.tsbuildinfo
-```
+## 2026-07-26 follow-up evidence
 
-only after its current diff is reviewed and the team agrees to stop tracking
-it.
+- FastAPI SQLite/full regression: `981 passed, 6 skipped`.
+- Next.js Node regression, TypeScript, ESLint, and production build: passed;
+  the production build emitted 29 routes.
+- Template V2 Studio Cypress component gate: `12/12` passed; the existing full
+  browser baseline remains `104/104`.
+- A detached clean worktree at commit `3bcfea63` reproduced locked dependency
+  installation, FastAPI PyInstaller packaging, Next.js standalone packaging,
+  NSIS, and AppX generation.
+- Packaged-server smoke returned HTTP 200 from FastAPI `/docs`, Next.js `/`,
+  and the runtime Tailwind endpoint. The generated unpacked Electron app
+  remained live for 15 seconds with a six-process tree and was then stopped
+  without residual processes.
+- The production dependency audit reported zero findings. Sixteen high-severity
+  findings remain confined to Electron development/build tooling and are not
+  auto-fixed because the available forced resolution changes the packaging
+  toolchain.
+- Managed PostgreSQL canary, rollback-drain, and flag-OFF verification dry runs
+  passed without exposing credentials. This is local-equivalent evidence only,
+  not a managed-environment canary.
