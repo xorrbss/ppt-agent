@@ -100,12 +100,22 @@ public `/health` endpoint. It prints content-free JSON and exits `0` only for
 3. the exact live `alembic_version` set equals the repository's Alembic heads;
 4. the private import storage directory is writable and outside public
    `/app_data`;
-5. aggregate Template V2 operation status is healthy.
+5. the configured required malware scanner executable can be resolved; and
+6. aggregate Template V2 operation status is healthy.
 
 It never prints template IDs. Exit `2` is a NO-GO; use the `code` field to
 distinguish policy, database, schema, storage, or operational failure. The
 output reports only stable codes, counts, database backend, and deployment
 tier, never a database URL, credentials, paths, row identifiers, or content.
+
+`TEMPLATE_V2_PPTX_MALWARE_SCAN_MODE=required` makes readiness and operational
+health fail closed unless the configured scanner executable is available.
+Install the scanner on every API node that accepts uploads and on every node
+that runs the readiness command. The default `disabled` mode is reported as an
+explicit accepted policy state, not as proof that an upload was scanned.
+Managed canary owners who require malware enforcement must set `required`
+before accepting traffic. Uploads are scanned while staged and are promoted to
+retained private storage only after the scan succeeds.
 
 Do not use the destructive PostgreSQL integration tests as a readiness probe.
 Both `tests/integration/test_postgresql_template_v2_migrations.py` and
@@ -187,9 +197,13 @@ uv run python scripts/check_template_v2_operations.py --mode health
 ```
 
 The command exits `2` for stale, failed, review-required, or overdue-cleanup
-state and never prints job IDs, tenant identifiers, filenames, or presentation
-content. Health priority is stale, failed, review-required, then overdue
-cleanup.
+state, an unavailable required scanner, or an invalid scan mode, and never
+prints job IDs, tenant identifiers, filenames, or presentation content. Health
+priority is stale active work, stale cleanup claims, over-age queued work,
+failed work, review-required work, then overdue cleanup. Scanner readiness does
+not block `--mode rollback` or `--mode cleanup`: disabling new uploads and
+reclaiming already-retained sources must remain available during a scanner
+outage.
 
 ## Allowlist expansion gates
 
@@ -210,7 +224,7 @@ relax a gate during an active observation window:
 | Export | At least 99% success for every enabled export type and p95 at or below its predeclared SLO |
 | Correctness | Zero partial publications, duplicate presentations from one idempotency key, revision mismatches, or unintended fallback to authored/adaptive |
 | Recovery | Zero repeated lease recovery for the same synthetic exercise; aggregate recovered work below 1% of dispatched work |
-| Operations | `--mode health` exits 0, `rollback_safe` is true, and private storage is ready |
+| Operations | `--mode health` exits 0, `rollback_safe` is true, private storage is ready, and the configured required malware scanner executable is available |
 | Compatibility | Authored/adaptive smoke tests and the Template V2 CI suites remain green |
 
 Pause expansion immediately for any correctness, privacy, credential, or
@@ -353,6 +367,12 @@ uv run python scripts/check_template_v2_operations.py --mode cleanup
 The cleanup command is feature-flag independent, content-free, and exits `2`
 when any claimed deletion failed.
 
+The retained source `.pptx` is never exposed by a public file route. Import
+status and mutation routes are owner-scoped. Derived private assets are
+owner-scoped before confirmation; after confirmation they follow the existing
+authenticated template-read contract because persisted layouts reference them.
+Flag rollback does not widen these access rules or delete retained evidence.
+
 To drain without a full rollback, keep `ENABLE_TEMPLATE_V2=true` and shrink
 `TEMPLATE_V2_TEMPLATE_ALLOWLIST` to only the affected template IDs. Confirm,
 cancel, and retry keep working for those IDs and TTL cleanup keeps running, while
@@ -463,3 +483,9 @@ Cleanup runs in an independent FastAPI lifespan service regardless of
 the shared interval and durable row claims prevent duplicate deletion across
 processes. A standalone maintenance invocation is available through
 `scripts/check_template_v2_operations.py --mode cleanup`.
+
+Malware policy applies before a newly uploaded source enters this lifecycle.
+With scan mode `required`, scanner absence, timeout, detection, or execution
+failure rejects the upload without promoting it to retained storage. Cleanup
+remains runnable during scanner outages so an unavailable scanner cannot extend
+the retention period of existing terminal imports.

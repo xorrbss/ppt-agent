@@ -14,7 +14,10 @@ from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from scripts import check_template_v2_operations as operations_script
 from services import template_v2_pptx_operations as operations
 from services import template_v2_pptx_retention_service as retention
-from services.template_v2_pptx_storage import PrivateStorageHealth
+from services.template_v2_pptx_storage import (
+    MalwareScanHealth,
+    PrivateStorageHealth,
+)
 from utils.datetime_utils import get_current_utc_datetime
 
 
@@ -29,8 +32,7 @@ def _import_job(*, state: str, now, lease_expires_at=None, retention_at=None):
         source_retention_expires_at=retention_at,
         source_filename="private.pptx",
         source_media_type=(
-            "application/vnd.openxmlformats-officedocument."
-            "presentationml.presentation"
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ),
         source_size_bytes=1,
         source_sha256="a" * 64,
@@ -71,9 +73,7 @@ def test_managed_canary_requires_postgresql_but_local_sqlite_remains_valid():
 
 
 def test_queue_alert_threshold_is_bounded_and_rejects_ambiguous_values():
-    assert operations.get_template_v2_queued_alert_threshold({}) == timedelta(
-        minutes=5
-    )
+    assert operations.get_template_v2_queued_alert_threshold({}) == timedelta(minutes=5)
     assert operations.get_template_v2_queued_alert_threshold(
         {"TEMPLATE_V2_PPTX_QUEUED_ALERT_SECONDS": "30"}
     ) == timedelta(seconds=30)
@@ -351,6 +351,15 @@ def test_operations_health_is_read_only_and_checks_database_safety_first(
             code="template_v2_private_storage_ready",
         ),
     )
+    monkeypatch.setattr(
+        operations_script,
+        "get_malware_scan_health",
+        lambda: MalwareScanHealth(
+            ready=True,
+            code="template_v2_pptx_malware_scan_required",
+            mode="required",
+        ),
+    )
     monkeypatch.setattr(operations_script, "dispose_engines", dispose)
     monkeypatch.setattr(operations_script.os, "makedirs", make_directory)
 
@@ -358,6 +367,8 @@ def test_operations_health_is_read_only_and_checks_database_safety_first(
 
     assert ready is True
     assert payload["health_code"] == "template_v2_healthy"
+    assert payload["malware_scan_ready"] is True
+    assert payload["malware_scan_mode"] == "required"
     assert events == ["safety", "status", "dispose"]
     make_directory.assert_not_called()
 
@@ -406,6 +417,176 @@ def test_operations_health_fails_closed_when_private_volume_is_missing(
         "private_storage_code": "template_v2_private_storage_missing",
     }
     assert events == ["safety", "dispose"]
+
+
+def test_operations_health_fails_closed_when_required_scanner_is_unavailable(
+    monkeypatch,
+):
+    events = []
+
+    def require_safety(*, feature_enabled):
+        assert feature_enabled is True
+        events.append("safety")
+
+    async def get_status():
+        events.append("status")
+
+    async def dispose():
+        events.append("dispose")
+
+    monkeypatch.setattr(
+        operations_script,
+        "require_template_v2_database_safety",
+        require_safety,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_template_v2_operational_status",
+        get_status,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_private_storage_health",
+        lambda: PrivateStorageHealth(
+            ready=True,
+            code="template_v2_private_storage_ready",
+        ),
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_malware_scan_health",
+        lambda: MalwareScanHealth(
+            ready=False,
+            code="template_v2_pptx_malware_scanner_unavailable",
+            mode="required",
+        ),
+    )
+    monkeypatch.setattr(operations_script, "dispose_engines", dispose)
+
+    payload, ready = asyncio.run(operations_script._run("health"))
+
+    assert ready is False
+    assert payload == {
+        "mode": "health",
+        "private_storage_ready": True,
+        "private_storage_code": "template_v2_private_storage_ready",
+        "malware_scan_ready": False,
+        "malware_scan_code": "template_v2_pptx_malware_scanner_unavailable",
+        "malware_scan_mode": "required",
+    }
+    assert events == ["safety", "dispose"]
+
+
+def test_operations_cleanup_remains_available_during_scanner_outage(
+    tmp_path,
+    monkeypatch,
+):
+    events = []
+
+    def require_safety(*, feature_enabled):
+        assert feature_enabled is True
+        events.append("safety")
+
+    async def cleanup():
+        events.append("cleanup")
+        return retention.SourceCleanupSummary(claimed=1, deleted=1)
+
+    async def dispose():
+        events.append("dispose")
+
+    monkeypatch.setattr(
+        operations_script,
+        "require_template_v2_database_safety",
+        require_safety,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "cleanup_expired_private_sources",
+        cleanup,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_malware_scan_health",
+        Mock(side_effect=AssertionError("cleanup must not require scanner")),
+    )
+    monkeypatch.setattr(operations_script, "dispose_engines", dispose)
+    monkeypatch.setattr(
+        operations_script,
+        "get_app_data_directory_env",
+        lambda: str(tmp_path),
+    )
+
+    payload, ready = asyncio.run(operations_script._run("cleanup"))
+
+    assert ready is True
+    assert payload == {
+        "mode": "cleanup",
+        "initialized": 0,
+        "claimed": 1,
+        "deleted": 1,
+        "already_missing": 0,
+        "failed": 0,
+    }
+    assert events == ["safety", "cleanup", "dispose"]
+
+
+def test_operations_rollback_remains_available_during_scanner_outage(
+    monkeypatch,
+):
+    status = operations.TemplateV2OperationalStatus(
+        healthy=True,
+        health_code="template_v2_operations_healthy",
+        rollback_safe=True,
+        rollback_code="template_v2_rollback_safe",
+        rollback_blocking_count=0,
+        active_count=0,
+        stale_active_count=0,
+        failed_count=0,
+        review_required_count=0,
+        overdue_cleanup_count=0,
+    )
+
+    monkeypatch.setattr(
+        operations_script,
+        "require_template_v2_database_safety",
+        lambda *, feature_enabled: None,
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_template_v2_operational_status",
+        lambda: asyncio.sleep(0, result=status),
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_private_storage_health",
+        lambda: PrivateStorageHealth(
+            ready=True,
+            code="template_v2_private_storage_ready",
+        ),
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "get_malware_scan_health",
+        lambda: MalwareScanHealth(
+            ready=False,
+            code="template_v2_pptx_malware_scanner_unavailable",
+            mode="required",
+        ),
+    )
+    monkeypatch.setattr(
+        operations_script,
+        "dispose_engines",
+        lambda: asyncio.sleep(0),
+    )
+
+    payload, ready = asyncio.run(operations_script._run("rollback"))
+
+    assert ready is True
+    assert payload["rollback_safe"] is True
+    assert payload["malware_scan_ready"] is False
+    assert (
+        payload["malware_scan_code"] == "template_v2_pptx_malware_scanner_unavailable"
+    )
 
 
 def test_operations_health_rejects_unsafe_database_before_query(monkeypatch):
