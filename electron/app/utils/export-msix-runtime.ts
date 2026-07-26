@@ -4,7 +4,7 @@ import { createHash } from "crypto";
 import { baseDir, getCacheDir } from "./constants";
 import { safeLog } from "./safe-console";
 
-const CACHE_LAYOUT_VERSION = "1";
+const CACHE_LAYOUT_VERSION = "2";
 
 type ExportSpawnTarget = {
   scriptPath: string;
@@ -33,7 +33,7 @@ function getExportRuntimeVersion(): string {
   }
 }
 
-function getMsixExportCacheRoot(exportRuntimeVersion: string): string {
+export function getMsixExportCacheRoot(exportRuntimeVersion: string): string {
   return path.join(
     getCacheDir(),
     "msix-export-runtime",
@@ -42,13 +42,24 @@ function getMsixExportCacheRoot(exportRuntimeVersion: string): string {
   );
 }
 
-function sharpPackagesForPlatform(): string[] {
-  const arch = process.arch;
-  if (process.platform === "win32") {
+export function sharpPackagesForPlatform(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch
+): string[] {
+  if (platform === "win32") {
     if (arch === "arm64") {
       return [
         "sharp",
         "@img/sharp-win32-arm64",
+        "@img/colour",
+        "detect-libc",
+        "semver",
+      ];
+    }
+    if (arch === "ia32") {
+      return [
+        "sharp",
+        "@img/sharp-win32-ia32",
         "@img/colour",
         "detect-libc",
         "semver",
@@ -62,12 +73,14 @@ function sharpPackagesForPlatform(): string[] {
       "semver",
     ];
   }
-  if (process.platform === "darwin") {
+  if (platform === "darwin") {
     return arch === "arm64"
       ? ["sharp", "@img/sharp-darwin-arm64", "@img/colour", "detect-libc", "semver"]
       : ["sharp", "@img/sharp-darwin-x64", "@img/colour", "detect-libc", "semver"];
   }
-  return ["sharp", "@img/sharp-linux-x64", "@img/colour", "detect-libc", "semver"];
+  return arch === "arm64"
+    ? ["sharp", "@img/sharp-linux-arm64", "@img/colour", "detect-libc", "semver"]
+    : ["sharp", "@img/sharp-linux-x64", "@img/colour", "detect-libc", "semver"];
 }
 
 function resolvePackageSourceDir(sourceModulesRoot: string, packageName: string): string {
@@ -82,17 +95,86 @@ function resolvePackageDestDir(destModulesRoot: string, packageName: string): st
   return resolvePackageSourceDir(destModulesRoot, packageName);
 }
 
+export function getPackagedExportModulesRoot(packagedExportRoot: string): string {
+  return path.join(packagedExportRoot, "node_modules");
+}
+
+type PackageMetadata = {
+  name?: unknown;
+  version?: unknown;
+};
+
+async function readPackageVersion(
+  modulesRoot: string,
+  packageName: string
+): Promise<string> {
+  const packageJsonPath = path.join(
+    resolvePackageSourceDir(modulesRoot, packageName),
+    "package.json"
+  );
+  let metadata: PackageMetadata;
+  try {
+    metadata = JSON.parse(
+      await fs.promises.readFile(packageJsonPath, "utf8")
+    ) as PackageMetadata;
+  } catch (error) {
+    throw new Error(
+      `Cannot read export dependency metadata for ${packageName} (${packageJsonPath}): ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+
+  if (metadata.name !== packageName) {
+    throw new Error(
+      `Invalid export dependency metadata for ${packageName} (${packageJsonPath})`
+    );
+  }
+  if (typeof metadata.version !== "string" || !metadata.version.trim()) {
+    throw new Error(
+      `Export dependency has no valid version: ${packageName} (${packageJsonPath})`
+    );
+  }
+  return metadata.version.trim();
+}
+
+export async function assertSharpRuntimeVersionParity(
+  modulesRoot: string,
+  packageNames: string[] = sharpPackagesForPlatform()
+): Promise<string> {
+  const platformPackage = packageNames.find((packageName) =>
+    packageName.startsWith("@img/sharp-")
+  );
+  if (!platformPackage) {
+    throw new Error("No platform-specific Sharp package selected for the export runtime.");
+  }
+
+  const sharpVersion = await readPackageVersion(modulesRoot, "sharp");
+  const platformVersion = await readPackageVersion(modulesRoot, platformPackage);
+  if (sharpVersion !== platformVersion) {
+    throw new Error(
+      `Export Sharp runtime version mismatch: sharp@${sharpVersion} does not match ` +
+        `${platformPackage}@${platformVersion} (${modulesRoot})`
+    );
+  }
+  return sharpVersion;
+}
+
 async function fileFingerprint(filePath: string): Promise<string> {
   const stat = await fs.promises.stat(filePath);
   return `${stat.size}:${stat.mtimeMs}`;
 }
 
-async function buildSourceFingerprint(exportRoot: string, sourceModulesRoot: string): Promise<string> {
+async function buildSourceFingerprint(
+  exportRoot: string,
+  sourceModulesRoot: string,
+  packageNames: string[] = sharpPackagesForPlatform()
+): Promise<string> {
   const hash = createHash("sha256");
   const indexPath = path.join(exportRoot, "index.js");
   hash.update(await fileFingerprint(indexPath));
 
-  for (const packageName of sharpPackagesForPlatform()) {
+  for (const packageName of packageNames) {
     const packagePath = resolvePackageSourceDir(sourceModulesRoot, packageName);
     hash.update(packageName);
     hash.update(await fileFingerprint(path.join(packagePath, "package.json")));
@@ -131,16 +213,39 @@ async function readCacheFingerprint(cacheRoot: string): Promise<string | null> {
   }
 }
 
+export async function isMsixExportCacheCurrent(
+  cacheRoot: string,
+  expectedFingerprint: string,
+  packageNames: string[] = sharpPackagesForPlatform()
+): Promise<boolean> {
+  const cachedScriptPath = path.join(cacheRoot, "index.js");
+  const cachedFingerprint = await readCacheFingerprint(cacheRoot);
+  if (
+    cachedFingerprint !== expectedFingerprint ||
+    !fs.existsSync(cachedScriptPath)
+  ) {
+    return false;
+  }
+
+  await assertSharpRuntimeVersionParity(
+    path.join(cacheRoot, "node_modules"),
+    packageNames
+  );
+  return true;
+}
+
 async function copyPath(source: string, destination: string): Promise<void> {
   await fs.promises.mkdir(path.dirname(destination), { recursive: true });
   await fs.promises.cp(source, destination, { recursive: true, force: true });
 }
 
-async function materializeMsixExportRuntime(
+export async function materializeMsixExportRuntime(
   exportRoot: string,
   sourceModulesRoot: string,
-  cacheRoot: string
+  cacheRoot: string,
+  packageNames: string[] = sharpPackagesForPlatform()
 ): Promise<void> {
+  await assertSharpRuntimeVersionParity(sourceModulesRoot, packageNames);
   safeLog("[Export] Preparing MSIX export runtime in user cache:", cacheRoot);
   await fs.promises.rm(cacheRoot, { recursive: true, force: true });
   await fs.promises.mkdir(cacheRoot, { recursive: true });
@@ -153,7 +258,7 @@ async function materializeMsixExportRuntime(
   }
 
   const destModulesRoot = path.join(cacheRoot, "node_modules");
-  for (const packageName of sharpPackagesForPlatform()) {
+  for (const packageName of packageNames) {
     const sourceDir = resolvePackageSourceDir(sourceModulesRoot, packageName);
     const destDir = resolvePackageDestDir(destModulesRoot, packageName);
     if (!fs.existsSync(sourceDir)) {
@@ -162,7 +267,12 @@ async function materializeMsixExportRuntime(
     await copyPath(sourceDir, destDir);
   }
 
-  const fingerprint = await buildSourceFingerprint(exportRoot, sourceModulesRoot);
+  await assertSharpRuntimeVersionParity(destModulesRoot, packageNames);
+  const fingerprint = await buildSourceFingerprint(
+    exportRoot,
+    sourceModulesRoot,
+    packageNames
+  );
   await fs.promises.writeFile(path.join(cacheRoot, ".source-fingerprint"), fingerprint, "utf8");
   safeLog("[Export] MSIX export runtime ready.");
 }
@@ -215,12 +325,14 @@ export async function resolveExportSpawnTarget(
   const exportRuntimeVersion = getExportRuntimeVersion();
   const cacheRoot = getMsixExportCacheRoot(exportRuntimeVersion);
   const cachedScriptPath = path.join(cacheRoot, "index.js");
-  const sourceModulesRoot = path.join(baseDir, "node_modules");
+  const sourceModulesRoot = getPackagedExportModulesRoot(packagedExportRoot);
 
+  await assertSharpRuntimeVersionParity(sourceModulesRoot);
   const expectedFingerprint = await buildSourceFingerprint(packagedExportRoot, sourceModulesRoot);
-  const cachedFingerprint = await readCacheFingerprint(cacheRoot);
-  const cacheIsCurrent =
-    cachedFingerprint === expectedFingerprint && fs.existsSync(cachedScriptPath);
+  const cacheIsCurrent = await isMsixExportCacheCurrent(
+    cacheRoot,
+    expectedFingerprint
+  );
 
   if (!cacheIsCurrent) {
     await materializeMsixExportRuntime(packagedExportRoot, sourceModulesRoot, cacheRoot);

@@ -389,10 +389,12 @@ runStep({
     "-q",
     "--no-header",
     "tests/integration/test_postgresql_template_v2_migrations.py",
+    "tests/integration/test_postgresql_template_v2_canary_rollback.py",
   ],
   cwd: fastapiDirectory,
   selected: postgresSelected,
-  notRunReason: "requires --with-postgres and a disposable PPT_AGENT_POSTGRES_TEST_URL",
+  notRunReason:
+    "requires --with-postgres and a disposable PPT_AGENT_POSTGRES_TEST_URL; never use a shared or managed database",
   env: {
     ...(postgresUrl ? { PPT_AGENT_POSTGRES_TEST_URL: postgresUrl } : {}),
     PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION: "1",
@@ -413,7 +415,8 @@ runStep({
     }
     return null;
   },
-  preconditionDescription: "running disposable PostgreSQL database whose name ends in test/tests",
+  preconditionDescription:
+    "running disposable PostgreSQL database whose name ends in test/tests; never a shared or managed database",
 });
 
 const electronSelected = requested("--with-electron");
@@ -429,7 +432,18 @@ runStep({
   precondition: electronPrecondition,
   preconditionDescription: "Windows, Node 22, and npm",
 });
+runStep({
+  name: "Electron release dependency audit",
+  command: npm,
+  args: ["run", "audit:release"],
+  cwd: electronDirectory,
+  selected: electronSelected,
+  notRunReason: "requires --with-electron on Windows",
+  precondition: electronPrecondition,
+  preconditionDescription: "Windows and electron npm ci",
+});
 for (const script of [
+  "test:audit-release",
   "test:standalone-copy",
   "test:package-preflight",
   "test:build-config",
@@ -484,6 +498,16 @@ for (const script of ["typecheck", "build:ts", "check:main-no-undef"]) {
     preconditionDescription: "Windows and electron npm ci",
   });
 }
+runStep({
+  name: "Electron MSIX export runtime isolation",
+  command: process.execPath,
+  args: ["--test", "tests/export-msix-runtime.test.cjs"],
+  cwd: electronDirectory,
+  selected: electronSelected,
+  notRunReason: "requires --with-electron on Windows",
+  precondition: electronPrecondition,
+  preconditionDescription: "Windows, compiled Electron TypeScript, and electron npm ci",
+});
 
 const g4Selected = requested("--with-g4");
 const g4Script = String.raw`set -euo pipefail

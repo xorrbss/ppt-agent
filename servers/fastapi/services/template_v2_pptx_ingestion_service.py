@@ -71,6 +71,10 @@ from templates.v2.pptx.runtime_layouts import (
     runtime_default_contents,
 )
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
+from templates.v2.pptx.placeholder_evidence import (
+    extract_runtime_placeholder_evidence,
+    unavailable_runtime_placeholder_evidence,
+)
 from templates.v2.pptx.repeat_suggestions import (
     build_repeat_block_suggestions,
 )

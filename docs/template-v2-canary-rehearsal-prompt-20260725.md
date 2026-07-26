@@ -14,8 +14,8 @@
 
 ## 실행 순서
 
-1. 카나리 인스턴스 시작 전 `/health`가 데이터베이스 설정 누락을 숨기지 않고 실패하는지 확인한다.
-2. `uv run python scripts/check_template_v2_canary.py`를 실행하고 `template_v2_canary_ready`와 exit 0을 증거로 보관한다.
+1. 카나리 인스턴스 시작 전 `uv run python scripts/check_template_v2_canary.py`를 실행해 DB 연결, 정확한 Alembic head, 비공개 저장소, 운영 상태의 누락을 숨기지 않고 실패하는지 확인한다. Template V2는 공개 `/health` 엔드포인트를 추가하지 않는다.
+2. 동일 명령의 `template_v2_canary_ready`와 exit 0을 증거로 보관한다.
 3. `uv run python scripts/check_template_v2_operations.py`를 실행해 큐의 `stale`, `failed`, `review_required`, `cleanup_due` 수치를 기록한다.
 4. 허용된 템플릿과 허용되지 않은 템플릿으로 `/api/v1/ppt/structured-templates` 목록·읽기·쓰기·가져오기 경계를 검증한다.
 5. 실제 PPTX를 가져와 분석, 검토, 저장, 재개, 내보내기까지 수행한다.

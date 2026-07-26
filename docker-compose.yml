@@ -16,6 +16,8 @@ services:
       - ./servers/fastapi/utils/internal_http.py:/app/servers/fastapi/utils/internal_http.py:ro
     environment:
       - TEMPLATE_V2_DEPLOYMENT_TIER=production
+      - ENABLE_TEMPLATE_V2=${ENABLE_TEMPLATE_V2:-false}
+      - TEMPLATE_V2_TEMPLATE_ALLOWLIST=${TEMPLATE_V2_TEMPLATE_ALLOWLIST:-}
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}
@@ -122,6 +124,8 @@ services:
       - presenton_template_v2_private_sources:/app_data-private
     environment:
       - TEMPLATE_V2_DEPLOYMENT_TIER=production
+      - ENABLE_TEMPLATE_V2=${ENABLE_TEMPLATE_V2:-false}
+      - TEMPLATE_V2_TEMPLATE_ALLOWLIST=${TEMPLATE_V2_TEMPLATE_ALLOWLIST:-}
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - MIGRATE_DATABASE_ON_STARTUP=true
       - CAN_CHANGE_KEYS=${CAN_CHANGE_KEYS}

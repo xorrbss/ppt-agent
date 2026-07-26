@@ -34,6 +34,8 @@
     "typecheck": "tsc --noEmit",
     "build:ts": "node scripts/rmrf.cjs app_dist && tsc",
     "check:main-no-undef": "node scripts/check-main-no-undef.cjs",
+    "audit:release": "node scripts/audit-release-dependencies.cjs",
+    "test:audit-release": "node --test scripts/audit-release-dependencies.test.cjs",
     "preflight:package": "node scripts/verify-packaging-inputs.cjs",
     "test:package-preflight": "node --test scripts/verify-packaging-inputs.test.cjs",
     "lint:main": "npm run build:ts && npm run check:main-no-undef",

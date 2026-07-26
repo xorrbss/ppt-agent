@@ -196,12 +196,15 @@ def test_runtime_analysis_classifies_and_seeds_clear_placeholders(
         )
     )
 
-    assert analysis["classification"] == {
-        "version": 1,
-        "strategy": "conservative-placeholder-name",
-        "fillable_element_count": 2,
-        "text_placeholder_count": 1,
-        "image_placeholder_count": 1,
+    assert analysis["classification"]["version"] == 2
+    assert analysis["classification"]["fillable_element_count"] == 2
+    assert analysis["classification"]["text_placeholder_count"] == 1
+    assert analysis["classification"]["image_placeholder_count"] == 1
+    assert analysis["classification"]["legacy_name_fallback_count"] == 2
+    assert analysis["placeholder_evidence"]["status"] == "unavailable"
+    assert analysis["visual_evidence"] == {
+        "status": "not_evaluated",
+        "reason": "semantic_visual_provider_not_configured",
     }
     elements = analysis["raw_layouts"]["layouts"][0]["elements"]
     assert [element["decorative"] for element in elements] == [False, False, True]

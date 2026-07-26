@@ -8,9 +8,10 @@ list of element objects drawn from the same upstream element schema this fork
 models strictly.
 
 Every runtime element is validated against the fork's 11-member discriminated
-union.  A separate, conservative classifier may change only ``decorative=True``
-to ``False`` for unambiguous text/image placeholder names; every other element
-field remains verbatim.  That preserves run-level
+union. A separate conservative classifier joins the runtime shapes to an OOXML
+placeholder evidence sidecar and may change only ``decorative=True`` to ``False``
+for structurally proven text/image slots. Every other element field remains
+verbatim. That preserves run-level
 ``bold``/``italic``/``size``/``color``, ``image.data`` URLs and vector
 ``points``/``fill``/``corner_radii``.  The remaining layout-level shape
 difference is that ``RawSlideLayout`` carries ``elements`` while ``SlideLayout``
@@ -24,6 +25,7 @@ maps an already-element-shaped payload -> component.
 from __future__ import annotations
 
 import copy
+import hashlib
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -40,6 +42,7 @@ from templates.v2.models.layouts import (
     SlideLayout,
     SlideLayouts,
 )
+from templates.v2.pptx.placeholder_evidence import RuntimePlaceholderEvidence
 
 
 # ``SlideLayout.id`` / ``Component.id`` are both bounded at 80 characters.
@@ -49,11 +52,9 @@ _MAX_DESCRIPTION_LENGTH = 300
 
 _ELEMENT_ADAPTER: TypeAdapter[SlideElement] = TypeAdapter(SlideElement)
 
-# The runtime does not expose OOXML ``p:ph`` metadata. These patterns are
-# deliberately narrower than a general "content-looking" heuristic: accept only
-# names PowerPoint assigns to clear text placeholders, or image names that
-# explicitly contain ``placeholder``. Ordinary text boxes and pictures remain
-# decorative until a reviewer or an OOXML-aware classifier can identify them.
+# Legacy decks may lack readable OOXML sidecar evidence. These fallback patterns
+# are deliberately narrower than a general "content-looking" heuristic and are
+# never consulted when structural evidence is available.
 _TEXT_PLACEHOLDER_NAME = re.compile(
     r"^(?:title|subtitle|body)(?:_placeholder)?(?:_\d+)?$"
     r"|^(?:content|text)_placeholder(?:_\d+)?$"
@@ -76,6 +77,9 @@ _DECORATIVE_NAME_TOKENS = frozenset(
         "watermark",
     }
 )
+_AUTO_TEXT_PLACEHOLDERS = frozenset({"title", "ctrTitle", "subTitle", "body"})
+_MAX_REVIEW_ITEMS = 200
+_MAX_SLOT_EVIDENCE = 500
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,13 @@ class RuntimeFillableClassification:
     fillable_element_count: int
     text_placeholder_count: int
     image_placeholder_count: int
+    structural_match_count: int = 0
+    structural_fillable_count: int = 0
+    legacy_name_fallback_count: int = 0
+    review_item_count: int = 0
+    slot_evidence_count: int = 0
+    review_items: tuple[dict[str, Any], ...] = ()
+    slot_evidence: tuple[dict[str, Any], ...] = ()
 
     def as_manifest(self) -> dict[str, Any]:
         return {
@@ -103,59 +114,312 @@ class RuntimeFillableClassification:
             "fillable_element_count": self.fillable_element_count,
             "text_placeholder_count": self.text_placeholder_count,
             "image_placeholder_count": self.image_placeholder_count,
+            "structural_match_count": self.structural_match_count,
+            "structural_fillable_count": self.structural_fillable_count,
+            "legacy_name_fallback_count": self.legacy_name_fallback_count,
+            "review_item_count": self.review_item_count,
+            "review_items_omitted": max(
+                0, self.review_item_count - len(self.review_items)
+            ),
+            "review_items": list(self.review_items),
+            "slot_evidence_count": self.slot_evidence_count,
+            "slot_evidence_omitted": max(
+                0, self.slot_evidence_count - len(self.slot_evidence)
+            ),
+            "slot_evidence": list(self.slot_evidence),
+            "visual_evidence": {
+                "status": "not_evaluated",
+                "reason": "semantic_visual_provider_not_configured",
+            },
         }
 
 
 def classify_runtime_fillable_layouts(
     layouts: Sequence[Mapping[str, Any]],
+    placeholder_evidence: RuntimePlaceholderEvidence | None = None,
 ) -> tuple[list[dict[str, Any]], RuntimeFillableClassification]:
-    """Promote only unambiguous runtime text/image placeholders.
+    """Promote only structurally proven runtime text/image placeholders.
 
     Returned layouts are deep copies; converter output and caller-owned fixtures
-    are never mutated. A name must match a strict allowlist and must not contain a
-    decorative token. Missing, malformed, ambiguous and future elements remain
-    exactly as emitted (normally ``decorative=True``).
+    are never mutated. OOXML placeholder evidence wins whenever it is available;
+    the legacy name allowlist is used only when the sidecar is unavailable.
     """
 
     classified = copy.deepcopy(list(layouts))
     counts = {"text": 0, "image": 0}
-    for layout in classified:
+    stats = {
+        "matched": 0,
+        "structural": 0,
+        "legacy": 0,
+        "review_total": 0,
+        "slot_total": 0,
+    }
+    reviews: list[dict[str, Any]] = []
+    slots: list[dict[str, Any]] = []
+    structural = (
+        placeholder_evidence is not None
+        and placeholder_evidence.status == "available"
+    )
+    for layout_index, layout in enumerate(classified):
         elements = layout.get("elements") if isinstance(layout, dict) else None
         if not isinstance(elements, list):
             continue
-        for element in elements:
-            _classify_element(element, counts)
+        slide_evidence = (
+            [
+                shape
+                for shape in placeholder_evidence.shapes
+                if shape.slide_index == layout_index + 1
+            ]
+            if structural and placeholder_evidence
+            else []
+        )
+        for element_index, element in enumerate(elements):
+            _classify_element(
+                element,
+                counts,
+                stats,
+                reviews,
+                slots,
+                slide_index=layout_index + 1,
+                element_path=str(element_index),
+                structural=structural,
+                slide_evidence=slide_evidence,
+            )
     return classified, RuntimeFillableClassification(
-        version=1,
-        strategy="conservative-placeholder-name",
+        version=2,
+        strategy="ooxml-placeholder-structure-with-legacy-name-fallback",
         fillable_element_count=counts["text"] + counts["image"],
         text_placeholder_count=counts["text"],
         image_placeholder_count=counts["image"],
+        structural_match_count=stats["matched"],
+        structural_fillable_count=stats["structural"],
+        legacy_name_fallback_count=stats["legacy"],
+        review_item_count=stats["review_total"],
+        slot_evidence_count=stats["slot_total"],
+        review_items=tuple(reviews),
+        slot_evidence=tuple(slots),
     )
 
 
-def _classify_element(element: Any, counts: dict[str, int]) -> None:
+def _classify_element(
+    element: Any,
+    counts: dict[str, int],
+    stats: dict[str, int],
+    reviews: list[dict[str, Any]],
+    slots: list[dict[str, Any]],
+    *,
+    slide_index: int,
+    element_path: str,
+    structural: bool,
+    slide_evidence: list[Any],
+) -> None:
     if not isinstance(element, dict):
         return
     element_type = element.get("type")
     name = element.get("name")
-    if (
-        element.get("decorative") is True
-        and isinstance(name, str)
-        and _is_fillable_placeholder_name(element_type, name)
-    ):
-        element["decorative"] = False
-        counts[element_type] += 1
+    if element_type in {"text", "image"}:
+        slot_id = _slot_id(slide_index, element_path, element_type, name)
+        if structural:
+            matched, confidence, reason = _match_structural_evidence(
+                element, slide_evidence
+            )
+            fillable = False
+            placeholder_type = None
+            if matched is not None:
+                stats["matched"] += 1
+                placeholder_type = matched.resolved_type
+                if matched.status == "resolved":
+                    fillable = (
+                        element_type == "text"
+                        and placeholder_type in _AUTO_TEXT_PLACEHOLDERS
+                    ) or (element_type == "image" and placeholder_type == "pic")
+                    reason = (
+                        "structural_placeholder_allowlisted"
+                        if fillable
+                        else "structural_placeholder_requires_review"
+                    )
+                else:
+                    reason = matched.reason
+            if fillable and element.get("decorative") is True:
+                element["decorative"] = False
+                counts[element_type] += 1
+                stats["structural"] += 1
+            elif not fillable:
+                element["decorative"] = True
+                _append_bounded(
+                    reviews,
+                    {
+                        "slot_id": slot_id,
+                        "slide_index": slide_index,
+                        "element_path": element_path,
+                        "reason": reason,
+                    },
+                    limit=_MAX_REVIEW_ITEMS,
+                )
+                stats["review_total"] += 1
+            _append_bounded(
+                slots,
+                {
+                    "slot_id": slot_id,
+                    "slide_index": slide_index,
+                    "element_path": element_path,
+                    "element_type": element_type,
+                    "placeholder_type": placeholder_type,
+                    "fillable": fillable,
+                    "confidence": confidence,
+                    "reason": reason,
+                },
+                limit=_MAX_SLOT_EVIDENCE,
+            )
+            stats["slot_total"] += 1
+        elif (
+            element.get("decorative") is True
+            and isinstance(name, str)
+            and _is_fillable_placeholder_name(element_type, name)
+        ):
+            element["decorative"] = False
+            counts[element_type] += 1
+            stats["legacy"] += 1
+            _append_bounded(
+                reviews,
+                {
+                    "slot_id": slot_id,
+                    "slide_index": slide_index,
+                    "element_path": element_path,
+                    "reason": "legacy_name_fallback",
+                },
+                limit=_MAX_REVIEW_ITEMS,
+            )
+            stats["review_total"] += 1
+            _append_bounded(
+                slots,
+                {
+                    "slot_id": slot_id,
+                    "slide_index": slide_index,
+                    "element_path": element_path,
+                    "element_type": element_type,
+                    "placeholder_type": None,
+                    "fillable": True,
+                    "confidence": "low",
+                    "reason": "legacy_name_fallback",
+                },
+                limit=_MAX_SLOT_EVIDENCE,
+            )
+            stats["slot_total"] += 1
 
     # The current converter flattens groups. Recurse defensively so a future
     # runtime cannot bypass this fail-safe policy when it preserves nesting.
     child = element.get("child")
     if isinstance(child, dict):
-        _classify_element(child, counts)
+        _classify_element(
+            child,
+            counts,
+            stats,
+            reviews,
+            slots,
+            slide_index=slide_index,
+            element_path=f"{element_path}.child",
+            structural=structural,
+            slide_evidence=slide_evidence,
+        )
     children = element.get("children")
     if isinstance(children, list):
-        for nested in children:
-            _classify_element(nested, counts)
+        for index, nested in enumerate(children):
+            _classify_element(
+                nested,
+                counts,
+                stats,
+                reviews,
+                slots,
+                slide_index=slide_index,
+                element_path=f"{element_path}.children.{index}",
+                structural=structural,
+                slide_evidence=slide_evidence,
+            )
+
+
+def _slot_id(
+    slide_index: int, element_path: str, element_type: Any, name: Any
+) -> str:
+    stable = f"{slide_index}|{element_path}|{element_type}|{_normalized_name(name)}"
+    digest = hashlib.sha256(stable.encode("utf-8")).hexdigest()[:12]
+    return f"slot_s{slide_index}_{digest}"
+
+
+def _append_bounded(
+    items: list[dict[str, Any]], item: dict[str, Any], *, limit: int
+) -> None:
+    if len(items) < limit:
+        items.append(item)
+
+
+def _normalized_name(name: Any) -> str:
+    if not isinstance(name, str):
+        return ""
+    return re.sub(r"[^\w]+", "_", name.casefold()).strip("_")
+
+
+def _runtime_geometry(element: dict[str, Any]) -> dict[str, float] | None:
+    position = element.get("position")
+    size = element.get("size")
+    if not isinstance(position, Mapping) or not isinstance(size, Mapping):
+        return None
+    values = {
+        "x": position.get("x"),
+        "y": position.get("y"),
+        "width": size.get("width"),
+        "height": size.get("height"),
+    }
+    if not all(isinstance(value, (int, float)) for value in values.values()):
+        return None
+    return {key: float(value) for key, value in values.items()}
+
+
+def _geometry_matches(
+    left: dict[str, float] | None, right: dict[str, float] | None
+) -> bool:
+    if left is None or right is None:
+        return False
+    return all(
+        abs(left[key] - right[key]) <= max(2.0, abs(right[key]) * 0.01)
+        for key in ("x", "y", "width", "height")
+    )
+
+
+def _match_structural_evidence(
+    element: dict[str, Any], slide_evidence: list[Any]
+) -> tuple[Any | None, str, str]:
+    element_type = element.get("type")
+    compatible = [
+        candidate
+        for candidate in slide_evidence
+        if candidate.shape_kind == element_type
+    ]
+    normalized = _normalized_name(element.get("name"))
+    name_matches = [
+        candidate
+        for candidate in compatible
+        if normalized and _normalized_name(candidate.shape_name) == normalized
+    ]
+    geometry = _runtime_geometry(element)
+    geometry_matches = [
+        candidate
+        for candidate in compatible
+        if _geometry_matches(geometry, candidate.geometry)
+    ]
+    name_match = name_matches[0] if len(name_matches) == 1 else None
+    geometry_match = geometry_matches[0] if len(geometry_matches) == 1 else None
+    if name_match is not None and geometry_match is not None:
+        if name_match == geometry_match:
+            return name_match, "high", "unique_name_and_geometry_match"
+        return None, "none", "name_geometry_match_conflict"
+    if len(name_matches) > 1 or len(geometry_matches) > 1:
+        return None, "none", "structural_match_ambiguous"
+    if name_match is not None:
+        return name_match, "medium", "unique_name_match"
+    if geometry_match is not None:
+        return geometry_match, "medium", "unique_geometry_match"
+    return None, "none", "structural_match_not_found"
 
 
 def _is_fillable_placeholder_name(element_type: Any, name: str) -> bool:

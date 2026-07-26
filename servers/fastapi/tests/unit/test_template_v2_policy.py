@@ -1,5 +1,6 @@
 import pytest
 
+from scripts import check_template_v2_canary
 from scripts.check_template_v2_canary import main as check_canary
 from templates.v2.policy import (
     StructuredTemplatePolicyError,
@@ -207,9 +208,34 @@ def test_readiness_command_is_content_free_and_returns_go(
     monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
     monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "secret-canary-id")
 
+    async def ready_preflight():
+        return (
+            {
+                "database_reachable": True,
+                "database_check_code": "template_v2_database_reachable",
+                "schema_at_head": True,
+                "schema_code": "template_v2_schema_at_head",
+                "private_storage_ready": True,
+                "private_storage_code": "template_v2_private_storage_ready",
+                "healthy": True,
+                "health_code": "template_v2_operations_healthy",
+                "preflight_code": "template_v2_preflight_ready",
+            },
+            True,
+        )
+
+    monkeypatch.setattr(
+        check_template_v2_canary,
+        "_run_live_preflight",
+        ready_preflight,
+    )
     assert check_canary() == 0
     output = capsys.readouterr().out
     assert '"ready": true' in output
+    assert '"database_reachable": true' in output
+    assert '"schema_at_head": true' in output
+    assert '"private_storage_ready": true' in output
+    assert "template_v2_operations_healthy" in output
     assert '"allowlisted_template_count": 1' in output
     assert "secret-canary-id" not in output
 
@@ -233,4 +259,95 @@ def test_readiness_command_rejects_production_sqlite(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert '"ready": false' in output
     assert "template_v2_managed_canary_requires_postgresql" in output
+    assert "secret-canary-id" not in output
+
+
+def test_readiness_command_fails_closed_when_live_database_check_fails(
+    monkeypatch, capsys
+):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "secret-canary-id")
+    monkeypatch.setenv("TEMPLATE_V2_DEPLOYMENT_TIER", "production")
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql://presenton:secret@unreachable.invalid/presenton",
+    )
+
+    async def failed_preflight():
+        return (
+            {
+                "database_reachable": False,
+                "database_check_code": (
+                    "template_v2_database_connection_or_schema_check_failed"
+                ),
+                "schema_at_head": False,
+                "schema_code": "template_v2_schema_check_not_completed",
+                "preflight_code": (
+                    "template_v2_database_connection_or_schema_check_failed"
+                ),
+            },
+            False,
+        )
+
+    monkeypatch.setattr(
+        check_template_v2_canary,
+        "_run_live_preflight",
+        failed_preflight,
+    )
+    assert check_canary() == 2
+    output = capsys.readouterr().out
+    assert '"ready": false' in output
+    assert '"database_reachable": false' in output
+    assert (
+        '"code": "template_v2_database_connection_or_schema_check_failed"'
+        in output
+    )
+    assert "secret-canary-id" not in output
+    assert "unreachable.invalid" not in output
+
+
+@pytest.mark.parametrize(
+    ("failed_preflight_code", "failed_field"),
+    (
+        (
+            "template_v2_schema_head_mismatch",
+            {"schema_at_head": False},
+        ),
+        (
+            "template_v2_private_storage_missing",
+            {"private_storage_ready": False},
+        ),
+        (
+            "template_v2_failed_imports_require_attention",
+            {"healthy": False},
+        ),
+    ),
+)
+def test_readiness_command_preserves_live_preflight_failure_code(
+    monkeypatch,
+    capsys,
+    failed_preflight_code,
+    failed_field,
+):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "secret-canary-id")
+
+    async def failed_preflight():
+        return (
+            {
+                "database_reachable": True,
+                "preflight_code": failed_preflight_code,
+                **failed_field,
+            },
+            False,
+        )
+
+    monkeypatch.setattr(
+        check_template_v2_canary,
+        "_run_live_preflight",
+        failed_preflight,
+    )
+    assert check_canary() == 2
+    output = capsys.readouterr().out
+    assert f'"code": "{failed_preflight_code}"' in output
     assert "secret-canary-id" not in output

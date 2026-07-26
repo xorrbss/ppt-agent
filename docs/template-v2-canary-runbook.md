@@ -40,6 +40,11 @@ set `TEMPLATE_V2_DEPLOYMENT_TIER=staging|production`. Packaged Electron and
 ordinary desktop/local launches remain `local`; do not use that default as a
 managed deployment classification.
 
+The production Compose profiles also pass `ENABLE_TEMPLATE_V2` and
+`TEMPLATE_V2_TEMPLATE_ALLOWLIST` through explicitly. Their defaults remain
+`false` and empty, so merely starting a production profile does not enable the
+feature.
+
 The allowlist is comma-separated. Empty entries, duplicate IDs, `*`, control
 characters, and IDs longer than 128 characters invalidate the entire
 configuration. Values such as `1`, `yes`, and `on` do not merely fail to enable
@@ -78,7 +83,7 @@ The external worker consumes the same database-backed queue with compare-and-set
 claims, leases, heartbeats, stale-attempt recovery, and graceful requeue. Invalid
 worker-mode values fail closed by starting no embedded dispatcher.
 
-## Offline readiness check
+## Canary preflight
 
 From `servers/fastapi`, with the intended environment loaded:
 
@@ -86,12 +91,30 @@ From `servers/fastapi`, with the intended environment loaded:
 uv run python scripts/check_template_v2_canary.py
 ```
 
-The command prints content-free JSON and exits `0` only for
-`template_v2_canary_ready`. It never prints template IDs. Exit `2` is a NO-GO;
-use the `code` field to distinguish a disabled feature, missing allowlist,
-invalid configuration, or `template_v2_managed_canary_requires_postgresql`.
-The output also reports only the database backend and deployment tier, never a
-database URL or credentials.
+This command is the actual pre-start readiness probe; Template V2 does not add a
+public `/health` endpoint. It prints content-free JSON and exits `0` only for
+`template_v2_canary_ready` after all of these checks pass:
+
+1. feature flag and allowlist policy;
+2. managed-tier PostgreSQL safety plus a live `SELECT 1`;
+3. the exact live `alembic_version` set equals the repository's Alembic heads;
+4. the private import storage directory is writable and outside public
+   `/app_data`;
+5. aggregate Template V2 operation status is healthy.
+
+It never prints template IDs. Exit `2` is a NO-GO; use the `code` field to
+distinguish policy, database, schema, storage, or operational failure. The
+output reports only stable codes, counts, database backend, and deployment
+tier, never a database URL, credentials, paths, row identifiers, or content.
+
+Do not use the destructive PostgreSQL integration tests as a readiness probe.
+Both `tests/integration/test_postgresql_template_v2_migrations.py` and
+`tests/integration/test_postgresql_template_v2_canary_rollback.py` reset the
+database's `public` schema. Run them only against a disposable local or CI
+database whose name ends in `test` or `tests`. Never point them at shared
+staging, production, or any managed canary database. On a managed environment,
+run this content-free preflight and the non-destructive canary verification
+below instead.
 
 Before a canary handoff, run:
 
