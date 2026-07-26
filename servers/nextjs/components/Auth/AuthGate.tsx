@@ -2,9 +2,15 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { useDispatch } from "react-redux";
 import { getApiUrl } from "@/utils/api";
 import { formatFastApiDetail, UNAUTHORIZED_DETAIL } from "@/utils/authErrors";
 import { notify } from "@/components/ui/sonner";
+import Home from "@/components/Home";
+import { setCanChangeKeys, setLLMConfig } from "@/store/slices/userConfig";
+import { LLMConfig } from "@/types/llm_config";
+import { hasValidLLMConfig, normalizeLLMConfig } from "@/utils/storeHelpers";
+import { getAuthenticatedLanding } from "./authenticatedLanding";
 
 type AuthStatus = {
   configured: boolean;
@@ -19,9 +25,11 @@ const initialStatus: AuthStatus = {
 };
 
 export default function AuthGate() {
+  const dispatch = useDispatch();
   const [status, setStatus] = useState<AuthStatus>(initialStatus);
   const [isLoading, setIsLoading] = useState(true);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -37,14 +45,90 @@ export default function AuthGate() {
       typeof window === "undefined" ||
       isLoading ||
       !status.authenticated ||
-      isRedirecting
+      isRedirecting ||
+      showOnboarding
     ) {
       return;
     }
 
-    setIsRedirecting(true);
-    window.location.replace("/upload");
-  }, [isLoading, isRedirecting, status.authenticated]);
+    let isCancelled = false;
+
+    const resolveAuthenticatedLanding = async () => {
+      let canChangeKeys = false;
+      let llmConfig: LLMConfig = {};
+
+      try {
+        if (window.electron?.getCanChangeKeys) {
+          canChangeKeys = await window.electron.getCanChangeKeys();
+        } else {
+          const response = await fetch("/api/can-change-keys", {
+            cache: "no-store",
+          });
+          if (!response.ok) {
+            throw new Error("Could not load configuration permissions");
+          }
+          const data = await response.json();
+          canChangeKeys = data.canChange ?? false;
+        }
+
+        if (canChangeKeys) {
+          if (window.electron?.getUserConfig) {
+            llmConfig = await window.electron.getUserConfig();
+          } else {
+            const response = await fetch("/api/user-config", {
+              cache: "no-store",
+            });
+            if (!response.ok) {
+              throw new Error("Could not load user configuration");
+            }
+            llmConfig = await response.json();
+          }
+          llmConfig = normalizeLLMConfig(llmConfig);
+        }
+      } catch (configurationError) {
+        console.error("Failed to resolve authenticated landing:", configurationError);
+        // A configurable deployment must fail closed into onboarding rather
+        // than restarting the / -> /upload redirect cycle.
+        canChangeKeys = true;
+        llmConfig = normalizeLLMConfig({});
+      }
+
+      if (isCancelled) {
+        return;
+      }
+
+      dispatch(setCanChangeKeys(canChangeKeys));
+      dispatch(setLLMConfig(llmConfig));
+
+      const forceOnboarding =
+        new URLSearchParams(window.location.search).get("setup") === "llm";
+      const landing = getAuthenticatedLanding({
+        canChangeKeys,
+        hasValidConfig: hasValidLLMConfig(llmConfig),
+        forceOnboarding,
+      });
+
+      if (landing === "onboarding") {
+        setShowOnboarding(true);
+        return;
+      }
+
+      setIsRedirecting(true);
+      window.location.replace("/upload");
+    };
+
+    void resolveAuthenticatedLanding();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    dispatch,
+    isLoading,
+    isRedirecting,
+    showOnboarding,
+    status.authenticated,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined" || isLoading) {
@@ -193,6 +277,10 @@ export default function AuthGate() {
       setIsSubmitting(false);
     }
   };
+
+  if (showOnboarding) {
+    return <Home />;
+  }
 
   if (isLoading || isRedirecting || status.authenticated) {
     return (
