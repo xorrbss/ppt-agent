@@ -65,6 +65,29 @@ SLIDE_XML = b"""\
   <p:graphicFrame/>
  </p:spTree></p:cSld>
 </p:sld>"""
+SMARTART_SLIDE_XML = b"""\
+<p:sld
+ xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+ xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+ <p:cSld><p:spTree>
+  <p:nvGrpSpPr/><p:grpSpPr/>
+  <p:graphicFrame>
+   <p:nvGraphicFramePr>
+    <p:cNvPr id="4" name="Localized process diagram"/>
+   </p:nvGraphicFramePr>
+   <p:xfrm><a:off x="914400" y="914400"/>
+    <a:ext cx="5486400" cy="3657600"/></p:xfrm>
+   <a:graphic>
+    <a:graphicData
+     uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+     <dgm:relIds r:dm="rId1" r:lo="rId2" r:qs="rId3" r:cs="rId4"/>
+    </a:graphicData>
+   </a:graphic>
+  </p:graphicFrame>
+ </p:spTree></p:cSld>
+</p:sld>"""
 
 
 def _pptx_bytes(
@@ -150,6 +173,30 @@ def test_ooxml_candidates_are_deterministic_and_manifest_review_is_explicit(
     assert draft.manifest["review"]["required"] is True
     assert draft.manifest["slides"][0]["unsupported"][0]["reason"] == (
         "unsupported_ooxml:graphicFrame"
+    )
+    assert draft.manifest["slides"][0]["fallback"]["kind"] == "manual_review"
+
+
+def test_smartart_is_an_explicit_manual_review_fallback(tmp_path: Path) -> None:
+    source = tmp_path / "smartart.pptx"
+    payload = _pptx_bytes(slide_xml=SMARTART_SLIDE_XML)
+    source.write_bytes(payload)
+
+    candidates = parse_presentation_candidates(
+        PptxPackageReader(source),
+        source_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    smart_art = candidates.slides[0].shapes[0]
+
+    assert smart_art.kind == "unsupported"
+    assert smart_art.unsupported_reason == "unsupported_ooxml:smartArt"
+    assert smart_art.name == "Localized process diagram"
+
+    draft = assemble_template_v2_draft(candidates)
+
+    assert draft.manifest["review"]["required"] is True
+    assert draft.manifest["slides"][0]["unsupported"][0]["reason"] == (
+        "unsupported_ooxml:smartArt"
     )
     assert draft.manifest["slides"][0]["fallback"]["kind"] == "manual_review"
 

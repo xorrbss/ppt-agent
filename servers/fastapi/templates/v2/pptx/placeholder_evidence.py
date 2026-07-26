@@ -52,6 +52,9 @@ class ShapePlaceholderEvidence:
     resolved_type: str | None
     status: str
     reason: str
+    resolved_idx: str | None = None
+    resolved_orient: str | None = None
+    resolved_size: str | None = None
 
     def as_manifest(self) -> dict[str, Any]:
         return {
@@ -71,6 +74,9 @@ class ShapePlaceholderEvidence:
                 self.master_placeholder.as_manifest() if self.master_placeholder else None
             ),
             "resolved_type": self.resolved_type,
+            "resolved_idx": self.resolved_idx,
+            "resolved_orient": self.resolved_orient,
+            "resolved_size": self.resolved_size,
             "status": self.status,
             "reason": self.reason,
         }
@@ -261,16 +267,31 @@ def _candidate(
     candidates: list[_PartShape],
 ) -> tuple[_PartShape | None, str | None]:
     placeholders = [candidate for candidate in candidates if candidate.placeholder]
-    if source.idx is not None:
-        indexed = [
-            candidate
-            for candidate in placeholders
-            if candidate.placeholder and candidate.placeholder.idx == source.idx
-        ]
-        if len(indexed) == 1:
-            return indexed[0], None
-        if len(indexed) > 1:
-            return None, "duplicate_placeholder_idx"
+    # ECMA-376 defines idx=0 when the attribute is omitted. Real-world
+    # producers frequently omit the default on one hierarchy level but emit it
+    # explicitly on another, so raw-attribute comparison creates false
+    # ambiguity. Shape names are intentionally not consulted: they are
+    # localized and user-editable metadata, not placeholder identity.
+    effective_idx = source.idx or "0"
+    indexed = [
+        candidate
+        for candidate in placeholders
+        if candidate.placeholder
+        and (candidate.placeholder.idx or "0") == effective_idx
+    ]
+    if len(indexed) == 1:
+        return indexed[0], None
+    if len(indexed) > 1:
+        if source.type is not None:
+            indexed_and_typed = [
+                candidate
+                for candidate in indexed
+                if candidate.placeholder
+                and candidate.placeholder.type == source.type
+            ]
+            if len(indexed_and_typed) == 1:
+                return indexed_and_typed[0], None
+        return None, "duplicate_placeholder_idx"
     if source.type is not None:
         typed = [
             candidate
@@ -334,7 +355,45 @@ def _resolved_evidence(
     else:
         status = "resolved"
         reason = "placeholder_type_resolved"
-    resolved_type = types[0] if status == "resolved" and types else None
+    resolved_type = (
+        (types[0] if types else "obj") if status == "resolved" else None
+    )
+    resolved_idx = next(
+        (
+            placeholder.idx
+            for placeholder in (
+                slide_placeholder,
+                layout_placeholder,
+                master_placeholder,
+            )
+            if placeholder and placeholder.idx is not None
+        ),
+        "0",
+    )
+    resolved_orient = next(
+        (
+            placeholder.orient
+            for placeholder in (
+                slide_placeholder,
+                layout_placeholder,
+                master_placeholder,
+            )
+            if placeholder and placeholder.orient is not None
+        ),
+        "horz",
+    )
+    resolved_size = next(
+        (
+            placeholder.size
+            for placeholder in (
+                slide_placeholder,
+                layout_placeholder,
+                master_placeholder,
+            )
+            if placeholder and placeholder.size is not None
+        ),
+        "full",
+    )
     geometry = (
         slide_shape.geometry
         or (layout_shape.geometry if layout_shape else None)
@@ -353,6 +412,9 @@ def _resolved_evidence(
         resolved_type=resolved_type,
         status=status,
         reason=reason,
+        resolved_idx=resolved_idx,
+        resolved_orient=resolved_orient,
+        resolved_size=resolved_size,
     )
 
 

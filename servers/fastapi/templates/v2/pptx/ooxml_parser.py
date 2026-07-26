@@ -16,6 +16,7 @@ NS = {
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     "pr": "http://schemas.openxmlformats.org/package/2006/relationships",
     "c": "http://schemas.openxmlformats.org/drawingml/2006/chart",
+    "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
 }
 REL_NS = f"{{{NS['r']}}}"
 SLIDE_REL_TYPE = (
@@ -197,6 +198,16 @@ def _parse_graphic_frame(
     transform.pop("_canvas_height", None)
     table = shape.find("./a:graphic/a:graphicData/a:tbl", NS)
     if table is None:
+        smart_art = shape.find("./a:graphic/a:graphicData/dgm:relIds", NS)
+        if smart_art is not None:
+            return ShapeCandidate(
+                source_id=source_id,
+                name=name,
+                kind="unsupported",
+                confidence=0,
+                unsupported_reason="unsupported_ooxml:smartArt",
+                **transform,
+            )
         chart_ref = shape.find("./a:graphic/a:graphicData/c:chart", NS)
         relationship_id = (
             chart_ref.get(f"{REL_NS}id") if chart_ref is not None else None
