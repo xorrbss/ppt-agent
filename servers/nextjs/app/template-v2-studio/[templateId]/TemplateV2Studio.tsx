@@ -18,11 +18,14 @@ import {
   type TemplateV2DistributeDirection,
   type TemplateV2ReorderDirection,
 } from "@/lib/template-v2-studio";
+import { applyTemplateV2ImageReplacementPatch } from "@/lib/template-v2-image-replacement";
+import { templateV2VariantDigest } from "@/lib/template-v2-slide-variants";
 import { elementPosition } from "@/lib/template-v2-konva";
 import { getTemplateV2HistoryKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
 import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
 import TemplateV2Canvas from "./TemplateV2Canvas";
 import TemplateV2AiRewritePanel from "./TemplateV2AiRewritePanel";
+import TemplateV2ChartCopilotPanel from "./TemplateV2ChartCopilotPanel";
 import TemplateV2ConflictRecovery from "./TemplateV2ConflictRecovery";
 import TemplateV2ContentInspector from "./TemplateV2ContentInspector";
 import TemplateV2DraftRecovery from "./TemplateV2DraftRecovery";
@@ -31,7 +34,11 @@ import TemplateV2ElementTree, {
   pathLabel,
 } from "./TemplateV2ElementTree";
 import TemplateV2GeometryInspector from "./TemplateV2GeometryInspector";
+import TemplateV2ImageReplacementPanel from "./TemplateV2ImageReplacementPanel";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
+import TemplateV2QualityInspector from "./TemplateV2QualityInspector";
+import TemplateV2SlideVariantsPanel from "./TemplateV2SlideVariantsPanel";
+import TemplateV2TableEditorPanel from "./TemplateV2TableEditorPanel";
 import { useTemplateV2StudioPersistence } from "./useTemplateV2StudioPersistence";
 
 export default function TemplateV2Studio({
@@ -596,6 +603,44 @@ export default function TemplateV2Studio({
               </p>
             ) : null}
           </section>
+          <TemplateV2QualityInspector
+            layouts={state.layouts}
+            revision={template.revision}
+            disabled={Boolean(conflict)}
+            onApply={(result) => {
+              if (
+                result.autosave.expected_revision !== template.revision
+              ) {
+                setNotice("Quality fix rejected: the revision is stale.");
+                return;
+              }
+              dispatch({
+                type: "apply-bounded-layouts",
+                layouts: result.layouts,
+                expectedDigest: templateV2VariantDigest(state.layouts),
+                historyKey: result.historyKey,
+              });
+              setNotice("Quality fix applied. Autosave scheduled.");
+            }}
+          />
+          {activeLayout && state.activeLayoutId ? (
+            <TemplateV2SlideVariantsPanel
+              key={state.activeLayoutId}
+              layouts={state.layouts}
+              layoutId={state.activeLayoutId}
+              revision={template.revision}
+              disabled={Boolean(conflict)}
+              onCommit={({ layouts, expectedDigest, historyKey, notice }) => {
+                dispatch({
+                  type: "apply-bounded-layouts",
+                  layouts,
+                  expectedDigest,
+                  historyKey,
+                });
+                setNotice(notice);
+              }}
+            />
+          ) : null}
           {selectedElement &&
           state.selection &&
           state.selectionSet.length === 1 ? (
@@ -610,6 +655,70 @@ export default function TemplateV2Studio({
                     geometry,
                   });
                   setNotice(null);
+                }}
+              />
+              <TemplateV2ChartCopilotPanel
+                element={selectedElement}
+                disabled={selectionControls.lockConflict || Boolean(conflict)}
+                onApply={(replacement, historyKey) => {
+                  dispatch({
+                    type: "apply-bounded-element",
+                    selection: state.selection as StudioSelection,
+                    replacement,
+                    expectedElementDigest:
+                      templateV2VariantDigest(selectedElement),
+                    expectedRevision: template.revision,
+                    currentRevision: template.revision,
+                    historyKey,
+                  });
+                  setNotice("Chart patch applied. Autosave scheduled.");
+                }}
+              />
+              <TemplateV2TableEditorPanel
+                element={selectedElement}
+                revision={template.revision}
+                disabled={selectionControls.lockConflict || Boolean(conflict)}
+                onApply={(replacement, mutation) => {
+                  if (mutation.expectedRevision !== template.revision) {
+                    setNotice("Table change rejected: the revision is stale.");
+                    return;
+                  }
+                  dispatch({
+                    type: "apply-bounded-element",
+                    selection: state.selection as StudioSelection,
+                    replacement,
+                    expectedElementDigest:
+                      templateV2VariantDigest(selectedElement),
+                    expectedRevision: mutation.expectedRevision,
+                    currentRevision: template.revision,
+                    historyKey: mutation.historyKey,
+                  });
+                  setNotice("Table patch applied. Autosave scheduled.");
+                }}
+              />
+              <TemplateV2ImageReplacementPanel
+                element={selectedElement}
+                revision={template.revision}
+                disabled={selectionControls.lockConflict || Boolean(conflict)}
+                onApply={(intent, historyKey) => {
+                  if (intent.expectedRevision !== template.revision) {
+                    setNotice("Image replacement rejected: the revision is stale.");
+                    return;
+                  }
+                  dispatch({
+                    type: "apply-bounded-element",
+                    selection: state.selection as StudioSelection,
+                    replacement: applyTemplateV2ImageReplacementPatch(
+                      selectedElement,
+                      intent.patch
+                    ),
+                    expectedElementDigest:
+                      templateV2VariantDigest(selectedElement),
+                    expectedRevision: intent.expectedRevision,
+                    currentRevision: template.revision,
+                    historyKey,
+                  });
+                  setNotice("Local image replacement applied. Autosave scheduled.");
                 }}
               />
               <TemplateV2AiRewritePanel
