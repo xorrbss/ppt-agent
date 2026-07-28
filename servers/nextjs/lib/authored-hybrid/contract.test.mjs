@@ -153,7 +153,32 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
               fragmentRectsPx: [{ x: 176, y: 48, width: 72, height: 32 }],
               style: { ...TEXT_STYLE, color: { hex: "0066CC", alpha: 1 } },
             },
+            {
+              text: "\n",
+              boundsPx: { x: 248, y: 48, width: 0, height: 0 },
+              fragmentRectsPx: [],
+              style: TEXT_STYLE,
+              breakKind: "line",
+            },
           ],
+          layout: {
+            boxBoundsPx: { x: 88, y: 40, width: 400, height: 80 },
+            contentBoundsPx: { x: 96, y: 48, width: 384, height: 64 },
+            paintedTextBoundsPx: { x: 96, y: 48, width: 152, height: 32 },
+            paddingPx: { top: 6, right: 6, bottom: 6, left: 6 },
+            borderPx: { top: 2, right: 2, bottom: 2, left: 2 },
+            marginPx: { top: 12, right: -4, bottom: 18, left: 0 },
+            rowGapPx: 0,
+            columnGapPx: 0,
+            display: "block",
+            flexDirection: null,
+            alignItems: "normal",
+            justifyContent: "normal",
+            textAlignSource: "inherited",
+            lineCount: 2,
+            singleLine: false,
+            paragraphSpacingPx: { before: 12, after: 18 },
+          },
         },
       },
     ],
@@ -168,8 +193,19 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
   assert.equal(slide.elements[0].classification.mode, "native");
   assert.equal(slide.elements[0].bounds.inches.x, 1);
   assert.equal(slide.elements[0].rotationDeg, 7.5);
-  assert.equal(slide.elements[0].text.runs.length, 2);
+  assert.equal(slide.elements[0].text.runs.length, 3);
   assert.equal(slide.elements[0].text.runs[1].style.color.hex, "0066CC");
+  assert.equal(slide.elements[0].text.runs[2].breakKind, "line");
+  assert.equal(slide.elements[0].text.layout.textAlignSource, "inherited");
+  assert.equal(slide.elements[0].text.layout.boxBounds.px.width, 400);
+  assert.equal(slide.elements[0].text.layout.contentBounds.px.width, 384);
+  assert.equal(slide.elements[0].text.layout.paintedTextBounds.px.width, 152);
+  assert.deepEqual(slide.elements[0].text.layout.marginPx, {
+    top: 12,
+    right: -4,
+    bottom: 18,
+    left: 0,
+  });
   assert.equal(slide.elements[1].classification.mode, "raster");
   assert.deepEqual(slide.backplate.eligibleElementIds, ["h1-0001"]);
   assert.deepEqual(slide.backplate.rasterElementIds, ["h1-0002"]);
@@ -192,6 +228,15 @@ test("browser observations become a versioned JSON-safe H2 contract", () => {
   const invalidWrapMode = structuredClone(slide);
   invalidWrapMode.elements[0].text.style.wrapMode = "overflow";
   assert.throws(() => assertAuthoredHybridSlide(invalidWrapMode), /wrapMode is invalid/);
+
+  const invalidBreak = structuredClone(slide);
+  invalidBreak.elements[0].text.runs[2].breakKind = "paragraph";
+  invalidBreak.elements[0].text.runs[2].text = "not a newline";
+  assert.throws(() => assertAuthoredHybridSlide(invalidBreak), /requires a newline run/);
+
+  const invalidLayout = structuredClone(slide);
+  invalidLayout.elements[0].text.layout.singleLine = true;
+  assert.throws(() => assertAuthoredHybridSlide(invalidLayout), /singleLine must match lineCount/);
 
   const invalidUnits = structuredClone(slide);
   invalidUnits.elements[0].bounds.inches.x = 99;

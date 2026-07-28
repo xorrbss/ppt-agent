@@ -35,6 +35,7 @@ import {
 } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { Separator } from "@/components/ui/separator";
+import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
 import {
   Dialog,
   DialogContent,
@@ -116,6 +117,8 @@ const PresentationHeader = ({
   const [themes, setThemes] = useState<Theme[]>([]);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isRegenerateConfirmOpen, setIsRegenerateConfirmOpen] = useState(false);
+  const [exportQuality, setExportQuality] =
+    useState<PresentationExportQualityReport | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   const exportTriggerRef = useRef<HTMLButtonElement>(null);
@@ -236,7 +239,10 @@ const PresentationHeader = ({
     }
   };
 
-  const handleExportPptx = async (pptxMode?: PptxExportMode) => {
+  const handleExportPptx = async (
+    pptxMode?: PptxExportMode,
+    fontEmbedding = false
+  ) => {
     if (isStreaming || isExporting) return;
 
     let exportToastId: string | number | undefined;
@@ -270,7 +276,7 @@ const PresentationHeader = ({
           format: "pptx" as const,
           id: presentation_id,
           title: safePptxTitle,
-          ...(pptxMode ? { pptxMode } : {}),
+          ...(pptxMode ? { pptxMode, fontEmbedding } : {}),
         };
         const response = await fetch("/api/export-presentation", {
           method: "POST",
@@ -281,12 +287,17 @@ const PresentationHeader = ({
           throw new Error("PPTX 내보내기에 실패했습니다.");
         }
 
-        const { path: pptxPath } = await response.json();
+        const payload = (await response.json()) as {
+          path?: string;
+          quality?: PresentationExportQualityReport;
+        };
+        const pptxPath = payload.path;
         if (!pptxPath) {
           throw new Error("내보내기 경로를 받지 못했습니다.");
         }
 
         downloadLink(pptxPath, safePptxFileName);
+        if (payload.quality) setExportQuality(payload.quality);
       }
       notify.success(
         "내보내기 완료",
@@ -440,6 +451,32 @@ const PresentationHeader = ({
                 <span className="block font-medium">PPTX · 텍스트 편집 가능</span>
                 <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
                   텍스트와 일부 요소를 편집할 수 있습니다.
+                </span>
+              </span>
+              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                closeExportOptions();
+                void handleExportPptx("hybrid", true);
+              }}
+              disabled={isExporting || isStreaming === true}
+              data-testid="authored-export-hybrid-embedded"
+              variant="ghost"
+              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-2 text-left text-xs text-black hover:bg-amber-50 disabled:cursor-not-allowed"
+              aria-label="PPTX로 내보내기, 편집 가능 및 글꼴 포함"
+            >
+              <span className="min-w-0">
+                <span className="block font-medium">
+                  PPTX · 편집 가능 + 글꼴 포함
+                </span>
+                <span
+                  className="mt-1 block text-[11px] font-normal leading-snug text-amber-900"
+                  role="note"
+                >
+                  명시적 opt-in입니다. 서버에서 허용된 글꼴만 포함하며 파일
+                  크기가 크게 늘 수 있습니다. 실패 시 호환 글꼴로 대체됩니다.
                 </span>
               </span>
               <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -723,6 +760,86 @@ const PresentationHeader = ({
           )}
         </div>
       </div>
+      <Dialog
+        open={exportQuality !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setExportQuality(null);
+        }}
+      >
+        <DialogContent
+          className="w-[420px] rounded-2xl sm:max-w-[420px]"
+          data-testid="export-quality-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>PPTX 편집 품질</DialogTitle>
+            <DialogDescription>
+              전체 {exportQuality?.totalSlides ?? 0}장 · 편집 요소 포함{" "}
+              {exportQuality?.editableSlides ?? 0}장 · 이미지 fallback{" "}
+              {exportQuality?.imageFallbackSlides ?? 0}장
+            </DialogDescription>
+          </DialogHeader>
+          {exportQuality &&
+            (exportQuality.status !== "fully-editable" ||
+              exportQuality.imageFallbackSlides > 0 ||
+              exportQuality.rasterFallbackElements > 0) && (
+            <div
+              className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
+              role="alert"
+            >
+              일부 콘텐츠는 이미지로 남아 완전 편집형이 아닙니다.
+            </div>
+          )}
+          {exportQuality && (
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                네이티브 텍스트 {exportQuality.nativeTextElements}개 · 도형{" "}
+                {exportQuality.nativeShapeElements}개 · 그룹{" "}
+                {exportQuality.nativeGroupElements ?? 0}개 · 이미지{" "}
+                {exportQuality.nativeImageElements}개 · 잔여 raster{" "}
+                {exportQuality.rasterFallbackElements}개
+              </p>
+              {exportQuality.slides.some(
+                (slide) => slide.fallbackReasons.length > 0
+              ) && (
+                <div className="max-h-36 overflow-y-auto rounded-lg bg-gray-50 p-3">
+                  {exportQuality.slides
+                    .filter((slide) => slide.fallbackReasons.length > 0)
+                    .flatMap((slide) =>
+                      (slide.fallbackElements?.length ?? 0) > 0
+                        ? (slide.fallbackElements ?? []).map((element) => (
+                            <p
+                              key={`${slide.slideNumber}:${element.elementId}`}
+                            >
+                              {slide.slideNumber}장 · {element.elementId} (
+                              {element.candidateKind}):{" "}
+                              {element.reasons.join(", ")}
+                            </p>
+                          ))
+                        : [
+                            <p key={slide.slideNumber}>
+                              {slide.slideNumber}장:{" "}
+                              {slide.fallbackReasons.join(", ")}
+                            </p>,
+                          ]
+                    )}
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                {exportQuality.fontEmbeddingStatus?.applied
+                  ? `OOXML 폰트 임베딩 ${exportQuality.fontEmbeddingStatus.embeddedFontFiles}개가 적용되었습니다.`
+                  : exportQuality.fontEmbeddingStatus?.requested
+                    ? "폰트 임베딩 opt-in을 요청했지만 적용되지 않아 호환 typeface/fallback을 사용했습니다."
+                    : "폰트 임베딩은 기본 off이며 호환 typeface/fallback을 사용합니다."}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" onClick={() => setExportQuality(null)}>
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={isRegenerateConfirmOpen}
         onOpenChange={setIsRegenerateConfirmOpen}

@@ -48,11 +48,59 @@ same DOM identity was hidden during capture. Any rejected, changed, unsafe, or
 overlap-ambiguous element remains rasterised on the backplate. A slide or deck
 failure returns the already-produced fidelity PPTX.
 
-Hybrid execution is fail-closed. HTML is size-bounded and must be static and
-self-contained: scripts, event handlers, frames, forms, external/local URLs,
-CSS imports, vector data URLs, and active protocols are rejected. Native image
+Hybrid execution is fail-closed. Before preflight, the server may collect
+Google Fonts referenced by a `fonts.googleapis.com` stylesheet link or CSS
+`@import`. Collection requires HTTPS, exact allow-listed hosts, validated
+redirects, MIME and font magic agreement, bounded response/file/total sizes,
+and an 8-second timeout. Successful `fonts.gstatic.com` assets are converted to
+validated font data URLs; collection failure removes the Google reference and
+uses the local fallback stack. No other remote CSS or font host is accepted.
+Chrome remains fully offline behind its deny proxy.
+
+The central compatibility policy is used for both captured CSS layout and
+native OOXML typeface names: Noto Sans KR and Pretendard use Malgun Gothic,
+Noto Serif KR uses Batang, Inter/Roboto/DM Sans use Aptos, Source Serif 4 uses
+Cambria, and IBM Plex Mono uses Consolas. This scope covers rendering and
+typeface fallback only. Fonts are not embedded in the PPTX/OOXML, so a document
+opened on another machine uses its locally installed compatible typeface.
+
+Font-family order is intentional. The source-fidelity render keeps a collected
+authored face first. Editable text measurement has a separate mapped-first
+stack (`expandPowerPointLayoutFontFamilyStack`) so a native-layout pass can
+measure glyph widths and line breaks with the same local face written to OOXML,
+while retaining the authored face as a fallback. Export performs these as two
+isolated extractions and merges only identity-matched text metrics into the
+native layer; classification, paint order, and the fidelity backplate remain
+anchored to the source extraction. Callers must not use the mapped-first stack
+for the source-fidelity backplate.
+
+After collection, HTML is size-bounded and must be static and self-contained:
+scripts, event handlers, frames, forms, remaining external/local URLs, CSS
+imports, vector data URLs, and active protocols are rejected. Native image
 promotion additionally requires a bounded PNG/JPEG/WebP data URL with matching
-magic bytes and safe decoded pixels. Archives reject traversal, encryption,
-ZIP64, duplicate entries, unsupported compression, and oversized payloads.
-Chrome work directories and interim PPTX files are deleted in `finally` paths;
+magic bytes and safe decoded pixels. Collected font data URLs are independently
+bounded and magic-validated. Archives reject traversal, encryption, ZIP64,
+duplicate entries, unsupported compression, and oversized payloads. Chrome
+work directories and interim PPTX files are deleted in `finally` paths;
 download paths are contained to the configured export directory.
+
+## Optional export quality metadata
+
+Hybrid export responses may include additive `quality` metadata using
+`presenton.export-quality/v1`; existing callers can continue reading only
+`path`. The report contains overall slide counts, native
+text/shape/group/image counts, image-fallback slide counts, element-level
+fallback ids/reasons when known, and deterministic aggregate reason counts.
+The added fields are optional for compatibility with previously cached v1
+sidecars.
+
+The same report is retained with the in-process hybrid cache and written beside
+the generated PPTX as `<file>.pptx.quality.json`. The completion UI warns when
+`status` is not `fully-editable`, or when the independent raster/image fallback
+counts contradict that status.
+
+This scope validates rendered font fallback and native PowerPoint typefaces. It
+keeps OOXML font embedding default-off and exposes the explicit opt-in request,
+application result, embedded-file count, and failure reason separately. A
+request must never be reported as applied unless the exported PPTX actually
+contains embedded font files.
