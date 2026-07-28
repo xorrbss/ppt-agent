@@ -662,6 +662,10 @@ function runPropertiesXml(
     `lang="ko-KR"`,
     `altLang="en-US"`,
     `sz="${Math.round(Math.max(MIN_EDITABLE_FONT_SIZE_PT, style.fontSizePt) * 100)}"`,
+    // Bold runs override the paragraph's explicit regular default. Keeping
+    // `b="0"` on the paragraph end marker (rather than every regular run)
+    // preserves mixed-weight semantics without changing regular glyph shaping
+    // in LibreOffice and PowerPoint's renderer.
     style.bold || style.fontWeight >= 600 ? `b="1"` : "",
     style.italic ? `i="1"` : "",
     style.underline ? `u="sng"` : "",
@@ -722,12 +726,39 @@ function collapseCapturedLineBreaks(element: AuthoredHybridEditableTextElement):
 function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[] {
   const collapseBreaks = collapseCapturedLineBreaks(element);
   const joined = element.text.runs.map((run) => run.text).join("");
+  const joinedWithoutSoftBreaks = element.text.runs
+    .map((run) =>
+      run.breakKind === "soft" ? run.text.replace(/\n/g, "") : run.text
+    )
+    .join("");
   const sameTextIgnoringCollapsibleWhitespace =
     joined.replace(/\s+/g, " ").trim() ===
     element.text.plainText.replace(/\s+/g, " ").trim();
+  // A captured soft wrap may replace an authored space (Latin text) or add no
+  // semantic space at all (CJK text), even within the same text root. If the
+  // non-whitespace characters are identical, retain the run formatting and
+  // the browser-confirmed visual breaks instead of flattening rich text.
+  const sameTextIgnoringWhitespace =
+    joined.replace(/\s/g, "") === element.text.plainText.replace(/\s/g, "");
+  const nonWhitespaceRunStyles = new Set(
+    element.text.runs
+      .filter((run) => run.text.replace(/\s/g, "").length > 0)
+      .map((run) => JSON.stringify(run.style))
+  );
+  const hasMeaningfulRunStyleVariation = nonWhitespaceRunStyles.size > 1;
+  const preservesRichTextAcrossSoftWraps =
+    hasMeaningfulRunStyleVariation &&
+    (
+      joinedWithoutSoftBreaks === element.text.plainText ||
+      sameTextIgnoringWhitespace
+    );
   if (
     element.text.runs.length &&
-    (joined === element.text.plainText || sameTextIgnoringCollapsibleWhitespace)
+    (
+      joined === element.text.plainText ||
+      sameTextIgnoringCollapsibleWhitespace ||
+      preservesRichTextAcrossSoftWraps
+    )
   ) {
     return element.text.runs.map((run) => ({
       text: collapseBreaks ? run.text.replace(/\n+/g, " ") : run.text,
@@ -785,6 +816,82 @@ function cssPixelsToTextSpacingPointValue(cssPixels: number): number {
   return textSpacingPointValue(cssPixels * 0.75);
 }
 
+function hasZeroTextBoxPadding(
+  element: AuthoredHybridEditableTextElement
+): boolean {
+  const padding = element.text.layout?.paddingPx;
+  return !padding || [padding.top, padding.right, padding.bottom, padding.left]
+    .every((value) => Math.abs(value) < 0.01);
+}
+
+function shouldUseProportionalLineSpacing(
+  element: AuthoredHybridEditableTextElement,
+  fontSizes: number[]
+): boolean {
+  const authoredBreakCount = element.text.runs.filter(
+    (run) =>
+      run.text.includes("\n") &&
+      (run.breakKind === "line" || run.breakKind === "paragraph")
+  ).length;
+  if (!authoredBreakCount || !fontSizes.length || !hasZeroTextBoxPadding(element)) {
+    return false;
+  }
+
+  const maximumFontSizePt = Math.max(...fontSizes);
+  const lineCount = element.text.layout?.lineCount ?? authoredBreakCount + 1;
+  const expectedHeightPx =
+    (element.text.style.lineHeight.points / 0.75) * lineCount;
+  const isTightlyFitted =
+    Math.abs(element.bounds.px.height - expectedHeightPx) <= 2;
+  const isDisplayTitle =
+    element.text.role === "title" &&
+    maximumFontSizePt >= 24 &&
+    lineCount >= 2 &&
+    isTightlyFitted;
+  const isCenteredTwoLineLabel =
+    element.text.style.horizontalAlignment === "center" &&
+    maximumFontSizePt <= 12 &&
+    lineCount === 2 &&
+    isTightlyFitted;
+  const isCompactCaptionToken =
+    element.text.role === "caption" &&
+    maximumFontSizePt <= 10 &&
+    Math.abs(element.text.style.lineHeight.multiple - 1.4) <= 0.001;
+
+  // Proportional spacing is reserved for tightly fitted, font-metric-sensitive
+  // authored layouts. Ordinary multiline text uses exact point spacing so a
+  // PowerPoint font substitution cannot move surrounding content.
+  return isDisplayTitle || isCenteredTwoLineLabel || isCompactCaptionToken;
+}
+
+function lineSpacingXml(
+  element: AuthoredHybridEditableTextElement
+): string {
+  if (element.text.style.lineHeight.source !== "computed") return "";
+
+  const fontSizes = textSegments(element)
+    .filter((segment) => segment.text.replace(/\n/g, "").length > 0)
+    .map((segment) => segment.style.fontSizePt);
+  const hasMixedFontSizes = fontSizes.some(
+    (fontSizePt) => Math.abs(fontSizePt - fontSizes[0]) > 0.01
+  );
+
+  if (hasMixedFontSizes || !shouldUseProportionalLineSpacing(element, fontSizes)) {
+    return `<a:lnSpc><a:spcPts val="${textSpacingPointValue(
+      element.text.style.lineHeight.points
+    )}"/></a:lnSpc>`;
+  }
+
+  const percentage = Math.max(
+    0,
+    Math.min(
+      20_116_800,
+      Math.round(element.text.style.lineHeight.multiple * 100_000)
+    )
+  );
+  return `<a:lnSpc><a:spcPct val="${percentage}"/></a:lnSpc>`;
+}
+
 function paragraphsXml(
   element: AuthoredHybridEditableTextElement,
   options: PowerPointTypefaceSerializationOptions
@@ -798,15 +905,11 @@ function paragraphsXml(
   // CSS `line-height: normal` is a font-engine metric, not an authored
   // numeric spacing value. The browser contract carries a 1.2 estimate for
   // geometry. Preserve PowerPoint's font-native normal spacing unless CSS
-  // supplied a numeric line height. Preserve that authored used value as an
-  // exact DrawingML point spacing; proportional spacing lets Office recompute
-  // each line from its tallest mixed-size run and measurably drifts from the
-  // browser layout.
-  const lineSpacing = element.text.style.lineHeight.source === "computed"
-    ? `<a:lnSpc><a:spcPts val="${textSpacingPointValue(
-        element.text.style.lineHeight.points
-      )}"/></a:lnSpc>`
-    : "";
+  // supplied a numeric line height. Uniform-size text is serialized as the
+  // authored CSS multiple so PowerPoint can apply the active font's native
+  // metrics. Mixed-size text keeps exact point spacing because proportional
+  // spacing is recalculated from the tallest run and drifts from the browser.
+  const lineSpacing = lineSpacingXml(element);
   const paragraphs = powerPointTextParagraphs(element);
   const paragraphSpacing = element.text.layout?.paragraphSpacingPx ?? {
     before: 0,
@@ -829,7 +932,7 @@ function paragraphsXml(
         ? "<a:br/>"
         : `<a:r>${runPropertiesXml(piece.style, element.opacity, options)}<a:t xml:space="preserve">${escapeXml(piece.text)}</a:t></a:r>`
     );
-    return `<a:p>${pPr}${contents.join("")}<a:endParaRPr lang="ko-KR"/></a:p>`;
+    return `<a:p>${pPr}${contents.join("")}<a:endParaRPr lang="ko-KR" b="0"/></a:p>`;
   }).join("");
 }
 
