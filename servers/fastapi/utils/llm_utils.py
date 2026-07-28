@@ -1,8 +1,10 @@
 import asyncio
 import json
 import logging
+import re
 import threading
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import dirtyjson
@@ -23,6 +25,13 @@ from utils.schema_utils import get_schema_validation_errors
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
 DisconnectChecker = Callable[[], Awaitable[bool]]
+
+
+@dataclass(frozen=True)
+class TextLengthLimit:
+    path: str
+    recommended: int
+    maximum: int
 
 
 async def _raise_if_client_disconnected(
@@ -130,12 +139,238 @@ def _resolve_ref(schema: Any, root: dict) -> Any:
         if ref.startswith("#/"):
             node: Any = root
             for part in ref[2:].split("/"):
+                part = part.replace("~1", "/").replace("~0", "~")
                 if isinstance(node, dict):
                     node = node.get(part, {})
                 else:
                     return {}
             return node if isinstance(node, dict) else {}
     return schema
+
+
+def _schema_variant_label(schema: Any, root: dict) -> Optional[str]:
+    schema = _resolve_ref(schema, root)
+    if not isinstance(schema, dict):
+        return None
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        return None
+    for discriminator in ("archetype", "type"):
+        spec = _resolve_ref(properties.get(discriminator), root)
+        if not isinstance(spec, dict):
+            continue
+        if isinstance(spec.get("const"), str):
+            return spec["const"]
+        enum = spec.get("enum")
+        if isinstance(enum, list) and len(enum) == 1 and isinstance(enum[0], str):
+            return enum[0]
+    return None
+
+
+def extract_text_length_limits(
+    schema: dict,
+    *,
+    recommended_ratio: float = 0.8,
+) -> list[TextLengthLimit]:
+    """Return text budgets from a JSON Schema, including referenced union branches.
+
+    Paths use ``[]`` for homogeneous arrays and ``<name>`` for discriminated
+    oneOf/anyOf branches, for example ``slides[].<cover>.title``.
+    """
+    ratio = min(0.85, max(0.75, recommended_ratio))
+    limits: dict[str, int] = {}
+
+    def walk(node: Any, path: str, ref_stack: frozenset[str]) -> None:
+        if not isinstance(node, dict):
+            return
+
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/"):
+            if ref in ref_stack:
+                return
+            resolved = _resolve_ref(node, schema)
+            siblings = {key: value for key, value in node.items() if key != "$ref"}
+            if siblings and isinstance(resolved, dict):
+                resolved = {**resolved, **siblings}
+            walk(resolved, path, ref_stack | {ref})
+            return
+
+        max_length = node.get("maxLength")
+        if isinstance(max_length, int) and max_length >= 0 and path:
+            previous = limits.get(path)
+            limits[path] = max_length if previous is None else min(previous, max_length)
+
+        for combiner in ("allOf", "oneOf", "anyOf"):
+            variants = node.get(combiner)
+            if not isinstance(variants, list):
+                continue
+            for variant in variants:
+                label = (
+                    _schema_variant_label(variant, schema)
+                    if combiner in {"oneOf", "anyOf"}
+                    else None
+                )
+                variant_path = f"{path}.<{label}>" if label and path else path
+                walk(variant, variant_path, ref_stack)
+
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            for name, child in properties.items():
+                child_path = f"{path}.{name}" if path else name
+                walk(child, child_path, ref_stack)
+
+        items = node.get("items")
+        if isinstance(items, dict):
+            walk(items, f"{path}[]" if path else "[]", ref_stack)
+        elif isinstance(items, list):
+            for index, child in enumerate(items):
+                walk(child, f"{path}[{index}]" if path else f"[{index}]", ref_stack)
+
+        prefix_items = node.get("prefixItems")
+        if isinstance(prefix_items, list):
+            for index, child in enumerate(prefix_items):
+                walk(child, f"{path}[{index}]" if path else f"[{index}]", ref_stack)
+
+    walk(schema, "", frozenset())
+    return [
+        TextLengthLimit(
+            path=path,
+            recommended=max(1, int(maximum * ratio)) if maximum else 0,
+            maximum=maximum,
+        )
+        for path, maximum in sorted(limits.items())
+    ]
+
+
+def format_text_length_guidance(
+    schema: dict,
+    *,
+    recommended_ratio: float = 0.8,
+) -> str:
+    limits = extract_text_length_limits(
+        schema,
+        recommended_ratio=recommended_ratio,
+    )
+    if not limits:
+        return ""
+    entries = "\n".join(
+        f"- `{limit.path}`: recommended <= {limit.recommended} characters; "
+        f"absolute maximum {limit.maximum} characters."
+        for limit in limits
+    )
+    return (
+        "\n# Text Length Budgets\n"
+        "Write to the recommended length from the start; the absolute maximum is a "
+        "hard schema limit, not a target. Keep titles and labels compact. Keep body "
+        "copy and speaker notes complete and meaningful within their budgets. Remove "
+        "repetition, filler, and decorative modifiers before dropping facts, numbers, "
+        "names, or conclusions. Never end a title or sentence mid-word.\n"
+        f"{entries}\n"
+    )
+
+
+def _schema_matches_value(schema: Any, value: Any, root: dict) -> bool:
+    schema = _resolve_ref(schema, root)
+    if not isinstance(schema, dict):
+        return False
+    schema_type = schema.get("type")
+    return (
+        (schema_type == "object" and isinstance(value, dict))
+        or (schema_type == "array" and isinstance(value, list))
+        or (schema_type == "string" and isinstance(value, str))
+        or (schema_type == "number" and isinstance(value, (int, float)))
+        or (schema_type == "integer" and isinstance(value, int))
+        or (schema_type == "boolean" and isinstance(value, bool))
+        or (schema_type == "null" and value is None)
+    )
+
+
+def _compact_text(value: str, maximum: int) -> str:
+    """Shorten at sentence/word boundaries, preserving complete leading ideas."""
+    if len(value) <= maximum:
+        return value
+    if maximum <= 0:
+        return ""
+
+    normalized = re.sub(r"\s+", " ", value).strip()
+    if len(normalized) <= maximum:
+        return normalized
+
+    # Prefer one or more complete sentences/clauses over a raw character slice.
+    segments = [
+        match.group(0).strip()
+        for match in re.finditer(r".+?(?:[.!?。！？](?=\s|$)|$)", normalized)
+        if match.group(0).strip()
+    ]
+    complete = ""
+    for segment in segments:
+        candidate = f"{complete} {segment}".strip()
+        if len(candidate) > maximum:
+            break
+        complete = candidate
+    if complete:
+        return complete
+
+    ellipsis = "…" if maximum > 1 else ""
+    boundary = maximum - len(ellipsis)
+    prefix = normalized[:boundary].rstrip()
+    for separator in ("; ", ": ", ", ", " "):
+        split_at = prefix.rfind(separator)
+        if split_at >= max(1, boundary // 2):
+            prefix = prefix[:split_at].rstrip()
+            break
+    return (prefix + ellipsis)[:maximum]
+
+
+def compact_to_schema(value: Any, schema: Any, root: dict) -> Any:
+    """Compact only overflowing fields before considering a full LLM correction.
+
+    Unlike ``clamp_to_schema``, strings prefer complete sentence/word boundaries.
+    Arrays keep their existing order and discard only trailing overflow items.
+    """
+    schema = _resolve_ref(schema, root)
+    if not isinstance(schema, dict):
+        return value
+
+    for sub_schema in schema.get("allOf", []):
+        value = compact_to_schema(value, sub_schema, root)
+
+    for combiner in ("oneOf", "anyOf"):
+        if combiner not in schema:
+            continue
+        variants = [_resolve_ref(variant, root) for variant in schema[combiner]]
+        chosen = None
+        if isinstance(value, dict):
+            for variant in variants:
+                label = _schema_variant_label(variant, root)
+                if label and value.get("archetype", value.get("type")) == label:
+                    chosen = variant
+                    break
+        chosen = chosen or next(
+            (variant for variant in variants if _schema_matches_value(variant, value, root)),
+            None,
+        )
+        chosen = chosen or (variants[0] if variants else None)
+        return compact_to_schema(value, chosen, root) if chosen else value
+
+    schema_type = schema.get("type")
+    if (schema_type == "object" or "properties" in schema) and isinstance(value, dict):
+        for key, child_schema in schema.get("properties", {}).items():
+            if key in value:
+                value[key] = compact_to_schema(value[key], child_schema, root)
+        return value
+    if schema_type == "array" and isinstance(value, list):
+        items = schema.get("items", {})
+        compacted = [compact_to_schema(item, items, root) for item in value]
+        max_items = schema.get("maxItems")
+        if isinstance(max_items, int) and len(compacted) > max_items:
+            compacted = compacted[:max_items]
+        return compacted
+    if schema_type == "string" and isinstance(value, str):
+        max_length = schema.get("maxLength")
+        if isinstance(max_length, int) and len(value) > max_length:
+            return _compact_text(value, max_length)
+    return value
 
 
 def clamp_to_schema(value: Any, schema: Any, root: dict) -> Any:
@@ -244,19 +479,38 @@ async def generate_structured_with_schema_retries(
             return content
 
         formatted_validation_errors = " | ".join(validation_errors)
+        # Fix isolated upper-bound overflow fields before asking the LLM to
+        # regenerate the whole structured response. This preserves all sibling
+        # fields and prefers sentence/word boundaries for strings.
+        compacted = compact_to_schema(content, json_schema, json_schema)
+        remaining = get_schema_validation_errors(
+            json_schema,
+            compacted,
+            strict=strict,
+        )
+        if not remaining:
+            LOGGER.warning(
+                "Validation errors fixed by field-level semantic compaction: %s",
+                formatted_validation_errors,
+            )
+            return compacted
+
         if validation_attempt == max_validation_loops - 1:
-            # Last resort: clamp over-length strings / over-count arrays to the schema
-            # so the response is valid (trimmed) rather than crashing the caller.
-            clamped = clamp_to_schema(content, json_schema, json_schema)
-            remaining = get_schema_validation_errors(json_schema, clamped, strict=strict)
+            # Preserve clamp as the final availability safety net only.
+            clamped = clamp_to_schema(compacted, json_schema, json_schema)
+            remaining = get_schema_validation_errors(
+                json_schema,
+                clamped,
+                strict=strict,
+            )
             if remaining:
                 LOGGER.warning(
-                    "Validation errors after max fixes + clamp (returning clamped): %s",
+                    "Validation errors remain after final schema clamp: %s",
                     " | ".join(remaining),
                 )
             else:
                 LOGGER.warning(
-                    "Validation errors fixed by clamping after max fixes: %s",
+                    "Validation errors fixed by final schema clamp: %s",
                     formatted_validation_errors,
                 )
             return clamped

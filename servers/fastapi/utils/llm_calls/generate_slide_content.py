@@ -14,7 +14,11 @@ from utils.content_preservation import (
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
-from utils.llm_utils import DisconnectChecker, generate_structured_with_schema_retries
+from utils.llm_utils import (
+    DisconnectChecker,
+    format_text_length_guidance,
+    generate_structured_with_schema_retries,
+)
 from utils.schema_utils import (
     add_field_in_schema,
     ensure_array_schemas_have_items,
@@ -51,6 +55,8 @@ You need to generate structured content json based on the schema.
 {tone_instructions}
 
 {verbosity_instructions}
+
+{text_length_guidance}
 
 {output_fields_instructions}
 """
@@ -119,14 +125,20 @@ def get_system_prompt(
         )
     elif verbosity == "text-heavy":
         verbosity_instructions += (
-            "Use roughly 90-100% of each text field's maximum length and populate the MAXIMUM number of list items the schema allows. Maximize substantive, specific detail."
+            "Use the field-specific recommended budgets and populate the maximum number "
+            "of useful list items the schema allows. Maximize substantive, specific detail "
+            "without treating hard maximum lengths as targets."
         )
     else:
         # standard / default: still apply real density pressure (this is the common path)
         verbosity_instructions += (
-            "Use roughly 75-90% of each text field's maximum length and populate most or all allowed list items. Favor substance over brevity."
+            "Aim for the field-specific recommended budgets (normally 80% of each hard "
+            "maximum) and populate most or all useful list items. Favor substance over filler."
         )
 
+    text_length_guidance = (
+        format_text_length_guidance(response_schema) if response_schema else ""
+    )
     output_fields_instructions = "# Output Fields:\n" + _get_schema_markdown(
         response_schema
     )
@@ -147,7 +159,7 @@ def get_system_prompt(
         content_depth_rules = """# Content Depth
 - Be specific and concrete: prefer named examples, figures, dates, percentages, and cause-effect detail over generic statements.
 - Genuinely expand each outline point into substantive prose — do not merely restate or summarize the outline.
-- Fill each text field toward its maximum length budget, and populate the MAXIMUM number of list items the schema allows. Do not leave fields near their minimum or ship under-filled lists.
+- Fill each text field toward its recommended length budget, and populate the maximum number of useful list items the schema allows. Do not add filler merely to consume space.
 - Every bullet or point must carry real, distinct information; never use filler such as \"various aspects\", \"many benefits\", or vague placeholders."""
 
     return SLIDE_CONTENT_SYSTEM_PROMPT.format(
@@ -155,6 +167,7 @@ def get_system_prompt(
         user_instructions=user_instructions,
         tone_instructions=tone_instructions,
         verbosity_instructions=verbosity_instructions,
+        text_length_guidance=text_length_guidance,
         output_fields_instructions=output_fields_instructions,
         content_depth_rules=content_depth_rules,
     )
