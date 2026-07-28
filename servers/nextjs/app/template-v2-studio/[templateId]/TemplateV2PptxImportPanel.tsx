@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { getApiUrl } from "@/utils/api";
+import { useUploadLimits } from "@/lib/use-upload-limits";
 import TemplateV2ImportReview from "./TemplateV2ImportReview";
 import TemplateV2RepeatSuggestionReview, {
   type RepeatSuggestion,
 } from "./TemplateV2RepeatSuggestionReview";
 
 const IMPORT_ENDPOINT = "/api/v1/ppt/structured-templates/imports";
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const ACTIVE_STATES = new Set(["queued", "processing", "finalizing"]);
 
 interface ImportRecord {
@@ -93,6 +93,7 @@ export default function TemplateV2PptxImportPanel({
 }: {
   currentTemplateId: string;
 }) {
+  const uploadLimits = useUploadLimits();
   const [expanded, setExpanded] = useState(false);
   const [newTemplateId, setNewTemplateId] = useState(
     `${currentTemplateId.slice(0, 115)}-import`
@@ -147,8 +148,10 @@ export default function TemplateV2PptxImportPanel({
       setError("Only .pptx files are accepted.");
       return;
     }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError("The PPTX exceeds the 100 MB upload limit.");
+    if (file.size > uploadLimits.document.bytes) {
+      setError(
+        `The PPTX exceeds the ${uploadLimits.document.mb} MB upload limit.`
+      );
       return;
     }
     const templateId = newTemplateId.trim();
@@ -249,6 +252,10 @@ export default function TemplateV2PptxImportPanel({
             <p className="text-xs text-slate-400">
               Analysis is local and deterministic. It does not run Vision,
               OCR, or an external AI provider.
+            </p>
+            <p className="text-xs text-slate-400">
+              Maximum PPTX size: {uploadLimits.document.mb} MB. The limit
+              protects memory, temporary disk, and conversion time.
             </p>
             <label className="block text-xs text-slate-300">
               New template ID

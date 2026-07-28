@@ -8,6 +8,11 @@ from pydantic import BaseModel
 
 from services.documents_loader import DocumentsLoader
 from utils.asset_directory_utils import absolute_fastapi_asset_url, get_images_directory
+from utils.upload_limits import (
+    get_single_upload_limit_bytes,
+    reject_if_declared_too_large,
+    stream_upload_to_file,
+)
 import uuid
 from constants.documents import PDF_MIME_TYPES
 
@@ -47,25 +52,24 @@ async def process_pdf_slides(
             status_code=400,
             detail=f"Invalid file type. Expected PDF file, got {pdf_file.content_type}",
         )
-    # Enforce 100MB size limit
-    if (
-        hasattr(pdf_file, "size")
-        and pdf_file.size
-        and pdf_file.size > (100 * 1024 * 1024)
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="PDF file exceeded max upload size of 100 MB",
-        )
+    upload_limit = get_single_upload_limit_bytes()
+    reject_if_declared_too_large(
+        pdf_file,
+        limit_bytes=upload_limit,
+        label="PDF file",
+    )
 
     # Create temporary directory for processing
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
             # Save uploaded PDF file
             pdf_path = os.path.join(temp_dir, "presentation.pdf")
-            with open(pdf_path, "wb") as f:
-                pdf_content = await pdf_file.read()
-                f.write(pdf_content)
+            await stream_upload_to_file(
+                pdf_file,
+                pdf_path,
+                limit_bytes=upload_limit,
+                label="PDF file",
+            )
 
             # Generate screenshots from PDF using ImageMagick
             screenshot_paths = await DocumentsLoader.get_page_images_from_pdf_async(
@@ -111,6 +115,8 @@ async def process_pdf_slides(
                 success=True, slides=slides_data, total_slides=len(slides_data)
             )
 
+        except HTTPException:
+            raise
         except Exception as e:
             print(f"Error processing PDF slides: {str(e)}")
             raise HTTPException(

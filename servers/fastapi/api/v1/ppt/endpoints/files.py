@@ -9,6 +9,14 @@ from services.temp_file_service import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
 import uuid
 from utils.get_env import get_app_data_directory_env
+from utils.upload_limits import (
+    MIB,
+    format_limit,
+    get_single_upload_limit_bytes,
+    get_total_upload_limit_bytes,
+    stream_upload_to_file,
+    upload_limits_payload,
+)
 from utils.validators import validate_files
 
 FILES_ROUTER = APIRouter(prefix="/files", tags=["Files"])
@@ -33,6 +41,13 @@ def _ensure_within_allowed(path: str) -> str:
     raise HTTPException(400, "file_path is outside the allowed directories")
 
 
+@FILES_ROUTER.get("/upload-limits")
+async def get_upload_limits():
+    """Expose effective limits so clients can validate and explain them."""
+
+    return upload_limits_payload()
+
+
 @FILES_ROUTER.post("/upload", response_model=List[str])
 async def upload_files(files: Optional[List[UploadFile]]):
     if not files:
@@ -40,19 +55,54 @@ async def upload_files(files: Optional[List[UploadFile]]):
 
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
 
-    validate_files(files, True, True, 100, UPLOAD_ACCEPTED_FILE_TYPES)
+    single_limit = get_single_upload_limit_bytes()
+    total_limit = get_total_upload_limit_bytes()
+    validate_files(
+        files,
+        True,
+        True,
+        single_limit // MIB,
+        UPLOAD_ACCEPTED_FILE_TYPES,
+    )
+    declared_total = sum(each_file.size or 0 for each_file in files)
+    if declared_total > total_limit:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Combined upload size exceeds the "
+                f"{format_limit(total_limit)} request limit."
+            ),
+        )
 
     temp_files: List[str] = []
-    if files:
+    actual_total = 0
+    try:
         for each_file in files:
             temp_path = TEMP_FILE_SERVICE.create_temp_file_path(
                 each_file.filename, temp_dir
             )
-            with open(temp_path, "wb") as f:
-                content = await each_file.read()
-                f.write(content)
-
+            actual_total += await stream_upload_to_file(
+                each_file,
+                temp_path,
+                limit_bytes=single_limit,
+                label="Document",
+            )
             temp_files.append(temp_path)
+            if actual_total > total_limit:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        "Combined upload size exceeds the "
+                        f"{format_limit(total_limit)} request limit."
+                    ),
+                )
+    except Exception:
+        for temp_path in temp_files:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        raise
 
     return temp_files
 

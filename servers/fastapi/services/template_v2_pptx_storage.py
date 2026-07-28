@@ -20,11 +20,14 @@ from fastapi import UploadFile
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from templates.v2.pptx.source_inventory import SecretFreeSourceMetadata
 from utils.get_env import get_app_data_directory_env
+from utils.upload_limits import get_single_upload_limit_bytes
 
 logger = logging.getLogger(__name__)
 
 
-MAX_PPTX_UPLOAD_BYTES = 100 * 1024 * 1024
+# Retain the constant as a monkeypatchable hard cap for existing callers/tests,
+# while sourcing its process-start value from the shared upload configuration.
+MAX_PPTX_UPLOAD_BYTES = get_single_upload_limit_bytes()
 DEFAULT_PRIVATE_SOURCE_RETENTION_DAYS = 7
 MIN_PRIVATE_SOURCE_RETENTION_DAYS = 1
 MAX_PRIVATE_SOURCE_RETENTION_DAYS = 90
