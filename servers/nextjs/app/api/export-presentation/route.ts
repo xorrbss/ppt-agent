@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   try {
     body = await readExportPresentationRouteBody(req);
-    const { path: outPath } = await executeExportPresentationRouteRequest(
+    const exportResult = await executeExportPresentationRouteRequest(
       body,
       cookieHeader,
       {
@@ -78,11 +78,17 @@ export async function POST(req: NextRequest) {
               cookieHeader,
               expectedPresentationSha256,
             }),
-          hybrid: ({ presentationId, title, cookieHeader }) =>
+          hybrid: ({
+            presentationId,
+            title,
+            cookieHeader,
+            fontEmbedding,
+          }) =>
             runAuthoredHybridPresentationExport({
               presentationId,
               title,
               cookieHeader,
+              fontEmbedding,
             }),
         },
       },
@@ -90,7 +96,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      path: buildExportDownloadUrl(outPath),
+      path: buildExportDownloadUrl(exportResult.path),
+      ...(exportResult.quality ? { quality: exportResult.quality } : {}),
     });
   } catch (e) {
     if (e instanceof ExportPresentationRequestError) {

@@ -17,6 +17,7 @@ export interface ExportPresentationRouteBody {
   id?: unknown;
   title?: unknown;
   pptxMode?: unknown;
+  fontEmbedding?: unknown;
 }
 
 export interface ExportPresentationRouteDependencies<
@@ -214,6 +215,25 @@ export async function executeExportPresentationRouteRequest<
       400
     );
   }
+  if (
+    body.fontEmbedding !== undefined &&
+    typeof body.fontEmbedding !== "boolean"
+  ) {
+    throw new ExportPresentationRequestError(
+      "Invalid font embedding option",
+      400
+    );
+  }
+  const fontEmbedding = body.fontEmbedding === true;
+  if (
+    fontEmbedding &&
+    (body.format !== "pptx" || resolvedPptxMode.value !== "hybrid")
+  ) {
+    throw new ExportPresentationRequestError(
+      "Font embedding requires hybrid PPTX export",
+      400
+    );
+  }
   if (!(await dependencies.packageAvailable())) {
     throw new Error(
       "presentation-export runtime is not available. Run scripts/sync-presentation-export.cjs to install it."
@@ -227,6 +247,7 @@ export async function executeExportPresentationRouteRequest<
       title: typeof body.title === "string" ? body.title : undefined,
       cookieHeader,
       pptxMode: resolvedPptxMode.value,
+      fontEmbedding,
     },
     dependencies
   );

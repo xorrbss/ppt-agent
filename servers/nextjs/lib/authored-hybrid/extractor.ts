@@ -11,6 +11,7 @@ import {
   instrumentAuthoredHtml,
   normalizeAuthoredHybridBaseUrl,
   parseAuthoredHybridDomDump,
+  type AuthoredHybridFontLayoutMode,
 } from "./html-instrumentation.ts";
 import type { AuthoredHybridExpectedPromotedElement } from "./observation.ts";
 import type {
@@ -27,6 +28,8 @@ export interface AuthoredHybridExtractionOptions
   extends AuthoredHybridChromeOptions {
   /** Base used to resolve relative HTML assets. Persist and reuse for backplate. */
   baseUrl?: string;
+  /** Optional editable-layout measurement mode; omitted/default remains source fidelity. */
+  fontLayoutMode?: AuthoredHybridFontLayoutMode;
 }
 
 const calibratedWindowSizes = new Map<
@@ -85,7 +88,10 @@ export async function extractAuthoredSlideDom(
   options: AuthoredHybridExtractionOptions = {}
 ): Promise<AuthoredHybridSlideV1> {
   const baseUrl = normalizeAuthoredHybridBaseUrl(options.baseUrl);
-  const instrumented = instrumentAuthoredHtml(html, { baseUrl });
+  const instrumented = instrumentAuthoredHtml(html, {
+    baseUrl,
+    fontLayoutMode: options.fontLayoutMode,
+  });
   const { observation } = await captureWithFixedViewport(
     instrumented,
     false,
