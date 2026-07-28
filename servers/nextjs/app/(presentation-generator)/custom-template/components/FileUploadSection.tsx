@@ -1,5 +1,6 @@
 import React from "react";
 import { UploadIcon, ChevronRight, Plus, FileText, X } from "lucide-react";
+import { useUploadLimits } from "@/lib/use-upload-limits";
 import { ProcessedSlide } from "../types";
 
 interface FileUploadSectionProps {
@@ -23,6 +24,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   slides,
   completedSlides,
 }) => {
+  const uploadLimits = useUploadLimits();
   const isProcessing = isProcessingPptx || slides.some((s) => s.processing);
 
   const handleCheckFonts = () => {
@@ -190,7 +192,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8.5" cy="8.17041" r="4.5" fill="#EBE9FE" />
             </svg>
-            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">최대 100MB</p>
+            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">최대 {uploadLimits.document.mb}MB</p>
           </li>
           <li className="flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">

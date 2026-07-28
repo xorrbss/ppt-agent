@@ -1,7 +1,9 @@
 import { useState, useCallback } from "react";
 import { notify } from "@/components/ui/sonner";
+import { useUploadLimits } from "@/lib/use-upload-limits";
 
 export const useFileUpload = () => {
+  const uploadLimits = useUploadLimits();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const handleFileSelect = useCallback(
@@ -17,16 +19,17 @@ export const useFileUpload = () => {
         return;
       }
 
-      // Validate file size (100MB limit)
-      const maxSize = 100 * 1024 * 1024; // 100MB
-      if (file.size > maxSize) {
-        notify.error("파일이 너무 큽니다", "파일 크기는 100MB 미만이어야 합니다.");
+      if (file.size > uploadLimits.document.bytes) {
+        notify.error(
+          "파일이 너무 큽니다",
+          `파일 크기는 ${uploadLimits.document.mb}MB 이하여야 합니다.`
+        );
         return;
       }
 
       setSelectedFile(file);
     },
-    []
+    [uploadLimits.document.bytes, uploadLimits.document.mb]
   );
 
   const removeFile = useCallback(() => {
@@ -38,4 +41,4 @@ export const useFileUpload = () => {
     handleFileSelect,
     removeFile,
   };
-}; 
+};
