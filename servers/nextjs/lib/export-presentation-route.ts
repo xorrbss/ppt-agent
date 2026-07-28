@@ -18,6 +18,7 @@ export interface ExportPresentationRouteBody {
   title?: unknown;
   pptxMode?: unknown;
   fontEmbedding?: unknown;
+  textFidelityMode?: unknown;
 }
 
 export interface ExportPresentationRouteDependencies<
@@ -226,11 +227,33 @@ export async function executeExportPresentationRouteRequest<
   }
   const fontEmbedding = body.fontEmbedding === true;
   if (
+    body.textFidelityMode !== undefined &&
+    body.textFidelityMode !== "powerpoint-calibrated"
+  ) {
+    throw new ExportPresentationRequestError(
+      "Invalid text fidelity mode",
+      400
+    );
+  }
+  const textFidelityMode =
+    body.textFidelityMode === "powerpoint-calibrated"
+      ? body.textFidelityMode
+      : undefined;
+  if (
     fontEmbedding &&
     (body.format !== "pptx" || resolvedPptxMode.value !== "hybrid")
   ) {
     throw new ExportPresentationRequestError(
       "Font embedding requires hybrid PPTX export",
+      400
+    );
+  }
+  if (
+    textFidelityMode &&
+    (body.format !== "pptx" || resolvedPptxMode.value !== "hybrid")
+  ) {
+    throw new ExportPresentationRequestError(
+      "Calibrated text fidelity requires hybrid PPTX export",
       400
     );
   }
@@ -248,6 +271,7 @@ export async function executeExportPresentationRouteRequest<
       cookieHeader,
       pptxMode: resolvedPptxMode.value,
       fontEmbedding,
+      textFidelityMode,
     },
     dependencies
   );

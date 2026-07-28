@@ -83,12 +83,14 @@ export async function POST(req: NextRequest) {
             title,
             cookieHeader,
             fontEmbedding,
+            textFidelityMode,
           }) =>
             runAuthoredHybridPresentationExport({
               presentationId,
               title,
               cookieHeader,
               fontEmbedding,
+              textFidelityMode,
             }),
         },
       },

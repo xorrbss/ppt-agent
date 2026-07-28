@@ -219,6 +219,83 @@ test("route request rejects font embedding outside hybrid PPTX", async () => {
   }
 });
 
+test("route request forwards calibrated text fidelity only to authored hybrid", async () => {
+  let receivedTextFidelityMode:
+    | PresentationExportExecutionParams["textFidelityMode"];
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.hybrid = async (
+    params: PresentationExportExecutionParams
+  ) => {
+    receivedTextFidelityMode = params.textFidelityMode;
+    return { path: "hybrid-calibrated.pptx" };
+  };
+
+  const result = await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "hybrid",
+      textFidelityMode: "powerpoint-calibrated",
+    },
+    "session=test",
+    dependencies
+  );
+
+  assert.equal(result.path, "hybrid-calibrated.pptx");
+  assert.equal(receivedTextFidelityMode, "powerpoint-calibrated");
+});
+
+test("route request validates calibrated text fidelity mode and scope", async () => {
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+
+  for (const textFidelityMode of ["default", true, null, {}, []]) {
+    const error = await rejectedRequestError(
+      executeExportPresentationRouteRequest(
+        {
+          format: "pptx",
+          id: "persisted-id",
+          pptxMode: "hybrid",
+          textFidelityMode,
+        },
+        "session=test",
+        dependencies
+      )
+    );
+    assert.equal(error.status, 400);
+    assert.equal(error.message, "Invalid text fidelity mode");
+  }
+
+  for (const request of [
+    { format: "pptx", pptxMode: "fidelity" },
+    { format: "pdf", pptxMode: "hybrid" },
+  ] as const) {
+    const error = await rejectedRequestError(
+      executeExportPresentationRouteRequest(
+        {
+          ...request,
+          id: "persisted-id",
+          textFidelityMode: "powerpoint-calibrated",
+        },
+        "session=test",
+        dependencies
+      )
+    );
+    assert.equal(error.status, 400);
+    assert.equal(
+      error.message,
+      "Calibrated text fidelity requires hybrid PPTX export"
+    );
+  }
+});
+
 test("persisted identity cannot redirect an embedding request to general export", async () => {
   const { calls, dependencies } = boundarySpies({
     version: "v2-standard",

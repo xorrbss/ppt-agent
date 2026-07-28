@@ -104,3 +104,27 @@ keeps OOXML font embedding default-off and exposes the explicit opt-in request,
 application result, embedded-file count, and failure reason separately. A
 request must never be reported as applied unless the exported PPTX actually
 contains embedded font files.
+
+## PowerPoint Desktop calibration and A/B verification
+
+`scripts/powerpoint-desktop-calibration.ps1` is an operator-run Windows probe
+for the final renderer. It copies its input before opening it, opens A, asks
+PowerPoint Desktop for a B `SaveAs`, then reopens B. It writes a JSON report for
+every outcome and does not claim success when COM or a reopen fails.
+
+Run it with a new artifact directory outside `app_data`:
+
+```powershell
+./scripts/powerpoint-desktop-calibration.ps1 `
+  -InputPptx C:\exports\deck.pptx `
+  -OutputDirectory C:\qa-artifacts
+```
+
+The tool fails closed when `POWERPNT.EXE` is already running; it neither
+attaches to nor closes a user's PowerPoint session. When safely isolated, it
+also records 128 Noto Sans KR probes across Regular/Bold, font-size, single or
+multiline, left or centered, and fixed or content-width buckets. Raw COM text
+bounds are written in points. `buildPowerPointCalibrationProbes` and
+`derivePowerPointCalibrationProfiles` expose the same keyed matrix to the
+native exporter; consumers must preserve all dimensions rather than using one
+global font correction.

@@ -24,7 +24,8 @@ import { createPresentationExportQuality } from "../lib/presentation-export-qual
 function usage() {
   throw new Error(
     "Usage: qa-authored-hybrid-export.mjs <python> <db> <presentation-id> " +
-      "<source.pptx> <output.pptx> <qa-directory> [plain|embedded]"
+      "<source.pptx> <output.pptx> <qa-directory> [plain|embedded] " +
+      "[default|powerpoint-calibrated]"
   );
 }
 
@@ -81,7 +82,11 @@ print(json.dumps(sorted(found, key=lambda item: item["index"]), ensure_ascii=Fal
   );
 }
 
-function preSerializePreparedElements(elements, embeddedTypefaceFamilies = []) {
+function preSerializePreparedElements(
+  elements,
+  embeddedTypefaceFamilies = [],
+  textFidelityMode
+) {
   const serializable = [];
   for (const element of elements) {
     try {
@@ -89,7 +94,7 @@ function preSerializePreparedElements(elements, embeddedTypefaceFamilies = []) {
         element,
         serializable.length + 3,
         element.kind === "image" ? "rId999" : undefined,
-        { embeddedTypefaceFamilies }
+        { embeddedTypefaceFamilies, textFidelityMode }
       );
       serializable.push(element);
     } catch {
@@ -153,7 +158,8 @@ async function prepareSlide(
   html,
   slideNumber,
   chromeExecutable,
-  embeddedTypefaceFamilies = []
+  embeddedTypefaceFamilies = [],
+  textFidelityMode
 ) {
   const fontCollection = await collectGoogleFontsForAuthoredHtml(html);
   const fontRendering = {
@@ -194,7 +200,8 @@ async function prepareSlide(
       includeRasterText: true,
       includeRasterShapes: true,
     }),
-    embeddedTypefaceFamilies
+    embeddedTypefaceFamilies,
+    textFidelityMode
   );
   let selected = selectLayerSafeNativeElements(
     contract.elements,
@@ -316,6 +323,7 @@ const [
   outputPath,
   qaDirectory,
   embeddingMode = "plain",
+  textFidelityMode = "default",
 ] = process.argv.slice(2);
 if (
   !python ||
@@ -328,6 +336,11 @@ if (
   usage();
 }
 if (!["plain", "embedded"].includes(embeddingMode)) usage();
+if (!["default", "powerpoint-calibrated"].includes(textFidelityMode)) usage();
+const resolvedTextFidelityMode =
+  textFidelityMode === "powerpoint-calibrated"
+    ? textFidelityMode
+    : undefined;
 
 const slides = await readSlides(python, database, presentationId);
 if (slides.length !== 20) {
@@ -448,7 +461,8 @@ const outcomes = await mapConcurrent(slides, 2, async (slide, index) => {
       slide.html,
       slideNumber,
       chromeExecutable,
-      embeddedTypefaceFamilies
+      embeddedTypefaceFamilies,
+      resolvedTextFidelityMode
     );
   } catch (error) {
     process.stderr.write(
@@ -483,6 +497,7 @@ const quality = createPresentationExportQuality(
 );
 const pptxBytes = assembleAuthoredHybridPptx(basePptx, layers, {
   embeddedTypefaceFamilies,
+  textFidelityMode: resolvedTextFidelityMode,
 });
 await fs.writeFile(outputPath, pptxBytes, { flag: "wx", mode: 0o644 });
 await fs.writeFile(
@@ -507,6 +522,7 @@ await fs.writeFile(
       database: path.resolve(database),
       chromeExecutable,
       embeddingMode,
+      textFidelityMode,
       fontEmbeddingStatus,
       slideCount: slides.length,
       quality,

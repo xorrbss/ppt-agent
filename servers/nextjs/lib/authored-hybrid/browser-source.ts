@@ -1529,6 +1529,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       alignItems: String(style.alignItems || "normal"),
       justifyContent: String(style.justifyContent || "normal"),
       textAlignSource: computedTextAlignSource(element, style),
+      widthMode: display === "inline" || display === "inline-flex"
+        ? "content"
+        : "fixed",
       lineCount: lineCount,
       singleLine: lineCount === 1,
       // The root element's CSS margins have already participated in layout
