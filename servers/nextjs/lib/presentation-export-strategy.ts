@@ -27,6 +27,8 @@ export interface PresentationExportExecutionParams {
   pptxMode?: PptxMode;
   /** Explicit opt-in. Omitted and false are both non-embedding requests. */
   fontEmbedding?: boolean;
+  /** Additive native-text calibration; omitted preserves the editable default. */
+  textFidelityMode?: "powerpoint-calibrated";
   expectedPresentationSha256?: string;
 }
 
@@ -171,6 +173,16 @@ export async function executePersistedPresentationExport<
     )
   ) {
     throw new Error("font_embedding_requires_authored_hybrid_export");
+  }
+  if (
+    params.textFidelityMode === "powerpoint-calibrated" &&
+    !(
+      params.format === "pptx" &&
+      params.pptxMode === "hybrid" &&
+      strategy === "authored-hybrid"
+    )
+  ) {
+    throw new Error("text_fidelity_requires_authored_hybrid_export");
   }
   if (
     params.format === "pptx" &&

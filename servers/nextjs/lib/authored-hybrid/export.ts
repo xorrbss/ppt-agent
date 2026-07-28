@@ -21,6 +21,7 @@ import {
   type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
 } from "./native-plan.ts";
+import type { AuthoredHybridTextFidelityMode } from "./text-fidelity.ts";
 import {
   assembleAuthoredHybridPptx,
   type AuthoredHybridSlideLayer,
@@ -63,7 +64,7 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides simply keep their fidelity (image) render.
 const HYBRID_DECK_BUDGET_MS = 8 * 60_000;
 const HYBRID_CACHE_VERSION =
-  "authored-hybrid-v4-powerpoint-font-layout";
+  "authored-hybrid-v5-powerpoint-calibrated-text";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
@@ -99,6 +100,7 @@ interface AuthoredHybridExportParams {
   title?: string;
   cookieHeader?: string;
   fontEmbedding?: boolean;
+  textFidelityMode?: AuthoredHybridTextFidelityMode;
 }
 
 interface FetchedPresentation {
@@ -242,7 +244,8 @@ async function prepareSlideLayer(
   html: string,
   slideNumber: number,
   chromeExecutable: string,
-  embeddedTypefaceFamilies: readonly string[] = []
+  embeddedTypefaceFamilies: readonly string[] = [],
+  textFidelityMode?: AuthoredHybridTextFidelityMode
 ): Promise<PreparedSlideOutcome> {
   // Network access is permitted only in this validated server-side collector.
   // The resulting document is self-contained before isolated Chrome receives it.
@@ -286,7 +289,7 @@ async function prepareSlideLayer(
       includeRasterText: true,
       includeRasterShapes: true,
     }),
-    { embeddedTypefaceFamilies }
+    { embeddedTypefaceFamilies, textFidelityMode }
   );
   let selected = selectLayerSafeNativeElements(
     contract.elements,
@@ -614,12 +617,14 @@ async function writeHybridPptx(
   fidelityPath: string,
   layers: readonly AuthoredHybridSlideLayer[],
   basePptx?: Buffer,
-  embeddedTypefaceFamilies: readonly string[] = []
+  embeddedTypefaceFamilies: readonly string[] = [],
+  textFidelityMode?: AuthoredHybridTextFidelityMode
 ): Promise<string> {
   const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
   const fidelityBytes = basePptx ?? (await fs.readFile(safeFidelityPath));
   const hybridBytes = assembleAuthoredHybridPptx(fidelityBytes, layers, {
     embeddedTypefaceFamilies,
+    textFidelityMode,
   });
   const parsed = path.parse(safeFidelityPath);
   const suffix = randomUUID();
@@ -749,7 +754,8 @@ async function runUncachedAuthoredHybridExport(
             html,
             slideNumber,
             chromeExecutable,
-            fontEmbedding.embeddedTypefaceFamilies
+            fontEmbedding.embeddedTypefaceFamilies,
+            params.textFidelityMode
           );
         } catch (error) {
           console.warn(
@@ -800,7 +806,8 @@ async function runUncachedAuthoredHybridExport(
       fidelity.path,
       layers,
       fontEmbedding.pptx,
-      fontEmbedding.embeddedTypefaceFamilies
+      fontEmbedding.embeddedTypefaceFamilies,
+      params.textFidelityMode
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
     const result = await attachQualityReport({ path: hybridPath }, quality);
@@ -898,7 +905,8 @@ export async function runAuthoredHybridPresentationExport(
   const cacheKey = createHybridCacheKey(
     params.presentationId,
     fetched.sourceSha256,
-    fontEmbeddingPlan.cacheDiscriminator
+    fontEmbeddingPlan.cacheDiscriminator,
+    params.textFidelityMode
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
@@ -933,7 +941,8 @@ export async function runAuthoredHybridPresentationExport(
 function createHybridCacheKey(
   presentationId: string,
   sourceSha256: string,
-  fontEmbeddingDiscriminator: string
+  fontEmbeddingDiscriminator: string,
+  textFidelityMode?: AuthoredHybridTextFidelityMode
 ): string {
   return createHash("sha256")
     .update(HYBRID_CACHE_VERSION)
@@ -943,6 +952,8 @@ function createHybridCacheKey(
     .update(sourceSha256)
     .update("\0")
     .update(fontEmbeddingDiscriminator)
+    .update("\0")
+    .update(textFidelityMode ?? "editable-default")
     .digest("hex");
 }
 
