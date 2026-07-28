@@ -147,6 +147,8 @@ export interface AuthoredHybridTextLayout {
   justifyContent: string;
   /** Whether the computed text-align came from this box, an ancestor, or initial CSS. */
   textAlignSource: "self" | "inherited" | "default";
+  /** Whether computed layout sized the text box explicitly or to its contents. */
+  widthMode?: "fixed" | "content";
   lineCount: number;
   singleLine: boolean;
   paragraphSpacingPx: {

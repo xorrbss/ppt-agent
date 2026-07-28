@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import sharp from "sharp";
+import "./text-fidelity.test.mjs";
 
 import {
   preparedNativeElementNonVisualIdCount,
@@ -775,6 +776,65 @@ test("compact authored captions use proportional spacing for active font metrics
 
   assert.match(xml, /<a:lnSpc><a:spcPct val="140000"\/><\/a:lnSpc>/);
   assert.doesNotMatch(xml, /<a:lnSpc><a:spcPts/);
+});
+
+test("PowerPoint-calibrated mode applies semantic title correction without changing editable default", async () => {
+  const titleStyle = style({
+    fontSizePt: 32,
+    lineHeight: { points: 38, multiple: 1.1875, source: "computed" },
+    horizontalAlignment: "left",
+    verticalAlignment: "top",
+  });
+  const element = {
+    ...base("calibrated-title", 0, 0, bounds(100, 80, 500, 100)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "title",
+      plainText: "첫째 줄\n둘째 줄",
+      paragraphs: ["첫째 줄", "둘째 줄"],
+      style: titleStyle,
+      runs: [
+        {
+          text: "첫째 줄\n둘째 줄",
+          bounds: bounds(100, 80, 430, 72),
+          fragments: [bounds(100, 82, 430, 72)],
+          style: titleStyle,
+          breakKind: "line",
+        },
+      ],
+      layout: {
+        boxBounds: bounds(100, 80, 500, 100),
+        contentBounds: bounds(100, 80, 500, 100),
+        paintedTextBounds: bounds(100, 82, 430, 72),
+        paddingPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        borderPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        marginPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        rowGapPx: 0,
+        columnGapPx: 0,
+        display: "block",
+        flexDirection: null,
+        alignItems: "normal",
+        justifyContent: "normal",
+        textAlignSource: "self",
+        widthMode: "fixed",
+        lineCount: 2,
+        singleLine: false,
+        paragraphSpacingPx: { before: 0, after: 0 },
+      },
+    },
+  };
+  const [prepared] = await prepareNativeElements([element]);
+  const editableXml = serializePreparedNativeElement(prepared, 3);
+  const calibratedXml = serializePreparedNativeElement(prepared, 3, undefined, {
+    textFidelityMode: "powerpoint-calibrated",
+  });
+
+  assert.match(editableXml, /<a:spcPct val="118750"\/>/);
+  assert.match(calibratedXml, /<a:spcPct val="116406"\/>/);
+  assert.notEqual(calibratedXml, editableXml);
+  assert.doesNotMatch(calibratedXml, /<p:pic>/);
+  assert.match(calibratedXml, /<a:t xml:space="preserve">첫째 줄<\/a:t>/);
+  assert.match(calibratedXml, /<a:t xml:space="preserve">둘째 줄<\/a:t>/);
 });
 
 test("editable mode promotes raster-classified text above retained artwork", async () => {

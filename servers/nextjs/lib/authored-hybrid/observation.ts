@@ -32,6 +32,7 @@ export interface BrowserTextLayoutObservation {
   alignItems: string;
   justifyContent: string;
   textAlignSource: "self" | "inherited" | "default";
+  widthMode?: "fixed" | "content";
   lineCount: number;
   singleLine: boolean;
   paragraphSpacingPx: {

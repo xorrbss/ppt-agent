@@ -176,6 +176,9 @@ function assertTextLayout(value: unknown, label: string): void {
   invariant(typeof layout.alignItems === "string", `${label}.alignItems is invalid`);
   invariant(typeof layout.justifyContent === "string", `${label}.justifyContent is invalid`);
   oneOf(layout.textAlignSource, ["self", "inherited", "default"], `${label}.textAlignSource`);
+  if (layout.widthMode !== undefined) {
+    oneOf(layout.widthMode, ["fixed", "content"], `${label}.widthMode`);
+  }
   invariant(Number.isInteger(layout.lineCount) && (layout.lineCount as number) >= 0, `${label}.lineCount is invalid`);
   invariant(typeof layout.singleLine === "boolean", `${label}.singleLine is invalid`);
   invariant(
@@ -322,6 +325,7 @@ function convertTextPayload(
             alignItems: layout.alignItems,
             justifyContent: layout.justifyContent,
             textAlignSource: layout.textAlignSource,
+            ...(layout.widthMode ? { widthMode: layout.widthMode } : {}),
             lineCount: layout.lineCount,
             singleLine: layout.singleLine,
             paragraphSpacingPx: layout.paragraphSpacingPx,

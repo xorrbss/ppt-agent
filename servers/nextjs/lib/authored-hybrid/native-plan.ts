@@ -15,6 +15,12 @@ import type {
   AuthoredHybridTextStyle,
 } from "./schema.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
+import {
+  applyNativeTextBoundsTransform,
+  selectNativeTextFidelity,
+  type AuthoredHybridTextFidelityMode,
+  type NativeTextTransform,
+} from "./text-fidelity.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
 export const MIN_EDITABLE_FONT_SIZE_PT = 9;
@@ -69,6 +75,11 @@ export interface LayerSelectionOptions {
  */
 export interface PowerPointTypefaceSerializationOptions {
   embeddedTypefaceFamilies?: readonly string[];
+  /**
+   * Editable keeps the established native mapping. The calibrated mode applies
+   * bounded, semantic-profile corrections without rasterizing text.
+   */
+  textFidelityMode?: AuthoredHybridTextFidelityMode;
 }
 
 function isEditableRasterText(
@@ -865,7 +876,8 @@ function shouldUseProportionalLineSpacing(
 }
 
 function lineSpacingXml(
-  element: AuthoredHybridEditableTextElement
+  element: AuthoredHybridEditableTextElement,
+  lineSpacingDeltaPt = 0
 ): string {
   if (element.text.style.lineHeight.source !== "computed") return "";
 
@@ -878,7 +890,7 @@ function lineSpacingXml(
 
   if (hasMixedFontSizes || !shouldUseProportionalLineSpacing(element, fontSizes)) {
     return `<a:lnSpc><a:spcPts val="${textSpacingPointValue(
-      element.text.style.lineHeight.points
+      element.text.style.lineHeight.points + lineSpacingDeltaPt
     )}"/></a:lnSpc>`;
   }
 
@@ -886,7 +898,12 @@ function lineSpacingXml(
     0,
     Math.min(
       20_116_800,
-      Math.round(element.text.style.lineHeight.multiple * 100_000)
+      Math.round(
+        (
+          element.text.style.lineHeight.multiple +
+          lineSpacingDeltaPt / Math.max(MIN_EDITABLE_FONT_SIZE_PT, fontSizes[0] ?? 1)
+        ) * 100_000
+      )
     )
   );
   return `<a:lnSpc><a:spcPct val="${percentage}"/></a:lnSpc>`;
@@ -894,7 +911,8 @@ function lineSpacingXml(
 
 function paragraphsXml(
   element: AuthoredHybridEditableTextElement,
-  options: PowerPointTypefaceSerializationOptions
+  options: PowerPointTypefaceSerializationOptions,
+  transform?: NativeTextTransform
 ): string {
   const alignment = {
     left: "l",
@@ -909,7 +927,7 @@ function paragraphsXml(
   // authored CSS multiple so PowerPoint can apply the active font's native
   // metrics. Mixed-size text keeps exact point spacing because proportional
   // spacing is recalculated from the tallest run and drifts from the browser.
-  const lineSpacing = lineSpacingXml(element);
+  const lineSpacing = lineSpacingXml(element, transform?.lineSpacingPt ?? 0);
   const paragraphs = powerPointTextParagraphs(element);
   const paragraphSpacing = element.text.layout?.paragraphSpacingPx ?? {
     before: 0,
@@ -1486,24 +1504,44 @@ export function serializePreparedNativeElement(
     const wrap = powerPointWrapMode(element);
     const container = element.text.containerShape;
     const authoredBoxBounds = element.text.layout?.boxBounds.px;
-    const shapeBounds = container?.bounds.px ??
+    const baseShapeBounds = container?.bounds.px ??
       powerPointSafeTextBounds(
         element,
         authoredBoxBounds ?? element.bounds.px
       );
+    const fidelity = options.textFidelityMode === "powerpoint-calibrated"
+      ? selectNativeTextFidelity(element.text, baseShapeBounds)
+      : undefined;
+    const transform = fidelity?.transform;
+    // A text-owned container is also editable geometry. Never resize or move
+    // that paint merely to calibrate its text; use inset/spacing corrections.
+    const shapeBounds = transform && !container
+      ? applyNativeTextBoundsTransform(
+          baseShapeBounds,
+          element.text.style.horizontalAlignment,
+          transform
+        )
+      : baseShapeBounds;
     const capturedInsets = capturedTextInsets(element, shapeBounds);
-    const insets = powerPointSafeTextInsets(
+    const safeInsets = powerPointSafeTextInsets(
       element,
       shapeBounds,
       capturedInsets
     );
+    const insetDeltaPx = (transform?.insetPt ?? 0) / 0.75;
+    const insets = {
+      left: Math.max(0, safeInsets.left + insetDeltaPx),
+      top: Math.max(0, safeInsets.top + insetDeltaPx),
+      right: Math.max(0, safeInsets.right + insetDeltaPx),
+      bottom: Math.max(0, safeInsets.bottom + insetDeltaPx),
+    };
     const geometry = container
       ? shapeGeometryXml(container.shape, shapeBounds)
       : '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>';
     const paint = container
       ? shapePaintXml(container.shape, element.opacity)
       : "<a:noFill/><a:ln><a:noFill/></a:ln>";
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="clip" vertOverflow="clip" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml(element)}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="clip" vertOverflow="clip" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml(element)}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options, transform)}</p:txBody></p:sp>`;
   }
   if (item.kind === "shape") {
     const element = item.source;
