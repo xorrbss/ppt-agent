@@ -32,10 +32,6 @@ function isText(element) {
   return element?.kind === "text" || element?.classification?.kind === "text";
 }
 
-function isNativeText(element) {
-  return isText(element) && (element.mode ?? element.classification?.mode) === "native";
-}
-
 function hasClipping(element) {
   const reasons = element?.reasons ?? element?.classification?.reasons ?? [];
   const layout = textLayout(element);
@@ -60,14 +56,6 @@ function mapElements(elementMap) {
     }
   }
   return values;
-}
-
-function slideNumberSet(...documents) {
-  const numbers = new Set();
-  for (const document of documents) {
-    for (const slide of asSlides(document)) numbers.add(slide.slideNumber);
-  }
-  return [...numbers].filter(Number.isInteger).sort((left, right) => left - right);
 }
 
 export function compareElementMapSemantics(
