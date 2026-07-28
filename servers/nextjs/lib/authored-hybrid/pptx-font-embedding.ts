@@ -25,6 +25,11 @@ export interface PowerPointFontFaceInput {
 export interface PowerPointTypefaceInput {
   readonly typeface: string;
   readonly pitchFamily?: number;
+  /**
+   * Windows LOGFONT charset byte. Values 128-255 are accepted for callers
+   * that use the unsigned Win32 constants and are serialized as the
+   * equivalent signed OOXML byte (for example, HANGEUL_CHARSET 129 -> -127).
+   */
   readonly charset?: number;
   readonly faces: Readonly<
     Partial<Record<PowerPointEmbeddedFontFace, PowerPointFontFaceInput>>
@@ -95,6 +100,22 @@ function xmlEscapeAttribute(value: string): string {
     .replaceAll('"', "&quot;")
     .replaceAll("\r", "&#xD;")
     .replaceAll("\n", "&#xA;");
+}
+
+function normalizePowerPointCharset(value: number): {
+  readonly eot: number;
+  readonly presentation: number;
+} {
+  if (!Number.isInteger(value) || value < -128 || value > 255) {
+    throw new Error("Embedded PowerPoint font charset is invalid.");
+  }
+  const eot = value < 0 ? value + 256 : value;
+  // CT_TextFont.charset is an XML Schema byte, not an unsigned Win32 BYTE.
+  // PowerPoint consequently writes HANGEUL_CHARSET 129 as -127.
+  return {
+    eot,
+    presentation: eot > 127 ? eot - 256 : eot,
+  };
 }
 
 function readUInt16BE(bytes: Buffer, offset: number, label: string): number {
@@ -264,6 +285,7 @@ export function createPowerPointFontData(
 ): { readonly data: Buffer; readonly metadata: SfntMetadata } {
   const source = Buffer.from(sfnt);
   const metadata = parseSfntMetadata(source);
+  const charset = normalizePowerPointCharset(options.charset ?? 1);
   // Restricted-license and bitmap-only fonts cannot be embedded. Preview/print
   // embedding is intentionally rejected because this exporter promises an
   // editable presentation. Installable (0) and editable (0x8) are accepted.
@@ -291,7 +313,7 @@ export function createPowerPointFontData(
   fixed.writeUInt32LE(0x00010000, 8);
   fixed.writeUInt32LE(flags, 12);
   metadata.panose.copy(fixed, 16);
-  fixed.writeUInt8(options.charset ?? 1, 26);
+  fixed.writeUInt8(charset.eot, 26);
   fixed.writeUInt8(metadata.italic ? 1 : 0, 27);
   fixed.writeUInt32LE(metadata.weight, 28);
   fixed.writeUInt16LE(metadata.fsType, 32);
@@ -396,6 +418,24 @@ function ensureRelationshipNamespace(xml: string): string {
   );
 }
 
+function ensureEmbedTrueTypeFonts(xml: string): string {
+  const opening = xml.match(/<p:presentation\b[^>]*>/i)?.[0];
+  if (!opening) throw new Error("PPTX presentation.xml is malformed.");
+  if (/\bembedTrueTypeFonts\s*=/i.test(opening)) {
+    return xml.replace(
+      opening,
+      opening.replace(
+        /\bembedTrueTypeFonts\s*=\s*(["'])(?:true|false|0|1)\1/i,
+        'embedTrueTypeFonts="1"'
+      )
+    );
+  }
+  return xml.replace(
+    opening,
+    opening.replace(/>$/, ' embedTrueTypeFonts="1">')
+  );
+}
+
 function insertEmbeddedFontList(xml: string, list: string): string {
   if (/<p:embeddedFontLst\b/i.test(xml)) {
     throw new Error("Replacing an existing PowerPoint embedded-font list is unsupported.");
@@ -488,16 +528,13 @@ export function embedPowerPointFonts(
     }
     seenTypefaces.add(typefaceKey);
     const pitchFamily = requested.pitchFamily ?? 0;
-    const charset = requested.charset ?? 1;
+    const charset = normalizePowerPointCharset(requested.charset ?? 1);
     if (
       !Number.isInteger(pitchFamily) ||
       pitchFamily < 0 ||
-      pitchFamily > 255 ||
-      !Number.isInteger(charset) ||
-      charset < 0 ||
-      charset > 255
+      pitchFamily > 255
     ) {
-      throw new Error("Embedded PowerPoint font pitchFamily or charset is invalid.");
+      throw new Error("Embedded PowerPoint font pitchFamily is invalid.");
     }
     const faceResults: EmbeddedPowerPointFontFace[] = [];
     const faceDeclarations: string[] = [];
@@ -506,7 +543,7 @@ export function embedPowerPointFonts(
       if (!input) continue;
       const wrapped = createPowerPointFontData(input.data, {
         subset: input.subset,
-        charset,
+        charset: charset.eot,
       });
       const expectedBold = face === "bold" || face === "boldItalic";
       const expectedItalic = face === "italic" || face === "boldItalic";
@@ -547,12 +584,18 @@ export function embedPowerPointFonts(
     }
     declarations.push(
       `<p:embeddedFont><p:font typeface="${xmlEscapeAttribute(typeface)}" ` +
-        `pitchFamily="${pitchFamily}" charset="${charset}"/>${faceDeclarations.join("")}` +
+        `pitchFamily="${pitchFamily}" charset="${charset.presentation}"/>${faceDeclarations.join("")}` +
         `</p:embeddedFont>`
     );
-    embeddedFonts.push({ typeface, pitchFamily, charset, faces: faceResults });
+    embeddedFonts.push({
+      typeface,
+      pitchFamily,
+      charset: charset.presentation,
+      faces: faceResults,
+    });
   }
 
+  presentation = ensureEmbedTrueTypeFonts(presentation);
   presentation = insertEmbeddedFontList(
     presentation,
     `<p:embeddedFontLst>${declarations.join("")}</p:embeddedFontLst>`
