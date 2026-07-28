@@ -780,6 +780,8 @@ test("compact authored captions use proportional spacing for active font metrics
 
 test("PowerPoint-calibrated mode applies semantic title correction without changing editable default", async () => {
   const titleStyle = style({
+    fontFamily: '"Noto Sans KR", sans-serif',
+    fontFamilies: ["Noto Sans KR", "sans-serif"],
     fontSizePt: 32,
     lineHeight: { points: 38, multiple: 1.1875, source: "computed" },
     horizontalAlignment: "left",
@@ -825,11 +827,17 @@ test("PowerPoint-calibrated mode applies semantic title correction without chang
   };
   const [prepared] = await prepareNativeElements([element]);
   const editableXml = serializePreparedNativeElement(prepared, 3);
+  const calibratedWithoutEmbeddedTypefaceXml =
+    serializePreparedNativeElement(prepared, 3, undefined, {
+      textFidelityMode: "powerpoint-calibrated",
+    });
   const calibratedXml = serializePreparedNativeElement(prepared, 3, undefined, {
     textFidelityMode: "powerpoint-calibrated",
+    embeddedTypefaceFamilies: ["Noto Sans KR"],
   });
 
   assert.match(editableXml, /<a:spcPct val="118750"\/>/);
+  assert.equal(calibratedWithoutEmbeddedTypefaceXml, editableXml);
   assert.match(calibratedXml, /<a:spcPct val="116406"\/>/);
   assert.notEqual(calibratedXml, editableXml);
   assert.doesNotMatch(calibratedXml, /<p:pic>/);

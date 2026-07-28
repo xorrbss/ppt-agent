@@ -82,6 +82,20 @@ export interface PowerPointTypefaceSerializationOptions {
   textFidelityMode?: AuthoredHybridTextFidelityMode;
 }
 
+function hasEmbeddedAuthoredTypeface(
+  style: AuthoredHybridTextStyle,
+  embeddedTypefaceFamilies: readonly string[] | undefined
+): boolean {
+  const embedded = new Set(
+    (embeddedTypefaceFamilies ?? []).map((family) =>
+      family.trim().replace(/^['"]|['"]$/g, "").toLowerCase()
+    )
+  );
+  return style.fontFamilies.some((family) =>
+    embedded.has(family.trim().replace(/^['"]|['"]$/g, "").toLowerCase())
+  );
+}
+
 function isEditableRasterText(
   element: AuthoredHybridElement
 ): element is AuthoredHybridRasterElement & { text: AuthoredHybridTextPayload } {
@@ -1509,7 +1523,17 @@ export function serializePreparedNativeElement(
         element,
         authoredBoxBounds ?? element.bounds.px
       );
-    const fidelity = options.textFidelityMode === "powerpoint-calibrated"
+    // The current calibration corpus is measured against the authored Noto
+    // faces in PowerPoint Desktop. If those faces were not embedded, the
+    // serializer deliberately substitutes a platform-safe typeface whose
+    // metrics require a separate calibration. Preserve the editable default in
+    // that case instead of applying Noto-specific geometry to a substitute.
+    const fidelity =
+      options.textFidelityMode === "powerpoint-calibrated" &&
+      hasEmbeddedAuthoredTypeface(
+        element.text.style,
+        options.embeddedTypefaceFamilies
+      )
       ? selectNativeTextFidelity(element.text, baseShapeBounds)
       : undefined;
     const transform = fidelity?.transform;
