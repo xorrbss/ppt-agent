@@ -1,8 +1,14 @@
-const MAX_AUTHORED_HTML_BYTES = 2 * 1024 * 1024;
+// Collected webfonts are base64-inlined before the document reaches Chrome.
+// The collector caps decoded font data at 24 MiB; 40 MiB covers base64
+// expansion while preserving a hard upper bound on temporary HTML allocation.
+const MAX_AUTHORED_HTML_BYTES = 40 * 1024 * 1024;
 const MAX_DATA_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_DATA_FONT_BYTES = 8 * 1024 * 1024;
 
 const DATA_IMAGE_PATTERN =
   /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]*={0,2})$/i;
+const DATA_FONT_PATTERN =
+  /^data:font\/(woff2|woff|otf|ttf);base64,([A-Za-z0-9+/]*={0,2})$/i;
 
 export interface HybridHtmlPreflightResult {
   ok: boolean;
@@ -122,15 +128,18 @@ export function preflightAuthoredHtmlForHybrid(
     return { ok: false, reason: "active-or-external-html" };
   }
 
-  // Every CSS url() must be an embedded safe raster. Static SVG markup itself
-  // remains eligible for the backplate, but SVG data URLs are intentionally not.
+  // Every CSS url() must be an embedded safe raster or a magic-validated font
+  // collected by the server. Static SVG markup itself remains eligible for the
+  // backplate, but SVG data URLs are intentionally not.
   const cssUrlPattern = /url\(\s*(["']?)(.*?)\1\s*\)/gis;
   for (const match of html.matchAll(cssUrlPattern)) {
     const value = match[2].trim();
     // Same-document SVG paint servers and markers (for example
     // marker-end:url(#arrow)) do not load external content.
     if (/^#[A-Za-z_][A-Za-z0-9_.:-]*$/.test(value)) continue;
-    const result = validateHybridDataImageUrl(value);
+    const result = value.toLowerCase().startsWith("data:font/")
+      ? validateHybridDataFontUrl(value)
+      : validateHybridDataImageUrl(value);
     if (!result.ok) return { ok: false, reason: "unsafe-css-url" };
   }
 
@@ -185,4 +194,46 @@ export function validateHybridDataImageUrl(
   return magicMatches
     ? { ok: true, mime, bytes }
     : { ok: false, reason: "image-mime-mismatch" };
+}
+
+export type HybridDataFontResult =
+  | {
+      ok: true;
+      mime: "woff2" | "woff" | "otf" | "ttf";
+      bytes: Buffer;
+    }
+  | { ok: false; reason: string };
+
+export function validateHybridDataFontUrl(
+  source: string
+): HybridDataFontResult {
+  const match = DATA_FONT_PATTERN.exec(source.trim());
+  if (!match) return { ok: false, reason: "unsupported-font-url" };
+  const length = decodedBase64Length(match[2]);
+  if (length < 0 || length > MAX_DATA_FONT_BYTES) {
+    return { ok: false, reason: "invalid-font-size" };
+  }
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length !== length) return { ok: false, reason: "invalid-base64" };
+
+  const mime = match[1].toLowerCase() as "woff2" | "woff" | "otf" | "ttf";
+  const magicMatches =
+    (mime === "woff2" &&
+      bytes.length >= 4 &&
+      bytes.toString("ascii", 0, 4) === "wOF2") ||
+    (mime === "woff" &&
+      bytes.length >= 4 &&
+      bytes.toString("ascii", 0, 4) === "wOFF") ||
+    (mime === "otf" &&
+      bytes.length >= 4 &&
+      bytes.toString("ascii", 0, 4) === "OTTO") ||
+    (mime === "ttf" &&
+      bytes.length >= 4 &&
+      bytes[0] === 0x00 &&
+      bytes[1] === 0x01 &&
+      bytes[2] === 0x00 &&
+      bytes[3] === 0x00);
+  return magicMatches
+    ? { ok: true, mime, bytes }
+    : { ok: false, reason: "font-mime-mismatch" };
 }

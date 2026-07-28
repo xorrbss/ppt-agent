@@ -6,6 +6,7 @@ import {
   preparedNativeElementUnderlayNonVisualIdCount,
   serializePreparedNativeElementOverlay,
   serializePreparedNativeElementUnderlay,
+  type PowerPointTypefaceSerializationOptions,
   type PreparedNativeElement,
 } from "./native-plan.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
@@ -360,7 +361,8 @@ const GROUP_ROOT_XML =
 
 function assembleSlide(
   entries: Map<string, Buffer>,
-  layer: AuthoredHybridSlideLayer
+  layer: AuthoredHybridSlideLayer,
+  options: PowerPointTypefaceSerializationOptions
 ): ReadonlySet<string> {
   if (!Number.isInteger(layer.slideNumber) || layer.slideNumber < 1) {
     throw new Error("Hybrid slide number is invalid.");
@@ -428,12 +430,14 @@ function assembleSlide(
     const underlayCount = preparedNativeElementUnderlayNonVisualIdCount(item);
     const underlay = serializePreparedNativeElementUnderlay(
       item,
-      nextNonVisualId
+      nextNonVisualId,
+      options
     );
     const overlay = serializePreparedNativeElementOverlay(
       item,
       nextNonVisualId + underlayCount,
-      relationshipId
+      relationshipId,
+      options
     );
     if (underlay) {
       (isCanvasBackgroundShape(item) ? canvasBackgroundXml : underlayXml).push(
@@ -479,7 +483,8 @@ function assembleSlide(
 /** Rebuild selected slides inside the already-generated fidelity PPTX skeleton. */
 export function assembleAuthoredHybridPptx(
   fidelityPptx: Buffer,
-  layers: readonly AuthoredHybridSlideLayer[]
+  layers: readonly AuthoredHybridSlideLayer[],
+  options: PowerPointTypefaceSerializationOptions = {}
 ): Buffer {
   if (!layers.length) return Buffer.from(fidelityPptx);
   const slideNumbers = new Set<number>();
@@ -495,7 +500,7 @@ export function assembleAuthoredHybridPptx(
   addPngContentType(entries);
   const removedMediaPaths = new Set<string>();
   for (const layer of layers) {
-    for (const mediaPath of assembleSlide(entries, layer)) {
+    for (const mediaPath of assembleSlide(entries, layer, options)) {
       removedMediaPaths.add(mediaPath);
     }
   }
