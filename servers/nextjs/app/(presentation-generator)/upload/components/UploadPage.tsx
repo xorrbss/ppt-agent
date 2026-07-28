@@ -33,6 +33,7 @@ import { LLMConfig } from "@/types/llm_config";
 import TemplateSelection from "../../outline/components/TemplateSelection";
 import { resolveTemplateSelection, templateSelectionToId } from "@/app/presentation-templates/select";
 import ThemeGallery from "./ThemeGallery";
+import { useUploadLimits } from "@/lib/use-upload-limits";
 import { applyDeckTheme } from "./applyDeckTheme";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
@@ -116,6 +117,7 @@ const getSelectedImageQuality = (config?: LLMConfig): string => {
 };
 
 const UploadPage = () => {
+  const uploadLimits = useUploadLimits();
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
@@ -152,7 +154,10 @@ const UploadPage = () => {
     setIsDragOver(false);
 
     const nextFiles = [...files, ...dropped];
-    const allowed = nextFiles.filter(isAllowedFile);
+    const allowed = nextFiles.filter(
+      (file) =>
+        isAllowedFile(file) && file.size <= uploadLimits.document.bytes
+    );
     const limited = allowed.slice(0, MAX_SUPPORTED_FILES);
     setFiles(limited);
 
@@ -160,6 +165,12 @@ const UploadPage = () => {
       notify.error(
         "지원하지 않는 파일이 있습니다",
         "지원 형식: Word, PowerPoint, 스프레드시트, PDF/TXT, 이미지 파일."
+      );
+    }
+    if (nextFiles.some((file) => file.size > uploadLimits.document.bytes)) {
+      notify.error(
+        "파일이 너무 큽니다",
+        `파일당 최대 크기는 ${uploadLimits.document.mb}MB입니다.`
       );
     }
     if (allowed.length > MAX_SUPPORTED_FILES) {

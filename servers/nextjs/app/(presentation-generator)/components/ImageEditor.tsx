@@ -22,6 +22,7 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "../services/api/images";
 import { ImageAssetResponse } from "../services/api/types";
 import { resolveBackendAssetSource } from "@/utils/api";
+import { useUploadLimits } from "@/lib/use-upload-limits";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
@@ -54,6 +55,7 @@ const ImageEditor = ({
   onFocusPointClick,
   onImageChange,
 }: ImageEditorProps) => {
+  const uploadLimits = useUploadLimits();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
   const stockImageProvider = useMemo(() => {
     if (llmConfig?.DISABLE_IMAGE_GENERATION) return null;
@@ -303,15 +305,16 @@ const ImageEditor = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("파일 크기는 5MB 미만이어야 합니다");
+    if (file.size > uploadLimits.image.bytes) {
+      setUploadError(
+        `이미지 파일 크기는 ${uploadLimits.image.mb}MB 이하여야 합니다`
+      );
       return;
     }
 
     // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setUploadError("이미지 파일을 업로드해 주세요");
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
+      setUploadError("PNG, JPEG, GIF 또는 WebP 이미지를 업로드해 주세요");
       return;
     }
     try {
@@ -529,7 +532,7 @@ const ImageEditor = ({
                       type="file"
                       id="file-upload"
                       className="hidden"
-                      accept="image/*"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
                       onChange={handleFileUpload}
                       disabled={isUploading}
                     />
@@ -551,7 +554,7 @@ const ImageEditor = ({
                           : "클릭하여 이미지 업로드"}
                       </span>
                       <span className="text-xs text-gray-500 mt-1">
-                        최대 파일 크기: 5MB
+                        최대 파일 크기: {uploadLimits.image.mb}MB
                       </span>
                     </label>
                   </div>
