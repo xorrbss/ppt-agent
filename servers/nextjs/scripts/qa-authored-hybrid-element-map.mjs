@@ -8,6 +8,10 @@ import {
 } from "../lib/authored-hybrid/index.ts";
 import { collectGoogleFontsForAuthoredHtml } from "../lib/authored-hybrid/google-font-collector.ts";
 import { preflightAuthoredHtmlForHybrid } from "../lib/authored-hybrid/security.ts";
+import {
+  resolveAuthoredHybridTextProfile,
+  selectNativeTextFidelity,
+} from "../lib/authored-hybrid/text-fidelity.ts";
 
 function usage() {
   throw new Error(
@@ -72,8 +76,14 @@ print(json.dumps(sorted(found, key=lambda item: item["index"]), ensure_ascii=Fal
 function textObservation(element) {
   if (!element?.text) return undefined;
   const style = element.text.style ?? {};
+  const fidelity = selectNativeTextFidelity(
+    element.text,
+    element.text.layout?.boxBounds?.px ?? element.bounds.px
+  );
   return {
     role: element.text.role,
+    profile: resolveAuthoredHybridTextProfile(element.text),
+    calibratedTransform: fidelity.transform,
     textLength: element.text.text?.length,
     runCount: element.text.runs?.length ?? 0,
     font: {

@@ -46,43 +46,17 @@ const PROFILE_TARGETS: Record<
   AuthoredHybridTextProfile,
   NativeTextTransform
 > = {
-  "display-title": {
-    insetPt: -0.5,
-    lineSpacingPt: -0.5,
-    widthScale: 0.004,
-    verticalPt: -0.25,
-  },
-  "multiline-title": {
-    insetPt: -0.25,
-    lineSpacingPt: -0.75,
-    widthScale: 0.006,
-    verticalPt: -0.25,
-  },
+  "display-title": ZERO_TRANSFORM,
+  "multiline-title": ZERO_TRANSFORM,
   body: ZERO_TRANSFORM,
-  "centered-label": {
-    insetPt: -0.25,
-    lineSpacingPt: -0.25,
-    widthScale: 0.002,
-    verticalPt: 0,
-  },
-  "compact-caption": {
-    insetPt: -0.25,
-    lineSpacingPt: -0.25,
-    widthScale: 0.002,
-    verticalPt: -0.25,
-  },
-  "table-cell": {
-    insetPt: 0,
-    lineSpacingPt: 0,
-    widthScale: 0.002,
-    verticalPt: 0,
-  },
-  "mixed-weight": {
-    insetPt: -0.25,
-    lineSpacingPt: -0.5,
-    widthScale: 0.004,
-    verticalPt: -0.25,
-  },
+  "centered-label": ZERO_TRANSFORM,
+  // The PowerPoint/LibreOffice A-B corpus showed that a universal caption
+  // offset improves many dense slides but creates visible regressions when a
+  // slide is almost entirely 9pt captions. Keep the native baseline until a
+  // geometry-conditioned caption candidate has positive calibration evidence.
+  "compact-caption": ZERO_TRANSFORM,
+  "table-cell": ZERO_TRANSFORM,
+  "mixed-weight": ZERO_TRANSFORM,
 };
 
 function distinctRunWeights(text: AuthoredHybridTextPayload): Set<number> {

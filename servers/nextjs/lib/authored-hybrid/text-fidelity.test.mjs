@@ -122,10 +122,38 @@ test("candidate search is deterministic, bounded, and includes native baseline",
   }
 });
 
-test("profile search preserves body defaults and selects bounded title correction", () => {
+test("profile search preserves native baselines without positive calibration evidence", () => {
   const body = selectNativeTextFidelity(text(), bounds(100, 100, 300, 60).px);
   assert.equal(body.profile, "body");
   assert.deepEqual(body.transform, {
+    insetPt: 0, lineSpacingPt: 0, widthScale: 0, verticalPt: 0,
+  });
+  const caption = selectNativeTextFidelity(text({
+    role: "caption",
+    style: style({ fontSizePt: 9 }),
+  }), bounds(100, 100, 300, 60).px);
+  assert.equal(caption.profile, "compact-caption");
+  assert.deepEqual(caption.transform, {
+    insetPt: 0, lineSpacingPt: 0, widthScale: 0, verticalPt: 0,
+  });
+  const mixed = selectNativeTextFidelity(text({
+    runs: [
+      {
+        text: "regular",
+        bounds: bounds(100, 100, 60, 20),
+        fragments: [],
+        style: style(),
+      },
+      {
+        text: "bold",
+        bounds: bounds(160, 100, 40, 20),
+        fragments: [],
+        style: style({ fontWeight: 700, bold: true }),
+      },
+    ],
+  }), bounds(100, 100, 300, 60).px);
+  assert.equal(mixed.profile, "mixed-weight");
+  assert.deepEqual(mixed.transform, {
     insetPt: 0, lineSpacingPt: 0, widthScale: 0, verticalPt: 0,
   });
   const title = selectNativeTextFidelity(text({
@@ -145,7 +173,7 @@ test("profile search preserves body defaults and selects bounded title correctio
   }), bounds(100, 100, 500, 100).px);
   assert.equal(title.profile, "multiline-title");
   assert.deepEqual(title.transform, {
-    insetPt: -0.25, lineSpacingPt: -0.75, widthScale: 0.006, verticalPt: -0.25,
+    insetPt: 0, lineSpacingPt: 0, widthScale: 0, verticalPt: 0,
   });
 });
 
