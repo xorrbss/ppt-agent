@@ -21,6 +21,16 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   var promotedElements = Array.isArray(config.promotedElements)
     ? config.promotedElements
     : [];
+  var fontFallbackPolicy = new Map(
+    (Array.isArray(config.fontFallbackPolicy) ? config.fontFallbackPolicy : [])
+      .filter(function (rule) {
+        return rule && typeof rule.authored === "string" &&
+          typeof rule.powerpoint === "string";
+      })
+      .map(function (rule) {
+        return [rule.authored.trim().toLowerCase(), rule.powerpoint.trim()];
+      })
+  );
 
   function round(value) {
     return Math.round(value * 1000000) / 1000000;
@@ -193,11 +203,64 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       .filter(Boolean);
   }
 
+  function expandedFontFamilies(families) {
+    var result = [];
+    var seen = new Set();
+    function append(family) {
+      var normalized = String(family || "").trim().replace(/^['\"]|['\"]$/g, "");
+      var key = normalized.toLowerCase();
+      if (!normalized || seen.has(key)) return;
+      seen.add(key);
+      result.push(normalized);
+    }
+    families.forEach(function (family) {
+      append(family);
+      append(fontFallbackPolicy.get(String(family || "").trim().toLowerCase()));
+    });
+    return result;
+  }
+
+  function cssFontFamilyStack(families) {
+    var generic = new Set([
+      "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"
+    ]);
+    return families.map(function (family) {
+      return generic.has(family.toLowerCase())
+        ? family
+        : '"' + family.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+    }).join(", ");
+  }
+
+  function applyFontFallbackPolicy() {
+    [document.documentElement, document.body]
+      .concat(Array.from(document.body.querySelectorAll("*")))
+      .forEach(function (element) {
+        if (
+          !element ||
+          ["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(
+            element.tagName
+          )
+        ) return;
+        var authored = fontFamilies(getComputedStyle(element).fontFamily || "sans-serif");
+        var expanded = expandedFontFamilies(authored);
+        if (
+          expanded.length !== authored.length ||
+          expanded.some(function (family, index) { return family !== authored[index]; })
+        ) {
+          element.style.setProperty(
+            "font-family",
+            cssFontFamilyStack(expanded),
+            "important"
+          );
+        }
+      });
+  }
+
   function cjkFallbacks(text, families) {
     if (!/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(text)) return [];
     var fallback = [
-      "Noto Sans KR",
       "Malgun Gothic",
+      "Batang",
       "Apple SD Gothic Neo",
       "Arial Unicode MS",
       "sans-serif",
@@ -207,10 +270,14 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         return family.toLowerCase();
       })
     );
-    var preferred = families.filter(function (family) {
+    var preferred = [];
+    families.forEach(function (family) {
       var lower = family.toLowerCase();
-      return lower !== "sans-serif" && knownCjk.has(lower);
+      var mapped = fontFallbackPolicy.get(lower);
+      if (mapped && knownCjk.has(mapped.toLowerCase())) preferred.push(mapped);
+      if (lower !== "sans-serif" && knownCjk.has(lower)) preferred.push(family);
     });
+    preferred = unique(preferred);
     var preferredNames = new Set(
       preferred.map(function (family) {
         return family.toLowerCase();
@@ -225,7 +292,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 
   function textStyle(element, text) {
     var style = getComputedStyle(element);
-    var families = fontFamilies(style.fontFamily || "sans-serif");
+    var families = expandedFontFamilies(
+      fontFamilies(style.fontFamily || "sans-serif")
+    );
     var fontSizePx = number(style.fontSize, 16);
     var lineHeightSource = style.lineHeight === "normal" ? "normal" : "computed";
     var lineHeightPx =
@@ -390,6 +459,35 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       rotationDeg: safe ? rotationDeg : 0,
       matrix: { a: a, b: b, c: c, d: d, e: e, f: f },
     };
+  }
+
+  function rigidAncestorRotation(element) {
+    var rotationDeg = 0;
+    var current = element.parentElement;
+    while (current) {
+      var style = getComputedStyle(current);
+      if (
+        (style.transform && style.transform !== "none") ||
+        hasIndividualTransform(style)
+      ) {
+        var transform = analyzeTransform(current);
+        // Descendants of scale, skew, perspective, or off-centre rotation do
+        // not map to one native PowerPoint rotation. Keep those on raster.
+        if (!transform.safe) return null;
+        rotationDeg += transform.rotationDeg;
+      }
+      if (current === document.documentElement) break;
+      current = current.parentElement;
+    }
+    return round(rotationDeg);
+  }
+
+  function effectiveRigidRotation(element, transform) {
+    if (!transform.safe) return transform.rotationDeg;
+    var ancestorRotation = rigidAncestorRotation(element);
+    return ancestorRotation === null
+      ? transform.rotationDeg
+      : round(transform.rotationDeg + ancestorRotation);
   }
 
   function affineRectanglePoints(transform, sourceWidth, sourceHeight) {
@@ -604,7 +702,8 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         ? affineRectanglePoints(transform, clone.offsetWidth, clone.offsetHeight)
         : null;
       if (!transform.safe && !affinePoints) reasons.push("complex-transform");
-      var bounds = unrotatedRect(clone, transform.rotationDeg);
+      var rotationDeg = effectiveRigidRotation(clone, transform);
+      var bounds = unrotatedRect(clone, rotationDeg);
       if (bounds.width <= 0 || bounds.height <= 0 || !Object.values(bounds).every(Number.isFinite)) {
         return null;
       }
@@ -621,7 +720,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         sourceIndex: sourceIndex,
         cssZIndex: zIndex,
         boundsPx: bounds,
-        rotationDeg: transform.rotationDeg,
+        rotationDeg: rotationDeg,
         opacity: round(effectiveOpacity(element) * number(pseudoStyle.opacity, 1)),
         candidateKind: pseudoText ? "text" : "shape",
         fallbackReasons: reasons,
@@ -639,7 +738,14 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         };
         var containerShape = textContainerShape(clone, bounds);
         if (containerShape) observation.text.containerShape = containerShape;
-        observation.boundsPx = textContentRect(clone, bounds, transform.rotationDeg);
+        var contentBounds = textContentRect(clone, bounds, rotationDeg);
+        observation.text.layout = textLayout(
+          clone,
+          bounds,
+          contentBounds,
+          extractedRuns.runs
+        );
+        observation.boundsPx = contentBounds;
       } else {
         var pseudoTriangle = pseudoBorderTrianglePayload(getComputedStyle(clone));
         observation.shape = pseudoTriangle || shapePayload(clone, reasons, bounds, false);
@@ -757,10 +863,11 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
           hasIndividualTransform(style))
       ) {
         var ancestorTransform = analyzeTransform(current);
-        // A pure translation is already included in every descendant's
-        // viewport bounds. Rotated/scaled/skewed ancestry still changes the
-        // descendant geometry and remains a raster fallback.
-        if (!ancestorTransform.safe || Math.abs(ancestorTransform.rotationDeg) >= 0.001) {
+        // Pure translation is already included in viewport bounds. A centred
+        // rigid rotation is accumulated into every descendant's native
+        // rotation; scale, skew, perspective, and off-centre rotation still
+        // cannot be represented without changing descendant geometry.
+        if (!ancestorTransform.safe) {
           reasons.push("transformed-ancestor");
           reasons.push("unknown-z-order");
         }
@@ -1022,7 +1129,21 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       (["TEXT", "TEXTPATH"].includes(tag) ? element.textContent : "") || "";
     if (!renderedText.trim()) return false;
     return TEXT_ROOT_TAGS.has(tag) ||
-      (directText(element) && !nestedBlockContent(element));
+      (directText(element) && !nestedBlockContent(element)) ||
+      inlineFlowTextRoot(element);
+  }
+
+  function inlineFlowTextRoot(element) {
+    var children = Array.from(element.children);
+    if (children.length < 2 || nestedBlockContent(element)) return false;
+    var display = getComputedStyle(element).display;
+    if ([
+      "flex", "inline-flex", "grid", "inline-grid", "table", "inline-table"
+    ].includes(display)) return false;
+    return children.every(function (child) {
+      return INLINE_TAGS.has(child.tagName.toUpperCase()) &&
+        ["inline", "contents"].includes(getComputedStyle(child).display);
+    });
   }
 
   function nestedBlockContent(element) {
@@ -1139,14 +1260,15 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       return { top: top, bottom: bottom, height: Math.max(1, bottom - top) };
     }
 
-    function pushLineBreak(parent, rect, softLineBreak) {
+    function pushLineBreak(parent, rect, breakKind) {
       if (!runs.length || runs[runs.length - 1].text.endsWith("\n")) return;
       runs.push({
         text: "\n",
         boundsPx: { x: round(rect.left), y: round(rect.top), width: 0, height: 0 },
         fragmentRectsPx: [],
         style: textStyle(parent, "\n"),
-        softLineBreak: Boolean(softLineBreak),
+        breakKind: breakKind,
+        softLineBreak: breakKind === "soft",
       });
     }
 
@@ -1268,7 +1390,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
               (text[index] === "\n" || text[index] === "\r")
             ) {
               pushTextSlice(node, parent, sliceStart, index);
-              pushLineBreak(parent, parent.getBoundingClientRect(), false);
+              pushLineBreak(parent, parent.getBoundingClientRect(), "line");
               activeLineBand = null;
               sliceStart = index + 1;
               continue;
@@ -1283,7 +1405,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
             var characterRect = characterRects[0];
             if (activeLineBand && !sharesVisualLine(characterRect, activeLineBand)) {
               pushTextSlice(node, parent, sliceStart, index);
-              pushLineBreak(parent, characterRect, true);
+              pushLineBreak(parent, characterRect, "soft");
               sliceStart = index;
               activeLineBand = rectBand(characterRect);
             } else {
@@ -1305,6 +1427,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
           boundsPx: { x: round(rect.left), y: round(rect.top), width: 0, height: 0 },
           fragmentRectsPx: [],
           style: textStyle(parent, "\n"),
+          breakKind: "line",
         });
         activeLineBand = null;
         return;
@@ -1313,12 +1436,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       if (lineBoundary && runs.some(function (run) {
         return run.text !== "\n" && Boolean(run.text.trim());
       })) {
-        pushLineBreak(node, node.getBoundingClientRect(), false);
+        pushLineBreak(node, node.getBoundingClientRect(), "paragraph");
         activeLineBand = null;
       }
       Array.from(node.childNodes).forEach(visit);
       if (lineBoundary && hasFollowingTextContent(node)) {
-        pushLineBreak(node, node.getBoundingClientRect(), false);
+        pushLineBreak(node, node.getBoundingClientRect(), "paragraph");
         activeLineBand = null;
       }
     }
@@ -1329,6 +1452,96 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       return run.softLineBreak ? "" : run.text;
     }).join("");
     return { runs: runs, failed: failed, identityText: identityText };
+  }
+
+  function edgeValues(style, prefix, suffix) {
+    return {
+      top: round(number(style[prefix + "Top" + suffix], 0)),
+      right: round(number(style[prefix + "Right" + suffix], 0)),
+      bottom: round(number(style[prefix + "Bottom" + suffix], 0)),
+      left: round(number(style[prefix + "Left" + suffix], 0)),
+    };
+  }
+
+  function unionPaintedTextBounds(runs) {
+    var fragments = [];
+    runs.forEach(function (run) {
+      if (run.text === "\n") return;
+      (run.fragmentRectsPx || []).forEach(function (rect) {
+        if (
+          rect && rect.width >= 0 && rect.height > 0 &&
+          Object.values(rect).every(Number.isFinite)
+        ) fragments.push(rect);
+      });
+    });
+    if (!fragments.length) return null;
+    var left = Math.min.apply(null, fragments.map(function (rect) { return rect.x; }));
+    var top = Math.min.apply(null, fragments.map(function (rect) { return rect.y; }));
+    var right = Math.max.apply(null, fragments.map(function (rect) {
+      return rect.x + rect.width;
+    }));
+    var bottom = Math.max.apply(null, fragments.map(function (rect) {
+      return rect.y + rect.height;
+    }));
+    return {
+      x: round(left),
+      y: round(top),
+      width: round(Math.max(0, right - left)),
+      height: round(Math.max(0, bottom - top)),
+    };
+  }
+
+  function computedTextAlignSource(element, style) {
+    var parent = element.parentElement;
+    if (!parent) return "default";
+    var parentStyle = getComputedStyle(parent);
+    return String(style.textAlign || "") === String(parentStyle.textAlign || "")
+      ? "inherited"
+      : "self";
+  }
+
+  function textLayout(element, boxBounds, contentBounds, runs) {
+    var style = getComputedStyle(element);
+    var display = String(style.display || "");
+    var isFlex = display === "flex" || display === "inline-flex";
+    var flexDirection = isFlex &&
+      ["row", "row-reverse", "column", "column-reverse"].includes(style.flexDirection)
+      ? style.flexDirection
+      : null;
+    var hasPaintedText = runs.some(function (run) {
+      return run.text !== "\n" && Boolean(run.text) &&
+        (run.fragmentRectsPx || []).length > 0;
+    });
+    var lineCount = hasPaintedText
+      ? 1 + runs.filter(function (run) { return run.text === "\n"; }).length
+      : 0;
+    return {
+      boxBoundsPx: boxBounds,
+      contentBoundsPx: contentBounds,
+      paintedTextBoundsPx: unionPaintedTextBounds(runs),
+      paddingPx: edgeValues(style, "padding", ""),
+      borderPx: edgeValues(style, "border", "Width"),
+      marginPx: edgeValues(style, "margin", ""),
+      rowGapPx: Math.max(0, round(number(style.rowGap, 0))),
+      columnGapPx: Math.max(0, round(number(style.columnGap, 0))),
+      display: display,
+      flexDirection: flexDirection,
+      alignItems: String(style.alignItems || "normal"),
+      justifyContent: String(style.justifyContent || "normal"),
+      textAlignSource: computedTextAlignSource(element, style),
+      lineCount: lineCount,
+      singleLine: lineCount === 1,
+      // The root element's CSS margins have already participated in layout
+      // and are therefore represented by boxBoundsPx. Reapplying them as
+      // DrawingML paragraph spacing would move the text a second time inside
+      // its PowerPoint text box. Internal block boundaries are emitted as
+      // paragraph breaks; their measured geometry remains represented by the
+      // captured line boxes rather than by the text root's outer margins.
+      paragraphSpacingPx: {
+        before: 0,
+        after: 0,
+      },
+    };
   }
 
   function imagePayload(element, reasons, bounds) {
@@ -2123,7 +2336,23 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       ? Math.min(radii[0], bounds.width / 2, bounds.height / 2)
       : 0;
     var shape = "rectangle";
-    if (Math.min(bounds.width, bounds.height) <= 3 && Math.max(bounds.width, bounds.height) >= 8) {
+    var isThin = Math.min(bounds.width, bounds.height) <= 3 &&
+      Math.max(bounds.width, bounds.height) >= 8;
+    var isMaterializedPseudo = element.hasAttribute(
+      "data-presenton-authored-pseudo-clone"
+    );
+    var hasDetachedArrowTip = ["::before", "::after"].some(function (pseudo) {
+      try {
+        return Boolean(pseudoBorderTrianglePayload(getComputedStyle(element, pseudo)));
+      } catch (_pseudoStyleError) {
+        return false;
+      }
+    });
+    // A thin painted CSS box is still a box: serializing every divider as a
+    // PowerPoint line changes its end caps, centre line, and effective length.
+    // Keep rectangles native unless the author supplied connector semantics
+    // through a generated rail or a detached CSS border-triangle arrowhead.
+    if (isThin && (isMaterializedPseudo || hasDetachedArrowTip)) {
       shape = "line";
     } else if (
       radiusValues.every(function (value) { return /^(?:50(?:\.0+)?)%$/.test(String(value)); }) ||
@@ -2139,6 +2368,28 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var strokeWidthPt = uniformBorder
       ? round(activeBorders[0].width * 0.75)
       : 0;
+    var outline = undefined;
+    var outlineWidthPx = number(style.outlineWidth, 0);
+    var outlineStyle = String(style.outlineStyle || "none").toLowerCase();
+    if (outlineStyle !== "none" && outlineWidthPx > 0.01) {
+      var outlineColor = parseColor(style.outlineColor);
+      if (!["solid", "dashed", "dotted"].includes(outlineStyle)) {
+        reasons.push("unsupported-shape");
+      } else if (!outlineColor) {
+        reasons.push("unsupported-color");
+      } else if (outlineColor.alpha > 0) {
+        outline = {
+          color: outlineColor,
+          widthPt: round(outlineWidthPx * 0.75),
+          offsetPx: round(number(style.outlineOffset, 0)),
+          dash: outlineStyle === "dashed"
+            ? "dash"
+            : outlineStyle === "dotted"
+              ? "dot"
+              : undefined,
+        };
+      }
+    }
     if (shape === "line" && !stroke && fill) {
       stroke = fill;
       fill = null;
@@ -2160,6 +2411,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       radiusPt: round(radiusPx * 0.75),
       borderLines: borderLines,
       shadowLayers: simpleBoxShadowLayers(style),
+      outline: outline,
       // CSS border triangles are materialized as independent editable
       // freeforms. Attaching another PowerPoint arrow to the host line would
       // duplicate and distort the authored tip.
@@ -2179,7 +2431,6 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     if (!paintedBackground(style) && !hasBorder(style)) return null;
     if (
       (style.boxShadow && style.boxShadow !== "none") ||
-      (style.outlineStyle && style.outlineStyle !== "none" && hasPositiveCssComponent(style.outlineWidth)) ||
       nestedBlockContent(element)
     ) {
       return null;
@@ -2953,6 +3204,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 
   try {
     await ensureFixedViewport();
+    applyFontFallbackPolicy();
     await waitForStablePage();
     enforceMinimumEditableFontSize();
     await waitForTwoPaints();
@@ -3047,6 +3299,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var id = "h1-" + String(records.length + 1).padStart(4, "0");
       element.setAttribute(ELEMENT_ATTRIBUTE, id);
       var transform = analyzeTransform(element);
+      var rotationDeg = effectiveRigidRotation(element, transform);
       var reasons = safetyReasons(element, candidateKind, transform);
       if (complexHtmlImagePayloads.has(element)) {
         // The whole semantic visual is captured exactly as a transparent PNG;
@@ -3056,7 +3309,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       }
       var bounds = svgShapeElement(element)
         ? svgShapeBounds(element, reasons)
-        : unrotatedRect(element, transform.rotationDeg);
+        : unrotatedRect(element, rotationDeg);
       if (complexReason && candidateKind === "complex") reasons.push(complexReason);
       if (bounds.width <= 0 || bounds.height <= 0 || !Object.values(bounds).every(Number.isFinite)) {
         reasons.push("invalid-bounds");
@@ -3077,7 +3330,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         sourceIndex: sourceIndex,
         cssZIndex: zIndex,
         boundsPx: bounds,
-        rotationDeg: transform.rotationDeg,
+        rotationDeg: rotationDeg,
         opacity: effectiveOpacity(element),
         candidateKind: candidateKind,
         fallbackReasons: reasons,
@@ -3115,7 +3368,14 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
           };
           var containerShape = textContainerShape(element, bounds);
           if (containerShape) observation.text.containerShape = containerShape;
-          observation.boundsPx = textContentRect(element, bounds, transform.rotationDeg);
+          var contentBounds = textContentRect(element, bounds, rotationDeg);
+          observation.text.layout = textLayout(
+            element,
+            bounds,
+            contentBounds,
+            extractedRuns.runs
+          );
+          observation.boundsPx = contentBounds;
         } else if (candidateKind === "image") {
           observation.image = complexSvgImagePayloads.has(element)
             ? complexSvgImagePayloads.get(element)

@@ -131,13 +131,13 @@ test("Chrome extracts candidates and produces subset-aware RGBA backplates", asy
   );
   assert.ok(title.text.runs.length >= 2, "rich title should retain separate runs");
   assert.ok(
-    title.text.style.cjkFallbackFamilies.includes("Noto Sans KR"),
-    "CJK fallback stack should be explicit"
+    title.text.style.fontFamilies.includes("Malgun Gothic"),
+    "CSS capture should include the same local fallback used by PowerPoint"
   );
   assert.equal(
     title.text.style.cjkFallbackFamilies[0],
     "Malgun Gothic",
-    "the authored CJK font should remain the preferred PowerPoint typeface"
+    "the CJK fallback should match the PowerPoint compatibility policy"
   );
 
   const expectedFallbackReasons = [
@@ -447,6 +447,69 @@ test("Chrome fails closed for pointer-transparent paint and off-center rotation"
   assert.ok(decoratedImage?.classification.reasons.includes("decorated-image"));
 });
 
+test("Chrome accumulates rigid ancestor rotation and rejects non-rigid or clipped ancestry", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#fff}
+    section{position:absolute;width:190px;height:100px}
+    section > div{position:absolute;left:35px;top:25px;width:100px;height:40px;background:#2878d8}
+    .rigid{left:40px;top:40px;transform:rotate(8deg)}
+    .rigid > div{transform:rotate(4deg)}
+    .scale{left:270px;top:40px;transform:scale(1.15)}
+    .skew{left:500px;top:40px;transform:skewX(8deg)}
+    .off-center{left:730px;top:40px;transform:rotate(8deg);transform-origin:0 0}
+    .perspective{left:960px;top:40px;perspective:600px}
+    .clip{left:40px;top:230px;width:90px;overflow:hidden}
+    .clip > div{left:55px}
+  </style></head><body>
+    <section class="rigid"><div></div></section>
+    <section class="scale"><div></div></section>
+    <section class="skew"><div></div></section>
+    <section class="off-center"><div></div></section>
+    <section class="perspective"><div></div></section>
+    <section class="clip"><div></div></section>
+  </body></html>`;
+  const slide = await extractAuthoredSlideDom(html, {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+  const shape = (index) =>
+    slide.elements.find(
+      (element) =>
+        element.domPath ===
+        `body > section:nth-of-type(${index}) > div:nth-of-type(1)`
+    );
+
+  const rigid = shape(1);
+  assert.equal(rigid?.classification.mode, "native");
+  assert.ok(Math.abs(rigid.rotationDeg - 12) < 0.01);
+  assert.ok(Math.abs(rigid.bounds.px.width - 100) < 0.1);
+  assert.ok(Math.abs(rigid.bounds.px.height - 40) < 0.1);
+  assert.ok(
+    !rigid.classification.reasons?.includes("transformed-ancestor")
+  );
+
+  for (const index of [2, 3, 4]) {
+    const nonRigid = shape(index);
+    assert.equal(nonRigid?.classification.mode, "raster");
+    assert.ok(nonRigid?.classification.reasons.includes("transformed-ancestor"));
+  }
+
+  const perspective = shape(5);
+  assert.equal(perspective?.classification.mode, "raster");
+  assert.ok(perspective?.classification.reasons.includes("unknown-z-order"));
+
+  const clipped = shape(6);
+  assert.equal(clipped?.classification.mode, "raster");
+  assert.ok(clipped?.classification.reasons.includes("overflow-clipped"));
+});
+
 test("Chrome fails closed for descendant effects and paint outside element bounds", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
@@ -704,6 +767,100 @@ test("vertical text anchor honors flex-direction", async (t) => {
   assert.equal(cross.text.style.verticalAlignment, "middle");
 });
 
+test("Chrome preserves computed text box geometry, alignment provenance, and line-break kinds", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><html><head><style>
+    *{box-sizing:content-box}
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#fff}
+    .outer{position:absolute;left:80px;top:60px;text-align:right}
+    .contract{width:220px;margin:11px 13px 17px 19px;padding:7px 23px 11px 5px;
+      border-style:solid;border-width:1px 2px 3px 4px;
+      font:400 18px/27px Arial;letter-spacing:2px}
+    .contract strong{font-weight:700;color:#2457d6;font-size:20px}
+    .flex{position:absolute;left:500px;top:80px;width:260px;height:100px;
+      display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
+      row-gap:9px;column-gap:13px;font:16px/22px Arial;text-align:center;white-space:nowrap}
+  </style></head><body>
+    <div class="outer"><p class="contract">Alpha <strong>bold words</strong> plus enough words to wrap in this narrow content box.<br>Hard line.</p></div>
+    <div class="flex">Centered flex label</div>
+  </body></html>`;
+  const slide = await extractAuthoredSlideDom(html, {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+  const contract = textElement(slide, "Alpha");
+  const flex = textElement(slide, "Centered flex label");
+  assert.ok(contract && flex);
+
+  assert.equal(contract.text.style.horizontalAlignment, "right");
+  assert.equal(contract.text.style.lineHeight.points, 20.25);
+  assert.equal(contract.text.style.letterSpacingPt, 1.5);
+  assert.deepEqual(contract.text.layout?.paddingPx, {
+    top: 7,
+    right: 23,
+    bottom: 11,
+    left: 5,
+  });
+  assert.deepEqual(contract.text.layout?.borderPx, {
+    top: 1,
+    right: 2,
+    bottom: 3,
+    left: 4,
+  });
+  assert.deepEqual(contract.text.layout?.marginPx, {
+    top: 11,
+    right: 13,
+    bottom: 17,
+    left: 19,
+  });
+  assert.deepEqual(contract.text.layout?.paragraphSpacingPx, {
+    before: 0,
+    after: 0,
+  });
+  assert.equal(contract.text.layout?.boxBounds.px.width, 254);
+  assert.equal(contract.text.layout?.contentBounds.px.width, 220);
+  assert.equal(
+    contract.text.layout?.contentBounds.px.x,
+    contract.text.layout?.boxBounds.px.x + 9
+  );
+  assert.deepEqual(contract.bounds, contract.text.layout?.contentBounds);
+  assert.ok(contract.text.layout?.paintedTextBounds);
+  assert.equal(contract.text.layout?.textAlignSource, "inherited");
+  assert.ok((contract.text.layout?.lineCount ?? 0) >= 3);
+  assert.equal(contract.text.layout?.singleLine, false);
+  const breakKinds = new Set(
+    contract.text.runs
+      .filter((run) => run.text === "\n")
+      .map((run) => run.breakKind)
+  );
+  assert.ok(breakKinds.has("soft"), "automatic wrapping must remain distinguishable");
+  assert.ok(breakKinds.has("line"), "authored <br> must remain distinguishable");
+  const bold = contract.text.runs.find((run) => run.text.includes("bold words"));
+  assert.ok(bold);
+  assert.equal(bold.style.bold, true);
+  assert.equal(bold.style.fontWeight, 700);
+  assert.equal(bold.style.fontSizePt, 15);
+  assert.equal(bold.style.color.hex, "2457D6");
+
+  assert.equal(flex.text.style.horizontalAlignment, "center");
+  assert.equal(flex.text.style.verticalAlignment, "middle");
+  assert.equal(flex.text.layout?.display, "flex");
+  assert.equal(flex.text.layout?.flexDirection, "column");
+  assert.equal(flex.text.layout?.alignItems, "flex-end");
+  assert.equal(flex.text.layout?.justifyContent, "center");
+  assert.equal(flex.text.layout?.rowGapPx, 9);
+  assert.equal(flex.text.layout?.columnGapPx, 13);
+  assert.equal(flex.text.layout?.textAlignSource, "self");
+  assert.equal(flex.text.layout?.lineCount, 1);
+  assert.equal(flex.text.layout?.singleLine, true);
+});
+
 test("pretty-printed inline HTML does not create phantom PowerPoint lines", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
@@ -798,7 +955,90 @@ test("Chrome suppresses decorated raster text selected by editable export", asyn
   assert.deepEqual(result.fallbackElementIds, []);
 });
 
-test("Chrome promotes editable cards, circles, and lines without removing nested text", async (t) => {
+test("inline-only mixed-style prose is one editable text root while highlight paint stays on the backplate", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><html><head><style>
+    *{box-sizing:border-box}
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#fff}
+    .quote{position:absolute;left:80px;top:80px;width:270px;margin:0;font:700 24px/34px Arial;color:#182235}
+    .quote em{font-style:normal;color:#2457d6;background:linear-gradient(transparent 58%,#ffb21a 0)}
+    .quote span{font-weight:400;color:#687385}
+    .node{position:absolute;left:420px;top:80px;z-index:1;width:27px;height:27px;display:inline-flex;align-items:center;justify-content:center;background:#182235;border:1.5px solid #7697f1;border-radius:50%;outline:2px solid #2457d6;font:850 12px/1 Arial;color:#afc5ff}
+  </style></head><body>
+    <div class="quote">Lead words <em>highlighted words</em><span> and regular tail</span></div>
+    <span class="node">01</span>
+  </body></html>`;
+  const options = { chromeExecutable, timeoutMs: 30_000 };
+  const slide = await extractAuthoredSlideDom(html, options);
+  const quoteElements = slide.elements.filter(
+    (element) =>
+      "text" in element &&
+      element.text.plainText.includes("Lead words") &&
+      element.bounds.px.x < 400
+  );
+  assert.equal(quoteElements.length, 1, "inline prose must not become overlapping sibling text boxes");
+  const quote = quoteElements[0];
+  assert.equal(quote.tagName, "div");
+  assert.match(
+    quote.text.plainText.replace(/\n/g, " "),
+    /^Lead words highlighted words and regular tail$/
+  );
+  assert.equal(quote.text.style.bold, true);
+  const highlighted = quote.text.runs.find((run) => run.text.includes("highlighted"));
+  const regular = quote.text.runs.find((run) => run.text.includes("regular tail"));
+  assert.ok(highlighted && regular);
+  assert.equal(highlighted.style.bold, true);
+  assert.equal(highlighted.style.color.hex, "2457D6");
+  assert.equal(regular.style.bold, false);
+  assert.equal(regular.style.color.hex, "687385");
+  const node = textElement(slide, "01");
+  assert.ok(node);
+  assert.equal(node.text.containerShape?.shape.shape, "ellipse");
+  assert.equal(node.text.containerShape?.bounds.px.width, 27);
+  assert.equal(node.text.containerShape?.bounds.px.height, 27);
+  assert.deepEqual(node.text.containerShape?.shape.outline, {
+    color: { hex: "2457D6", alpha: 1 },
+    widthPt: 1.5,
+    offsetPx: 0,
+  });
+
+  const prepared = await prepareNativeElements(slide.elements, { includeRasterText: true });
+  const selected = selectLayerSafeNativeElements(
+    slide.elements,
+    prepared,
+    new Set([quote.id, node.id]),
+    { promoteTextAboveRaster: true }
+  );
+  assert.deepEqual(selected.map((item) => item.source.id), [quote.id, node.id]);
+
+  const result = await renderAuthoredBackplate(html, slide, [quote.id, node.id], options);
+  assert.deepEqual(result.appliedPromotedElementIds, [quote.id, node.id]);
+  assert.deepEqual(result.fallbackElementIds, []);
+  const { data } = await sharp(result.backplatePng).ensureAlpha().raw().toBuffer({
+    resolveWithObject: true,
+  });
+  let yellowPixels = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    if (
+      data[index] >= 245 &&
+      data[index + 1] >= 145 &&
+      data[index + 1] <= 205 &&
+      data[index + 2] <= 60 &&
+      data[index + 3] >= 245
+    ) {
+      yellowPixels += 1;
+    }
+  }
+  assert.ok(yellowPixels > 250, "highlight decoration should remain behind native text");
+});
+
+test("Chrome promotes editable cards, circles, and thin dividers without removing nested text", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
     if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
@@ -826,22 +1066,25 @@ test("Chrome promotes editable cards, circles, and lines without removing nested
   const circle = slide.elements.find(
     (element) => "shape" in element && element.shape.shape === "ellipse"
   );
-  const line = slide.elements.find(
-    (element) => "shape" in element && element.shape.shape === "line"
+  const divider = slide.elements.find(
+    (element) =>
+      "shape" in element &&
+      element.shape.shape === "rectangle" &&
+      Math.abs(element.bounds.px.height - 3) < 0.1
   );
   const nestedText = textElement(slide, "Nested editable text");
   const badge = textElement(slide, "Editable badge");
 
-  assert.ok(card && circle && line && nestedText && badge);
+  assert.ok(card && circle && divider && nestedText && badge);
   assert.equal(card.classification.mode, "native");
   assert.equal(circle.classification.mode, "native");
-  assert.equal(line.classification.mode, "native");
+  assert.equal(divider.classification.mode, "native");
   assert.equal(nestedText.classification.mode, "native");
   assert.equal(badge.classification.mode, "raster");
   assert.ok(slide.backplate.eligibleElementIds.includes(badge.id));
   assert.equal(badge.text.containerShape?.shape.shape, "round-rectangle");
 
-  const promotedIds = [card.id, circle.id, line.id, nestedText.id, badge.id];
+  const promotedIds = [card.id, circle.id, divider.id, nestedText.id, badge.id];
   const result = await renderAuthoredBackplate(html, slide, promotedIds, options);
   assert.deepEqual(result.appliedPromotedElementIds, promotedIds);
   assert.deepEqual(result.fallbackElementIds, []);
@@ -1225,6 +1468,34 @@ test("CSS border-triangle arrows remain separate editable tips at authored coord
   assert.equal(tip.shape.fill.hex, "2878D8");
   assert.ok(Math.abs(tip.bounds.px.x + tip.bounds.px.width - 181) < 0.75);
   assert.ok(Math.abs(tip.bounds.px.y + tip.bounds.px.height / 2 - 101) < 0.75);
+});
+
+test("thin filled dividers remain rectangles instead of drifting PowerPoint lines", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#fff}
+    .horizontal{position:absolute;left:100px;top:100px;width:240px;height:2px;background:#2878d8}
+    .vertical{position:absolute;left:400px;top:100px;width:3px;height:180px;background:#72aeef}
+  </style></head><body><div class="horizontal"></div><div class="vertical"></div></body></html>`;
+  const slide = await extractAuthoredSlideDom(html, {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+  const dividers = slide.elements.filter(
+    (element) => element.tagName === "div" && "shape" in element
+  );
+  assert.equal(dividers.length, 2);
+  assert.ok(dividers.every((element) => element.shape.shape === "rectangle"));
+  assert.deepEqual(
+    dividers.map((element) => element.shape.fill?.hex).sort(),
+    ["2878D8", "72AEEF"]
+  );
 });
 
 test("compact SVG icon strokes do not stretch to nearby card boundaries", async (t) => {

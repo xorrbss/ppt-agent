@@ -5,6 +5,7 @@ import type {
   AuthoredHybridNativeKind,
   AuthoredHybridRect,
   AuthoredHybridShapePayload,
+  AuthoredHybridTextBoxEdgesPx,
   AuthoredHybridTextRole,
   AuthoredHybridTextStyle,
 } from "./schema.ts";
@@ -14,6 +15,29 @@ export interface BrowserTextRunObservation {
   boundsPx: AuthoredHybridRect;
   fragmentRectsPx: AuthoredHybridRect[];
   style: AuthoredHybridTextStyle;
+  breakKind?: "soft" | "line" | "paragraph";
+}
+
+export interface BrowserTextLayoutObservation {
+  boxBoundsPx: AuthoredHybridRect;
+  contentBoundsPx: AuthoredHybridRect;
+  paintedTextBoundsPx: AuthoredHybridRect | null;
+  paddingPx: AuthoredHybridTextBoxEdgesPx;
+  borderPx: AuthoredHybridTextBoxEdgesPx;
+  marginPx: AuthoredHybridTextBoxEdgesPx;
+  rowGapPx: number;
+  columnGapPx: number;
+  display: string;
+  flexDirection: "row" | "row-reverse" | "column" | "column-reverse" | null;
+  alignItems: string;
+  justifyContent: string;
+  textAlignSource: "self" | "inherited" | "default";
+  lineCount: number;
+  singleLine: boolean;
+  paragraphSpacingPx: {
+    before: number;
+    after: number;
+  };
 }
 
 export interface BrowserTextObservation {
@@ -22,6 +46,7 @@ export interface BrowserTextObservation {
   paragraphs: string[];
   style: AuthoredHybridTextStyle;
   runs: BrowserTextRunObservation[];
+  layout?: BrowserTextLayoutObservation;
   containerShape?: {
     boundsPx: AuthoredHybridRect;
     shape: BrowserShapeObservation;
