@@ -165,7 +165,7 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
   assert.match(textXml, /horzOverflow="clip"/);
   assert.match(textXml, /vertOverflow="clip"/);
   assert.match(textXml, /<a:noAutofit\/>/);
-  assert.match(textXml, /<a:lnSpc><a:spcPct val="125000"\/><\/a:lnSpc>/);
+  assert.match(textXml, /<a:lnSpc><a:spcPts val="3000"\/><\/a:lnSpc>/);
   assert.doesNotMatch(textXml, /<a:normAutofit/);
   assert.match(textXml, /rot="21150000"/);
   assert.match(textXml, /<a:alpha val="80000"\/>/);
@@ -651,13 +651,58 @@ test("centered mixed-weight runs keep one centered paragraph across a browser so
   assert.match(xml, /anchor="ctr"/);
   assert.match(xml, /wrap="none"/);
   assert.match(xml, /<a:normAutofit\/>/);
-  assert.match(xml, /<a:lnSpc><a:spcPct val="153846"\/><\/a:lnSpc>/);
-  assert.doesNotMatch(xml, /<a:lnSpc><a:spcPts/);
+  assert.match(xml, /<a:lnSpc><a:spcPts val="2000"\/><\/a:lnSpc>/);
   assert.equal((xml.match(/\sb="1"/g) ?? []).length, 1);
-  assert.equal((xml.match(/\sb="0"/g) ?? []).length, 2);
+  assert.equal((xml.match(/\sb="0"/g) ?? []).length, 1);
   assert.match(xml, /<a:t xml:space="preserve">Center <\/a:t>/);
   assert.match(xml, /<a:t xml:space="preserve">bold<\/a:t>/);
   assert.match(xml, /<a:srgbClr val="2457D6">/);
+});
+
+test("uniform CJK text keeps authored whitespace instead of browser soft-wrap markup", async () => {
+  const uniformStyle = style({
+    fontSizePt: 9,
+    fontWeight: 400,
+    bold: false,
+  });
+  const authoredText = "이 문장은 완전하게 보존되어야 합니다.";
+  const element = {
+    ...base("uniform-cjk-soft-wrap", 0, 0, bounds(40, 40, 280, 40)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body",
+      plainText: authoredText,
+      paragraphs: [authoredText],
+      style: uniformStyle,
+      runs: [
+        {
+          text: "이 문장은 완전하게 보존",
+          bounds: bounds(40, 40, 150, 14),
+          fragments: [],
+          style: uniformStyle,
+        },
+        {
+          text: "\n",
+          bounds: bounds(190, 40, 0, 0),
+          fragments: [],
+          style: uniformStyle,
+          breakKind: "soft",
+        },
+        {
+          text: "되어야 합니다.",
+          bounds: bounds(40, 54, 80, 14),
+          fragments: [],
+          style: uniformStyle,
+        },
+      ],
+    },
+  };
+
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 4);
+
+  assert.match(xml, new RegExp(`<a:t xml:space="preserve">${authoredText}</a:t>`));
+  assert.doesNotMatch(xml, /<a:br\/>/);
 });
 
 test("font-native normal line height is not serialized as an estimated exact spacing", async () => {
@@ -688,16 +733,16 @@ test("font-native normal line height is not serialized as an estimated exact spa
   assert.doesNotMatch(xml, /<a:lnSpc>/);
 });
 
-test("uniform computed line height uses proportional spacing for the active font metrics", async () => {
+test("compact authored captions use proportional spacing for active font metrics", async () => {
   const uniformStyle = style({
-    fontSizePt: 12,
-    lineHeight: { points: 18, multiple: 1.5, source: "computed" },
+    fontSizePt: 9,
+    lineHeight: { points: 12.6, multiple: 1.4, source: "computed" },
   });
   const element = {
-    ...base("uniform-line-height", 0, 0, bounds(40, 40, 280, 60)),
+    ...base("compact-caption-line-height", 0, 0, bounds(40, 40, 280, 34)),
     classification: { mode: "native", kind: "text", confidence: "safe" },
     text: {
-      role: "body",
+      role: "caption",
       plainText: "Uniform\nspacing",
       paragraphs: ["Uniform", "spacing"],
       style: uniformStyle,
@@ -728,7 +773,7 @@ test("uniform computed line height uses proportional spacing for the active font
   const [prepared] = await prepareNativeElements([element]);
   const xml = serializePreparedNativeElement(prepared, 3);
 
-  assert.match(xml, /<a:lnSpc><a:spcPct val="150000"\/><\/a:lnSpc>/);
+  assert.match(xml, /<a:lnSpc><a:spcPct val="140000"\/><\/a:lnSpc>/);
   assert.doesNotMatch(xml, /<a:lnSpc><a:spcPts/);
 });
 

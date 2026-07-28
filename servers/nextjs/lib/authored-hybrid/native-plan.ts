@@ -662,10 +662,11 @@ function runPropertiesXml(
     `lang="ko-KR"`,
     `altLang="en-US"`,
     `sz="${Math.round(Math.max(MIN_EDITABLE_FONT_SIZE_PT, style.fontSizePt) * 100)}"`,
-    // Always make the run's bold state explicit. Leaving regular runs without
-    // `b="0"` lets a bold paragraph/theme default bleed into mixed-weight text
-    // when PowerPoint repairs, edits, or re-saves the shape.
-    style.bold || style.fontWeight >= 600 ? `b="1"` : `b="0"`,
+    // Bold runs override the paragraph's explicit regular default. Keeping
+    // `b="0"` on the paragraph end marker (rather than every regular run)
+    // preserves mixed-weight semantics without changing regular glyph shaping
+    // in LibreOffice and PowerPoint's renderer.
+    style.bold || style.fontWeight >= 600 ? `b="1"` : "",
     style.italic ? `i="1"` : "",
     style.underline ? `u="sng"` : "",
     style.strike ? `strike="sngStrike"` : "",
@@ -739,13 +740,24 @@ function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[]
   // the browser-confirmed visual breaks instead of flattening rich text.
   const sameTextIgnoringWhitespace =
     joined.replace(/\s/g, "") === element.text.plainText.replace(/\s/g, "");
+  const nonWhitespaceRunStyles = new Set(
+    element.text.runs
+      .filter((run) => run.text.replace(/\s/g, "").length > 0)
+      .map((run) => JSON.stringify(run.style))
+  );
+  const hasMeaningfulRunStyleVariation = nonWhitespaceRunStyles.size > 1;
+  const preservesRichTextAcrossSoftWraps =
+    hasMeaningfulRunStyleVariation &&
+    (
+      joinedWithoutSoftBreaks === element.text.plainText ||
+      sameTextIgnoringWhitespace
+    );
   if (
     element.text.runs.length &&
     (
       joined === element.text.plainText ||
-      joinedWithoutSoftBreaks === element.text.plainText ||
       sameTextIgnoringCollapsibleWhitespace ||
-      sameTextIgnoringWhitespace
+      preservesRichTextAcrossSoftWraps
     )
   ) {
     return element.text.runs.map((run) => ({
@@ -804,6 +816,54 @@ function cssPixelsToTextSpacingPointValue(cssPixels: number): number {
   return textSpacingPointValue(cssPixels * 0.75);
 }
 
+function hasZeroTextBoxPadding(
+  element: AuthoredHybridEditableTextElement
+): boolean {
+  const padding = element.text.layout?.paddingPx;
+  return !padding || [padding.top, padding.right, padding.bottom, padding.left]
+    .every((value) => Math.abs(value) < 0.01);
+}
+
+function shouldUseProportionalLineSpacing(
+  element: AuthoredHybridEditableTextElement,
+  fontSizes: number[]
+): boolean {
+  const authoredBreakCount = element.text.runs.filter(
+    (run) =>
+      run.text.includes("\n") &&
+      (run.breakKind === "line" || run.breakKind === "paragraph")
+  ).length;
+  if (!authoredBreakCount || !fontSizes.length || !hasZeroTextBoxPadding(element)) {
+    return false;
+  }
+
+  const maximumFontSizePt = Math.max(...fontSizes);
+  const lineCount = element.text.layout?.lineCount ?? authoredBreakCount + 1;
+  const expectedHeightPx =
+    (element.text.style.lineHeight.points / 0.75) * lineCount;
+  const isTightlyFitted =
+    Math.abs(element.bounds.px.height - expectedHeightPx) <= 2;
+  const isDisplayTitle =
+    element.text.role === "title" &&
+    maximumFontSizePt >= 24 &&
+    lineCount >= 2 &&
+    isTightlyFitted;
+  const isCenteredTwoLineLabel =
+    element.text.style.horizontalAlignment === "center" &&
+    maximumFontSizePt <= 12 &&
+    lineCount === 2 &&
+    isTightlyFitted;
+  const isCompactCaptionToken =
+    element.text.role === "caption" &&
+    maximumFontSizePt <= 10 &&
+    Math.abs(element.text.style.lineHeight.multiple - 1.4) <= 0.001;
+
+  // Proportional spacing is reserved for tightly fitted, font-metric-sensitive
+  // authored layouts. Ordinary multiline text uses exact point spacing so a
+  // PowerPoint font substitution cannot move surrounding content.
+  return isDisplayTitle || isCenteredTwoLineLabel || isCompactCaptionToken;
+}
+
 function lineSpacingXml(
   element: AuthoredHybridEditableTextElement
 ): string {
@@ -816,7 +876,7 @@ function lineSpacingXml(
     (fontSizePt) => Math.abs(fontSizePt - fontSizes[0]) > 0.01
   );
 
-  if (hasMixedFontSizes) {
+  if (hasMixedFontSizes || !shouldUseProportionalLineSpacing(element, fontSizes)) {
     return `<a:lnSpc><a:spcPts val="${textSpacingPointValue(
       element.text.style.lineHeight.points
     )}"/></a:lnSpc>`;
@@ -872,7 +932,7 @@ function paragraphsXml(
         ? "<a:br/>"
         : `<a:r>${runPropertiesXml(piece.style, element.opacity, options)}<a:t xml:space="preserve">${escapeXml(piece.text)}</a:t></a:r>`
     );
-    return `<a:p>${pPr}${contents.join("")}<a:endParaRPr lang="ko-KR"/></a:p>`;
+    return `<a:p>${pPr}${contents.join("")}<a:endParaRPr lang="ko-KR" b="0"/></a:p>`;
   }).join("");
 }
 
