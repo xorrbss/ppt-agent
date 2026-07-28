@@ -342,11 +342,21 @@ export default function TemplateV2ContentInspector({
   onEdit,
 }: TemplateV2ContentInspectorProps) {
   const [transaction, setTransaction] = useState(0);
-  const handleFocus = () => {
+  const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+  const handleFocus = (key: string, value: string) => {
     setTransaction((current) => current + 1);
+    setDraftValues((current) => ({ ...current, [key]: value }));
   };
   const handleEdit = (target: TemplateV2RunTarget, value: string) => {
     onEdit(target, value, `content-${transaction}`);
+  };
+  const handleBlur = (key: string) => {
+    setDraftValues((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    onBlur();
   };
   const fields = editableFields(element);
   const series =
@@ -417,15 +427,20 @@ export default function TemplateV2ContentInspector({
       ) : null}
       {fields.map(({ key, label, value, target, control, min, max }) => {
         const shared = {
-          value,
+          value: draftValues[key] ?? value,
           disabled,
-          onFocus: handleFocus,
-          onBlur,
+          "aria-label": `${label} content`,
+          onFocus: () => handleFocus(key, value),
+          onBlur: () => handleBlur(key),
           onChange: (
             event: ChangeEvent<
               HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
             >,
-          ) => handleEdit(target, event.target.value),
+          ) => {
+            const nextValue = event.target.value;
+            setDraftValues((current) => ({ ...current, [key]: nextValue }));
+            handleEdit(target, nextValue);
+          },
           className:
             "mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-400",
         };

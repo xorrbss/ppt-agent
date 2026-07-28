@@ -113,6 +113,6 @@ jobs:
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx,**/TemplateV2ChartCopilotPanel.cy.tsx,**/TemplateV2TableEditorPanel.cy.tsx,**/TemplateV2QualityInspector.cy.tsx,**/TemplateV2ImageReplacementPanel.cy.tsx"
         install: false
 

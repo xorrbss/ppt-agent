@@ -157,3 +157,36 @@ def test_connected_request_keeps_schema_validation_retries(monkeypatch):
     assert asyncio.run(run()) == {"result": "fixed"}
     assert len(client.calls) == 2
     assert all(call["stream"] is True for call in client.calls)
+
+
+def test_upper_bound_validation_error_is_compacted_without_llm_retry(monkeypatch):
+    monkeypatch.setenv("LLM", "ollama")
+
+    class OverlongClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, **kwargs):
+            self.calls.append(kwargs)
+            return SimpleNamespace(content={"result": "x" * 8})
+
+    client = OverlongClient()
+    result = asyncio.run(
+        generate_structured_with_schema_retries(
+            client,
+            "test-model",
+            messages=[],
+            response_format=object(),
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "result": {"type": "string", "maxLength": 5},
+                },
+                "required": ["result"],
+            },
+            validate_schema=True,
+        )
+    )
+
+    assert result == {"result": "xxxx…"}
+    assert len(client.calls) == 1
