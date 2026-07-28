@@ -101,6 +101,7 @@ test("packager writes real PresentationML font parts, relationships, and content
   assert.equal(embedded.result.embeddedFontFiles, 1);
   assert.equal(embedded.result.embeddedTypefaces, 1);
   assert.match(presentation, /xmlns:r="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships"/);
+  assert.match(presentation, /<p:presentation\b[^>]*\bembedTrueTypeFonts="1"/);
   assert.match(
     presentation,
     /<p:embeddedFontLst><p:embeddedFont><p:font typeface="Arial" pitchFamily="34" charset="0"\/><p:regular r:id="rId3"\/><\/p:embeddedFont><\/p:embeddedFontLst>/
@@ -117,6 +118,34 @@ test("packager writes real PresentationML font parts, relationships, and content
   const fontPart = entries.get("ppt/fonts/font1.fntdata");
   assert.ok(fontPart);
   assert.deepEqual(decryptEotFontData(fontPart), font);
+});
+
+test("packager converts unsigned Win32 charsets to signed OOXML bytes", async (t) => {
+  let font;
+  try {
+    font = await readFile(WINDOWS_STATIC_TTF);
+  } catch {
+    t.skip("Windows Arial static TTF is unavailable");
+    return;
+  }
+  const embedded = embedPowerPointFonts(skeleton(), [
+    {
+      typeface: "Korean test face",
+      pitchFamily: 34,
+      charset: 129,
+      faces: { regular: { data: font } },
+    },
+  ]);
+  const entries = readPptxArchive(embedded.pptx);
+  const presentation = entries.get("ppt/presentation.xml").toString("utf8");
+  const fontPart = entries.get("ppt/fonts/font1.fntdata");
+
+  assert.match(
+    presentation,
+    /<p:font typeface="Korean test face" pitchFamily="34" charset="-127"\/>/
+  );
+  assert.equal(embedded.result.fonts[0].charset, -127);
+  assert.equal(fontPart[26], 129);
 });
 
 test("packager is opt-in/no-op for an empty approved face set", () => {
