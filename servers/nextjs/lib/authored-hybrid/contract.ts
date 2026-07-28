@@ -137,6 +137,60 @@ function assertTextStyle(value: unknown, label: string): void {
   }
 }
 
+function assertRectEdges(
+  value: unknown,
+  label: string,
+  allowNegative = false
+): void {
+  invariant(typeof value === "object" && value !== null, `${label} is missing`);
+  const edges = value as Record<string, unknown>;
+  for (const key of ["top", "right", "bottom", "left"] as const) {
+    invariant(
+      finite(edges[key]) && (allowNegative || edges[key] >= 0),
+      `${label}.${key} is invalid`
+    );
+  }
+}
+
+function assertTextLayout(value: unknown, label: string): void {
+  invariant(typeof value === "object" && value !== null, `${label} is missing`);
+  const layout = value as Record<string, unknown>;
+  assertBounds(layout.boxBounds, `${label}.boxBounds`);
+  assertBounds(layout.contentBounds, `${label}.contentBounds`);
+  if (layout.paintedTextBounds !== null) {
+    assertBounds(layout.paintedTextBounds, `${label}.paintedTextBounds`);
+  }
+  assertRectEdges(layout.paddingPx, `${label}.paddingPx`);
+  assertRectEdges(layout.borderPx, `${label}.borderPx`);
+  assertRectEdges(layout.marginPx, `${label}.marginPx`, true);
+  invariant(finite(layout.rowGapPx) && layout.rowGapPx >= 0, `${label}.rowGapPx is invalid`);
+  invariant(finite(layout.columnGapPx) && layout.columnGapPx >= 0, `${label}.columnGapPx is invalid`);
+  invariant(typeof layout.display === "string", `${label}.display is invalid`);
+  if (layout.flexDirection !== null) {
+    oneOf(
+      layout.flexDirection,
+      ["row", "row-reverse", "column", "column-reverse"],
+      `${label}.flexDirection`
+    );
+  }
+  invariant(typeof layout.alignItems === "string", `${label}.alignItems is invalid`);
+  invariant(typeof layout.justifyContent === "string", `${label}.justifyContent is invalid`);
+  oneOf(layout.textAlignSource, ["self", "inherited", "default"], `${label}.textAlignSource`);
+  invariant(Number.isInteger(layout.lineCount) && (layout.lineCount as number) >= 0, `${label}.lineCount is invalid`);
+  invariant(typeof layout.singleLine === "boolean", `${label}.singleLine is invalid`);
+  invariant(
+    layout.singleLine === (layout.lineCount === 1),
+    `${label}.singleLine must match lineCount`
+  );
+  invariant(
+    typeof layout.paragraphSpacingPx === "object" && layout.paragraphSpacingPx !== null,
+    `${label}.paragraphSpacingPx is missing`
+  );
+  const spacing = layout.paragraphSpacingPx as Record<string, unknown>;
+  invariant(finite(spacing.before) && spacing.before >= 0, `${label}.paragraphSpacingPx.before is invalid`);
+  invariant(finite(spacing.after) && spacing.after >= 0, `${label}.paragraphSpacingPx.after is invalid`);
+}
+
 function assertShapePayload(value: unknown, label: string): void {
   invariant(typeof value === "object" && value !== null, `${label} is missing`);
   const shape = value as Record<string, unknown>;
@@ -196,6 +250,16 @@ function assertShapePayload(value: unknown, label: string): void {
       assertColor(shadowLayer.color, `${label}.shadowLayers[${index}].color`);
     });
   }
+  if (shape.outline !== undefined) {
+    invariant(typeof shape.outline === "object" && shape.outline !== null, `${label}.outline is invalid`);
+    const outline = shape.outline as Record<string, unknown>;
+    assertColor(outline.color, `${label}.outline.color`);
+    invariant(finite(outline.widthPt) && outline.widthPt > 0, `${label}.outline.widthPt is invalid`);
+    invariant(finite(outline.offsetPx), `${label}.outline.offsetPx is invalid`);
+    if (outline.dash !== undefined) {
+      oneOf(outline.dash, ["dash", "dot"], `${label}.outline.dash`);
+    }
+  }
   if (shape.endArrow !== undefined) {
     oneOf(shape.endArrow, ["triangle"], `${label}.endArrow`);
   }
@@ -229,7 +293,7 @@ function assertShapePayload(value: unknown, label: string): void {
 function convertTextPayload(
   observation: NonNullable<BrowserElementObservation["text"]>
 ): AuthoredHybridTextPayload {
-  const { containerShape, ...text } = observation;
+  const { containerShape, layout, ...text } = observation;
   return {
     ...text,
     role: observation.role === "unsupported" ? "body" : observation.role,
@@ -238,7 +302,32 @@ function convertTextPayload(
       bounds: rectPxToBounds(run.boundsPx),
       fragments: run.fragmentRectsPx.map(rectPxToBounds),
       style: run.style,
+      ...(run.breakKind ? { breakKind: run.breakKind } : {}),
     })),
+    ...(layout
+      ? {
+          layout: {
+            boxBounds: rectPxToBounds(layout.boxBoundsPx),
+            contentBounds: rectPxToBounds(layout.contentBoundsPx),
+            paintedTextBounds: layout.paintedTextBoundsPx
+              ? rectPxToBounds(layout.paintedTextBoundsPx)
+              : null,
+            paddingPx: layout.paddingPx,
+            borderPx: layout.borderPx,
+            marginPx: layout.marginPx,
+            rowGapPx: layout.rowGapPx,
+            columnGapPx: layout.columnGapPx,
+            display: layout.display,
+            flexDirection: layout.flexDirection,
+            alignItems: layout.alignItems,
+            justifyContent: layout.justifyContent,
+            textAlignSource: layout.textAlignSource,
+            lineCount: layout.lineCount,
+            singleLine: layout.singleLine,
+            paragraphSpacingPx: layout.paragraphSpacingPx,
+          },
+        }
+      : {}),
     ...(containerShape
       ? { containerShape: {
           bounds: rectPxToBounds(containerShape.boundsPx),
@@ -491,7 +580,14 @@ export function assertAuthoredHybridSlide(
             assertBounds(fragment, `element ${element.id} run ${runIndex}.fragments[${fragmentIndex}]`)
           );
           assertTextStyle(run.style, `element ${element.id} run ${runIndex}.style`);
+          if (run.breakKind !== undefined) {
+            oneOf(run.breakKind, ["soft", "line", "paragraph"], `element ${element.id} run ${runIndex}.breakKind`);
+            invariant(run.text === "\n", `element ${element.id} run ${runIndex}.breakKind requires a newline run`);
+          }
         });
+        if (element.text.layout) {
+          assertTextLayout(element.text.layout, `element ${element.id} text.layout`);
+        }
         if (element.text.containerShape) {
           assertBounds(element.text.containerShape.bounds, `element ${element.id} text.containerShape.bounds`);
           assertShapePayload(element.text.containerShape.shape, `element ${element.id} text.containerShape.shape`);
@@ -544,7 +640,14 @@ export function assertAuthoredHybridSlide(
             assertBounds(fragment, `element ${element.id} run ${runIndex}.fragments[${fragmentIndex}]`)
           );
           assertTextStyle(run.style, `element ${element.id} run ${runIndex}.style`);
+          if (run.breakKind !== undefined) {
+            oneOf(run.breakKind, ["soft", "line", "paragraph"], `element ${element.id} run ${runIndex}.breakKind`);
+            invariant(run.text === "\n", `element ${element.id} run ${runIndex}.breakKind requires a newline run`);
+          }
         });
+        if (element.text.layout) {
+          assertTextLayout(element.text.layout, `element ${element.id} text.layout`);
+        }
         if (element.text.containerShape) {
           assertBounds(element.text.containerShape.bounds, `element ${element.id} text.containerShape.bounds`);
           assertShapePayload(element.text.containerShape.shape, `element ${element.id} text.containerShape.shape`);
