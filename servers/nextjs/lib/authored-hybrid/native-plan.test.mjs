@@ -165,7 +165,7 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
   assert.match(textXml, /horzOverflow="clip"/);
   assert.match(textXml, /vertOverflow="clip"/);
   assert.match(textXml, /<a:noAutofit\/>/);
-  assert.match(textXml, /<a:spcPts val="3000"\/>/);
+  assert.match(textXml, /<a:lnSpc><a:spcPct val="125000"\/><\/a:lnSpc>/);
   assert.doesNotMatch(textXml, /<a:normAutofit/);
   assert.match(textXml, /rot="21150000"/);
   assert.match(textXml, /<a:alpha val="80000"\/>/);
@@ -577,6 +577,7 @@ test("computed table-cell layout maps asymmetric insets, exact line height, para
   assert.match(paragraphs[1], /<a:spcBef><a:spcPts val="0"\/><\/a:spcBef>/);
   assert.match(paragraphs[1], /<a:spcAft><a:spcPts val="900"\/><\/a:spcAft>/);
   assert.equal((xml.match(/\sb="1"/g) ?? []).length, 1);
+  assert.equal((xml.match(/\sb="0"/g) ?? []).length, 2);
   assert.match(xml, /sz="1400" b="1"/);
   assert.match(xml, /<a:srgbClr val="D92344">/);
 });
@@ -604,8 +605,9 @@ test("centered mixed-weight runs keep one centered paragraph across a browser so
     classification: { mode: "native", kind: "text", confidence: "safe" },
     text: {
       role: "caption",
-      plainText: "Center bold\nblue",
-      paragraphs: ["Center bold", "blue"],
+      // The browser-only soft wrap is captured in runs, not authored text.
+      plainText: "Center boldblue",
+      paragraphs: ["Center boldblue"],
       style: regularStyle,
       runs: [
         { text: "Center ", bounds: bounds(470, 112, 75, 20), fragments: [], style: regularStyle },
@@ -649,8 +651,10 @@ test("centered mixed-weight runs keep one centered paragraph across a browser so
   assert.match(xml, /anchor="ctr"/);
   assert.match(xml, /wrap="none"/);
   assert.match(xml, /<a:normAutofit\/>/);
-  assert.match(xml, /<a:lnSpc><a:spcPts val="2000"\/><\/a:lnSpc>/);
+  assert.match(xml, /<a:lnSpc><a:spcPct val="153846"\/><\/a:lnSpc>/);
+  assert.doesNotMatch(xml, /<a:lnSpc><a:spcPts/);
   assert.equal((xml.match(/\sb="1"/g) ?? []).length, 1);
+  assert.equal((xml.match(/\sb="0"/g) ?? []).length, 2);
   assert.match(xml, /<a:t xml:space="preserve">Center <\/a:t>/);
   assert.match(xml, /<a:t xml:space="preserve">bold<\/a:t>/);
   assert.match(xml, /<a:srgbClr val="2457D6">/);
@@ -682,6 +686,50 @@ test("font-native normal line height is not serialized as an estimated exact spa
   const xml = serializePreparedNativeElement(prepared, 3);
 
   assert.doesNotMatch(xml, /<a:lnSpc>/);
+});
+
+test("uniform computed line height uses proportional spacing for the active font metrics", async () => {
+  const uniformStyle = style({
+    fontSizePt: 12,
+    lineHeight: { points: 18, multiple: 1.5, source: "computed" },
+  });
+  const element = {
+    ...base("uniform-line-height", 0, 0, bounds(40, 40, 280, 60)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body",
+      plainText: "Uniform\nspacing",
+      paragraphs: ["Uniform", "spacing"],
+      style: uniformStyle,
+      runs: [
+        {
+          text: "Uniform",
+          bounds: bounds(40, 40, 80, 18),
+          fragments: [],
+          style: uniformStyle,
+        },
+        {
+          text: "\n",
+          bounds: bounds(40, 58, 0, 0),
+          fragments: [],
+          style: uniformStyle,
+          breakKind: "line",
+        },
+        {
+          text: "spacing",
+          bounds: bounds(40, 58, 70, 18),
+          fragments: [],
+          style: uniformStyle,
+        },
+      ],
+    },
+  };
+
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 3);
+
+  assert.match(xml, /<a:lnSpc><a:spcPct val="150000"\/><\/a:lnSpc>/);
+  assert.doesNotMatch(xml, /<a:lnSpc><a:spcPts/);
 });
 
 test("editable mode promotes raster-classified text above retained artwork", async () => {
