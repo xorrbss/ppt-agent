@@ -278,11 +278,55 @@ export function normalizeChartContract(
 }
 
 function validTableCell(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (hasMeaningfulField(value, "stroke") || hasMeaningfulField(value, "border")) {
+    // The canonical TableCell model has no border field. The HTML renderer
+    // currently understands an undeclared `stroke`, but editing it would make
+    // the persisted payload invalid for FastAPI/Pydantic.
+    return false;
+  }
   return (
-    isRecord(value) &&
+    validOptionalFont(value.font) &&
     Array.isArray(value.runs) &&
     value.runs.every(
-      (run) => isRecord(run) && typeof run.text === "string",
+      (run) =>
+        isRecord(run) &&
+        typeof run.text === "string" &&
+        validOptionalFont(run.font),
+    )
+  );
+}
+
+const FONT_STRING_FIELDS = ["family", "color"] as const;
+const FONT_BOOLEAN_FIELDS = [
+  "bold",
+  "italic",
+  "underline",
+  "ellipsis",
+] as const;
+const FONT_NUMBER_FIELDS = [
+  "size",
+  "line_height",
+  "letter_spacing",
+  "opacity",
+] as const;
+
+function validOptionalFont(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!isRecord(value)) return false;
+  return (
+    FONT_STRING_FIELDS.every(
+      (field) =>
+        !hasMeaningfulField(value, field) || typeof value[field] === "string",
+    ) &&
+    FONT_BOOLEAN_FIELDS.every(
+      (field) =>
+        !hasMeaningfulField(value, field) || typeof value[field] === "boolean",
+    ) &&
+    FONT_NUMBER_FIELDS.every(
+      (field) =>
+        !hasMeaningfulField(value, field) ||
+        (typeof value[field] === "number" && Number.isFinite(value[field])),
     )
   );
 }
@@ -394,6 +438,9 @@ export function normalizeTableContract(
 
 export type ChartContractEdit =
   | { kind: "chart-type"; value: unknown }
+  | { kind: "data-labels"; value: unknown }
+  | { kind: "category-count"; value: unknown }
+  | { kind: "series-count"; value: unknown }
   | { kind: "category-label"; categoryIndex: number; value: unknown }
   | { kind: "series-name"; seriesIndex: number; value: unknown }
   | {
@@ -432,12 +479,84 @@ export function buildChartContractEditPatches(
       }
     }
     if (
-      capabilities.value.dataLabelPositions.length === 0 &&
-      hasMeaningfulField(candidate, "data_labels")
+      hasMeaningfulField(candidate, "data_labels") &&
+      !capabilities.value.dataLabelPositions.includes(
+        candidate.data_labels as DataLabelPosition,
+      )
     ) {
       candidate.data_labels = null;
       patches.push({ path: ["data_labels"], value: null });
     }
+  } else if (edit.kind === "data-labels") {
+    const capabilities = chartContractCapabilities(candidate.chart_type);
+    if (!capabilities.ok) return capabilities;
+    if (
+      edit.value !== null &&
+      (typeof edit.value !== "string" ||
+        !capabilities.value.dataLabelPositions.includes(
+          edit.value as DataLabelPosition,
+        ))
+    ) {
+      return { ok: false, reason: "invalid_chart_data_labels_edit" };
+    }
+    if ((candidate.data_labels ?? null) === edit.value) {
+      return { ok: true, value: [] };
+    }
+    candidate.data_labels = edit.value;
+    patches.push({ path: ["data_labels"], value: edit.value });
+  } else if (edit.kind === "category-count") {
+    if (
+      !Number.isInteger(edit.value) ||
+      (edit.value as number) < 0 ||
+      (edit.value as number) > CHART_LIMIT ||
+      !Array.isArray(candidate.categories) ||
+      !Array.isArray(candidate.series)
+    ) {
+      return { ok: false, reason: "invalid_chart_category_count_edit" };
+    }
+    const nextCount = edit.value as number;
+    if (nextCount === candidate.categories.length) {
+      return { ok: true, value: [] };
+    }
+    const categories = candidate.categories as string[];
+    if (nextCount < categories.length) categories.splice(nextCount);
+    while (categories.length < nextCount) {
+      categories.push(`Category ${categories.length + 1}`);
+    }
+    patches.push({ path: ["categories"], value: categories });
+    (candidate.series as JsonRecord[]).forEach((item, seriesIndex) => {
+      const values = item.values as number[];
+      if (nextCount < values.length) values.splice(nextCount);
+      while (values.length < nextCount) values.push(0);
+      patches.push({
+        path: ["series", seriesIndex, "values"],
+        value: values,
+      });
+    });
+  } else if (edit.kind === "series-count") {
+    const capabilities = chartContractCapabilities(candidate.chart_type);
+    if (!capabilities.ok) return capabilities;
+    const limit = capabilities.value.multipleSeries ? SERIES_LIMIT : 1;
+    if (
+      !Number.isInteger(edit.value) ||
+      (edit.value as number) < 0 ||
+      (edit.value as number) > limit ||
+      !Array.isArray(candidate.categories) ||
+      !Array.isArray(candidate.series)
+    ) {
+      return { ok: false, reason: "invalid_chart_series_count_edit" };
+    }
+    const nextCount = edit.value as number;
+    const series = candidate.series as JsonRecord[];
+    if (nextCount === series.length) return { ok: true, value: [] };
+    if (nextCount < series.length) series.splice(nextCount);
+    while (series.length < nextCount) {
+      series.push({
+        name: `Series ${series.length + 1}`,
+        values: (candidate.categories as string[]).map(() => 0),
+      });
+    }
+    patches.push({ path: ["series"], value: series });
   } else if (edit.kind === "category-label") {
     if (
       !Number.isInteger(edit.categoryIndex) ||
@@ -507,6 +626,14 @@ export type TableContractEdit =
       runIndex: number;
       value: unknown;
     }
+  | {
+      kind: "cell-font";
+      section: "header" | "body";
+      rowIndex?: number;
+      columnIndex: number;
+      field: "size" | "family" | "color" | "bold" | "italic" | "underline";
+      value: unknown;
+    }
   | { kind: "row-count"; value: unknown }
   | { kind: "column-count"; value: unknown };
 
@@ -525,45 +652,87 @@ export function buildTableContractEditPatches(
   const rows = candidate.rows as JsonRecord[][];
   const patches: TemplateV2ContractPatch[] = [];
 
-  if (edit.kind === "run-text") {
+  if (edit.kind === "run-text" || edit.kind === "cell-font") {
     if (
       !Number.isInteger(edit.columnIndex) ||
-      !Number.isInteger(edit.runIndex) ||
-      typeof edit.value !== "string" ||
       edit.columnIndex < 0 ||
-      edit.runIndex < 0
+      (edit.kind === "run-text" &&
+        (!Number.isInteger(edit.runIndex) ||
+          typeof edit.value !== "string" ||
+          edit.runIndex < 0))
     ) {
-      return { ok: false, reason: "invalid_table_text_edit" };
+      return {
+        ok: false,
+        reason:
+          edit.kind === "run-text"
+            ? "invalid_table_text_edit"
+            : "invalid_table_font_edit",
+      };
     }
     let cell: JsonRecord | undefined;
-    let path: (string | number)[];
+    let cellPath: (string | number)[];
     if (edit.section === "header") {
       cell = columns[edit.columnIndex];
-      path = ["columns", edit.columnIndex, "runs", edit.runIndex, "text"];
+      cellPath = ["columns", edit.columnIndex];
     } else {
       if (!Number.isInteger(edit.rowIndex) || (edit.rowIndex as number) < 0) {
-        return { ok: false, reason: "invalid_table_text_edit" };
+        return {
+          ok: false,
+          reason:
+            edit.kind === "run-text"
+              ? "invalid_table_text_edit"
+              : "invalid_table_font_edit",
+        };
       }
       cell = rows[edit.rowIndex as number]?.[edit.columnIndex];
-      path = [
+      cellPath = [
         "rows",
         edit.rowIndex as number,
         edit.columnIndex,
-        "runs",
-        edit.runIndex,
-        "text",
       ];
     }
-    const runs = cell?.runs;
-    if (!Array.isArray(runs) || edit.runIndex >= runs.length) {
-      return { ok: false, reason: "invalid_table_text_edit" };
+    if (!cell) {
+      return {
+        ok: false,
+        reason:
+          edit.kind === "run-text"
+            ? "invalid_table_text_edit"
+            : "invalid_table_font_edit",
+      };
     }
-    const run = runs[edit.runIndex];
-    if (!isRecord(run)) {
-      return { ok: false, reason: "invalid_table_text_edit" };
+    if (edit.kind === "run-text") {
+      const runs = cell.runs;
+      if (!Array.isArray(runs) || edit.runIndex >= runs.length) {
+        return { ok: false, reason: "invalid_table_text_edit" };
+      }
+      const run = runs[edit.runIndex];
+      if (!isRecord(run)) {
+        return { ok: false, reason: "invalid_table_text_edit" };
+      }
+      run.text = edit.value;
+      patches.push({
+        path: [...cellPath, "runs", edit.runIndex, "text"],
+        value: edit.value,
+      });
+    } else {
+      const isBooleanField = ["bold", "italic", "underline"].includes(edit.field);
+      const isNumberField = edit.field === "size";
+      if (
+        (isBooleanField && typeof edit.value !== "boolean") ||
+        (isNumberField &&
+          (typeof edit.value !== "number" || !Number.isFinite(edit.value))) ||
+        (!isBooleanField && !isNumberField && typeof edit.value !== "string")
+      ) {
+        return { ok: false, reason: "invalid_table_font_edit" };
+      }
+      const font = isRecord(cell.font) ? cell.font : {};
+      font[edit.field] = edit.value;
+      cell.font = font;
+      patches.push({
+        path: [...cellPath, "font", edit.field],
+        value: edit.value,
+      });
     }
-    run.text = edit.value;
-    patches.push({ path, value: edit.value });
   } else if (edit.kind === "row-count") {
     if (!Number.isInteger(edit.value) || (edit.value as number) < 0) {
       return { ok: false, reason: "invalid_table_row_count_edit" };
