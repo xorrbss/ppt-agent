@@ -4,7 +4,9 @@ import test from "node:test";
 import { renderTemplateV2GeneralPresentationHtml } from "../template-v2-general-renderer.mjs";
 import { createTemplateV2SlideRenderPlan } from "../template-v2-render-plan.mjs";
 import {
+  editTemplateV2VectorPointTopology,
   projectTemplateV2ElementForRenderPlan,
+  templateV2CanChangeVectorEllipseShape,
   templateV2EditableVectorGeometry,
   templateV2VectorRenderGeometry,
 } from "../template-v2-vector.ts";
@@ -172,12 +174,168 @@ test("canonical curve lifecycle and explicit two-point shape conversion are loss
   assert.equal(templateV2EditableVectorGeometry(ellipse)?.shape, "ellipse");
   assert.deepEqual(ellipse.points[0].future_point, { retained: true });
   assert.deepEqual(ellipse.future_vector, { version: 3 });
+  assert.equal(templateV2CanChangeVectorEllipseShape(ellipse), true);
 
   const plan = createTemplateV2SlideRenderPlan(slideWith(ellipse));
   assert.equal(plan.components[0].elements[0].vector?.shape, "ellipse");
   assert.match(
     renderTemplateV2GeneralPresentationHtml(presentationWith(ellipse)),
     /<ellipse /
+  );
+
+  const path = JSON.parse(JSON.stringify(
+    applyAtPath(ellipse, ["shape"], null)
+  ));
+  assert.equal(templateV2EditableVectorGeometry(path)?.shape, null);
+  assert.deepEqual(path.points[0].future_point, { retained: true });
+  assert.deepEqual(path.future_vector, { version: 3 });
+  assert.match(
+    renderTemplateV2GeneralPresentationHtml(presentationWith(path)),
+    /<polyline /
+  );
+  assert.equal(
+    templateV2CanChangeVectorEllipseShape({
+      ...path,
+      curve: { type: "smooth", tension: 0.5, segments: 8 },
+    }),
+    false
+  );
+  assert.equal(
+    templateV2CanChangeVectorEllipseShape({
+      ...path,
+      closed: true,
+    }),
+    false
+  );
+  assert.equal(
+    templateV2CanChangeVectorEllipseShape({
+      ...path,
+      corner_radii: [0, 0],
+    }),
+    false
+  );
+});
+
+test("point topology edits preserve point extensions, radii, and PPT geometry", () => {
+  const authored = {
+    type: "vector",
+    shape: "polygon",
+    points: [
+      { x: 10, y: 20, future_point: { id: "a" } },
+      { x: 170, y: 15, future_point: { id: "b" } },
+      { x: 155, y: 130 },
+      { x: 25, y: 145 },
+    ],
+    closed: true,
+    corner_radii: [10, 8, 6, 4],
+    fill: { color: "#123456" },
+    stroke: { color: "#abcdef", width: 2 },
+    future_vector: { retained: true },
+  };
+
+  const added = editTemplateV2VectorPointTopology(authored, {
+    type: "add-after",
+    index: 1,
+  });
+  assert.ok(added);
+  assert.deepEqual(added.points, [
+    authored.points[0],
+    authored.points[1],
+    { x: 162.5, y: 72.5 },
+    authored.points[2],
+    authored.points[3],
+  ]);
+  assert.deepEqual(added.cornerRadii, [10, 8, 0, 6, 4]);
+  assert.equal(added.selectedIndex, 2);
+
+  const addedElement = {
+    ...authored,
+    points: added.points,
+    corner_radii: added.cornerRadii,
+  };
+  const moved = editTemplateV2VectorPointTopology(addedElement, {
+    type: "move",
+    index: added.selectedIndex,
+    direction: 1,
+  });
+  assert.ok(moved);
+  assert.deepEqual(moved.points, [
+    authored.points[0],
+    authored.points[1],
+    authored.points[2],
+    { x: 162.5, y: 72.5 },
+    authored.points[3],
+  ]);
+  assert.deepEqual(moved.cornerRadii, [10, 8, 6, 0, 4]);
+  assert.equal(moved.selectedIndex, 3);
+
+  const movedElement = JSON.parse(JSON.stringify({
+    ...addedElement,
+    points: moved.points,
+    corner_radii: moved.cornerRadii,
+  }));
+  assert.deepEqual(movedElement.points[0].future_point, { id: "a" });
+  assert.deepEqual(movedElement.points[1].future_point, { id: "b" });
+  assert.deepEqual(movedElement.future_vector, { retained: true });
+
+  const deleted = editTemplateV2VectorPointTopology(movedElement, {
+    type: "delete",
+    index: moved.selectedIndex,
+  });
+  assert.ok(deleted);
+  assert.deepEqual(deleted.points, authored.points);
+  assert.deepEqual(deleted.cornerRadii, authored.corner_radii);
+
+  const withoutCanonicalRadii = {
+    ...authored,
+    corner_radii: undefined,
+  };
+  const addedWithoutCanonicalRadii = editTemplateV2VectorPointTopology(
+    withoutCanonicalRadii,
+    { type: "add-after", index: 0 }
+  );
+  assert.ok(addedWithoutCanonicalRadii);
+  assert.equal(addedWithoutCanonicalRadii.cornerRadii, null);
+  assert.deepEqual(addedWithoutCanonicalRadii.points, [
+    authored.points[0],
+    { x: 90, y: 17.5 },
+    ...authored.points.slice(1),
+  ]);
+
+  const projected = projectTemplateV2ElementForRenderPlan(movedElement);
+  const plan = createTemplateV2SlideRenderPlan(slideWith(projected));
+  const vectorPlan = plan.components[0].elements[0].vector;
+  assert.ok(vectorPlan);
+  const konvaGeometry = templateV2VectorRenderGeometry(
+    movedElement,
+    vectorPlan
+  );
+  const pptHtml = renderTemplateV2GeneralPresentationHtml(
+    presentationWith(movedElement)
+  );
+  assertPointsClose(parseSvgPoints(pptHtml, "polygon"), konvaGeometry.points);
+
+  assert.equal(
+    editTemplateV2VectorPointTopology(
+      {
+        ...authored,
+        shape: "ellipse",
+        points: authored.points.slice(0, 2),
+        corner_radii: undefined,
+      },
+      { type: "add-after", index: 0 }
+    ),
+    null
+  );
+  assert.equal(
+    editTemplateV2VectorPointTopology(
+      {
+        ...authored,
+        cornerRadii: [10, 8, 6, 4],
+      },
+      { type: "delete", index: 1 }
+    ),
+    null
   );
 });
 

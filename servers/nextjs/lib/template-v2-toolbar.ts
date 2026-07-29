@@ -2,6 +2,7 @@ import {
   validateChartContract,
   validateTableContract,
 } from "./template-v2-chart-table-contract.ts";
+import { validateTemplateV2InfographicContract } from "./template-v2-infographic-contract.ts";
 import { isTemplateV2SafeColor } from "./template-v2-render-plan.mjs";
 import { planStudioElement } from "./template-v2-studio-plan.ts";
 import { projectTemplateV2ElementForRenderPlan } from "./template-v2-vector.ts";
@@ -16,7 +17,7 @@ export type TemplateV2ToolbarRoute =
       element: TemplateV2ToolbarRecord;
     }
   | {
-      kind: "vector" | "chart" | "table";
+      kind: "vector" | "chart" | "table" | "infographic";
       element: TemplateV2ToolbarRecord;
     }
   | {
@@ -179,6 +180,17 @@ function hasSupportedTableContract(element: TemplateV2ToolbarRecord): boolean {
   );
 }
 
+function hasSupportedInfographicContract(
+  element: TemplateV2ToolbarRecord
+): boolean {
+  try {
+    validateTemplateV2InfographicContract(element);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function resolveTemplateV2ToolbarRoute({
   selectionCount,
   element,
@@ -221,6 +233,11 @@ export function resolveTemplateV2ToolbarRoute({
   if (element.type === "table") {
     return hasSupportedTableContract(element)
       ? { kind: "table", element }
+      : { kind: "unsupported", reason: "invalid-contract", element };
+  }
+  if (element.type === "infographic") {
+    return hasSupportedInfographicContract(element)
+      ? { kind: "infographic", element }
       : { kind: "unsupported", reason: "invalid-contract", element };
   }
   return { kind: "unsupported", reason: "element-type", element };

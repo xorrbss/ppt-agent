@@ -3,10 +3,16 @@ import test from "node:test";
 
 import { renderTemplateV2GeneralPresentationHtml } from "./template-v2-general-renderer.mjs";
 import {
+  buildTemplateV2InfographicValuePatches,
   validateTemplateV2InfographicContract,
   validateTemplateV2SlideUiInfographicContract,
 } from "./template-v2-infographic-contract.ts";
+import { templateV2InfographicView } from "./template-v2-konva.ts";
 import { createTemplateV2SlideRenderPlan } from "./template-v2-render-plan.mjs";
+import {
+  adaptUpstreamTemplateV2LayoutsToStudio,
+  serializeStudioLayoutsForUpstream,
+} from "./template-v2-upstream-compat.ts";
 
 function infographicElement(overrides: Record<string, unknown> = {}) {
   return {
@@ -74,6 +80,125 @@ test("infographic contract accepts inclusive endpoints for progress bars and gau
       assert.equal(contract.metrics.ratio, value === 10 ? 0 : 1);
     }
   }
+});
+
+test("value edits are bounded leaf patches that do not mutate retained JSON", () => {
+  const source = infographicElement();
+  const before = structuredClone(source);
+
+  assert.deepEqual(buildTemplateV2InfographicValuePatches(source, 64), {
+    ok: true,
+    value: [{ path: ["data", "value"], value: 64 }],
+  });
+  assert.deepEqual(buildTemplateV2InfographicValuePatches(source, 30), {
+    ok: true,
+    value: [],
+  });
+  assert.deepEqual(
+    buildTemplateV2InfographicValuePatches(source, Number.NaN),
+    {
+      ok: false,
+      reason: "template_v2_infographic_invalid_value_edit",
+    },
+  );
+  assert.deepEqual(buildTemplateV2InfographicValuePatches(source, 81), {
+    ok: false,
+    reason: "template_v2_infographic_value_edit_out_of_range",
+  });
+  assert.equal(
+    buildTemplateV2InfographicValuePatches(
+      infographicElement({
+        data: {
+          type: "progress_bar",
+          min_value: 5,
+          max_value: 5,
+          value: 5,
+        },
+      }),
+      5,
+    ).ok,
+    false,
+  );
+  assert.deepEqual(source, before);
+});
+
+test("value leaf patch survives save, reload, Konva planning, and the PPT render boundary", () => {
+  const sourceElement = infographicElement();
+  const source = {
+    future_envelope: { retain: "exactly" },
+    layouts: [
+      {
+        id: "retained-infographic",
+        future_layout: ["retain", "exactly"],
+        components: [
+          {
+            id: "metric",
+            position: { x: 0, y: 0 },
+            elements: [sourceElement],
+          },
+        ],
+      },
+    ],
+  };
+  const document = adaptUpstreamTemplateV2LayoutsToStudio(source);
+  const edited = structuredClone(document.studioLayouts) as {
+    layouts: Array<{
+      components: Array<{
+        elements: Array<Record<string, unknown>>;
+      }>;
+    }>;
+  };
+  const editedElement = edited.layouts[0]!.components[0]!.elements[0]!;
+  const patches = buildTemplateV2InfographicValuePatches(editedElement, 72.5);
+  assert.equal(patches.ok, true);
+  if (!patches.ok) return;
+  assert.deepEqual(patches.value, [
+    { path: ["data", "value"], value: 72.5 },
+  ]);
+  (editedElement.data as Record<string, unknown>).value =
+    patches.value[0]!.value;
+
+  const saved = serializeStudioLayoutsForUpstream(document, edited) as {
+    future_envelope: { retain: string };
+    layouts: Array<{
+      future_layout: string[];
+      components: Array<{ elements: Array<Record<string, unknown>> }>;
+    }>;
+  };
+  const reloaded = adaptUpstreamTemplateV2LayoutsToStudio(saved);
+  const persisted = serializeStudioLayoutsForUpstream(reloaded) as typeof saved;
+  const persistedElement =
+    persisted.layouts[0]!.components[0]!.elements[0]!;
+  const slide = { id: "retained-infographic", ui: persisted.layouts[0] };
+
+  assert.deepEqual(persisted.future_envelope, source.future_envelope);
+  assert.deepEqual(persisted.layouts[0]!.future_layout, ["retain", "exactly"]);
+  assert.deepEqual(persistedElement.upstream_element_extension, {
+    retain: "exactly",
+  });
+  assert.deepEqual(
+    (persistedElement.data as Record<string, unknown>).future_format,
+    "percent",
+  );
+  assert.equal(
+    validateTemplateV2SlideUiInfographicContract(slide, 0, 0).metrics.value,
+    72.5,
+  );
+  assert.equal(templateV2InfographicView(persistedElement)?.ratio, 0.925);
+  assert.equal(
+    createTemplateV2SlideRenderPlan(slide).components[0]!.elements[0]!
+      .infographic?.ratio,
+    0.925,
+  );
+
+  const html = renderTemplateV2GeneralPresentationHtml({
+    version: "v2-standard",
+    mode: "template",
+    slides: [slide],
+  });
+  assert.match(html, /data-infographic-type="progress_bar"/);
+  assert.match(html, /width:92.5%/);
+  assert.deepEqual(sourceElement, infographicElement());
 });
 
 test("infographic contract rejects invalid ranges, values, colors, and types", () => {

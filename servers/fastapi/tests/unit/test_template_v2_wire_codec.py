@@ -180,6 +180,56 @@ def test_layout_envelope_validates_known_schema_without_projecting_extensions():
     assert loaded.to_wire_value() == source
 
 
+def test_layout_envelope_preserves_vector_path_topology_extensions():
+    source = {
+        "layouts": [
+            {
+                "id": "vector-path-slide",
+                "description": "Editable vector path",
+                "components": [
+                    {
+                        "id": "vector-body",
+                        "description": "Editable vector path body",
+                        "position": {"x": 0, "y": 0},
+                        "elements": [
+                            {
+                                "type": "vector",
+                                "shape": None,
+                                "points": [
+                                    {
+                                        "x": 10,
+                                        "y": 20,
+                                        "future_point": {"pressure": 0.75},
+                                    },
+                                    {"x": 90, "y": 10},
+                                    {"x": 140, "y": 80},
+                                ],
+                                "closed": False,
+                                "corner_radii": [0, 3, 0],
+                                "curve": {
+                                    "type": "smooth",
+                                    "tension": 0.4,
+                                    "segments": 8,
+                                    "future_curve": {"interpolation": "v3"},
+                                },
+                                "future_vector": {"retained": True},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    wire = decode_wire_layouts(source)
+    wire.validate_strict()
+    stored = dump_storage_layouts(wire)
+    loaded = load_storage_layouts(stored)
+
+    assert stored == source
+    assert loaded.to_wire_value() == source
+
+
 def test_layout_envelope_strict_validation_rejects_unknown_discriminator():
     source = {
         "layouts": [

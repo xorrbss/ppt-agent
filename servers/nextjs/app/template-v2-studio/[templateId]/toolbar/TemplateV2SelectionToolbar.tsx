@@ -7,6 +7,7 @@ import { resolveTemplateV2ToolbarRoute } from "@/lib/template-v2-toolbar";
 import ChartToolbar from "./ChartToolbar";
 import IconToolbar from "./IconToolbar";
 import ImageToolbar from "./ImageToolbar";
+import InfographicToolbar from "./InfographicToolbar";
 import MultiSelectionToolbar from "./MultiSelectionToolbar";
 import SelectionActions from "./SelectionActions";
 import TableToolbar from "./TableToolbar";
@@ -84,6 +85,9 @@ export function TemplateV2SelectionToolbar({
         )}
         {route.kind === "table" && (
           <TableToolbar element={route.element} onPatch={onPatch} />
+        )}
+        {route.kind === "infographic" && (
+          <InfographicToolbar element={route.element} onPatch={onPatch} />
         )}
         <SelectionActions actions={actions} />
       </>

@@ -567,4 +567,62 @@ describe("TemplateV2SelectionToolbar", () => {
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("exist");
     cy.wrap(path).should("deep.equal", ["children", 2, "children", 1]);
   });
+
+  it("routes a strict infographic leaf edit without losing selection and cleans up its portal", () => {
+    const path = ["children", 4];
+    const patch = cy.spy().as("infographicSelectionPatch");
+    const initialElement = {
+      type: "infographic",
+      data: {
+        type: "progress_bar",
+        min_value: 0,
+        max_value: 100,
+        value: 35,
+        retained_data: { source: "upstream" },
+      },
+      colors: ["#e5e7eb", "#2563eb"],
+      retained_root: { owner: "template" },
+    };
+
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={initialElement}
+        position={position}
+        actions={emptyActions}
+        observedPatch={patch}
+      />
+    );
+
+    setReactInputValue("Infographic value", "64");
+    cy.get("@infographicSelectionPatch").should(
+      "have.been.calledWith",
+      [{ path: ["data", "value"], value: 64 }],
+      {
+        historyKey: "toolbar:infographic-value",
+        continuous: true,
+      }
+    );
+    cy.get('input[aria-label="Infographic value"]').should("have.value", "64");
+    cy.wrap(path).should("deep.equal", ["children", 4]);
+
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={{
+          ...initialElement,
+          data: { ...initialElement.data, value: 64 },
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={() => {}}
+      />
+    );
+    cy.get('input[aria-label="Infographic value"]').should("have.value", "64");
+
+    cy.mount(<div data-testid="infographic-replacement">Replacement</div>);
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+  });
 });

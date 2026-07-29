@@ -7,10 +7,8 @@ import { cn } from "@/lib/utils";
 
 const CreateCustomTemplate = ({
   selectionPage = false,
-  onClick,
 }: {
   selectionPage?: boolean;
-  onClick?: () => void;
 }) => {
     const router = useRouter();
     return (

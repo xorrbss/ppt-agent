@@ -3,8 +3,14 @@
 import { useState } from "react";
 
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
-import { templateV2EditableVectorGeometry } from "@/lib/template-v2-vector";
 import {
+  editTemplateV2VectorPointTopology,
+  templateV2CanChangeVectorEllipseShape,
+  templateV2EditableVectorGeometry,
+  type TemplateV2VectorPointTopologyAction,
+} from "@/lib/template-v2-vector";
+import {
+  ToolbarButton,
   ToolbarField,
   ToolbarSelect,
   toolbarInputClass,
@@ -56,6 +62,17 @@ export default function VectorToolbar({
     editableGeometry.points.length >= 3
       ? editableGeometry.cornerRadii
       : null;
+  const editablePointTopology =
+    editableGeometry &&
+    editableGeometry.shape !== "ellipse" &&
+    editableGeometry.cornerRadii !== null &&
+    element.cornerRadii == null
+      ? editableGeometry
+      : null;
+  const ellipseShapeChangeIsSafe =
+    templateV2CanChangeVectorEllipseShape(element);
+  const unsafeEllipseIsLocked =
+    editableGeometry?.shape === "ellipse" && !ellipseShapeChangeIsSafe;
 
   function patchFill(value: string) {
     const path = fill || element.fill == null ? ["fill", "color"] : ["fill"];
@@ -63,6 +80,24 @@ export default function VectorToolbar({
       [{ path, value }],
       { historyKey: "toolbar:vector-fill", continuous: true }
     );
+  }
+
+  function patchPointTopology(action: TemplateV2VectorPointTopologyAction) {
+    const edit = editTemplateV2VectorPointTopology(element, action);
+    if (!edit) return;
+    const patches: TemplateV2ToolbarPatch[] = [
+      { path: ["points"], value: edit.points },
+    ];
+    if (edit.cornerRadii !== null) {
+      patches.push({
+        path: ["corner_radii"],
+        value: edit.cornerRadii,
+      });
+    }
+    onPatch(patches, {
+      historyKey: `toolbar:vector-point-${action.type}`,
+    });
+    setRequestedPointIndex(edit.selectedIndex);
   }
 
   return (
@@ -136,25 +171,49 @@ export default function VectorToolbar({
           }
         />
       </ToolbarField>
-      {editableGeometry &&
-      editableGeometry.shape !== null &&
-      editableGeometry.points.length === 2 ? (
+      {editableGeometry ? (
         <ToolbarField label="Vector shape">
           <span aria-hidden="true">Shape</span>
           <ToolbarSelect
             className="w-20"
             aria-label="Vector shape"
-            value={editableGeometry.shape}
+            value={editableGeometry.shape ?? "path"}
             onChange={(event) => {
               const value = event.target.value;
-              if (value !== "polygon" && value !== "ellipse") return;
-              onPatch([{ path: ["shape"], value }], {
-                historyKey: "toolbar:vector-shape",
-              });
+              if (
+                value !== "path" &&
+                value !== "polygon" &&
+                value !== "ellipse"
+              ) {
+                return;
+              }
+              if (
+                value === "ellipse" &&
+                editableGeometry.shape !== "ellipse" &&
+                !ellipseShapeChangeIsSafe
+              ) {
+                return;
+              }
+              if (unsafeEllipseIsLocked && value !== "ellipse") return;
+              onPatch(
+                [{
+                  path: ["shape"],
+                  value: value === "path" ? null : value,
+                }],
+                { historyKey: "toolbar:vector-shape" }
+              );
             }}
           >
-            <option value="polygon">Polygon</option>
-            <option value="ellipse">Ellipse</option>
+            {!unsafeEllipseIsLocked ? (
+              <option value="path">Path</option>
+            ) : null}
+            {!unsafeEllipseIsLocked ? (
+              <option value="polygon">Polygon</option>
+            ) : null}
+            {editableGeometry.shape === "ellipse" ||
+            ellipseShapeChangeIsSafe ? (
+              <option value="ellipse">Ellipse</option>
+            ) : null}
           </ToolbarSelect>
         </ToolbarField>
       ) : null}
@@ -226,6 +285,67 @@ export default function VectorToolbar({
               }}
             />
           </ToolbarField>
+          {editablePointTopology ? (
+            <div
+              className="flex items-center gap-1"
+              role="group"
+              aria-label="Vector point actions"
+            >
+              <ToolbarButton
+                className="px-1.5"
+                aria-label="Add vector point after"
+                title="Add point after selected point"
+                onClick={() =>
+                  patchPointTopology({ type: "add-after", index: pointIndex })
+                }
+              >
+                +
+              </ToolbarButton>
+              <ToolbarButton
+                className="px-1.5"
+                aria-label="Delete vector point"
+                title="Delete selected point"
+                disabled={editablePointTopology.points.length <= 2}
+                onClick={() =>
+                  patchPointTopology({ type: "delete", index: pointIndex })
+                }
+              >
+                −
+              </ToolbarButton>
+              <ToolbarButton
+                className="px-1.5"
+                aria-label="Move vector point earlier"
+                title="Move selected point earlier"
+                disabled={pointIndex === 0}
+                onClick={() =>
+                  patchPointTopology({
+                    type: "move",
+                    index: pointIndex,
+                    direction: -1,
+                  })
+                }
+              >
+                ←
+              </ToolbarButton>
+              <ToolbarButton
+                className="px-1.5"
+                aria-label="Move vector point later"
+                title="Move selected point later"
+                disabled={
+                  pointIndex === editablePointTopology.points.length - 1
+                }
+                onClick={() =>
+                  patchPointTopology({
+                    type: "move",
+                    index: pointIndex,
+                    direction: 1,
+                  })
+                }
+              >
+                →
+              </ToolbarButton>
+            </div>
+          ) : null}
         </>
       ) : null}
       {editableGeometry && editableGeometry.shape !== "ellipse" ? (

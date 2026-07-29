@@ -39,11 +39,13 @@ function boundarySpies(presentation: Record<string, unknown>) {
         return presentation;
       },
       registry: {
-        async general(_params: PresentationExportExecutionParams) {
+        async general(params: PresentationExportExecutionParams) {
+          void params;
           calls.general += 1;
           return { path: "general.pptx" };
         },
-        async hybrid(_params: PresentationExportExecutionParams) {
+        async hybrid(params: PresentationExportExecutionParams) {
+          void params;
           calls.hybrid += 1;
           return { path: "hybrid.pptx" };
         },
@@ -283,8 +285,24 @@ test("route request preserves additive hybrid quality metadata", async () => {
   );
 });
 
+test("route request uses the default hybrid mode for authored PPTX", async () => {
+  const { calls, dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+
+  const result = await executeExportPresentationRouteRequest(
+    { format: "pptx", id: "persisted-id" },
+    "session=test",
+    dependencies
+  );
+
+  assert.equal(result.path, "hybrid.pptx");
+  assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 1 });
+});
+
 for (const [format, pptxMode] of [
-  ["pptx", undefined],
   ["pptx", "fidelity"],
   ["pdf", "hybrid"],
 ] as const) {

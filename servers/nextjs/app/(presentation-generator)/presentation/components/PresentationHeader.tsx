@@ -10,7 +10,6 @@ import {
   ArrowUpRight,
   Pencil,
   Check,
-  Keyboard,
   X,
   AlertTriangle,
 } from "lucide-react";
