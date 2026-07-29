@@ -21,7 +21,9 @@ import { renderTemplateV2SourceHtml } from "./source-render.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..");
-const EXPORT_ROOT = path.join(REPO_ROOT, "presentation-export");
+const EXPORT_ROOT =
+  process.env.EXPORT_PACKAGE_ROOT?.trim() ||
+  path.join(REPO_ROOT, "presentation-export");
 const NEXT_ROOT = path.join(REPO_ROOT, "servers", "nextjs");
 const FIXTURE_ROOT = path.join(HERE, "fixtures", "template-v2-general");
 
@@ -97,6 +99,17 @@ async function stopProcess(child) {
 
 async function startNextDev({ port, fastApiUrl, appData, tempRoot, nextDistDir, chrome, fixtureId }) {
   const nextBin = path.join(NEXT_ROOT, "node_modules", "next", "dist", "bin", "next");
+  const nextArgs = [
+    nextBin,
+    "dev",
+    "--hostname",
+    "127.0.0.1",
+    "--port",
+    String(port),
+  ];
+  if (process.env.PRESENTON_TEST_USE_WEBPACK === "1") {
+    nextArgs.splice(2, 0, "--webpack");
+  }
   const converter = path.join(
     EXPORT_ROOT,
     "py",
@@ -106,7 +119,7 @@ async function startNextDev({ port, fastApiUrl, appData, tempRoot, nextDistDir, 
   const logs = [];
   const child = spawn(
     process.execPath,
-    [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
+    nextArgs,
     {
       cwd: NEXT_ROOT,
       env: {

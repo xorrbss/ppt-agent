@@ -188,6 +188,57 @@ describe("Chart and table toolbar contract", () => {
     cy.get('select[aria-label="Chart category"]').should("have.value", "1");
     cy.get('select[aria-label="Chart series"]').should("have.value", "1");
 
+    cy.get('select[aria-label="Chart data labels"]').select("outside");
+    cy.get("@chartPatch").should(
+      "have.been.calledWith",
+      [{ path: ["data_labels"], value: "outside" }],
+      {
+        historyKey: "toolbar:chart-data-labels",
+        continuous: false,
+      }
+    );
+
+    cy.get('button[aria-label="Add chart category"]').click();
+    cy.get("@chartPatch").then((subject) => {
+      const spy = subject as unknown as {
+        lastCall: { args: [TemplateV2ToolbarPatch[], PatchOptions] };
+      };
+      const [patches, options] = spy.lastCall.args;
+      expect(patches).to.deep.equal([
+        {
+          path: ["categories"],
+          value: ["January", "February revised", "Category 3"],
+        },
+        { path: ["series", 0, "values"], value: [10, 20, 0] },
+        { path: ["series", 1, "values"], value: [4, 9.5, 0] },
+      ]);
+      expect(options).to.deep.equal({
+        historyKey: "toolbar:chart-categories",
+        continuous: false,
+      });
+    });
+    cy.get('select[aria-label="Chart category"]').should("have.value", "1");
+    cy.get('select[aria-label="Chart series"]').should("have.value", "1");
+
+    cy.get('button[aria-label="Add chart series"]').click();
+    cy.get("@chartPatch").then((subject) => {
+      const spy = subject as unknown as {
+        lastCall: { args: [TemplateV2ToolbarPatch[], PatchOptions] };
+      };
+      const [patches, options] = spy.lastCall.args;
+      expect(patches).to.have.length(1);
+      expect(patches[0].path).to.deep.equal(["series"]);
+      expect((patches[0].value as Array<Record<string, unknown>>)[2]).to.deep.equal({
+        name: "Series 3",
+        values: [0, 0, 0],
+      });
+      expect(options).to.deep.equal({
+        historyKey: "toolbar:chart-series",
+        continuous: false,
+      });
+    });
+    cy.get('select[aria-label="Chart series"]').should("have.value", "1");
+
     cy.get('select[aria-label="Chart type"]').select("line");
     cy.get("@chartPatch").should(
       "have.been.calledWith",
@@ -224,6 +275,35 @@ describe("Chart and table toolbar contract", () => {
     cy.get('select[aria-label="Table text target"]').should("have.value", "3");
     cy.get('input[aria-label="Table cell text"]').should("have.value", "125");
 
+    setReactInputValue("Table cell font size", "20");
+    cy.get("@tablePatch").should(
+      "have.been.calledWith",
+      [{ path: ["rows", 0, 1, "font", "size"], value: 20 }],
+      {
+        historyKey: "toolbar:table-font-size-3",
+        continuous: true,
+      }
+    );
+    setReactInputValue("Table cell font color", "#dc2626");
+    cy.get("@tablePatch").should(
+      "have.been.calledWith",
+      [{ path: ["rows", 0, 1, "font", "color"], value: "#dc2626" }],
+      {
+        historyKey: "toolbar:table-font-color-3",
+        continuous: true,
+      }
+    );
+    cy.get('button[aria-label="Toggle table cell bold"]').click();
+    cy.get("@tablePatch").should(
+      "have.been.calledWith",
+      [{ path: ["rows", 0, 1, "font", "bold"], value: true }],
+      {
+        historyKey: "toolbar:table-font-bold-3",
+        continuous: false,
+      }
+    );
+    cy.get('select[aria-label="Table text target"]').should("have.value", "3");
+
     cy.get('button[aria-label="Add table row"]').click();
     cy.get("@tablePatch").then((subject) => {
       const spy = subject as unknown as {
@@ -235,7 +315,10 @@ describe("Chart and table toolbar contract", () => {
       expect(patches[0].value).to.deep.equal([
         [
           { runs: [{ text: "Cash" }] },
-          { runs: [{ text: "125" }] },
+          {
+            runs: [{ text: "125" }],
+            font: { size: 20, color: "#dc2626", bold: true },
+          },
         ],
         [
           { runs: [{ text: "" }] },

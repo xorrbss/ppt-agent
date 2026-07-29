@@ -19,6 +19,9 @@ import {
 } from "./ToolbarPrimitives";
 import type { TemplateV2ToolbarPatch } from "./types";
 
+const CHART_CATEGORY_LIMIT = 24;
+const CHART_SERIES_LIMIT = 12;
+
 const numberValue = (value: unknown, fallback: number) =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
@@ -36,6 +39,13 @@ export default function ChartToolbar({
   const [seriesIndex, setSeriesIndex] = useState(0);
   const capabilities = chartContractCapabilities(element.chart_type);
   const supportsAxes = capabilities.ok && capabilities.value.axisOptions;
+  const dataLabelPositions = capabilities.ok
+    ? capabilities.value.dataLabelPositions
+    : [];
+  const seriesLimit =
+    capabilities.ok && !capabilities.value.multipleSeries
+      ? 1
+      : CHART_SERIES_LIMIT;
   const categories = Array.isArray(element.categories)
     ? element.categories.filter((value): value is string => typeof value === "string")
     : [];
@@ -99,6 +109,93 @@ export default function ChartToolbar({
           ))}
         </ToolbarSelect>
       </ToolbarField>
+      {Array.isArray(element.categories) && Array.isArray(element.series) && (
+        <>
+          <ToolbarField label="Chart category count">
+            <span aria-hidden="true">Categories {categories.length}</span>
+            <ToolbarButton
+              aria-label="Remove chart category"
+              disabled={categories.length === 0}
+              onClick={() =>
+                applyContractEdit(
+                  { kind: "category-count", value: categories.length - 1 },
+                  "toolbar:chart-categories"
+                )
+              }
+            >
+              -
+            </ToolbarButton>
+            <ToolbarButton
+              aria-label="Add chart category"
+              disabled={categories.length >= CHART_CATEGORY_LIMIT}
+              onClick={() =>
+                applyContractEdit(
+                  { kind: "category-count", value: categories.length + 1 },
+                  "toolbar:chart-categories"
+                )
+              }
+            >
+              +
+            </ToolbarButton>
+          </ToolbarField>
+          <ToolbarField label="Chart series count">
+            <span aria-hidden="true">Series {series.length}</span>
+            <ToolbarButton
+              aria-label="Remove chart series"
+              disabled={series.length === 0}
+              onClick={() =>
+                applyContractEdit(
+                  { kind: "series-count", value: series.length - 1 },
+                  "toolbar:chart-series"
+                )
+              }
+            >
+              -
+            </ToolbarButton>
+            <ToolbarButton
+              aria-label="Add chart series"
+              disabled={series.length >= seriesLimit}
+              onClick={() =>
+                applyContractEdit(
+                  { kind: "series-count", value: series.length + 1 },
+                  "toolbar:chart-series"
+                )
+              }
+            >
+              +
+            </ToolbarButton>
+          </ToolbarField>
+        </>
+      )}
+      {dataLabelPositions.length > 0 && (
+        <ToolbarField label="Chart data labels">
+          <span aria-hidden="true">Labels</span>
+          <ToolbarSelect
+            aria-label="Chart data labels"
+            value={
+              typeof element.data_labels === "string"
+                ? element.data_labels
+                : ""
+            }
+            onChange={(event) =>
+              applyContractEdit(
+                {
+                  kind: "data-labels",
+                  value: event.target.value || null,
+                },
+                "toolbar:chart-data-labels"
+              )
+            }
+          >
+            <option value="">None</option>
+            {dataLabelPositions.map((position) => (
+              <option key={position} value={position}>
+                {position}
+              </option>
+            ))}
+          </ToolbarSelect>
+        </ToolbarField>
+      )}
       {categories.length > 0 && (
         <>
           <ToolbarField label="Chart category">

@@ -187,3 +187,40 @@ test("partial bounds and non-rectangular tables fail closed", () => {
     { ok: false, reason: "table_not_rectangular" },
   );
 });
+
+test("table fonts validate known fields while unsupported cell borders fail closed", () => {
+  const source = {
+    type: "table",
+    columns: [
+      {
+        runs: [{ text: "Header", font: { bold: true } }],
+        font: {
+          family: "Arial",
+          size: 18,
+          color: "#111827",
+          extension: { retained: true },
+        },
+      },
+    ],
+    rows: [[cell("Body")]],
+    min_columns: 1,
+    max_columns: 1,
+    min_rows: 1,
+    max_rows: 1,
+  };
+  assert.equal(validateTableContract(source).ok, true);
+  assert.deepEqual(
+    validateTableContract({
+      ...source,
+      columns: [{ ...source.columns[0], font: { bold: "yes" } }],
+    }),
+    { ok: false, reason: "invalid_table_columns" },
+  );
+  assert.deepEqual(
+    validateTableContract({
+      ...source,
+      columns: [{ ...source.columns[0], stroke: { color: "#000", width: 1 } }],
+    }),
+    { ok: false, reason: "invalid_table_columns" },
+  );
+});

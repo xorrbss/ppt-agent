@@ -160,3 +160,43 @@ def test_partial_bounds_and_non_rectangular_tables_fail_closed():
             "rows": [[cell("Only one")]],
         }
     ) == {"ok": False, "reason": "table_not_rectangular"}
+
+
+def test_table_font_known_fields_validate_and_cell_borders_fail_closed():
+    source = {
+        "type": "table",
+        "columns": [
+            {
+                "runs": [{"text": "Header", "font": {"bold": True}}],
+                "font": {
+                    "family": "Arial",
+                    "size": 18,
+                    "color": "#111827",
+                    "extension": {"retained": True},
+                },
+            }
+        ],
+        "rows": [[{"runs": [{"text": "Body"}]}]],
+        "min_columns": 1,
+        "max_columns": 1,
+        "min_rows": 1,
+        "max_rows": 1,
+    }
+    assert validate_table_contract(source)["ok"]
+
+    invalid_font = deepcopy(source)
+    invalid_font["columns"][0]["font"] = {"bold": "yes"}
+    assert validate_table_contract(invalid_font) == {
+        "ok": False,
+        "reason": "invalid_table_columns",
+    }
+
+    unsupported_border = deepcopy(source)
+    unsupported_border["columns"][0]["stroke"] = {
+        "color": "#000",
+        "width": 1,
+    }
+    assert validate_table_contract(unsupported_border) == {
+        "ok": False,
+        "reason": "invalid_table_columns",
+    }

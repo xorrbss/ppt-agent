@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { inspectTemplateV2DesignVariablesContract } from "./template-v2-design-variables-contract.ts";
 import { renderTemplateV2GeneralPresentationHtml } from "./template-v2-general-renderer.mjs";
 import { createTemplateV2SlideRenderPlan } from "./template-v2-render-plan.mjs";
 import { updateTemplateV2ContentRun } from "./template-v2-studio-content.ts";
@@ -93,6 +94,10 @@ test("design-variable text edits preserve bindings through save, reload, and exp
   // The export plan receives a strict slide.ui boundary and neither planning
   // nor rendering may mutate the persisted design-variable metadata.
   const slide = { id: "bound-title", ui: saved.layouts.layouts[0] };
+  const contract = inspectTemplateV2DesignVariablesContract(slide);
+  assert.equal(contract.activation, "retention-only");
+  assert.equal(contract.toolbarSafe, false);
+  assert.deepEqual(contract.declarations[0]!.bindings, designVariables);
   assert.doesNotThrow(() => createTemplateV2SlideRenderPlan(slide));
   const html = renderTemplateV2GeneralPresentationHtml({
     version: "v2-standard",
