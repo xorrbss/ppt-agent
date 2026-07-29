@@ -280,9 +280,9 @@ export function normalizeChartContract(
 function validTableCell(value: unknown): boolean {
   if (!isRecord(value)) return false;
   if (hasMeaningfulField(value, "stroke") || hasMeaningfulField(value, "border")) {
-    // The canonical TableCell model has no border field. The HTML renderer
-    // currently understands an undeclared `stroke`, but editing it would make
-    // the persisted payload invalid for FastAPI/Pydantic.
+    // The canonical TableCell model has no border field. Konva and HTML/PPT
+    // rendering currently use a fixed fallback border, so accepting either
+    // undeclared shape would make persistence invalid and imply false fidelity.
     return false;
   }
   return (

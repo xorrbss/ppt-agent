@@ -86,6 +86,22 @@ test("routes no, multi, image, icon, text, text-list, and bounded rich selection
     }).kind,
     "table"
   );
+  assert.equal(
+    resolveTemplateV2ToolbarRoute({
+      selectionCount: 1,
+      element: {
+        type: "infographic",
+        data: {
+          type: "progress_bar",
+          min_value: 0,
+          max_value: 100,
+          value: 62,
+        },
+        colors: ["#e5e7eb", "#2563eb"],
+      },
+    }).kind,
+    "infographic"
+  );
 });
 
 test("fails closed for design variables and unsupported element types", () => {
@@ -164,6 +180,15 @@ test("fails closed for malformed or ambiguous vector, chart, and table payloads"
       min_rows: 0,
       max_rows: 0,
     },
+    {
+      type: "infographic",
+      data: {
+        type: "gauge",
+        min_value: 0,
+        max_value: 100,
+        value: 101,
+      },
+    },
   ]) {
     assert.deepEqual(resolveTemplateV2ToolbarRoute({ selectionCount: 1, element }), {
       kind: "unsupported",
@@ -171,6 +196,24 @@ test("fails closed for malformed or ambiguous vector, chart, and table payloads"
       element,
     });
   }
+});
+
+test("non-empty design variables take precedence over infographic routing", () => {
+  const element = {
+    type: "infographic",
+    data: {
+      type: "progress_bar",
+      min_value: 0,
+      max_value: 100,
+      value: 40,
+    },
+    design_variables: [{ name: "retention-only" }],
+  };
+
+  assert.deepEqual(
+    resolveTemplateV2ToolbarRoute({ selectionCount: 1, element }),
+    { kind: "unsupported", reason: "design-variables", element }
+  );
 });
 
 test("rich route checks are pure so the external selection controller retains its payload identity", () => {

@@ -223,4 +223,18 @@ test("table fonts validate known fields while unsupported cell borders fail clos
     }),
     { ok: false, reason: "invalid_table_columns" },
   );
+  assert.deepEqual(
+    validateTableContract({
+      ...source,
+      columns: [{ ...source.columns[0], border: { color: "#000", width: 1 } }],
+    }),
+    { ok: false, reason: "invalid_table_columns" },
+  );
+  assert.deepEqual(
+    validateTableContract({
+      ...source,
+      rows: [[{ ...source.rows[0][0], stroke: "#000" }]],
+    }),
+    { ok: false, reason: "invalid_table_rows" },
+  );
 });

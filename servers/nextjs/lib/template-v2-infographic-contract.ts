@@ -15,6 +15,15 @@ export type TemplateV2InfographicContract = {
   metrics: TemplateV2InfographicMetrics;
 };
 
+export type TemplateV2InfographicValuePatch = {
+  path: ["data", "value"];
+  value: number;
+};
+
+export type TemplateV2InfographicValuePatchResult =
+  | { ok: true; value: TemplateV2InfographicValuePatch[] }
+  | { ok: false; reason: string };
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -139,6 +148,69 @@ export function validateTemplateV2InfographicContract(
       ratio: (value - minimum) / (maximum - minimum),
       colors,
     },
+  };
+}
+
+/**
+ * Builds the only currently editable infographic operation. The edit is
+ * deliberately leaf-only so positional palette semantics and all unknown JSON
+ * beside `data.value` remain untouched.
+ */
+export function buildTemplateV2InfographicValuePatches(
+  element: unknown,
+  value: unknown,
+): TemplateV2InfographicValuePatchResult {
+  let contract: TemplateV2InfographicContract;
+  try {
+    contract = validateTemplateV2InfographicContract(element);
+  } catch (error) {
+    return {
+      ok: false,
+      reason:
+        error instanceof Error
+          ? error.message
+          : "template_v2_infographic_invalid_contract",
+    };
+  }
+
+  if (!finiteNumber(value)) {
+    return {
+      ok: false,
+      reason: "template_v2_infographic_invalid_value_edit",
+    };
+  }
+  if (value < contract.metrics.minimum || value > contract.metrics.maximum) {
+    return {
+      ok: false,
+      reason: "template_v2_infographic_value_edit_out_of_range",
+    };
+  }
+  if (Object.is(value, contract.metrics.value)) {
+    return { ok: true, value: [] };
+  }
+
+  const candidate = contract.json;
+  if (!isPlainRecord(candidate.data)) {
+    return {
+      ok: false,
+      reason: "template_v2_infographic_invalid_contract",
+    };
+  }
+  candidate.data.value = value;
+  try {
+    validateTemplateV2InfographicContract(candidate);
+  } catch (error) {
+    return {
+      ok: false,
+      reason:
+        error instanceof Error
+          ? error.message
+          : "template_v2_infographic_invalid_contract",
+    };
+  }
+  return {
+    ok: true,
+    value: [{ path: ["data", "value"], value }],
   };
 }
 
