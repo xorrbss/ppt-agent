@@ -203,6 +203,21 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
   ));
   const fastApi = http.createServer((request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
+    if (url.pathname === "/api/v1/auth/status") {
+      if (!request.headers.cookie) {
+        response.writeHead(401).end("session required");
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" })
+        .end(JSON.stringify({
+          configured: true,
+          authenticated: true,
+          username: "fidelity",
+          user_id: null,
+          role: "admin",
+        }));
+      return;
+    }
     const prefix = "/api/v1/ppt/presentation/";
     if (!url.pathname.startsWith(prefix)) {
       response.writeHead(404).end("unknown fake FastAPI route");
@@ -269,7 +284,9 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
       );
       assert.equal(routeBody.success, true);
       assert.match(routeBody.path, /^\/api\/export-presentation\/file\?name=/);
-      const downloadResponse = await fetch(`${nextBaseUrl}${routeBody.path}`);
+      const downloadResponse = await fetch(`${nextBaseUrl}${routeBody.path}`, {
+        headers: { Cookie: "presenton_session=fidelity" },
+      });
       assert.equal(downloadResponse.status, 200);
       const pptx = Buffer.from(await downloadResponse.arrayBuffer());
       const pptxPath = path.join(tempRoot, `${fixture.id}.pptx`);
