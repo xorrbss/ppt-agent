@@ -189,6 +189,28 @@ test("renderer preserves advanced appearance and image semantics", () => {
   assert.match(html, /background:#abcdef/);
 });
 
+test("renderer preserves zoomed-out image crops and corrected focus origin", () => {
+  const html = renderTemplateV2GeneralSlideCanvasHtml(
+    slideWith([
+      {
+        type: "image",
+        ...frame,
+        data: "data:image/png;base64,AA==",
+        fit: "cover",
+        focus_x: 25,
+        focus_y: 75,
+        crop_scale: 0.5,
+      },
+    ])
+  );
+
+  assert.match(html, /data-image-crop-scale="0.5"/);
+  assert.match(html, /object-position:25% 75%/);
+  assert.match(html, /transform:scale\(0.5\)/);
+  assert.match(html, /transform-origin:25% 75%/);
+  assert.match(html, /overflow:hidden/);
+});
+
 test("stacked charts accumulate series and render all supported chart annotations", () => {
   const html = renderTemplateV2GeneralSlideCanvasHtml(
     slideWith([
