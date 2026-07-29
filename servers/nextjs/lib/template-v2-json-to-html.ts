@@ -2013,10 +2013,26 @@ function curveSettings(item: JsonRecord) {
   if (!curve) return null;
   const rawType = readString(curve.type)?.trim().toLowerCase();
   if (rawType !== "smooth") return null;
+  const rawTension = curve.tension;
+  const tension = rawTension == null ? 0.5 : rawTension;
+  const rawSegments = curve.segments;
+  const segments = rawSegments == null ? 16 : rawSegments;
+  if (
+    typeof tension !== "number" ||
+    !Number.isFinite(tension) ||
+    tension < 0 ||
+    tension > 1 ||
+    typeof segments !== "number" ||
+    !Number.isInteger(segments) ||
+    segments < 1 ||
+    segments > 96
+  ) {
+    return null;
+  }
   return {
     type: "smooth",
-    tension: clamp(readNumber(curve.tension) ?? 0.4, 0, 1),
-    segments: Math.max(1, Math.min(96, Math.round(readNumber(curve.segments) ?? 16))),
+    tension,
+    segments,
   };
 }
 
@@ -2082,6 +2098,9 @@ function polygonClosed(item: JsonRecord, points: Point[]): boolean {
   const value = item.closed;
   if (value === false || value === "false" || value === "0") return false;
   if (value === true || value === "true" || value === "1") return true;
+  if (readString(item.type) === "vector") {
+    return vectorShape(item) === "polygon";
+  }
   return points.length > 2;
 }
 
