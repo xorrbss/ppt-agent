@@ -220,6 +220,11 @@ async function spawnChrome(
     child.once("error", (error) => finish(() => reject(error)));
     child.once("close", (code, signal) => {
       if (code === 0) {
+        // On Windows chrome.exe can act as a launcher: the process we spawned
+        // exits successfully before its browser child has flushed the requested
+        // PNG. Keep the existing bounded IEND poll alive for screenshot-only
+        // captures instead of deleting the work directory under that child.
+        if (completedScreenshotPath) return;
         finish(() =>
           resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) })
         );
