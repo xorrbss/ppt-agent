@@ -2670,12 +2670,12 @@ function imageMaskSize(value: unknown): string {
 function imageCropScale(item: JsonRecord): number {
   const value = readNumber(item.crop_scale ?? item.cropScale);
   if (value == null) return 1;
-  return clamp(value, 1, 6);
+  return clamp(value, 0.1, 6);
 }
 
 function imageCropTransformStyle(item: JsonRecord): string {
   const cropScale = imageCropScale(item);
-  if (cropScale <= 1) return "";
+  if (Math.abs(cropScale - 1) <= 0.01) return "";
   return `transform:scale(${cssNumber(cropScale)});transform-origin:${
     imageFocusValue(item) ?? "center"
   };`;

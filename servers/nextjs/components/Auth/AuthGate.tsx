@@ -153,7 +153,7 @@ export default function AuthGate() {
       });
       notify.warning(
         "비밀번호가 너무 짧음",
-        "비밀번호는 6자 이상이어야 합니다."
+        `비밀번호는 ${minimumPasswordLength}자 이상이어야 합니다.`
       );
       return;
     }
@@ -318,7 +318,13 @@ export default function AuthGate() {
               id="username"
               autoComplete="username"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => setUsername(event.target.value.replace(/\s/g, ""))}
+              minLength={3}
+              maxLength={128}
+              pattern="\S+"
+              title="사용자 이름에는 공백을 사용할 수 없습니다."
+              required
+              spellCheck={false}
               placeholder="관리자 사용자 이름"
               className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
               disabled={isSubmitting}
@@ -335,7 +341,10 @@ export default function AuthGate() {
               autoComplete={isSetupMode ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="6자 이상"
+              minLength={isSetupMode ? 8 : 6}
+              maxLength={128}
+              required
+              placeholder={isSetupMode ? "8자 이상" : "6자 이상"}
               className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
               disabled={isSubmitting}
             />
@@ -352,6 +361,9 @@ export default function AuthGate() {
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
+                minLength={8}
+                maxLength={128}
+                required
                 placeholder="비밀번호를 다시 입력하세요"
                 className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
                 disabled={isSubmitting}

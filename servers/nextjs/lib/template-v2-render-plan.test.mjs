@@ -391,7 +391,7 @@ test("ambiguous appearance contracts fail closed", () => {
       element: {
         type: "image",
         data: "x",
-        crop_scale: 0.5,
+        crop_scale: 0.09,
       },
       code: "template_v2_render_plan_invalid_image_crop_scale",
     },
@@ -402,6 +402,25 @@ test("ambiguous appearance contracts fail closed", () => {
       new RegExp(`^Error: ${code}:`)
     );
   }
+});
+
+test("image plans preserve zoomed-out crop scale for preview and export", () => {
+  const image = createTemplateV2SlideRenderPlan(
+    slide([
+      {
+        type: "image",
+        data: "data:image/png;base64,AA==",
+        fit: "cover",
+        focus_x: 25,
+        focus_y: 75,
+        crop_scale: 0.5,
+      },
+    ])
+  ).components[0].elements[0].image;
+
+  assert.equal(image.cropScale, 0.5);
+  assert.equal(image.focusX, 25);
+  assert.equal(image.focusY, 75);
 });
 
 test("infographic plans compute ratios and fail closed outside backend ranges", () => {

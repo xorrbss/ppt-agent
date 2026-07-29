@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useReducer } from "react";
 
 import {
@@ -224,6 +225,15 @@ export default function TemplateV2Studio({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/template-preview?templateV2Id=${encodeURIComponent(
+              templateId
+            )}`}
+            data-testid="open-ai-layout-editor"
+            className="rounded-lg border border-violet-400/60 bg-violet-500/10 px-3 py-2 text-sm font-medium text-violet-200 transition hover:bg-violet-500/20"
+          >
+            AI Layout
+          </Link>
           {notice ? (
             <span
               role="status"

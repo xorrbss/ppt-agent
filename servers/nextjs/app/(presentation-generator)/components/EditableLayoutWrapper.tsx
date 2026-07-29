@@ -7,6 +7,12 @@ import ImageEditor from './ImageEditor';
 import IconsEditor from './IconsEditor';
 import AdaptiveBlockControls from './AdaptiveBlockControls';
 import AdaptivePropertyControls from './AdaptivePropertyControls';
+import {
+    cropScaleFromProperties,
+    imageCropDomStyle,
+    normalizeImageFocusPoint,
+    resolveImageEditorProperties,
+} from '@/components/slide-editor/images/imageCrop';
 
 interface EditableLayoutWrapperProps {
     children: ReactNode;
@@ -24,6 +30,7 @@ interface EditableElement {
     dataPath: string;
     data: any;
     element: HTMLImageElement | SVGElement;
+    propertyIndex: number;
 }
 
 const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
@@ -198,7 +205,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         src,
                         dataPath,
                         data,
-                        element: htmlImg
+                        element: htmlImg,
+                        propertyIndex: index
                     };
 
                     newEditableElements.push(editableElement);
@@ -212,14 +220,19 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
                     htmlImg.addEventListener('click', clickHandler);
 
-                    const itemIndex = parseInt(`${slideIndex}-${type}-${dataPath}-${index}`.split('-').pop() || '0');
-                    const propertiesData = properties?.[itemIndex];
+                    const propertiesData = resolveImageEditorProperties(properties, index);
+                    const fit = propertiesData.initialObjectFit || 'cover';
+                    const focus = normalizeImageFocusPoint(propertiesData.initialFocusPoint);
+                    const cropStyle = imageCropDomStyle(
+                        fit,
+                        focus,
+                        cropScaleFromProperties(propertiesData)
+                    );
 
                     // Add hover effects without changing layout
                     htmlImg.style.cursor = 'pointer';
                     htmlImg.style.transition = 'opacity 0.2s, transform 0.2s';
-                    htmlImg.style.objectFit = propertiesData?.initialObjectFit;
-                    htmlImg.style.objectPosition = `${propertiesData?.initialFocusPoint?.x}% ${propertiesData?.initialFocusPoint?.y}%`;
+                    Object.assign(htmlImg.style, cropStyle);
 
                     const mouseEnterHandler = () => {
                         htmlImg.style.opacity = '0.8';
@@ -243,6 +256,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         htmlImg.style.transition = '';
                         htmlImg.style.opacity = '';
                         htmlImg.style.transform = '';
+                        htmlImg.style.transformOrigin = '';
                         htmlImg.removeAttribute('data-editable-processed');
                     };
                 }
@@ -273,7 +287,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         src,
                         dataPath,
                         data,
-                        element: svgEl
+                        element: svgEl,
+                        propertyIndex: index
                     };
 
                     newEditableElements.push(editableElement);
@@ -424,19 +439,24 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
         }
     };
     const handleFocusPointClick = (propertiesData: any) => {
-
-        const id = activeEditor?.id;
-        const editableId = document.querySelector(`[data-editable-id="${id}"]`);
+        if (!activeEditor || activeEditor.type !== 'image') return;
+        const editableId = activeEditor.element;
 
         if (editableId) {
             const editableElement = editableId as HTMLImageElement;
-            editableElement.style.objectFit = propertiesData.initialObjectFit;
-            editableElement.style.objectPosition = `${propertiesData.initialFocusPoint.x}% ${propertiesData.initialFocusPoint.y}%`;
+            Object.assign(
+                editableElement.style,
+                imageCropDomStyle(
+                    propertiesData.initialObjectFit,
+                    propertiesData.initialFocusPoint,
+                    propertiesData.crop_scale ?? 1
+                )
+            );
         }
 
         dispatch(updateImageProperties({
             slideIndex,
-            itemIndex: parseInt(activeEditor?.id.split('-').pop() || '0'),
+            itemIndex: activeEditor.propertyIndex,
             properties: propertiesData
         }));
 
@@ -462,7 +482,10 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     slideIndex={slideIndex}
                     promptContent={activeEditor.data?.__image_prompt__ || ''}
                     imageIdx={0}
-                    properties={null}
+                    properties={resolveImageEditorProperties(
+                        properties,
+                        activeEditor.propertyIndex
+                    )}
                     onClose={handleEditorClose}
                     onImageChange={handleImageChange}
                     onFocusPointClick={handleFocusPointClick}

@@ -76,10 +76,9 @@ function response(payloadLayouts = layouts(), revision = 1) {
 }
 
 function settleSuccessfulPersistence() {
-  cy.contains("button", /^(Save now|Saving…)$/).then(($button) => {
-    if (!$button.is(":disabled")) cy.wrap($button).click();
-  });
-  cy.contains("Unsaved changes").should("not.exist");
+  // Autosave can disable the button between Cypress's actionability check and
+  // click dispatch. Waiting on the persisted state avoids that timing race.
+  cy.contains("Unsaved changes", { timeout: 10_000 }).should("not.exist");
 }
 
 describe("TemplateV2Studio API integration", () => {
@@ -113,6 +112,11 @@ describe("TemplateV2Studio API integration", () => {
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadNestedTemplate");
+    cy.get('[data-testid="open-ai-layout-editor"]').should(
+      "have.attr",
+      "href",
+      `/template-preview?templateV2Id=${templateId}`
+    );
     cy.contains("button", "Add rectangle").click();
     cy.contains("button", "Save").click();
 
