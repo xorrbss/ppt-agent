@@ -230,6 +230,67 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("Saved").should("be.visible");
   });
 
+  it("renders the floating image toolbar, preserves selection, and reloads its saved patch", () => {
+    let persistedLayouts = layouts();
+    let revision = 1;
+
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("loadToolbarTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        persistedLayouts = request.body.layouts;
+        revision = request.body.expected_revision + 1;
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("saveToolbarTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadToolbarTemplate");
+    cy.contains("button[aria-pressed]", /^hero/).click();
+    cy.get('[data-testid="template-v2-selection-toolbar"]')
+      .should("be.visible")
+      .within(() => {
+        cy.get('button[aria-label="Flip image horizontally"]')
+          .should("have.attr", "aria-pressed", "false")
+          .click();
+      });
+    cy.contains("1 selected").should("be.visible");
+
+    cy.wait("@saveToolbarTemplate", { timeout: 10_000 })
+      .its("request.body.layouts.layouts.0.components.0.elements.1")
+      .then((element) => {
+        expect(element).to.include({
+          type: "image",
+          name: "hero",
+          flip_h: true,
+        });
+        expect(element.position).to.deep.equal({ x: 420, y: 40 });
+        expect(element.size).to.deep.equal({ width: 320, height: 180 });
+      });
+
+    cy.mount(<div data-testid="toolbar-unmounted" />);
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadToolbarTemplate");
+    cy.contains("button[aria-pressed]", /^hero/).click();
+    cy.get(
+      '[data-testid="template-v2-selection-toolbar"] button[aria-label="Flip image horizontally"]'
+    ).should("have.attr", "aria-pressed", "true");
+  });
+
   it("keeps local edits and offers an explicit reload after a revision conflict", () => {
     cy.intercept(
       "GET",

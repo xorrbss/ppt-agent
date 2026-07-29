@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useReducer } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import {
   EMPTY_TEMPLATE_V2_STUDIO_STATE,
@@ -9,18 +16,31 @@ import {
   findTemplateV2Layout,
   getSelectedElement,
   getTemplateV2Scene,
+  isJsonRecord,
   listTemplateV2Components,
   listTemplateV2Layouts,
   parseTemplateV2SelectionKey,
   templateV2StudioReducer,
   type ElementPath,
+  type JsonRecord,
   type StudioSelection,
   type TemplateV2AlignDirection,
   type TemplateV2DistributeDirection,
   type TemplateV2ReorderDirection,
 } from "@/lib/template-v2-studio";
 import { elementPosition } from "@/lib/template-v2-konva";
-import { getTemplateV2HistoryKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
+import {
+  getTemplateV2HistoryKeyboardIntent,
+  getTemplateV2SelectionKeyboardIntent,
+} from "@/lib/template-v2-studio-keyboard";
+import type {
+  TemplateV2CanvasCropDraft,
+  TemplateV2CanvasSelectionBounds,
+} from "@/lib/template-v2-studio-media";
+import {
+  positionTemplateV2Toolbar,
+  type TemplateV2ToolbarPosition,
+} from "@/lib/template-v2-toolbar";
 import { toggleTemplateV2Selection } from "@/lib/template-v2-studio-ui";
 import TemplateV2Canvas from "./TemplateV2Canvas";
 import TemplateV2ConflictRecovery from "./TemplateV2ConflictRecovery";
@@ -31,7 +51,64 @@ import TemplateV2ElementTree, {
 } from "./TemplateV2ElementTree";
 import TemplateV2GeometryInspector from "./TemplateV2GeometryInspector";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
+import {
+  TemplateV2SelectionToolbar,
+  type TemplateV2ImageCropDraft,
+  type TemplateV2ToolbarPatch,
+  type TemplateV2ToolbarPatchOptions,
+} from "./toolbar";
 import { useTemplateV2StudioPersistence } from "./useTemplateV2StudioPersistence";
+
+const TEMPLATE_V2_TOOLBAR_WIDTH = 760;
+const TEMPLATE_V2_TOOLBAR_HEIGHT = 56;
+
+function cloneJsonValue<T>(value: T): T {
+  return structuredClone(value);
+}
+
+function setPathValue(
+  value: unknown,
+  path: Array<string | number>,
+  nextValue: unknown
+): unknown {
+  if (path.length === 0) return cloneJsonValue(nextValue);
+  const [part, ...rest] = path;
+  const container =
+    typeof part === "number"
+      ? Array.isArray(value)
+        ? cloneJsonValue(value)
+        : []
+      : isJsonRecord(value)
+        ? cloneJsonValue(value)
+        : {};
+  if (typeof part === "number" && Array.isArray(container)) {
+    container[part] = setPathValue(container[part], rest, nextValue);
+  } else if (typeof part === "string" && isJsonRecord(container)) {
+    container[part] = setPathValue(container[part], rest, nextValue);
+  }
+  return container;
+}
+
+/**
+ * The command facade patches objects recursively and replaces arrays. Build a
+ * complete copy of every touched top-level field so run/item edits keep all
+ * unrecognised JSON beside the edited value.
+ */
+function losslessToolbarPatch(
+  element: JsonRecord,
+  patches: TemplateV2ToolbarPatch[]
+): JsonRecord {
+  const result: JsonRecord = {};
+  for (const patch of patches) {
+    const [root, ...rest] = patch.path;
+    if (typeof root !== "string") continue;
+    const current = Object.prototype.hasOwnProperty.call(result, root)
+      ? result[root]
+      : element[root];
+    result[root] = setPathValue(current, rest, patch.value);
+  }
+  return result;
+}
 
 export default function TemplateV2Studio({
   templateId,
@@ -53,6 +130,14 @@ export default function TemplateV2Studio({
     flushAutosave,
     reloadServerVersion,
   } = useTemplateV2StudioPersistence({ templateId, state, dispatch });
+  const canvasSurfaceRef = useRef<HTMLElement | null>(null);
+  const [selectionBounds, setSelectionBounds] =
+    useState<TemplateV2CanvasSelectionBounds | null>(null);
+  const [toolbarPosition, setToolbarPosition] =
+    useState<TemplateV2ToolbarPosition | null>(null);
+  const [cropModePath, setCropModePath] = useState<ElementPath | null>(null);
+  const [cropDraft, setCropDraft] =
+    useState<TemplateV2CanvasCropDraft | null>(null);
 
   const activeLayout = findTemplateV2Layout(
     state.layouts,
@@ -104,20 +189,128 @@ export default function TemplateV2Studio({
       }),
     [lockedSelections, scene, state.lockedElementKeys, state.selectionSet]
   );
+  const selectionIdentity = useMemo(
+    () =>
+      JSON.stringify(
+        state.selectionSet.map((selection) => [
+          selection.layoutId,
+          selection.componentId,
+          selection.elementPath,
+        ])
+      ),
+    [state.selectionSet]
+  );
+
+  const updateToolbarPosition = useCallback(() => {
+    const surface = canvasSurfaceRef.current;
+    if (!surface || state.selectionSet.length === 0) {
+      setToolbarPosition(null);
+      return;
+    }
+    const canvasRect =
+      surface.firstElementChild?.getBoundingClientRect() ??
+      surface.getBoundingClientRect();
+    const anchor = selectionBounds
+      ? {
+          x: canvasRect.left + selectionBounds.left,
+          y: canvasRect.top + selectionBounds.top,
+          width: selectionBounds.width,
+          height: selectionBounds.height,
+        }
+      : {
+          x: canvasRect.left + canvasRect.width / 2,
+          y: canvasRect.top + 12,
+          width: 1,
+          height: 1,
+        };
+    setToolbarPosition(
+      positionTemplateV2Toolbar({
+        anchor,
+        bounds: {
+          left: 0,
+          top: 0,
+          right: window.innerWidth,
+          bottom: window.innerHeight,
+        },
+        toolbarWidth: Math.min(
+          TEMPLATE_V2_TOOLBAR_WIDTH,
+          Math.max(0, window.innerWidth - 16)
+        ),
+        toolbarHeight: TEMPLATE_V2_TOOLBAR_HEIGHT,
+      })
+    );
+  }, [selectionBounds, state.selectionSet.length]);
+
+  useEffect(() => {
+    updateToolbarPosition();
+    const surface = canvasSurfaceRef.current;
+    const observer =
+      surface && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(updateToolbarPosition)
+        : null;
+    if (surface) observer?.observe(surface);
+    if (surface?.firstElementChild instanceof Element) {
+      observer?.observe(surface.firstElementChild);
+    }
+    window.addEventListener("resize", updateToolbarPosition);
+    window.addEventListener("scroll", updateToolbarPosition, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateToolbarPosition);
+      window.removeEventListener("scroll", updateToolbarPosition, true);
+    };
+  }, [updateToolbarPosition]);
+
+  useEffect(() => {
+    setCropModePath(null);
+    setCropDraft(null);
+  }, [selectionIdentity]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const intent = getTemplateV2HistoryKeyboardIntent(event, {
+      const historyIntent = getTemplateV2HistoryKeyboardIntent(event, {
         canUndo: state.past.length > 0,
         canRedo: state.future.length > 0,
       });
-      if (!intent) return;
+      if (historyIntent) {
+        event.preventDefault();
+        dispatch({ type: historyIntent });
+        return;
+      }
+      const selectionIntent = getTemplateV2SelectionKeyboardIntent(event, {
+        selectionCount: state.selectionSet.length,
+        canGroup: selectionControls.canGroup,
+        canUngroup: selectionControls.canUngroup,
+        canDelete:
+          selectionControls.hasSelection && !selectionControls.lockConflict,
+        canDuplicate:
+          selectionControls.hasSelection && !selectionControls.lockConflict,
+      });
+      if (!selectionIntent) return;
       event.preventDefault();
-      dispatch({ type: intent });
+      dispatch({
+        type: "execute-command",
+        command:
+          selectionIntent === "delete-selection"
+            ? { type: "delete-elements", selections: state.selectionSet }
+            : selectionIntent === "duplicate-selection"
+              ? { type: "duplicate-elements", selections: state.selectionSet }
+              : { type: selectionIntent, selections: state.selectionSet },
+      });
+      setNotice(null);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [state.future.length, state.past.length]);
+  }, [
+    selectionControls.canGroup,
+    selectionControls.canUngroup,
+    selectionControls.hasSelection,
+    selectionControls.lockConflict,
+    setNotice,
+    state.future.length,
+    state.past.length,
+    state.selectionSet,
+  ]);
 
   function selectElement(path: ElementPath | null, additive = false) {
     if (!path || !scene) {
@@ -188,6 +381,81 @@ export default function TemplateV2Studio({
       });
     }
     setNotice(null);
+  }
+
+  function setSelectionLocked(locked: boolean) {
+    for (const selection of state.selectionSet) {
+      dispatch({
+        type: "set-element-lock",
+        selection,
+        locked,
+      });
+    }
+    setNotice(null);
+  }
+
+  function deleteSelection() {
+    dispatch({
+      type: "execute-command",
+      command: { type: "delete-elements", selections: state.selectionSet },
+    });
+    setNotice(null);
+  }
+
+  function duplicateSelection() {
+    dispatch({
+      type: "execute-command",
+      command: { type: "duplicate-elements", selections: state.selectionSet },
+    });
+    setNotice(null);
+  }
+
+  function patchSelectedElement(
+    patches: TemplateV2ToolbarPatch[],
+    options?: TemplateV2ToolbarPatchOptions
+  ) {
+    if (
+      !state.selection ||
+      !selectedElement ||
+      selectionControls.lockConflict ||
+      patches.length === 0
+    ) {
+      return;
+    }
+    dispatch({
+      type: "execute-command",
+      command: {
+        type: "patch-element",
+        selection: state.selection,
+        patch: losslessToolbarPatch(selectedElement, patches),
+        historyKey: options?.continuous && options.historyKey
+          ? `${options.historyKey}:${selectionIdentity}`
+          : undefined,
+      },
+    });
+    setNotice(null);
+  }
+
+  function replaceSelectedMedia(label: "image" | "icon") {
+    if (!selectedElement || !state.selection || selectionControls.lockConflict) {
+      return;
+    }
+    const replacement = window.prompt(
+      label === "icon"
+        ? "Paste an app-relative icon SVG path or data URL"
+        : "Paste an app-relative image path or data URL",
+      typeof selectedElement.data === "string" ? selectedElement.data : ""
+    );
+    if (replacement === null || replacement.trim() === "") return;
+    patchSelectedElement(
+      [
+        { path: ["data"], value: replacement.trim() },
+        ...(label === "icon"
+          ? [{ path: ["is_icon"], value: true } satisfies TemplateV2ToolbarPatch]
+          : []),
+      ],
+      { historyKey: `toolbar:${label}-replace` }
+    );
   }
 
   if (loading) {
@@ -391,7 +659,10 @@ export default function TemplateV2Studio({
           ) : null}
         </nav>
 
-        <section className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+        <section
+          ref={canvasSurfaceRef}
+          className="rounded-xl border border-slate-800 bg-slate-900 p-3"
+        >
           {scene ? (
             <TemplateV2Canvas
               scene={scene}
@@ -405,6 +676,9 @@ export default function TemplateV2Studio({
                     selection.componentId === String(scene.component.id)
                 )
                 .map((selection) => selection.elementPath)}
+              cropModePath={cropModePath}
+              cropDraft={cropDraft}
+              onSelectionBoundsChange={setSelectionBounds}
               onSelect={selectElement}
               onGeometryBatch={(updates) => {
                 dispatch({
@@ -431,6 +705,77 @@ export default function TemplateV2Studio({
           )}
         </section>
 
+        <TemplateV2SelectionToolbar
+          selectionCount={state.selectionSet.length}
+          selectionPath={state.selection?.elementPath ?? null}
+          element={selectedElement}
+          position={toolbarPosition}
+          fontFamilies={[
+            "Arial",
+            "Calibri",
+            "Inter",
+            "Noto Sans",
+            "Noto Sans KR",
+            "Times New Roman",
+          ]}
+          actions={{
+            locked: selectionControls.allLocked,
+            canGroup: selectionControls.canGroup,
+            canUngroup: selectionControls.canUngroup,
+            onGroup: selectionControls.canGroup
+              ? () => executeSelectionCommand("group-siblings")
+              : undefined,
+            onUngroup: selectionControls.canUngroup
+              ? () => executeSelectionCommand("ungroup")
+              : undefined,
+            onLayer: selectionControls.lockConflict
+              ? undefined
+              : (direction) => executeSelectionCommand(direction),
+            onLockChange: selectionControls.hasSelection
+              ? setSelectionLocked
+              : undefined,
+            onAlign: selectionControls.canAlign
+              ? (direction) => executeSelectionCommand(`align-${direction}`)
+              : undefined,
+            onDistribute: selectionControls.canDistribute
+              ? (direction) =>
+                  executeSelectionCommand(`distribute-${direction}`)
+              : undefined,
+            onDelete:
+              selectionControls.hasSelection && !selectionControls.lockConflict
+                ? deleteSelection
+                : undefined,
+            onDuplicate:
+              selectionControls.hasSelection && !selectionControls.lockConflict
+                ? duplicateSelection
+                : undefined,
+          }}
+          onPatch={patchSelectedElement}
+          onCropModeChange={(path) => {
+            setCropModePath(path ? [...path] : null);
+            if (!path) setCropDraft(null);
+          }}
+          onCropDraftChange={(draft: TemplateV2ImageCropDraft | null) => {
+            if (!draft) {
+              setCropDraft(null);
+              return;
+            }
+            const path = cropModePath ?? state.selection?.elementPath;
+            setCropDraft(
+              path
+                ? {
+                    path: [...path],
+                    focusX: draft.focusX,
+                    focusY: draft.focusY,
+                    cropScale: draft.cropScale,
+                  }
+                : null
+            );
+          }}
+          onReplaceImage={() => replaceSelectedMedia("image")}
+          onChangeIcon={() => replaceSelectedMedia("icon")}
+        />
+
         <aside className="rounded-xl border border-slate-800 bg-slate-900 p-5">
           <h2 className="font-semibold">Inspector</h2>
           {scene ? (
@@ -446,7 +791,9 @@ export default function TemplateV2Studio({
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Ctrl/Cmd-click sibling elements to select more than one.
+              Ctrl/Cmd-click adds a sibling. Ctrl/Cmd+G groups,
+              Ctrl/Cmd+Shift+G ungroups, Ctrl/Cmd+D duplicates, and Delete
+              removes unlocked selections.
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {[
@@ -504,15 +851,7 @@ export default function TemplateV2Studio({
                 type="button"
                 disabled={!selectionControls.hasSelection}
                 onClick={() => {
-                  const locked = !selectionControls.allLocked;
-                  for (const selection of state.selectionSet) {
-                    dispatch({
-                      type: "set-element-lock",
-                      selection,
-                      locked,
-                    });
-                  }
-                  setNotice(null);
+                  setSelectionLocked(!selectionControls.allLocked);
                 }}
                 className="col-span-2 rounded border border-amber-500/50 px-2 py-1.5 text-xs text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
               >

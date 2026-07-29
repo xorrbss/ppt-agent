@@ -14,6 +14,12 @@ import {
   type ElementPath,
   type JsonRecord,
 } from "@/lib/template-v2-studio";
+import {
+  recolorStudioSvgMarkup,
+  studioImagePlacement,
+  type TemplateV2CanvasCropDraft,
+} from "@/lib/template-v2-studio-media";
+import { isTemplateV2AdditiveSelectionModifier } from "@/lib/template-v2-studio-keyboard";
 
 export const CONTENT_PADDING = 8;
 
@@ -26,6 +32,7 @@ export interface StudioElementProps {
    * is what tells a memoized element that its interactive state may have moved.
    */
   interactionKey: string;
+  cropDraft?: TemplateV2CanvasCropDraft | null;
   isDisabled(path: ElementPath): boolean;
   setNode(path: ElementPath, node: Konva.Node | null): void;
   onSelect(path: ElementPath, additive?: boolean): void;
@@ -50,7 +57,7 @@ export function interactionProps({
     draggable: !isDisabled(path) && capabilities.move,
     onClick: (event: Konva.KonvaEventObject<MouseEvent>) => {
       event.cancelBubble = true;
-      onSelect(path, event.evt.ctrlKey || event.evt.metaKey);
+      onSelect(path, isTemplateV2AdditiveSelectionModifier(event.evt));
     },
     onTap: (event: Konva.KonvaEventObject<TouchEvent>) => {
       event.cancelBubble = true;
@@ -119,26 +126,63 @@ export function measureTextRun(run: TemplateV2TextRun): number {
   return glyphWidth + gaps * run.letterSpacing;
 }
 
-export function useTemplateImage(source: unknown): HTMLImageElement | null {
+export function useTemplateImage(
+  source: unknown,
+  iconColor?: string | null
+): HTMLImageElement | null {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     setImage(null);
     if (
       typeof source !== "string" ||
       (!source.startsWith("/") &&
-        !/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(source))
+        !/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(source) &&
+        !/^data:image\/svg\+xml[;,]/i.test(source))
     ) {
       return;
     }
+    let cancelled = false;
+    let objectUrl: string | null = null;
     const next = new window.Image();
-    next.onload = () => setImage(next);
-    next.onerror = () => setImage(null);
-    next.src = source;
+    next.onload = () => {
+      if (!cancelled) setImage(next);
+    };
+    next.onerror = () => {
+      if (!cancelled) setImage(null);
+    };
+
+    const load = async () => {
+      let resolvedSource = source;
+      const shouldRecolor =
+        Boolean(iconColor?.trim()) &&
+        (/\.svg(?:[?#]|$)/i.test(source) ||
+          /^data:image\/svg\+xml[;,]/i.test(source));
+      if (shouldRecolor) {
+        try {
+          const response = await fetch(source);
+          if (!response.ok) throw new Error("Could not load icon SVG");
+          const markup = recolorStudioSvgMarkup(
+            await response.text(),
+            iconColor ?? ""
+          );
+          objectUrl = URL.createObjectURL(
+            new Blob([markup], { type: "image/svg+xml" })
+          );
+          resolvedSource = objectUrl;
+        } catch {
+          // The original source remains a safe fallback for cross-origin icons.
+        }
+      }
+      if (!cancelled) next.src = resolvedSource;
+    };
+    void load();
     return () => {
+      cancelled = true;
       next.onload = null;
       next.onerror = null;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [source]);
+  }, [iconColor, source]);
   return image;
 }
 
@@ -146,35 +190,45 @@ export function imagePlacement(
   image: HTMLImageElement,
   width: number,
   height: number,
-  fit: unknown
+  fit: unknown,
+  focusX?: unknown,
+  focusY?: unknown,
+  cropScale?: unknown
 ) {
-  if (fit === "contain") {
-    const scale = Math.min(width / image.width, height / image.height);
-    const renderedWidth = image.width * scale;
-    const renderedHeight = image.height * scale;
-    return {
-      x: (width - renderedWidth) / 2,
-      y: (height - renderedHeight) / 2,
-      width: renderedWidth,
-      height: renderedHeight,
-    };
-  }
-  if (fit === "cover") {
-    const scale = Math.max(width / image.width, height / image.height);
-    const cropWidth = width / scale;
-    const cropHeight = height / scale;
-    return {
-      x: 0,
-      y: 0,
-      width,
-      height,
-      crop: {
-        x: (image.width - cropWidth) / 2,
-        y: (image.height - cropHeight) / 2,
-        width: cropWidth,
-        height: cropHeight,
-      },
-    };
-  }
-  return { x: 0, y: 0, width, height };
+  return studioImagePlacement({
+    naturalWidth: image.naturalWidth || image.width,
+    naturalHeight: image.naturalHeight || image.height,
+    width,
+    height,
+    fit,
+    focusX,
+    focusY,
+    cropScale,
+  });
+}
+
+export function clipRoundedRect(
+  context: Konva.Context,
+  width: number,
+  height: number,
+  radius: number | number[]
+) {
+  const values = Array.isArray(radius)
+    ? radius
+    : [radius, radius, radius, radius];
+  const maxRadius = Math.max(0, Math.min(width, height) / 2);
+  const [tl, tr, br, bl] = values.map((value) =>
+    Math.min(maxRadius, Math.max(0, value ?? 0))
+  );
+  context.beginPath();
+  context.moveTo(tl, 0);
+  context.lineTo(width - tr, 0);
+  context.quadraticCurveTo(width, 0, width, tr);
+  context.lineTo(width, height - br);
+  context.quadraticCurveTo(width, height, width - br, height);
+  context.lineTo(bl, height);
+  context.quadraticCurveTo(0, height, 0, height - bl);
+  context.lineTo(0, tl);
+  context.quadraticCurveTo(0, 0, tl, 0);
+  context.closePath();
 }

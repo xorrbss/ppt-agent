@@ -7,6 +7,7 @@ import { Group, Layer, Rect, Stage, Transformer } from "react-konva";
 import {
   elementCapabilities,
   elementPosition,
+  elementSize,
   normalizeElementGeometry,
   pathKey,
   TEMPLATE_V2_SLIDE_HEIGHT,
@@ -14,6 +15,14 @@ import {
 } from "@/lib/template-v2-konva";
 import { nudgeTemplateV2Geometry } from "@/lib/template-v2-studio-geometry";
 import { getTemplateV2CanvasKeyboardIntent } from "@/lib/template-v2-studio-keyboard";
+import {
+  clampStudioSelectionBounds,
+  closestStudioPath,
+  sameStudioSelectionBounds,
+  unionStudioCanvasRects,
+  type TemplateV2CanvasCropDraft,
+  type TemplateV2CanvasSelectionBounds,
+} from "@/lib/template-v2-studio-media";
 import { planStudioElement } from "@/lib/template-v2-studio-plan";
 import {
   sameTemplateV2Guides,
@@ -35,11 +44,16 @@ import {
   useTemplateV2Viewport,
 } from "./TemplateV2CanvasViewport";
 
-interface TemplateV2CanvasProps {
+export interface TemplateV2CanvasProps {
   scene: TemplateV2Scene;
   selectedPaths: ElementPath[];
   lockedPaths: ElementPath[];
   disabled?: boolean;
+  cropModePath?: ElementPath | null;
+  cropDraft?: TemplateV2CanvasCropDraft | null;
+  onSelectionBoundsChange?(
+    bounds: TemplateV2CanvasSelectionBounds | null
+  ): void;
   onSelect(path: ElementPath | null, additive?: boolean): void;
   onGeometryBatch(
     updates: Array<{ elementPath: ElementPath; geometry: ElementGeometry }>
@@ -53,8 +67,13 @@ interface CanvasLatest
     "scene" | "selectedPaths" | "onSelect" | "onGeometryBatch"
   > {
   componentPosition: { x: number; y: number };
+  dimensions: { width: number; height: number };
+  viewport: { x: number; y: number; scale: number };
   selectedKeys: ReadonlySet<string>;
   capabilities: { move: boolean; resize: boolean; rotate: boolean };
+  onSelectionBoundsChange?: (
+    bounds: TemplateV2CanvasSelectionBounds | null
+  ) => void;
 }
 
 function elementAtPath(
@@ -89,6 +108,9 @@ export default function TemplateV2Canvas({
   selectedPaths,
   lockedPaths,
   disabled = false,
+  cropModePath = null,
+  cropDraft = null,
+  onSelectionBoundsChange,
   onSelect,
   onGeometryBatch,
 }: TemplateV2CanvasProps) {
@@ -104,6 +126,9 @@ export default function TemplateV2Canvas({
   } = useTemplateV2Viewport();
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const nodesRef = useRef(new Map<string, Konva.Node>());
+  const selectionBoundsFrameRef = useRef<number | null>(null);
+  const lastSelectionBoundsRef =
+    useRef<TemplateV2CanvasSelectionBounds | null>(null);
   const dragRef = useRef<{
     sourceKey: string;
     sourceStart: { x: number; y: number };
@@ -150,6 +175,7 @@ export default function TemplateV2Canvas({
       ) &&
       !selectionLocked,
   };
+  const cropModeActive = cropModePath !== null;
 
   // Handlers handed to every element keep a stable identity so a geometry
   // commit only re-renders the elements that changed; they read the current
@@ -157,11 +183,14 @@ export default function TemplateV2Canvas({
   const snapshot: CanvasLatest = {
     scene,
     componentPosition,
+    dimensions,
+    viewport,
     selectedPaths,
     selectedKeys,
     capabilities,
     onSelect,
     onGeometryBatch,
+    onSelectionBoundsChange,
   };
   const latest = useRef(snapshot);
   useEffect(() => {
@@ -176,9 +205,107 @@ export default function TemplateV2Canvas({
     selectedPaths.map(pathKey).join(","),
   ].join("|");
 
+  const publishSelectionBounds = useCallback(() => {
+    const {
+      componentPosition,
+      dimensions,
+      onSelectionBoundsChange: publish,
+      scene: currentScene,
+      selectedPaths: currentSelection,
+      viewport: currentViewport,
+    } = latest.current;
+    if (!publish) return;
+    const rects = currentSelection.flatMap((selectedPath) => {
+      const registeredPath = closestStudioPath(selectedPath, (candidate) =>
+        nodesRef.current.has(pathKey(candidate))
+      );
+      const node = registeredPath
+        ? nodesRef.current.get(pathKey(registeredPath))
+        : null;
+      if (node) {
+        const rect = node.getClientRect({
+          skipShadow: true,
+          skipStroke: false,
+        });
+        return [{ x: rect.x, y: rect.y, width: rect.width, height: rect.height }];
+      }
+
+      // A node can be briefly absent while an image or planned subtree mounts.
+      // The top-level frame keeps the toolbar stable until the exact node is
+      // registered, rather than dropping it or guessing nested transforms.
+      const rootIndex = selectedPath[0];
+      const root =
+        typeof rootIndex === "number" ? currentScene.elements[rootIndex] : null;
+      if (!isJsonRecord(root)) return [];
+      const position = elementPosition(root);
+      const size = elementSize(root);
+      return [
+        {
+          x:
+            currentViewport.x +
+            (componentPosition.x + position.x) * currentViewport.scale,
+          y:
+            currentViewport.y +
+            (componentPosition.y + position.y) * currentViewport.scale,
+          width: size.width * currentViewport.scale,
+          height: size.height * currentViewport.scale,
+        },
+      ];
+    });
+    const bounds = clampStudioSelectionBounds(
+      unionStudioCanvasRects(rects),
+      dimensions
+    );
+    if (sameStudioSelectionBounds(lastSelectionBoundsRef.current, bounds)) {
+      return;
+    }
+    lastSelectionBoundsRef.current = bounds;
+    publish(bounds);
+  }, []);
+
+  const queueSelectionBounds = useCallback(() => {
+    if (
+      typeof window === "undefined" ||
+      selectionBoundsFrameRef.current !== null
+    ) {
+      return;
+    }
+    selectionBoundsFrameRef.current = window.requestAnimationFrame(() => {
+      selectionBoundsFrameRef.current = null;
+      publishSelectionBounds();
+    });
+  }, [publishSelectionBounds]);
+
+  useEffect(() => {
+    // A newly connected toolbar callback must receive the current rectangle
+    // even when the selection itself has not moved.
+    lastSelectionBoundsRef.current = null;
+    queueSelectionBounds();
+  }, [onSelectionBoundsChange, queueSelectionBounds]);
+
+  useEffect(() => {
+    queueSelectionBounds();
+  }, [
+    dimensions,
+    queueSelectionBounds,
+    scene,
+    selectedPaths,
+    viewport,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (selectionBoundsFrameRef.current !== null) {
+        window.cancelAnimationFrame(selectionBoundsFrameRef.current);
+      }
+      latest.current.onSelectionBoundsChange?.(null);
+    },
+    []
+  );
+
   useEffect(() => {
     const transformer = transformerRef.current;
-    const nodes = capabilities.move
+    const nodes = capabilities.move && !cropModeActive
       ? selectedPaths
           .map((path) => nodesRef.current.get(pathKey(path)))
           .filter((node): node is Konva.Node => Boolean(node))
@@ -187,13 +314,21 @@ export default function TemplateV2Canvas({
       nodes.length === selectedPaths.length ? nodes : []
     );
     transformer?.getLayer()?.batchDraw();
-  }, [capabilities.move, scene, selectedPaths]);
+    queueSelectionBounds();
+  }, [
+    capabilities.move,
+    cropModeActive,
+    queueSelectionBounds,
+    scene,
+    selectedPaths,
+  ]);
 
   const setNode = useCallback((path: ElementPath, node: Konva.Node | null) => {
     const key = pathKey(path);
     if (node) nodesRef.current.set(key, node);
     else nodesRef.current.delete(key);
-  }, []);
+    queueSelectionBounds();
+  }, [queueSelectionBounds]);
 
   const selectElement = useCallback(
     (path: ElementPath | null, additive?: boolean) =>
@@ -309,8 +444,9 @@ export default function TemplateV2Canvas({
       }
       transformerRef.current?.forceUpdate();
       node.getLayer()?.batchDraw();
+      queueSelectionBounds();
     },
-    [guideTargets]
+    [guideTargets, queueSelectionBounds]
   );
 
   const onDragEnd = useCallback(
@@ -323,8 +459,9 @@ export default function TemplateV2Canvas({
           ? drag.entries.map((entry) => entry.path)
           : [path]
       );
+      queueSelectionBounds();
     },
-    [commitNodes]
+    [commitNodes, queueSelectionBounds]
   );
 
   const nudgeSelection = useCallback((deltaX: number, deltaY: number) => {
@@ -394,6 +531,14 @@ export default function TemplateV2Canvas({
         width={dimensions.width}
         height={dimensions.height}
         {...stageProps}
+        onWheel={(event) => {
+          stageProps.onWheel(event);
+          queueSelectionBounds();
+        }}
+        onMouseMove={(event) => {
+          stageProps.onMouseMove(event);
+          queueSelectionBounds();
+        }}
         onMouseDown={(event) => {
           if (beginPan(event)) return;
           const stage = event.target.getStage();
@@ -428,6 +573,7 @@ export default function TemplateV2Canvas({
                   element={element}
                   path={elementPaths[index]}
                   interactionKey={interactionKey}
+                  cropDraft={cropDraft}
                   isDisabled={elementDisabled}
                   setNode={setNode}
                   onSelect={selectElement}
@@ -439,7 +585,11 @@ export default function TemplateV2Canvas({
             </Group>
             <Transformer
               ref={transformerRef}
-              onTransformEnd={() => commitNodes(selectedPaths)}
+              onTransform={() => queueSelectionBounds()}
+              onTransformEnd={() => {
+                commitNodes(selectedPaths);
+                queueSelectionBounds();
+              }}
               rotateEnabled={capabilities.rotate}
               resizeEnabled={capabilities.resize}
               enabledAnchors={
