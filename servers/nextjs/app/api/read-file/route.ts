@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { authStatusForRequest } from '@/lib/server-auth-role';
 
 
 export async function POST(request: Request) {
@@ -45,4 +46,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

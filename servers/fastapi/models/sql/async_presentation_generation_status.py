@@ -3,7 +3,7 @@ import secrets
 from typing import Optional
 import uuid
 
-from sqlalchemy import JSON, Column, ForeignKey
+from sqlalchemy import JSON, Column, Uuid
 from sqlmodel import Field, SQLModel
 from api.v1.auth.context import get_current_owner_id
 
@@ -18,9 +18,9 @@ class AsyncPresentationGenerationTaskModel(SQLModel, table=True):
     owner_id: Optional[uuid.UUID] = Field(
         default_factory=get_current_owner_id,
         exclude=True,
-        sa_column=Column(
-            ForeignKey("user.id", ondelete="CASCADE"), nullable=True, index=True
-        ),
+        # Alembic owns the production FK. Keeping it out of ORM metadata lets
+        # focused tests create this legacy task table without the user table.
+        sa_column=Column(Uuid, nullable=True, index=True),
     )
     status: str
     message: Optional[str] = None

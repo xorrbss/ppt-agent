@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import React from 'react'
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import Image from 'next/image'
+import { cn } from "@/lib/utils";
 
 const CreateCustomTemplate = ({
   selectionPage = false,

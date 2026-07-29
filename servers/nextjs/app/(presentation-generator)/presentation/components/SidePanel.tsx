@@ -68,6 +68,7 @@ const SidePanel = ({
   const lastSlideTemplateId = presentationData?.slides?.[lastSlideIndex]?.layout
     ? presentationData.slides[lastSlideIndex].layout.split(":")[0]
     : "";
+  const isTemplateFree = isTemplateFreePresentation(presentationData);
 
   const handleAddSlideClick = () => {
     if (!presentationData?.slides?.length || isStreaming) return;

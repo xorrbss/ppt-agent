@@ -5,6 +5,9 @@ import Image from "next/image";
 import { getApiUrl } from "@/utils/api";
 import { formatFastApiDetail, UNAUTHORIZED_DETAIL } from "@/utils/authErrors";
 import { notify } from "@/components/ui/sonner";
+import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
+
+const PRESENTON_SPLASH_MIN_DURATION_MS = 3000;
 
 type AuthStatus = {
   configured: boolean;
@@ -25,10 +28,19 @@ export default function AuthGate() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasMetSplashDuration, setHasMetSplashDuration] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const isSetupMode = useMemo(() => !status.configured, [status.configured]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setHasMetSplashDuration(true),
+      PRESENTON_SPLASH_MIN_DURATION_MS
+    );
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   useEffect(() => {
     void refreshStatus();

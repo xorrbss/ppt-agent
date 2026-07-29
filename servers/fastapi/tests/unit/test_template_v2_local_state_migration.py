@@ -156,7 +156,7 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_DURABLE_GENERATION_JOBS
+            == migrations.REVISION_PRIMARY_ADMIN
             )
             assert set(inspector.get_table_names()) >= {
                 "presentation_generation_jobs",
@@ -175,6 +175,7 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
             } == (
                 TEMPLATE_V2_CANONICAL_COLUMNS
                 | TEMPLATE_V2_TRANSITIONAL_LOCAL_COLUMNS
+                | {"owner_id"}
             )
             assert {
                 column["name"]
@@ -243,7 +244,7 @@ def test_complete_schema_inference_recognizes_local_state_head(tmp_path):
                     set(inspector.get_table_names()),
                     "ignored-future-head",
                 )
-                == migrations.REVISION_DURABLE_GENERATION_JOBS
+        == migrations.REVISION_PRIMARY_ADMIN
             )
     finally:
         engine.dispose()

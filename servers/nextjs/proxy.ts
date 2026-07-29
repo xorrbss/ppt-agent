@@ -20,6 +20,23 @@ function getFastApiBaseUrl(): string {
   return "http://127.0.0.1:8000";
 }
 
+function isFastApiApiPath(pathname: string): boolean {
+  return (
+    pathname === "/api/v1" ||
+    pathname.startsWith("/api/v1/") ||
+    pathname === "/api/v2" ||
+    pathname.startsWith("/api/v2/")
+  );
+}
+
+function rewriteToFastApi(request: NextRequest): NextResponse {
+  const destination = new URL(
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    `${getFastApiBaseUrl()}/`
+  );
+  return NextResponse.rewrite(destination);
+}
+
 type AuthStatus = {
   configured: boolean;
   authenticated: boolean;

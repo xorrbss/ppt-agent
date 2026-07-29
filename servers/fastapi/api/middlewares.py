@@ -84,7 +84,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if (
             request.method == "OPTIONS"
             or not self._requires_auth(path)
-            or path in self._PUBLIC_AUTH_PATHS
+            or self._is_exempt(path)
         ):
             return await call_next(request)
 

@@ -9,6 +9,7 @@ import { checkIfSelectedOllamaModelIsPulled } from '@/utils/providerUtils';
 import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
 import Image from 'next/image';
+import { notify } from '@/components/ui/sonner';
 
 const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
   try {

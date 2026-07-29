@@ -63,6 +63,7 @@ from utils.process_slides import (
 )
 from utils.authored_styles import load_authored_styles
 
+from api.v1.auth.context import get_current_owner_id
 from api.v1.ppt.endpoints.presentation_helpers import (
     build_export_cookie_header,
     resolve_presentation_fonts,
@@ -70,6 +71,7 @@ from api.v1.ppt.endpoints.presentation_helpers import (
 from api.v1.ppt.endpoints.presentation_generate import queue_presentation_generation
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
+_build_export_cookie_header = build_export_cookie_header
 
 
 def _is_authored_slide(slide: SlideModel) -> bool:

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { authStatusForRequest } from "@/lib/server-auth-role";
 
 import {
   formatUploadLimit,
@@ -43,6 +44,10 @@ const SUPPORTED_IMAGES = [
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await authStatusForRequest(request);
+    if (!auth.authenticated) {
+      return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
+    }
     const imageLimit = getUploadLimits().image;
     const contentLength = Number(request.headers.get("content-length"));
     if (!Number.isSafeInteger(contentLength) || contentLength <= 0) {

@@ -1,11 +1,11 @@
 import React from 'react'
-import { LogOut, Shield } from 'lucide-react'
+import { LogOut, Shield, ShieldCheck } from 'lucide-react'
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store/store'
 import Image from 'next/image'
 
-type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'session'
+type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'admin' | 'session'
 
 const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: SettingsSection, setSelectedProvider: (provider: SettingsSection) => void }) => {
     const { llm_config } = useSelector((state: RootState) => state.userConfig)

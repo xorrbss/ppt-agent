@@ -4,6 +4,7 @@ import path from "path";
 import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
+import { authStatusForRequest } from "@/lib/server-auth-role";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".pdf": "application/pdf",

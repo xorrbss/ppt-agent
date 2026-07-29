@@ -4,6 +4,10 @@ import { useState } from "react";
 import { LogOut } from "lucide-react";
 
 import { getApiUrl } from "@/utils/api";
+import {
+  MixpanelEvent,
+  trackEventImmediately,
+} from "@/utils/mixpanel";
 
 type LogoutButtonProps = {
   label?: string;

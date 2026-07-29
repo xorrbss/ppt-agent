@@ -5,7 +5,7 @@ import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
 
 export type BlankPresentationResponse = {
   id: string;
-  version: PresentationVersion;
+  version: number;
   title: string | null;
   n_slides: number;
   language: string;

@@ -152,6 +152,11 @@ const EachSlide: React.FC<EachSlideProps> = ({
     setIsDeleteDialogOpen(false);
   };
 
+  const confirmDeleteSlide = () => {
+    setSlides(prev => prev.filter((_, i) => i !== index));
+    setIsDeleteDialogOpen(false);
+  };
+
   const isSlideReady = slide.processed && !slide.processing;
   const isSlideProcessing = slide.processing;
   const hasError = !!slide.error;

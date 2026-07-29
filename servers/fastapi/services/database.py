@@ -5,9 +5,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     AsyncSession,
 )
-from sqlalchemy import event
+from sqlalchemy import event, or_
+from sqlalchemy.orm import Session, with_loader_criteria
 from sqlmodel import SQLModel
 
+from models.sql.async_task import AsyncTaskModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -146,6 +148,7 @@ async def create_db_and_tables():
                         TemplateV2Revision.__table__,
                         TemplateV2PptxImport.__table__,
                         WebhookSubscription.__table__,
+                        AsyncTaskModel.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,
                         OllamaPullStatus.__table__,
                         User.__table__,

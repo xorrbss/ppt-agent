@@ -12,7 +12,7 @@ from templates.presentation_layout import PresentationLayoutModel
 from utils.archetype_profiles import ARCHETYPE_PROFILES
 from utils.get_env import get_next_internal_base_url
 from utils.icon_weights import extract_icon_weight_from_settings
-from utils.internal_http import internal_request_headers
+from api.v1.auth.internal import authenticated_internal_request_headers
 
 LOGGER = logging.getLogger(__name__)
 

@@ -1,5 +1,6 @@
 import asyncio
 from copy import deepcopy
+from types import SimpleNamespace
 import uuid
 
 import pytest
@@ -444,17 +445,31 @@ def test_temp_sqlite_asgi_auth_crud_contract_and_off_mutation_gate(
         "api.middlewares.is_disable_auth_enabled",
         lambda: False,
     )
+    class AuthSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def scalar(self, _statement):
+            return 1
+
+    async def resolve_test_principal(request, _session):
+        if request.headers.get("x-test-token") != "valid":
+            return None, None
+        principal = SimpleNamespace(
+            method="jwt",
+            is_admin=False,
+            user_id=None,
+            username="tester",
+        )
+        return principal, None
+
+    monkeypatch.setattr("api.middlewares.async_session_maker", AuthSession)
     monkeypatch.setattr(
-        "api.middlewares.get_session_token_from_request",
-        lambda request: request.headers.get("x-test-token"),
-    )
-    monkeypatch.setattr(
-        "api.middlewares.get_auth_status",
-        lambda token: {
-            "configured": True,
-            "authenticated": token == "valid",
-            "username": "tester" if token == "valid" else None,
-        },
+        "api.middlewares.resolve_request_principal",
+        resolve_test_principal,
     )
 
     async_engine = create_async_engine(

@@ -1,6 +1,5 @@
 "use client";
-
-import React, { useCallback } from "react";
+import React from "react";
 import {
     DndContext,
     closestCenter,
@@ -14,6 +13,8 @@ import {
     sortableKeyboardCoordinates,
     verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { OutlineItem } from "./OutlineItem";
+import { Button } from "@/components/ui/button";
 import { FileText, Loader2 } from "lucide-react";
 
 interface OutlineContentProps {
@@ -22,11 +23,9 @@ interface OutlineContentProps {
     isStreaming: boolean;
     activeSlideIndex: number | null;
     highestActiveIndex: number;
-    onDragEnd: (event: any) => void;
+    onDragEnd: (oldIndex: number, newIndex: number) => void;
     onAddSlide: () => void;
 }
-
-const getOutlineContent = (outline: { content: string }) => outline.content;
 
 const OutlineContent: React.FC<OutlineContentProps> = ({
     outlines,
@@ -83,7 +82,16 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
-                        onDragEnd={onDragEnd}
+                        onDragEnd={({ active, over }) => {
+                            if (!over || active.id === over.id) return;
+                            const oldIndex = outlines.findIndex(
+                                (_, index) => `slide-${index}` === active.id
+                            );
+                            const newIndex = outlines.findIndex(
+                                (_, index) => `slide-${index}` === over.id
+                            );
+                            onDragEnd(oldIndex, newIndex);
+                        }}
                     >
                         <SortableContext
                             items={outlines.map((_, index) => `slide-${index}`)}

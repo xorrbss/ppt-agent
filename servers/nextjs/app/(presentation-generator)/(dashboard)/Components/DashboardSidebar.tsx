@@ -93,7 +93,7 @@ const DashboardSidebar = () => {
             <div className=" pt-5 border-t border-[#E1E1E5]  font-syne "
             >
                 {BelongingNavItems.map(({ key, label: itemLabel }) => {
-                    const isActive = activeTab === key;
+                    const isActive = pathname === `/${key}`;
                     return (
                         <Link
                             prefetch={false}
