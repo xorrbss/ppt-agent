@@ -4,8 +4,8 @@ import test from "node:test";
 import { resolvePptxMode, resolveRequestedPptxMode } from "./mode.ts";
 import { isAuthoredPresentation } from "./presentation-mode.ts";
 
-test("missing and explicit fidelity modes retain the historical exporter path", () => {
-  assert.deepEqual(resolvePptxMode(undefined), { ok: true, value: "fidelity" });
+test("missing mode uses structured export while explicit fidelity remains available", () => {
+  assert.deepEqual(resolvePptxMode(undefined), { ok: true, value: "hybrid" });
   assert.deepEqual(resolvePptxMode("fidelity"), {
     ok: true,
     value: "fidelity",

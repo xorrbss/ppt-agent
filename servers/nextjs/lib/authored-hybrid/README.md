@@ -34,9 +34,11 @@ the H1 contract, not extraction failures.
 
 ## Export modes
 
-The PPTX export API accepts `pptxMode: "fidelity" | "hybrid"`. Missing mode and
-explicit `"fidelity"` both use the historical full-slide-image exporter without
-entering this module. PDF ignores this PPTX-only option.
+The PPTX export API accepts `pptxMode: "fidelity" | "hybrid"`. Missing mode
+defaults to `"hybrid"` so backgrounds, text, pictures, and supported shapes are
+exported as separate PowerPoint objects. Explicit `"fidelity"` remains
+available for compatibility and uses the historical full-slide-image exporter
+without entering this module. PDF ignores this PPTX-only option.
 
 `"hybrid"` first produces that fidelity deck as a valid OOXML skeleton. Only
 slides identified as authored are considered. Each selected slide is rebuilt

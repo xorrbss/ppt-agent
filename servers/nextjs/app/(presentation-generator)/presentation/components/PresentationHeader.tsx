@@ -422,18 +422,18 @@ const PresentationHeader = ({
               type="button"
               onClick={() => {
                 closeExportOptions();
-                void handleExportPptx("fidelity");
+                void handleExportPptx("hybrid");
               }}
               disabled={isExporting || isStreaming === true}
-              data-testid="authored-export-fidelity"
+              data-testid="authored-export-hybrid"
               variant="ghost"
               className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 디자인 그대로"
+              aria-label="PPTX로 내보내기, 배경과 요소 분리"
             >
               <span className="min-w-0">
-                <span className="block font-medium">PPTX · 디자인 그대로</span>
+                <span className="block font-medium">PPTX · 배경과 요소 분리</span>
                 <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
-                  슬라이드를 이미지로 유지합니다.
+                  배경, 텍스트, 이미지와 도형을 가능한 범위에서 각각 분리합니다.
                 </span>
               </span>
               <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -445,7 +445,7 @@ const PresentationHeader = ({
                 void handleExportPptx("hybrid", true);
               }}
               disabled={isExporting || isStreaming === true}
-              data-testid="authored-export-hybrid"
+              data-testid="authored-export-hybrid-embedded"
               variant="ghost"
               className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
               aria-label="PPTX로 내보내기, 텍스트 편집 가능 및 글꼴 포함"

@@ -98,16 +98,16 @@ describe("PresentationHeader authored export", () => {
     cy.get("@getThemes").should("have.been.calledOnce");
   });
 
-  it("sends fidelity by default for the authored design-preserving option", () => {
+  it("sends hybrid by default for the authored separated-elements option", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     expectExportBody({
       format: "pptx",
       id: "deck-1",
       title: "deck",
-      pptxMode: "fidelity",
+      pptxMode: "hybrid",
       fontEmbedding: false,
     });
   });
@@ -116,7 +116,7 @@ describe("PresentationHeader authored export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
+    cy.get('[data-testid="authored-export-hybrid-embedded"]').click({ force: true });
     expectExportBody({
       format: "pptx",
       id: "deck-1",
@@ -206,7 +206,7 @@ describe("PresentationHeader authored export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
+    cy.get('[data-testid="authored-export-hybrid-embedded"]').click({ force: true });
     cy.wait("@qualityExport");
     cy.get('[data-testid="export-quality-dialog"]')
       .should("contain.text", "전체 2장")
@@ -215,14 +215,13 @@ describe("PresentationHeader authored export", () => {
       .and("contain.text", "그룹 1개")
       .and("contain.text", "잔여 raster 1개")
       .and("contain.text", "hero::before")
-      .and("contain.text", "폰트 임베딩은 기본 off");
+      .and("contain.text", "이 내보내기에는 글꼴이 포함되지 않아");
   });
 
   it("does not expose authored choices or alter the adaptive PPTX body", () => {
     mountHeader(false);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').should("not.exist");
     cy.get('[data-testid="authored-export-hybrid"]').should("not.exist");
     cy.get('[data-testid="authored-export-hybrid-embedded"]').should("not.exist");
     cy.get('[data-testid="export-pptx"]').click();
@@ -246,10 +245,10 @@ describe("PresentationHeader authored export", () => {
       .focus()
       .should("be.focused");
     cy.get('[data-testid="export-trigger"]').click();
-    cy.get('[data-testid="authored-export-fidelity"]')
+    cy.get('[data-testid="authored-export-hybrid"]')
       .should("have.attr", "aria-label")
       .and("not.be.empty");
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     cy.wait("@exportPresentation");
     cy.get('[data-testid="export-trigger"]').should("be.focused");
   });
@@ -263,7 +262,7 @@ describe("PresentationHeader authored export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     cy.get('[data-testid="export-trigger"]').should("be.disabled");
     cy.get('[role="status"]').should("exist");
     cy.wait("@slowExport");
@@ -277,7 +276,7 @@ describe("PresentationHeader authored export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     cy.wait("@failedExport");
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
   });

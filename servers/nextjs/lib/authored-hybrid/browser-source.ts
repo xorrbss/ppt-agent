@@ -1083,6 +1083,23 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     return unique(reasons);
   }
 
+  function complexSvgImageReasons(reasons) {
+    // A path-heavy SVG is rendered into its own transparent PNG before the
+    // residual backplate is captured. Paint owned by ancestors (cards,
+    // shadows, and generated decoration) remains in the backplate because
+    // suppression hides only the SVG root. The SVG's internal paint is already
+    // represented by the PNG, while final overlap selection preserves browser
+    // paint order. Do not let those container-level signals fuse the picture
+    // back into the slide-sized bitmap.
+    return reasons.filter(function (reason) {
+      return ![
+        "pseudo-element",
+        "external-paint",
+        "unknown-z-order",
+      ].includes(reason);
+    });
+  }
+
   function visibleElement(element) {
     var style = getComputedStyle(element);
     if (
@@ -3301,6 +3318,9 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var transform = analyzeTransform(element);
       var rotationDeg = effectiveRigidRotation(element, transform);
       var reasons = safetyReasons(element, candidateKind, transform);
+      if (complexSvgImagePayloads.has(element)) {
+        reasons = complexSvgImageReasons(reasons);
+      }
       if (complexHtmlImagePayloads.has(element)) {
         // The whole semantic visual is captured exactly as a transparent PNG;
         // its internal decoration, clipping, pseudo paint, and local z-index
@@ -3445,6 +3465,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         if (
           !record.pseudo &&
           observation.candidateKind !== "complex" &&
+          !complexSvgImagePayloads.has(record.element) &&
           !complexHtmlImagePayloads.has(record.element) &&
           (isOccluded(record.element, observation) ||
             isRectOccluded(record.element, observation, allElements) ||

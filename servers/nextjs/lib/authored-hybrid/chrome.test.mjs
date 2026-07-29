@@ -1271,6 +1271,63 @@ test("complex SVG illustrations become selectable pictures while compact connect
   );
 });
 
+test("complex SVG pictures stay separate from decorated background containers", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const complexPaths = Array.from({ length: 25 }, (_, index) =>
+    `<path d="M${index * 6} 0h5v5h-5z" fill="#2878d8"/>`
+  ).join("");
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#f7fafc}
+    .card{position:absolute;left:120px;top:80px;width:480px;height:260px;z-index:2;background:#fff;box-shadow:0 12px 30px #1631512e}
+    .card::after{content:"";position:absolute;right:20px;top:-5px;width:48px;height:8px;background:#ffbe3f}
+    svg{position:absolute;left:80px;top:70px;width:300px;height:120px}
+  </style></head><body>
+    <div class="card">
+      <svg id="illustration" viewBox="0 0 300 120">${complexPaths}</svg>
+    </div>
+  </body></html>`;
+  const slide = await extractAuthoredSlideDom(html, {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+
+  const illustration = slide.elements.find(
+    (element) =>
+      element.tagName === "svg" &&
+      element.classification.mode === "native" &&
+      element.classification.kind === "image" &&
+      "image" in element
+  );
+  assert.ok(
+    illustration,
+    "ancestor shadow, pseudo paint, and stacking context must not fuse the SVG into the backplate"
+  );
+  assert.match(illustration.image.src, /^data:image\/png;base64,/);
+
+  const baseline = await renderAuthoredBackplate(html, slide, [], {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+  const promoted = await renderAuthoredBackplate(html, slide, [illustration.id], {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+  assert.ok(
+    (await changedPixels(baseline.backplatePng, promoted.backplatePng, [200, 150, 300, 120])) > 500,
+    "the SVG picture should be removed from the residual background"
+  );
+  assert.ok(
+    (await changedPixels(baseline.backplatePng, promoted.backplatePng, [120, 80, 60, 60])) < 10,
+    "the surrounding card background should remain in the residual layer"
+  );
+});
+
 test("large semantic HTML visuals become selectable pictures while their labels remain editable", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
