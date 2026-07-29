@@ -15,6 +15,32 @@ export interface CloneLayoutPayload {
     layout_name?: string;
 }
 
+export interface GenerateTemplateLayoutPayload {
+    template_id: string;
+    prompt: string;
+}
+
+export interface GenerateTemplateLayoutResponse {
+    layout: TemplateV2Layout;
+    response: string;
+}
+
+export interface StructuredTemplateDetailsResponse {
+    id: string;
+    name: string;
+    description?: string | null;
+    layouts: unknown;
+    assets?: unknown;
+    is_default?: boolean;
+    revision: number;
+    updated_at?: string;
+}
+
+export interface UpdateStructuredTemplatePayload {
+    layouts: unknown;
+    expected_revision: number;
+}
+
 class TemplateService {
 
     static async getCustomTemplateSummaries() {
@@ -71,6 +97,75 @@ class TemplateService {
             return await ApiResponseHandler.handleResponse(response, "Failed to clone layout");
         } catch (error) {
             console.error("Failed to clone layout", error);
+            throw error;
+        }
+    }
+
+    static async getStructuredTemplateDetails(
+        templateId: string,
+    ): Promise<StructuredTemplateDetailsResponse> {
+        try {
+            const response = await fetch(
+                getApiUrl(
+                    `/api/v1/ppt/structured-templates/${encodeURIComponent(templateId)}`,
+                ),
+                { credentials: "include" },
+            );
+            return await ApiResponseHandler.handleResponse(
+                response,
+                "Failed to get structured template details",
+            );
+        } catch (error) {
+            console.error("Failed to get structured template details", error);
+            throw error;
+        }
+    }
+
+    static async updateStructuredTemplateLayouts(
+        templateId: string,
+        payload: UpdateStructuredTemplatePayload,
+    ): Promise<StructuredTemplateDetailsResponse> {
+        try {
+            const response = await fetch(
+                getApiUrl(
+                    `/api/v1/ppt/structured-templates/${encodeURIComponent(templateId)}`,
+                ),
+                {
+                    method: "PATCH",
+                    credentials: "include",
+                    headers: getHeader(),
+                    body: JSON.stringify(payload),
+                },
+            );
+            return await ApiResponseHandler.handleResponse(
+                response,
+                "Failed to update structured template",
+            );
+        } catch (error) {
+            console.error("Failed to update structured template", error);
+            throw error;
+        }
+    }
+
+    static async generateTemplateLayout(
+        payload: GenerateTemplateLayoutPayload,
+    ): Promise<GenerateTemplateLayoutResponse> {
+        try {
+            const response = await fetch(
+                getApiUrl("/api/v1/ppt/template/layouts/generate"),
+                {
+                    method: "POST",
+                    credentials: "include",
+                    headers: getHeader(),
+                    body: JSON.stringify(payload),
+                },
+            );
+            return await ApiResponseHandler.handleResponse(
+                response,
+                "Failed to generate template layout",
+            );
+        } catch (error) {
+            console.error("Failed to generate template layout", error);
             throw error;
         }
     }
