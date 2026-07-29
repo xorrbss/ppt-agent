@@ -1,5 +1,5 @@
 PDF_EXTENSIONS = [".pdf"]
-TEXT_EXTENSIONS = [".txt"]
+TEXT_EXTENSIONS = [".txt", ".md", ".markdown"]
 
 WORD_EXTENSIONS = [".doc", ".docx", ".docm", ".odt", ".rtf"]
 POWERPOINT_EXTENSIONS = [".ppt", ".pptx", ".pptm", ".odp"]

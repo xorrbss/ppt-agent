@@ -52,6 +52,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "html2canvas": "^1.4.1",
+    "isomorphic-dompurify": "^2.36.0",
     "jsonrepair": "^3.12.0",
     "konva": "10.3.0",
     "lucide-react": "^0.447.0",

@@ -15,9 +15,11 @@ interface SupportingDocProps {
 }
 
 export const MAX_SUPPORTED_FILES = 8
+export const SUPPORTED_FILE_FORMATS_DESCRIPTION = 'Word, PowerPoint, 스프레드시트, PDF, TXT, Markdown, 이미지 파일.'
 
 const PDF_TYPES = ['.pdf']
-const TEXT_TYPES = ['.txt']
+export const TEXT_EXTENSIONS = ['.txt', '.md', '.markdown'] as const
+export const TEXT_MIME_TYPES = ['text/plain', 'text/markdown'] as const
 const WORD_TYPES = ['.doc', '.docx', '.docm', '.odt', '.rtf']
 const POWERPOINT_TYPES = ['.ppt', '.pptx', '.pptm', '.odp']
 const SPREADSHEET_TYPES = ['.xls', '.xlsx', '.xlsm', '.ods', '.csv', '.tsv']
@@ -26,7 +28,7 @@ const IMAGE_TYPES = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', 
 const ALLOWED_MIME_PREFIXES: string[] = ['image/']
 const ALLOWED_MIME_TYPES = [
     'application/pdf',
-    'text/plain',
+    ...TEXT_MIME_TYPES,
     'text/csv',
     'application/csv',
     'text/tab-separated-values',
@@ -55,7 +57,7 @@ const ALLOWED_MIME_TYPES = [
 ]
 const ALLOWED_EXTENSIONS = [
     ...PDF_TYPES,
-    ...TEXT_TYPES,
+    ...TEXT_EXTENSIONS,
     ...WORD_TYPES,
     ...POWERPOINT_TYPES,
     ...SPREADSHEET_TYPES,
@@ -94,7 +96,7 @@ const SupportingDoc = ({
     const handleValidate = (filesToReview: File[]) => {
         const disallowed = filesToReview.filter((file) => !isAllowedFile(file))
         if (disallowed.length > 0) {
-            notify.error('지원하지 않는 파일이 있습니다', '지원 형식: Word, PowerPoint, 스프레드시트, PDF/TXT, 이미지 파일.')
+            notify.error('지원하지 않는 파일이 있습니다', `지원 형식: ${SUPPORTED_FILE_FORMATS_DESCRIPTION}`)
         }
         const oversized = filesToReview.filter((file) => file.size > uploadLimits.document.bytes)
         if (oversized.length > 0) {
@@ -236,7 +238,7 @@ const SupportingDoc = ({
                                     <Plus className='w-3 h-3' />
                                 </div>
                             </div>
-                            <p className='text-[#808080] text-sm  font-normal'>(Office 문서, 스프레드시트, 이미지, PDF/TXT)</p>
+                            <p className='text-[#808080] text-sm  font-normal'>(Office 문서, 스프레드시트, 이미지, PDF, TXT, Markdown)</p>
                             <p className='text-[#808080] text-xs font-normal'>
                                 파일당 최대 {uploadLimits.document.mb}MB
                             </p>
@@ -284,7 +286,7 @@ const SupportingDoc = ({
                     </ul>
                     {filteredFiles.length !== files.length && (
                         <p className="mt-2 text-xs text-amber-600 font-syne">
-                            일부 파일이 제외되었습니다. 지원 형식: Word, PowerPoint, 스프레드시트, PDF/TXT, 이미지 파일.
+                            일부 파일이 제외되었습니다. 지원 형식: {SUPPORTED_FILE_FORMATS_DESCRIPTION}
                         </p>
                     )}
                 </div>

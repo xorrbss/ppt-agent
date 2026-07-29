@@ -112,7 +112,7 @@ describe("PresentationHeader authored export", () => {
     });
   });
 
-  it("sends hybrid for editable text and preserves the PDF request shape", () => {
+  it("sends hybrid with font embedding by default and preserves the PDF request shape", () => {
     mountHeader(true);
 
     openExportOptions();
@@ -122,7 +122,7 @@ describe("PresentationHeader authored export", () => {
       id: "deck-1",
       title: "deck",
       pptxMode: "hybrid",
-      fontEmbedding: false,
+      fontEmbedding: true,
     });
 
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
@@ -132,23 +132,6 @@ describe("PresentationHeader authored export", () => {
       format: "pdf",
       id: "deck-1",
       title: "deck",
-    });
-  });
-
-  it("keeps embedding off by default and sends an explicit opt-in with a warning", () => {
-    mountHeader(true);
-
-    openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid-embedded"]')
-      .should("contain.text", "글꼴 포함")
-      .and("contain.text", "파일 크기가 크게 늘 수 있습니다")
-      .click({ force: true });
-    expectExportBody({
-      format: "pptx",
-      id: "deck-1",
-      title: "deck",
-      pptxMode: "hybrid",
-      fontEmbedding: true,
     });
   });
 

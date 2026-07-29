@@ -439,44 +439,20 @@ const PresentationHeader = ({
               type="button"
               onClick={() => {
                 closeExportOptions();
-                void handleExportPptx("hybrid");
+                void handleExportPptx("hybrid", true);
               }}
               disabled={isExporting || isStreaming === true}
               data-testid="authored-export-hybrid"
               variant="ghost"
               className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 텍스트 편집 가능"
-            >
-              <span className="min-w-0">
-                <span className="block font-medium">PPTX · 텍스트 편집 가능</span>
-                <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
-                  텍스트와 일부 요소를 편집할 수 있습니다.
-                </span>
-              </span>
-              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                closeExportOptions();
-                void handleExportPptx("hybrid", true);
-              }}
-              disabled={isExporting || isStreaming === true}
-              data-testid="authored-export-hybrid-embedded"
-              variant="ghost"
-              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-2 text-left text-xs text-black hover:bg-amber-50 disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 편집 가능 및 글꼴 포함"
+              aria-label="PPTX로 내보내기, 텍스트 편집 가능 및 글꼴 포함"
             >
               <span className="min-w-0">
                 <span className="block font-medium">
-                  PPTX · 편집 가능 + 글꼴 포함
+                  PPTX · 텍스트 편집 가능 + 글꼴 포함
                 </span>
-                <span
-                  className="mt-1 block text-[11px] font-normal leading-snug text-amber-900"
-                  role="note"
-                >
-                  명시적 opt-in입니다. 서버에서 허용된 글꼴만 포함하며 파일
-                  크기가 크게 늘 수 있습니다. 실패 시 호환 글꼴로 대체됩니다.
+                <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
+                  텍스트와 일부 요소를 편집할 수 있으며 허용된 글꼴을 자동으로 포함합니다.
                 </span>
               </span>
               <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -828,8 +804,8 @@ const PresentationHeader = ({
                 {exportQuality.fontEmbeddingStatus?.applied
                   ? `OOXML 폰트 임베딩 ${exportQuality.fontEmbeddingStatus.embeddedFontFiles}개가 적용되었습니다.`
                   : exportQuality.fontEmbeddingStatus?.requested
-                    ? "폰트 임베딩 opt-in을 요청했지만 적용되지 않아 호환 typeface/fallback을 사용했습니다."
-                    : "폰트 임베딩은 기본 off이며 호환 typeface/fallback을 사용합니다."}
+                    ? "글꼴 포함을 요청했지만 적용되지 않아 호환 typeface/fallback을 사용했습니다."
+                    : "이 내보내기에는 글꼴이 포함되지 않아 호환 typeface/fallback을 사용합니다."}
               </p>
             </div>
           )}
