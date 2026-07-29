@@ -10,12 +10,14 @@ type AuthStatus = {
   configured: boolean;
   authenticated: boolean;
   username: string | null;
+  role?: "admin" | "user" | null;
 };
 
 const initialStatus: AuthStatus = {
   configured: false,
   authenticated: false,
   username: null,
+  role: null,
 };
 
 export default function AuthGate() {
@@ -81,6 +83,7 @@ export default function AuthGate() {
         configured: Boolean(data.configured),
         authenticated: Boolean(data.authenticated),
         username: data.username ?? null,
+        role: data.role ?? null,
       });
     } catch (fetchError) {
       console.error(fetchError);
@@ -93,11 +96,36 @@ export default function AuthGate() {
     }
   };
 
+  useEffect(() => {
+    if (
+      isLoading ||
+      isRedirecting ||
+      status.authenticated ||
+      !hasMetSplashDuration
+    ) {
+      return;
+    }
+
+    trackEvent(MixpanelEvent.Auth_Gate_Viewed, {
+      flow: status.configured ? "sign_in" : "setup",
+    });
+  }, [
+    hasMetSplashDuration,
+    isLoading,
+    isRedirecting,
+    status.authenticated,
+    status.configured,
+  ]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const cleanedUsername = username.trim();
     if (cleanedUsername.length < 3) {
+      trackEvent(MixpanelEvent.Auth_Validation_Failed, {
+        flow: isSetupMode ? "setup" : "sign_in",
+        reason: "username_too_short",
+      });
       notify.warning(
         "사용자 이름이 너무 짧음",
         "사용자 이름은 3자 이상이어야 합니다."
@@ -105,7 +133,12 @@ export default function AuthGate() {
       return;
     }
 
-    if (password.length < 6) {
+    const minimumPasswordLength = isSetupMode ? 8 : 6;
+    if (password.length < minimumPasswordLength) {
+      trackEvent(MixpanelEvent.Auth_Validation_Failed, {
+        flow: isSetupMode ? "setup" : "sign_in",
+        reason: "password_too_short",
+      });
       notify.warning(
         "비밀번호가 너무 짧음",
         "비밀번호는 6자 이상이어야 합니다."
@@ -114,6 +147,10 @@ export default function AuthGate() {
     }
 
     if (isSetupMode && password !== confirmPassword) {
+      trackEvent(MixpanelEvent.Auth_Validation_Failed, {
+        flow: "setup",
+        reason: "passwords_do_not_match",
+      });
       notify.warning(
         "비밀번호가 일치하지 않음",
         "계속하기 전에 두 비밀번호가 일치하는지 확인하세요."
@@ -163,6 +200,7 @@ export default function AuthGate() {
           configured: true,
           authenticated: false,
           username: (payload as AuthStatus).username ?? cleanedUsername,
+          role: (payload as AuthStatus).role ?? "admin",
         });
         setPassword("");
         setConfirmPassword("");
@@ -176,6 +214,7 @@ export default function AuthGate() {
         configured: Boolean((payload as AuthStatus).configured),
         authenticated: Boolean((payload as AuthStatus).authenticated),
         username: (payload as AuthStatus).username ?? cleanedUsername,
+        role: (payload as AuthStatus).role ?? null,
       });
       setPassword("");
       setConfirmPassword("");
@@ -228,17 +267,17 @@ export default function AuthGate() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white p-6">
-      <section className="relative z-10 w-full max-w-xl rounded-2xl border border-[#E1E1E5] bg-white p-7 shadow-xl sm:p-10">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white p-6 font-syne">
+      <section className="relative z-10 w-full max-w-lg rounded-[20px] border border-[#EDEEEF] bg-[#F9F8F8] p-7 sm:p-10">
+        <div className="mb-7">
           <div className="flex items-center gap-4">
-            <div className="flex h-[74px] w-[74px] shrink-0 items-center justify-center rounded-[4px] bg-[#F4F3FF] p-3">
+            <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-[4px] bg-[#F4F3FF] p-3">
               <Image
                 src="/logo-with-bg.png"
                 alt=""
-                width={40}
-                height={40}
-                className="h-10 w-10 object-contain"
+                width={161}
+                height={166}
+                className="h-10 w-auto object-contain"
               />
             </div>
             <div>
@@ -252,13 +291,13 @@ export default function AuthGate() {
           </div>
         </div>
 
-        <p className="font-syne text-base text-[#000000CC] sm:text-lg">
+        <p className="max-w-md text-sm leading-relaxed text-[#6B7280]">
           {isSetupMode
             ? "이 배포에 대한 1회성 설정입니다. 이후 방문 시에도 동일한 사용자 이름과 비밀번호를 사용합니다."
             : "이 배포는 보호되어 있습니다. 앱을 열려면 자격 증명을 입력하세요."}
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <form onSubmit={handleSubmit} className="mt-7 space-y-5">
           <div className="space-y-2">
             <label htmlFor="username" className="block font-syne text-sm font-medium text-black">
               사용자 이름

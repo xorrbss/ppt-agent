@@ -4,7 +4,13 @@ import React from 'react'
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import Image from 'next/image'
 
-const CreateCustomTemplate = () => {
+const CreateCustomTemplate = ({
+  selectionPage = false,
+  onClick,
+}: {
+  selectionPage?: boolean;
+  onClick?: () => void;
+}) => {
     const router = useRouter();
     return (
         <div
@@ -25,19 +31,27 @@ const CreateCustomTemplate = () => {
                     </div>
                 </div>
             </div>
-            <div className='px-5 py-4 bg-white flex items-center gap-4 overflow-hidden border-t  border-[#EDEEEF]'>
-                <div className='bg-[#7A5AF8] w-[45px] h-[45px] rounded-lg p-2 flex items-center justify-center'>
-
-                    <Sparkles className='w-6 h-6 text-white' />
+            <div
+              className={cn(
+                "flex items-center overflow-hidden border-t border-[#EDEEEF] bg-white px-5",
+                selectionPage ? "h-20 gap-[15px] py-2.5" : "gap-4 py-4"
+              )}
+            >
+                <div
+                  className={cn(
+                    "flex items-center justify-center rounded-lg bg-[#7A5AF8] p-2",
+                    selectionPage ? "h-[46px] w-[45px]" : "h-[45px] w-[45px]"
+                  )}
+                >
+                    <Sparkles className="h-6 w-6 text-white" />
                 </div>
                 <div>
                     <h4 className='text-[#191919] text-sm font-semibold '>템플릿 만들기</h4>
                     <p className='flex text-[#808080] text-sm  font-medium items-center gap-2'>나만의 템플릿 만들기</p>
                 </div>
-
             </div>
         </div>
-    )
-}
+    );
+};
 
-export default CreateCustomTemplate
+export default CreateCustomTemplate;

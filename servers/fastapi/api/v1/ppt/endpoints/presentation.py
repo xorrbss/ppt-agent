@@ -460,7 +460,10 @@ async def stream_presentation(
 
         # Moved this here to make sure new slides are generated before deleting the old ones
         await sql_session.execute(
-            delete(SlideModel).where(SlideModel.presentation == id)
+            delete(SlideModel).where(
+                SlideModel.presentation == id,
+                SlideModel.owner_id == get_current_owner_id(),
+            )
         )
         await sql_session.commit()
 
@@ -553,7 +556,10 @@ async def update_presentation(
         )
 
         await sql_session.execute(
-            delete(SlideModel).where(SlideModel.presentation == presentation.id)
+            delete(SlideModel).where(
+                SlideModel.presentation == presentation.id,
+                SlideModel.owner_id == get_current_owner_id(),
+            )
         )
         sql_session.add_all(slides)
 
@@ -602,7 +608,10 @@ async def edit_presentation_with_new_content(
             slides_to_delete.append(each_slide.id)
 
     await sql_session.execute(
-        delete(SlideModel).where(SlideModel.id.in_(slides_to_delete))
+        delete(SlideModel).where(
+            SlideModel.id.in_(slides_to_delete),
+            SlideModel.owner_id == get_current_owner_id(),
+        )
     )
 
     sql_session.add_all(new_slides)

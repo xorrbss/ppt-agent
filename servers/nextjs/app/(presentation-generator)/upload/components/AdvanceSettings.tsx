@@ -6,16 +6,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Pencil, SlidersHorizontal, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
+import { cn } from '@/lib/utils';
 
 interface ConfigurationSelectsProps {
     config: PresentationConfig;
     onConfigChange: (key: keyof PresentationConfig, value: any) => void;
+    compact?: boolean;
 }
 
 const toggleClassName =
     'h-[22px] w-[36px] border-0 bg-[#D8D8DD] data-[state=checked]:bg-[#7A5AF8] ';
 
-const AdvanceSettings = ({ config, onConfigChange }: ConfigurationSelectsProps) => {
+const AdvanceSettings = ({
+    config,
+    onConfigChange,
+    compact = false,
+}: ConfigurationSelectsProps) => {
     const [openAdvanced, setOpenAdvanced] = useState(false);
 
     const [advancedDraft, setAdvancedDraft] = useState({

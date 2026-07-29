@@ -48,6 +48,42 @@ def test_search_images_strict_mode_requires_api_key(fake_async_session):
     assert response.json()["detail"] == "Pexels API key is required"
 
 
+def test_search_images_uses_configured_key_for_redacted_runtime_secret(
+    fake_async_session,
+):
+    client = _build_client(fake_async_session)
+
+    with patch(
+        "api.v1.ppt.endpoints.images.get_images_directory", return_value="/tmp"
+    ), patch(
+        "api.v1.ppt.endpoints.images.get_pexels_api_key_env",
+        return_value="server-pexels-key",
+    ), patch(
+        "api.v1.ppt.endpoints.images.ImageGenerationService"
+    ) as mock_service_cls:
+        service = Mock()
+        service.get_image_from_pexels = AsyncMock(
+            side_effect=[
+                "https://img.example.com/validation.jpg",
+                ["https://img.example.com/a.jpg"],
+            ]
+        )
+        mock_service_cls.return_value = service
+
+        response = client.get(
+            "/images/search?query=business&provider=pexels&strict_api_key=true",
+            headers={"X-Provider-Api-Key": "__configured__"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == ["https://img.example.com/a.jpg"]
+    assert service.get_image_from_pexels.await_count == 2
+    assert all(
+        call.kwargs["api_key"] == "server-pexels-key"
+        for call in service.get_image_from_pexels.await_args_list
+    )
+
+
 def test_generate_image_returns_image_path_and_persists_image_asset(fake_async_session):
     client = _build_client(fake_async_session)
     generated_asset = ImageAsset(path="/tmp/generated/a.png", is_uploaded=False)

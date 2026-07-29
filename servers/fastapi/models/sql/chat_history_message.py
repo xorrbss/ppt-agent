@@ -6,6 +6,7 @@ from sqlalchemy import JSON, Column, DateTime, ForeignKey, Text
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
+from api.v1.auth.context import get_current_owner_id
 
 
 class ChatHistoryMessageModel(SQLModel, table=True):

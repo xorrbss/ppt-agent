@@ -15,19 +15,35 @@ function getExportsDirectory(): string {
   return path.join(resolveAppDataDirectory(), "exports");
 }
 
-function getSafeExportName(request: NextRequest): string | null {
+function getSafeExportName(
+  request: NextRequest,
+  userId: string | null,
+  isAdmin: boolean,
+): string | null {
   const decodedName = request.nextUrl.searchParams.get("name");
 
   if (
     !decodedName ||
-    decodedName.includes("/") ||
     decodedName.includes("\\") ||
-    decodedName !== path.basename(decodedName)
+    path.isAbsolute(decodedName)
   ) {
     return null;
   }
 
-  return decodedName;
+  const normalized = path.normalize(decodedName);
+  if (
+    normalized === ".." ||
+    normalized.startsWith(`..${path.sep}`)
+  ) {
+    return null;
+  }
+  if (!userId) return normalized;
+
+  const parts = normalized.split(path.sep);
+  if (parts[0] === "users") {
+    return parts.length >= 3 && parts[1] === userId ? normalized : null;
+  }
+  return isAdmin && parts.length === 1 ? normalized : null;
 }
 
 function contentDisposition(filename: string): string {
@@ -36,7 +52,15 @@ function contentDisposition(filename: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const filename = getSafeExportName(request);
+  const auth = await authStatusForRequest(request);
+  if (!auth.authenticated) {
+    return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
+  }
+  const filename = getSafeExportName(
+    request,
+    auth.user_id,
+    auth.role === "admin",
+  );
   if (!filename) {
     return NextResponse.json({ error: "Invalid export file name" }, { status: 400 });
   }

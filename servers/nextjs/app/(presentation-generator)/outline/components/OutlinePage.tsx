@@ -170,11 +170,8 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
               onSubmit={handleSubmit}
             />
           </div>
-        </div>
-
-
-
-      </Wrapper>
+        </>
+      )}
     </div>
   );
 };

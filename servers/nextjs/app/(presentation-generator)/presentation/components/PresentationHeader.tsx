@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Pencil,
   Check,
+  Keyboard,
   X,
   AlertTriangle,
 } from "lucide-react";
@@ -112,6 +113,7 @@ const PresentationHeader = ({
   isAuthoredDeck?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -853,6 +855,10 @@ const PresentationHeader = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <KeyboardShortcutsDialog
+        open={shortcutsDialogOpen}
+        onOpenChange={setShortcutsDialogOpen}
+      />
     </>
   );
 };

@@ -5,6 +5,10 @@ import path from 'path';
 
 export async function POST(request: Request) {
   try {
+    const auth = await authStatusForRequest(request);
+    if (!auth.authenticated) {
+      return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
+    }
     const { filePath } = await request.json();
     if (!filePath || typeof filePath !== 'string') {
       return NextResponse.json({ error: 'filePath is required' }, { status: 400 });

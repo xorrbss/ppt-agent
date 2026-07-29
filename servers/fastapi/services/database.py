@@ -27,6 +27,10 @@ from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
 from models.sql.webhook_subscription import WebhookSubscription
+from models.sql.user import User
+from models.sql.access_token import AccessToken
+from models.sql.provider_settings import ProviderSettings
+from api.v1.auth.context import get_current_owner_id
 from utils.get_env import get_migrate_database_on_startup_env
 from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
 
@@ -53,6 +57,64 @@ if "sqlite" in database_url:
 
 
 async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
+
+
+_STRICT_OWNER_MODELS = (
+    PresentationModel,
+    SlideModel,
+    PresentationLayoutCodeModel,
+    TemplateModel,
+    ChatHistoryMessageModel,
+    ImageAsset,
+    TemplateCreateInfoModel,
+    AsyncTaskModel,
+    AsyncPresentationGenerationTaskModel,
+    WebhookSubscription,
+)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _scope_owned_selects(execute_state) -> None:
+    """Apply tenant criteria to every ORM SELECT performed during a request."""
+    owner_id = get_current_owner_id()
+    if (
+        owner_id is None
+        or not execute_state.is_select
+        or execute_state.execution_options.get("skip_owner_scope")
+    ):
+        return
+
+    statement = execute_state.statement
+    for model in _STRICT_OWNER_MODELS:
+        statement = statement.options(
+            with_loader_criteria(
+                model,
+                lambda row: row.owner_id == owner_id,
+                include_aliases=True,
+            )
+        )
+    statement = statement.options(
+        with_loader_criteria(
+            TemplateV2,
+            lambda row: or_(
+                row.owner_id == owner_id,
+                (row.owner_id.is_(None) & row.is_default.is_(True)),
+            ),
+            include_aliases=True,
+        )
+    )
+    execute_state.statement = statement
+
+
+@event.listens_for(Session, "before_flush")
+def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        return
+    owner_models = _STRICT_OWNER_MODELS + (TemplateV2,)
+    for instance in session.new:
+        if isinstance(instance, owner_models):
+            instance.owner_id = owner_id
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
@@ -86,6 +148,9 @@ async def create_db_and_tables():
                         WebhookSubscription.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,
                         OllamaPullStatus.__table__,
+                        User.__table__,
+                        AccessToken.__table__,
+                        ProviderSettings.__table__,
                     ],
                 )
             )

@@ -1,33 +1,42 @@
 import { NextResponse } from "next/server";
-import { LLMConfig } from "@/types/llm_config";
-import {
-  readUserConfigFile,
-  updateUserConfigFile,
-} from "@/lib/user-config-store";
+import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
+import { requireAdminApi } from "@/lib/server-auth-role";
 
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
-const AUTH_FIELDS = new Set([
-  "AUTH_USERNAME",
-  "AUTH_PASSWORD_HASH",
-  "AUTH_SECRET_KEY",
-]);
 
-function stripAuthFields(config: Record<string, unknown>) {
-  const sanitized = { ...config };
-  for (const key of AUTH_FIELDS) {
-    delete sanitized[key];
-  }
-  return sanitized;
-}
-
-function stripAuthFieldsFromIncoming(config: Record<string, unknown>) {
-  return Object.fromEntries(
-    Object.entries(config).filter(([key]) => !AUTH_FIELDS.has(key))
+function immutableResponse() {
+  return NextResponse.json(
+    { error: "You are not allowed to access this resource", status: 403 },
+    { status: 403 }
   );
 }
 
-function getUserConfigPath() {
-  return process.env.USER_CONFIG_PATH;
+async function forwardProviderSettings(
+  request: Request,
+  method: "GET" | "PUT",
+  body?: string
+) {
+  const cookie = request.headers.get("cookie") || "";
+  const response = await fetch(
+    `${getFastApiBaseUrl()}/api/v1/admin/provider-settings`,
+    {
+      method,
+      headers: {
+        ...(cookie ? { cookie } : {}),
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      body,
+      cache: "no-store",
+    }
+  );
+  const payload = await response.text();
+  return new NextResponse(payload || null, {
+    status: response.status,
+    headers: {
+      "content-type":
+        response.headers.get("content-type") || "application/json",
+    },
+  });
 }
 
 export async function GET() {
@@ -46,12 +55,10 @@ export async function GET() {
   }
 
   try {
-    const parsedConfig =
-      readUserConfigFile<Record<string, unknown>>(userConfigPath);
-    return NextResponse.json(stripAuthFields(parsedConfig));
+    return await forwardProviderSettings(request, "GET");
   } catch {
     return NextResponse.json(
-      { error: "Unable to read user config", status: 500 },
+      { error: "Unable to read provider settings", status: 500 },
       { status: 500 }
     );
   }
@@ -119,7 +126,7 @@ export async function POST(request: Request) {
     );
   } catch {
     return NextResponse.json(
-      { error: "Unable to save user config", status: 500 },
+      { error: "Unable to save provider settings", status: 500 },
       { status: 500 }
     );
   }

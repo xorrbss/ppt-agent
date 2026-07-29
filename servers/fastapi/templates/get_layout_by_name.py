@@ -139,10 +139,9 @@ async def _fetch_template_fallback_payload(
         fallback_url,
     )
     try:
+        headers = await authenticated_internal_request_headers()
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                fallback_url, headers=internal_request_headers()
-            ) as response:
+            async with session.get(fallback_url, headers=headers) as response:
                 if response.status == 200:
                     payload = await response.json()
                     LOGGER.info(

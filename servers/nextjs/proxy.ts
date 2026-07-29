@@ -104,6 +104,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const authorization = request.headers.get("authorization") || "";
+  if (authorization.toLowerCase().startsWith("bearer sk-presenton-")) {
+    // FastAPI validates admin-owned API keys. Do not treat them as browser
+    // sessions or expose them to local Next.js configuration routes.
+    return isFastApiApiPath(pathname)
+      ? rewriteToFastApi(request)
+      : NextResponse.json(
+          { detail: "API keys are only accepted by the Presenton API" },
+          { status: 403 }
+        );
+  }
+
   const authStatus = await getAuthStatus(request);
   if (authStatus.authenticated) {
     return NextResponse.next();

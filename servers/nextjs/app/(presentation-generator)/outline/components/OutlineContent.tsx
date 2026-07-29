@@ -1,5 +1,6 @@
 "use client";
-import React from "react";
+
+import React, { useCallback } from "react";
 import {
     DndContext,
     closestCenter,
@@ -13,8 +14,6 @@ import {
     sortableKeyboardCoordinates,
     verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { OutlineItem } from "./OutlineItem";
-import { Button } from "@/components/ui/button";
 import { FileText, Loader2 } from "lucide-react";
 
 interface OutlineContentProps {
@@ -26,6 +25,8 @@ interface OutlineContentProps {
     onDragEnd: (event: any) => void;
     onAddSlide: () => void;
 }
+
+const getOutlineContent = (outline: { content: string }) => outline.content;
 
 const OutlineContent: React.FC<OutlineContentProps> = ({
     outlines,

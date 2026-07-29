@@ -25,11 +25,27 @@ export default function LogoutButton({
 
     setIsSubmitting(true);
     try {
-      await fetch(getApiUrl("/api/v1/auth/logout"), {
+      const response = await fetch(getApiUrl("/api/v1/auth/logout"), {
         method: "POST",
         credentials: "include",
       });
-    } catch {
+      if (response.ok) {
+        await trackEventImmediately(MixpanelEvent.Auth_Signed_Out, {
+          source: "logout_button",
+        });
+      } else {
+        await trackEventImmediately(MixpanelEvent.Auth_SignOut_Failed, {
+          source: "logout_button",
+          status_code: response.status,
+        });
+      }
+    } catch (logoutError) {
+      await trackEventImmediately(MixpanelEvent.Auth_SignOut_Failed, {
+        source: "logout_button",
+        status_code: null,
+        error_type:
+          logoutError instanceof Error ? logoutError.name : "UnknownError",
+      });
       // Always route back to auth gate even if backend logout fails.
     } finally {
       window.location.replace("/");

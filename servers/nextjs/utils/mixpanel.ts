@@ -81,6 +81,8 @@ export enum MixpanelEvent {
 
   Dashboard_Page_Viewed = 'Dashboard Page Viewed',
   Dashboard_New_Presentation_Clicked = 'Dashboard New Presentation Clicked',
+  Dashboard_Blank_Presentation_Created = 'Dashboard Blank Presentation Created',
+  Dashboard_Blank_Presentation_Create_Failed = 'Dashboard Blank Presentation Create Failed',
   Dashboard_Presentation_Opened = 'Dashboard Presentation Opened',
   Dashboard_Presentation_Deleted = 'Dashboard Presentation Deleted',
   Dashboard_Create_New_Card_Clicked = 'Dashboard Create New Card Clicked',

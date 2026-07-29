@@ -447,6 +447,7 @@ const SettingsPage = () => {
           />}
           {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
           {selectedProvider === 'privacy' && <PrivacySettings />}
+          {selectedProvider === "admin" && <AdminPanel embedded />}
           {selectedProvider === "session" && (
             <div className="w-full max-w-lg space-y-5 rounded-[20px] border border-[#EDEEEF] bg-white p-7">
               <div>
@@ -466,7 +467,7 @@ const SettingsPage = () => {
       </main>
 
       {/* Fixed Bottom Button — hidden on Sign out; nothing to save there */}
-      {selectedProvider !== "session" ? (
+      {!["session", "admin"].includes(selectedProvider) ? (
         <div className=" mx-auto fixed bottom-20 right-5 ">
           <button
             onClick={handleSaveConfig}

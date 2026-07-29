@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
@@ -40,6 +46,8 @@ const DashboardPage: React.FC = () => {
   const pathname = usePathname();
   const [presentations, setPresentations] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingBlankPresentation, setIsCreatingBlankPresentation] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deckSortDirection, setDeckSortDirection] = useState<"desc" | "asc">(
     "desc"
@@ -89,6 +97,43 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     void fetchPresentations();
   }, [fetchPresentations]);
+
+  const createBlankPresentation = useCallback(async () => {
+    if (blankPresentationRequestInFlight.current) return;
+
+    blankPresentationRequestInFlight.current = true;
+    setIsCreatingBlankPresentation(true);
+    trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
+      pathname,
+      source: "dashboard_blank_presentation_card",
+    });
+
+    try {
+      const presentation =
+        await PresentationGenerationApi.createBlankPresentation();
+      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Created, {
+        pathname,
+        presentation_id: presentation.id,
+        slide_count: presentation.n_slides,
+      });
+      router.push(
+        `/presentation?id=${encodeURIComponent(presentation.id)}&type=standard`
+      );
+    } catch (creationError) {
+      const message =
+        creationError instanceof Error
+          ? creationError.message
+          : "Something went wrong while creating the presentation.";
+      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Create_Failed, {
+        pathname,
+        error_message: sanitizeAnalyticsError(creationError),
+      });
+      notify.error("Could not create blank presentation", message);
+    } finally {
+      blankPresentationRequestInFlight.current = false;
+      setIsCreatingBlankPresentation(false);
+    }
+  }, [pathname, router]);
 
   const removePresentation = (presentationId: string) => {
     setPresentations((prev: any) =>

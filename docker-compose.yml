@@ -13,7 +13,6 @@ services:
       - ./app_data:/app_data
       - presenton_template_v2_private_sources:/app_data-private
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
-      - ./servers/fastapi/utils/internal_http.py:/app/servers/fastapi/utils/internal_http.py:ro
     environment:
       - TEMPLATE_V2_DEPLOYMENT_TIER=production
       - ENABLE_TEMPLATE_V2=${ENABLE_TEMPLATE_V2:-false}

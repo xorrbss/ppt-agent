@@ -21,14 +21,7 @@ export const BelongingNavItems = [
 ]
 
 const DashboardSidebar = () => {
-
-
     const pathname = usePathname();
-    const activeTab = pathname.split("?")[0].split("/").pop();
-
-
-
-
 
     return (
         <aside

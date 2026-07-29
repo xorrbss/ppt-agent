@@ -35,6 +35,7 @@ _IMAGE_TYPES = {
         lambda value: value.startswith(b"RIFF") and value[8:12] == b"WEBP",
     ),
 }
+REDACTED_SECRET_PLACEHOLDER = "__configured__"
 
 
 def _validate_uploaded_image(file: UploadFile, image_path: str) -> None:
@@ -74,6 +75,15 @@ def _normalize_stock_provider(provider: str | None) -> str:
     return "pexels"
 
 
+def _resolve_stock_api_key(
+    request_api_key: str | None, configured_api_key: str | None
+) -> str:
+    normalized_request_key = (request_api_key or "").strip()
+    if normalized_request_key == REDACTED_SECRET_PLACEHOLDER:
+        normalized_request_key = ""
+    return (normalized_request_key or configured_api_key or "").strip()
+
+
 @IMAGES_ROUTER.get("/search", response_model=List[str])
 async def search_stock_images(
     query: str,
@@ -87,7 +97,7 @@ async def search_stock_images(
     image_generation_service = ImageGenerationService(get_images_directory())
 
     if normalized_provider == "pexels":
-        api_key = (x_provider_api_key or get_pexels_api_key_env() or "").strip()
+        api_key = _resolve_stock_api_key(x_provider_api_key, get_pexels_api_key_env())
         if strict_api_key and not api_key:
             raise HTTPException(status_code=401, detail="Pexels API key is required")
 
@@ -110,7 +120,7 @@ async def search_stock_images(
             return [images] if images else []
         return images
 
-    api_key = (x_provider_api_key or get_pixabay_api_key_env() or "").strip()
+    api_key = _resolve_stock_api_key(x_provider_api_key, get_pixabay_api_key_env())
     if strict_api_key and not api_key:
         raise HTTPException(status_code=401, detail="Pixabay API key is required")
 

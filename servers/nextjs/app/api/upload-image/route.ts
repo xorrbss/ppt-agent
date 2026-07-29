@@ -103,7 +103,9 @@ export async function POST(request: NextRequest) {
       );
     }
     // Create uploads directory if it doesn't exist
-    const uploadsDir = path.join(userDataDir, "uploads");
+    const uploadsDir = auth.user_id
+      ? path.join(userDataDir, "uploads", "users", auth.user_id)
+      : path.join(userDataDir, "uploads");
     fs.mkdirSync(uploadsDir, { recursive: true });
 
 

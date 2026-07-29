@@ -89,6 +89,15 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         <p className='text-[#191919] text-xs font-medium'>사용 분석</p>
                     </button>
                     <button
+                        className={`w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border ${selectedProvider === 'admin' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`}
+                        onClick={() => setSelectedProvider('admin')}
+                    >
+                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
+                            <ShieldCheck className='w-3.5 h-3.5 text-[#5146E5]' />
+                        </div>
+                        <p className='text-[#191919] text-xs font-medium'>Admin</p>
+                    </button>
+                    <button
                         className={`w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border ${selectedProvider === 'session' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`}
                         onClick={() => setSelectedProvider('session')}
                     >

@@ -1,25 +1,11 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- The icon editor previews arbitrary remote SVG/data URLs and needs native img loading semantics. */
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
-import { Search, ChevronRight, Info } from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronRight, Info, Loader2, Search, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import ToolTip from "@/components/ToolTip";
 import { cn } from "@/lib/utils";
 import type { RootState } from "@/store/store";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
@@ -93,20 +79,21 @@ const clonePresentationData = <T,>(value: T): T => {
   return JSON.parse(JSON.stringify(value));
 };
 
-const applyIconWeightToValue = (value: any, weight: IconWeight): any => {
+const applyIconWeightToValue = <T,>(value: T, weight: IconWeight): T => {
   if (typeof value === "string") {
-    return value.includes("/static/icons/")
+    return (value.includes("/static/icons/")
       ? replaceIconWeightInUrl(value, weight)
-      : value;
+      : value) as T;
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => applyIconWeightToValue(item, weight));
+    return value.map((item) => applyIconWeightToValue(item, weight)) as T;
   }
 
   if (value && typeof value === "object") {
-    Object.keys(value).forEach((key) => {
-      value[key] = applyIconWeightToValue(value[key], weight);
+    const record = value as Record<string, unknown>;
+    Object.keys(record).forEach((key) => {
+      record[key] = applyIconWeightToValue(record[key], weight);
     });
   }
 
@@ -145,14 +132,12 @@ const IconsEditor = ({
     (state: RootState) => state.presentationGeneration.presentationData
   );
   const requestIdRef = useRef(0);
-  const closeTimeoutRef = useRef<number | null>(null);
 
   const [icons, setIcons] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>(
     icon_prompt?.[0] || ""
   );
   const [loading, setLoading] = useState(true);
-  const [isOpen, setIsOpen] = useState(true);
   const [selectedWeight, setSelectedWeight] = useState<IconWeight>(
     normalizeIconWeight(getIconWeightFromUrl(currentIconUrl))
   );
@@ -170,39 +155,6 @@ const IconsEditor = ({
   );
 
   const previewIconSource = selectedIconUrl || currentIconUrl || icons[0] || "";
-
-  useEffect(() => {
-    setSelectedIconUrl(currentIconUrl || "");
-    setSelectedWeight(
-      normalizeIconWeight(getIconWeightFromUrl(currentIconUrl))
-    );
-  }, [currentIconUrl]);
-
-  useEffect(() => {
-    if (!selectedIconUrl && icons.length > 0) {
-      setSelectedIconUrl(icons[0]);
-    }
-  }, [icons, selectedIconUrl]);
-
-  useEffect(() => {
-    return () => {
-      if (closeTimeoutRef.current) {
-        window.clearTimeout(closeTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleClose = useCallback(() => {
-    setIsOpen(false);
-
-    if (closeTimeoutRef.current) {
-      window.clearTimeout(closeTimeoutRef.current);
-    }
-
-    closeTimeoutRef.current = window.setTimeout(() => {
-      onClose?.();
-    }, 300);
-  }, [onClose]);
 
   const handleIconSearch = useCallback(
     async (weightOverride?: IconWeight, queryOverride?: string) => {
@@ -228,9 +180,14 @@ const IconsEditor = ({
         });
 
         if (requestIdRef.current === requestId) {
-          setIcons(Array.isArray(data) ? data : []);
+          const nextIcons = Array.isArray(data) ? data : [];
+          setIcons(nextIcons);
+          setSelectedIconUrl(
+            (previousIcon) =>
+              previousIcon || currentIconUrl || nextIcons[0] || ""
+          );
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (requestIdRef.current === requestId) {
           console.error("Error fetching icons:", error);
           notify.error(
@@ -245,11 +202,15 @@ const IconsEditor = ({
         }
       }
     },
-    [selectedWeight]
+    [currentIconUrl, selectedWeight]
   );
 
   useEffect(() => {
-    handleIconSearch(selectedWeight, debouncedActiveQuery);
+    const timeoutId = window.setTimeout(() => {
+      void handleIconSearch(selectedWeight, debouncedActiveQuery);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [debouncedActiveQuery, handleIconSearch, selectedWeight]);
 
   const handleWeightSelect = (weight: IconWeight) => {
@@ -281,7 +242,7 @@ const IconsEditor = ({
     }
 
     onIconChange?.(replacementIcon, activeQuery);
-    handleClose();
+    onClose?.();
   };
 
   return (
@@ -371,6 +332,7 @@ const IconsEditor = ({
                   })}
                 </div>
               </div>
+            </header>
 
               <div className="flex items-center justify-between gap-3 pb-5">
                 <p className="text-sm font-medium text-[#191919] ">
@@ -431,10 +393,13 @@ const IconsEditor = ({
                         )}
                       >
                         <img
-                          src={iconSrc}
+                          src={replaceIconWeightInUrl(
+                            previewIconSource,
+                            selectedWeight
+                          )}
                           alt=""
                           draggable={false}
-                          className="h-full w-full object-contain"
+                          className="size-10 object-contain"
                         />
                       </button>
                     );
@@ -470,9 +435,16 @@ const IconsEditor = ({
               </Button>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+
+          <DialogPrimitive.Close
+            aria-label="Close icon editor"
+            className="absolute right-3 top-3 flex size-11 items-center justify-center rounded-full bg-white text-[#191919] shadow-sm transition hover:bg-[#F6F6F9] sm:-right-[68px] sm:top-0 sm:size-[52px]"
+          >
+            <X className="size-5" strokeWidth={1.5} aria-hidden="true" />
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 };
 

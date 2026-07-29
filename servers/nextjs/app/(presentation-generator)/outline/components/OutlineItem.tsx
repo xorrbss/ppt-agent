@@ -1,50 +1,41 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trash } from "lucide-react";
-import { RootState } from "@/store/store";
-import { useDispatch, useSelector } from "react-redux";
+import { Grip } from "lucide-react";
 import {
-  deleteSlideOutline,
-  setOutlines,
-} from "@/store/slices/presentationGeneration";
-import ToolTip from "@/components/ToolTip";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
+  type KeyboardEvent,
 } from "react";
 import { renderMarkdown } from "@/lib/safe-markdown";
 
 interface OutlineItemProps {
-  sortableId: string;
   slideOutline: {
     content: string;
   };
+  id: string;
   index: number;
   isStreaming: boolean;
   isActiveStreaming?: boolean;
   isStableStreaming?: boolean;
+  onUpdate?: (newContent: string) => void;
 }
 
+const outlineMarkdownClassName =
+  "prose prose-sm max-w-none flex-1 font-syne text-base font-normal leading-normal text-[#666666] [overflow-wrap:anywhere] [&>*]:!my-0 [&>*+*]:!mt-[10px] [&_h1]:text-xl [&_h1]:font-medium [&_h1]:leading-normal [&_h1]:text-[#191919] [&_h2]:text-xl [&_h2]:font-medium [&_h2]:leading-normal [&_h2]:text-[#191919] [&_h3]:text-base [&_h3]:font-semibold [&_h3]:leading-normal [&_h3]:text-[#191919] [&_p]:text-base [&_p]:font-normal [&_p]:leading-normal [&_p]:text-[#666666] [&_strong]:font-semibold [&_strong]:text-[#191919] [&_ul]:!my-0 [&_ul]:list-none [&_ul]:space-y-1.5 [&_ul]:pl-0 [&_ul_li]:my-0 [&_ul_li]:bg-[url('/figma/outline-check.svg')] [&_ul_li]:bg-[length:20px_20px] [&_ul_li]:bg-[position:left_2px] [&_ul_li]:bg-no-repeat [&_ul_li]:pl-7 [&_ul_li]:text-base [&_ul_li]:font-normal [&_ul_li]:leading-6 [&_ul_li]:text-[#333333]";
+
 export function OutlineItem({
-  sortableId,
+  id,
   index,
   slideOutline,
   isStreaming,
   isActiveStreaming = false,
   isStableStreaming = false,
+  onUpdate,
 }: OutlineItemProps) {
-  const { outlines } = useSelector(
-    (state: RootState) => state.presentationGeneration
-  );
-  const dispatch = useDispatch();
-
   useEffect(() => {
-    if (isStreaming && slideOutline) {
+    if (isStreaming) {
       const outlineItem = document.getElementById(`outline-item-${index}`);
       if (outlineItem) {
         outlineItem.scrollIntoView({
@@ -79,7 +70,7 @@ export function OutlineItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: sortableId, disabled: isStreaming });
+  } = useSortable({ id, disabled: isStreaming });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -90,41 +81,62 @@ export function OutlineItem({
     dispatch(deleteSlideOutline({ index: index - 1 }));
   };
 
-  // Throttled markdown rendering only for the active streaming item to avoid flicker
-  const [renderedHtml, setRenderedHtml] = useState<string>("");
-  const [isEditing, setIsEditing] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const throttleRef = useRef<number | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const resizeTextarea = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = "0px";
-    textarea.style.height = `${Math.max(textarea.scrollHeight, 140)}px`;
-  }, []);
+  const [markdownDraft, setMarkdownDraft] = useState(
+    slideOutline.content || ""
+  );
+  const [isEditingMarkdown, setIsEditingMarkdown] = useState(false);
+  const [renderedHtml, setRenderedHtml] = useState<string>("");
 
   useEffect(() => {
-    if (!isEditing) return;
-
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.focus();
-    const cursorPosition = textarea.value.length;
-    textarea.setSelectionRange(cursorPosition, cursorPosition);
-    resizeTextarea();
-  }, [isEditing, resizeTextarea]);
+    setMarkdownDraft(slideOutline.content || "");
+  }, [slideOutline.content]);
 
   useEffect(() => {
-    if (!isEditing) return;
-    resizeTextarea();
-  }, [isEditing, resizeTextarea, slideOutline.content]);
+    if (!isEditingMarkdown) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+    const end = editor.value.length;
+    editor.setSelectionRange(end, end);
+  }, [isEditingMarkdown]);
+
+  const handleMarkdownBlur = () => {
+    if (markdownDraft !== slideOutline.content) {
+      onUpdate?.(markdownDraft);
+    }
+    setIsEditingMarkdown(false);
+  };
+
+  const handleStartMarkdownEdit = () => {
+    setMarkdownDraft(slideOutline.content || "");
+    setIsEditingMarkdown(true);
+  };
+
+  const handleMarkdownKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab") return;
+
+    event.preventDefault();
+    const target = event.currentTarget;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    const updatedValue = `${markdownDraft.slice(
+      0,
+      start
+    )}\t${markdownDraft.slice(end)}`;
+
+    setMarkdownDraft(updatedValue);
+    requestAnimationFrame(() => {
+      target.selectionStart = target.selectionEnd = start + 1;
+    });
+  };
 
   useEffect(() => {
     if (!isStreaming || !isActiveStreaming) return;
     const content = slideOutline.content || "";
-    // Throttle updates to ~60ms to reduce reflows/flicker
+
     if (throttleRef.current) {
       window.clearTimeout(throttleRef.current);
     }
@@ -135,6 +147,7 @@ export function OutlineItem({
         setRenderedHtml("");
       }
     }, 60);
+
     return () => {
       if (throttleRef.current) {
         window.clearTimeout(throttleRef.current);
@@ -142,7 +155,6 @@ export function OutlineItem({
     };
   }, [isStreaming, isActiveStreaming, slideOutline.content]);
 
-  // Memoized stable HTML for previous (already completed) items during streaming
   const stableHtml = useMemo(() => {
     if (!isStreaming || isActiveStreaming) return null;
     if (!isStableStreaming) return null;
@@ -162,11 +174,6 @@ export function OutlineItem({
     }
   }, [isStreaming, slideOutline.content]);
 
-  const handleTextareaChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    handleSlideChange(event.target.value);
-    resizeTextarea();
-  };
-
   return (
     <div
       ref={setNodeRef}
@@ -177,68 +184,13 @@ export function OutlineItem({
           : "border-transparent shadow-sm"
       } ${isDragging ? "opacity-50" : ""}`}
     >
-      <div className="flex items-start gap-3 md:gap-4 rounded-[8px]">
+      <div className="flex items-start gap-3 rounded-[8px]">
         <div
           {...attributes}
           {...listeners}
           className=" flex items-center justify-center relative cursor-grab"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <path
-              d="M12 10C12.5523 10 13 9.55228 13 9C13 8.44772 12.5523 8 12 8C11.4477 8 11 8.44772 11 9C11 9.55228 11.4477 10 12 10Z"
-              fill="#191919"
-              stroke="#191919"
-              strokeWidth="0.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M19 10C19.5523 10 20 9.55228 20 9C20 8.44772 19.5523 8 19 8C18.4477 8 18 8.44772 18 9C18 9.55228 18.4477 10 19 10Z"
-              fill="#191919"
-              stroke="#191919"
-              strokeWidth="0.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M5 10C5.55228 10 6 9.55228 6 9C6 8.44772 5.55228 8 5 8C4.44772 8 4 8.44772 4 9C4 9.55228 4.44772 10 5 10Z"
-              fill="#191919"
-              stroke="#191919"
-              strokeWidth="0.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M12 16C12.5523 16 13 15.5523 13 15C13 14.4477 12.5523 14 12 14C11.4477 14 11 14.4477 11 15C11 15.5523 11.4477 16 12 16Z"
-              fill="#191919"
-              stroke="#191919"
-              strokeWidth="0.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M19 16C19.5523 16 20 15.5523 20 15C20 14.4477 19.5523 14 19 14C18.4477 14 18 14.4477 18 15C18 15.5523 18.4477 16 19 16Z"
-              fill="#191919"
-              stroke="#191919"
-              strokeWidth="0.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M5 16C5.55228 16 6 15.5523 6 15C6 14.4477 5.55228 14 5 14C4.44772 14 4 14.4477 4 15C4 15.5523 4.44772 16 5 16Z"
-              fill="#191919"
-              stroke="#191919"
-              strokeWidth="0.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <Grip aria-hidden="true" className="h-6 w-6 text-[#191919]" />
         </div>
 
         <div
@@ -248,7 +200,7 @@ export function OutlineItem({
           <p className="text-black w-fit text-[10px] font-medium  bg-white border border-[#EDEEEF] rounded-[80px] px-2.5">
             슬라이드 {index}
           </p>
-          {/* Editable Markdown Content */}
+
           {isStreaming ? (
             isActiveStreaming ? (
               <div
@@ -265,6 +217,17 @@ export function OutlineItem({
                 {slideOutline.content || ""}
               </p>
             )
+          ) : isEditingMarkdown ? (
+            <Textarea
+              ref={editorRef}
+              value={markdownDraft}
+              onChange={(event) => setMarkdownDraft(event.target.value)}
+              onBlur={handleMarkdownBlur}
+              onKeyDown={handleMarkdownKeyDown}
+              spellCheck={false}
+              placeholder="Enter markdown content here..."
+              className="min-h-[140px] resize-y rounded-[8px] border-[#D8D8DF] bg-[#FBFBFC] px-3 py-3 font-mono text-[13px] leading-6 text-[#191919] shadow-none focus-visible:border-[#7A5AF8] focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/20"
+            />
           ) : (
             <>
               {isEditing ? (

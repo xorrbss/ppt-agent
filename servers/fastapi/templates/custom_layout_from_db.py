@@ -6,6 +6,7 @@ import aiohttp
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from api.v1.auth.internal import authenticated_internal_request_headers
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.template import TemplateModel
 from services.database import async_session_maker

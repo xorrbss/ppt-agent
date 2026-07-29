@@ -1,4 +1,5 @@
 import { getApiUrl } from "@/utils/api";
+import type { TemplateV2Layout } from "@/components/slide-editor/importing/template-v2-import";
 import { ApiResponseHandler } from "./api-error-handler";
 import { getHeader } from "./header";
 

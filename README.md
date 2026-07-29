@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://presenton.ai/download"><strong>Quickstart</strong></a> &middot;
+  <a href="https://presenton.ai/explore"><strong>Templates</strong></a> &middot;
   <a href="https://docs.presenton.ai/"><strong>Docs</strong></a> &middot;
   <a href="https://www.youtube.com/@presentonai"><strong>Youtube</strong></a> &middot;
   <a href="https://discord.gg/9ZsKKxudNE"><strong>Discord</strong></a>
@@ -50,6 +51,91 @@ What makes Presenton different?
 
 <p align="center">
   <img src="./readme_assets/images/chatgpt-2-1.png" alt="Create stunning presentations with your existing ChatGPT subscription — secure and private, instant access, no API keys" />
+</p>
+
+#
+
+### 🎨 Free AI Presentation Templates for PowerPoint
+
+Browse free AI presentation templates for pitch decks, business reports, executive updates, educational presentations, and more. Preview each editable slide layout, choose a design, and use Presenton to generate fully editable PowerPoint (`.pptx`) or PDF presentations from a prompt or document.
+
+<table border="1" cellpadding="16" cellspacing="0" width="100%">
+<tr>
+<td align="center" width="33%">
+  <a href="https://presenton.ai/explore/momentum">
+    <img src="./readme_assets/templates/Momentum.png" alt="Momentum AI presentation template with sales report, KPI, chart, and executive summary slide layouts" />
+  </a>
+  <br />
+  <sub>
+    <b>Momentum Business Presentation Template</b> — sales reports, strategy decks, and data storytelling
+    <br />
+    <a href="https://presenton.ai/explore/momentum">Preview Momentum business template ↗</a>
+  </sub>
+</td>
+<td align="center" width="33%">
+  <a href="https://presenton.ai/explore/dynamic">
+    <img src="./readme_assets/templates/Dynamic.png" alt="Dynamic AI presentation template with high-contrast creative and visual storytelling slide layouts" />
+  </a>
+  <br />
+  <sub>
+    <b>Dynamic Creative Presentation Template</b> — proposals, visual stories, and high-impact decks
+    <br />
+    <a href="https://presenton.ai/explore/dynamic">Preview Dynamic presentation template ↗</a>
+  </sub>
+</td>
+<td align="center" width="33%">
+  <a href="https://presenton.ai/explore/executive">
+    <img src="./readme_assets/templates/Executive.png" alt="Executive PowerPoint template with leadership, strategy, and decision-making slide layouts" />
+  </a>
+  <br />
+  <sub>
+    <b>Executive PowerPoint Template</b> — leadership updates, strategic plans, and decision-ready reports
+    <br />
+    <a href="https://presenton.ai/explore/executive">Preview Executive PowerPoint template ↗</a>
+  </sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+  <a href="https://presenton.ai/explore/general">
+    <img src="./readme_assets/templates/General.png" alt="General presentation template with flexible business and educational slide layouts" />
+  </a>
+  <br />
+  <sub>
+    <b>General Presentation Template</b> — adaptable layouts for business, education, and everyday topics
+    <br />
+    <a href="https://presenton.ai/explore/general">Preview General presentation template ↗</a>
+  </sub>
+</td>
+<td align="center" width="33%">
+  <a href="https://presenton.ai/explore/modern">
+    <img src="./readme_assets/templates/Modern.png" alt="Modern pitch deck template with contemporary product, startup, and portfolio slide layouts" />
+  </a>
+  <br />
+  <sub>
+    <b>Modern Pitch Deck Template</b> — contemporary slides for startups, products, and portfolios
+    <br />
+    <a href="https://presenton.ai/explore/modern">Preview Modern pitch deck template ↗</a>
+  </sub>
+</td>
+<td align="center" width="33%">
+  <a href="https://presenton.ai/explore/standard">
+    <img src="./readme_assets/templates/Standard.png" alt="Standard business presentation template with report, proposal, and company slide layouts" />
+  </a>
+  <br />
+  <sub>
+    <b>Standard Business Presentation Template</b> — professional reports, proposals, and company decks
+    <br />
+    <a href="https://presenton.ai/explore/standard">Preview Standard business template ↗</a>
+  </sub>
+</td>
+</tr>
+</table>
+
+<p align="center">
+  <a href="https://presenton.ai/explore"><strong>Browse all free AI presentation templates →</strong></a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://presenton.ai/custom-template"><strong>Create an AI-ready PowerPoint template from your PPTX →</strong></a>
 </p>
 
 #
@@ -134,6 +220,7 @@ Presenton gives you complete control over your AI presentation workflow. Choose 
 - Rich Media Support — Icons, charts, and custom graphics for professional presentations
 - Runs Locally — All processing happens on your device, no cloud dependencies
 - API Deployment — Host as your own API service for your team
+- Multi-User Workspaces — Give each user a private workspace and manage accounts from a built-in admin panel
 - Fully Open-Source — Apache 2.0 licensed, inspect, modify, and contribute
 - Docker Ready — One-command deployment with GPU support for local models
 - Electron Desktop App — Run Presenton as a native desktop application on Windows, macOS, and Linux (no browser required)
@@ -334,19 +421,39 @@ The parallel image generation option applies everywhere images are generated: in
 
 - **DISABLE_ANONYMOUS_TRACKING**=[true/false]: Set to **true** to disable anonymous telemetry.
 
-#### Authentication (web login)
+#### Multi-user authentication
 
-Presenton uses a **single admin account** per instance. Credentials live in `app_data` (hashed; see `userConfig.json`). Pass these with `-e` or via `.env` for compose:
+Presenton supports multiple accounts with a private workspace for each user. The
+first account becomes the primary administrator and can create, reset, or remove
+other accounts from **Admin → Users**.
 
-- **AUTH_USERNAME** / **AUTH_PASSWORD** — Preseed the admin login on first boot (password at least 6 characters). Ignored if a user already exists unless **AUTH_OVERRIDE_FROM_ENV** is set.
-- **AUTH_OVERRIDE_FROM_ENV**=[true/false] — If **true**, replace stored credentials from the env vars on every FastAPI startup and rotate the session signing secret (invalidates existing sessions). Remove after a one-off rotation.
-- **RESET_AUTH**=[true/false] — If **true**, clear stored credentials on startup. Use for a **single** boot to recover access, then unset.
+Existing single-user installations are upgraded automatically: the current account
+becomes the primary administrator, while its presentations, templates, tasks, and
+other owned data stay attached to the same account.
 
-**Examples**
+##### Set up the primary administrator
+
+On a new installation, open Presenton and follow the account setup screen. For an
+unattended Docker deployment, you can create the primary administrator on first boot
+with environment variables:
 
 ```bash
 docker run -it --name presenton -p 5000:80 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
 ```
+
+Usernames must contain at least 3 characters, and new passwords must contain at least
+8 characters. Older six- or seven-character passwords remain valid after an upgrade.
+
+##### Authentication environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| **AUTH_USERNAME** | Username used to create the primary administrator on first boot. It can also change the username during a rotation or recovery. |
+| **AUTH_PASSWORD** | Password used for first-time setup, rotation, or recovery. Required when using either flag below. |
+| **AUTH_OVERRIDE_FROM_ENV**=[true/false] | Replace the primary administrator's credentials from the environment on the next startup. Use this for a deployment-managed credential rotation. |
+| **RESET_AUTH**=[true/false] | Recover access to the existing primary administrator without replacing the account or its data. |
+
+To rotate credentials from the environment:
 
 ```bash
 docker run -it --name presenton -p 5000:80 -e AUTH_USERNAME=admin -e AUTH_PASSWORD=changeme123 -v "./app_data:/app_data" ghcr.io/presenton/presenton:latest
@@ -440,8 +547,8 @@ Same variables as compose; use `-e` instead of `.env` when running `docker run` 
 </p>
 
 <p>
-<strong>Authentication (HTTP Basic):</strong><br>
-All <code>/api/v1/</code> routes except <code>/api/v1/auth/*</code> require authentication. Send your Presenton admin username and password (same as the web UI, or <strong>AUTH_USERNAME</strong> / <strong>AUTH_PASSWORD</strong> when preseeding Docker). With <code>curl</code>, put them right after <code>-u</code> as <code>-u USERNAME:PASSWORD</code> — that is HTTP Basic auth and sets <code>Authorization: Basic …</code> for you. Replace the sample <code>username:password</code> below with your real credentials.
+<strong>Authentication (API key):</strong><br>
+All <code>/api/v1/</code> routes except the public authentication endpoints require authentication. An administrator creates an access key under <strong>Admin → API keys</strong>. Send that <code>sk-presenton-...</code> key as <code>Authorization: Bearer YOUR_KEY</code>. API keys act as their owning user and cannot call browser-session-only administrator endpoints.
 </p>
 
 **Request Body**
@@ -572,7 +679,7 @@ Options: <code>pptx</code>, <code>pdf</code>
   "edit_path": "string"
 }</code></pre>
 
-**Example (curl + HTTP Basic auth with <code>-u</code>)**
+**Example (curl + API key)**
 
 <pre><code class="language-bash">curl -u username:password \
   -X POST http://localhost:5000/api/v1/ppt/presentation/generate \

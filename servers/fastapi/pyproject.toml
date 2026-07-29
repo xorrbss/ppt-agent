@@ -15,6 +15,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "dirtyjson>=1.0.8",
     "fastapi[standard]>=0.116.1",
+    "fastapi-users[sqlalchemy]>=14.0.1",
     "fastembed-vectorstore>=0.5.2",
     "fastmcp>=2.11.0",
     "greenlet>=3.0.3",

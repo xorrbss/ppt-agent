@@ -2,6 +2,7 @@ import os
 from typing import Optional, Union
 
 from utils.get_env import get_temp_directory_env
+from api.v1.auth.context import get_current_owner_id
 import uuid
 
 
@@ -18,13 +19,13 @@ class TempFileService:
         return temp_dir
 
     def create_temp_dir(self, dir_name: Optional[str] = None) -> str:
-        return self.create_dir_in_dir(self.base_dir, dir_name)
+        return self.create_dir_in_dir(self._owner_base_dir_realpath(), dir_name)
 
     def create_temp_file_path(
         self, file_path: str, dir_path: Optional[str] = None
     ) -> str:
         if dir_path is None:
-            dir_path = self.base_dir
+            dir_path = self._owner_base_dir_realpath()
 
         full_path = os.path.join(dir_path, file_path)
 

@@ -12,6 +12,7 @@ app_data
 tmp
 debug
 .fastembed_cache
+.DS_Store
 
 generated_models
 nltk
@@ -19,6 +20,7 @@ chroma
 container.db
 .next-build
 .cursor
+.vscode
 .agents
 skills-lock.json
 .codex/
