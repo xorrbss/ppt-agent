@@ -8,12 +8,21 @@ not collide.
 
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 from datetime import datetime
+import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Response, status
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_validator,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.template_v2 import TemplateV2
@@ -25,15 +34,26 @@ from services.template_v2_service import (
     TemplateV2Service,
     TemplateV2ServiceError,
 )
-from templates.v2.models.layouts import MergedComponents, SlideLayouts
+from templates.v2.generation import generate_prompted_slide_layout
+from templates.v2.models.layouts import (
+    MergedComponents,
+    SlideLayout,
+    SlideLayouts,
+)
 from templates.v2.policy import (
     StructuredTemplatePolicyError,
     get_structured_template_policy,
 )
+from templates.v2.wire_codec import (
+    TemplateV2WireCodecError,
+    decode_wire_layouts,
+)
+from utils.llm_client_error_handler import handle_llm_client_exceptions
 
 
 TEMPLATE_V2_COMPAT_ROUTER = APIRouter(prefix="/template", tags=["Templates"])
 IconType = Literal["bold", "duotone", "fill", "light", "regular", "thin"]
+LOGGER = logging.getLogger(__name__)
 
 
 class UpdateTemplateMetadataRequest(BaseModel):
@@ -70,6 +90,30 @@ class TemplateResponse(TemplateListItem):
     merged_components: dict[str, Any] | None = None
     layouts: dict[str, Any] | None = None
     fonts: dict[str, str] = Field(default_factory=dict)
+
+
+class GenerateTemplateLayoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    template_id: str = Field(
+        validation_alias=AliasChoices("template_id", "id")
+    )
+    prompt: str = Field(min_length=1, max_length=8000)
+
+    @model_validator(mode="after")
+    def _normalize_values(self) -> "GenerateTemplateLayoutRequest":
+        self.template_id = self.template_id.strip()
+        self.prompt = self.prompt.strip()
+        if not self.template_id:
+            raise ValueError("Template ID cannot be empty")
+        if not self.prompt:
+            raise ValueError("Prompt cannot be empty")
+        return self
+
+
+class GenerateTemplateLayoutResponse(BaseModel):
+    layout: SlideLayout
+    response: str
 
 
 def _count_layouts(layouts_json: Any) -> int:
@@ -164,6 +208,84 @@ def _validated_layouts(value: dict[str, Any]) -> dict[str, Any]:
     return SlideLayouts.model_validate(value).model_dump(
         mode="json",
         exclude_none=True,
+    )
+
+
+@TEMPLATE_V2_COMPAT_ROUTER.post(
+    "/layouts/generate",
+    response_model=GenerateTemplateLayoutResponse,
+)
+async def generate_template_layout_from_prompt(
+    request: GenerateTemplateLayoutRequest = Body(...),
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Return one owner-visible Template V2 layout draft without saving it."""
+
+    service = TemplateV2Service(sql_session)
+    try:
+        template = await service.get(request.template_id)
+    except TemplateV2ServiceError as error:
+        raise _service_http_error(error) from error
+
+    if template.layouts is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Template layouts are unavailable",
+        )
+    try:
+        template_layouts = decode_wire_layouts(
+            template.layouts
+        ).validate_strict()
+    except (TemplateV2WireCodecError, ValidationError) as error:
+        LOGGER.exception(
+            "[template.layouts.generate] template has invalid layouts "
+            "template_id=%s",
+            request.template_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Template layouts are invalid",
+        ) from error
+
+    merged_components: MergedComponents | None = None
+    if template.merged_components is not None:
+        try:
+            merged_components = MergedComponents.model_validate(
+                template.merged_components
+            )
+        except ValidationError:
+            LOGGER.warning(
+                "[template.layouts.generate] ignoring invalid merged "
+                "components template_id=%s",
+                request.template_id,
+                exc_info=True,
+            )
+
+    try:
+        layout = await asyncio.to_thread(
+            generate_prompted_slide_layout,
+            request.prompt,
+            template_layouts,
+            merged_components,
+            template.name,
+            template.description,
+            _template_fonts(template),
+        )
+    except Exception as error:
+        LOGGER.exception(
+            "[template.layouts.generate] prompted layout generation failed "
+            "template_id=%s",
+            request.template_id,
+        )
+        raise handle_llm_client_exceptions(error) from error
+
+    validated_layout = SlideLayout.model_validate(layout)
+    return GenerateTemplateLayoutResponse(
+        layout=validated_layout,
+        response=(
+            f"Created the {validated_layout.id.replace('_', ' ')} "
+            "template layout."
+        ),
     )
 
 
