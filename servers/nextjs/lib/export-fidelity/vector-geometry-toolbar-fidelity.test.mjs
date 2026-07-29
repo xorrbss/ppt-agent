@@ -216,6 +216,66 @@ test("canonical curve lifecycle and explicit two-point shape conversion are loss
   );
 });
 
+test("ellipse-only latent geometry stays lossless and cannot become path semantics", () => {
+  const authored = {
+    type: "vector",
+    shape: "ellipse",
+    points: [
+      { x: 10, y: 20, future_point: { retained: true } },
+      { x: 170, y: 110 },
+    ],
+    closed: true,
+    corner_radii: [12, 7],
+    curve: {
+      type: "smooth",
+      tension: 0.4,
+      segments: 8,
+      future_curve: { interpolation: "v3" },
+    },
+    raw_path: "M917 811 L919 813",
+    fill: { color: "#123456" },
+    stroke: { color: "#abcdef", width: 2 },
+    future_vector: { retained: true },
+  };
+  const persisted = JSON.parse(JSON.stringify(
+    applyAtPath(authored, ["points", 0, "x"], 15.5)
+  ));
+
+  assert.deepEqual(persisted.points[0].future_point, { retained: true });
+  assert.deepEqual(persisted.curve.future_curve, { interpolation: "v3" });
+  assert.equal(persisted.raw_path, authored.raw_path);
+  assert.deepEqual(persisted.future_vector, { retained: true });
+  assert.deepEqual(templateV2EditableVectorGeometry(persisted), {
+    shape: "ellipse",
+    closed: true,
+    points: [{ x: 15.5, y: 20 }, { x: 170, y: 110 }],
+    curve: { tension: 0.4, segments: 8, canRemove: false },
+    cornerRadii: [12, 7],
+  });
+  assert.equal(templateV2CanChangeVectorEllipseShape(persisted), false);
+  assert.equal(
+    editTemplateV2VectorPointTopology(
+      persisted,
+      { type: "add-after", index: 0 }
+    ),
+    null
+  );
+
+  const plan = createTemplateV2SlideRenderPlan(slideWith(persisted));
+  const vectorPlan = plan.components[0].elements[0].vector;
+  assert.ok(vectorPlan);
+  assert.equal(vectorPlan.shape, "ellipse");
+  const konvaGeometry = templateV2VectorRenderGeometry(persisted, vectorPlan);
+  assert.deepEqual(konvaGeometry.points, vectorPlan.points);
+
+  const pptHtml = renderTemplateV2GeneralPresentationHtml(
+    presentationWith(persisted)
+  );
+  assert.match(pptHtml, /<ellipse /);
+  assert.doesNotMatch(pptHtml, /<polygon |<polyline /);
+  assert.doesNotMatch(pptHtml, /M917 811 L919 813/);
+});
+
 test("point topology edits preserve point extensions, radii, and PPT geometry", () => {
   const authored = {
     type: "vector",

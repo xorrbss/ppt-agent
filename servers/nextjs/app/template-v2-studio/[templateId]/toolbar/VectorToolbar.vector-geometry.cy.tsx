@@ -434,7 +434,7 @@ describe("VectorToolbar geometry fidelity", () => {
           ...validVector,
           shape: "ellipse",
           points: [{ x: 0, y: 0 }, { x: 120, y: 80 }],
-          corner_radii: undefined,
+          corner_radii: [12, 7],
         }}
         onPatch={() => {}}
       />
@@ -449,6 +449,7 @@ describe("VectorToolbar geometry fidelity", () => {
     cy.get('input[aria-label="Smooth vector curve"]').should("not.exist");
     cy.get('input[aria-label="Curve tension"]').should("not.exist");
     cy.get('input[aria-label="Curve segments"]').should("not.exist");
+    cy.get('input[aria-label="Vector corner radius"]').should("not.exist");
     cy.get('button[aria-label="Add vector point after"]').should("not.exist");
 
     cy.mount(
