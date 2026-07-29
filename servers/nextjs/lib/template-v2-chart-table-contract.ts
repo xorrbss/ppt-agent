@@ -800,6 +800,14 @@ export function buildTableContractEditPatches(
       return { ok: false, reason: "table_row_count_edit_out_of_bounds" };
     }
     if (nextCount === rows.length) return { ok: true, value: [] };
+    // The toolbar emits one +/- action at a time; only that fixed-fixture
+    // round-trip is proven lossless.
+    if (Math.abs(nextCount - rows.length) !== 1) {
+      return {
+        ok: false,
+        reason: "table_row_count_edit_requires_single_step",
+      };
+    }
     if (nextCount < rows.length) rows.splice(nextCount);
     else {
       while (rows.length < nextCount) {
@@ -818,6 +826,13 @@ export function buildTableContractEditPatches(
       return { ok: false, reason: "table_column_count_edit_out_of_bounds" };
     }
     if (nextCount === columns.length) return { ok: true, value: [] };
+    // Keep programmatic callers on the same proven unit as the toolbar.
+    if (Math.abs(nextCount - columns.length) !== 1) {
+      return {
+        ok: false,
+        reason: "table_column_count_edit_requires_single_step",
+      };
+    }
     if (nextCount < columns.length) {
       columns.splice(nextCount);
       for (const row of rows) row.splice(nextCount);

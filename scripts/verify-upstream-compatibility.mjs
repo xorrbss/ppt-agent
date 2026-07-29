@@ -178,8 +178,21 @@ for (const [assetName, sha256] of exportAssets) {
 }
 
 const rendererSource = await readText(manifest.templateV2Renderer?.source);
+const rendererDispatchStart = rendererSource.indexOf("function renderElement(");
+const rendererDispatchEnd = rendererSource.indexOf(
+  "\nfunction projectElementForRenderPlan(",
+  rendererDispatchStart
+);
+check(
+  rendererDispatchStart >= 0 && rendererDispatchEnd > rendererDispatchStart,
+  "renderer contract cannot locate the renderElement dispatch boundary"
+);
+const rendererDispatchSource =
+  rendererDispatchStart >= 0 && rendererDispatchEnd > rendererDispatchStart
+    ? rendererSource.slice(rendererDispatchStart, rendererDispatchEnd)
+    : "";
 const actualDiscriminators = [
-  ...rendererSource.matchAll(/element\.type === "([^"]+)"/g),
+  ...rendererDispatchSource.matchAll(/element\.type === "([^"]+)"/g),
 ].map((match) => match[1]);
 const expectedDiscriminators = manifest.templateV2Renderer?.discriminators ?? [];
 check(expectedDiscriminators.length > 0, "renderer contract must contain at least one discriminator");

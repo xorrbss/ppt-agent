@@ -1,0 +1,92 @@
+{
+  "contract": {
+    "upstream_sha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "upstream_sources": [
+      "servers/nextjs/components/slide-editor/types.ts",
+      "servers/nextjs/components/slide-editor/model/design-variables.ts"
+    ],
+    "reviewed_slice": {
+      "element_type": "text",
+      "run_count": 1,
+      "variable_count": 1,
+      "variable_type": "color",
+      "option_count": 2,
+      "effect_count": 1,
+      "effect_path": "runs.0.font.color",
+      "effect_expression": "$"
+    }
+  },
+  "edit": {
+    "variable_index": 0,
+    "option_index": 1
+  },
+  "wire": {
+    "future_top_level_field": {
+      "source": "upstream-generated"
+    },
+    "layouts": {
+      "future_envelope_field": [
+        "retain",
+        "exactly"
+      ],
+      "layouts": [
+        {
+          "id": "direct-color-design-variable",
+          "future_layout_field": {
+            "retain": true
+          },
+          "components": [
+            {
+              "id": "hero",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "elements": [
+                {
+                  "type": "text",
+                  "name": "title",
+                  "position": {
+                    "x": 20,
+                    "y": 30
+                  },
+                  "size": {
+                    "width": 600,
+                    "height": 80
+                  },
+                  "runs": [
+                    {
+                      "text": "Bound title",
+                      "font": {
+                        "color": "#0F172A"
+                      }
+                    }
+                  ],
+                  "design_variables": [
+                    {
+                      "name": "title_color",
+                      "type": "color",
+                      "options": [
+                        "#0F172A",
+                        "#1D4ED8"
+                      ],
+                      "effect": [
+                        {
+                          "path": "runs.0.font.color",
+                          "effect": "$"
+                        }
+                      ]
+                    }
+                  ],
+                  "future_element_field": {
+                    "retain": "exactly"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

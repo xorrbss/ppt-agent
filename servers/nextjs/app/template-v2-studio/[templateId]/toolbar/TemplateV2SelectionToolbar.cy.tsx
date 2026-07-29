@@ -382,7 +382,7 @@ describe("TemplateV2SelectionToolbar", () => {
     });
   });
 
-  it("renders bounded shape, chart, and table controls without replacing nested selections", () => {
+  it("renders proven vector, chart, and table controls without replacing nested selections", () => {
     const shapePatch = cy.spy().as("shapePatch");
     cy.mount(
       <StatefulToolbar
@@ -391,33 +391,29 @@ describe("TemplateV2SelectionToolbar", () => {
         initialElement={{
           type: "vector",
           shape: "polygon",
-          points: [{ x: 0, y: 0 }, { x: 50, y: 50 }],
-          fill: { color: "#ffffff", retained: "fill metadata" },
-          stroke: { color: "#111111", width: 1, retained: "stroke metadata" },
-          opacity: 1,
-          retained: { nested: true },
+          points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+          closed: true,
+          upstream_element_extension: "vector-vNext",
         }}
         position={position}
         actions={emptyActions}
         observedPatch={shapePatch}
       />
     );
-    setReactInputValue("Shape fill color", "#334455");
-    setReactInputValue("Shape stroke width", "2");
-    cy.get("[role=toolbar]").should("contain", "Fill");
+    cy.get('button[aria-label="Add vector point after"]').click();
     cy.get("@shapePatch").then((subject) => {
       const calls = (subject as unknown as { getCalls(): Array<{ args: [TemplateV2ToolbarPatch[], Record<string, unknown>] }> })
         .getCalls()
         .map((call) => call.args);
       expect(calls).to.deep.include([
-        [{ path: ["fill", "color"], value: "#334455" }],
-        { historyKey: "toolbar:vector-fill", continuous: true },
-      ]);
-      expect(calls).to.deep.include([
-        [{ path: ["stroke", "width"], value: 2 }],
-        { historyKey: "toolbar:vector-stroke-width", continuous: true },
+        [{
+          path: ["points"],
+          value: [{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 80 }],
+        }],
+        { historyKey: "toolbar:vector-point-add-after" },
       ]);
     });
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
 
     const chartPatch = cy.spy().as("chartPatch");
     cy.mount(
@@ -496,7 +492,7 @@ describe("TemplateV2SelectionToolbar", () => {
     });
   });
 
-  it("keeps a nested selection path stable across rich patches, command actions, and a persisted remount", () => {
+  it("keeps a nested selection path stable across a proven vector edit and persisted remount", () => {
     const path = ["children", 2, "children", 1];
     const patch = cy.spy().as("persistedShapePatch");
     const lock = cy.spy().as("persistedShapeLock");
@@ -504,10 +500,9 @@ describe("TemplateV2SelectionToolbar", () => {
     const initialElement = {
       type: "vector",
       shape: "polygon",
-      points: [{ x: 0, y: 0 }, { x: 50, y: 50 }],
-      fill: { color: "#ffffff", retained: "keep me" },
-      stroke: { color: "#111111", width: 1 },
-      opacity: 1,
+      points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+      closed: true,
+      upstream_element_extension: "vector-vNext",
     };
 
     cy.mount(
@@ -522,7 +517,7 @@ describe("TemplateV2SelectionToolbar", () => {
     );
 
     cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should("be.visible");
-    setReactInputValue("Shape fill color", "#334455");
+    cy.get('button[aria-label="Add vector point after"]').click();
     cy.get('button[aria-label="Lock selection"]').click();
     cy.get('button[aria-label="Duplicate selection"]').click();
     cy.get("@persistedShapePatch").then((subject) => {
@@ -536,8 +531,11 @@ describe("TemplateV2SelectionToolbar", () => {
         .getCalls()
         .map((call) => call.args);
       expect(calls).to.deep.include([
-        [{ path: ["fill", "color"], value: "#334455" }],
-        { historyKey: "toolbar:vector-fill", continuous: true },
+        [{
+          path: ["points"],
+          value: [{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 80 }],
+        }],
+        { historyKey: "toolbar:vector-point-add-after" },
       ]);
     });
     cy.get("@persistedShapeLock").should("have.been.calledWith", true);
@@ -553,17 +551,14 @@ describe("TemplateV2SelectionToolbar", () => {
         selectionPath={path}
         initialElement={{
           ...initialElement,
-          fill: { color: "#334455", retained: "keep me" },
+          points: [{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 80 }],
         }}
         position={position}
         actions={emptyActions}
         observedPatch={() => {}}
       />
     );
-    cy.get('input[aria-label="Shape fill color"]').should(
-      "have.value",
-      "#334455"
-    );
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("exist");
     cy.wrap(path).should("deep.equal", ["children", 2, "children", 1]);
   });

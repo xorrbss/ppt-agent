@@ -34,26 +34,76 @@ export interface TemplateV2EditableVectorGeometry {
   cornerRadii: number[] | null;
 }
 
-export type TemplateV2VectorPointTopologyAction =
-  | { type: "add-after"; index: number }
-  | { type: "delete"; index: number }
-  | { type: "move"; index: number; direction: -1 | 1 };
+export type TemplateV2VectorPointTopologyAction = {
+  type: "add-after";
+  index: 0;
+};
 
 export interface TemplateV2VectorPointTopologyEdit {
   points: JsonRecord[];
-  /**
-   * `null` means no canonical field exists and no radius patch is needed.
-   * A legacy alias is rejected before an edit is produced.
-   */
   cornerRadii: number[] | null;
   selectedIndex: number;
 }
 
+export interface TemplateV2ProvenVectorEditCapability {
+  kind: "polygon-add-after-first-point";
+  points: [TemplateV2VectorPoint, TemplateV2VectorPoint];
+}
+
+const PROVEN_VECTOR_WIRE_KEYS = new Set([
+  "type",
+  "shape",
+  "points",
+  "closed",
+  "upstream_element_extension",
+]);
+
 /**
- * Returns only geometry that every current renderer can consume without
- * coercion. The toolbar uses this as a fail-closed capability check before it
- * offers leaf edits; the authored record itself is never projected or rebuilt,
- * so unknown point/curve fields survive the edit.
+ * The only vector edit currently enabled is the exact operation demonstrated
+ * by the pinned upstream fixture through import, edit, serialization, reload,
+ * and render. Every other vector shape or field combination stays fail-closed
+ * until it has its own fixed-fixture round-trip contract.
+ */
+export function templateV2ProvenVectorEditCapability(
+  element: JsonRecord
+): TemplateV2ProvenVectorEditCapability | null {
+  if (
+    element.type !== "vector" ||
+    element.shape !== "polygon" ||
+    element.closed !== true ||
+    element.upstream_element_extension !== "vector-vNext" ||
+    Object.keys(element).some((key) => !PROVEN_VECTOR_WIRE_KEYS.has(key)) ||
+    !Array.isArray(element.points) ||
+    element.points.length !== 2
+  ) {
+    return null;
+  }
+
+  const points = element.points.map((point) => {
+    if (
+      !isRecord(point) ||
+      Object.keys(point).some((key) => key !== "x" && key !== "y") ||
+      typeof point.x !== "number" ||
+      !Number.isFinite(point.x) ||
+      typeof point.y !== "number" ||
+      !Number.isFinite(point.y)
+    ) {
+      return null;
+    }
+    return { x: point.x, y: point.y };
+  });
+  if (points.some((point) => point === null)) return null;
+
+  return {
+    kind: "polygon-add-after-first-point",
+    points: points as [TemplateV2VectorPoint, TemplateV2VectorPoint],
+  };
+}
+
+/**
+ * Returns geometry that every current renderer can consume without coercion.
+ * This parser is intentionally broader than the proven edit capability above:
+ * successfully rendering an authored vector does not make it safe to edit.
  */
 export function templateV2EditableVectorGeometry(
   element: JsonRecord
@@ -166,113 +216,34 @@ export function templateV2EditableVectorGeometry(
 }
 
 /**
- * Ellipse renderers intentionally ignore closed paths, curves, and corner
- * radii. Restrict shape changes to records where no latent geometry would be
- * hidden or reactivated by the transition.
- */
-export function templateV2CanChangeVectorEllipseShape(
-  element: JsonRecord
-): boolean {
-  const geometry = templateV2EditableVectorGeometry(element);
-  return Boolean(
-    geometry &&
-      geometry.points.length === 2 &&
-      !geometry.closed &&
-      element.curve == null &&
-      element.corner_radii == null &&
-      element.cornerRadii == null
-  );
-}
-
-/**
- * Produces a lossless topology edit for non-ellipse vectors. Existing point
- * records move as whole objects so extension keys remain attached to their
- * authored point. Canonical corner radii move in lockstep; legacy aliases stay
- * fail-closed because their wire contract is ambiguous.
+ * Produces the single topology edit proven by the pinned upstream fixture.
  */
 export function editTemplateV2VectorPointTopology(
   element: JsonRecord,
   action: TemplateV2VectorPointTopologyAction
 ): TemplateV2VectorPointTopologyEdit | null {
-  const geometry = templateV2EditableVectorGeometry(element);
-  const hasCanonicalCornerRadii = Array.isArray(element.corner_radii);
-  const hasLegacyCornerRadii = element.cornerRadii != null;
+  const capability = templateV2ProvenVectorEditCapability(element);
   if (
-    !geometry ||
-    geometry.shape === "ellipse" ||
-    hasLegacyCornerRadii ||
-    !Number.isInteger(action.index) ||
-    action.index < 0 ||
-    action.index >= geometry.points.length ||
+    !capability ||
+    action.type !== "add-after" ||
+    action.index !== 0 ||
     !Array.isArray(element.points)
   ) {
     return null;
   }
 
-  const points = element.points.map((point) => ({
-    ...(point as JsonRecord),
-  }));
-  const cornerRadii = hasCanonicalCornerRadii
-    ? [...(element.corner_radii as number[])]
-    : null;
-
-  if (action.type === "add-after") {
-    const insertionIndex = action.index + 1;
-    const current = geometry.points[action.index];
-    const next =
-      insertionIndex < geometry.points.length
-        ? geometry.points[insertionIndex]
-        : geometry.closed
-          ? geometry.points[0]
-          : current;
-    const x = current.x / 2 + next.x / 2;
-    const y = current.y / 2 + next.y / 2;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    points.splice(insertionIndex, 0, { x, y });
-    if (cornerRadii && insertionIndex <= cornerRadii.length) {
-      cornerRadii.splice(insertionIndex, 0, 0);
-    }
-    return {
-      points,
-      cornerRadii,
-      selectedIndex: insertionIndex,
-    };
-  }
-
-  if (action.type === "delete") {
-    if (points.length <= 2) return null;
-    points.splice(action.index, 1);
-    if (cornerRadii && action.index < cornerRadii.length) {
-      cornerRadii.splice(action.index, 1);
-    }
-    return {
-      points,
-      cornerRadii,
-      selectedIndex: Math.min(action.index, points.length - 1),
-    };
-  }
-
-  const targetIndex = action.index + action.direction;
-  if (targetIndex < 0 || targetIndex >= points.length) return null;
-  [points[action.index], points[targetIndex]] = [
-    points[targetIndex],
-    points[action.index],
-  ];
-  if (
-    cornerRadii &&
-    (action.index < cornerRadii.length || targetIndex < cornerRadii.length)
-  ) {
-    const requiredLength = Math.max(action.index, targetIndex) + 1;
-    while (cornerRadii.length < requiredLength) cornerRadii.push(0);
-    [cornerRadii[action.index], cornerRadii[targetIndex]] = [
-      cornerRadii[targetIndex],
-      cornerRadii[action.index],
-    ];
-  }
+  const [current, next] = capability.points;
+  const x = current.x / 2 + next.x / 2;
+  const y = current.y / 2 + next.y / 2;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return {
-    points,
-    cornerRadii,
-    selectedIndex: targetIndex,
+    points: [
+      { ...(element.points[0] as JsonRecord) },
+      { x, y },
+      { ...(element.points[1] as JsonRecord) },
+    ],
+    cornerRadii: null,
+    selectedIndex: 1,
   };
 }
 

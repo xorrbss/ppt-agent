@@ -30,6 +30,33 @@ const pinnedUpstreamElements = JSON.parse(
   elements: Array<Record<string, unknown>>;
 };
 
+const tableStructureRoundTripFixture = JSON.parse(
+  readFileSync(
+    new URL(
+      "./fixtures/template-v2-upstream-table-structure-roundtrip-57b194b.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as {
+  upstream_sha: string;
+  model_path: string;
+  document: TableRoundTripEnvelope;
+};
+
+type TableRoundTripEnvelope = {
+  layouts: Array<{
+    id: string;
+    components: Array<{
+      elements: Array<Record<string, unknown>>;
+      [key: string]: unknown;
+    }>;
+    [key: string]: unknown;
+  }>;
+  future_envelope_field: { retained: boolean };
+  [key: string]: unknown;
+};
+
 function applyPatches(
   source: Record<string, unknown>,
   patches: TemplateV2ContractPatch[],
@@ -312,6 +339,59 @@ test("table resize fails closed at declared or imported exact bounds", () => {
   );
 });
 
+test("pinned upstream exact-bound table structural edits stay fail closed", () => {
+  const fixtureTable = pinnedUpstreamElements.elements.find(
+    (element) => element.type === "table",
+  );
+  assert.ok(fixtureTable);
+  assert.deepEqual(
+    buildTableContractEditPatches(fixtureTable, {
+      kind: "column-count",
+      value: 2,
+    }),
+    {
+      ok: false,
+      reason: "table_column_count_edit_out_of_bounds",
+    },
+  );
+  assert.deepEqual(
+    buildTableContractEditPatches(fixtureTable, {
+      kind: "row-count",
+      value: 0,
+    }),
+    {
+      ok: false,
+      reason: "table_row_count_edit_out_of_bounds",
+    },
+  );
+});
+
+test("table resize fails closed for unproven multi-step count changes", () => {
+  const source = table();
+  source.max_columns = 4;
+  source.max_rows = 3;
+  assert.deepEqual(
+    buildTableContractEditPatches(source, {
+      kind: "column-count",
+      value: 4,
+    }),
+    {
+      ok: false,
+      reason: "table_column_count_edit_requires_single_step",
+    },
+  );
+  assert.deepEqual(
+    buildTableContractEditPatches(source, {
+      kind: "row-count",
+      value: 3,
+    }),
+    {
+      ok: false,
+      reason: "table_row_count_edit_requires_single_step",
+    },
+  );
+});
+
 test("table cell font edits create canonical font objects without losing cell metadata", () => {
   const source = table();
   const changed = buildTableContractEditPatches(source, {
@@ -472,4 +552,156 @@ test("pinned upstream table fill edit survives save, render, and reload", () => 
   assert.match(html, />Metric</);
   assert.match(html, />Revenue</);
   assert.deepEqual(source.layouts[0]!.components[0]!.elements[0], fixtureTable);
+});
+
+test("fixed upstream table single-step additions survive save, reload, and render", () => {
+  assert.equal(
+    tableStructureRoundTripFixture.upstream_sha,
+    "57b194b234b42c8b28f8a507a30322de200e3e83",
+  );
+  assert.equal(
+    tableStructureRoundTripFixture.model_path,
+    "servers/fastapi/templates/v2/models/elements.py",
+  );
+  const source = structuredClone(tableStructureRoundTripFixture.document);
+  const document = adaptUpstreamTemplateV2LayoutsToStudio(source);
+  const edited = structuredClone(
+    document.studioLayouts,
+  ) as TableRoundTripEnvelope;
+  let element = edited.layouts[0]!.components[0]!.elements[0]!;
+
+  const wider = buildTableContractEditPatches(element, {
+    kind: "column-count",
+    value: 3,
+  });
+  assert.equal(wider.ok, true);
+  if (!wider.ok) return;
+  element = applyPatches(element, wider.value);
+
+  const taller = buildTableContractEditPatches(element, {
+    kind: "row-count",
+    value: 2,
+  });
+  assert.equal(taller.ok, true);
+  if (!taller.ok) return;
+  edited.layouts[0]!.components[0]!.elements[0] = applyPatches(
+    element,
+    taller.value,
+  );
+
+  const saved = serializeStudioLayoutsForUpstream(
+    document,
+    edited,
+  ) as TableRoundTripEnvelope;
+  const reloaded = adaptUpstreamTemplateV2LayoutsToStudio(saved);
+  const persisted = serializeStudioLayoutsForUpstream(
+    reloaded,
+  ) as TableRoundTripEnvelope;
+  const persistedTable =
+    persisted.layouts[0]!.components[0]!.elements[0]!;
+
+  assert.equal(validateTableContract(persistedTable).ok, true);
+  assert.deepEqual(persisted.future_envelope_field, { retained: true });
+  assert.deepEqual(
+    persisted.layouts[0]!.upstream_layout_extension,
+    { retained: true },
+  );
+  assert.equal(persistedTable.upstream_element_extension, "table-vNext");
+  assert.deepEqual(
+    (persistedTable.columns as Array<Record<string, unknown>>)[2],
+    { runs: [{ text: "" }] },
+  );
+  assert.deepEqual(
+    (persistedTable.rows as Array<Array<Record<string, unknown>>>)[1],
+    [
+      { runs: [{ text: "" }] },
+      { runs: [{ text: "" }] },
+      { runs: [{ text: "" }] },
+    ],
+  );
+  assert.deepEqual(
+    (persistedTable.rows as Array<Array<Record<string, unknown>>>)[0],
+    [
+      { runs: [{ text: "Revenue" }] },
+      { runs: [{ text: "$12M" }] },
+      { runs: [{ text: "" }] },
+    ],
+  );
+
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    id: persisted.layouts[0]!.id,
+    ui: persisted.layouts[0],
+  });
+  assert.equal(html.match(/<th\b/g)?.length, 3);
+  assert.equal(html.match(/<td\b/g)?.length, 6);
+  assert.equal(html.match(/<tr>/g)?.length, 3);
+  assert.match(html, />Metric</);
+  assert.match(html, />Revenue</);
+  assert.deepEqual(source, tableStructureRoundTripFixture.document);
+});
+
+test("fixed upstream table single-step removals survive save, reload, and render", () => {
+  const source = structuredClone(tableStructureRoundTripFixture.document);
+  const document = adaptUpstreamTemplateV2LayoutsToStudio(source);
+  const edited = structuredClone(
+    document.studioLayouts,
+  ) as TableRoundTripEnvelope;
+  let element = edited.layouts[0]!.components[0]!.elements[0]!;
+
+  const narrower = buildTableContractEditPatches(element, {
+    kind: "column-count",
+    value: 1,
+  });
+  assert.equal(narrower.ok, true);
+  if (!narrower.ok) return;
+  element = applyPatches(element, narrower.value);
+
+  const shorter = buildTableContractEditPatches(element, {
+    kind: "row-count",
+    value: 0,
+  });
+  assert.equal(shorter.ok, true);
+  if (!shorter.ok) return;
+  edited.layouts[0]!.components[0]!.elements[0] = applyPatches(
+    element,
+    shorter.value,
+  );
+
+  const saved = serializeStudioLayoutsForUpstream(
+    document,
+    edited,
+  ) as TableRoundTripEnvelope;
+  const reloaded = adaptUpstreamTemplateV2LayoutsToStudio(saved);
+  const persisted = serializeStudioLayoutsForUpstream(
+    reloaded,
+  ) as TableRoundTripEnvelope;
+  const persistedTable =
+    persisted.layouts[0]!.components[0]!.elements[0]!;
+
+  assert.equal(validateTableContract(persistedTable).ok, true);
+  assert.deepEqual(persisted.future_envelope_field, { retained: true });
+  assert.deepEqual(
+    persisted.layouts[0]!.upstream_layout_extension,
+    { retained: true },
+  );
+  assert.equal(persistedTable.upstream_element_extension, "table-vNext");
+  assert.deepEqual(persistedTable.columns, [
+    {
+      runs: [{ text: "Metric", font: { bold: true } }],
+      color: { color: "#E2E8F0" },
+    },
+  ]);
+  assert.deepEqual(persistedTable.rows, []);
+
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    id: persisted.layouts[0]!.id,
+    ui: persisted.layouts[0],
+  });
+  assert.equal(html.match(/<th\b/g)?.length, 1);
+  assert.equal(html.match(/<td\b/g)?.length ?? 0, 0);
+  assert.equal(html.match(/<tbody><tr>/g)?.length ?? 0, 0);
+  assert.match(html, />Metric</);
+  assert.doesNotMatch(html, />Actual</);
+  assert.doesNotMatch(html, />Revenue</);
+  assert.deepEqual(source, tableStructureRoundTripFixture.document);
 });

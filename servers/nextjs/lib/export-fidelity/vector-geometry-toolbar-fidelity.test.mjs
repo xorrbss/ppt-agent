@@ -6,8 +6,8 @@ import { createTemplateV2SlideRenderPlan } from "../template-v2-render-plan.mjs"
 import {
   editTemplateV2VectorPointTopology,
   projectTemplateV2ElementForRenderPlan,
-  templateV2CanChangeVectorEllipseShape,
   templateV2EditableVectorGeometry,
+  templateV2ProvenVectorEditCapability,
   templateV2VectorRenderGeometry,
 } from "../template-v2-vector.ts";
 
@@ -174,7 +174,7 @@ test("canonical curve lifecycle and explicit two-point shape conversion are loss
   assert.equal(templateV2EditableVectorGeometry(ellipse)?.shape, "ellipse");
   assert.deepEqual(ellipse.points[0].future_point, { retained: true });
   assert.deepEqual(ellipse.future_vector, { version: 3 });
-  assert.equal(templateV2CanChangeVectorEllipseShape(ellipse), true);
+  assert.equal(templateV2ProvenVectorEditCapability(ellipse), null);
 
   const plan = createTemplateV2SlideRenderPlan(slideWith(ellipse));
   assert.equal(plan.components[0].elements[0].vector?.shape, "ellipse");
@@ -194,25 +194,25 @@ test("canonical curve lifecycle and explicit two-point shape conversion are loss
     /<polyline /
   );
   assert.equal(
-    templateV2CanChangeVectorEllipseShape({
+    templateV2ProvenVectorEditCapability({
       ...path,
       curve: { type: "smooth", tension: 0.5, segments: 8 },
     }),
-    false
+    null
   );
   assert.equal(
-    templateV2CanChangeVectorEllipseShape({
+    templateV2ProvenVectorEditCapability({
       ...path,
       closed: true,
     }),
-    false
+    null
   );
   assert.equal(
-    templateV2CanChangeVectorEllipseShape({
+    templateV2ProvenVectorEditCapability({
       ...path,
       corner_radii: [0, 0],
     }),
-    false
+    null
   );
 });
 
@@ -252,7 +252,7 @@ test("ellipse-only latent geometry stays lossless and cannot become path semanti
     curve: { tension: 0.4, segments: 8, canRemove: false },
     cornerRadii: [12, 7],
   });
-  assert.equal(templateV2CanChangeVectorEllipseShape(persisted), false);
+  assert.equal(templateV2ProvenVectorEditCapability(persisted), null);
   assert.equal(
     editTemplateV2VectorPointTopology(
       persisted,
@@ -276,127 +276,96 @@ test("ellipse-only latent geometry stays lossless and cannot become path semanti
   assert.doesNotMatch(pptHtml, /M917 811 L919 813/);
 });
 
-test("point topology edits preserve point extensions, radii, and PPT geometry", () => {
+test("only the pinned upstream polygon add-after edit is enabled", () => {
   const authored = {
     type: "vector",
     shape: "polygon",
     points: [
-      { x: 10, y: 20, future_point: { id: "a" } },
-      { x: 170, y: 15, future_point: { id: "b" } },
-      { x: 155, y: 130 },
-      { x: 25, y: 145 },
+      { x: 0, y: 0 },
+      { x: 100, y: 80 },
     ],
     closed: true,
-    corner_radii: [10, 8, 6, 4],
-    fill: { color: "#123456" },
-    stroke: { color: "#abcdef", width: 2 },
-    future_vector: { retained: true },
+    upstream_element_extension: "vector-vNext",
   };
 
+  assert.deepEqual(templateV2ProvenVectorEditCapability(authored), {
+    kind: "polygon-add-after-first-point",
+    points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+  });
   const added = editTemplateV2VectorPointTopology(authored, {
     type: "add-after",
-    index: 1,
+    index: 0,
   });
   assert.ok(added);
   assert.deepEqual(added.points, [
     authored.points[0],
+    { x: 50, y: 40 },
     authored.points[1],
-    { x: 162.5, y: 72.5 },
-    authored.points[2],
-    authored.points[3],
   ]);
-  assert.deepEqual(added.cornerRadii, [10, 8, 0, 6, 4]);
-  assert.equal(added.selectedIndex, 2);
+  assert.equal(added.cornerRadii, null);
+  assert.equal(added.selectedIndex, 1);
 
-  const addedElement = {
-    ...authored,
-    points: added.points,
-    corner_radii: added.cornerRadii,
-  };
-  const moved = editTemplateV2VectorPointTopology(addedElement, {
-    type: "move",
-    index: added.selectedIndex,
-    direction: 1,
-  });
-  assert.ok(moved);
-  assert.deepEqual(moved.points, [
-    authored.points[0],
-    authored.points[1],
-    authored.points[2],
-    { x: 162.5, y: 72.5 },
-    authored.points[3],
-  ]);
-  assert.deepEqual(moved.cornerRadii, [10, 8, 6, 0, 4]);
-  assert.equal(moved.selectedIndex, 3);
-
-  const movedElement = JSON.parse(JSON.stringify({
-    ...addedElement,
-    points: moved.points,
-    corner_radii: moved.cornerRadii,
-  }));
-  assert.deepEqual(movedElement.points[0].future_point, { id: "a" });
-  assert.deepEqual(movedElement.points[1].future_point, { id: "b" });
-  assert.deepEqual(movedElement.future_vector, { retained: true });
-
-  const deleted = editTemplateV2VectorPointTopology(movedElement, {
-    type: "delete",
-    index: moved.selectedIndex,
-  });
-  assert.ok(deleted);
-  assert.deepEqual(deleted.points, authored.points);
-  assert.deepEqual(deleted.cornerRadii, authored.corner_radii);
-
-  const withoutCanonicalRadii = {
-    ...authored,
-    corner_radii: undefined,
-  };
-  const addedWithoutCanonicalRadii = editTemplateV2VectorPointTopology(
-    withoutCanonicalRadii,
-    { type: "add-after", index: 0 }
+  const edited = { ...authored, points: added.points };
+  assert.equal(templateV2ProvenVectorEditCapability(edited), null);
+  assert.equal(
+    editTemplateV2VectorPointTopology(authored, {
+      type: "add-after",
+      index: 1,
+    }),
+    null
   );
-  assert.ok(addedWithoutCanonicalRadii);
-  assert.equal(addedWithoutCanonicalRadii.cornerRadii, null);
-  assert.deepEqual(addedWithoutCanonicalRadii.points, [
-    authored.points[0],
-    { x: 90, y: 17.5 },
-    ...authored.points.slice(1),
-  ]);
-
-  const projected = projectTemplateV2ElementForRenderPlan(movedElement);
+  assert.equal(
+    editTemplateV2VectorPointTopology(authored, {
+      type: "delete",
+      index: 0,
+    }),
+    null
+  );
+  assert.equal(
+    editTemplateV2VectorPointTopology(authored, {
+      type: "move",
+      index: 0,
+      direction: 1,
+    }),
+    null
+  );
+  const projected = projectTemplateV2ElementForRenderPlan(edited);
   const plan = createTemplateV2SlideRenderPlan(slideWith(projected));
   const vectorPlan = plan.components[0].elements[0].vector;
   assert.ok(vectorPlan);
-  const konvaGeometry = templateV2VectorRenderGeometry(
-    movedElement,
-    vectorPlan
-  );
+  const konvaGeometry = templateV2VectorRenderGeometry(edited, vectorPlan);
   const pptHtml = renderTemplateV2GeneralPresentationHtml(
-    presentationWith(movedElement)
+    presentationWith(edited)
   );
   assertPointsClose(parseSvgPoints(pptHtml, "polygon"), konvaGeometry.points);
 
-  assert.equal(
-    editTemplateV2VectorPointTopology(
-      {
-        ...authored,
-        shape: "ellipse",
-        points: authored.points.slice(0, 2),
-        corner_radii: undefined,
-      },
-      { type: "add-after", index: 0 }
-    ),
-    null
-  );
-  assert.equal(
-    editTemplateV2VectorPointTopology(
-      {
-        ...authored,
-        cornerRadii: [10, 8, 6, 4],
-      },
-      { type: "delete", index: 1 }
-    ),
-    null
-  );
+  const unsupported = [
+    { ...authored, shape: "ellipse" },
+    { ...authored, closed: false },
+    { ...authored, curve: { type: "smooth", tension: 0.5, segments: 8 } },
+    { ...authored, corner_radii: [0, 0] },
+    { ...authored, raw_path: "M0 0 L100 80" },
+    { ...authored, fill: { color: "#123456" } },
+    { ...authored, points: [...authored.points, { x: 50, y: 40 }] },
+    {
+      ...authored,
+      points: [
+        { x: 0, y: 0, future_point: true },
+        authored.points[1],
+      ],
+    },
+    { ...authored, upstream_element_extension: "vector-future" },
+  ];
+  unsupported.forEach((element) => {
+    assert.equal(templateV2ProvenVectorEditCapability(element), null);
+    assert.equal(
+      editTemplateV2VectorPointTopology(element, {
+        type: "add-after",
+        index: 0,
+      }),
+      null
+    );
+  });
 });
 
 test("open path is represented consistently and does not acquire a fill", () => {

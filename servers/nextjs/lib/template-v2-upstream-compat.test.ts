@@ -15,7 +15,7 @@ import {
 } from "./template-v2-upstream-compat.ts";
 import {
   editTemplateV2VectorPointTopology,
-  templateV2CanChangeVectorEllipseShape,
+  templateV2ProvenVectorEditCapability,
 } from "./template-v2-vector.ts";
 
 const pinnedUpstreamElements = JSON.parse(
@@ -97,9 +97,10 @@ test("round-trips the pinned upstream vector after one proven topology edit", ()
     component.elements as Array<Record<string, unknown>>
   )[0];
 
-  // The pinned record proves polygon topology preservation, but its authored
-  // closed path does not prove a semantics-safe ellipse transition.
-  assert.equal(templateV2CanChangeVectorEllipseShape(vector), false);
+  assert.deepEqual(templateV2ProvenVectorEditCapability(vector), {
+    kind: "polygon-add-after-first-point",
+    points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+  });
   const topologyEdit = editTemplateV2VectorPointTopology(vector, {
     type: "add-after",
     index: 0,
@@ -141,9 +142,22 @@ test("round-trips the pinned upstream vector after one proven topology edit", ()
     serializeStudioLayoutsForUpstream(reentered),
     wire
   );
+  const reloadedLayouts = reentered.studioLayouts as {
+    layouts: Array<Record<string, unknown>>;
+  };
+  const reloadedLayout = reloadedLayouts.layouts[0];
+  const reloadedComponent = (
+    reloadedLayout.components as Array<Record<string, unknown>>
+  )[0];
+  const reloadedVector = (
+    reloadedComponent.elements as Array<Record<string, unknown>>
+  )[0];
+  assert.deepEqual(reloadedVector, savedVector);
+  assert.equal(templateV2ProvenVectorEditCapability(reloadedVector), null);
+
   const plan = createTemplateV2SlideRenderPlan({
     id: "upstream-vector-roundtrip",
-    ui: savedLayout,
+    ui: reloadedLayout,
   });
   assert.deepEqual(plan.components[0].elements[0].vector, {
     shape: "polygon",
@@ -160,7 +174,7 @@ test("round-trips the pinned upstream vector after one proven topology edit", ()
   assert.match(
     renderTemplateV2GeneralSlideCanvasHtml({
       id: "upstream-vector-roundtrip",
-      ui: savedLayout,
+      ui: reloadedLayout,
     }),
     /<polygon /
   );

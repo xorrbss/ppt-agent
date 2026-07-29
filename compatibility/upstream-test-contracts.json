@@ -133,7 +133,7 @@
       "id": "non-conflicting-template-v2-compat-mutations",
       "sourceConcept": "Expose only Template V2 method/path pairs that do not replace the legacy template read contract.",
       "localTests": [
-        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_compat_router_merges_mutations_into_legacy_template_item_openapi_path",
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_compat_router_adds_advanced_routes_without_legacy_collisions",
         "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_item_openapi_exposes_one_resource_path_with_unique_operations"
       ],
       "evidenceFiles": [

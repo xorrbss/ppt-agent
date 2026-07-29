@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { platform, tmpdir } from "node:os";
+import { homedir, platform, tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -88,9 +88,72 @@ function findOnPath(name) {
   return null;
 }
 
+function findPlaywrightHeadlessShell() {
+  const roots = [];
+  const configuredRoot = process.env.PLAYWRIGHT_BROWSERS_PATH?.trim();
+  if (configuredRoot && configuredRoot !== "0") roots.push(configuredRoot);
+  if (process.env.LOCALAPPDATA) {
+    roots.push(join(process.env.LOCALAPPDATA, "ms-playwright"));
+  }
+  roots.push(
+    join(homedir(), ".cache", "ms-playwright"),
+    join(homedir(), "Library", "Caches", "ms-playwright"),
+  );
+
+  const revisions = [];
+  for (const root of new Set(roots.map((candidate) => resolve(candidate)))) {
+    let entries;
+    try {
+      entries = readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const match = /^chromium_headless_shell-(\d+)$/.exec(entry.name);
+      if (!entry.isDirectory() || !match) continue;
+      revisions.push({
+        directory: join(root, entry.name),
+        revision: Number(match[1]),
+      });
+    }
+  }
+
+  revisions.sort(
+    (left, right) =>
+      right.revision - left.revision ||
+      left.directory.localeCompare(right.directory),
+  );
+  for (const { directory } of revisions) {
+    let platformDirectories;
+    try {
+      platformDirectories = readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const platformDirectory of platformDirectories) {
+      if (!platformDirectory.isDirectory()) continue;
+      for (const executableName of [
+        "chrome-headless-shell.exe",
+        "chrome-headless-shell",
+      ]) {
+        const candidate = join(
+          directory,
+          platformDirectory.name,
+          executableName,
+        );
+        if (existsSync(candidate)) return candidate;
+      }
+    }
+  }
+  return null;
+}
+
 function findBrowser() {
   const configured = process.env.PUPPETEER_EXECUTABLE_PATH;
   if (configured && existsSync(configured)) return configured;
+
+  const headlessShell = findPlaywrightHeadlessShell();
+  if (headlessShell) return headlessShell;
 
   const pathNames = isWindows
     ? ["chrome", "msedge", "chromium"]
@@ -225,38 +288,50 @@ console.log(
 );
 
 const nodeMajor = Number(process.versions.node.split(".")[0]);
+const node22Precondition = () =>
+  nodeMajor === 22 ? null : `Node 22 required; found ${process.versions.node}`;
+const withNode22 = (precondition) => () => node22Precondition() || precondition?.() || null;
 runStep({
   name: "Root locked npm install",
   command: npm,
   args: ["ci"],
-  precondition: () => nodeMajor === 22 ? null : `Node 22 required; found ${process.versions.node}`,
+  precondition: node22Precondition,
   preconditionDescription: "Node 22 and npm",
 });
 runStep({
   name: "presentation-export v0.4.2 synchronization contract",
   command: npm,
   args: ["run", "test:presentation-export-sync"],
+  precondition: node22Precondition,
+  preconditionDescription: "Node 22 and root npm ci",
 });
 runStep({
   name: "Synchronize pinned presentation-export runtime",
   command: npm,
   args: ["run", "sync:presentation-export"],
+  precondition: node22Precondition,
   preconditionDescription: "network access only when the pinned v0.4.2 runtime is absent or stale",
 });
 runStep({
   name: "Verify pinned presentation-export runtime",
   command: npm,
   args: ["run", "check:presentation-export"],
+  precondition: node22Precondition,
+  preconditionDescription: "Node 22 and synchronized presentation-export runtime",
 });
 runStep({
   name: "Static upstream compatibility verifier",
   command: process.execPath,
   args: ["--test", "scripts/verify-upstream-compatibility.test.mjs"],
+  precondition: node22Precondition,
+  preconditionDescription: "Node 22",
 });
 runStep({
   name: "Offline upstream intake fixture",
   command: process.execPath,
   args: ["--test", "scripts/intake-upstream-main.test.mjs"],
+  precondition: node22Precondition,
+  preconditionDescription: "Node 22",
 });
 runStep({
   name: "FastAPI locked dependency install",
@@ -278,25 +353,30 @@ runStep({
   command: npm,
   args: ["ci"],
   cwd: nextDirectory,
+  precondition: node22Precondition,
+  preconditionDescription: "Node 22 and npm",
 });
 runStep({
   name: "Shared Next.js CI Node suite",
   command: npm,
   args: ["run", "test:next-ci"],
-  precondition: () => browserPath ? null : "Chrome/Chromium is required because CI=true forbids Chrome smoke skips",
-  preconditionDescription: "Next.js npm ci and Chrome/Chromium",
+  precondition: withNode22(() => browserPath ? null : "Chrome/Chromium is required because CI=true forbids Chrome smoke skips"),
+  preconditionDescription: "Node 22, Next.js npm ci, and Chrome/Chromium",
 });
 runStep({
   name: "Next.js lint",
   command: npm,
   args: ["run", "lint"],
   cwd: nextDirectory,
+  precondition: node22Precondition,
+  preconditionDescription: "Node 22 and Next.js npm ci",
 });
 runStep({
   name: "Next.js production build",
   command: npm,
   args: ["run", "build"],
   cwd: nextDirectory,
+  precondition: node22Precondition,
   env: {
     NEXT_PUBLIC_FAST_API: "http://localhost:8000",
     NEXT_PUBLIC_URL: "http://localhost:3000",
@@ -322,7 +402,8 @@ runStep({
   cwd: nextDirectory,
   selected: cypressSelected,
   notRunReason: "requires --with-cypress; GitHub uses the pinned Cypress action with Xvfb",
-  preconditionDescription: "npm ci and cached Cypress binary",
+  precondition: node22Precondition,
+  preconditionDescription: "Node 22, npm ci, and cached Cypress binary",
 });
 const cypressSpecs = [
   "**/AdaptiveBlockControls.cy.tsx",
@@ -355,8 +436,8 @@ runStep({
   cwd: nextDirectory,
   selected: cypressSelected,
   notRunReason: "requires --with-cypress",
-  precondition: () => !isWindows && !findOnPath("xvfb-run") ? "xvfb-run is required on Linux" : null,
-  preconditionDescription: "Cypress binary; xvfb-run on Linux",
+  precondition: withNode22(() => !isWindows && !findOnPath("xvfb-run") ? "xvfb-run is required on Linux" : null),
+  preconditionDescription: "Node 22, Cypress binary; xvfb-run on Linux",
 });
 
 const fidelitySelected = requested("--with-fidelity");
@@ -373,13 +454,13 @@ runStep({
     ...(sofficePath ? { SOFFICE_PATH: sofficePath } : {}),
     ...(pdfToCairoPath ? { PDFTOCAIRO_PATH: pdfToCairoPath } : {}),
   },
-  precondition: () => {
+  precondition: withNode22(() => {
     if (!browserPath) return "Chrome/Chromium not found";
     if (!sofficePath) return "LibreOffice/soffice not found";
     if (!pdfToCairoPath) return "Poppler pdftocairo not found";
     return null;
-  },
-  preconditionDescription: "Chrome/Chromium, LibreOffice, and Poppler pdftocairo",
+  }),
+  preconditionDescription: "Node 22, Chrome/Chromium, LibreOffice, and Poppler pdftocairo",
 });
 
 const postgresSelected = requested("--with-postgres");
@@ -424,7 +505,7 @@ runStep({
 });
 
 const electronSelected = requested("--with-electron");
-const electronPrecondition = () => isWindows ? null : "the release gate is Windows-only";
+const electronPrecondition = withNode22(() => isWindows ? null : "the release gate is Windows-only");
 runStep({
   name: "Electron locked dependency install",
   command: npm,
