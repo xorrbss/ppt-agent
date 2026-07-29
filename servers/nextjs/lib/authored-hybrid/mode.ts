@@ -4,9 +4,9 @@ export type PptxModeResolution =
   | { ok: true; value: PptxMode }
   | { ok: false };
 
-/** Missing mode deliberately preserves the historical image-per-slide export. */
+/** Missing mode uses the structured export; fidelity remains explicit-only. */
 export function resolvePptxMode(value: unknown): PptxModeResolution {
-  if (value === undefined) return { ok: true, value: "fidelity" };
+  if (value === undefined) return { ok: true, value: "hybrid" };
   if (value === "fidelity" || value === "hybrid") {
     return { ok: true, value };
   }

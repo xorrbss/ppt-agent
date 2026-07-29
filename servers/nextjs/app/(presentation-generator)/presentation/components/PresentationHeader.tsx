@@ -422,40 +422,18 @@ const PresentationHeader = ({
               type="button"
               onClick={() => {
                 closeExportOptions();
-                void handleExportPptx("fidelity");
-              }}
-              disabled={isExporting || isStreaming === true}
-              data-testid="authored-export-fidelity"
-              variant="ghost"
-              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 디자인 그대로"
-            >
-              <span className="min-w-0">
-                <span className="block font-medium">PPTX · 디자인 그대로</span>
-                <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
-                  슬라이드를 이미지로 유지합니다.
-                </span>
-              </span>
-              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                closeExportOptions();
-                void handleExportPptx("hybrid", true);
+                void handleExportPptx("hybrid");
               }}
               disabled={isExporting || isStreaming === true}
               data-testid="authored-export-hybrid"
               variant="ghost"
               className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 텍스트 편집 가능 및 글꼴 포함"
+              aria-label="PPTX로 내보내기, 배경과 요소 분리"
             >
               <span className="min-w-0">
-                <span className="block font-medium">
-                  PPTX · 텍스트 편집 가능 + 글꼴 포함
-                </span>
+                <span className="block font-medium">PPTX · 배경과 요소 분리</span>
                 <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
-                  텍스트와 일부 요소를 편집할 수 있으며 허용된 글꼴을 자동으로 포함합니다.
+                  배경, 텍스트, 이미지와 도형을 가능한 범위에서 각각 분리합니다.
                 </span>
               </span>
               <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -833,8 +811,8 @@ const PresentationHeader = ({
                 {exportQuality.fontEmbeddingStatus?.applied
                   ? `OOXML 폰트 임베딩 ${exportQuality.fontEmbeddingStatus.embeddedFontFiles}개가 적용되었습니다.`
                   : exportQuality.fontEmbeddingStatus?.requested
-                    ? "폰트 임베딩 opt-in을 요청했지만 적용되지 않아 호환 typeface/fallback을 사용했습니다."
-                    : "폰트 임베딩은 기본 off이며 호환 typeface/fallback을 사용합니다."}
+                    ? "글꼴 포함을 요청했지만 적용되지 않아 호환 typeface/fallback을 사용했습니다."
+                    : "이 내보내기에는 글꼴이 포함되지 않아 호환 typeface/fallback을 사용합니다."}
               </p>
             </div>
           )}
