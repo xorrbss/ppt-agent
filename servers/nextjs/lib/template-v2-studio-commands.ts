@@ -181,6 +181,65 @@ function replaceAtPath(
   return value;
 }
 
+function jsonValueEquals(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((value, index) => jsonValueEquals(value, right[index]))
+    );
+  }
+  if (isRecord(left) && isRecord(right)) {
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key) => key in right && jsonValueEquals(left[key], right[key])
+      )
+    );
+  }
+  return false;
+}
+
+function mergeJsonRecord(
+  element: JsonRecord,
+  patch: JsonRecord
+): JsonRecord {
+  let next = element;
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const currentValue = element[key];
+    const nextValue =
+      isRecord(currentValue) && isRecord(patchValue)
+        ? mergeJsonRecord(currentValue, patchValue)
+        : jsonValueEquals(currentValue, patchValue)
+          ? currentValue
+          : patchValue;
+    if (nextValue !== currentValue) {
+      if (next === element) next = { ...element };
+      next[key] = nextValue;
+    }
+  }
+  return next;
+}
+
+function cloneJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cloneJsonValue);
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        cloneJsonValue(child),
+      ])
+    );
+  }
+  return value;
+}
+
+function cloneJsonRecord(value: JsonRecord): JsonRecord {
+  return cloneJsonValue(value) as JsonRecord;
+}
+
 function componentContext(
   layouts: JsonRecord,
   layoutId: string,
@@ -423,6 +482,195 @@ function unchanged(
   lockedElementKeys: ReadonlySet<string>
 ): TemplateV2CommandResult {
   return { layouts, selectionSet, lockedElementKeys };
+}
+
+function replaceElementAtSelection(
+  layouts: JsonRecord,
+  selection: StudioSelection,
+  replacement: JsonRecord
+): JsonRecord {
+  const context = componentContext(
+    layouts,
+    selection.layoutId,
+    selection.componentId
+  );
+  if (!context) return layouts;
+  const elements = Array.isArray(context.component.elements)
+    ? context.component.elements
+    : [];
+  if (!isRecord(valueAtPath(elements, selection.elementPath))) return layouts;
+  const nextElements = replaceAtPath(
+    elements,
+    selection.elementPath,
+    replacement
+  );
+  if (nextElements === elements) return layouts;
+  const layoutItems = context.layoutItems.slice();
+  const components = context.components.slice();
+  components[context.componentIndex] = {
+    ...context.component,
+    elements: nextElements,
+  };
+  layoutItems[context.layoutIndex] = {
+    ...context.layout,
+    components,
+  };
+  return { ...layouts, layouts: layoutItems };
+}
+
+function applyElementPatch(
+  layouts: JsonRecord,
+  selectionSet: StudioSelection[],
+  lockedElementKeys: ReadonlySet<string>,
+  selection: StudioSelection,
+  patch: JsonRecord
+): TemplateV2CommandResult {
+  if (isTemplateV2SelectionLocked(lockedElementKeys, selection, true)) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  const context = componentContext(
+    layouts,
+    selection.layoutId,
+    selection.componentId
+  );
+  const elements = Array.isArray(context?.component.elements)
+    ? context.component.elements
+    : [];
+  const element = valueAtPath(elements, selection.elementPath);
+  if (!isRecord(element)) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  const replacement = mergeJsonRecord(element, patch);
+  if (replacement === element) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  return {
+    layouts: replaceElementAtSelection(layouts, selection, replacement),
+    selectionSet,
+    lockedElementKeys,
+  };
+}
+
+function applyElementReplace(
+  layouts: JsonRecord,
+  selectionSet: StudioSelection[],
+  lockedElementKeys: ReadonlySet<string>,
+  selection: StudioSelection,
+  element: JsonRecord
+): TemplateV2CommandResult {
+  if (isTemplateV2SelectionLocked(lockedElementKeys, selection, true)) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  const context = componentContext(
+    layouts,
+    selection.layoutId,
+    selection.componentId
+  );
+  const elements = Array.isArray(context?.component.elements)
+    ? context.component.elements
+    : [];
+  const current = valueAtPath(elements, selection.elementPath);
+  if (!isRecord(current) || jsonValueEquals(current, element)) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  return {
+    layouts: replaceElementAtSelection(layouts, selection, element),
+    selectionSet,
+    lockedElementKeys,
+  };
+}
+
+function applyDelete(
+  layouts: JsonRecord,
+  selectionSet: StudioSelection[],
+  lockedElementKeys: ReadonlySet<string>,
+  requestedSelections?: StudioSelection[]
+): TemplateV2CommandResult {
+  const context = siblingContext(
+    layouts,
+    requestedSelections ?? selectionSet
+  );
+  if (
+    !context ||
+    containsLockedPath(lockedElementKeys, context.selections, true)
+  ) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  const deleted = new Set(context.indices);
+  const siblings = context.siblings.filter((_, index) => !deleted.has(index));
+  const first = context.selections[0];
+  const remap = (selection: StudioSelection) =>
+    remapTemplateV2SelectionPath(
+      selection,
+      first.layoutId,
+      first.componentId,
+      context.parentPath,
+      (oldIndex, tail) => {
+        if (deleted.has(oldIndex)) return null;
+        const shift = context.indices.filter((index) => index < oldIndex).length;
+        return [oldIndex - shift, ...tail];
+      }
+    );
+  const session = remapSession(selectionSet, lockedElementKeys, remap);
+  return {
+    layouts: replaceSiblings(layouts, context, siblings),
+    ...session,
+  };
+}
+
+function applyDuplicate(
+  layouts: JsonRecord,
+  selectionSet: StudioSelection[],
+  lockedElementKeys: ReadonlySet<string>,
+  requestedSelections?: StudioSelection[]
+): TemplateV2CommandResult {
+  const context = siblingContext(
+    layouts,
+    requestedSelections ?? selectionSet
+  );
+  if (
+    !context ||
+    containsLockedPath(lockedElementKeys, context.selections, true)
+  ) {
+    return unchanged(layouts, selectionSet, lockedElementKeys);
+  }
+  const selected = new Set(context.indices);
+  const siblings: unknown[] = [];
+  const originalIndexByOld = new Map<number, number>();
+  const duplicateIndexByOld = new Map<number, number>();
+  for (let oldIndex = 0; oldIndex < context.siblings.length; oldIndex += 1) {
+    originalIndexByOld.set(oldIndex, siblings.length);
+    siblings.push(context.siblings[oldIndex]);
+    if (selected.has(oldIndex)) {
+      duplicateIndexByOld.set(oldIndex, siblings.length);
+      siblings.push(cloneJsonRecord(context.siblings[oldIndex] as JsonRecord));
+    }
+  }
+  const first = context.selections[0];
+  const remap = (selection: StudioSelection) =>
+    remapTemplateV2SelectionPath(
+      selection,
+      first.layoutId,
+      first.componentId,
+      context.parentPath,
+      (oldIndex, tail) => {
+        const nextIndex = originalIndexByOld.get(oldIndex);
+        return nextIndex === undefined ? null : [nextIndex, ...tail];
+      }
+    );
+  const session = remapSession([], lockedElementKeys, remap);
+  return {
+    layouts: replaceSiblings(layouts, context, siblings),
+    selectionSet: context.indices.map((oldIndex) => ({
+      layoutId: first.layoutId,
+      componentId: first.componentId,
+      elementPath: [
+        ...context.parentPath,
+        duplicateIndexByOld.get(oldIndex) as number,
+      ],
+    })),
+    lockedElementKeys: session.lockedElementKeys,
+  };
 }
 
 function applyGeometryBatch(
@@ -942,6 +1190,36 @@ export function applyTemplateV2StudioCommand(
         selectionSet,
         lockedElementKeys,
         command.updates
+      );
+    case "patch-element":
+      return applyElementPatch(
+        layouts,
+        selectionSet,
+        lockedElementKeys,
+        command.selection,
+        command.patch
+      );
+    case "replace-element":
+      return applyElementReplace(
+        layouts,
+        selectionSet,
+        lockedElementKeys,
+        command.selection,
+        command.element
+      );
+    case "delete-elements":
+      return applyDelete(
+        layouts,
+        selectionSet,
+        lockedElementKeys,
+        command.selections
+      );
+    case "duplicate-elements":
+      return applyDuplicate(
+        layouts,
+        selectionSet,
+        lockedElementKeys,
+        command.selections
       );
     case "reorder-siblings":
       return applyReorder(

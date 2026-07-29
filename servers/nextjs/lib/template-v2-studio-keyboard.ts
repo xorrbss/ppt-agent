@@ -9,6 +9,7 @@ export interface TemplateV2KeyboardEvent {
   shiftKey?: boolean;
   altKey?: boolean;
   repeat?: boolean;
+  isComposing?: boolean;
   target?: unknown;
   composedPath?(): unknown[];
 }
@@ -63,6 +64,19 @@ function eventPath(event: TemplateV2KeyboardEvent): unknown[] {
     : [event.target, ...composedPath];
 }
 
+function hasExactPrimaryModifier(event: TemplateV2KeyboardEvent): boolean {
+  return Boolean(event.ctrlKey) !== Boolean(event.metaKey);
+}
+
+function isBlockedShortcutEvent(event: TemplateV2KeyboardEvent): boolean {
+  return Boolean(
+    event.repeat ||
+      event.isComposing ||
+      event.altKey ||
+      eventPath(event).some(isTemplateV2EditableKeyboardTarget)
+  );
+}
+
 /**
  * Returns a history intent only when the chord can perform a real state change.
  *
@@ -77,10 +91,8 @@ export function getTemplateV2HistoryKeyboardIntent(
 ): TemplateV2HistoryKeyboardIntent | null {
   if (
     availability.disabled ||
-    event.repeat ||
-    event.altKey ||
-    (!event.ctrlKey && !event.metaKey) ||
-    eventPath(event).some(isTemplateV2EditableKeyboardTarget)
+    isBlockedShortcutEvent(event) ||
+    !hasExactPrimaryModifier(event)
   ) {
     return null;
   }
@@ -113,6 +125,87 @@ export interface TemplateV2CanvasKeyboardAvailability {
   canMove: boolean;
 }
 
+export type TemplateV2SelectionKeyboardIntent =
+  | "group-siblings"
+  | "ungroup"
+  | "delete-selection"
+  | "duplicate-selection";
+
+export interface TemplateV2SelectionKeyboardAvailability {
+  selectionCount: number;
+  canGroup: boolean;
+  canUngroup: boolean;
+  canDelete: boolean;
+  canDuplicate: boolean;
+  disabled?: boolean;
+}
+
+/**
+ * Maps production selection shortcuts to the Studio command facade without
+ * knowing anything about React, the reducer, or the current element paths.
+ *
+ * Delete/Backspace intentionally have no primary modifier. Group, ungroup, and
+ * duplicate require exactly one platform primary modifier so synthetic events
+ * cannot accidentally match both Ctrl and Cmd.
+ */
+export function getTemplateV2SelectionKeyboardIntent(
+  event: TemplateV2KeyboardEvent,
+  availability: TemplateV2SelectionKeyboardAvailability
+): TemplateV2SelectionKeyboardIntent | null {
+  if (
+    availability.disabled ||
+    availability.selectionCount < 1 ||
+    isBlockedShortcutEvent(event)
+  ) {
+    return null;
+  }
+
+  const key = event.key.toLowerCase();
+  if (!event.ctrlKey && !event.metaKey) {
+    if (
+      !event.shiftKey &&
+      (key === "delete" || key === "backspace") &&
+      availability.canDelete
+    ) {
+      return "delete-selection";
+    }
+    return null;
+  }
+
+  if (!hasExactPrimaryModifier(event)) return null;
+  if (key === "g") {
+    if (event.shiftKey) {
+      return availability.canUngroup ? "ungroup" : null;
+    }
+    return availability.canGroup ? "group-siblings" : null;
+  }
+  if (key === "d" && !event.shiftKey && availability.canDuplicate) {
+    return "duplicate-selection";
+  }
+  return null;
+}
+
+export interface TemplateV2SelectionModifierEvent {
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+}
+
+/**
+ * Canvas click selection is additive only for the documented Ctrl/Cmd chord.
+ * Shift is reserved for coarse keyboard nudging and Alt for viewport gestures.
+ */
+export function isTemplateV2AdditiveSelectionModifier(
+  event: TemplateV2SelectionModifierEvent
+): boolean {
+  return (
+    !event.altKey &&
+    !event.shiftKey &&
+    Boolean(event.ctrlKey) !== Boolean(event.metaKey)
+  );
+}
+
 export const TEMPLATE_V2_NUDGE_STEP = 1;
 export const TEMPLATE_V2_COARSE_NUDGE_STEP = TEMPLATE_V2_SNAP_GRID;
 
@@ -139,6 +232,7 @@ export function getTemplateV2CanvasKeyboardIntent(
 ): TemplateV2CanvasKeyboardIntent | null {
   if (
     event.repeat ||
+    event.isComposing ||
     event.altKey ||
     event.ctrlKey ||
     event.metaKey ||

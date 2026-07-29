@@ -4,11 +4,14 @@ import test from "node:test";
 import {
   getTemplateV2CanvasKeyboardIntent,
   getTemplateV2HistoryKeyboardIntent,
+  getTemplateV2SelectionKeyboardIntent,
+  isTemplateV2AdditiveSelectionModifier,
   isTemplateV2EditableKeyboardTarget,
   TEMPLATE_V2_COARSE_NUDGE_STEP,
   type TemplateV2CanvasKeyboardAvailability,
   type TemplateV2HistoryKeyboardAvailability,
   type TemplateV2KeyboardEvent,
+  type TemplateV2SelectionKeyboardAvailability,
 } from "./template-v2-studio-keyboard.ts";
 
 const available: TemplateV2HistoryKeyboardAvailability = {
@@ -19,6 +22,14 @@ const available: TemplateV2HistoryKeyboardAvailability = {
 const movable: TemplateV2CanvasKeyboardAvailability = {
   hasSelection: true,
   canMove: true,
+};
+
+const selectionAvailable: TemplateV2SelectionKeyboardAvailability = {
+  selectionCount: 2,
+  canGroup: true,
+  canUngroup: true,
+  canDelete: true,
+  canDuplicate: true,
 };
 
 function intent(
@@ -33,6 +44,13 @@ function canvasIntent(
   availability: TemplateV2CanvasKeyboardAvailability = movable
 ) {
   return getTemplateV2CanvasKeyboardIntent(event, availability);
+}
+
+function selectionIntent(
+  event: TemplateV2KeyboardEvent,
+  availability: TemplateV2SelectionKeyboardAvailability = selectionAvailable
+) {
+  return getTemplateV2SelectionKeyboardIntent(event, availability);
 }
 
 test("recognizes Ctrl/Cmd undo and both redo variants", () => {
@@ -73,6 +91,14 @@ test("repeat, disabled history, and unavailable directions are no-ops", () => {
   );
   assert.equal(
     intent({ key: "y", ctrlKey: true }, { canUndo: true, canRedo: false }),
+    null
+  );
+  assert.equal(
+    intent({ key: "z", ctrlKey: true, isComposing: true }),
+    null
+  );
+  assert.equal(
+    intent({ key: "z", ctrlKey: true, metaKey: true }),
     null
   );
 });
@@ -158,6 +184,7 @@ test("canvas keys yield to history chords, repeat, editing, and locked selection
   assert.equal(canvasIntent({ key: "ArrowLeft", altKey: true }), null);
   assert.equal(canvasIntent({ key: "ArrowLeft", repeat: true }), null);
   assert.equal(canvasIntent({ key: "Escape", repeat: true }), null);
+  assert.equal(canvasIntent({ key: "Escape", isComposing: true }), null);
   assert.equal(
     canvasIntent({ key: "ArrowLeft", target: { tagName: "INPUT" } }),
     null
@@ -171,6 +198,125 @@ test("canvas keys yield to history chords, repeat, editing, and locked selection
     null
   );
   assert.equal(canvasIntent({ key: "Tab" }), null);
+});
+
+test("selection shortcuts map Group, Ungroup, Duplicate, and Delete commands", () => {
+  assert.equal(
+    selectionIntent({ key: "g", ctrlKey: true }),
+    "group-siblings"
+  );
+  assert.equal(
+    selectionIntent({ key: "G", metaKey: true, shiftKey: true }),
+    "ungroup"
+  );
+  assert.equal(
+    selectionIntent({ key: "d", ctrlKey: true }),
+    "duplicate-selection"
+  );
+  assert.equal(selectionIntent({ key: "Delete" }), "delete-selection");
+  assert.equal(selectionIntent({ key: "Backspace" }), "delete-selection");
+});
+
+test("selection shortcuts honor capabilities and exact modifier contracts", () => {
+  assert.equal(
+    selectionIntent({ key: "g", ctrlKey: true }, {
+      ...selectionAvailable,
+      canGroup: false,
+    }),
+    null
+  );
+  assert.equal(
+    selectionIntent({ key: "g", metaKey: true, shiftKey: true }, {
+      ...selectionAvailable,
+      canUngroup: false,
+    }),
+    null
+  );
+  assert.equal(
+    selectionIntent({ key: "d", ctrlKey: true }, {
+      ...selectionAvailable,
+      canDuplicate: false,
+    }),
+    null
+  );
+  assert.equal(
+    selectionIntent({ key: "Delete" }, {
+      ...selectionAvailable,
+      canDelete: false,
+    }),
+    null
+  );
+  assert.equal(
+    selectionIntent(
+      { key: "g", ctrlKey: true },
+      { ...selectionAvailable, selectionCount: 0 }
+    ),
+    null
+  );
+  assert.equal(
+    selectionIntent(
+      { key: "g", ctrlKey: true },
+      { ...selectionAvailable, disabled: true }
+    ),
+    null
+  );
+  assert.equal(selectionIntent({ key: "g" }), null);
+  assert.equal(selectionIntent({ key: "g", shiftKey: true }), null);
+  assert.equal(
+    selectionIntent({ key: "g", ctrlKey: true, metaKey: true }),
+    null
+  );
+  assert.equal(
+    selectionIntent({ key: "d", ctrlKey: true, shiftKey: true }),
+    null
+  );
+  assert.equal(
+    selectionIntent({ key: "Delete", ctrlKey: true }),
+    null
+  );
+  assert.equal(
+    selectionIntent({ key: "Backspace", shiftKey: true }),
+    null
+  );
+});
+
+test("selection shortcuts yield to editable targets, IME, repeat, and Alt", () => {
+  for (const event of [
+    { key: "g", ctrlKey: true, repeat: true },
+    { key: "g", ctrlKey: true, isComposing: true },
+    { key: "g", ctrlKey: true, altKey: true },
+    { key: "Delete", isComposing: true },
+    { key: "Delete", target: { tagName: "INPUT" } },
+    {
+      key: "d",
+      metaKey: true,
+      target: { nodeName: "#text" },
+      composedPath: () => [
+        { nodeName: "#text" },
+        { contentEditable: "plaintext-only" },
+      ],
+    },
+  ] satisfies TemplateV2KeyboardEvent[]) {
+    assert.equal(selectionIntent(event), null);
+  }
+});
+
+test("additive canvas selection is exactly Ctrl or Cmd without Shift/Alt", () => {
+  assert.equal(isTemplateV2AdditiveSelectionModifier({ ctrlKey: true }), true);
+  assert.equal(isTemplateV2AdditiveSelectionModifier({ metaKey: true }), true);
+  assert.equal(isTemplateV2AdditiveSelectionModifier({}), false);
+  assert.equal(
+    isTemplateV2AdditiveSelectionModifier({ ctrlKey: true, metaKey: true }),
+    false
+  );
+  assert.equal(
+    isTemplateV2AdditiveSelectionModifier({ ctrlKey: true, shiftKey: true }),
+    false
+  );
+  assert.equal(
+    isTemplateV2AdditiveSelectionModifier({ metaKey: true, altKey: true }),
+    false
+  );
 });
 
 test("ordinary targets and unusable synthetic composed paths stay safe", () => {
