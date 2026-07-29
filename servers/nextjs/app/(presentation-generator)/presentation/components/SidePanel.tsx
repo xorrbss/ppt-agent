@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
+import { v4 as uuidv4 } from "uuid";
 import { RootState } from "@/store/store";
 import {
   DndContext,
@@ -18,13 +19,24 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { setPresentationData } from "@/store/slices/presentationGeneration";
+import {
+  addNewSlide,
+  setPresentationData,
+} from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
 import { Separator } from "@/components/ui/separator";
+import { notify } from "@/components/ui/sonner";
 import { usePathname } from "next/navigation";
 import NewSlide from "./NewSlide";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SlideThumbnailCard } from "./SlideThumbnailCard";
+import {
+  BLANK_SLIDE_LAYOUT_GROUP,
+  BLANK_SLIDE_LAYOUT_ID,
+  createBlankPresentationSlide,
+  isTemplateFreePresentation,
+} from "../../_shared/blank-slide";
+import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -56,9 +68,49 @@ const SidePanel = ({
   const lastSlideTemplateId = presentationData?.slides?.[lastSlideIndex]?.layout
     ? presentationData.slides[lastSlideIndex].layout.split(":")[0]
     : "";
+  const isTemplateFree = isTemplateFreePresentation(presentationData);
 
   const handleAddSlideClick = () => {
     if (!presentationData?.slides?.length || isStreaming) return;
+
+    if (presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
+      notify.warning(
+        "Slide limit reached",
+        `You can have up to ${MAX_NUMBER_OF_SLIDES} slides.`
+      );
+      return;
+    }
+
+    if (isTemplateFree) {
+      const slideId = uuidv4();
+      const newIndex = lastSlideIndex + 1;
+      const blankSlide = createBlankPresentationSlide({
+        id: slideId,
+        index: newIndex,
+        presentationId,
+        templateId: BLANK_SLIDE_LAYOUT_GROUP,
+        isTemplateV2: true,
+      });
+
+      dispatch(
+        addNewSlide({
+          slideData: blankSlide,
+          index: lastSlideIndex,
+        })
+      );
+      trackEvent(MixpanelEvent.Presentation_Slide_Added, {
+        pathname,
+        presentation_id: presentationId,
+        inserted_after_index: lastSlideIndex,
+        template_id: BLANK_SLIDE_LAYOUT_GROUP,
+        layout_id: BLANK_SLIDE_LAYOUT_ID,
+        source: "blank_side_panel",
+        is_template_v2: true,
+      });
+      onSlideClick(newIndex);
+      return;
+    }
+
     setShowNewSlideSelection(true);
   };
 
@@ -126,6 +178,7 @@ const SidePanel = ({
 
   const shouldShowNewSlideModal =
     showNewSlideSelection &&
+    !isTemplateFree &&
     lastSlideTemplateId &&
     typeof document !== "undefined";
 

@@ -1,7 +1,8 @@
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 import uuid
-from sqlalchemy import JSON, Column, DateTime, String
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Uuid
 from sqlmodel import Boolean, Field, SQLModel
 
 from models.presentation_outline_model import PresentationOutlineModel
@@ -10,15 +11,28 @@ from models.presentation_layout import PresentationLayoutModel
 from models.slide_spec_model import PresentationComposition
 from utils.datetime_utils import get_current_utc_datetime
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
+from api.v1.auth.context import get_current_owner_id
 
 PRESENTATION_LIFECYCLE_STAGING = "staging"
 PRESENTATION_LIFECYCLE_PUBLISHED = "published"
+
+
+class PresentationVersion(str, Enum):
+    V1_STANDARD = "v1-standard"
+    V2_STANDARD = "v2-standard"
 
 
 class PresentationModel(SQLModel, table=True):
     __tablename__ = "presentations"
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    owner_id: Optional[uuid.UUID] = Field(
+        default_factory=get_current_owner_id,
+        exclude=True,
+        # The production FK is managed by Alembic; omit it from ORM metadata so
+        # partial-schema fixtures can create presentations independently.
+        sa_column=Column(Uuid, nullable=True, index=True),
+    )
     content: str
     n_slides: int
     language: str
@@ -89,6 +103,7 @@ class PresentationModel(SQLModel, table=True):
     def get_new_presentation(self):
         return PresentationModel(
             id=uuid.uuid4(),
+            owner_id=self.owner_id,
             content=self.content,
             n_slides=self.n_slides,
             language=self.language,

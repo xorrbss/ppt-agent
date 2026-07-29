@@ -44,6 +44,9 @@ REVISION_TEMPLATE_V2_DELETE_SAFETY = "0a1b2c3d4e5f"
 REVISION_TEMPLATE_V2_IMPORT_REVIEW = "1b2c3d4e5f6a"
 REVISION_TEMPLATE_V2_REVISION_JOURNAL = "2c3d4e5f6a7b"
 REVISION_DURABLE_GENERATION_JOBS = "3d4e5f6a7b8c"
+REVISION_MULTI_USER_AUTH = "c9f1a2b3d4e5"
+REVISION_PROVIDER_SETTINGS = "d0a2b4c6e8f1"
+REVISION_PRIMARY_ADMIN = "e1b3c5d7f9a2"
 PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -288,7 +291,7 @@ def _infer_revision_from_schema(
     if connection is not None:
         report = validate_template_v2_phase_one_schema(
             connection,
-            allowed_extra_columns=frozenset({"revision"}),
+            allowed_extra_columns=frozenset({"revision", "owner_id"}),
             allowed_presentation_fk_ondelete=(
                 TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS
                 if "template_v2_local_state" in tables
@@ -413,7 +416,17 @@ def _infer_revision_from_schema(
                 raise RuntimeError(
                     "Durable generation job schema is only partially applied"
                 )
-            return REVISION_DURABLE_GENERATION_JOBS
+            if "user" not in tables:
+                return REVISION_DURABLE_GENERATION_JOBS
+            if "provider_settings" not in tables:
+                return REVISION_MULTI_USER_AUTH
+            user_columns = {
+                column["name"]
+                for column in inspector.get_columns("user")
+            }
+            if "admin_slot" not in user_columns:
+                return REVISION_PROVIDER_SETTINGS
+            return REVISION_PRIMARY_ADMIN
         raise RuntimeError(
             "Template V2 presentation ownership FKs have unsupported or "
             "mixed delete actions: "

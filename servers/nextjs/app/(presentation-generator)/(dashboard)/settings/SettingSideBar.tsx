@@ -1,11 +1,11 @@
 import React from 'react'
-import { LogOut, Shield } from 'lucide-react'
+import { LogOut, Shield, ShieldCheck } from 'lucide-react'
 import { IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store/store'
 import Image from 'next/image'
 
-type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'session'
+type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'admin' | 'session'
 
 const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: SettingsSection, setSelectedProvider: (provider: SettingsSection) => void }) => {
     const { llm_config } = useSelector((state: RootState) => state.userConfig)
@@ -87,6 +87,15 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                             <Shield className='w-3.5 h-3.5 text-[#5146E5]' />
                         </div>
                         <p className='text-[#191919] text-xs font-medium'>사용 분석</p>
+                    </button>
+                    <button
+                        className={`w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border ${selectedProvider === 'admin' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`}
+                        onClick={() => setSelectedProvider('admin')}
+                    >
+                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
+                            <ShieldCheck className='w-3.5 h-3.5 text-[#5146E5]' />
+                        </div>
+                        <p className='text-[#191919] text-xs font-medium'>Admin</p>
                     </button>
                     <button
                         className={`w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border ${selectedProvider === 'session' ? 'bg-[#F4F3FF] border-[#D9D6FE]' : 'bg-white border-[#EDEEEF]'}`}

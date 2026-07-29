@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 
 import { compileTemplateSchema } from "@/lib/compile-template-schema";
-import { getFastApiAuthHeaders, getFastApiBaseUrl } from "@/lib/fastapi-internal";
+import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
 
 export type BuiltinLayoutSlide = {
   id: string;
@@ -180,6 +180,7 @@ type FastApiTemplateLayoutsResponse = {
  */
 export async function buildCustomTemplateLayoutPayloadFromApi(
   group: string,
+  authHeaders: Record<string, string> = {},
 ): Promise<{
   name: string;
   ordered: boolean;
@@ -192,7 +193,7 @@ export async function buildCustomTemplateLayoutPayloadFromApi(
 
   const url = `${getFastApiBaseUrl()}/api/v1/ppt/template/${encodeURIComponent(group)}/layouts`;
   const response = await fetch(url, {
-    headers: getFastApiAuthHeaders(),
+    headers: authHeaders,
     cache: "no-store",
   });
 

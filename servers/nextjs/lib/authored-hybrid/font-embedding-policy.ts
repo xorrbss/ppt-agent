@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { realpath, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { resolveAppDataDirectory } from "../app-data-directory.ts";
+
 const MAX_EMBEDDED_FONT_SOURCE_BYTES = 32 * 1024 * 1024;
 const DEFAULT_WINDOWS_FONT_ROOT = "C:\\Windows\\Fonts";
 
@@ -175,8 +177,18 @@ function normalizeFamily(family: string): string {
 function fontRoots(): string[] {
   const configured = process.env.PRESENTON_FONT_EMBEDDING_DIR?.trim();
   const windowsRoot = process.env.WINDIR?.trim();
+  let appDataAllowlist: string | undefined;
+  try {
+    appDataAllowlist = path.join(
+      resolveAppDataDirectory(),
+      "font-embedding-allowlist"
+    );
+  } catch {
+    // Unit tests and isolated policy callers may not configure app-data.
+  }
   const roots = [
     configured && path.isAbsolute(configured) ? configured : undefined,
+    appDataAllowlist,
     windowsRoot
       ? path.join(windowsRoot, "Fonts")
       : DEFAULT_WINDOWS_FONT_ROOT,

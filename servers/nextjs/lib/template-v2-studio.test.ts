@@ -605,6 +605,144 @@ test("geometry and text no-ops preserve identity, history, and unknown geometry 
   assert.equal(invalidPartialSize, updated);
 });
 
+test("generic element patch is lossless while explicit replace swaps the whole element", () => {
+  const value = fixture();
+  const component = (
+    ((value.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  const title = (component.elements as JsonRecord[])[0];
+  title.font = {
+    family: "Inter",
+    size: 24,
+    metadata: { source: "theme", untouched: true },
+  };
+  title.experimental = {
+    upstream: { retained: true },
+    version: 3,
+  };
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: value,
+  });
+  const selected = templateV2StudioReducer(loaded, {
+    type: "set-selection",
+    selections: [titleSelection],
+  });
+  const patched = templateV2StudioReducer(selected, {
+    type: "patch-element",
+    selection: titleSelection,
+    patch: {
+      font: { size: 32, metadata: { source: "toolbar" } },
+      opacity: 0.75,
+    },
+  });
+  const patchedTitle = getSelectedElement(patched.layouts, titleSelection);
+
+  assert.deepEqual(patchedTitle?.font, {
+    family: "Inter",
+    size: 32,
+    metadata: { source: "toolbar", untouched: true },
+  });
+  assert.deepEqual(patchedTitle?.experimental, {
+    upstream: { retained: true },
+    version: 3,
+  });
+  assert.equal(patchedTitle?.decorative, false);
+  assert.equal(patchedTitle?.opacity, 0.75);
+  assert.equal(getSelectedElement(selected.layouts, titleSelection)?.opacity, undefined);
+  assert.equal(patched.past.length, 1);
+
+  const patchNoOp = templateV2StudioReducer(patched, {
+    type: "patch-element",
+    selection: titleSelection,
+    patch: {
+      font: { size: 32, metadata: { source: "toolbar" } },
+      opacity: 0.75,
+    },
+  });
+  assert.equal(patchNoOp, patched);
+
+  const replacement = {
+    type: "image",
+    name: "replacement",
+    src: "data:image/png;base64,AA==",
+    custom: { safe: true },
+  };
+  const replaced = templateV2StudioReducer(patched, {
+    type: "replace-element",
+    selection: titleSelection,
+    element: replacement,
+  });
+  assert.deepEqual(getSelectedElement(replaced.layouts, titleSelection), replacement);
+  assert.equal(
+    "experimental" in (getSelectedElement(replaced.layouts, titleSelection) ?? {}),
+    false
+  );
+  assert.deepEqual(replaced.selectionSet, [titleSelection]);
+});
+
+test("continuous element and geometry commands coalesce by stable history key", () => {
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: fixture(),
+  });
+  const selected = templateV2StudioReducer(loaded, {
+    type: "set-selection",
+    selections: [titleSelection],
+  });
+  const opacityKey = `${JSON.stringify(titleSelection)}:opacity`;
+  const first = templateV2StudioReducer(selected, {
+    type: "patch-element",
+    selection: titleSelection,
+    patch: { opacity: 0.9 },
+    historyKey: opacityKey,
+  });
+  const second = templateV2StudioReducer(first, {
+    type: "patch-element",
+    selection: titleSelection,
+    patch: { opacity: 0.45 },
+    historyKey: opacityKey,
+  });
+  const geometryKey = `${JSON.stringify(titleSelection)}:geometry`;
+  const moved = templateV2StudioReducer(second, {
+    type: "update-geometry-batch",
+    updates: [
+      { selection: titleSelection, geometry: { x: 25, y: 35 } },
+    ],
+    historyKey: geometryKey,
+  });
+  const movedAgain = templateV2StudioReducer(moved, {
+    type: "update-geometry-batch",
+    updates: [
+      { selection: titleSelection, geometry: { x: 45, y: 55 } },
+    ],
+    historyKey: geometryKey,
+  });
+
+  assert.equal(second.past.length, 1);
+  assert.equal(movedAgain.past.length, 2);
+  assert.equal(getSelectedElement(movedAgain.layouts, titleSelection)?.opacity, 0.45);
+  assert.deepEqual(
+    getSelectedElement(movedAgain.layouts, titleSelection)?.position,
+    { x: 45, y: 55 }
+  );
+
+  const geometryUndone = templateV2StudioReducer(movedAgain, { type: "undo" });
+  const opacityUndone = templateV2StudioReducer(geometryUndone, { type: "undo" });
+  assert.deepEqual(
+    getSelectedElement(geometryUndone.layouts, titleSelection)?.position,
+    { x: 5, y: 6 }
+  );
+  assert.equal(
+    getSelectedElement(geometryUndone.layouts, titleSelection)?.opacity,
+    0.45
+  );
+  assert.equal(
+    getSelectedElement(opacityUndone.layouts, titleSelection)?.opacity,
+    undefined
+  );
+});
+
 function nestedOperationsFixture(): JsonRecord {
   const value = fixture();
   const component = (
@@ -802,6 +940,88 @@ test("a descendant lock rejects operations that move or reshape its subtree", ()
   );
 });
 
+test("generic replace, patch, delete, and duplicate honor ancestor and subtree locks", () => {
+  const parent: StudioSelection = {
+    ...titleSelection,
+    elementPath: [1],
+  };
+  const child: StudioSelection = {
+    ...titleSelection,
+    elementPath: [1, "children", 0],
+  };
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: nestedOperationsFixture(),
+  });
+  const ancestorLocked = templateV2StudioReducer(loaded, {
+    type: "set-element-lock",
+    selection: parent,
+    locked: true,
+  });
+
+  assert.equal(
+    templateV2StudioReducer(ancestorLocked, {
+      type: "patch-element",
+      selection: child,
+      patch: { opacity: 0.2 },
+    }),
+    ancestorLocked
+  );
+  assert.equal(
+    templateV2StudioReducer(ancestorLocked, {
+      type: "replace-element",
+      selection: child,
+      element: { type: "container", child: null },
+    }),
+    ancestorLocked
+  );
+  assert.equal(
+    templateV2StudioReducer(ancestorLocked, {
+      type: "delete-elements",
+      selections: [child],
+    }),
+    ancestorLocked
+  );
+  assert.equal(
+    templateV2StudioReducer(ancestorLocked, {
+      type: "duplicate-elements",
+      selections: [child],
+    }),
+    ancestorLocked
+  );
+
+  const descendantLocked = templateV2StudioReducer(loaded, {
+    type: "set-element-lock",
+    selection: child,
+    locked: true,
+  });
+  for (const command of [
+    {
+      type: "patch-element" as const,
+      selection: parent,
+      patch: { opacity: 0.2 },
+    },
+    {
+      type: "replace-element" as const,
+      selection: parent,
+      element: { type: "group", children: [] },
+    },
+    {
+      type: "delete-elements" as const,
+      selections: [parent],
+    },
+    {
+      type: "duplicate-elements" as const,
+      selections: [parent],
+    },
+  ]) {
+    assert.equal(
+      templateV2StudioReducer(descendantLocked, command),
+      descendantLocked
+    );
+  }
+});
+
 function orderingFixture(): JsonRecord {
   const value = fixture();
   const component = (
@@ -868,6 +1088,144 @@ function elementNames(state: typeof EMPTY_TEMPLATE_V2_STUDIO_STATE): string[] {
     getTemplateV2Scene(state.layouts, "layout-1", "component-1")?.elements ?? []
   ).map((element) => String(element.name));
 }
+
+test("duplicate and delete remap nested selections and session locks losslessly", () => {
+  const value = orderingFixture();
+  const component = (
+    ((value.layouts as JsonRecord[])[0].components as JsonRecord[])
+  )[0];
+  const elements = component.elements as JsonRecord[];
+  elements[0].custom = {
+    nested: { retained: true },
+    array: [{ value: 1 }, { value: 2 }],
+  };
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: value,
+  });
+  const selected = templateV2StudioReducer(loaded, {
+    type: "set-selection",
+    selections: [
+      { ...titleSelection, elementPath: [0] },
+      { ...titleSelection, elementPath: [2] },
+    ],
+  });
+  const locked = templateV2StudioReducer(selected, {
+    type: "set-element-lock",
+    selection: { ...titleSelection, elementPath: [3] },
+    locked: true,
+  });
+  const duplicated = templateV2StudioReducer(locked, {
+    type: "duplicate-elements",
+  });
+
+  assert.deepEqual(elementNames(duplicated), ["A", "A", "B", "C", "C", "D"]);
+  assert.deepEqual(
+    duplicated.selectionSet.map((selection) => selection.elementPath),
+    [[1], [4]]
+  );
+  assert.equal(
+    isTemplateV2ElementLocked(duplicated, {
+      ...titleSelection,
+      elementPath: [5],
+    }),
+    true
+  );
+  const original = getSelectedElement(duplicated.layouts, {
+    ...titleSelection,
+    elementPath: [0],
+  });
+  const duplicate = getSelectedElement(duplicated.layouts, {
+    ...titleSelection,
+    elementPath: [1],
+  });
+  assert.deepEqual(duplicate?.custom, original?.custom);
+  assert.notEqual(duplicate?.custom, original?.custom);
+
+  const deleted = templateV2StudioReducer(duplicated, {
+    type: "delete-elements",
+  });
+  assert.deepEqual(elementNames(deleted), ["A", "B", "C", "D"]);
+  assert.deepEqual(deleted.selectionSet, []);
+  assert.equal(deleted.selection, null);
+  assert.equal(
+    isTemplateV2ElementLocked(deleted, {
+      ...titleSelection,
+      elementPath: [3],
+    }),
+    true
+  );
+  assert.equal(deleted.past.length, 2);
+
+  const undoDelete = templateV2StudioReducer(deleted, { type: "undo" });
+  const undoDuplicate = templateV2StudioReducer(undoDelete, { type: "undo" });
+  assert.deepEqual(elementNames(undoDelete), ["A", "A", "B", "C", "C", "D"]);
+  assert.equal(
+    isTemplateV2ElementLocked(undoDelete, {
+      ...titleSelection,
+      elementPath: [5],
+    }),
+    true
+  );
+  assert.deepEqual(elementNames(undoDuplicate), ["A", "B", "C", "D"]);
+  assert.equal(
+    isTemplateV2ElementLocked(undoDuplicate, {
+      ...titleSelection,
+      elementPath: [3],
+    }),
+    true
+  );
+});
+
+test("nested delete and duplicate keep ElementPath parents and shift sibling locks", () => {
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: nestedOperationsFixture(),
+  });
+  const firstChild: StudioSelection = {
+    ...titleSelection,
+    elementPath: [1, "children", 0],
+  };
+  const lastChild: StudioSelection = {
+    ...titleSelection,
+    elementPath: [1, "children", 2],
+  };
+  const selected = templateV2StudioReducer(loaded, {
+    type: "set-selection",
+    selections: [firstChild],
+  });
+  const locked = templateV2StudioReducer(selected, {
+    type: "set-element-lock",
+    selection: lastChild,
+    locked: true,
+  });
+  const duplicated = templateV2StudioReducer(locked, {
+    type: "duplicate-elements",
+  });
+
+  assert.deepEqual(duplicated.selection?.elementPath, [1, "children", 1]);
+  assert.equal(
+    isTemplateV2ElementLocked(duplicated, {
+      ...lastChild,
+      elementPath: [1, "children", 3],
+    }),
+    true
+  );
+  const deleted = templateV2StudioReducer(duplicated, {
+    type: "delete-elements",
+  });
+  assert.deepEqual(
+    ((getSelectedElement(deleted.layouts, {
+      ...titleSelection,
+      elementPath: [1],
+    })?.children ?? []) as JsonRecord[]).map((element) => element.name),
+    ["first", "inner", "last"]
+  );
+  assert.equal(
+    isTemplateV2ElementLocked(deleted, lastChild),
+    true
+  );
+});
 
 test("sibling reorder commands preserve relative order and remap selection and locks", () => {
   const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
@@ -1260,7 +1618,11 @@ test("command facade emits one execute action per command", () => {
   );
   commands.updateGeometryBatch([
     { selection: titleSelection, geometry: { x: 1, y: 2 } },
-  ]);
+  ], "geometry");
+  commands.patchElement(titleSelection, { opacity: 0.5 }, "opacity");
+  commands.replaceElement(titleSelection, { type: "image" }, "replace");
+  commands.deleteElements();
+  commands.duplicateElements();
   commands.reorderSiblings("back");
   commands.alignSiblings("center");
   commands.distributeSiblings("vertical");
@@ -1276,6 +1638,10 @@ test("command facade emits one execute action per command", () => {
       "execute-command",
       "execute-command",
       "execute-command",
+      "execute-command",
+      "execute-command",
+      "execute-command",
+      "execute-command",
     ]
   );
   assert.deepEqual(
@@ -1285,12 +1651,22 @@ test("command facade emits one execute action per command", () => {
     ),
     [
       "update-geometry-batch",
+      "patch-element",
+      "replace-element",
+      "delete-elements",
+      "duplicate-elements",
       "reorder-siblings",
       "align-siblings",
       "distribute-siblings",
       "group-siblings",
       "ungroup",
     ]
+  );
+  assert.deepEqual(
+    actions.slice(0, 3).map(
+      (action) => ((action as JsonRecord).command as JsonRecord).historyKey
+    ),
+    ["geometry", "opacity", "replace"]
   );
 });
 

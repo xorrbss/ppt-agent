@@ -10,6 +10,7 @@ import {
   type TemplateV2Scene,
 } from "@/lib/template-v2-studio";
 import { stringValue } from "@/lib/template-v2-konva";
+import { isTemplateV2AdditiveSelectionModifier } from "@/lib/template-v2-studio-keyboard";
 
 export interface TemplateV2SelectionControls {
   allLocked: boolean;
@@ -197,7 +198,9 @@ function ElementBranch({
       <button
         type="button"
         aria-pressed={selected}
-        onClick={(event) => onSelect(path, event.ctrlKey || event.metaKey)}
+        onClick={(event) =>
+          onSelect(path, isTemplateV2AdditiveSelectionModifier(event))
+        }
         className={`w-full rounded px-2 py-1 text-left text-xs ${
           selected
             ? "bg-violet-500/30 text-violet-100"

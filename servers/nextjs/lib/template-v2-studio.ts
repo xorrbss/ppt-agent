@@ -85,6 +85,27 @@ export type TemplateV2StudioCommand =
   | {
       type: "update-geometry-batch";
       updates: TemplateV2GeometryUpdate[];
+      historyKey?: string;
+    }
+  | {
+      type: "patch-element";
+      selection: StudioSelection;
+      patch: JsonRecord;
+      historyKey?: string;
+    }
+  | {
+      type: "replace-element";
+      selection: StudioSelection;
+      element: JsonRecord;
+      historyKey?: string;
+    }
+  | {
+      type: "delete-elements";
+      selections?: StudioSelection[];
+    }
+  | {
+      type: "duplicate-elements";
+      selections?: StudioSelection[];
     }
   | {
       type: "reorder-siblings";
@@ -189,7 +210,22 @@ export interface TemplateV2SaveGate {
 export interface TemplateV2StudioCommandFacade {
   setSelection(selections: StudioSelection[]): void;
   setElementLock(selection: StudioSelection, locked: boolean): void;
-  updateGeometryBatch(updates: TemplateV2GeometryUpdate[]): void;
+  updateGeometryBatch(
+    updates: TemplateV2GeometryUpdate[],
+    historyKey?: string
+  ): void;
+  patchElement(
+    selection: StudioSelection,
+    patch: JsonRecord,
+    historyKey?: string
+  ): void;
+  replaceElement(
+    selection: StudioSelection,
+    element: JsonRecord,
+    historyKey?: string
+  ): void;
+  deleteElements(selections?: StudioSelection[]): void;
+  duplicateElements(selections?: StudioSelection[]): void;
   reorderSiblings(
     direction: TemplateV2ReorderDirection,
     selections?: StudioSelection[]
@@ -218,8 +254,16 @@ export function createTemplateV2StudioCommandFacade(
       dispatch({ type: "set-selection", selections }),
     setElementLock: (selection, locked) =>
       dispatch({ type: "set-element-lock", selection, locked }),
-    updateGeometryBatch: (updates) =>
-      execute({ type: "update-geometry-batch", updates }),
+    updateGeometryBatch: (updates, historyKey) =>
+      execute({ type: "update-geometry-batch", updates, historyKey }),
+    patchElement: (selection, patch, historyKey) =>
+      execute({ type: "patch-element", selection, patch, historyKey }),
+    replaceElement: (selection, element, historyKey) =>
+      execute({ type: "replace-element", selection, element, historyKey }),
+    deleteElements: (selections) =>
+      execute({ type: "delete-elements", selections }),
+    duplicateElements: (selections) =>
+      execute({ type: "duplicate-elements", selections }),
     reorderSiblings: (direction, selections) =>
       execute({ type: "reorder-siblings", direction, selections }),
     alignSiblings: (direction, selections) =>
@@ -540,7 +584,11 @@ function commitCommand(
   const committed = commit(
     state,
     result.layouts,
-    undefined,
+    command.type === "patch-element" ||
+      command.type === "replace-element" ||
+      command.type === "update-geometry-batch"
+      ? command.historyKey
+      : undefined,
     result.lockedElementKeys
   );
   return {
@@ -548,7 +596,6 @@ function commitCommand(
     selection: result.selectionSet[0] ?? null,
     selectionSet: result.selectionSet,
     lockedElementKeys: result.lockedElementKeys,
-    lastHistoryKey: null,
   };
 }
 
@@ -704,6 +751,10 @@ export function templateV2StudioReducer(
     case "execute-command":
       return commitCommand(state, action.command);
     case "update-geometry-batch":
+    case "patch-element":
+    case "replace-element":
+    case "delete-elements":
+    case "duplicate-elements":
     case "reorder-siblings":
     case "group-siblings":
     case "ungroup":

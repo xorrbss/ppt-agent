@@ -17,7 +17,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
-import { marked } from "marked";
+import { renderMarkdown } from "@/lib/safe-markdown";
 
 interface OutlineItemProps {
   sortableId: string;
@@ -130,7 +130,7 @@ export function OutlineItem({
     }
     throttleRef.current = window.setTimeout(() => {
       try {
-        setRenderedHtml(marked.parse(content) as string);
+        setRenderedHtml(renderMarkdown(content));
       } catch {
         setRenderedHtml("");
       }
@@ -147,7 +147,7 @@ export function OutlineItem({
     if (!isStreaming || isActiveStreaming) return null;
     if (!isStableStreaming) return null;
     try {
-      return marked.parse(slideOutline.content || "") as string;
+      return renderMarkdown(slideOutline.content || "");
     } catch {
       return null;
     }
@@ -156,7 +156,7 @@ export function OutlineItem({
   const previewHtml = useMemo(() => {
     if (isStreaming) return "";
     try {
-      return marked.parse(slideOutline.content || "") as string;
+      return renderMarkdown(slideOutline.content || "");
     } catch {
       return "";
     }

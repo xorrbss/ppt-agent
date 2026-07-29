@@ -338,6 +338,7 @@ const cypressSpecs = [
   "**/usePresentationGeneration.cy.tsx",
   "**/PresentationHeader.cy.tsx",
   "**/TemplateV2Studio.cy.tsx",
+  "**/TemplateV2SelectionToolbar.cy.tsx",
   "**/TemplateV2PptxImportPanel.cy.tsx",
 ].join(",");
 const cypressCommand = !isWindows && findOnPath("xvfb-run") ? "xvfb-run" : npx;

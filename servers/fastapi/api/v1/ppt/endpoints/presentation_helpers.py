@@ -75,6 +75,12 @@ def build_export_cookie_header(request: Request) -> Optional[str]:
     if cookie_header:
         return cookie_header
 
+    internal_session_token = getattr(
+        request.state, "internal_session_token", None
+    )
+    if isinstance(internal_session_token, str) and internal_session_token.strip():
+        return f"{SESSION_COOKIE_NAME}={internal_session_token.strip()}"
+
     session_token = get_session_token_from_request(request)
     if session_token:
         return f"{SESSION_COOKIE_NAME}={session_token}"

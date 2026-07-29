@@ -22,6 +22,15 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "../services/api/images";
 import { ImageAssetResponse } from "../services/api/types";
 import { resolveBackendAssetSource } from "@/utils/api";
+import { useUploadLimits } from "@/lib/use-upload-limits";
+import {
+  cropScaleFromProperties,
+  imageCropDomStyle,
+  imageCropProperties,
+  normalizeImageFocusPoint,
+  resolveImageEditorProperties,
+  type ImageFit,
+} from "@/components/slide-editor/images/imageCrop";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
@@ -54,6 +63,7 @@ const ImageEditor = ({
   onFocusPointClick,
   onImageChange,
 }: ImageEditorProps) => {
+  const uploadLimits = useUploadLimits();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
   const stockImageProvider = useMemo(() => {
     if (llmConfig?.DISABLE_IMAGE_GENERATION) return null;
@@ -79,21 +89,20 @@ const ImageEditor = ({
   const [isOpen, setIsOpen] = useState(true);
   const [uploadedImages, setUploadedImages] = useState<ImageAssetResponse[]>([]);
   const [uploadedImagesLoading, setUploadedImagesLoading] = useState(false);
+  const imageProperties = useMemo(
+    () => resolveImageEditorProperties(properties, imageIdx),
+    [imageIdx, properties]
+  );
   // Focus point and object fit for image editing
   const [isFocusPointMode, setIsFocusPointMode] = useState(false);
-  const [focusPoint, setFocusPoint] = useState(
-    (properties &&
-      properties[imageIdx] &&
-      properties[imageIdx].initialFocusPoint) || {
-      x: 50,
-      y: 50,
-    }
+  const [focusPoint, setFocusPoint] = useState(() =>
+    normalizeImageFocusPoint(imageProperties.initialFocusPoint)
   );
-  const [objectFit, setObjectFit] = useState<"cover" | "contain" | "fill">(
-    (properties &&
-      properties[imageIdx] &&
-      properties[imageIdx].initialObjectFit) ||
-      "cover"
+  const [objectFit, setObjectFit] = useState<ImageFit>(
+    imageProperties.initialObjectFit || "cover"
+  );
+  const [cropScale, setCropScale] = useState(() =>
+    cropScaleFromProperties(imageProperties)
   );
 
   // Refs
@@ -102,6 +111,12 @@ const ImageEditor = ({
   useEffect(() => {
     setPreviewImages(resolveEditorImageSource(initialImage));
   }, [initialImage]);
+
+  useEffect(() => {
+    setFocusPoint(normalizeImageFocusPoint(imageProperties.initialFocusPoint));
+    setObjectFit(imageProperties.initialObjectFit || "cover");
+    setCropScale(cropScaleFromProperties(imageProperties));
+  }, [imageProperties]);
 
   useEffect(() => {
     setPrompt((prev) => (prev.trim() ? prev : promptContent || ""));
@@ -153,6 +168,11 @@ const ImageEditor = ({
       const promptForSlide = stockImageProvider
         ? (prompt.trim() || promptContent || "")
         : promptContent;
+      const resetFocus = { x: 50, y: 50 };
+      setFocusPoint(resetFocus);
+      setObjectFit("cover");
+      setCropScale(1);
+      saveImageProperties("cover", resetFocus, 1);
       onImageChange(newImage, promptForSlide);
       setPreviewImages(newImage);
     }
@@ -164,7 +184,12 @@ const ImageEditor = ({
   const handleFocusPointClick = (e: React.MouseEvent) => {
     if (!isFocusPointMode || !imageRef.current) return;
 
-    const rect = imageRef.current.getBoundingClientRect();
+    // Use the fixed crop frame, not the transformed image bounds. When scale is
+    // below 1 the image is smaller than the frame, so image-relative coordinates
+    // would jump or clamp while clicking the intentional free space.
+    const rect =
+      imageRef.current.parentElement?.getBoundingClientRect() ??
+      imageRef.current.getBoundingClientRect();
     const x = Math.max(
       0,
       Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)
@@ -175,7 +200,7 @@ const ImageEditor = ({
     );
 
     setFocusPoint({ x, y });
-    saveImageProperties(objectFit, { x, y });
+    saveImageProperties(objectFit, { x, y }, cropScale);
 
     // Apply the focus point in real-time
     if (imageRef.current) {
@@ -188,7 +213,7 @@ const ImageEditor = ({
    */
   const toggleFocusPointMode = () => {
     if (isFocusPointMode) {
-      saveImageProperties(objectFit, focusPoint);
+      saveImageProperties(objectFit, focusPoint, cropScale);
     }
     setIsFocusPointMode(!isFocusPointMode);
   };
@@ -196,29 +221,42 @@ const ImageEditor = ({
   /**
    * Handles object fit change
    */
-  const handleFitChange = (fit: "cover" | "contain" | "fill") => {
+  const handleFitChange = (fit: ImageFit) => {
+    const nextCropScale = fit === "cover" ? cropScale : 1;
     setObjectFit(fit);
+    setCropScale(nextCropScale);
 
     if (imageRef.current) {
-      imageRef.current.style.objectFit = fit;
+      Object.assign(
+        imageRef.current.style,
+        imageCropDomStyle(fit, focusPoint, nextCropScale)
+      );
     }
 
-    saveImageProperties(fit, focusPoint);
+    saveImageProperties(fit, focusPoint, nextCropScale);
+  };
+
+  const handleCropScaleChange = (scale: number) => {
+    setObjectFit("cover");
+    setCropScale(scale);
+    if (imageRef.current) {
+      Object.assign(
+        imageRef.current.style,
+        imageCropDomStyle("cover", focusPoint, scale)
+      );
+    }
+    saveImageProperties("cover", focusPoint, scale);
   };
 
   /**
    * Saves image properties (focus point and object fit)
    */
   const saveImageProperties = (
-    fit: "cover" | "contain" | "fill",
-    focusPoint: { x: number; y: number }
+    fit: ImageFit,
+    focusPoint: { x: number; y: number },
+    scale: number
   ) => {
-    const propertiesData = {
-      initialObjectFit: fit,
-      initialFocusPoint: focusPoint,
-    };
-    // TODO: Save to Redux store if needed
-    onFocusPointClick?.(propertiesData);
+    onFocusPointClick?.(imageCropProperties(fit, focusPoint, scale));
   };
 
   /**
@@ -303,15 +341,16 @@ const ImageEditor = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("파일 크기는 5MB 미만이어야 합니다");
+    if (file.size > uploadLimits.image.bytes) {
+      setUploadError(
+        `이미지 파일 크기는 ${uploadLimits.image.mb}MB 이하여야 합니다`
+      );
       return;
     }
 
     // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setUploadError("이미지 파일을 업로드해 주세요");
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
+      setUploadError("PNG, JPEG, GIF 또는 WebP 이미지를 업로드해 주세요");
       return;
     }
     try {
@@ -529,7 +568,7 @@ const ImageEditor = ({
                       type="file"
                       id="file-upload"
                       className="hidden"
-                      accept="image/*"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
                       onChange={handleFileUpload}
                       disabled={isUploading}
                     />
@@ -551,7 +590,7 @@ const ImageEditor = ({
                           : "클릭하여 이미지 업로드"}
                       </span>
                       <span className="text-xs text-gray-500 mt-1">
-                        최대 파일 크기: 5MB
+                        최대 파일 크기: {uploadLimits.image.mb}MB
                       </span>
                     </label>
                   </div>
@@ -665,8 +704,11 @@ const ImageEditor = ({
                         }}
                         src={previewImages}
                         style={{
-                          objectFit: objectFit,
-                          objectPosition: `${focusPoint.x}% ${focusPoint.y}%`,
+                          ...imageCropDomStyle(
+                            objectFit,
+                            focusPoint,
+                            cropScale
+                          ),
                         }}
                         alt={`Preview`}
                         className="w-full h-full "
@@ -744,6 +786,39 @@ const ImageEditor = ({
                       </div>
                     </div>
                   }
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium">Crop scale</h3>
+                      <span className="text-xs tabular-nums text-gray-500">
+                        {cropScale.toFixed(1)}×
+                      </span>
+                    </div>
+                    <input
+                      aria-label="Crop scale"
+                      className="w-full accent-blue-600"
+                      max={6}
+                      min={0.1}
+                      onChange={(event) =>
+                        handleCropScaleChange(Number(event.target.value))
+                      }
+                      step={0.1}
+                      type="range"
+                      value={cropScale}
+                    />
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500">
+                        Cropping switches the image to Fill mode.
+                      </p>
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleCropScaleChange(1)}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
                   {/* Focus Point */}
                   {}
                 </div>

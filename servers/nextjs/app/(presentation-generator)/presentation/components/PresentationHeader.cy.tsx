@@ -112,7 +112,7 @@ describe("PresentationHeader authored export", () => {
     });
   });
 
-  it("sends hybrid for editable text and preserves the PDF request shape", () => {
+  it("sends hybrid with font embedding by default and preserves the PDF request shape", () => {
     mountHeader(true);
 
     openExportOptions();
@@ -151,7 +151,6 @@ describe("PresentationHeader authored export", () => {
       fontEmbedding: true,
     });
   });
-
   it("shows optional hybrid editability metadata and warns on image fallback", () => {
     cy.intercept("POST", "**/api/export-presentation", {
       statusCode: 200,

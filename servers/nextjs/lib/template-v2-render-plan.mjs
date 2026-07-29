@@ -264,7 +264,7 @@ function planImage(element, path) {
   }
   const cropScale = boundedFinite(
     element.crop_scale,
-    1,
+    0.1,
     6,
     "template_v2_render_plan_invalid_image_crop_scale",
     `${path}.crop_scale`,

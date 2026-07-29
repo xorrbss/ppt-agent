@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
+from api.v1.auth.context import get_current_owner_id
 
 
 TEMPLATE_V2_CANONICAL_COLUMNS = frozenset(
@@ -56,12 +57,20 @@ class TemplateV2(SQLModel, table=True):
     __tablename__ = "template_v2"
 
     id: str = Field(primary_key=True, default_factory=_new_template_v2_id)
+    owner_id: Optional[uuid.UUID] = Field(
+        default_factory=get_current_owner_id,
+        exclude=True,
+        # Alembic owns the production FK; ORM metadata stays composable for
+        # focused table fixtures.
+        sa_column=Column(Uuid, nullable=True, index=True),
+    )
     # Transitional compatibility columns. Their values are backfilled into
     # template_v2_local_state by revision f9a0b1c2d3e4. Revision
     # 0a1b2c3d4e5f restricts parent-first deletion: the presentation deletion
     # service validates the sidecar ownership graph and deletes canonical
     # templates explicitly before deleting their owning presentation.
-    presentation_id: uuid.UUID = Field(
+    presentation_id: Optional[uuid.UUID] = Field(
+        default=None,
         sa_column=Column(
             Uuid,
             ForeignKey(
@@ -69,7 +78,7 @@ class TemplateV2(SQLModel, table=True):
                 name="fk_template_v2_presentation_id_presentations",
                 ondelete="RESTRICT",
             ),
-            nullable=False,
+            nullable=True,
             index=True,
         )
     )

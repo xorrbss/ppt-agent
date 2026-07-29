@@ -24,6 +24,7 @@ import {
   StudioTable,
 } from "./TemplateV2CanvasContent";
 import {
+  clipRoundedRect,
   cornerRadius,
   fillColor,
   fillOpacity,
@@ -41,13 +42,28 @@ import { StudioChart, StudioVector } from "./TemplateV2CanvasPlanned";
 const noopSetNode = () => {};
 
 function StudioImage(props: StudioElementProps) {
-  const { element } = props;
-  const image = useTemplateImage(element.data);
+  const { cropDraft, element, path } = props;
+  const iconColor =
+    element.is_icon === true ? stringValue(element.color, "") : null;
+  const image = useTemplateImage(element.data, iconColor);
   const position = elementPosition(element);
   const size = elementSize(element, { width: 320, height: 180 });
+  const radius = cornerRadius(element);
+  const preview =
+    cropDraft && pathKey(cropDraft.path) === pathKey(path) ? cropDraft : null;
   const placement = image
-    ? imagePlacement(image, size.width, size.height, element.fit)
+    ? imagePlacement(
+        image,
+        size.width,
+        size.height,
+        element.fit,
+        preview?.focusX ?? element.focus_x,
+        preview?.focusY ?? element.focus_y,
+        preview?.cropScale ?? element.crop_scale
+      )
     : null;
+  const flipH = element.flip_h === true;
+  const flipV = element.flip_v === true;
   return (
     <Group
       {...position}
@@ -61,10 +77,25 @@ function StudioImage(props: StudioElementProps) {
         fill={image ? "#ffffff" : "#f8fafc"}
         stroke={image ? "#cbd5e1" : "#94a3b8"}
         dash={image ? undefined : [8, 6]}
-        cornerRadius={cornerRadius(element)}
+        cornerRadius={radius}
       />
       {image && placement ? (
-        <KonvaImage image={image} {...placement} listening={false} />
+        <Group
+          clipFunc={(context) =>
+            clipRoundedRect(context, size.width, size.height, radius)
+          }
+          listening={false}
+        >
+          <Group
+            x={flipH ? size.width : 0}
+            y={flipV ? size.height : 0}
+            scaleX={flipH ? -1 : 1}
+            scaleY={flipV ? -1 : 1}
+            listening={false}
+          >
+            <KonvaImage image={image} {...placement} listening={false} />
+          </Group>
+        </Group>
       ) : (
         <Text
           x={8}
@@ -290,6 +321,7 @@ export const StudioElement = memo(
     previous.element === next.element &&
     previous.path === next.path &&
     previous.interactionKey === next.interactionKey &&
+    previous.cropDraft === next.cropDraft &&
     previous.setNode === next.setNode &&
     previous.onSelect === next.onSelect &&
     previous.onDragStart === next.onDragStart &&

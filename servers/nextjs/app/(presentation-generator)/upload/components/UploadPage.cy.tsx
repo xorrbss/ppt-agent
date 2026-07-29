@@ -7,6 +7,7 @@
 // (notify -> sonner), so the mount wrapper includes one — mirroring the real app.
 import React from 'react'
 import UploadPage from './UploadPage'
+import { isAllowedFile } from './SupportingDoc'
 import { mount } from 'cypress/react'
 import { store } from '@/store/store'
 import { Provider } from 'react-redux'
@@ -68,7 +69,7 @@ describe('<UploadPage />', () => {
     })
 
     it('opens the advanced-settings modal', () => {
-      cy.get('[data-testid="advanced-settings-button"]').click()
+      cy.get('[data-testid="advanced-settings-button"]').click({ force: true })
       cy.get('[role="dialog"]').should('be.visible').and('contain', '고급 설정')
     })
   })
@@ -87,6 +88,38 @@ describe('<UploadPage />', () => {
       cy.get('[data-testid="file-upload-input"]').selectFile('@testFile', { force: true })
       cy.get('[data-testid="file-list"]').should('contain', 'example.txt')
       checkToast('파일 선택 완료')
+    })
+
+    it('accepts a Markdown document with the Markdown MIME type', () => {
+      cy.get('[data-testid="file-upload-input"]').selectFile(
+        [{
+          contents: Cypress.Buffer.from('# Markdown source\n\n- keep this structure'),
+          fileName: 'presentation-brief.md',
+          mimeType: 'text/markdown',
+        }],
+        { force: true }
+      )
+      cy.get('[data-testid="file-list"]').should('contain', 'presentation-brief.md')
+      checkToast('파일 선택 완료')
+    })
+
+    it('allows Markdown by its safe extension when the browser omits or generalizes MIME', () => {
+      expect(isAllowedFile(new File(['# Notes'], 'empty-mime.md'))).to.equal(true)
+      expect(
+        isAllowedFile(new File(['# Notes'], 'generic.markdown', { type: 'application/octet-stream' }))
+      ).to.equal(true)
+    })
+
+    it('does not accept arbitrary text MIME types', () => {
+      expect(isAllowedFile(new File(['<p>not allowed</p>'], 'unsafe.html', { type: 'text/html' }))).to.equal(false)
+    })
+
+    it('advertises Markdown in the file picker accept list', () => {
+      cy.get('[data-testid="file-upload-input"]')
+        .invoke('attr', 'accept')
+        .should('contain', 'text/markdown')
+        .and('contain', '.md')
+        .and('contain', '.markdown')
     })
 
     it('handles multiple document uploads', () => {

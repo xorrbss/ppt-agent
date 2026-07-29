@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useMemo, useRef } from "react";
+import React, { useLayoutEffect, useMemo, useRef } from "react";
 import EditableLayoutWrapper from "../components/EditableLayoutWrapper";
 import SlideErrorBoundary from "../components/SlideErrorBoundary";
 import TiptapTextReplacer, { EditBinding } from "../components/TiptapTextReplacer";
 import { EditableTextProvider } from "../components/EditableTextContext";
+import {
+    cropScaleFromProperties,
+    imageCropDomStyle,
+    normalizeImageFocusPoint,
+    resolveImageEditorProperties,
+} from "@/components/slide-editor/images/imageCrop";
 import { validate as uuidValidate } from 'uuid';
 import { getLayoutByLayoutId } from "@/app/presentation-templates";
 import { useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
@@ -19,6 +25,27 @@ import { Loader2 } from "lucide-react";
 export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEditMode: boolean, theme?: any, enableEditMode?: boolean }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement | null>(null);
+
+    // Read-only rendering is also used by the browser-backed PPT export. Keep
+    // persisted fit/focus/crop values visible there, without mounting the
+    // interactive EditableLayoutWrapper.
+    useLayoutEffect(() => {
+        if (isEditMode || !containerRef.current) return;
+
+        containerRef.current.querySelectorAll("img").forEach((image, index) => {
+            const properties = resolveImageEditorProperties(slide.properties, index);
+            const style = imageCropDomStyle(
+                properties.initialObjectFit || "cover",
+                normalizeImageFocusPoint(properties.initialFocusPoint),
+                cropScaleFromProperties(properties)
+            );
+
+            image.style.objectFit = style.objectFit;
+            image.style.objectPosition = style.objectPosition;
+            image.style.transform = style.transform;
+            image.style.transformOrigin = style.transformOrigin;
+        });
+    }, [isEditMode, slide.id, slide.properties]);
 
     // Context consumed by in-tree <EditableText> in migrated templates. Binds edits
     // by explicit path (no DOM surgery / text matching). Templates still wrapped in

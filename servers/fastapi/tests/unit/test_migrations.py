@@ -497,7 +497,7 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
             )
             template_indexes = db_inspector.get_indexes("template_v2")
 
-        assert revision == migrations.REVISION_DURABLE_GENERATION_JOBS
+        assert revision == migrations.REVISION_PRIMARY_ADMIN
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
@@ -1603,7 +1603,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_DURABLE_GENERATION_JOBS
+                == migrations.REVISION_PRIMARY_ADMIN
             )
             assert "presentation_generation_jobs" in inspector.get_table_names()
             assert "lifecycle_status" in {
@@ -1647,7 +1647,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_DURABLE_GENERATION_JOBS
+                == migrations.REVISION_PRIMARY_ADMIN
             )
             assert "template_v2" in inspector.get_table_names()
             assert "presentation_generation_jobs" in inspector.get_table_names()

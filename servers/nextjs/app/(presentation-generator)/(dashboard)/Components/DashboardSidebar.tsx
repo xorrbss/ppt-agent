@@ -21,14 +21,7 @@ export const BelongingNavItems = [
 ]
 
 const DashboardSidebar = () => {
-
-
     const pathname = usePathname();
-    const activeTab = pathname.split("?")[0].split("/").pop();
-
-
-
-
 
     return (
         <aside
@@ -100,7 +93,7 @@ const DashboardSidebar = () => {
             <div className=" pt-5 border-t border-[#E1E1E5]  font-syne "
             >
                 {BelongingNavItems.map(({ key, label: itemLabel }) => {
-                    const isActive = activeTab === key;
+                    const isActive = pathname === `/${key}`;
                     return (
                         <Link
                             prefetch={false}

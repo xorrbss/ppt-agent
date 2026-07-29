@@ -426,6 +426,8 @@ def validate_template_v2_phase_one_schema(
         "layouts",
         "assets",
     }
+    if "owner_id" in actual_columns:
+        nullable.add("presentation_id")
     for name, type_check in expected_types.items():
         column = columns.get(name)
         if column is None:
@@ -625,6 +627,7 @@ def validate_template_v2_local_sidecars(connection) -> PhaseOneSchemaReport:
         set(canonical_columns)
         - TEMPLATE_V2_CANONICAL_COLUMNS
         - TEMPLATE_V2_TRANSITIONAL_LOCAL_COLUMNS
+        - {"owner_id"}
     )
     if unexpected_canonical:
         incompatible.append(

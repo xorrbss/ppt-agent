@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Pencil,
   Check,
+  Keyboard,
   X,
   AlertTriangle,
 } from "lucide-react";
@@ -54,6 +55,7 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
 import AuthoredQualityReview from "./AuthoredQualityReview";
+import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 
 const MAX_EXPORT_TITLE_LENGTH = 40;
 type PptxExportMode = "fidelity" | "hybrid";
@@ -112,6 +114,7 @@ const PresentationHeader = ({
   isAuthoredDeck?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -439,18 +442,20 @@ const PresentationHeader = ({
               type="button"
               onClick={() => {
                 closeExportOptions();
-                void handleExportPptx("hybrid");
+                void handleExportPptx("hybrid", true);
               }}
               disabled={isExporting || isStreaming === true}
               data-testid="authored-export-hybrid"
               variant="ghost"
               className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 텍스트 편집 가능"
+              aria-label="PPTX로 내보내기, 텍스트 편집 가능 및 글꼴 포함"
             >
               <span className="min-w-0">
-                <span className="block font-medium">PPTX · 텍스트 편집 가능</span>
+                <span className="block font-medium">
+                  PPTX · 텍스트 편집 가능 + 글꼴 포함
+                </span>
                 <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
-                  텍스트와 일부 요소를 편집할 수 있습니다.
+                  텍스트와 일부 요소를 편집할 수 있으며 허용된 글꼴을 자동으로 포함합니다.
                 </span>
               </span>
               <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -877,6 +882,10 @@ const PresentationHeader = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <KeyboardShortcutsDialog
+        open={shortcutsDialogOpen}
+        onOpenChange={setShortcutsDialogOpen}
+      />
     </>
   );
 };

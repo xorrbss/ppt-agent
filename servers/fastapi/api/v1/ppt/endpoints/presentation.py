@@ -63,6 +63,7 @@ from utils.process_slides import (
 )
 from utils.authored_styles import load_authored_styles
 
+from api.v1.auth.context import get_current_owner_id
 from api.v1.ppt.endpoints.presentation_helpers import (
     build_export_cookie_header,
     resolve_presentation_fonts,
@@ -70,6 +71,7 @@ from api.v1.ppt.endpoints.presentation_helpers import (
 from api.v1.ppt.endpoints.presentation_generate import queue_presentation_generation
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
+_build_export_cookie_header = build_export_cookie_header
 
 
 def _is_authored_slide(slide: SlideModel) -> bool:
@@ -460,7 +462,10 @@ async def stream_presentation(
 
         # Moved this here to make sure new slides are generated before deleting the old ones
         await sql_session.execute(
-            delete(SlideModel).where(SlideModel.presentation == id)
+            delete(SlideModel).where(
+                SlideModel.presentation == id,
+                SlideModel.owner_id == get_current_owner_id(),
+            )
         )
         await sql_session.commit()
 
@@ -553,7 +558,10 @@ async def update_presentation(
         )
 
         await sql_session.execute(
-            delete(SlideModel).where(SlideModel.presentation == presentation.id)
+            delete(SlideModel).where(
+                SlideModel.presentation == presentation.id,
+                SlideModel.owner_id == get_current_owner_id(),
+            )
         )
         sql_session.add_all(slides)
 
@@ -602,7 +610,10 @@ async def edit_presentation_with_new_content(
             slides_to_delete.append(each_slide.id)
 
     await sql_session.execute(
-        delete(SlideModel).where(SlideModel.id.in_(slides_to_delete))
+        delete(SlideModel).where(
+            SlideModel.id.in_(slides_to_delete),
+            SlideModel.owner_id == get_current_owner_id(),
+        )
     )
 
     sql_session.add_all(new_slides)

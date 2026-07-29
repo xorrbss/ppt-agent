@@ -14,6 +14,11 @@ import re
 
 from services.documents_loader import DocumentsLoader
 from utils.asset_directory_utils import absolute_fastapi_asset_url, get_images_directory
+from utils.upload_limits import (
+    get_single_upload_limit_bytes,
+    reject_if_declared_too_large,
+    stream_upload_to_file,
+)
 import uuid
 from constants.documents import POWERPOINT_TYPES
 
@@ -308,25 +313,24 @@ async def process_pptx_slides(
             status_code=400,
             detail=f"Invalid file type. Expected PPTX file, got {pptx_file.content_type}",
         )
-    # Enforce 100MB size limit
-    if (
-        hasattr(pptx_file, "size")
-        and pptx_file.size
-        and pptx_file.size > (100 * 1024 * 1024)
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="PPTX file exceeded max upload size of 100 MB",
-        )
+    upload_limit = get_single_upload_limit_bytes()
+    reject_if_declared_too_large(
+        pptx_file,
+        limit_bytes=upload_limit,
+        label="PPTX file",
+    )
 
     # Create temporary directory for processing
     with tempfile.TemporaryDirectory() as temp_dir:
         if True:
             # Save uploaded PPTX file
             pptx_path = os.path.join(temp_dir, "presentation.pptx")
-            with open(pptx_path, "wb") as f:
-                pptx_content = await pptx_file.read()
-                f.write(pptx_content)
+            await stream_upload_to_file(
+                pptx_file,
+                pptx_path,
+                limit_bytes=upload_limit,
+                label="PPTX file",
+            )
 
             # Install fonts if provided
             if fonts:
@@ -421,14 +425,23 @@ async def process_pptx_fonts(
             status_code=400,
             detail=f"Invalid file type. Expected PPTX file, got {pptx_file.content_type}",
         )
+    upload_limit = get_single_upload_limit_bytes()
+    reject_if_declared_too_large(
+        pptx_file,
+        limit_bytes=upload_limit,
+        label="PPTX file",
+    )
 
     # Create temporary directory for processing
     with tempfile.TemporaryDirectory() as temp_dir:
         # Save uploaded PPTX file
         pptx_path = os.path.join(temp_dir, "presentation.pptx")
-        with open(pptx_path, "wb") as f:
-            pptx_content = await pptx_file.read()
-            f.write(pptx_content)
+        await stream_upload_to_file(
+            pptx_file,
+            pptx_path,
+            limit_bytes=upload_limit,
+            label="PPTX file",
+        )
 
         # Extract slide XMLs from PPTX
         slide_xmls = _extract_slide_xmls(pptx_path, temp_dir)

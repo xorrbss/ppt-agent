@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { marked } from "marked";
+import { renderInlineMarkdown, sanitizeMarkdownHtml } from "@/lib/safe-markdown";
 
 interface MarkdownInlineTextProps {
   content: string;
@@ -27,16 +27,16 @@ const MarkdownInlineText: React.FC<MarkdownInlineTextProps> = ({
 }) => {
   const html = useMemo(() => {
     try {
-      const parsed = marked.parseInline(content || "");
-      // parseInline is sync here; guard in case an async config makes it a Promise.
-      const base = typeof parsed === "string" ? parsed : content || "";
+      const base = renderInlineMarkdown(content || "");
       // Mop up bold that CommonMark's flanking rules leave unparsed — e.g. a value
       // ending in punctuation glued to a following letter (**99.9%**를, common in
-      // Korean number+particle copy). marked has already HTML-escaped the content,
-      // so the surviving ** wrap safe text and this substitution can't inject HTML.
-      return base.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>");
+      // Korean number+particle copy). The parsed output is sanitized before and
+      // after this substitution, so only safe inline markup reaches the DOM.
+      return sanitizeMarkdownHtml(
+        base.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>")
+      );
     } catch {
-      return content || "";
+      return sanitizeMarkdownHtml(content || "");
     }
   }, [content]);
 

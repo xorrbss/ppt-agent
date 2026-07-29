@@ -1,14 +1,23 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
+import { PresentationGenerationApi } from "@/app/(presentation-generator)/services/api/presentation-generation";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowUpDown } from "lucide-react";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { notify } from "@/components/ui/sonner";
+import { sanitizeAnalyticsError } from "@/utils/analytics";
 
 const actionCardBase =
   "absolute aspect-[16/9] h-[46.238px] w-[82.201px] rounded-[4.474px] border border-white/50 bg-cover bg-center bg-no-repeat shadow-[0_8px_18px_rgba(16,24,40,0.18)] transition-all duration-500 ease-out opacity-100 translate-y-0 scale-100";
@@ -38,8 +47,12 @@ const FloatingActionCards = () => (
 
 const DashboardPage: React.FC = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const [presentations, setPresentations] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingBlankPresentation, setIsCreatingBlankPresentation] =
+    useState(false);
+  const blankPresentationRequestInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [deckSortDirection, setDeckSortDirection] = useState<"desc" | "asc">(
     "desc"
@@ -89,6 +102,43 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     void fetchPresentations();
   }, [fetchPresentations]);
+
+  const createBlankPresentation = useCallback(async () => {
+    if (blankPresentationRequestInFlight.current) return;
+
+    blankPresentationRequestInFlight.current = true;
+    setIsCreatingBlankPresentation(true);
+    trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
+      pathname,
+      source: "dashboard_blank_presentation_card",
+    });
+
+    try {
+      const presentation =
+        await PresentationGenerationApi.createBlankPresentation();
+      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Created, {
+        pathname,
+        presentation_id: presentation.id,
+        slide_count: presentation.n_slides,
+      });
+      router.push(
+        `/presentation?id=${encodeURIComponent(presentation.id)}&type=standard`
+      );
+    } catch (creationError) {
+      const message =
+        creationError instanceof Error
+          ? creationError.message
+          : "Something went wrong while creating the presentation.";
+      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Create_Failed, {
+        pathname,
+        error_message: sanitizeAnalyticsError(creationError),
+      });
+      notify.error("Could not create blank presentation", message);
+    } finally {
+      blankPresentationRequestInFlight.current = false;
+      setIsCreatingBlankPresentation(false);
+    }
+  }, [pathname, router]);
 
   const removePresentation = (presentationId: string) => {
     setPresentations((prev: any) =>
