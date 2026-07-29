@@ -1,0 +1,56 @@
+id: botanical-journal
+name: 보태니컬 저널
+description: 찢은 종이와 식물 드로잉, 와시 테이프로 친근한 자연 관찰 기록을 엮는 스타일
+category: creative
+tags:
+  - 보태니컬
+  - 필드 저널
+  - 핸드메이드
+  - 에코
+  - 스크랩북
+use_cases:
+  - 환경·지속가능성 교육
+  - 자연과학 학습 자료
+  - 커뮤니티 프로젝트 기록
+  - 웰니스·푸드 스토리
+preview:
+  bg: "#F9F7F1"
+  accent: "#7CB342"
+  palette:
+    - "#F9F7F1"
+    - "#333333"
+    - "#7CB342"
+    - "#D4E157"
+    - "#26A69A"
+  variant: light
+brief: |-
+  MOOD:
+  Create a friendly eco field journal: handmade, observant, cheerful, and educational. Combine the clarity of a nature notebook with restrained scrapbook warmth. Keep the tone curious rather than childish and make every handmade mark support the story.
+
+  PALETTE:
+  Use warm cream #F9F7F1 as paper, charcoal #333333 as ink, leaf green #7CB342 as the main accent, lime #D4E157 as a sparing highlight, and teal #26A69A for one secondary signal. Keep strong contrast for text and never place white copy on lime.
+
+  TYPOGRAPHY:
+  Use a rounded hand-drawn display face for short headings, a friendly rounded sans serif for secondary copy, and a clean sans serif or approachable mono for body text and tables. Preserve table legibility and never set long passages in the display face.
+
+  LAYOUT SYSTEM:
+  Frame a central torn ruled or graph-paper sheet with botanical drawings. Attach up to three or four note or polaroid modules using a restrained set of washi strips. Use oval or circle image windows and only a few paper layers so reading order remains obvious.
+
+  SIGNATURE ELEMENTS:
+  Repeat black-ink leaves, vines, flower doodles, a crayon underline, dotted or striped washi, a torn lower edge, and simple hand-drawn checks. Keep foliage out of text zones and use one illustration style throughout.
+
+  DATA VISUALIZATION:
+  Draw simple tables or charts on a large torn graph-paper field. Use leaf-green axes, charcoal labels, hand-drawn checks, and one or two flat bar colors. Reserve a clean buffer around every value; botanical drawings belong at the perimeter, never behind data.
+
+  IMAGE DIRECTION:
+  Prefer flat botanical ink or crayon illustration. If photography is essential, use one natural documentary image in a single oval frame and keep the surrounding language illustrative. Do not mix photoreal flowers, clip art, and hand doodles on the same slide.
+
+  SLIDE ARCHETYPES:
+  - cover: Center one torn title note within a botanical wreath or edge frame and keep the subtitle compact.
+  - content: Arrange no more than four taped notes or polaroids with one sentence or fact per module.
+  - data: Use one large torn graph-paper table or chart with ample blank space around labels.
+  - timeline: Follow a single vine from seed to sprout to leaf, using up to five concise milestones.
+  - closing: Place one small central note inside a quiet botanical wreath with a short invitation or takeaway.
+
+  AVOID:
+  Avoid leaves behind text, white text on lime, more than four note cards, more than four tape patterns, mixed illustration styles, corporate gradients, glass effects, three-dimensional icons, excessive childish decoration, crowded paper layers, and unreplaced template text.

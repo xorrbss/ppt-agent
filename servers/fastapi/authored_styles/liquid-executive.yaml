@@ -1,0 +1,63 @@
+id: liquid-executive
+name: 리퀴드 이그제큐티브
+description: 블랙 캔버스와 유려한 블루 흐름으로 고위급 메시지에 몰입감을 더하는 프리미엄 다크 스타일
+category: business
+tags:
+  - executive
+  - dark
+  - immersive
+use_cases:
+  - 경영진 비전 발표
+  - 기업 전환 전략
+  - 리더십 포트폴리오
+preview:
+  bg: "#000000"
+  accent: "#2D8CFF"
+  palette:
+    - "#000000"
+    - "#111111"
+    - "#0056B3"
+    - "#2D8CFF"
+    - "#FFFFFF"
+  variant: fluid-boardroom
+brief: >-
+  MOOD: Build a cinematic executive deck that feels composed, modern, and
+  consequential. Balance the drama of fluid blue motion with the restraint expected
+  in a high-stakes boardroom.
+
+  PALETTE: Use pure black (#000000) for the main field, dark graphite (#111111) for
+  supporting surfaces, executive blue (#0056B3) for depth, electric blue (#2D8CFF)
+  for illuminated edges, and white (#FFFFFF) for critical text. Keep luminous color
+  localized rather than flooding every slide.
+
+  TYPOGRAPHY: Use an elegant geometric sans-serif for headlines and a lighter
+  humanist sans-serif for body copy. Maintain open leading, crisp hierarchy, and
+  short line lengths so text remains calm against expressive backgrounds.
+
+  LAYOUT SYSTEM: Combine large black fields with asymmetric image zones and a small
+  number of generously rounded containers. Use a stable grid beneath the curves and
+  keep important content away from high-energy texture.
+
+  SIGNATURE ELEMENTS: Use flowing cobalt ribbons, smoke-like blue light, broad
+  rounded corners, fine pale outlines, and controlled edge glow. Treat the fluid form
+  as a recurring directional gesture rather than a full-slide effect every time.
+
+  DATA VISUALIZATION: Place high-contrast bars, lines, and KPI figures on quiet
+  graphite panels. Use white for context, blue for the focal series, direct labels
+  for values, and a single concise interpretation outside the plotting area.
+
+  IMAGE DIRECTION: Use premium executive portraits, modern architecture, or abstract
+  liquid-silk studies with deep blacks, cool blue highlights, and directional studio
+  light. Preserve clean silhouettes and avoid busy office scenes.
+
+  SLIDE ARCHETYPES: cover: a black field with a blue liquid arc framing a compact
+  white title; content: a 40/60 split with one decision thesis and three supporting
+  points in a rounded graphite panel opposite a restrained fluid edge; data: one
+  horizontal comparison or trend chart on a quiet graphite surface, with the
+  decisive series in electric blue and a one-line implication; timeline: a
+  curved but clearly sequenced transformation path with anchored milestones; closing:
+  a single commitment inside a deep-blue rounded frame with one explicit next step.
+
+  AVOID: Avoid full-canvas texture behind small text, glowing every element, crowded
+  dashboards, playful bubbles, pale corporate photography, weak gray contrast,
+  excessive rounded cards, and motion effects that obscure sequence or evidence.

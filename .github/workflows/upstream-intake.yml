@@ -1,0 +1,146 @@
+name: Upstream main intake
+
+on:
+  pull_request:
+    paths:
+      - "compatibility/upstream-intake-policy.json"
+      - "compatibility/upstream-compatibility.json"
+      - "compatibility/migration-translation-ledger.json"
+      - "compatibility/protected-local-patches.json"
+      - "compatibility/README.md"
+      - "scripts/intake-upstream-main.mjs"
+      - "scripts/intake-upstream-main.test.mjs"
+      - "scripts/fixtures/upstream-intake/**"
+      - "scripts/verify-upstream-compatibility.mjs"
+      - ".github/workflows/upstream-intake.yml"
+      - ".github/workflows/README.md"
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact task revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Use pinned Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22.17.1"
+      - name: Verify offline intake error and delta contracts
+        run: node --test scripts/intake-upstream-main.test.mjs
+
+  live-intake:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    # issues: write lets the scheduled run turn a silent-green (upstream moved,
+    # review needed) or a lone-red (intake error) into a single rolling, actionable
+    # issue. Residual risk: GitHub disables cron after ~60 days of repo inactivity;
+    # detecting that the nightly stopped needs an external uptime monitor, which is
+    # intentionally out of scope here.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout exact task revision
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Use pinned Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22.17.1"
+      - name: Inspect official upstream main
+        id: intake
+        shell: bash
+        env:
+          UPSTREAM_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p reports
+          set +e
+          node scripts/intake-upstream-main.mjs \
+            --json \
+            --output reports/upstream-intake.md \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --fail-on-risk \
+            > reports/upstream-intake.json
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+      - name: Retain full intake evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: upstream-intake-${{ github.run_id }}
+          path: reports/upstream-intake.*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Surface drift or intake error as a rolling issue
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          report_json=reports/upstream-intake.json
+          report_md=reports/upstream-intake.md
+          if [ ! -f "$report_json" ]; then
+            echo "No intake report was produced; nothing to surface." >&2
+            exit 0
+          fi
+          signal=$(jq -r 'if (.changeDetected == true) or (.status == "intake-error") then "yes" else "no" end' "$report_json")
+          if [ "$signal" != "yes" ]; then
+            echo "Upstream unchanged and no intake error; no issue raised."
+            exit 0
+          fi
+          status=$(jq -r '.status' "$report_json")
+          risk=$(jq -r '.risk' "$report_json")
+          title="Upstream main intake: ${status} (risk: ${risk})"
+          gh label create upstream-intake \
+            --color FBCA04 \
+            --description "Automated upstream main intake signal" \
+            2>/dev/null || true
+          existing=$(gh issue list --state open --label upstream-intake --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title"
+            gh issue comment "$existing" --body-file "$report_md"
+          else
+            gh issue create --title "$title" --label upstream-intake --body-file "$report_md"
+          fi
+      - name: Enforce intake decision
+        if: always()
+        shell: bash
+        env:
+          INTAKE_CODE: ${{ steps.intake.outputs.code }}
+        run: |
+          case "$INTAKE_CODE" in
+            0) exit 0 ;;
+            1|2) exit "$INTAKE_CODE" ;;
+            *) echo "Unexpected or missing intake exit code: $INTAKE_CODE" >&2; exit 70 ;;
+          esac
+      - name: Signal external intake heartbeat
+        if: success()
+        continue-on-error: true
+        shell: bash
+        env:
+          HEARTBEAT_URL: ${{ secrets.UPSTREAM_INTAKE_HEARTBEAT_URL }}
+        run: |
+          if [ -z "$HEARTBEAT_URL" ]; then
+            echo "::warning::UPSTREAM_INTAKE_HEARTBEAT_URL is unset; external stale-cron detection is inactive."
+            exit 0
+          fi
+          curl --fail --silent --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 20 \
+            --request POST \
+            "$HEARTBEAT_URL"

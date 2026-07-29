@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 1280px; height: 720px; margin: 0; overflow: hidden; }
+    body { position: relative; background: #eef3f8; color: #182333; font-family: Arial, sans-serif; }
+    h1 { position: absolute; left: 64px; top: 42px; margin: 0; font-size: 34px; line-height: 44px; }
+    img { position: absolute; left: 64px; top: 135px; width: 260px; height: 190px; object-fit: fill; }
+    svg { position: absolute; left: 390px; top: 135px; width: 500px; height: 250px; overflow: visible; }
+    .raster-art { position: absolute; left: 930px; top: 150px; width: 210px; height: 210px;
+      border-radius: 34px; background: linear-gradient(135deg, #8357e5, #f45d8d);
+      filter: drop-shadow(14px 16px 12px rgba(20, 30, 50, .45)); transform: rotate(7deg); }
+    .caption { position: absolute; left: 64px; top: 440px; width: 1000px; height: 100px;
+      font-size: 20px; line-height: 30px; }
+  </style>
+</head>
+<body>
+  <h1>Native media with residual artwork</h1>
+  <img alt="embedded blue pixel" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==">
+  <svg viewBox="0 0 500 250" aria-label="editable process connector">
+    <rect x="15" y="50" width="150" height="90" rx="16" fill="#dce9ff" stroke="#2f6bca" stroke-width="4"/>
+    <path d="M165 95 L325 95" fill="none" stroke="#2f6bca" stroke-width="5" stroke-linecap="round"/>
+    <path d="M310 80 L330 95 L310 110" fill="none" stroke="#2f6bca" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="330" y="50" width="150" height="90" rx="16" fill="#dff7ef" stroke="#21876f" stroke-width="4"/>
+    <text x="53" y="105" font-size="24" fill="#172033">Input</text>
+    <text x="365" y="105" font-size="24" fill="#172033">Output</text>
+  </svg>
+  <div class="raster-art"></div>
+  <div class="caption">The bitmap and safe SVG geometry stay selectable; the filtered rotated artwork remains on the residual backplate.</div>
+</body>
+</html>

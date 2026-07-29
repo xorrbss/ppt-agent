@@ -1,0 +1,164 @@
+{
+  "contract": "persisted-presentation-strategy-v1",
+  "cases": [
+    {
+      "name": "template-v2-general",
+      "presentation": {
+        "version": "v2-standard",
+        "mode": "template",
+        "slides": [
+          {
+            "ui": {
+              "id": "native"
+            },
+            "html_content": null
+          }
+        ]
+      },
+      "expected": {
+        "strategy": "template-v2-general"
+      }
+    },
+    {
+      "name": "authored-hybrid",
+      "presentation": {
+        "version": "v1-standard",
+        "mode": "authored",
+        "slides": [
+          {
+            "ui": null,
+            "html_content": "<section>editable</section>"
+          }
+        ]
+      },
+      "expected": {
+        "strategy": "authored-hybrid"
+      }
+    },
+    {
+      "name": "non-object-null-slide",
+      "presentation": {
+        "version": "v2-standard",
+        "mode": "template",
+        "slides": [
+          null
+        ]
+      },
+      "expected": {
+        "error": "invalid_slide_payload"
+      }
+    },
+    {
+      "name": "non-object-array-slide",
+      "presentation": {
+        "version": "v2-standard",
+        "mode": "template",
+        "slides": [
+          []
+        ]
+      },
+      "expected": {
+        "error": "invalid_slide_payload"
+      }
+    },
+    {
+      "name": "non-object-string-slide",
+      "presentation": {
+        "version": "v1-standard",
+        "mode": "template",
+        "slides": [
+          "not-a-slide"
+        ]
+      },
+      "expected": {
+        "error": "invalid_slide_payload"
+      }
+    },
+    {
+      "name": "v1-template-with-native-ui",
+      "presentation": {
+        "version": "v1-standard",
+        "mode": "template",
+        "slides": [
+          {
+            "ui": {
+              "id": "native"
+            },
+            "html_content": null
+          }
+        ]
+      },
+      "expected": {
+        "error": "legacy_payload_identity_mismatch"
+      }
+    },
+    {
+      "name": "v1-adaptive-with-authored-html",
+      "presentation": {
+        "version": "v1-standard",
+        "mode": "adaptive",
+        "slides": [
+          {
+            "ui": null,
+            "html_content": "<section>wrong identity</section>"
+          }
+        ]
+      },
+      "expected": {
+        "error": "legacy_payload_identity_mismatch"
+      }
+    },
+    {
+      "name": "authored-with-native-ui",
+      "presentation": {
+        "version": "v1-standard",
+        "mode": "authored",
+        "slides": [
+          {
+            "ui": {
+              "id": "native"
+            },
+            "html_content": null
+          }
+        ]
+      },
+      "expected": {
+        "error": "authored_identity_payload_mismatch"
+      }
+    },
+    {
+      "name": "template-v2-with-authored-html",
+      "presentation": {
+        "version": "v2-standard",
+        "mode": "template",
+        "slides": [
+          {
+            "ui": null,
+            "html_content": "<section>wrong identity</section>"
+          }
+        ]
+      },
+      "expected": {
+        "error": "template_v2_authored_payload_forbidden"
+      }
+    },
+    {
+      "name": "template-v2-mode-mismatch",
+      "presentation": {
+        "version": "v2-standard",
+        "mode": "adaptive",
+        "slides": [
+          {
+            "ui": {
+              "id": "native"
+            },
+            "html_content": null
+          }
+        ]
+      },
+      "expected": {
+        "error": "template_v2_identity_mismatch"
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "GitHub API rate limit exhausted",
+    "httpStatus": 403
+  }
+}

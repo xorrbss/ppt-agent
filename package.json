@@ -1,0 +1,25 @@
+{
+  "name": "presenton",
+  "version": "1.0.0",
+  "presentationExportVersion": "v0.4.2",
+  "type": "module",
+  "description": "Open-source AI presentation generator",
+  "scripts": {
+    "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
+    "sync:presentation-export": "node scripts/sync-presentation-export.cjs",
+    "sync:presentation-export:force": "node scripts/sync-presentation-export.cjs --force",
+    "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only",
+    "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs",
+    "test:next-ci": "node --test scripts/ppt-agent.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:local": "node scripts/test-local.mjs"
+  },
+  "dependencies": {
+    "@llamaindex/liteparse": "^1.5.2",
+    "sharp": "0.35.3"
+  },
+  "overrides": {
+    "axios": "1.18.1",
+    "form-data": "4.0.6",
+    "sharp": "0.35.3"
+  }
+}

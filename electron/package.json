@@ -1,0 +1,90 @@
+{
+  "name": "presenton",
+  "productName": "Presenton Open Source",
+  "version": "2026.7.2401",
+  "exportVersion": "v0.4.2",
+  "main": "app_dist/main.js",
+  "description": "Open-Source AI Presentation Generator",
+  "homepage": "https://github.com/xorrbss/ppt-agent/releases",
+  "repository": "https://github.com/xorrbss/ppt-agent",
+  "keywords": [
+    "electron",
+    "electron-builder",
+    "Microsoft Store",
+    "AI presentation generator",
+    "open-source",
+    "presentation software",
+    "tailwindcss",
+    "typescript",
+    "fastapi",
+    "nextjs",
+    "sharp",
+    "template management",
+    "slide generation",
+    "modern UI",
+    "automation"
+  ],
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "dist": "npm run preflight:package && electron-builder",
+    "postinstall": "electron-builder install-app-deps",
+    "dev": "node scripts/rmrf.cjs app_dist && tsc && electron . --no-sandbox",
+    "setup:env": "npm install && cd ../servers/fastapi && uv sync && cd ../nextjs && npm install && cd ../../electron && npm run setup:export-runtime",
+    "install:pyinstaller": "cd ../servers/fastapi && echo 'pyinstaller will be installed via uv run --with when building'",
+    "typecheck": "tsc --noEmit",
+    "build:ts": "node scripts/rmrf.cjs app_dist && tsc",
+    "check:main-no-undef": "node scripts/check-main-no-undef.cjs",
+    "audit:release": "node scripts/audit-release-dependencies.cjs",
+    "test:audit-release": "node --test scripts/audit-release-dependencies.test.cjs",
+    "preflight:package": "node scripts/verify-packaging-inputs.cjs",
+    "test:package-preflight": "node --test scripts/verify-packaging-inputs.test.cjs",
+    "lint:main": "npm run build:ts && npm run check:main-no-undef",
+    "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
+    "build:vectorstore": "echo 'Using prebuilt shared icons vectorstore index'",
+    "build:export-runtime": "node sync_export_runtime.js",
+    "setup:export-runtime": "node sync_export_runtime.js",
+    "fetch:export-runtime": "node sync_export_runtime.js --force",
+    "fetch:export-runtime:latest": "EXPORT_RUNTIME_VERSION=latest node sync_export_runtime.js --force",
+    "build:nextjs": "node build_nextjs_resources.js",
+    "test:build-config": "node --test tests/build-config.test.cjs",
+    "test:standalone-copy": "node --test tests/standalone-copy.test.cjs",
+    "test:update-channel": "npm run build:ts && node --test tests/update-channel.test.cjs",
+    "build:fastapi": "node scripts/rmrf.cjs resources/fastapi && npm run build:vectorstore && cross-env MEM0_SPACY_STRICT=true node ensure_spacy_model.js && cd ../servers/fastapi && uv run --with pyinstaller python -m PyInstaller --distpath ../../electron/resources server.spec && cd ../../electron && node copy_fastapi_assets.js",
+    "generate:version": "node generate_update.js",
+    "upload:sourcemaps": "node scripts/upload-sourcemaps.cjs",
+    "build:electron": "npm run generate:version && npm run build:export-runtime && npm run typecheck && npm run build:ts && npm run check:main-no-undef && npm run preflight:package && node build.js",
+    "build:all": "npm run clean:build && npm run setup:env && npm run build:ts && npm run install:pyinstaller && npm run build:nextjs && npm run build:fastapi && npm run build:electron",
+    "clean:build": "node scripts/rmrf.cjs resources/nextjs resources/fastapi app_dist"
+  },
+  "author": {
+    "name": "Presenton",
+    "email": "suraj@presenton.ai"
+  },
+  "dependencies": {
+    "@llamaindex/liteparse": "^1.5.2",
+    "@puppeteer/browsers": "^3.0.3",
+    "@sentry/electron": "^7.16.0",
+    "@tailwindcss/cli": "^4.1.5",
+    "@types/uuid": "^10.0.0",
+    "dotenv": "^16.5.0",
+    "electron-squirrel-startup": "^1.0.1",
+    "sharp": "0.35.3",
+    "tailwindcss": "^4.1.5",
+    "tree-kill": "^1.2.2",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "42.2.0",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "overrides": {
+    "axios": "1.18.1",
+    "form-data": "4.0.6",
+    "sharp": "0.35.3"
+  }
+}

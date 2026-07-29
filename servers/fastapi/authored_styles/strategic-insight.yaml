@@ -1,0 +1,61 @@
+id: strategic-insight
+name: 전략 인사이트
+description: 심층 네이비와 시안 신호, 정밀한 분석 패턴으로 시장의 방향을 구조화하는 전략 컨설팅 스타일
+category: business
+tags:
+  - strategy
+  - consulting
+  - analysis
+use_cases:
+  - 시장 분석
+  - 사업 전략 수립
+  - 성장 기회 진단
+preview:
+  bg: "#000033"
+  accent: "#00C2FF"
+  palette:
+    - "#000033"
+    - "#000080"
+    - "#00C2FF"
+    - "#E3F2FD"
+    - "#FFFFFF"
+  variant: signal-grid
+brief: >-
+  MOOD: Create a rigorous strategy deck with technical precision, controlled energy,
+  and a strong analytical pulse. The atmosphere should suggest a premium intelligence
+  briefing rather than a conventional corporate report.
+
+  PALETTE: Use midnight navy (#000033) as the primary field, deep blue (#000080) for
+  layered structure, cyan (#00C2FF) for signals and recommendations, pale blue
+  (#E3F2FD) for light analysis surfaces, and white (#FFFFFF) for high-contrast text.
+
+  TYPOGRAPHY: Use a modern geometric sans-serif across the system with bold,
+  compact headlines, medium-weight analytical labels, and regular body text. Keep
+  numerals tabular and hierarchy unambiguous.
+
+  LAYOUT SYSTEM: Use precise split screens, technical grids, alternating dark and
+  pale analysis surfaces, and strong alignment between evidence and implication.
+  Reserve one zone on each slide for the strategic takeaway.
+
+  SIGNATURE ELEMENTS: Use concentric contour lines, fine dot matrices, a recurring
+  three-dot index, cyan signal bars, and small coordinate-like markers. Keep these
+  motifs peripheral so they frame the analysis rather than decorate it.
+
+  DATA VISUALIZATION: Favor market landscapes, indexed trends, scenario matrices,
+  quadrant maps, and annotated comparisons. Use cyan to indicate the chosen path,
+  label assumptions and units, and connect each chart to a specific strategic move.
+
+  IMAGE DIRECTION: Choose high-precision market, infrastructure, or strategy-workshop
+  photography with cool grading and decisive crops. Use split-screen images or subtle
+  contour overlays while preserving documentary credibility.
+
+  SLIDE ARCHETYPES: cover: a midnight field with a bold insight title, contour motif,
+  and three-dot index; content: a split analysis with evidence on one side and the
+  strategic implication on the other; data: a market map or scenario chart with a
+  cyan recommended path; timeline: three strategic horizons connected by an exact
+  progression rail; closing: a centered strategic choice with supporting rationale
+  and one clearly framed decision request.
+
+  AVOID: Avoid serif report styling, fluid smoke textures, generic navy dashboards,
+  decorative pseudo-technical clutter, unlabeled matrices, excessive cyan, random
+  dot patterns, and recommendations disconnected from the evidence shown.

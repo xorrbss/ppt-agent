@@ -1,0 +1,49 @@
+import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+import { authStatusForRequest } from '@/lib/server-auth-role';
+
+
+export async function POST(request: Request) {
+  try {
+    const auth = await authStatusForRequest(request);
+    if (!auth.authenticated) {
+      return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
+    }
+    const { filePath } = await request.json();
+    if (!filePath || typeof filePath !== 'string') {
+      return NextResponse.json({ error: 'filePath is required' }, { status: 400 });
+    }
+
+      // Do NOT run sanitizeFilename() on a full path: it strips ':' and '\\' and
+      // corrupts absolute Windows paths. Traversal is already blocked by the
+      // realpath + allowedBaseDirs check below.
+      const normalizedPath = path.normalize(filePath.replace(/\0/g, ''));
+      const allowedBaseDirs = [
+        process.env.APP_DATA_DIRECTORY || '/app/user_data',
+        process.env.TEMP_DIRECTORY || '/tmp',
+        '/app/user_data' 
+      ];
+      const resolvedPath = fs.realpathSync(path.resolve(normalizedPath));
+      const isPathAllowed = allowedBaseDirs.some(baseDir => {
+      const resolvedBaseDir = fs.realpathSync(path.resolve(baseDir));
+      return resolvedPath.startsWith(resolvedBaseDir + path.sep) || resolvedPath === resolvedBaseDir;
+    });
+    if (!isPathAllowed) {
+      console.error('Unauthorized file access attempt:', resolvedPath);
+      return NextResponse.json(
+        { error: 'Access denied: File path not allowed' },
+        { status: 403 }
+      );
+    }
+    const content=  fs.readFileSync(resolvedPath, 'utf-8');
+    
+    return NextResponse.json({ content });
+  } catch (error) {
+    console.error('Error reading file:', error);
+    return NextResponse.json(
+      { error: 'Failed to read file' },
+      { status: 500 }
+    );
+  }
+}

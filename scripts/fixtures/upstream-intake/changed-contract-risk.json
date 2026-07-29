@@ -1,0 +1,53 @@
+{
+  "ref": {
+    "object": {
+      "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "commit": {
+    "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "html_url": "https://github.com/presenton/presenton/commit/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "commit": {
+      "committer": {
+        "date": "2026-07-25T04:05:06Z"
+      },
+      "message": "Change presentation contracts"
+    }
+  },
+  "compare": {
+    "status": "ahead",
+    "ahead_by": 2,
+    "behind_by": 0,
+    "total_commits": 2,
+    "files": [
+      {
+        "filename": "servers/fastapi/api/v2/router.py",
+        "status": "added",
+        "additions": 4,
+        "deletions": 0,
+        "patch": "@@ -0,0 +1,4 @@\n+from fastapi import APIRouter\n+V2 = APIRouter(prefix=\"/api/v2\")\n+@V2.post(\"/templates\")\n+def create(): ..."
+      },
+      {
+        "filename": "servers/fastapi/alembic/versions/b8e2f4a7c9d1_normalize_async_task_statuses.py",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "patch": "@@ -1 +1 @@\n-down_revision = \"a7d4c9e2f1b3\"\n+down_revision = \"new_parent\""
+      },
+      {
+        "filename": "servers/fastapi/templates/v2/models.py",
+        "status": "modified",
+        "additions": 0,
+        "deletions": 1,
+        "patch": "@@ -1 +0,0 @@\n-type: Literal[\"group\"]"
+      },
+      {
+        "filename": "package.json",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 1,
+        "patch": "@@ -4 +4 @@\n-  \"presentationExportVersion\": \"v0.4.2\",\n+  \"presentationExportVersion\": \"v0.4.3\","
+      }
+    ]
+  }
+}

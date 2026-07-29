@@ -1,0 +1,56 @@
+id: architectural-portfolio
+name: 아키텍처 포트폴리오
+description: 세이지와 테라코타, 아치형 사진 모듈과 도면 선으로 프로젝트를 조형적으로 보여주는 스타일
+category: creative
+tags:
+  - 건축 포트폴리오
+  - 세이지
+  - 모듈형
+  - 도면
+  - 이미지 중심
+use_cases:
+  - 건축·인테리어 포트폴리오
+  - 디자인 스튜디오 소개
+  - 프로젝트 사례 연구
+  - 공간 전략 제안
+preview:
+  bg: "#F4F4F4"
+  accent: "#8B9B7B"
+  palette:
+    - "#F4F4F4"
+    - "#333333"
+    - "#8B9B7B"
+    - "#7EA89B"
+    - "#A0522D"
+  variant: light
+brief: |-
+  MOOD:
+  Create a contemporary architecture-studio portfolio that feels bright, sculptural, orderly, and environmentally aware. The system is image-first and modular. Distinguish it from minimal-vellum: use no warm paper texture, muted-brown text-first minimalism, or single-image austerity; repeat sage, teal, terracotta, curved photo masks, and blueprint logic.
+
+  PALETTE:
+  Use off-white #F4F4F4 as the main canvas, charcoal #333333 for type, sage #8B9B7B and soft teal #7EA89B for structural accents, and terracotta #A0522D for one small note or focal shape. Keep colors low-saturation and spatially separated.
+
+  TYPOGRAPHY:
+  Use a bold geometric sans serif for oversized project titles, a light clean sans serif for narrative text, and a compact mono or condensed sans serif for project metadata. Keep labels small and precise. Do not introduce serif or handwritten faces.
+
+  LAYOUT SYSTEM:
+  Build asymmetric two-column compositions and connected modular clusters using arch, pill, stadium, and circle image masks. Balance one large project title with small location, year, role, and material metadata. Use fine perimeter rules and selective bento groupings; every module should align to an intentional architectural datum.
+
+  SIGNATURE ELEMENTS:
+  Repeat a sage four-point compass, linked pill-photo mosaics, a small terracotta disc or note, circular blueprint overlays, thin leader lines, and name-or-role identity rails. Curved masks must feel like architectural openings, not soft social-media cards.
+
+  DATA VISUALIZATION:
+  Favor a large circular floor-plan or network diagram with sparse surrounding callouts, bento metric blocks, and fine leader lines. Use area, adjacency, material, or program relationships as the visual logic. Keep conventional bar charts secondary and avoid dashboard chrome.
+
+  IMAGE DIRECTION:
+  Choose soft-daylight modern houses, interiors, concrete, glass, light wood, and architects working over drawings. Use low saturation, frontal geometry, and deliberate crops. Combine multiple views only through the recurring arch-and-pill mask family.
+
+  SLIDE ARCHETYPES:
+  - cover: Place an oversized title at left, a connected pill-image mosaic at right, and a compact identity rail along the bottom.
+  - content: Pair a concise case-study narrative with one large arch photograph and small project metadata.
+  - data: Center a circular blueprint or relationship network with up to four leader-line callouts.
+  - timeline: Use a two-column experience or awards chronology with dates on one datum and concise project notes on the other.
+  - closing: Balance one modular image cluster with contact details and a single terracotta circle.
+
+  AVOID:
+  Avoid vellum or kraft texture, serif type, brown-dominant palettes, one-photo minimalism, generic rectangular galleries, unrelated rounded cards, decorative gradients, heavy shadows, crowded floor plans, arbitrary masks, and unreplaced template text.

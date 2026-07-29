@@ -1,0 +1,75 @@
+id: cyber-ai
+name: 프리즘 AI 보안
+description: 반투명 프리즘과 정교한 아이소메트릭 시스템 맵으로 복잡한 AI 보안 구조를 미래지향적으로 설명합니다.
+category: technology
+tags:
+  - AI 보안
+  - 시스템 아키텍처
+  - 프리즘 비주얼
+use_cases:
+  - AI 보안 플랫폼 제안
+  - 멀티 에이전트 아키텍처
+  - 디지털 전환 전략
+preview:
+  bg: "#F4F7FA"
+  accent: "#4F86D9"
+  palette:
+    - "#F4F7FA"
+    - "#171A20"
+    - "#4F86D9"
+    - "#ECA064"
+    - "#67B989"
+    - "#B8A7E8"
+  variant: prismatic-future
+  image: cyber-ai/cover.png
+design_tokens:
+  primary: "#4F86D9"
+  background: "#F4F7FA"
+  heading_font: Noto Sans KR
+  body_font: Noto Sans KR
+  mono_font: IBM Plex Mono
+reference_images:
+  cover:
+    - cyber-ai/cover.png
+  content:
+    - cyber-ai/content.png
+  data:
+    - cyber-ai/data.png
+  timeline:
+    - cyber-ai/timeline.png
+  architecture:
+    - cyber-ai/architecture.png
+  closing:
+    - cyber-ai/closing.png
+brief: |-
+  MOOD
+  Create an optimistic near-future security platform aesthetic: precise, luminous, calm, and highly engineered. The deck should feel like a premium technology keynote with consulting-grade information design, not a generic corporate template.
+
+  PALETTE
+  Use a soft ice-white canvas #F4F7FA with near-black #171A20 typography. Organize systems with muted zone colours: blue #4F86D9, warm coral #ECA064, mint #67B989, and restrained prism lavender #B8A7E8. Use translucent spectral gradients only as a focal light effect, never as decoration across the whole slide.
+
+  TYPOGRAPHY
+  Use Noto Sans KR for Korean headings and body copy, with very bold compact headlines and disciplined line breaks. Use IBM Plex Mono sparingly for system labels, metrics, IDs, and stage markers. Make one headline or number unmistakably dominant on every slide.
+
+  LAYOUT SYSTEM
+  Build asymmetric editorial compositions with a clear reading path: a strong narrative block on one side and a large engineered visual on the other. Use generous negative space, thin connector lines, and aligned zones. Prefer one integrated system scene or diagram over collections of unrelated cards.
+
+  SIGNATURE ELEMENTS
+  Use translucent prism volumes, softly refracted light, isometric infrastructure clusters, connected agent nodes, layered security zones, and small precise labels. Visuals should feel dimensional and tactile while remaining clean enough for an executive audience.
+
+  DATA VISUALIZATION
+  Turn data into designed objects: segmented rings, vertical gauges, risk curves, layered pyramids, and stage flows. Direct-label values and use colour to encode meaning consistently. Avoid default chart chrome, legends detached from the data, and equal-weight dashboard tiles.
+
+  IMAGE DIRECTION
+  Favor original inline-SVG or CSS-built isometric systems, architectural cutaways, luminous protective fields, and refracted glass forms. Keep the illustration tightly related to the slide claim. Do not reproduce any wording, logo, watermark, or exact object arrangement from a visual reference.
+
+  SLIDE ARCHETYPES
+  cover: Oversized Korean title on the left with one luminous prism or protected isometric ecosystem occupying the right half.
+  content: A concise claim paired with one integrated process, loop, or before-and-after transformation scene.
+  architecture: A central multi-agent or platform map with clearly separated colour-coded domains and visible connections.
+  data: One dominant KPI family using rings, gauges, or a designed curve with short interpretation labels.
+  timeline: A horizontal incident flow or roadmap whose stages change colour and visual state as the sequence advances.
+  closing: A minimal vision statement with one memorable luminous protection symbol and a clear next action.
+
+  AVOID
+  Avoid dark hacker-terminal clichés, matrix rain, neon-on-black overload, generic card grids, stock photography, repetitive rounded rectangles, floating icons without relationships, tiny labels, and decorative complexity that competes with the message.

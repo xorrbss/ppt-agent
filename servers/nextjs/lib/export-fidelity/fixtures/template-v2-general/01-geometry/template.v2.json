@@ -1,0 +1,75 @@
+{
+  "version": "v2-standard",
+  "mode": "template",
+  "template_id": "internal-v2-geometry",
+  "slides": [{
+    "id": "slide-geometry",
+    "ui": {
+      "id": "diagram",
+      "description": "Three-card operating model diagram",
+      "components": [{
+        "id": "main",
+        "description": "Complete three-card diagram composition",
+        "position": { "x": 0, "y": 0 },
+        "elements": [
+          { "type": "container", "position": { "x": 0, "y": 0 }, "size": { "width": 1280, "height": 720 }, "fill": { "color": "#ffffff" } },
+          {
+            "type": "text",
+            "position": { "x": 88, "y": 56 },
+            "size": { "width": 800, "height": 50 },
+            "font": { "size": 40, "family": "Arial", "color": "#123b72", "bold": true, "line_height": 48 },
+            "runs": [{ "text": "Operating model" }],
+            "decorative": false,
+            "name": "title",
+            "max_length": 120,
+            "min_length": 1
+          },
+          { "type": "container", "position": { "x": 88, "y": 128 }, "size": { "width": 1100, "height": 4 }, "fill": { "color": "#2878d8" } },
+          { "type": "container", "position": { "x": 128, "y": 234 }, "size": { "width": 240, "height": 178 }, "fill": { "color": "#edf5ff" }, "stroke": { "color": "#2878d8", "width": 3 }, "border_radius": { "tl": 18, "tr": 18, "bl": 18, "br": 18 } },
+          {
+            "type": "text",
+            "position": { "x": 131, "y": 237 },
+            "size": { "width": 234, "height": 172 },
+            "font": { "size": 28, "family": "Arial", "color": "#123b72", "bold": true, "line_height": 34 },
+            "alignment": { "horizontal": "center", "vertical": "middle" },
+            "runs": [{ "text": "Plan" }],
+            "decorative": false,
+            "name": "plan",
+            "max_length": 80,
+            "min_length": 1
+          },
+          { "type": "container", "position": { "x": 368, "y": 320 }, "size": { "width": 150, "height": 6 }, "fill": { "color": "#7aaeea" } },
+          { "type": "container", "position": { "x": 431, "y": 311 }, "size": { "width": 24, "height": 24 }, "fill": { "color": "#2878d8" }, "border_radius": { "tl": 12, "tr": 12, "bl": 12, "br": 12 } },
+          { "type": "container", "position": { "x": 520, "y": 234 }, "size": { "width": 240, "height": 178 }, "fill": { "color": "#f5f9ff" }, "stroke": { "color": "#2878d8", "width": 3 }, "border_radius": { "tl": 18, "tr": 18, "bl": 18, "br": 18 } },
+          {
+            "type": "text",
+            "position": { "x": 523, "y": 237 },
+            "size": { "width": 234, "height": 172 },
+            "font": { "size": 28, "family": "Arial", "color": "#123b72", "bold": true, "line_height": 34 },
+            "alignment": { "horizontal": "center", "vertical": "middle" },
+            "runs": [{ "text": "Build" }],
+            "decorative": false,
+            "name": "build",
+            "max_length": 80,
+            "min_length": 1
+          },
+          { "type": "container", "position": { "x": 760, "y": 320 }, "size": { "width": 150, "height": 6 }, "fill": { "color": "#7aaeea" } },
+          { "type": "container", "position": { "x": 823, "y": 311 }, "size": { "width": 24, "height": 24 }, "fill": { "color": "#2878d8" }, "border_radius": { "tl": 12, "tr": 12, "bl": 12, "br": 12 } },
+          { "type": "container", "position": { "x": 912, "y": 234 }, "size": { "width": 240, "height": 178 }, "fill": { "color": "#e7f1ff" }, "stroke": { "color": "#2878d8", "width": 3 }, "border_radius": { "tl": 18, "tr": 18, "bl": 18, "br": 18 } },
+          {
+            "type": "text",
+            "position": { "x": 915, "y": 237 },
+            "size": { "width": 234, "height": 172 },
+            "font": { "size": 28, "family": "Arial", "color": "#123b72", "bold": true, "line_height": 34 },
+            "alignment": { "horizontal": "center", "vertical": "middle" },
+            "runs": [{ "text": "Measure" }],
+            "decorative": false,
+            "name": "measure",
+            "max_length": 80,
+            "min_length": 1
+          }
+        ]
+      }]
+    }
+  }]
+}

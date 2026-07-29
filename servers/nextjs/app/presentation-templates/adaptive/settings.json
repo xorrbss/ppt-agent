@@ -1,0 +1,6 @@
+{
+  "description": "테마(톤앤매너)만 사용하고 내용에 맞춰 레이아웃을 매 슬라이드 새로 구성하는 적응형 슬라이드",
+  "ordered": false,
+  "default": false,
+  "icon_weight": "regular"
+}

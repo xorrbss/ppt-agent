@@ -1,0 +1,57 @@
+id: prestige-gold
+name: 프레스티지 골드
+description: 미드나이트 네이비와 올드 골드, 야간 건축 이미지로 기념비적 신뢰를 전하는 스타일
+category: editorial
+tags:
+  - 프레스티지
+  - 네이비
+  - 골드
+  - 헤리티지
+  - 건축
+use_cases:
+  - 프리미엄 부동산 제안
+  - 자산관리·투자 보고
+  - 멤버십·호스피탈리티 소개
+  - 경영진 비전 발표
+preview:
+  bg: "#020617"
+  accent: "#E2B670"
+  palette:
+    - "#020617"
+    - "#0F172A"
+    - "#1E293B"
+    - "#E2B670"
+    - "#F8FAFC"
+    - "#94A3B8"
+  variant: dark
+brief: |-
+  MOOD:
+  Create nocturnal heritage prestige with the atmosphere of an estate, private club, or executive library at dusk. Make the composition cinematic, symmetrical, and assured. Unlike editorial-tritone, avoid cream paper, coral accents, and magazine pull-quote structures. Unlike luxury-editorial, favor monumental architecture and centered ceremony over tactile fashion asymmetry and script overlays.
+
+  PALETTE:
+  Use deep navy #020617 and midnight #0F172A as primary environments, slate #1E293B for secondary planes, off-white #F8FAFC for main copy, blue-gray #94A3B8 for notes, and old gold #E2B670 for precise accents. Gold should trace, orbit, frame, or highlight; it should not become a broad fill or metallic texture.
+
+  TYPOGRAPHY:
+  Pair a stately, substantial display serif with a warm humanist sans serif. Center short ceremonial titles and use serif italic only for an occasional subtitle. Keep body copy calm and legible. Avoid condensed fashion serifs, cursive overlays, and all-caps body text.
+
+  LAYOUT SYSTEM:
+  Use centered symmetry for covers and quotations, full-bleed dusk architecture, thin gold frames, and wide navy shadows that protect text. Content may use three evenly spaced feature badges or a central medallion with surrounding callouts. Preserve generous margins and measured rhythm rather than magazine-style collision.
+
+  SIGNATURE ELEMENTS:
+  Repeat one fine luminous gold orbit or wave, a circular gold medallion, thin framed statistics, and warm interior light against a deep-blue exterior. Icons such as a key, house, crest, or book must be simple line marks, not ornate heraldry.
+
+  DATA VISUALIZATION:
+  Use a gold-ring radial diagram, a central operating model with three callouts, or restrained framed statistics. Keep most marks slate or blue-gray and reserve gold for the primary number or path. Avoid three-dimensional gold charts, excessive glow, dense dashboards, and decorative gauges.
+
+  IMAGE DIRECTION:
+  Select modern estates, premium interiors, executive libraries, and crisp architecture at blue hour. Favor deep blue exteriors with warm amber windows and strong perspective lines. Avoid brown fashion textures, generic corporate handshakes, and bright daytime stock.
+
+  SLIDE ARCHETYPES:
+  - cover: Set a centered gold serif title over full-bleed dusk architecture with a fine perimeter line.
+  - content: Place three restrained gold-outline feature badges on a deep navy field with brief supporting copy.
+  - data: Use one central gold ring or hero value with no more than three surrounding callouts.
+  - timeline: Lead four concise milestones along one thin luminous curve or orbit.
+  - closing: Set one invitation or call to action over an illuminated doorway or estate hero image with a small outlined action label.
+
+  AVOID:
+  Avoid broad gold fills, fake metallic foil, baroque ornament, cursive fashion overlays, cream-paper layouts, coral accents, crowded icon collections, over-glowing text, rounded SaaS cards, gradients with many colors, and unreplaced template text.

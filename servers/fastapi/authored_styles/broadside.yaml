@@ -1,0 +1,56 @@
+id: broadside
+name: 브로드사이드 포스터
+description: 잉크 블랙과 파이어 오렌지, 압도적인 대형 활자와 신문식 헤어라인으로 선언을 선명하게 전달하는 스타일
+category: editorial
+tags:
+  - 에디토리얼
+  - 포스터
+  - 대형 활자
+  - 고대비
+  - 다크
+use_cases:
+  - 브랜드 선언문
+  - 문화·매거진 피치
+  - 디자인 키노트
+  - 창업자 비전 발표
+preview:
+  bg: "#111111"
+  accent: "#E85D26"
+  palette:
+    - "#111111"
+    - "#1A1A18"
+    - "#E85D26"
+    - "#F0ECE5"
+    - "#888880"
+  variant: dark
+brief: |-
+  MOOD:
+  Create a protest-poster editorial system with considered newspaper precision: ink on fire, loud but controlled. Use two registers only—dark for documentation and orange for declaration. Treat one very short headline as a graphic object, then let negative space restore order.
+
+  PALETTE:
+  Use ink black #111111 and alternate black #1A1A18 for content surfaces, warm cream #F0ECE5 for main text, muted cream #888880 and hint #505048 for secondary labels, border #282826 for hairlines, and fire orange #E85D26 as the single accent. Cover, chapter, statement, and closing slides may use full orange with black type. Never introduce a white or cream slide register or a second accent.
+
+  TYPOGRAPHY:
+  Use a heavy grotesque sans serif at weight 800–900 for one enormous display moment and a regular sans serif for short support copy. Latin display text should be sentence case or lowercase, four to seven words, one or two lines, with tight tracking; Korean display text needs open line height and no collision. Reserve a mono face in uppercase for tiny kickers, page numbers, tags, and chart labels. Never use serif, script, italic, underline, or long display copy.
+
+  LAYOUT SYSTEM:
+  Compose for a fixed 16:9 canvas with generous outer margins, one statement, one rule, and breathing room. On dark content slides, use thin top and bottom newspaper hairlines, a small mono kicker, and compact page metadata. Suppress chrome on orange declaration slides. Keep corners square, surfaces flat, and bullet lists marked with an orange slash and capped at three items. Body copy must never exceed two short lines in one text block.
+
+  SIGNATURE ELEMENTS:
+  Repeat a short 36-by-2 orange rule, slash bullets, mono catalogue numbers, top-border-only statistic blocks, and one oversized orange numeral. Use a three-word fade stack at full, half, and faint opacity for sequence stories. Quotes may use one huge orange opening mark followed by a brief statement.
+
+  DATA VISUALIZATION:
+  Use black canvases, hairline axes, direct labels, and flat bars in muted charcoal or cream hint, with exactly one bar or value in orange. Prefer one dominant KPI and a short label. Avoid multicolor dashboards, heavy legends, rounded chart cards, and dense annotations.
+
+  IMAGE DIRECTION:
+  Let typography lead. When imagery is essential, choose one high-contrast documentary black-and-white or restrained duotone image, crop it decisively, and use orange only as an accent or environment. Avoid lifestyle stock, rounded image frames, and multi-photo collage.
+
+  SLIDE ARCHETYPES:
+  - cover: Fill the canvas with orange, set one short massive black title, add a small catalogue number or date, and remove all chrome.
+  - content: Use black, an orange mono kicker, one large cream heading, and either a two-line lead or no more than three slash bullets between hairlines.
+  - data: Use black, top-rule statistics, and one dominant orange number or one-accent-bar chart.
+  - timeline: Use a three-stage fade stack or one hairline baseline with terse milestone names; highlight only the current stage in orange and omit event paragraphs.
+  - closing: Fill the canvas with orange, use one decisive black statement and a small action or contact line, and remove all chrome.
+
+  AVOID:
+  Avoid body blocks longer than two short lines, more than three bullets, two display moments on one slide, four-column layouts, uppercase Latin display, serif or script faces, any second accent, white backgrounds, gradients, shadows, rounded cards, decorative icon spam, clipped type, and unreplaced template text.

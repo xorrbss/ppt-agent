@@ -1,0 +1,6 @@
+{
+  "description": "최상위 직책과 부문·팀 계층 구조를 보여주는 조직도 슬라이드",
+  "ordered": false,
+  "default": false,
+  "icon_weight": "regular"
+}

@@ -1,0 +1,142 @@
+{
+  "corpus_version": 1,
+  "cases": [
+    {
+      "name": "editable-structured-shapes",
+      "input": {
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "slides": [
+          {
+            "source_part": "ppt/slides/slide1.xml",
+            "relationship_id": "rId1",
+            "width": 1280.0,
+            "height": 720.0,
+            "shapes": [
+              {
+                "source_id": "table-1",
+                "name": "Revenue table",
+                "kind": "table",
+                "x": 80.0,
+                "y": 120.0,
+                "width": 520.0,
+                "height": 300.0,
+                "rotation": 0.0,
+                "table_rows": [["Quarter", "Revenue"], ["Q1", "120"]],
+                "fill_color": null,
+                "confidence": 0.95,
+                "unsupported_reason": null
+              },
+              {
+                "source_id": "chart-2",
+                "name": "Revenue chart",
+                "kind": "chart",
+                "x": 640.0,
+                "y": 120.0,
+                "width": 520.0,
+                "height": 300.0,
+                "rotation": 0.0,
+                "chart_type": "bar",
+                "chart_categories": ["Q1", "Q2"],
+                "chart_series": [
+                  {"name": "Revenue", "values": [120.0, 180.0]}
+                ],
+                "fill_color": null,
+                "confidence": 0.9,
+                "unsupported_reason": null
+              }
+            ],
+            "external_relationships": []
+          },
+          {
+            "source_part": "ppt/slides/slide2.xml",
+            "relationship_id": "rId2",
+            "width": 1280.0,
+            "height": 720.0,
+            "shapes": [
+              {
+                "source_id": "group-1",
+                "name": "Summary group",
+                "kind": "group",
+                "x": 100.0,
+                "y": 100.0,
+                "width": 600.0,
+                "height": 320.0,
+                "rotation": 0.0,
+                "children": [
+                  {
+                    "source_id": "group-1-text-1",
+                    "name": "Summary title",
+                    "kind": "text",
+                    "x": 0.0,
+                    "y": 0.0,
+                    "width": 300.0,
+                    "height": 80.0,
+                    "rotation": 0.0,
+                    "text": "Summary",
+                    "fill_color": null,
+                    "confidence": 0.92,
+                    "unsupported_reason": null
+                  },
+                  {
+                    "source_id": "group-1-box-2",
+                    "name": "Summary box",
+                    "kind": "container",
+                    "x": 0.0,
+                    "y": 100.0,
+                    "width": 300.0,
+                    "height": 160.0,
+                    "rotation": 0.0,
+                    "fill_color": "#336699",
+                    "confidence": 0.88,
+                    "unsupported_reason": null
+                  }
+                ],
+                "fill_color": null,
+                "confidence": 0.9,
+                "unsupported_reason": null
+              },
+              {
+                "source_id": "shape-2",
+                "name": "Accent",
+                "kind": "container",
+                "x": 760.0,
+                "y": 100.0,
+                "width": 320.0,
+                "height": 180.0,
+                "rotation": 15.0,
+                "fill_color": "#ffcc00",
+                "confidence": 0.85,
+                "unsupported_reason": null
+              },
+              {
+                "source_id": "ole-3",
+                "name": "Embedded object",
+                "kind": "unsupported",
+                "x": 760.0,
+                "y": 320.0,
+                "width": 320.0,
+                "height": 180.0,
+                "rotation": 0.0,
+                "fill_color": null,
+                "confidence": 0.0,
+                "unsupported_reason": "unsupported_ooxml:oleObj"
+              }
+            ],
+            "external_relationships": []
+          }
+        ]
+      },
+      "expected": {
+        "candidate_sha256": "1f7b79b7f3c5eb5899e551cd69fe50a6a2a876b61eceefd67038e8c2e224d2a6",
+        "summary": {
+          "slide_count": 2,
+          "shape_count": 5,
+          "supported_shape_count": 4,
+          "unsupported_shape_count": 1,
+          "visual_fidelity_status": "not_evaluated",
+          "review_required": true
+        }
+      }
+    }
+  ]
+}

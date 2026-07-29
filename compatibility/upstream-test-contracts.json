@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "baselineUpstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "sources": [
+    {
+      "path": "servers/fastapi/tests/unit/test_default_templates.py",
+      "tests": [
+        {
+          "name": "test_default_template_import_normalizes_shapes_and_copies_static",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "The local Template V2 rollout is default-off and does not mutate database rows or static assets during startup."
+        },
+        {
+          "name": "test_default_template_import_force_replaces_static_assets",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Force-replacing bundled static assets would bypass the local default-off rollout boundary."
+        },
+        {
+          "name": "test_default_template_import_removes_static_directory_removed_from_bundle",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Startup deletion of static directories is outside the local Template V2 compatibility surface."
+        },
+        {
+          "name": "test_default_template_import_updates_existing_database_row",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Automatic mutation of existing Template V2 rows conflicts with the feature-gated local write policy."
+        },
+        {
+          "name": "test_default_template_import_removes_stale_default_database_rows",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Automatic removal of persisted defaults would change local data outside an explicit API write."
+        },
+        {
+          "name": "test_default_template_import_removes_all_defaults_when_bundle_is_empty",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "An empty upstream bundle must not delete local Template V2 rows."
+        },
+        {
+          "name": "test_bundled_general_template_json_matches_template_v2_shapes",
+          "disposition": "excluded",
+          "reasonCode": "no-bundled-default-template-contract",
+          "reason": "The local rollout does not ship or initialize an upstream general default-template bundle."
+        },
+        {
+          "name": "test_resolve_default_template_id_maps_public_name_to_json_id",
+          "disposition": "excluded",
+          "reasonCode": "no-public-name-default-resolver",
+          "reason": "Local Template V2 APIs use explicit allowlisted string identifiers and do not alias a public default-template name."
+        },
+        {
+          "name": "test_resolve_default_template_id_rejects_paths",
+          "disposition": "excluded",
+          "reasonCode": "no-filesystem-default-resolver",
+          "reason": "No local API resolves a user-supplied template identifier to a bundled filesystem path."
+        }
+      ]
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_async_tasks_api.py",
+      "tests": [
+        {
+          "name": "test_async_tasks_routes_use_hyphenated_endpoint",
+          "disposition": "excluded",
+          "reasonCode": "legacy-async-api-preserved",
+          "reason": "The local API retains presentation-specific async generation routes under /api/v1/ppt/presentation and does not add the upstream generic /api/v1/async-tasks router."
+        },
+        {
+          "name": "test_async_task_status_enum_uses_string_column",
+          "disposition": "excluded",
+          "reasonCode": "upstream-only-async-task-schema",
+          "reason": "The generic async_tasks table and AsyncTaskStatus model are not introduced into the local migration chain."
+        },
+        {
+          "name": "test_check_async_task_status_returns_task",
+          "disposition": "excluded",
+          "reasonCode": "legacy-async-api-preserved",
+          "reason": "Task status remains available through the existing presentation-specific status endpoint and response model."
+        },
+        {
+          "name": "test_check_async_task_status_returns_404_for_missing_task",
+          "disposition": "excluded",
+          "reasonCode": "legacy-async-api-preserved",
+          "reason": "The upstream handler targets an API and persistence model that are intentionally absent locally."
+        },
+        {
+          "name": "test_list_async_tasks_filters_and_orders_tasks",
+          "disposition": "excluded",
+          "reasonCode": "upstream-only-async-task-schema",
+          "reason": "Adding a generic task listing query would expand the legacy API and database schema beyond Template V2 compatibility."
+        }
+      ]
+    }
+  ],
+  "excludedApiContracts": [
+    {
+      "method": "GET",
+      "path": "/api/v1/ppt/template/{template_id}",
+      "reasonCode": "legacy-template-read-response-conflict",
+      "reason": "The legacy router already owns this method/path shape with PresentationLayoutModel; mounting the upstream Template V2 GET response there would change legacy API behavior.",
+      "evidenceFiles": [
+        "servers/fastapi/templates/router.py"
+      ]
+    }
+  ],
+  "portedContracts": [
+    {
+      "id": "template-v2-default-off",
+      "sourceConcept": "Default templates must not become active implicitly.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_v2_is_default_off_without_rollout_configuration"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/templates/v2/policy.py"
+      ]
+    },
+    {
+      "id": "versioned-api-with-legacy-async-status",
+      "sourceConcept": "Async task status remains reachable through a stable versioned API.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_v2_routes_stay_in_api_v1_and_preserve_legacy_async_status"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py"
+      ]
+    },
+    {
+      "id": "non-conflicting-template-v2-compat-mutations",
+      "sourceConcept": "Expose only Template V2 method/path pairs that do not replace the legacy template read contract.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_compat_router_merges_mutations_into_legacy_template_item_openapi_path",
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_item_openapi_exposes_one_resource_path_with_unique_operations"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
+        "servers/fastapi/templates/router.py"
+      ]
+    }
+  ]
+}

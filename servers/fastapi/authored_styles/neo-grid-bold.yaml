@@ -1,0 +1,52 @@
+id: neo-grid-bold
+name: 네오 그리드 볼드
+description: 대담한 격자와 강한 타이포그래피로 에너지 있게 구성하는 스타일
+category: creative
+tags:
+  - 네오브루탈
+  - 대담한
+  - 고대비
+use_cases:
+  - 캠페인 기획
+  - 크리에이티브 피치
+  - 트렌드 발표
+preview:
+  bg: "#111111"
+  accent: "#D9FF3F"
+  palette:
+    - "#111111"
+    - "#F5F5F0"
+    - "#D9FF3F"
+    - "#7C3AED"
+  variant: acid-grid
+brief: |-
+  MOOD
+  Build an energetic neo-brutalist system with visible structure, sharp corners, and intentional high-contrast geometry. The tone should feel direct, provocative, and controlled.
+
+  PALETTE
+  Ground slides in black #111111 or off-white #F5F5F0, use acid lime #D9FF3F as the dominant signal, and reserve violet #7C3AED for rare secondary contrast.
+
+  TYPOGRAPHY
+  Favor oversized bold type, compressed labels, terse copy, and uncompromising hierarchy. Crop display type only when the complete message remains immediately understandable.
+
+  LAYOUT SYSTEM
+  Use modular divisions, hard alignment, cropped oversized elements, and dramatic scale shifts while preserving fit. Vary the grid across slides so the deck feels rhythmic rather than templated.
+
+  SIGNATURE ELEMENTS
+  Use exposed grid lines, square index markers, thick underline bars, high-contrast labels, and one oversized geometric crop. Keep every mark tied to hierarchy or navigation.
+
+  DATA VISUALIZATION
+  Render charts as bold geometric statements with direct labels, thick purposeful marks, and acid lime reserved for the decisive value. Keep scales and units explicit.
+
+  IMAGE DIRECTION
+  Use stark flash photography, graphic product crops, urban textures, or high-contrast portraits framed by hard rectangular masks. Keep imagery punchy and uncluttered.
+
+  SLIDE ARCHETYPES
+  cover: Combine one oversized title with a hard grid boundary and a single acid-lime signal.
+  content: Divide the field into two or three unequal modules for a claim, evidence, and sharp annotation.
+  data: Turn one comparison into a bold geometric chart with direct values and visible scale.
+  timeline: Use a stepped grid with numbered stages, terse labels, and one active lime marker.
+  closing: Finish with a compact manifesto line, one action, and a strong high-contrast frame.
+
+  AVOID
+  Avoid rounded cards, soft shadows, muted corporate layouts, gratuitous distortion, dense decorative complexity, and acid lime applied without informational purpose.

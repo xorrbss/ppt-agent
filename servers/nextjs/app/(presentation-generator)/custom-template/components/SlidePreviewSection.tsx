@@ -1,0 +1,109 @@
+'use client'
+
+import React from "react";
+import { Button } from "@/components/ui/button";
+import {
+    Loader2,
+    Images,
+    ChevronRight
+} from "lucide-react";
+import { SlidePreviewSectionProps } from "../types";
+import { resolveBackendAssetUrl } from '@/utils/api'
+
+
+export const SlidePreviewSection: React.FC<SlidePreviewSectionProps> = ({
+    previewData,
+    onInitTemplate,
+    isLoading,
+}) => {
+    const slideCount = previewData.slide_image_urls?.length || 0;
+    const fontCount = Object.keys(previewData.fonts || {}).length;
+
+    return (
+        <div className="my-8 max-w-[1440px] mx-auto">
+            {/* Header Card */}
+            <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm overflow-hidden">
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-[#F3F4F6] bg-gradient-to-r from-[#FAFAFA] to-white">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#EBE9FE] to-[#DDD6FE] flex items-center justify-center shadow-sm">
+                                <Images className="w-6 h-6 text-[#7A5AF8]" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-semibold text-[#111827]">슬라이드 미리보기</h2>
+                                <p className="text-sm text-[#6B7280] mt-0.5">
+                                    슬라이드 {slideCount}개 준비됨
+                                    {fontCount > 0 && (
+                                        <> · 글꼴 {fontCount}개 적용됨</>
+                                    )}
+                                </p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6 max-h-[900px] overflow-y-auto">
+                    {previewData.slide_image_urls?.map((url, index) => (
+                        <div
+                            key={index}
+                            className="group relative aspect-video w-full rounded-xl overflow-hidden border border-[#E5E7EB] bg-[#F9FAFB] shadow-sm"
+                        >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- Preview URLs come from arbitrary backend asset origins outside the Next image allowlist. */}
+                            <img
+                                src={resolveBackendAssetUrl(url)}
+                                alt={`Slide ${index + 1}`}
+                                className="w-full h-full object-contain"
+                            />
+                            {/* Slide number badge */}
+                            <div className="absolute top-2 left-2 px-2.5 py-1 bg-black/70 backdrop-blur-sm rounded-lg text-xs font-semibold text-white shadow-lg">
+                                {index + 1}
+                            </div>
+
+
+                        </div>
+                    ))}
+                </div>
+
+
+
+
+                {/* Action Footer */}
+                <div className="px-6 py-5 border-t border-[#F3F4F6] bg-gradient-to-r from-[#FAFAFA] to-white">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <p className="text-sm text-[#6B7280] max-w-md text-center sm:text-left">
+                            템플릿을 생성할 준비가 되었습니다. 각 슬라이드는 재사용 가능한 React 컴포넌트로 변환됩니다.
+                        </p>
+                        <Button
+                            size="lg"
+                            onClick={onInitTemplate}
+                            disabled={isLoading}
+                            className="px-4 py-2 h-auto text-xs font-syne font-medium rounded-full shadow-lg hover:shadow-xl transition-all duration-300 "
+                            style={{
+                                background: isLoading
+                                    ? '#E5E7EB'
+                                    : 'linear-gradient(135deg, #D5CAFC 0%, #E3D2EB 35%, #F4DCD3 70%, #FDE4C2 100%)',
+                                color: isLoading ? '#9CA3AF' : '#111827',
+                            }}
+                        >
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                    시작하는 중…
+                                </>
+                            ) : (
+                                <>
+
+                                    템플릿 생성
+                                    <ChevronRight className="w-4 h-4 ml-1" />
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};

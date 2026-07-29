@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "HTTP_404",
+    "message": "official repository or main ref was not found",
+    "httpStatus": 404
+  }
+}
