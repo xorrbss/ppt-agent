@@ -20,10 +20,18 @@ export interface TemplateV2VectorPoint {
 export interface TemplateV2EditableVectorGeometry {
   shape: "polygon" | "ellipse" | null;
   closed: boolean;
+  points: TemplateV2VectorPoint[];
   curve: {
     tension: number;
     segments: number;
+    canRemove: boolean;
   } | null;
+  /**
+   * `[]` means the canonical field can be created without replacing authored
+   * data. `null` means a legacy alias currently owns the rendered radii, so
+   * the toolbar must not introduce a competing canonical field.
+   */
+  cornerRadii: number[] | null;
 }
 
 /**
@@ -73,9 +81,35 @@ export function templateV2EditableVectorGeometry(
   const closed =
     typeof rawClosed === "boolean" ? rawClosed : shape === "polygon";
 
+  const rawCornerRadii = element.corner_radii ?? element.cornerRadii;
+  if (
+    rawCornerRadii != null &&
+    (!Array.isArray(rawCornerRadii) ||
+      rawCornerRadii.length > element.points.length ||
+      rawCornerRadii.some(
+        (radius) =>
+          typeof radius !== "number" ||
+          !Number.isFinite(radius) ||
+          radius < 0 ||
+          radius > 10000
+      ))
+  ) {
+    return null;
+  }
+  const cornerRadii =
+    Array.isArray(element.corner_radii)
+      ? [...element.corner_radii]
+      : element.cornerRadii != null
+        ? null
+        : [];
+  const points = element.points.map((point) => ({
+    x: (point as JsonRecord).x as number,
+    y: (point as JsonRecord).y as number,
+  }));
+
   const rawCurve = element.curve;
   if (rawCurve === undefined || rawCurve === null) {
-    return { shape, closed, curve: null };
+    return { shape, closed, points, curve: null, cornerRadii };
   }
   if (!isRecord(rawCurve) || rawCurve.type !== "smooth") return null;
 
@@ -101,7 +135,19 @@ export function templateV2EditableVectorGeometry(
     return null;
   }
 
-  return { shape, closed, curve: { tension, segments } };
+  return {
+    shape,
+    closed,
+    points,
+    curve: {
+      tension,
+      segments,
+      canRemove: Object.keys(rawCurve).every((key) =>
+        ["type", "tension", "segments"].includes(key)
+      ),
+    },
+    cornerRadii,
+  };
 }
 
 export function templateV2VectorCornerRadii(

@@ -90,6 +90,7 @@ const validVector: TemplateV2ToolbarRecord = {
     { x: 25, y: 145 },
   ],
   closed: true,
+  corner_radii: [10, 8, 6, 4],
   curve: {
     type: "smooth",
     tension: 0.35,
@@ -111,10 +112,31 @@ describe("VectorToolbar geometry fidelity", () => {
       />
     );
 
+    setReactInputValue("Vector point X", "48.25");
+    setReactInputValue("Vector corner radius", "16");
     setReactInputValue("Curve tension", "0.64");
     setReactInputValue("Curve segments", "24");
+    cy.get('input[aria-label="Smooth vector curve"]')
+      .should("be.checked")
+      .and("be.disabled");
     cy.get('input[aria-label="Closed vector path"]').click();
 
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["points", 0, "x"], value: 48.25 }],
+      {
+        historyKey: "toolbar:vector-point-0-x",
+        continuous: true,
+      }
+    );
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["corner_radii", 0], value: 16 }],
+      {
+        historyKey: "toolbar:vector-corner-0",
+        continuous: true,
+      }
+    );
     cy.get("@patch").should(
       "have.been.calledWith",
       [{ path: ["curve", "tension"], value: 0.64 }],
@@ -148,27 +170,116 @@ describe("VectorToolbar geometry fidelity", () => {
           interpolation: "v3",
         });
         expect(persisted.future_vector).to.deep.equal({ retained: true });
+        expect(persisted.points[0].x).to.equal(48.25);
+        expect(persisted.corner_radii).to.deep.equal([16, 8, 6, 4]);
         expect(persisted.curve).to.include({ tension: 0.64, segments: 24 });
         expect(persisted.closed).to.equal(false);
+
+        const reentered = adaptTemplateV2LayoutToSlide({
+          id: "vector-save-reentry",
+          elements: [persisted],
+        }).elements[0] as unknown as TemplateV2ToolbarRecord;
+        const reenteredPoint = (
+          reentered.points as TemplateV2ToolbarRecord[]
+        )[0];
+        const reenteredCurve = reentered.curve as TemplateV2ToolbarRecord;
+        expect(reenteredPoint).to.include({ x: 48.25, y: 20 });
+        expect(reenteredPoint.future_point).to.deep.equal({
+          pressure: 0.75,
+        });
+        expect(reentered.corner_radii).to.deep.equal([16, 8, 6, 4]);
+        expect(reenteredCurve.future_curve).to.deep.equal({
+          interpolation: "v3",
+        });
+        expect(reentered.future_vector).to.deep.equal({ retained: true });
 
         const html = templateV2UiToHtmlFragment({ elements: [persisted] });
         expect(html).to.contain("<polyline");
         expect(html).to.contain('fill="none"');
         expect(html).not.to.contain("<polygon");
+    });
+  });
+
+  it("creates and removes only canonical curves and converts explicit two-point shapes", () => {
+    const patch = cy.spy().as("patch");
+    cy.mount(
+      <StatefulVectorToolbar
+        initialElement={{
+          ...validVector,
+          shape: "polygon",
+          points: [{ x: 0, y: 0 }, { x: 120, y: 80 }],
+          closed: false,
+          curve: null,
+          corner_radii: undefined,
+        }}
+        observedPatch={patch}
+      />
+    );
+    cy.get('input[aria-label="Smooth vector curve"]').click();
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{
+        path: ["curve"],
+        value: { type: "smooth", tension: 0.5, segments: 16 },
+      }],
+      { historyKey: "toolbar:vector-curve" }
+    );
+    cy.get('input[aria-label="Curve tension"]').should("exist");
+    cy.get('input[aria-label="Smooth vector curve"]').click();
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["curve"], value: null }],
+      { historyKey: "toolbar:vector-curve" }
+    );
+    cy.get('input[aria-label="Curve tension"]').should("not.exist");
+    cy.get('input[aria-label="Curve segments"]').should("not.exist");
+    cy.get('select[aria-label="Vector shape"]').select("ellipse");
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["shape"], value: "ellipse" }],
+      { historyKey: "toolbar:vector-shape" }
+    );
+    cy.get('[data-testid="persisted-vector"]')
+      .invoke("text")
+      .then((serialized) => {
+        const persisted = JSON.parse(serialized);
+        expect(persisted.shape).to.equal("ellipse");
+        expect(persisted.future_vector).to.deep.equal({ retained: true });
+        expect(templateV2UiToHtmlFragment({ elements: [persisted] }))
+          .to.contain("<ellipse");
       });
   });
 
-  it("does not expose curve creation or unsafe geometry coercions", () => {
+  it("creates canonical radii without replacing point or vector extensions", () => {
+    const patch = cy.spy().as("patch");
     cy.mount(
-      <VectorToolbar
-        element={{ ...validVector, curve: null }}
-        onPatch={() => {}}
+      <StatefulVectorToolbar
+        initialElement={{ ...validVector, corner_radii: undefined }}
+        observedPatch={patch}
       />
     );
-    cy.get('input[aria-label="Closed vector path"]').should("exist");
-    cy.get('input[aria-label="Curve tension"]').should("not.exist");
-    cy.get('input[aria-label="Curve segments"]').should("not.exist");
+    setReactInputValue("Vector corner radius", "12");
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["corner_radii"], value: [12, 0, 0, 0] }],
+      {
+        historyKey: "toolbar:vector-corner-0",
+        continuous: true,
+      }
+    );
+    cy.get('[data-testid="persisted-vector"]')
+      .invoke("text")
+      .then((serialized) => {
+        const persisted = JSON.parse(serialized);
+        expect(persisted.corner_radii).to.deep.equal([12, 0, 0, 0]);
+        expect(persisted.points[0].future_point).to.deep.equal({
+          pressure: 0.75,
+        });
+        expect(persisted.future_vector).to.deep.equal({ retained: true });
+      });
+  });
 
+  it("fails closed for malformed geometry and ambiguous legacy radii", () => {
     cy.mount(
       <VectorToolbar
         element={{
@@ -179,6 +290,8 @@ describe("VectorToolbar geometry fidelity", () => {
       />
     );
     cy.get('input[aria-label="Closed vector path"]').should("not.exist");
+    cy.get('input[aria-label="Vector point X"]').should("not.exist");
+    cy.get('input[aria-label="Smooth vector curve"]').should("not.exist");
     cy.get('input[aria-label="Curve tension"]').should("not.exist");
     cy.get('input[aria-label="Curve segments"]').should("not.exist");
 
@@ -188,13 +301,30 @@ describe("VectorToolbar geometry fidelity", () => {
           ...validVector,
           shape: "ellipse",
           points: [{ x: 0, y: 0 }, { x: 120, y: 80 }],
+          corner_radii: undefined,
         }}
         onPatch={() => {}}
       />
     );
     cy.get('input[aria-label="Closed vector path"]').should("not.exist");
+    cy.get('select[aria-label="Vector shape"]').should("exist");
+    cy.get('input[aria-label="Vector point X"]').should("exist");
+    cy.get('input[aria-label="Smooth vector curve"]').should("not.exist");
     cy.get('input[aria-label="Curve tension"]').should("not.exist");
     cy.get('input[aria-label="Curve segments"]').should("not.exist");
+
+    cy.mount(
+      <VectorToolbar
+        element={{
+          ...validVector,
+          corner_radii: undefined,
+          cornerRadii: [4, 3, 2, 1],
+        }}
+        onPatch={() => {}}
+      />
+    );
+    cy.get('input[aria-label="Vector point X"]').should("exist");
+    cy.get('input[aria-label="Vector corner radius"]').should("not.exist");
   });
 
   it("canonicalizes imported segment counts without dropping future metadata", () => {

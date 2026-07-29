@@ -306,6 +306,11 @@ describe("TemplateV2Studio API integration", () => {
       "PATCH",
       `**/api/v1/ppt/structured-templates/${templateId}`,
       (request) => {
+        const elements =
+          request.body.layouts.layouts[0].components[0].elements;
+        if (elements[1]?.crop_scale === 1.75) {
+          request.alias = "saveEditableTemplateFinal";
+        }
         request.reply({
           statusCode: 200,
           body: response(
@@ -371,7 +376,7 @@ describe("TemplateV2Studio API integration", () => {
       .type("{selectall}1.75", { waitForAnimations: false });
     cy.contains("button", "Save").click({ waitForAnimations: false });
 
-    cy.wait("@saveEditableTemplate")
+    cy.wait("@saveEditableTemplateFinal")
       .its("request.body.layouts.layouts.0.components.0.elements")
       .then((elements) => {
         expect(elements[1]).to.deep.equal({

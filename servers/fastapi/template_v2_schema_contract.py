@@ -1192,14 +1192,51 @@ def normalize_chart_contract(
 
 
 def _valid_contract_cell(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if _contract_meaningful(value, "stroke") or _contract_meaningful(
+        value, "border"
+    ):
+        # TableCell has no canonical border field. The HTML renderer's
+        # undeclared `stroke` support is not enough to make it persistable.
+        return False
     return (
-        isinstance(value, dict)
+        _valid_contract_font(value.get("font"))
         and isinstance(value.get("runs"), list)
         and all(
-            isinstance(run, dict) and isinstance(run.get("text"), str)
+            isinstance(run, dict)
+            and isinstance(run.get("text"), str)
+            and _valid_contract_font(run.get("font"))
             for run in value["runs"]
         )
     )
+
+
+def _valid_contract_font(value: Any) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, dict):
+        return False
+    for field in ("family", "color"):
+        if _contract_meaningful(value, field) and not isinstance(
+            value[field], str
+        ):
+            return False
+    for field in ("bold", "italic", "underline", "ellipsis"):
+        if _contract_meaningful(value, field) and not isinstance(
+            value[field], bool
+        ):
+            return False
+    for field in ("size", "line_height", "letter_spacing", "opacity"):
+        if _contract_meaningful(value, field):
+            number = value[field]
+            if (
+                isinstance(number, bool)
+                or not isinstance(number, (int, float))
+                or not math.isfinite(number)
+            ):
+                return False
+    return True
 
 
 def _contract_bound(table: Mapping[str, Any], field: str) -> int | None:
@@ -1320,12 +1357,80 @@ def build_chart_contract_edit_patches(
                 if _contract_meaningful(candidate, field):
                     candidate[field] = None
                     patches.append({"path": [field], "value": None})
-        if (
-            not policy["data_label_positions"]
-            and _contract_meaningful(candidate, "data_labels")
-        ):
+        if _contract_meaningful(
+            candidate, "data_labels"
+        ) and candidate["data_labels"] not in policy["data_label_positions"]:
             candidate["data_labels"] = None
             patches.append({"path": ["data_labels"], "value": None})
+    elif kind == "data-labels":
+        value = edit.get("value")
+        policy = chart_contract_capabilities(candidate.get("chart_type"))[
+            "value"
+        ]
+        if value is not None and (
+            not isinstance(value, str)
+            or value not in policy["data_label_positions"]
+        ):
+            return _contract_error("invalid_chart_data_labels_edit")
+        if candidate.get("data_labels") == value:
+            return {"ok": True, "value": []}
+        candidate["data_labels"] = value
+        patches.append({"path": ["data_labels"], "value": value})
+    elif kind == "category-count":
+        next_count = edit.get("value")
+        categories = candidate.get("categories")
+        series_list = candidate.get("series")
+        if (
+            isinstance(next_count, bool)
+            or not isinstance(next_count, int)
+            or not 0 <= next_count <= 24
+            or not isinstance(categories, list)
+            or not isinstance(series_list, list)
+        ):
+            return _contract_error("invalid_chart_category_count_edit")
+        if next_count == len(categories):
+            return {"ok": True, "value": []}
+        del categories[next_count:]
+        while len(categories) < next_count:
+            categories.append(f"Category {len(categories) + 1}")
+        patches.append({"path": ["categories"], "value": categories})
+        for series_index, series in enumerate(series_list):
+            values = series["values"]
+            del values[next_count:]
+            values.extend([0] * (next_count - len(values)))
+            patches.append(
+                {
+                    "path": ["series", series_index, "values"],
+                    "value": values,
+                }
+            )
+    elif kind == "series-count":
+        next_count = edit.get("value")
+        categories = candidate.get("categories")
+        series_list = candidate.get("series")
+        policy = chart_contract_capabilities(candidate.get("chart_type"))[
+            "value"
+        ]
+        limit = 12 if policy["multiple_series"] else 1
+        if (
+            isinstance(next_count, bool)
+            or not isinstance(next_count, int)
+            or not 0 <= next_count <= limit
+            or not isinstance(categories, list)
+            or not isinstance(series_list, list)
+        ):
+            return _contract_error("invalid_chart_series_count_edit")
+        if next_count == len(series_list):
+            return {"ok": True, "value": []}
+        del series_list[next_count:]
+        while len(series_list) < next_count:
+            series_list.append(
+                {
+                    "name": f"Series {len(series_list) + 1}",
+                    "values": [0] * len(categories),
+                }
+            )
+        patches.append({"path": ["series"], "value": series_list})
     elif kind == "category-label":
         index = edit.get("categoryIndex")
         value = edit.get("value")
@@ -1418,30 +1523,28 @@ def build_table_contract_edit_patches(
     patches: list[dict[str, Any]] = []
     kind = edit.get("kind")
 
-    if kind == "run-text":
+    if kind in {"run-text", "cell-font"}:
         section = edit.get("section")
         row_index = edit.get("rowIndex")
         column_index = edit.get("columnIndex")
-        run_index = edit.get("runIndex")
-        value = edit.get("value")
         if (
             section not in {"header", "body"}
             or isinstance(column_index, bool)
             or not isinstance(column_index, int)
-            or isinstance(run_index, bool)
-            or not isinstance(run_index, int)
-            or not isinstance(value, str)
             or column_index < 0
-            or run_index < 0
         ):
-            return _contract_error("invalid_table_text_edit")
+            return _contract_error(
+                "invalid_table_text_edit"
+                if kind == "run-text"
+                else "invalid_table_font_edit"
+            )
         if section == "header":
             cell = (
                 columns[column_index]
                 if column_index < len(columns)
                 else None
             )
-            path = ["columns", column_index, "runs", run_index, "text"]
+            cell_path = ["columns", column_index]
         else:
             if (
                 isinstance(row_index, bool)
@@ -1450,25 +1553,78 @@ def build_table_contract_edit_patches(
                 or row_index >= len(rows)
                 or column_index >= len(rows[row_index])
             ):
-                return _contract_error("invalid_table_text_edit")
+                return _contract_error(
+                    "invalid_table_text_edit"
+                    if kind == "run-text"
+                    else "invalid_table_font_edit"
+                )
             cell = rows[row_index][column_index]
-            path = [
+            cell_path = [
                 "rows",
                 row_index,
                 column_index,
-                "runs",
-                run_index,
-                "text",
             ]
-        if (
-            not isinstance(cell, dict)
-            or not isinstance(cell.get("runs"), list)
-            or run_index >= len(cell["runs"])
-            or not isinstance(cell["runs"][run_index], dict)
-        ):
-            return _contract_error("invalid_table_text_edit")
-        cell["runs"][run_index]["text"] = value
-        patches.append({"path": path, "value": value})
+        if not isinstance(cell, dict):
+            return _contract_error(
+                "invalid_table_text_edit"
+                if kind == "run-text"
+                else "invalid_table_font_edit"
+            )
+        value = edit.get("value")
+        if kind == "run-text":
+            run_index = edit.get("runIndex")
+            if (
+                isinstance(run_index, bool)
+                or not isinstance(run_index, int)
+                or run_index < 0
+                or not isinstance(value, str)
+                or not isinstance(cell.get("runs"), list)
+                or run_index >= len(cell["runs"])
+                or not isinstance(cell["runs"][run_index], dict)
+            ):
+                return _contract_error("invalid_table_text_edit")
+            cell["runs"][run_index]["text"] = value
+            patches.append(
+                {
+                    "path": cell_path
+                    + ["runs", run_index, "text"],
+                    "value": value,
+                }
+            )
+        else:
+            field = edit.get("field")
+            if field not in {
+                "size",
+                "family",
+                "color",
+                "bold",
+                "italic",
+                "underline",
+            }:
+                return _contract_error("invalid_table_font_edit")
+            if field in {"bold", "italic", "underline"}:
+                valid_value = isinstance(value, bool)
+            elif field == "size":
+                valid_value = (
+                    not isinstance(value, bool)
+                    and isinstance(value, (int, float))
+                    and math.isfinite(value)
+                )
+            else:
+                valid_value = isinstance(value, str)
+            if not valid_value:
+                return _contract_error("invalid_table_font_edit")
+            font = cell.get("font")
+            if not isinstance(font, dict):
+                font = {}
+                cell["font"] = font
+            font[field] = value
+            patches.append(
+                {
+                    "path": cell_path + ["font", field],
+                    "value": value,
+                }
+            )
     elif kind == "row-count":
         next_count = edit.get("value")
         if (

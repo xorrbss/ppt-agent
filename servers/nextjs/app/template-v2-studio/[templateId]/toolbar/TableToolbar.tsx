@@ -5,6 +5,7 @@ import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import {
   buildTableContractEditPatches,
   type TableContractEdit,
+  validateTableContract,
 } from "@/lib/template-v2-chart-table-contract";
 import {
   ToolbarButton,
@@ -62,10 +63,12 @@ export default function TableToolbar({
   ) => void;
 }) {
   const [targetIndex, setTargetIndex] = useState(0);
-  const columns = element.columns as TemplateV2ToolbarRecord[];
-  const rows = element.rows as TemplateV2ToolbarRecord[][];
-  const headerColor = cellColor(columns[0]);
-  const bodyColor = cellColor(rows[0][0]);
+  const validated = validateTableContract(element);
+  const contractElement = validated.ok ? validated.value : null;
+  const columns = (contractElement?.columns ?? []) as TemplateV2ToolbarRecord[];
+  const rows = (contractElement?.rows ?? []) as TemplateV2ToolbarRecord[][];
+  const headerColor = columns[0] ? cellColor(columns[0]) : "";
+  const bodyColor = rows[0]?.[0] ? cellColor(rows[0][0]) : "";
   const textTargets = [
     ...columns.flatMap((cell, columnIndex) =>
       Array.isArray(cell.runs)
@@ -82,6 +85,7 @@ export default function TableToolbar({
                   },
                   label: `Header ${columnIndex + 1}, run ${runIndex + 1}`,
                   text: value.text,
+                  cell,
                 }]
               : [];
           })
@@ -104,6 +108,7 @@ export default function TableToolbar({
                     },
                     label: `Row ${rowIndex + 1}, column ${columnIndex + 1}, run ${runIndex + 1}`,
                     text: value.text,
+                    cell,
                   }]
                 : [];
             })
@@ -113,6 +118,11 @@ export default function TableToolbar({
   ];
   const safeTargetIndex = Math.min(targetIndex, Math.max(0, textTargets.length - 1));
   const selectedTarget = textTargets[safeTargetIndex];
+  const selectedFont = record(selectedTarget?.cell.font);
+  const selectedRowIndex =
+    selectedTarget && "rowIndex" in selectedTarget.edit
+      ? selectedTarget.edit.rowIndex
+      : undefined;
   const minRows = integerValue(element.min_rows, rows.length);
   const maxRows = integerValue(element.max_rows, rows.length);
   const minColumns = Math.max(
@@ -181,6 +191,107 @@ export default function TableToolbar({
               }
             />
           </ToolbarField>
+          <ToolbarField label="Table cell font size">
+            <span aria-hidden="true">Size</span>
+            <input
+              className={`${toolbarInputClass} w-16`}
+              aria-label="Table cell font size"
+              type="number"
+              step="any"
+              value={numberValue(selectedFont?.size, 18)}
+              onChange={(event) =>
+                applyContractEdit(
+                  {
+                    kind: "cell-font",
+                    section: selectedTarget.edit.section,
+                    rowIndex: selectedRowIndex,
+                    columnIndex: selectedTarget.edit.columnIndex,
+                    field: "size",
+                    value: event.target.valueAsNumber,
+                  },
+                  `toolbar:table-font-size-${safeTargetIndex}`,
+                  true
+                )
+              }
+            />
+          </ToolbarField>
+          <ToolbarField label="Table cell font family">
+            <span aria-hidden="true">Font</span>
+            <input
+              className={`${toolbarInputClass} w-28`}
+              aria-label="Table cell font family"
+              type="text"
+              value={
+                typeof selectedFont?.family === "string"
+                  ? selectedFont.family
+                  : ""
+              }
+              onChange={(event) =>
+                applyContractEdit(
+                  {
+                    kind: "cell-font",
+                    section: selectedTarget.edit.section,
+                    rowIndex: selectedRowIndex,
+                    columnIndex: selectedTarget.edit.columnIndex,
+                    field: "family",
+                    value: event.target.value,
+                  },
+                  `toolbar:table-font-family-${safeTargetIndex}`,
+                  true
+                )
+              }
+            />
+          </ToolbarField>
+          <ToolbarField label="Table cell font color">
+            <span aria-hidden="true">Text</span>
+            <input
+              className={`${toolbarInputClass} w-24`}
+              aria-label="Table cell font color"
+              type="text"
+              value={
+                typeof selectedFont?.color === "string"
+                  ? selectedFont.color
+                  : ""
+              }
+              placeholder="#111827"
+              onChange={(event) =>
+                applyContractEdit(
+                  {
+                    kind: "cell-font",
+                    section: selectedTarget.edit.section,
+                    rowIndex: selectedRowIndex,
+                    columnIndex: selectedTarget.edit.columnIndex,
+                    field: "color",
+                    value: event.target.value,
+                  },
+                  `toolbar:table-font-color-${safeTargetIndex}`,
+                  true
+                )
+              }
+            />
+          </ToolbarField>
+          {(["bold", "italic", "underline"] as const).map((field) => (
+            <ToolbarButton
+              key={field}
+              aria-label={`Toggle table cell ${field}`}
+              aria-pressed={selectedFont?.[field] === true}
+              onClick={() =>
+                applyContractEdit(
+                  {
+                    kind: "cell-font",
+                    section: selectedTarget.edit.section,
+                    rowIndex: selectedRowIndex,
+                    columnIndex: selectedTarget.edit.columnIndex,
+                    field,
+                    value: selectedFont?.[field] !== true,
+                  },
+                  `toolbar:table-font-${field}-${safeTargetIndex}`
+                )
+              }
+            >
+              {field === "bold" ? "B" : field === "italic" ? "I" : "U"}
+            </ToolbarButton>
+          ))}
         </>
       )}
       <ToolbarField label="Table body row count">
