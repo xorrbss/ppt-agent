@@ -1,8 +1,14 @@
 "use client";
 
+import { useState } from "react";
+
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import { templateV2EditableVectorGeometry } from "@/lib/template-v2-vector";
-import { ToolbarField, toolbarInputClass } from "./ToolbarPrimitives";
+import {
+  ToolbarField,
+  ToolbarSelect,
+  toolbarInputClass,
+} from "./ToolbarPrimitives";
 import type { TemplateV2ToolbarPatch } from "./types";
 
 const numberValue = (value: unknown, fallback: number) =>
@@ -23,6 +29,7 @@ export default function VectorToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const [requestedPointIndex, setRequestedPointIndex] = useState(0);
   const fill = record(element.fill);
   const stroke = record(element.stroke);
   const fillColor = fill
@@ -38,6 +45,17 @@ export default function VectorToolbar({
     editableGeometry?.shape === "ellipse"
       ? null
       : (editableGeometry?.curve ?? null);
+  const pointIndex = editableGeometry
+    ? Math.min(requestedPointIndex, editableGeometry.points.length - 1)
+    : 0;
+  const editablePoint = editableGeometry?.points[pointIndex] ?? null;
+  const editableCornerRadii =
+    editableGeometry &&
+    editableGeometry.shape !== "ellipse" &&
+    editableGeometry.closed &&
+    editableGeometry.points.length >= 3
+      ? editableGeometry.cornerRadii
+      : null;
 
   function patchFill(value: string) {
     const path = fill || element.fill == null ? ["fill", "color"] : ["fill"];
@@ -118,6 +136,98 @@ export default function VectorToolbar({
           }
         />
       </ToolbarField>
+      {editableGeometry &&
+      editableGeometry.shape !== null &&
+      editableGeometry.points.length === 2 ? (
+        <ToolbarField label="Vector shape">
+          <span aria-hidden="true">Shape</span>
+          <ToolbarSelect
+            className="w-20"
+            aria-label="Vector shape"
+            value={editableGeometry.shape}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value !== "polygon" && value !== "ellipse") return;
+              onPatch([{ path: ["shape"], value }], {
+                historyKey: "toolbar:vector-shape",
+              });
+            }}
+          >
+            <option value="polygon">Polygon</option>
+            <option value="ellipse">Ellipse</option>
+          </ToolbarSelect>
+        </ToolbarField>
+      ) : null}
+      {editableGeometry && editablePoint ? (
+        <>
+          <ToolbarField label="Vector point">
+            <span aria-hidden="true">Point</span>
+            <ToolbarSelect
+              className="w-14"
+              aria-label="Vector point"
+              value={pointIndex}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (
+                  Number.isInteger(value) &&
+                  value >= 0 &&
+                  value < editableGeometry.points.length
+                ) {
+                  setRequestedPointIndex(value);
+                }
+              }}
+            >
+              {editableGeometry.points.map((_, index) => (
+                <option key={index} value={index}>
+                  {index + 1}
+                </option>
+              ))}
+            </ToolbarSelect>
+          </ToolbarField>
+          <ToolbarField label="Vector point X">
+            <span aria-hidden="true">X</span>
+            <input
+              className={`${toolbarInputClass} w-20`}
+              aria-label="Vector point X"
+              type="number"
+              step={0.01}
+              value={editablePoint.x}
+              onChange={(event) => {
+                const value = event.target.valueAsNumber;
+                if (!Number.isFinite(value)) return;
+                onPatch(
+                  [{ path: ["points", pointIndex, "x"], value }],
+                  {
+                    historyKey: `toolbar:vector-point-${pointIndex}-x`,
+                    continuous: true,
+                  }
+                );
+              }}
+            />
+          </ToolbarField>
+          <ToolbarField label="Vector point Y">
+            <span aria-hidden="true">Y</span>
+            <input
+              className={`${toolbarInputClass} w-20`}
+              aria-label="Vector point Y"
+              type="number"
+              step={0.01}
+              value={editablePoint.y}
+              onChange={(event) => {
+                const value = event.target.valueAsNumber;
+                if (!Number.isFinite(value)) return;
+                onPatch(
+                  [{ path: ["points", pointIndex, "y"], value }],
+                  {
+                    historyKey: `toolbar:vector-point-${pointIndex}-y`,
+                    continuous: true,
+                  }
+                );
+              }}
+            />
+          </ToolbarField>
+        </>
+      ) : null}
       {editableGeometry && editableGeometry.shape !== "ellipse" ? (
         <ToolbarField label="Closed vector path">
           <span aria-hidden="true">Closed</span>
@@ -129,6 +239,78 @@ export default function VectorToolbar({
               onPatch([{ path: ["closed"], value: event.target.checked }], {
                 historyKey: "toolbar:vector-closed",
               })
+            }
+          />
+        </ToolbarField>
+      ) : null}
+      {editableGeometry && editableCornerRadii ? (
+        <ToolbarField label="Vector corner radius">
+          <span aria-hidden="true">Radius</span>
+          <input
+            className={`${toolbarInputClass} w-20`}
+            aria-label="Vector corner radius"
+            type="number"
+            min={0}
+            max={10000}
+            step={0.01}
+            value={editableCornerRadii[pointIndex] ?? 0}
+            onChange={(event) => {
+              const value = event.target.valueAsNumber;
+              if (
+                !Number.isFinite(value) ||
+                value < 0 ||
+                value > 10000
+              ) {
+                return;
+              }
+              if (pointIndex < editableCornerRadii.length) {
+                onPatch(
+                  [{ path: ["corner_radii", pointIndex], value }],
+                  {
+                    historyKey: `toolbar:vector-corner-${pointIndex}`,
+                    continuous: true,
+                  }
+                );
+                return;
+              }
+              const values = Array.from(
+                { length: editableGeometry.points.length },
+                (_, index) =>
+                  index === pointIndex
+                    ? value
+                    : (editableCornerRadii[index] ?? 0)
+              );
+              onPatch([{ path: ["corner_radii"], value: values }], {
+                historyKey: `toolbar:vector-corner-${pointIndex}`,
+                continuous: true,
+              });
+            }}
+          />
+        </ToolbarField>
+      ) : null}
+      {editableGeometry && editableGeometry.shape !== "ellipse" ? (
+        <ToolbarField label="Smooth vector curve">
+          <span aria-hidden="true">Smooth</span>
+          <input
+            aria-label="Smooth vector curve"
+            type="checkbox"
+            checked={Boolean(editableCurve)}
+            disabled={Boolean(editableCurve && !editableCurve.canRemove)}
+            title={
+              editableCurve && !editableCurve.canRemove
+                ? "Curve extensions are preserved; remove is unavailable."
+                : undefined
+            }
+            onChange={(event) =>
+              onPatch(
+                [{
+                  path: ["curve"],
+                  value: event.target.checked
+                    ? { type: "smooth", tension: 0.5, segments: 16 }
+                    : null,
+                }],
+                { historyKey: "toolbar:vector-curve" }
+              )
             }
           />
         </ToolbarField>
