@@ -464,11 +464,11 @@ describe("TemplateV2SelectionToolbar", () => {
           type: "table",
           columns: [
             { runs: [{ text: "Name" }], color: { color: "#f1f5f9", retained: true } },
-            { runs: [{ text: "Value" }], color: "#f1f5f9" },
+            { runs: [{ text: "Value" }], color: { color: "#f1f5f9" } },
           ],
           rows: [[
-            { runs: [{ text: "Q1" }], color: "#ffffff" },
-            { runs: [{ text: "12" }], color: "#ffffff" },
+            { runs: [{ text: "Q1" }], color: { color: "#ffffff" } },
+            { runs: [{ text: "12" }], color: { color: "#ffffff" } },
           ]],
           min_columns: 2,
           max_columns: 2,
@@ -489,7 +489,7 @@ describe("TemplateV2SelectionToolbar", () => {
       expect(observed.lastCall.args).to.deep.equal([
         [
           { path: ["columns", 0, "color", "color"], value: "#ddeeff" },
-          { path: ["columns", 1, "color"], value: "#ddeeff" },
+          { path: ["columns", 1, "color", "color"], value: "#ddeeff" },
         ],
         { historyKey: "toolbar:table-header-fill", continuous: true },
       ]);

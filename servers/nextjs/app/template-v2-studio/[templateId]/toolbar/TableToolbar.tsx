@@ -28,28 +28,7 @@ const integerValue = (value: unknown, fallback: number) =>
 
 function cellColor(cell: TemplateV2ToolbarRecord): string {
   const color = record(cell.color);
-  return color
-    ? typeof color.color === "string"
-      ? color.color
-      : ""
-    : typeof cell.color === "string"
-      ? cell.color
-      : "";
-}
-
-function cellColorPatch(
-  root: "columns" | "rows",
-  row: number | null,
-  column: number,
-  cell: TemplateV2ToolbarRecord,
-  value: string
-): TemplateV2ToolbarPatch {
-  const path: Array<string | number> =
-    root === "columns" ? ["columns", column] : ["rows", row as number, column];
-  return {
-    path: record(cell.color) ? [...path, "color", "color"] : [...path, "color"],
-    value,
-  };
+  return color && typeof color.color === "string" ? color.color : "";
 }
 
 export default function TableToolbar({
@@ -143,18 +122,18 @@ export default function TableToolbar({
   }
 
   function patchHeader(value: string) {
-    onPatch(
-      columns.map((cell, column) => cellColorPatch("columns", null, column, cell, value)),
-      { historyKey: "toolbar:table-header-fill", continuous: true }
+    applyContractEdit(
+      { kind: "section-fill", section: "header", value },
+      "toolbar:table-header-fill",
+      true
     );
   }
 
   function patchBody(value: string) {
-    onPatch(
-      rows.flatMap((row, rowIndex) =>
-        row.map((cell, column) => cellColorPatch("rows", rowIndex, column, cell, value))
-      ),
-      { historyKey: "toolbar:table-body-fill", continuous: true }
+    applyContractEdit(
+      { kind: "section-fill", section: "body", value },
+      "toolbar:table-body-fill",
+      true
     );
   }
 

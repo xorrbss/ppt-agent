@@ -238,3 +238,55 @@ test("table fonts validate known fields while unsupported cell borders fail clos
     { ok: false, reason: "invalid_table_rows" },
   );
 });
+
+test("table cell fills and alignment match the pinned upstream TableCell schema", () => {
+  const source = {
+    type: "table",
+    columns: [
+      {
+        runs: [{ text: "Header" }],
+        color: {
+          color: "#e2e8f0",
+          opacity: 0.75,
+          extension: { retained: true },
+        },
+        alignment: "center",
+      },
+    ],
+    rows: [[{
+      runs: [{ text: "Body" }],
+      color: { color: "#ffffff" },
+      alignment: "right",
+    }]],
+    min_columns: 1,
+    max_columns: 1,
+    min_rows: 1,
+    max_rows: 1,
+  };
+  assert.equal(validateTableContract(source).ok, true);
+
+  assert.deepEqual(
+    validateTableContract({
+      ...source,
+      columns: [{ ...source.columns[0], color: "#e2e8f0" }],
+    }),
+    { ok: false, reason: "invalid_table_columns" },
+  );
+  assert.deepEqual(
+    validateTableContract({
+      ...source,
+      columns: [{
+        ...source.columns[0],
+        color: { color: "#e2e8f0", opacity: Number.NaN },
+      }],
+    }),
+    { ok: false, reason: "non_finite_number:$.columns.0.color.opacity" },
+  );
+  assert.deepEqual(
+    validateTableContract({
+      ...source,
+      rows: [[{ ...source.rows[0][0], alignment: "justify" }]],
+    }),
+    { ok: false, reason: "invalid_table_rows" },
+  );
+});

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import {
+  renderTemplateV2GeneralSlideCanvasHtml,
+} from "./template-v2-general-renderer.mjs";
 import {
   buildChartContractEditPatches,
   buildTableContractEditPatches,
@@ -8,6 +12,23 @@ import {
   validateTableContract,
   type TemplateV2ContractPatch,
 } from "./template-v2-chart-table-contract.ts";
+import {
+  adaptUpstreamTemplateV2LayoutsToStudio,
+  serializeStudioLayoutsForUpstream,
+} from "./template-v2-upstream-compat.ts";
+
+const pinnedUpstreamElements = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../fastapi/tests/fixtures/template_v2/upstream-elements-57b194b.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as {
+  upstream_sha: string;
+  elements: Array<Record<string, unknown>>;
+};
 
 function applyPatches(
   source: Record<string, unknown>,
@@ -328,4 +349,127 @@ test("table cell font edits create canonical font objects without losing cell me
     }),
     { ok: false, reason: "invalid_table_font_edit" },
   );
+});
+
+test("table section fill edits create canonical Fill objects and retain metadata", () => {
+  const source = table();
+  (source.columns[0] as Record<string, unknown>).color = {
+    color: "#f1f5f9",
+    opacity: 0.8,
+    extension: { retained: true },
+  };
+  const changed = buildTableContractEditPatches(source, {
+    kind: "section-fill",
+    section: "header",
+    value: "#ddeeff",
+  });
+  assert.equal(changed.ok, true);
+  if (!changed.ok) return;
+  assert.deepEqual(changed.value, [
+    {
+      path: ["columns", 0, "color", "color"],
+      value: "#ddeeff",
+    },
+    {
+      path: ["columns", 1, "color", "color"],
+      value: "#ddeeff",
+    },
+  ]);
+
+  const result = applyPatches(source, changed.value);
+  assert.equal(validateTableContract(result).ok, true);
+  assert.deepEqual(
+    (result.columns as Array<Record<string, unknown>>)[0].color,
+    {
+      color: "#ddeeff",
+      opacity: 0.8,
+      extension: { retained: true },
+    },
+  );
+  assert.deepEqual(
+    (result.columns as Array<Record<string, unknown>>)[1].color,
+    { color: "#ddeeff" },
+  );
+  assert.deepEqual(
+    buildTableContractEditPatches(source, {
+      kind: "section-fill",
+      section: "body",
+      value: 123,
+    }),
+    { ok: false, reason: "invalid_table_fill_edit" },
+  );
+});
+
+test("pinned upstream table fill edit survives save, render, and reload", () => {
+  assert.equal(
+    pinnedUpstreamElements.upstream_sha,
+    "57b194b234b42c8b28f8a507a30322de200e3e83",
+  );
+  const fixtureTable = pinnedUpstreamElements.elements.find(
+    (element) => element.type === "table",
+  );
+  assert.ok(fixtureTable);
+  const source = {
+    layouts: [{
+      id: "upstream-table-roundtrip",
+      components: [{
+        id: "table-component",
+        position: { x: 0, y: 0 },
+        elements: [structuredClone(fixtureTable)],
+      }],
+    }],
+    future_envelope_field: { retained: true },
+  };
+  const document = adaptUpstreamTemplateV2LayoutsToStudio(source);
+  const edited = structuredClone(document.studioLayouts) as {
+    layouts: Array<{
+      components: Array<{
+        elements: Array<Record<string, unknown>>;
+      }>;
+    }>;
+  };
+  const element = edited.layouts[0]!.components[0]!.elements[0]!;
+  const patches = buildTableContractEditPatches(element, {
+    kind: "section-fill",
+    section: "header",
+    value: "#ddeeff",
+  });
+  assert.equal(patches.ok, true);
+  if (!patches.ok) return;
+  edited.layouts[0]!.components[0]!.elements[0] = applyPatches(
+    element,
+    patches.value,
+  );
+
+  const saved = serializeStudioLayoutsForUpstream(document, edited) as {
+    layouts: Array<{
+      components: Array<{
+        elements: Array<Record<string, unknown>>;
+      }>;
+    }>;
+    future_envelope_field: { retained: boolean };
+  };
+  const reloaded = adaptUpstreamTemplateV2LayoutsToStudio(saved);
+  const persisted = serializeStudioLayoutsForUpstream(reloaded) as typeof saved;
+  const persistedTable =
+    persisted.layouts[0]!.components[0]!.elements[0]!;
+
+  assert.deepEqual(persisted.future_envelope_field, { retained: true });
+  assert.equal(validateTableContract(persistedTable).ok, true);
+  assert.deepEqual(persistedTable, {
+    ...fixtureTable,
+    columns: [{
+      runs: [{ text: "Metric" }],
+      color: { color: "#ddeeff" },
+    }],
+  });
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    id: "upstream-table-roundtrip",
+    ui: persisted.layouts[0],
+  });
+  assert.match(html, /data-template-v2-element="table"/);
+  assert.match(html, /background:#ddeeff/);
+  assert.match(html, />Metric</);
+  assert.match(html, />Revenue</);
+  assert.deepEqual(source.layouts[0]!.components[0]!.elements[0], fixtureTable);
 });

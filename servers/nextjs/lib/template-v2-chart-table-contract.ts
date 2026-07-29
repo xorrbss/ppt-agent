@@ -286,7 +286,9 @@ function validTableCell(value: unknown): boolean {
     return false;
   }
   return (
+    validOptionalFill(value.color) &&
     validOptionalFont(value.font) &&
+    validOptionalTableAlignment(value.alignment) &&
     Array.isArray(value.runs) &&
     value.runs.every(
       (run) =>
@@ -294,6 +296,25 @@ function validTableCell(value: unknown): boolean {
         typeof run.text === "string" &&
         validOptionalFont(run.font),
     )
+  );
+}
+
+function validOptionalFill(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!isRecord(value) || typeof value.color !== "string") return false;
+  return (
+    !hasMeaningfulField(value, "opacity") ||
+    (typeof value.opacity === "number" && Number.isFinite(value.opacity))
+  );
+}
+
+function validOptionalTableAlignment(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "left" ||
+    value === "center" ||
+    value === "right"
   );
 }
 
@@ -634,6 +655,11 @@ export type TableContractEdit =
       field: "size" | "family" | "color" | "bold" | "italic" | "underline";
       value: unknown;
     }
+  | {
+      kind: "section-fill";
+      section: "header" | "body";
+      value: unknown;
+    }
   | { kind: "row-count"; value: unknown }
   | { kind: "column-count"; value: unknown };
 
@@ -730,6 +756,36 @@ export function buildTableContractEditPatches(
       cell.font = font;
       patches.push({
         path: [...cellPath, "font", edit.field],
+        value: edit.value,
+      });
+    }
+  } else if (edit.kind === "section-fill") {
+    if (typeof edit.value !== "string") {
+      return { ok: false, reason: "invalid_table_fill_edit" };
+    }
+    const targets =
+      edit.section === "header"
+        ? columns.map((cell, columnIndex) => ({
+            cell,
+            path: ["columns", columnIndex] as (string | number)[],
+          }))
+        : rows.flatMap((row, rowIndex) =>
+            row.map((cell, columnIndex) => ({
+              cell,
+              path: [
+                "rows",
+                rowIndex,
+                columnIndex,
+              ] as (string | number)[],
+            })),
+          );
+    for (const { cell, path } of targets) {
+      const fill = isRecord(cell.color) ? cell.color : {};
+      if (fill.color === edit.value) continue;
+      fill.color = edit.value;
+      cell.color = fill;
+      patches.push({
+        path: [...path, "color", "color"],
         value: edit.value,
       });
     }
