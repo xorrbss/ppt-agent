@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { renderTemplateV2GeneralPresentationHtml } from "../template-v2-general-renderer.mjs";
+import {
+  projectTemplateV2ElementForRenderPlan,
+  translateTemplateV2Vector,
+} from "../template-v2-vector.ts";
 
 const frame = {
   position: { x: 20, y: 30 },
@@ -156,4 +160,87 @@ test("toolbar image, icon, and text fields survive persisted JSON and export ren
   assert.match(html, /justify-content:center/);
   assert.match(html, /<ol data-template-v2-element="text-list"/);
   assert.match(html, /list-style-type:decimal/);
+});
+
+test("vector appearance fields remain exact while planning and export consume them", () => {
+  const vector = {
+    type: "vector",
+    points: [
+      { x: 40, y: 40, future_point: { pressure: 0.75 } },
+      { x: 200, y: 40 },
+      { x: 200, y: 160 },
+      { x: 40, y: 160 },
+    ],
+    closed: true,
+    corner_radii: [12.125, 8.5, 4.25, 2],
+    curve: { type: "smooth", tension: 0.35, segments: 4 },
+    fill: { color: "#123456", opacity: 0.35, future_fill: "kept" },
+    stroke: {
+      color: "#abcdef",
+      opacity: 0.6,
+      width: 3,
+      dash: [7, 3],
+      future_stroke: true,
+    },
+    shadow: {
+      color: "#112233",
+      opacity: 0.4,
+      blur: 9.5,
+      offset_x: 6.25,
+      offset_y: -3.5,
+      future_shadow: [1, 2],
+    },
+    opacity: 0.8,
+    future_vector: { retained: true },
+  };
+  const authoredSnapshot = structuredClone(vector);
+  const persisted = roundTripThroughExportBoundary({
+    version: "v2-standard",
+    mode: "template",
+    slides: [{
+      id: "vector-toolbar-fidelity",
+      ui: {
+        components: [{
+          id: "body",
+          position: { x: 0, y: 0 },
+          elements: [vector],
+        }],
+      },
+    }],
+  });
+
+  assert.deepEqual(
+    persisted.slides[0].ui.components[0].elements[0],
+    authoredSnapshot
+  );
+
+  const projected = projectTemplateV2ElementForRenderPlan(vector);
+  assert.notStrictEqual(projected, vector);
+  assert.deepEqual(projected.stroke.dash, []);
+  assert.deepEqual(vector, authoredSnapshot);
+  assert.equal(projected.stroke.future_stroke, true);
+  assert.strictEqual(projected.fill, vector.fill);
+  assert.strictEqual(projected.shadow, vector.shadow);
+
+  const translated = translateTemplateV2Vector(vector, 5, -2);
+  assert.deepEqual(translated.corner_radii, vector.corner_radii);
+  assert.deepEqual(translated.fill, vector.fill);
+  assert.deepEqual(translated.stroke, vector.stroke);
+  assert.deepEqual(translated.shadow, vector.shadow);
+  assert.deepEqual(translated.future_vector, vector.future_vector);
+  assert.deepEqual(translated.points[0].future_point, { pressure: 0.75 });
+
+  const html = renderTemplateV2GeneralPresentationHtml(persisted);
+  assert.match(html, /fill="rgba\(18,52,86,0.35\)"/);
+  assert.match(html, /stroke="rgba\(171,205,239,0.6\)"/);
+  assert.match(html, /stroke-dasharray="7 3"/);
+  assert.match(
+    html,
+    /filter:drop-shadow\(6.25px -3.5px 9.5px rgba\(17,34,51,0.4\)\)/
+  );
+  assert.match(html, /opacity="0.8"/);
+  const polygonPoints = html.match(/<polygon points="([^"]+)"/)?.[1];
+  assert.ok(polygonPoints);
+  assert.ok(polygonPoints.split(" ").length > vector.points.length);
+  assert.deepEqual(vector, authoredSnapshot);
 });

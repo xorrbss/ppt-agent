@@ -189,7 +189,12 @@ test("Template V2 persisted JSON always crosses the production strategy boundary
   }
 });
 
-test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.2", { timeout: 240_000 }, async (t) => {
+// A cold Next compilation plus three real LibreOffice conversions regularly
+// crosses four minutes on Windows. Keep the tighter CI budget elsewhere while
+// leaving enough time for the test's mandatory child-process cleanup.
+const EXPORT_E2E_TIMEOUT_MS = process.platform === "win32" ? 360_000 : 240_000;
+
+test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.2", { timeout: EXPORT_E2E_TIMEOUT_MS }, async (t) => {
   const [{ manifest, presentations }, chrome, installedVersion] = await Promise.all([
     loadCorpus(),
     resolveAuthoredHybridChromeExecutable(),
