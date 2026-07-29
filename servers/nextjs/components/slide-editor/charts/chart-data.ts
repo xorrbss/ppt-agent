@@ -37,6 +37,24 @@ export const TEMPLATE_V2_CHART_TYPES = [
   "stacked_bar",
 ] as const satisfies readonly ChartType[];
 
+export const TEMPLATE_V2_CHART_TYPE_LABELS: Record<
+  (typeof TEMPLATE_V2_CHART_TYPES)[number],
+  string
+> = {
+  area: "Area",
+  bar: "Bar",
+  bubble: "Bubble",
+  donut: "Donut",
+  horizontal_bar: "Horizontal bar",
+  horizontal_stacked_bar: "Horizontal stacked bar",
+  line: "Line",
+  pie: "Pie",
+  polar_area: "Polar area",
+  radar: "Radar",
+  scatter: "Scatter",
+  stacked_bar: "Stacked bar",
+};
+
 // Kept in lock-step with template-v2-render-plan.mjs. The remaining chart
 // types render, but explicit axis state is not part of their export contract.
 export const TEMPLATE_V2_AXIS_CHART_TYPES = [

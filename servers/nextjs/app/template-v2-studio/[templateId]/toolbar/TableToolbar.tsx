@@ -1,7 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
-import { ToolbarField, toolbarInputClass } from "./ToolbarPrimitives";
+import {
+  buildTableContractEditPatches,
+  type TableContractEdit,
+} from "@/lib/template-v2-chart-table-contract";
+import {
+  ToolbarButton,
+  ToolbarField,
+  ToolbarSelect,
+  toolbarInputClass,
+} from "./ToolbarPrimitives";
 import type { TemplateV2ToolbarPatch } from "./types";
 
 const record = (value: unknown): TemplateV2ToolbarRecord | null =>
@@ -11,6 +21,9 @@ const record = (value: unknown): TemplateV2ToolbarRecord | null =>
 
 const numberValue = (value: unknown, fallback: number) =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+const integerValue = (value: unknown, fallback: number) =>
+  Number.isInteger(value) ? (value as number) : fallback;
 
 function cellColor(cell: TemplateV2ToolbarRecord): string {
   const color = record(cell.color);
@@ -48,10 +61,76 @@ export default function TableToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const [targetIndex, setTargetIndex] = useState(0);
   const columns = element.columns as TemplateV2ToolbarRecord[];
   const rows = element.rows as TemplateV2ToolbarRecord[][];
   const headerColor = cellColor(columns[0]);
   const bodyColor = cellColor(rows[0][0]);
+  const textTargets = [
+    ...columns.flatMap((cell, columnIndex) =>
+      Array.isArray(cell.runs)
+        ? cell.runs.flatMap((run, runIndex) => {
+            const value = record(run);
+            return value && typeof value.text === "string"
+              ? [{
+                  edit: {
+                    kind: "run-text" as const,
+                    section: "header" as const,
+                    columnIndex,
+                    runIndex,
+                    value: value.text,
+                  },
+                  label: `Header ${columnIndex + 1}, run ${runIndex + 1}`,
+                  text: value.text,
+                }]
+              : [];
+          })
+        : []
+    ),
+    ...rows.flatMap((row, rowIndex) =>
+      row.flatMap((cell, columnIndex) =>
+        Array.isArray(cell.runs)
+          ? cell.runs.flatMap((run, runIndex) => {
+              const value = record(run);
+              return value && typeof value.text === "string"
+                ? [{
+                    edit: {
+                      kind: "run-text" as const,
+                      section: "body" as const,
+                      rowIndex,
+                      columnIndex,
+                      runIndex,
+                      value: value.text,
+                    },
+                    label: `Row ${rowIndex + 1}, column ${columnIndex + 1}, run ${runIndex + 1}`,
+                    text: value.text,
+                  }]
+                : [];
+            })
+          : []
+      )
+    ),
+  ];
+  const safeTargetIndex = Math.min(targetIndex, Math.max(0, textTargets.length - 1));
+  const selectedTarget = textTargets[safeTargetIndex];
+  const minRows = integerValue(element.min_rows, rows.length);
+  const maxRows = integerValue(element.max_rows, rows.length);
+  const minColumns = Math.max(
+    1,
+    integerValue(element.min_columns, columns.length)
+  );
+  const maxColumns = integerValue(element.max_columns, columns.length);
+
+  function applyContractEdit(
+    edit: TableContractEdit,
+    historyKey: string,
+    continuous = false
+  ) {
+    const result = buildTableContractEditPatches(element, edit);
+    if (result.ok && result.value.length > 0) {
+      onPatch(result.value, { historyKey, continuous });
+    }
+  }
 
   function patchHeader(value: string) {
     onPatch(
@@ -71,6 +150,93 @@ export default function TableToolbar({
 
   return (
     <div className="flex items-center gap-2">
+      {selectedTarget && (
+        <>
+          <ToolbarField label="Table text target">
+            <span aria-hidden="true">Cell</span>
+            <ToolbarSelect
+              aria-label="Table text target"
+              value={safeTargetIndex}
+              onChange={(event) => setTargetIndex(Number(event.target.value))}
+            >
+              {textTargets.map((target, index) => (
+                <option key={`${target.label}-${index}`} value={index}>
+                  {target.label}
+                </option>
+              ))}
+            </ToolbarSelect>
+          </ToolbarField>
+          <ToolbarField label="Table cell text">
+            <input
+              className={`${toolbarInputClass} w-32`}
+              aria-label="Table cell text"
+              type="text"
+              value={selectedTarget.text}
+              onChange={(event) =>
+                applyContractEdit(
+                  { ...selectedTarget.edit, value: event.target.value },
+                  `toolbar:table-text-${safeTargetIndex}`,
+                  true
+                )
+              }
+            />
+          </ToolbarField>
+        </>
+      )}
+      <ToolbarField label="Table body row count">
+        <span aria-hidden="true">Rows {rows.length}</span>
+        <ToolbarButton
+          aria-label="Remove table row"
+          disabled={rows.length <= minRows}
+          onClick={() =>
+            applyContractEdit(
+              { kind: "row-count", value: rows.length - 1 },
+              "toolbar:table-rows"
+            )
+          }
+        >
+          −
+        </ToolbarButton>
+        <ToolbarButton
+          aria-label="Add table row"
+          disabled={rows.length >= maxRows}
+          onClick={() =>
+            applyContractEdit(
+              { kind: "row-count", value: rows.length + 1 },
+              "toolbar:table-rows"
+            )
+          }
+        >
+          +
+        </ToolbarButton>
+      </ToolbarField>
+      <ToolbarField label="Table column count">
+        <span aria-hidden="true">Columns {columns.length}</span>
+        <ToolbarButton
+          aria-label="Remove table column"
+          disabled={columns.length <= minColumns}
+          onClick={() =>
+            applyContractEdit(
+              { kind: "column-count", value: columns.length - 1 },
+              "toolbar:table-columns"
+            )
+          }
+        >
+          −
+        </ToolbarButton>
+        <ToolbarButton
+          aria-label="Add table column"
+          disabled={columns.length >= maxColumns}
+          onClick={() =>
+            applyContractEdit(
+              { kind: "column-count", value: columns.length + 1 },
+              "toolbar:table-columns"
+            )
+          }
+        >
+          +
+        </ToolbarButton>
+      </ToolbarField>
       <ToolbarField label="Table header fill color">
         <span aria-hidden="true">Header</span>
         <input

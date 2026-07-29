@@ -493,24 +493,88 @@ describe("TemplateV2Studio API integration", () => {
     ).should("have.attr", "aria-pressed", "true");
   });
 
-  it("keeps design-variable selections in the inspector instead of opening the floating toolbar", () => {
+  it("edits bound text losslessly in the inspector without opening the floating toolbar", () => {
     const guardedLayouts = layouts();
     guardedLayouts.layouts[0].components[0].elements[0] = {
       ...guardedLayouts.layouts[0].components[0].elements[0],
-      design_variables: [{ name: "title_color" }],
+      design_variables: [
+        {
+          name: "title_color",
+          target: { path: "font.color", mode: "theme" },
+          fallback: "#1d4ed8",
+        },
+      ],
+      future_element_field: { retained: "exactly" },
     };
+    let persistedLayouts = guardedLayouts;
+    let revision = 1;
     cy.intercept(
       "GET",
       `**/api/v1/ppt/structured-templates/${templateId}`,
-      { statusCode: 200, body: response(guardedLayouts) }
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
     ).as("loadDesignVariableTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        persistedLayouts = request.body.layouts;
+        revision = request.body.expected_revision + 1;
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("saveDesignVariableTemplate");
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadDesignVariableTemplate");
     cy.contains("button[aria-pressed]", /^title/).click();
     cy.contains("1 selected").should("be.visible");
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
-    cy.get("textarea").first().should("be.visible");
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
+      "not.exist"
+    );
+    cy.get("textarea")
+      .first()
+      .should("be.visible")
+      .type("{selectall}Edited bound title", { waitForAnimations: false });
+    cy.contains("button", "Save").click();
+
+    cy.wait("@saveDesignVariableTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements.0")
+      .then((element) => {
+        expect(element.runs).to.deep.equal([
+          { text: "Edited bound title" },
+          guardedLayouts.layouts[0].components[0].elements[0].runs[1],
+        ]);
+        expect(element.design_variables).to.deep.equal([
+          {
+            name: "title_color",
+            target: { path: "font.color", mode: "theme" },
+            fallback: "#1d4ed8",
+          },
+        ]);
+        expect(element.future_element_field).to.deep.equal({
+          retained: "exactly",
+        });
+      });
+
+    cy.mount(<div data-testid="design-variable-unmounted" />);
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
+      "not.exist"
+    );
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadDesignVariableTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.get("textarea").first().should("have.value", "Edited bound title");
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
   });
 
   it("keeps local edits and offers an explicit reload after a revision conflict", () => {

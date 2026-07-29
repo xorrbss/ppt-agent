@@ -1,0 +1,222 @@
+import React, { useState } from "react";
+
+import { adaptTemplateV2LayoutToSlide } from "@/components/slide-editor/importing/template-v2-import";
+import { templateV2UiToHtmlFragment } from "@/lib/template-v2-json-to-html";
+import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
+import VectorToolbar from "./VectorToolbar";
+import type { TemplateV2ToolbarPatch } from "./types";
+
+type PatchOptions = { historyKey?: string; continuous?: boolean };
+
+function setReactInputValue(ariaLabel: string, value: string) {
+  cy.get(`input[aria-label="${ariaLabel}"]`).then(($input) => {
+    const input = $input[0] as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value"
+    )?.set;
+    expect(setter, "native input value setter").to.be.a("function");
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function applyAtPath(
+  root: TemplateV2ToolbarRecord,
+  path: Array<string | number>,
+  value: unknown
+): TemplateV2ToolbarRecord {
+  const result = { ...root };
+  let cursor: Record<string | number, unknown> | unknown[] = result;
+  path.forEach((segment, index) => {
+    if (index === path.length - 1) {
+      cursor[segment] = value;
+      return;
+    }
+    const current = cursor[segment];
+    const next = Array.isArray(current)
+      ? [...current]
+      : current && typeof current === "object"
+        ? { ...(current as Record<string, unknown>) }
+        : typeof path[index + 1] === "number"
+          ? []
+          : {};
+    cursor[segment] = next;
+    cursor = next;
+  });
+  return result;
+}
+
+function StatefulVectorToolbar({
+  initialElement,
+  observedPatch,
+}: {
+  initialElement: TemplateV2ToolbarRecord;
+  observedPatch: (
+    patches: TemplateV2ToolbarPatch[],
+    options?: PatchOptions
+  ) => void;
+}) {
+  const [element, setElement] = useState(initialElement);
+
+  function onPatch(
+    patches: TemplateV2ToolbarPatch[],
+    options?: PatchOptions
+  ) {
+    observedPatch(patches, options);
+    setElement((current) =>
+      patches.reduce(
+        (next, patch) => applyAtPath(next, patch.path, patch.value),
+        current
+      )
+    );
+  }
+
+  return (
+    <>
+      <VectorToolbar element={element} onPatch={onPatch} />
+      <output data-testid="persisted-vector">{JSON.stringify(element)}</output>
+    </>
+  );
+}
+
+const validVector: TemplateV2ToolbarRecord = {
+  type: "vector",
+  shape: "polygon",
+  points: [
+    { x: 10, y: 20, future_point: { pressure: 0.75 } },
+    { x: 170, y: 15 },
+    { x: 155, y: 130 },
+    { x: 25, y: 145 },
+  ],
+  closed: true,
+  curve: {
+    type: "smooth",
+    tension: 0.35,
+    segments: 8,
+    future_curve: { interpolation: "v3" },
+  },
+  fill: { color: "#123456" },
+  stroke: { color: "#abcdef", width: 2 },
+  future_vector: { retained: true },
+};
+
+describe("VectorToolbar geometry fidelity", () => {
+  it("patches only safe leaves and keeps continuous controls coalescible", () => {
+    const patch = cy.spy().as("patch");
+    cy.mount(
+      <StatefulVectorToolbar
+        initialElement={validVector}
+        observedPatch={patch}
+      />
+    );
+
+    setReactInputValue("Curve tension", "0.64");
+    setReactInputValue("Curve segments", "24");
+    cy.get('input[aria-label="Closed vector path"]').click();
+
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["curve", "tension"], value: 0.64 }],
+      {
+        historyKey: "toolbar:vector-curve-tension",
+        continuous: true,
+      }
+    );
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["curve", "segments"], value: 24 }],
+      {
+        historyKey: "toolbar:vector-curve-segments",
+        continuous: true,
+      }
+    );
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["closed"], value: false }],
+      { historyKey: "toolbar:vector-closed" }
+    );
+
+    cy.get('[data-testid="persisted-vector"]')
+      .invoke("text")
+      .then((serialized) => {
+        const persisted = JSON.parse(serialized);
+        expect(persisted.points[0].future_point).to.deep.equal({
+          pressure: 0.75,
+        });
+        expect(persisted.curve.future_curve).to.deep.equal({
+          interpolation: "v3",
+        });
+        expect(persisted.future_vector).to.deep.equal({ retained: true });
+        expect(persisted.curve).to.include({ tension: 0.64, segments: 24 });
+        expect(persisted.closed).to.equal(false);
+
+        const html = templateV2UiToHtmlFragment({ elements: [persisted] });
+        expect(html).to.contain("<polyline");
+        expect(html).to.contain('fill="none"');
+        expect(html).not.to.contain("<polygon");
+      });
+  });
+
+  it("does not expose curve creation or unsafe geometry coercions", () => {
+    cy.mount(
+      <VectorToolbar
+        element={{ ...validVector, curve: null }}
+        onPatch={() => {}}
+      />
+    );
+    cy.get('input[aria-label="Closed vector path"]').should("exist");
+    cy.get('input[aria-label="Curve tension"]').should("not.exist");
+    cy.get('input[aria-label="Curve segments"]').should("not.exist");
+
+    cy.mount(
+      <VectorToolbar
+        element={{
+          ...validVector,
+          curve: { type: "smooth", tension: 0.5, segments: 8.5 },
+        }}
+        onPatch={() => {}}
+      />
+    );
+    cy.get('input[aria-label="Closed vector path"]').should("not.exist");
+    cy.get('input[aria-label="Curve tension"]').should("not.exist");
+    cy.get('input[aria-label="Curve segments"]').should("not.exist");
+
+    cy.mount(
+      <VectorToolbar
+        element={{
+          ...validVector,
+          shape: "ellipse",
+          points: [{ x: 0, y: 0 }, { x: 120, y: 80 }],
+        }}
+        onPatch={() => {}}
+      />
+    );
+    cy.get('input[aria-label="Closed vector path"]').should("not.exist");
+    cy.get('input[aria-label="Curve tension"]').should("not.exist");
+    cy.get('input[aria-label="Curve segments"]').should("not.exist");
+  });
+
+  it("canonicalizes imported segment counts without dropping future metadata", () => {
+    const slide = adaptTemplateV2LayoutToSlide({
+      id: "vector-import-roundtrip",
+      elements: [{
+        ...validVector,
+        curve: {
+          type: "smooth",
+          tension: 0.4,
+          segments: 8.6,
+          future_curve: { interpolation: "v3" },
+        },
+      }],
+    });
+    const imported = slide.elements[0] as unknown as TemplateV2ToolbarRecord;
+    const curve = imported.curve as TemplateV2ToolbarRecord;
+    const point = (imported.points as TemplateV2ToolbarRecord[])[0];
+
+    expect(curve.segments).to.equal(9);
+    expect(curve.future_curve).to.deep.equal({ interpolation: "v3" });
+    expect(point.future_point).to.deep.equal({ pressure: 0.75 });
+    expect(imported.future_vector).to.deep.equal({ retained: true });
+  });
+});

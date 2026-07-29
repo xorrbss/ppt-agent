@@ -1285,3 +1285,237 @@ def normalize_table_contract(table: Any) -> dict[str, Any]:
     elif missing:
         return _contract_error("partial_table_bounds")
     return _validate_table_contract_value(cloned)
+
+
+def build_chart_contract_edit_patches(
+    chart: Any,
+    edit: Any,
+) -> dict[str, Any]:
+    """Return toolbar-safe patches after validating the complete candidate."""
+
+    validated = validate_chart_contract(chart)
+    if not validated["ok"]:
+        return validated
+    if not isinstance(edit, Mapping):
+        return _contract_error("invalid_chart_edit")
+    candidate = validated["value"]
+    patches: list[dict[str, Any]] = []
+    kind = edit.get("kind")
+
+    if kind == "chart-type":
+        previous_type = candidate.get("chart_type")
+        next_type = edit.get("value")
+        if (
+            previous_type not in CHART_TYPES
+            or next_type not in CHART_TYPES
+        ):
+            return _contract_error("unsupported_chart_type_edit")
+        if previous_type == next_type:
+            return {"ok": True, "value": []}
+        policy = chart_contract_capabilities(next_type)["value"]
+        candidate["chart_type"] = next_type
+        patches.append({"path": ["chart_type"], "value": next_type})
+        if not policy["axis_options"]:
+            for field in AXIS_FIELDS:
+                if _contract_meaningful(candidate, field):
+                    candidate[field] = None
+                    patches.append({"path": [field], "value": None})
+        if (
+            not policy["data_label_positions"]
+            and _contract_meaningful(candidate, "data_labels")
+        ):
+            candidate["data_labels"] = None
+            patches.append({"path": ["data_labels"], "value": None})
+    elif kind == "category-label":
+        index = edit.get("categoryIndex")
+        value = edit.get("value")
+        categories = candidate.get("categories")
+        if (
+            isinstance(index, bool)
+            or not isinstance(index, int)
+            or not isinstance(value, str)
+            or not isinstance(categories, list)
+            or not 0 <= index < len(categories)
+        ):
+            return _contract_error("invalid_chart_category_edit")
+        categories[index] = value
+        patches.append(
+            {"path": ["categories", index], "value": value}
+        )
+    elif kind in {"series-name", "series-value"}:
+        series_index = edit.get("seriesIndex")
+        series_list = candidate.get("series")
+        if (
+            isinstance(series_index, bool)
+            or not isinstance(series_index, int)
+            or not isinstance(series_list, list)
+            or not 0 <= series_index < len(series_list)
+            or not isinstance(series_list[series_index], dict)
+        ):
+            return _contract_error("invalid_chart_series_edit")
+        selected = series_list[series_index]
+        value = edit.get("value")
+        if kind == "series-name":
+            if not isinstance(value, str):
+                return _contract_error("invalid_chart_series_name_edit")
+            selected["name"] = value
+            patches.append(
+                {
+                    "path": ["series", series_index, "name"],
+                    "value": value,
+                }
+            )
+        else:
+            category_index = edit.get("categoryIndex")
+            values = selected.get("values")
+            if (
+                isinstance(category_index, bool)
+                or not isinstance(category_index, int)
+                or isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or not isinstance(values, list)
+                or not 0 <= category_index < len(values)
+            ):
+                return _contract_error("invalid_chart_series_value_edit")
+            values[category_index] = value
+            patches.append(
+                {
+                    "path": [
+                        "series",
+                        series_index,
+                        "values",
+                        category_index,
+                    ],
+                    "value": value,
+                }
+            )
+    else:
+        return _contract_error("invalid_chart_edit")
+
+    result = _validate_chart_contract_value(candidate)
+    return {"ok": True, "value": patches} if result["ok"] else result
+
+
+def _blank_contract_table_cell() -> dict[str, Any]:
+    return {"runs": [{"text": ""}]}
+
+
+def build_table_contract_edit_patches(
+    table: Any,
+    edit: Any,
+) -> dict[str, Any]:
+    """Return rectangular, bounds-safe table patches without style guesses."""
+
+    validated = validate_table_contract(table)
+    if not validated["ok"]:
+        return validated
+    if not isinstance(edit, Mapping):
+        return _contract_error("invalid_table_edit")
+    candidate = validated["value"]
+    columns = candidate["columns"]
+    rows = candidate["rows"]
+    patches: list[dict[str, Any]] = []
+    kind = edit.get("kind")
+
+    if kind == "run-text":
+        section = edit.get("section")
+        row_index = edit.get("rowIndex")
+        column_index = edit.get("columnIndex")
+        run_index = edit.get("runIndex")
+        value = edit.get("value")
+        if (
+            section not in {"header", "body"}
+            or isinstance(column_index, bool)
+            or not isinstance(column_index, int)
+            or isinstance(run_index, bool)
+            or not isinstance(run_index, int)
+            or not isinstance(value, str)
+            or column_index < 0
+            or run_index < 0
+        ):
+            return _contract_error("invalid_table_text_edit")
+        if section == "header":
+            cell = (
+                columns[column_index]
+                if column_index < len(columns)
+                else None
+            )
+            path = ["columns", column_index, "runs", run_index, "text"]
+        else:
+            if (
+                isinstance(row_index, bool)
+                or not isinstance(row_index, int)
+                or row_index < 0
+                or row_index >= len(rows)
+                or column_index >= len(rows[row_index])
+            ):
+                return _contract_error("invalid_table_text_edit")
+            cell = rows[row_index][column_index]
+            path = [
+                "rows",
+                row_index,
+                column_index,
+                "runs",
+                run_index,
+                "text",
+            ]
+        if (
+            not isinstance(cell, dict)
+            or not isinstance(cell.get("runs"), list)
+            or run_index >= len(cell["runs"])
+            or not isinstance(cell["runs"][run_index], dict)
+        ):
+            return _contract_error("invalid_table_text_edit")
+        cell["runs"][run_index]["text"] = value
+        patches.append({"path": path, "value": value})
+    elif kind == "row-count":
+        next_count = edit.get("value")
+        if (
+            isinstance(next_count, bool)
+            or not isinstance(next_count, int)
+            or next_count < 0
+            or not candidate["min_rows"]
+            <= next_count
+            <= candidate["max_rows"]
+        ):
+            return _contract_error("table_row_count_edit_out_of_bounds")
+        if next_count == len(rows):
+            return {"ok": True, "value": []}
+        del rows[next_count:]
+        while len(rows) < next_count:
+            rows.append(
+                [_blank_contract_table_cell() for _ in columns]
+            )
+        patches.append({"path": ["rows"], "value": rows})
+    elif kind == "column-count":
+        next_count = edit.get("value")
+        if (
+            isinstance(next_count, bool)
+            or not isinstance(next_count, int)
+            or next_count < 1
+            or not candidate["min_columns"]
+            <= next_count
+            <= candidate["max_columns"]
+        ):
+            return _contract_error("table_column_count_edit_out_of_bounds")
+        if next_count == len(columns):
+            return {"ok": True, "value": []}
+        del columns[next_count:]
+        for row in rows:
+            del row[next_count:]
+        while len(columns) < next_count:
+            columns.append(_blank_contract_table_cell())
+            for row in rows:
+                row.append(_blank_contract_table_cell())
+        patches.extend(
+            [
+                {"path": ["columns"], "value": columns},
+                {"path": ["rows"], "value": rows},
+            ]
+        )
+    else:
+        return _contract_error("invalid_table_edit")
+
+    result = _validate_table_contract_value(candidate)
+    return {"ok": True, "value": patches} if result["ok"] else result

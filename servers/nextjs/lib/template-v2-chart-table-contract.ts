@@ -14,6 +14,11 @@ export type TemplateV2ContractResult<T> =
   | { ok: true; value: T }
   | { ok: false; reason: string };
 
+export type TemplateV2ContractPatch = {
+  path: (string | number)[];
+  value: unknown;
+};
+
 export type NormalizeChartContractOptions = {
   /**
    * Supplying the old type proves this is an intentional type migration.
@@ -385,4 +390,224 @@ export function normalizeTableContract(
     return { ok: false, reason: "partial_table_bounds" };
   }
   return validateTableValue(value);
+}
+
+export type ChartContractEdit =
+  | { kind: "chart-type"; value: unknown }
+  | { kind: "category-label"; categoryIndex: number; value: unknown }
+  | { kind: "series-name"; seriesIndex: number; value: unknown }
+  | {
+      kind: "series-value";
+      seriesIndex: number;
+      categoryIndex: number;
+      value: unknown;
+    };
+
+export function buildChartContractEditPatches(
+  chart: unknown,
+  edit: ChartContractEdit,
+): TemplateV2ContractResult<TemplateV2ContractPatch[]> {
+  const validated = validateChartContract(chart);
+  if (!validated.ok) return validated;
+  const candidate = validated.value;
+  const patches: TemplateV2ContractPatch[] = [];
+
+  if (edit.kind === "chart-type") {
+    const previousType = parseChartType(candidate.chart_type);
+    const nextType = parseChartType(edit.value);
+    if (!previousType || !nextType) {
+      return { ok: false, reason: "unsupported_chart_type_edit" };
+    }
+    if (previousType === nextType) return { ok: true, value: [] };
+    const capabilities = chartContractCapabilities(nextType);
+    if (!capabilities.ok) return capabilities;
+    candidate.chart_type = nextType;
+    patches.push({ path: ["chart_type"], value: nextType });
+    if (!capabilities.value.axisOptions) {
+      for (const field of CHART_AXIS_FIELDS) {
+        if (hasMeaningfulField(candidate, field)) {
+          candidate[field] = null;
+          patches.push({ path: [field], value: null });
+        }
+      }
+    }
+    if (
+      capabilities.value.dataLabelPositions.length === 0 &&
+      hasMeaningfulField(candidate, "data_labels")
+    ) {
+      candidate.data_labels = null;
+      patches.push({ path: ["data_labels"], value: null });
+    }
+  } else if (edit.kind === "category-label") {
+    if (
+      !Number.isInteger(edit.categoryIndex) ||
+      typeof edit.value !== "string" ||
+      !Array.isArray(candidate.categories) ||
+      edit.categoryIndex < 0 ||
+      edit.categoryIndex >= candidate.categories.length
+    ) {
+      return { ok: false, reason: "invalid_chart_category_edit" };
+    }
+    candidate.categories[edit.categoryIndex] = edit.value;
+    patches.push({
+      path: ["categories", edit.categoryIndex],
+      value: edit.value,
+    });
+  } else {
+    if (
+      !Number.isInteger(edit.seriesIndex) ||
+      !Array.isArray(candidate.series) ||
+      edit.seriesIndex < 0 ||
+      edit.seriesIndex >= candidate.series.length
+    ) {
+      return { ok: false, reason: "invalid_chart_series_edit" };
+    }
+    const selectedSeries = candidate.series[edit.seriesIndex];
+    if (!isRecord(selectedSeries)) {
+      return { ok: false, reason: "invalid_chart_series_edit" };
+    }
+    if (edit.kind === "series-name") {
+      if (typeof edit.value !== "string") {
+        return { ok: false, reason: "invalid_chart_series_name_edit" };
+      }
+      selectedSeries.name = edit.value;
+      patches.push({
+        path: ["series", edit.seriesIndex, "name"],
+        value: edit.value,
+      });
+    } else {
+      if (
+        !Number.isInteger(edit.categoryIndex) ||
+        typeof edit.value !== "number" ||
+        !Number.isFinite(edit.value) ||
+        !Array.isArray(selectedSeries.values) ||
+        edit.categoryIndex < 0 ||
+        edit.categoryIndex >= selectedSeries.values.length
+      ) {
+        return { ok: false, reason: "invalid_chart_series_value_edit" };
+      }
+      selectedSeries.values[edit.categoryIndex] = edit.value;
+      patches.push({
+        path: ["series", edit.seriesIndex, "values", edit.categoryIndex],
+        value: edit.value,
+      });
+    }
+  }
+
+  const result = validateChartValue(candidate);
+  return result.ok ? { ok: true, value: patches } : result;
+}
+
+export type TableContractEdit =
+  | {
+      kind: "run-text";
+      section: "header" | "body";
+      rowIndex?: number;
+      columnIndex: number;
+      runIndex: number;
+      value: unknown;
+    }
+  | { kind: "row-count"; value: unknown }
+  | { kind: "column-count"; value: unknown };
+
+function blankTableCell(): JsonRecord {
+  return { runs: [{ text: "" }] };
+}
+
+export function buildTableContractEditPatches(
+  table: unknown,
+  edit: TableContractEdit,
+): TemplateV2ContractResult<TemplateV2ContractPatch[]> {
+  const validated = validateTableContract(table);
+  if (!validated.ok) return validated;
+  const candidate = validated.value;
+  const columns = candidate.columns as JsonRecord[];
+  const rows = candidate.rows as JsonRecord[][];
+  const patches: TemplateV2ContractPatch[] = [];
+
+  if (edit.kind === "run-text") {
+    if (
+      !Number.isInteger(edit.columnIndex) ||
+      !Number.isInteger(edit.runIndex) ||
+      typeof edit.value !== "string" ||
+      edit.columnIndex < 0 ||
+      edit.runIndex < 0
+    ) {
+      return { ok: false, reason: "invalid_table_text_edit" };
+    }
+    let cell: JsonRecord | undefined;
+    let path: (string | number)[];
+    if (edit.section === "header") {
+      cell = columns[edit.columnIndex];
+      path = ["columns", edit.columnIndex, "runs", edit.runIndex, "text"];
+    } else {
+      if (!Number.isInteger(edit.rowIndex) || (edit.rowIndex as number) < 0) {
+        return { ok: false, reason: "invalid_table_text_edit" };
+      }
+      cell = rows[edit.rowIndex as number]?.[edit.columnIndex];
+      path = [
+        "rows",
+        edit.rowIndex as number,
+        edit.columnIndex,
+        "runs",
+        edit.runIndex,
+        "text",
+      ];
+    }
+    const runs = cell?.runs;
+    if (!Array.isArray(runs) || edit.runIndex >= runs.length) {
+      return { ok: false, reason: "invalid_table_text_edit" };
+    }
+    const run = runs[edit.runIndex];
+    if (!isRecord(run)) {
+      return { ok: false, reason: "invalid_table_text_edit" };
+    }
+    run.text = edit.value;
+    patches.push({ path, value: edit.value });
+  } else if (edit.kind === "row-count") {
+    if (!Number.isInteger(edit.value) || (edit.value as number) < 0) {
+      return { ok: false, reason: "invalid_table_row_count_edit" };
+    }
+    const nextCount = edit.value as number;
+    const min = readTableBound(candidate, "min_rows");
+    const max = readTableBound(candidate, "max_rows");
+    if (min === null || max === null || nextCount < min || nextCount > max) {
+      return { ok: false, reason: "table_row_count_edit_out_of_bounds" };
+    }
+    if (nextCount === rows.length) return { ok: true, value: [] };
+    if (nextCount < rows.length) rows.splice(nextCount);
+    else {
+      while (rows.length < nextCount) {
+        rows.push(columns.map(() => blankTableCell()));
+      }
+    }
+    patches.push({ path: ["rows"], value: rows });
+  } else {
+    if (!Number.isInteger(edit.value) || (edit.value as number) < 1) {
+      return { ok: false, reason: "invalid_table_column_count_edit" };
+    }
+    const nextCount = edit.value as number;
+    const min = readTableBound(candidate, "min_columns");
+    const max = readTableBound(candidate, "max_columns");
+    if (min === null || max === null || nextCount < min || nextCount > max) {
+      return { ok: false, reason: "table_column_count_edit_out_of_bounds" };
+    }
+    if (nextCount === columns.length) return { ok: true, value: [] };
+    if (nextCount < columns.length) {
+      columns.splice(nextCount);
+      for (const row of rows) row.splice(nextCount);
+    } else {
+      while (columns.length < nextCount) {
+        columns.push(blankTableCell());
+        for (const row of rows) row.push(blankTableCell());
+      }
+    }
+    patches.push(
+      { path: ["columns"], value: columns },
+      { path: ["rows"], value: rows },
+    );
+  }
+
+  const result = validateTableValue(candidate);
+  return result.ok ? { ok: true, value: patches } : result;
 }

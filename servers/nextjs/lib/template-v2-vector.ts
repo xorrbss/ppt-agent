@@ -17,6 +17,93 @@ export interface TemplateV2VectorPoint {
   y: number;
 }
 
+export interface TemplateV2EditableVectorGeometry {
+  shape: "polygon" | "ellipse" | null;
+  closed: boolean;
+  curve: {
+    tension: number;
+    segments: number;
+  } | null;
+}
+
+/**
+ * Returns only geometry that every current renderer can consume without
+ * coercion. The toolbar uses this as a fail-closed capability check before it
+ * offers leaf edits; the authored record itself is never projected or rebuilt,
+ * so unknown point/curve fields survive the edit.
+ */
+export function templateV2EditableVectorGeometry(
+  element: JsonRecord
+): TemplateV2EditableVectorGeometry | null {
+  if (element.type !== "vector" || !Array.isArray(element.points)) return null;
+  if (element.points.length < 2) return null;
+  if (
+    element.points.some(
+      (point) =>
+        !isRecord(point) ||
+        typeof point.x !== "number" ||
+        !Number.isFinite(point.x) ||
+        typeof point.y !== "number" ||
+        !Number.isFinite(point.y)
+    )
+  ) {
+    return null;
+  }
+
+  const rawShape = element.shape;
+  if (
+    rawShape !== undefined &&
+    rawShape !== null &&
+    rawShape !== "polygon" &&
+    rawShape !== "ellipse"
+  ) {
+    return null;
+  }
+  const shape = rawShape ?? null;
+  if (shape === "ellipse" && element.points.length !== 2) return null;
+
+  const rawClosed = element.closed;
+  if (
+    rawClosed !== undefined &&
+    rawClosed !== null &&
+    typeof rawClosed !== "boolean"
+  ) {
+    return null;
+  }
+  const closed =
+    typeof rawClosed === "boolean" ? rawClosed : shape === "polygon";
+
+  const rawCurve = element.curve;
+  if (rawCurve === undefined || rawCurve === null) {
+    return { shape, closed, curve: null };
+  }
+  if (!isRecord(rawCurve) || rawCurve.type !== "smooth") return null;
+
+  const rawTension = rawCurve.tension;
+  const tension = rawTension ?? 0.5;
+  if (
+    typeof tension !== "number" ||
+    !Number.isFinite(tension) ||
+    tension < 0 ||
+    tension > 1
+  ) {
+    return null;
+  }
+
+  const rawSegments = rawCurve.segments;
+  const segments = rawSegments ?? 16;
+  if (
+    typeof segments !== "number" ||
+    !Number.isInteger(segments) ||
+    segments < 1 ||
+    segments > 96
+  ) {
+    return null;
+  }
+
+  return { shape, closed, curve: { tension, segments } };
+}
+
 export function templateV2VectorCornerRadii(
   element: JsonRecord,
   pointCount: number

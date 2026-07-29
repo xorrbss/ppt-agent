@@ -1,6 +1,7 @@
 "use client";
 
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
+import { templateV2EditableVectorGeometry } from "@/lib/template-v2-vector";
 import { ToolbarField, toolbarInputClass } from "./ToolbarPrimitives";
 import type { TemplateV2ToolbarPatch } from "./types";
 
@@ -32,6 +33,11 @@ export default function VectorToolbar({
       ? element.fill
       : "";
   const strokeColor = typeof stroke?.color === "string" ? stroke.color : "";
+  const editableGeometry = templateV2EditableVectorGeometry(element);
+  const editableCurve =
+    editableGeometry?.shape === "ellipse"
+      ? null
+      : (editableGeometry?.curve ?? null);
 
   function patchFill(value: string) {
     const path = fill || element.fill == null ? ["fill", "color"] : ["fill"];
@@ -112,6 +118,71 @@ export default function VectorToolbar({
           }
         />
       </ToolbarField>
+      {editableGeometry && editableGeometry.shape !== "ellipse" ? (
+        <ToolbarField label="Closed vector path">
+          <span aria-hidden="true">Closed</span>
+          <input
+            aria-label="Closed vector path"
+            type="checkbox"
+            checked={editableGeometry.closed}
+            onChange={(event) =>
+              onPatch([{ path: ["closed"], value: event.target.checked }], {
+                historyKey: "toolbar:vector-closed",
+              })
+            }
+          />
+        </ToolbarField>
+      ) : null}
+      {editableCurve ? (
+        <>
+          <ToolbarField label="Curve tension">
+            <span aria-hidden="true">Tension</span>
+            <input
+              className="w-20 accent-violet-400"
+              aria-label="Curve tension"
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={editableCurve.tension}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (!Number.isFinite(value) || value < 0 || value > 1) return;
+                onPatch([{ path: ["curve", "tension"], value }], {
+                  historyKey: "toolbar:vector-curve-tension",
+                  continuous: true,
+                });
+              }}
+            />
+          </ToolbarField>
+          <ToolbarField label="Curve segments">
+            <span aria-hidden="true">Segments</span>
+            <input
+              className={`${toolbarInputClass} w-16`}
+              aria-label="Curve segments"
+              type="number"
+              min={1}
+              max={96}
+              step={1}
+              value={editableCurve.segments}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (
+                  !Number.isInteger(value) ||
+                  value < 1 ||
+                  value > 96
+                ) {
+                  return;
+                }
+                onPatch([{ path: ["curve", "segments"], value }], {
+                  historyKey: "toolbar:vector-curve-segments",
+                  continuous: true,
+                });
+              }}
+            />
+          </ToolbarField>
+        </>
+      ) : null}
     </div>
   );
 }

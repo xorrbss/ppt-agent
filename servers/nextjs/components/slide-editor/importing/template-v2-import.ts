@@ -923,7 +923,7 @@ function adaptVectorCurve(raw: UnknownRecord): VectorCurve | null {
     ...curve,
     type: "smooth",
     tension: clampOptional(readRawNumber(curve.tension), 0, 1),
-    segments: clampOptional(readRawNumber(curve.segments), 1, 96),
+    segments: clampOptionalInteger(readRawNumber(curve.segments), 1, 96),
   };
 }
 
@@ -1758,6 +1758,10 @@ function clampInteger(value: number | null, min: number, max: number) {
 
 function clampOptional(value: number | null, min: number, max: number) {
   return value == null ? null : clamp(value, min, max);
+}
+
+function clampOptionalInteger(value: number | null, min: number, max: number) {
+  return value == null ? null : clamp(Math.round(value), min, max);
 }
 
 function truncateString(value: string, maxLength: number) {
