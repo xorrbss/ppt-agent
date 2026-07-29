@@ -495,4 +495,76 @@ describe("TemplateV2SelectionToolbar", () => {
       ]);
     });
   });
+
+  it("keeps a nested selection path stable across rich patches, command actions, and a persisted remount", () => {
+    const path = ["children", 2, "children", 1];
+    const patch = cy.spy().as("persistedShapePatch");
+    const lock = cy.spy().as("persistedShapeLock");
+    const duplicate = cy.spy().as("persistedShapeDuplicate");
+    const initialElement = {
+      type: "vector",
+      shape: "polygon",
+      points: [{ x: 0, y: 0 }, { x: 50, y: 50 }],
+      fill: { color: "#ffffff", retained: "keep me" },
+      stroke: { color: "#111111", width: 1 },
+      opacity: 1,
+    };
+
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={initialElement}
+        position={position}
+        actions={{ onLockChange: lock, onDuplicate: duplicate }}
+        observedPatch={patch}
+      />
+    );
+
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should("be.visible");
+    setReactInputValue("Shape fill color", "#334455");
+    cy.get('button[aria-label="Lock selection"]').click();
+    cy.get('button[aria-label="Duplicate selection"]').click();
+    cy.get("@persistedShapePatch").then((subject) => {
+      const calls = (
+        subject as unknown as {
+          getCalls(): Array<{
+            args: [TemplateV2ToolbarPatch[], Record<string, unknown>];
+          }>;
+        }
+      )
+        .getCalls()
+        .map((call) => call.args);
+      expect(calls).to.deep.include([
+        [{ path: ["fill", "color"], value: "#334455" }],
+        { historyKey: "toolbar:vector-fill", continuous: true },
+      ]);
+    });
+    cy.get("@persistedShapeLock").should("have.been.calledWith", true);
+    cy.get("@persistedShapeDuplicate").should("have.been.calledOnce");
+    cy.wrap(path).should("deep.equal", ["children", 2, "children", 1]);
+
+    // This mirrors an optimistic save followed by a reload: the controller
+    // supplies the same ElementPath and persisted rich element without a
+    // toolbar-specific state channel.
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={{
+          ...initialElement,
+          fill: { color: "#334455", retained: "keep me" },
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={() => {}}
+      />
+    );
+    cy.get('input[aria-label="Shape fill color"]').should(
+      "have.value",
+      "#334455"
+    );
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("exist");
+    cy.wrap(path).should("deep.equal", ["children", 2, "children", 1]);
+  });
 });

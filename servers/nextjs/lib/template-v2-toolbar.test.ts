@@ -173,6 +173,34 @@ test("fails closed for malformed or ambiguous vector, chart, and table payloads"
   }
 });
 
+test("rich route checks are pure so the external selection controller retains its payload identity", () => {
+  const selected = {
+    type: "chart",
+    chart_type: "bar",
+    categories: ["Q1"],
+    series: [{ name: "Revenue", values: [12], source: { retained: true } }],
+    legend: false,
+    metadata: { owner: "nested-selection" },
+  };
+  const before = structuredClone(selected);
+
+  assert.deepEqual(
+    resolveTemplateV2ToolbarRoute({ selectionCount: 1, element: selected }),
+    { kind: "chart", element: selected }
+  );
+  assert.deepEqual(selected, before);
+
+  // A multi-selection is routed before inspecting its representative element.
+  // This keeps the command facade in control even if a rich element is stale.
+  assert.deepEqual(
+    resolveTemplateV2ToolbarRoute({
+      selectionCount: 2,
+      element: { type: "chart", chart_type: "not-a-chart" },
+    }),
+    { kind: "multi", count: 2 }
+  );
+});
+
 test("projects an anchor through zoom, pan, and scroll", () => {
   assert.deepEqual(
     projectTemplateV2ToolbarBox(
