@@ -465,7 +465,7 @@ describe("TemplateV2Studio API integration", () => {
       .within(() => {
         cy.get('button[aria-label="Flip image horizontally"]')
           .should("have.attr", "aria-pressed", "false")
-          .click();
+          .click({ waitForAnimations: false });
       });
     cy.contains("1 selected").should("be.visible");
 
