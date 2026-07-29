@@ -95,6 +95,22 @@ test("planStudioElement fails soft to null instead of throwing", () => {
   );
 });
 
+test("planStudioElement keeps invalid infographic ranges out of the canvas plan", () => {
+  const base = {
+    type: "infographic",
+    data: { type: "gauge", min_value: 0, max_value: 100, value: 25 },
+  };
+
+  assert.ok(planStudioElement(base)?.infographic);
+  for (const data of [
+    { type: "gauge", min_value: 100, max_value: 100, value: 100 },
+    { type: "gauge", min_value: 100, max_value: 0, value: 25 },
+    { type: "progress_bar", min_value: 0, max_value: 100, value: 101 },
+  ]) {
+    assert.equal(planStudioElement({ type: "infographic", data }), null);
+  }
+});
+
 test("resolveStudioPlanFrame substitutes fallbacks for auto dimensions", () => {
   assert.deepEqual(
     resolveStudioPlanFrame({ x: 5, y: 6, width: null, height: 90 }),

@@ -865,7 +865,7 @@ function renderPolygon(item: JsonRecord, mode: RenderMode): string {
     }${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
   return `<div style="${frameStyleFromBox(box, mode)}${transformStyle(
     item
-  )}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
+  )}${vectorEffectStyle(item)}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
     box.width ?? 1
   )} ${cssNumber(
     box.height ?? 1
@@ -907,7 +907,7 @@ function renderEllipseVector(item: JsonRecord, mode: RenderMode): string {
 
   return `<div style="${frameStyleFromBox(box, mode)}${transformStyle(
     item
-  )}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
+  )}${vectorEffectStyle(item)}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
     width
   )} ${cssNumber(
     height
@@ -2135,6 +2135,14 @@ function boxStyle(item: JsonRecord): string {
 function textShadowStyle(item: JsonRecord): string {
   const shadowValue = shadowCssValue(readRecord(item.shadow));
   return shadowValue ? `text-shadow:${shadowValue};` : "";
+}
+
+function vectorEffectStyle(item: JsonRecord): string {
+  const shadowValue = shadowCssValue(readRecord(item.shadow));
+  const opacity = readNumber(item.opacity);
+  return `${shadowValue ? `filter:drop-shadow(${shadowValue});` : ""}${
+    opacity != null ? `opacity:${cssNumber(clamp(opacity, 0, 1))};` : ""
+  }`;
 }
 
 function shadowCssValue(shadow: JsonRecord): string {

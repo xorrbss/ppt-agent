@@ -1,6 +1,7 @@
 import {
   createTemplateV2SlideRenderPlan,
   isTemplateV2SafeColor,
+  sampleTemplateV2SmoothPoints,
 } from "./template-v2-render-plan.mjs";
 
 const CANVAS = Object.freeze({ width: 1280, height: 720 });
@@ -84,9 +85,37 @@ function colorWithOpacity(color, opacity) {
     : `color-mix(in srgb,${color} ${opacity * 100}%,transparent)`;
 }
 
+function paintColor(paint, fallback) {
+  const color = cssColor(paint, fallback);
+  if (color === "none" || color === "transparent") return color;
+  const opacity = isRecord(paint)
+    ? clamp(finite(paint.opacity, 1), 0, 1)
+    : 1;
+  return colorWithOpacity(color, opacity);
+}
+
+function strokeDashArray(stroke) {
+  if (!isRecord(stroke) || !Array.isArray(stroke.dash)) return "";
+  const dash = stroke.dash.filter(
+    (value) => typeof value === "number" && Number.isFinite(value) && value >= 0
+  );
+  return dash.length === stroke.dash.length ? dash.join(" ") : "";
+}
+
 function shadowStyle(shadow, property) {
   if (!shadow) return "";
   return `${property}:${shadow.offsetX}px ${shadow.offsetY}px ${shadow.blur}px ${colorWithOpacity(shadow.color, shadow.opacity)}`;
+}
+
+function elementShadowStyle(shadow) {
+  if (!isRecord(shadow)) return "";
+  const opacity = clamp(finite(shadow.opacity, 1), 0, 1);
+  if (opacity <= 0) return "";
+  const color = isTemplateV2SafeColor(shadow.color) ? shadow.color : "#000000";
+  const offsetX = finite(shadow.offset_x ?? shadow.offsetX);
+  const offsetY = finite(shadow.offset_y ?? shadow.offsetY);
+  const blur = clamp(finite(shadow.blur), 0, 1000);
+  return `filter:drop-shadow(${offsetX}px ${offsetY}px ${blur}px ${colorWithOpacity(color, opacity)})`;
 }
 
 function fontStyle(font) {
@@ -202,6 +231,7 @@ function renderImage(element, path, layout, plan) {
     ...positionStyle(element, layout, plan),
     isRecord(element.border_radius) ? `border-radius:${radiusStyle(element.border_radius)}` : "",
     `opacity:${image.opacity}`,
+    elementShadowStyle(element.shadow),
     image.clipPath ? `clip-path:${image.clipPath}` : "",
     "overflow:hidden",
   ].filter(Boolean);
@@ -282,24 +312,156 @@ function renderTable(element, path, layout, plan) {
   return `<table data-template-v2-element="table" data-element-name="${escapeHtml(element.name ?? path)}" style="${style.join(";")}">${head}${body}</table>`;
 }
 
+function vectorCornerRadii(element, pointCount) {
+  const value = element.corner_radii ?? element.cornerRadii;
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, pointCount).map((radius) =>
+    typeof radius === "number" && Number.isFinite(radius)
+      ? Math.max(0, radius)
+      : 0
+  );
+}
+
+function vectorPointAt(points, index) {
+  return points[((index % points.length) + points.length) % points.length];
+}
+
+function lerpVectorPoint(start, end, t) {
+  return {
+    x: start.x + (end.x - start.x) * t,
+    y: start.y + (end.y - start.y) * t,
+  };
+}
+
+function roundedVectorPoints(points, radii, segments = 8) {
+  if (points.length < 3 || radii.length === 0) return points;
+  const rounded = [];
+  points.forEach((point, index) => {
+    const radius = radii[index] ?? 0;
+    const previous = vectorPointAt(points, index - 1);
+    const next = vectorPointAt(points, index + 1);
+    const previousDistance = Math.hypot(
+      point.x - previous.x,
+      point.y - previous.y
+    );
+    const nextDistance = Math.hypot(point.x - next.x, point.y - next.y);
+    const safeRadius = Math.min(
+      Math.max(0, radius),
+      previousDistance / 2,
+      nextDistance / 2
+    );
+    if (
+      safeRadius <= 0 ||
+      previousDistance === 0 ||
+      nextDistance === 0
+    ) {
+      rounded.push(point);
+      return;
+    }
+    const from = lerpVectorPoint(
+      point,
+      previous,
+      safeRadius / previousDistance
+    );
+    const to = lerpVectorPoint(point, next, safeRadius / nextDistance);
+    rounded.push(from);
+    for (let step = 1; step < segments; step += 1) {
+      const t = step / segments;
+      rounded.push({
+        x:
+          (1 - t) * (1 - t) * from.x +
+          2 * (1 - t) * t * point.x +
+          t * t * to.x,
+        y:
+          (1 - t) * (1 - t) * from.y +
+          2 * (1 - t) * t * point.y +
+          t * t * to.y,
+      });
+    }
+    rounded.push(to);
+  });
+  return rounded;
+}
+
+function vectorGeometryWithCorners(element, geometry, path) {
+  if (
+    !geometry.closed ||
+    geometry.shape === "ellipse" ||
+    !Array.isArray(element.points)
+  ) {
+    return geometry;
+  }
+  const radii = vectorCornerRadii(element, element.points.length);
+  if (!radii.some((radius) => radius > 0)) return geometry;
+  const sourcePoints = element.points.map((point) => ({
+    x: finite(point?.x),
+    y: finite(point?.y),
+  }));
+  let points = roundedVectorPoints(sourcePoints, radii);
+  if (geometry.tension !== null) {
+    points = sampleTemplateV2SmoothPoints(points, {
+      closed: geometry.closed,
+      tension: geometry.tension,
+      segments: geometry.segments,
+      path,
+    });
+  }
+  const minX = Math.min(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const maxY = Math.max(...points.map((point) => point.y));
+  return {
+    ...geometry,
+    frame: {
+      x: minX,
+      y: minY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+    },
+    points: points.map((point) => ({
+      x: point.x - minX,
+      y: point.y - minY,
+    })),
+  };
+}
+
 function renderVector(element, path, plan) {
   if (!plan?.vector) {
     throw new Error(`template_v2_renderer_vector_plan_required:${path}`);
   }
-  const geometry = plan.vector;
+  const geometry = vectorGeometryWithCorners(element, plan.vector, path);
   const frame = plan.frame;
-  const fill = geometry.closed ? cssColor(element.fill, "none") : "none";
+  const fill = geometry.closed ? paintColor(element.fill, "none") : "none";
   const stroke = isRecord(element.stroke) ? element.stroke : {};
-  const strokeColor = typeof stroke.color === "string" ? stroke.color : "transparent";
+  const strokeColor = paintColor(stroke, "transparent");
   const strokeWidth = finite(stroke.width, 0);
-  const opacity = element.opacity === undefined ? 1 : finite(element.opacity, 1);
-  const outerStyle = `position:absolute;left:${frame.x}px;top:${frame.y}px;width:${frame.width}px;height:${frame.height}px;overflow:visible`;
+  const dash = strokeDashArray(stroke);
+  const opacity = clamp(
+    element.opacity === undefined ? 1 : finite(element.opacity, 1),
+    0,
+    1
+  );
+  const outerStyle = [
+    `position:absolute`,
+    `left:${frame.x}px`,
+    `top:${frame.y}px`,
+    `width:${frame.width}px`,
+    `height:${frame.height}px`,
+    elementShadowStyle(element.shadow),
+    "overflow:visible",
+  ].filter(Boolean).join(";");
+  const paintAttributes = [
+    `fill="${escapeHtml(fill)}"`,
+    `stroke="${escapeHtml(strokeColor)}"`,
+    `stroke-width="${strokeWidth}"`,
+    dash ? `stroke-dasharray="${dash}"` : "",
+  ].filter(Boolean).join(" ");
   if (element.shape === "ellipse") {
-    return `<svg data-template-v2-element="vector" viewBox="0 0 ${geometry.frame.width} ${geometry.frame.height}" style="${outerStyle}" opacity="${opacity}"><ellipse cx="${geometry.frame.width / 2}" cy="${geometry.frame.height / 2}" rx="${geometry.frame.width / 2}" ry="${geometry.frame.height / 2}" fill="${escapeHtml(fill)}" stroke="${escapeHtml(strokeColor)}" stroke-width="${strokeWidth}"/></svg>`;
+    return `<svg data-template-v2-element="vector" viewBox="0 0 ${geometry.frame.width} ${geometry.frame.height}" style="${outerStyle}" opacity="${opacity}"><ellipse cx="${geometry.frame.width / 2}" cy="${geometry.frame.height / 2}" rx="${geometry.frame.width / 2}" ry="${geometry.frame.height / 2}" ${paintAttributes}/></svg>`;
   }
   const tag = geometry.closed ? "polygon" : "polyline";
   const points = geometry.points.map((point) => `${point.x},${point.y}`).join(" ");
-  return `<svg data-template-v2-element="vector" viewBox="0 0 ${geometry.frame.width} ${geometry.frame.height}" style="${outerStyle}" opacity="${opacity}"><${tag} points="${points}" fill="${escapeHtml(fill)}" stroke="${escapeHtml(strokeColor)}" stroke-width="${strokeWidth}"/></svg>`;
+  return `<svg data-template-v2-element="vector" viewBox="0 0 ${geometry.frame.width} ${geometry.frame.height}" style="${outerStyle}" opacity="${opacity}"><${tag} points="${points}" ${paintAttributes}/></svg>`;
 }
 
 function pieSegments(values, colors) {
@@ -547,9 +709,61 @@ function renderElement(element, path, layout = "absolute", plan = null) {
   throw new Error(`template_v2_renderer_unsupported_element:${element.type}`);
 }
 
+function projectElementForRenderPlan(element) {
+  if (!isRecord(element)) return element;
+  let projected = element;
+  const stroke = isRecord(element.stroke) ? element.stroke : null;
+  if (
+    element.type === "vector" &&
+    stroke &&
+    Array.isArray(stroke.dash) &&
+    stroke.dash.length > 0
+  ) {
+    projected = { ...projected, stroke: { ...stroke, dash: [] } };
+  }
+  if (isRecord(element.child)) {
+    const child = projectElementForRenderPlan(element.child);
+    if (child !== element.child) projected = { ...projected, child };
+  }
+  if (Array.isArray(element.children)) {
+    let changed = false;
+    const children = element.children.map((child) => {
+      const projectedChild = projectElementForRenderPlan(child);
+      if (projectedChild !== child) changed = true;
+      return projectedChild;
+    });
+    if (changed) projected = { ...projected, children };
+  }
+  return projected;
+}
+
+function projectSlideForRenderPlan(slide) {
+  if (!isRecord(slide) || !isRecord(slide.ui) || !Array.isArray(slide.ui.components)) {
+    return slide;
+  }
+  let componentsChanged = false;
+  const components = slide.ui.components.map((component) => {
+    if (!isRecord(component) || !Array.isArray(component.elements)) return component;
+    let elementsChanged = false;
+    const elements = component.elements.map((element) => {
+      const projected = projectElementForRenderPlan(element);
+      if (projected !== element) elementsChanged = true;
+      return projected;
+    });
+    if (!elementsChanged) return component;
+    componentsChanged = true;
+    return { ...component, elements };
+  });
+  return componentsChanged
+    ? { ...slide, ui: { ...slide.ui, components } }
+    : slide;
+}
+
 function createGeneralRenderPlan(slide, index) {
   try {
-    return createTemplateV2SlideRenderPlan(slide, { pathPrefix: String(index) });
+    return createTemplateV2SlideRenderPlan(projectSlideForRenderPlan(slide), {
+      pathPrefix: String(index),
+    });
   } catch (error) {
     if (!(error instanceof Error) || !error.message.startsWith("template_v2_render_plan_")) {
       throw error;

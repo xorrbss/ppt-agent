@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 import json
+import math
 import re
+from typing import Any, Mapping
 import uuid
 
 import sqlalchemy as sa
@@ -956,3 +959,329 @@ def require_template_v2_legacy_provenance_drop_data_ready(connection) -> None:
             "Template V2 legacy provenance drop data requires a known "
             "presentation ownership foreign key"
         )
+
+# Fail-closed chart/table mutation contract.
+# Unknown JSON fields are cloned and retained; only known unsafe state is
+# rejected or, for an explicit chart-type transition, deliberately cleared.
+CHART_TYPES = frozenset(
+    {
+        "area",
+        "bar",
+        "bubble",
+        "donut",
+        "horizontal_bar",
+        "horizontal_stacked_bar",
+        "line",
+        "pie",
+        "polar_area",
+        "radar",
+        "scatter",
+        "stacked_bar",
+    }
+)
+AXIS_CHART_TYPES = frozenset(
+    {
+        "area",
+        "bar",
+        "horizontal_bar",
+        "horizontal_stacked_bar",
+        "line",
+        "stacked_bar",
+    }
+)
+DATA_LABEL_POSITIONS = frozenset({"base", "mid", "top", "outside"})
+AXIS_FIELDS = (
+    "x_axis",
+    "y_axis",
+    "x_axis_title",
+    "y_axis_title",
+    "axis_color",
+    "x_axis_grid",
+    "y_axis_grid",
+    "grid_color",
+)
+
+
+def _contract_ok(value: dict[str, Any]) -> dict[str, Any]:
+    return {"ok": True, "value": value}
+
+
+def _contract_error(reason: str) -> dict[str, Any]:
+    return {"ok": False, "reason": reason}
+
+
+def _clone_contract_json_object(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        cloned = deepcopy(dict(value))
+    except (TypeError, ValueError):
+        return None
+
+    active: set[int] = set()
+
+    def visit(item: Any) -> bool:
+        if item is None or isinstance(item, (str, bool, int)):
+            return True
+        if isinstance(item, float):
+            return math.isfinite(item)
+        if isinstance(item, list):
+            identity = id(item)
+            if identity in active:
+                return False
+            active.add(identity)
+            valid = all(visit(child) for child in item)
+            active.remove(identity)
+            return valid
+        if isinstance(item, dict):
+            identity = id(item)
+            if identity in active or any(
+                not isinstance(key, str) for key in item
+            ):
+                return False
+            active.add(identity)
+            valid = all(visit(child) for child in item.values())
+            active.remove(identity)
+            return valid
+        return False
+
+    return cloned if visit(cloned) else None
+
+
+def chart_contract_capabilities(chart_type: Any) -> dict[str, Any]:
+    if not isinstance(chart_type, str) or chart_type not in CHART_TYPES:
+        return _contract_error("unsupported_chart_type")
+    axis_options = chart_type in AXIS_CHART_TYPES
+    if chart_type in {"line", "area"}:
+        positions = ["top", "outside"]
+    elif axis_options:
+        positions = ["base", "mid", "top", "outside"]
+    else:
+        positions = []
+    return _contract_ok(
+        {
+            "axis_options": axis_options,
+            "data_label_positions": positions,
+            "multiple_series": chart_type not in {"pie", "donut"},
+        }
+    )
+
+
+def _contract_meaningful(element: Mapping[str, Any], field: str) -> bool:
+    return field in element and element[field] is not None
+
+
+def _validate_chart_contract_value(chart: dict[str, Any]) -> dict[str, Any]:
+    if chart.get("type") != "chart":
+        return _contract_error("not_chart")
+    chart_type = chart.get("chart_type")
+    capabilities = chart_contract_capabilities(chart_type)
+    if not capabilities["ok"]:
+        return capabilities
+    policy = capabilities["value"]
+
+    categories = chart.get("categories")
+    if categories is not None and (
+        not isinstance(categories, list)
+        or len(categories) > 24
+        or any(not isinstance(item, str) for item in categories)
+    ):
+        return _contract_error("invalid_chart_categories")
+
+    series_list = chart.get("series")
+    if series_list is not None:
+        if not isinstance(series_list, list) or len(series_list) > 12:
+            return _contract_error("invalid_chart_series")
+        if not policy["multiple_series"] and len(series_list) > 1:
+            return _contract_error("chart_series_limit")
+        for series in series_list:
+            if (
+                not isinstance(series, dict)
+                or not isinstance(series.get("name"), str)
+                or not isinstance(series.get("values"), list)
+                or len(series["values"]) > 24
+                or any(
+                    isinstance(item, bool)
+                    or not isinstance(item, (int, float))
+                    or not math.isfinite(item)
+                    for item in series["values"]
+                )
+            ):
+                return _contract_error("invalid_chart_series")
+            if categories is not None and len(series["values"]) != len(
+                categories
+            ):
+                return _contract_error("chart_category_mismatch")
+
+    if any(_contract_meaningful(chart, field) for field in AXIS_FIELDS) and not policy[
+        "axis_options"
+    ]:
+        return _contract_error("stale_chart_axis_options")
+    if _contract_meaningful(chart, "data_labels"):
+        data_labels = chart["data_labels"]
+        if (
+            not isinstance(data_labels, str)
+            or data_labels not in DATA_LABEL_POSITIONS
+        ):
+            return _contract_error("invalid_chart_data_labels")
+        if data_labels not in policy["data_label_positions"]:
+            return _contract_error("stale_chart_data_labels")
+
+    size = chart.get("size")
+    if size is not None:
+        if not isinstance(size, dict):
+            return _contract_error("invalid_chart_size")
+        width = size.get("width")
+        height = size.get("height")
+        if (
+            isinstance(width, bool)
+            or not isinstance(width, (int, float))
+            or not math.isfinite(width)
+            or isinstance(height, bool)
+            or not isinstance(height, (int, float))
+            or not math.isfinite(height)
+            or width < 80
+            or height < 60
+        ):
+            return _contract_error("invalid_chart_size")
+    return _contract_ok(chart)
+
+
+def validate_chart_contract(chart: Any) -> dict[str, Any]:
+    cloned = _clone_contract_json_object(chart)
+    return (
+        _validate_chart_contract_value(cloned)
+        if cloned is not None
+        else _contract_error("element_must_be_json_object")
+    )
+
+
+def normalize_chart_contract(
+    chart: Any,
+    *,
+    previous_type: Any = None,
+) -> dict[str, Any]:
+    cloned = _clone_contract_json_object(chart)
+    if cloned is None:
+        return _contract_error("element_must_be_json_object")
+    if cloned.get("type") != "chart":
+        return _contract_error("not_chart")
+    chart_type = cloned.get("chart_type")
+    if not isinstance(chart_type, str) or chart_type not in CHART_TYPES:
+        return _contract_error("unsupported_chart_type")
+
+    # Mirrors the explicit legacy coercion in templates.v2.models.Chart.
+    if cloned.get("data_labels") is True:
+        cloned["data_labels"] = "top"
+    elif cloned.get("data_labels") is False:
+        cloned.pop("data_labels", None)
+
+    if previous_type is not None:
+        if not isinstance(previous_type, str) or previous_type not in CHART_TYPES:
+            return _contract_error("unsupported_previous_chart_type")
+        if previous_type != chart_type:
+            policy = chart_contract_capabilities(chart_type)["value"]
+            if not policy["axis_options"]:
+                for field in AXIS_FIELDS:
+                    cloned.pop(field, None)
+            if _contract_meaningful(cloned, "data_labels") and cloned[
+                "data_labels"
+            ] not in policy["data_label_positions"]:
+                cloned.pop("data_labels", None)
+    return _validate_chart_contract_value(cloned)
+
+
+def _valid_contract_cell(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("runs"), list)
+        and all(
+            isinstance(run, dict) and isinstance(run.get("text"), str)
+            for run in value["runs"]
+        )
+    )
+
+
+def _contract_bound(table: Mapping[str, Any], field: str) -> int | None:
+    value = table.get(field)
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        else None
+    )
+
+
+def _validate_table_contract_value(table: dict[str, Any]) -> dict[str, Any]:
+    if table.get("type") != "table":
+        return _contract_error("not_table")
+    columns = table.get("columns")
+    rows = table.get("rows")
+    if not isinstance(columns, list) or not all(
+        _valid_contract_cell(cell) for cell in columns
+    ):
+        return _contract_error("invalid_table_columns")
+    if not isinstance(rows, list) or not all(
+        isinstance(row, list) and all(_valid_contract_cell(cell) for cell in row)
+        for row in rows
+    ):
+        return _contract_error("invalid_table_rows")
+    if any(len(row) != len(columns) for row in rows):
+        return _contract_error("table_not_rectangular")
+
+    min_columns = _contract_bound(table, "min_columns")
+    max_columns = _contract_bound(table, "max_columns")
+    min_rows = _contract_bound(table, "min_rows")
+    max_rows = _contract_bound(table, "max_rows")
+    if None in {min_columns, max_columns, min_rows, max_rows}:
+        return _contract_error("table_bounds_required")
+    assert min_columns is not None
+    assert max_columns is not None
+    assert min_rows is not None
+    assert max_rows is not None
+    if min_columns > max_columns or min_rows > max_rows:
+        return _contract_error("invalid_table_bounds")
+    if not min_columns <= len(columns) <= max_columns:
+        return _contract_error("table_column_count_out_of_bounds")
+    # `columns` is the header row. Bounds apply only to body rows in `rows`.
+    if not min_rows <= len(rows) <= max_rows:
+        return _contract_error("table_body_row_count_out_of_bounds")
+    return _contract_ok(table)
+
+
+def validate_table_contract(table: Any) -> dict[str, Any]:
+    cloned = _clone_contract_json_object(table)
+    return (
+        _validate_table_contract_value(cloned)
+        if cloned is not None
+        else _contract_error("element_must_be_json_object")
+    )
+
+
+def normalize_table_contract(table: Any) -> dict[str, Any]:
+    cloned = _clone_contract_json_object(table)
+    if cloned is None:
+        return _contract_error("element_must_be_json_object")
+    columns = cloned.get("columns")
+    rows = cloned.get("rows")
+    if (
+        cloned.get("type") != "table"
+        or not isinstance(columns, list)
+        or not isinstance(rows, list)
+    ):
+        return _validate_table_contract_value(cloned)
+    fields = ("min_columns", "max_columns", "min_rows", "max_rows")
+    missing = [
+        field for field in fields if cloned.get(field) is None
+    ]
+    if len(missing) == len(fields):
+        cloned.update(
+            {
+                "min_columns": len(columns),
+                "max_columns": len(columns),
+                "min_rows": len(rows),
+                "max_rows": len(rows),
+            }
+        )
+    elif missing:
+        return _contract_error("partial_table_bounds")
+    return _validate_table_contract_value(cloned)

@@ -462,6 +462,8 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("button[aria-pressed]", /^hero/).click();
     cy.get('[data-testid="template-v2-selection-toolbar"]')
       .should("be.visible")
+      .and("have.attr", "role", "toolbar")
+      .and("have.attr", "aria-label", "Selection toolbar")
       .within(() => {
         cy.get('button[aria-label="Flip image horizontally"]')
           .should("have.attr", "aria-pressed", "false")
@@ -489,6 +491,26 @@ describe("TemplateV2Studio API integration", () => {
     cy.get(
       '[data-testid="template-v2-selection-toolbar"] button[aria-label="Flip image horizontally"]'
     ).should("have.attr", "aria-pressed", "true");
+  });
+
+  it("keeps design-variable selections in the inspector instead of opening the floating toolbar", () => {
+    const guardedLayouts = layouts();
+    guardedLayouts.layouts[0].components[0].elements[0] = {
+      ...guardedLayouts.layouts[0].components[0].elements[0],
+      design_variables: [{ name: "title_color" }],
+    };
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response(guardedLayouts) }
+    ).as("loadDesignVariableTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadDesignVariableTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.contains("1 selected").should("be.visible");
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.get("textarea").first().should("be.visible");
   });
 
   it("keeps local edits and offers an explicit reload after a revision conflict", () => {
@@ -527,6 +549,14 @@ describe("TemplateV2Studio API integration", () => {
       .contains(/^Elements$/)
       .next("dd")
       .should("have.text", "3");
+
+    cy.on("window:confirm", () => true);
+    cy.contains("button", "Reload server version").click();
+    cy.get("dt")
+      .contains(/^Elements$/)
+      .next("dd")
+      .should("have.text", "2");
+    cy.contains("Unsaved changes").should("not.exist");
   });
 
   it("wires sibling multi-selection to reorder, lock, group, and ungroup commands", () => {

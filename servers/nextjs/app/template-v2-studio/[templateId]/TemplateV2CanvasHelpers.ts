@@ -88,14 +88,44 @@ export function fillOpacity(element: JsonRecord): number {
   return numberValue(fill.opacity, 1);
 }
 
-export function strokeProps(element: JsonRecord) {
+export function fillProps(element: JsonRecord, fallback = "#dbeafe") {
+  return {
+    fill: stringValue(
+      isJsonRecord(element.fill) ? element.fill.color : undefined,
+      fallback
+    ),
+    fillOpacity: fillOpacity(element),
+  };
+}
+
+export function strokeProps(
+  element: JsonRecord,
+  fallbackColor = "#2563eb",
+  fallbackWidth = 1
+) {
   const stroke = isJsonRecord(element.stroke) ? element.stroke : {};
   return {
-    stroke: stringValue(stroke.color, "#2563eb"),
-    strokeWidth: numberValue(stroke.width, 1),
+    stroke: stringValue(stroke.color, fallbackColor),
+    strokeWidth: numberValue(stroke.width, fallbackWidth),
+    strokeOpacity: numberValue(stroke.opacity, 1),
     dash: Array.isArray(stroke.dash)
-      ? stroke.dash.filter((item): item is number => typeof item === "number")
+      ? stroke.dash.filter(
+          (item): item is number =>
+            typeof item === "number" && Number.isFinite(item) && item >= 0
+        )
       : undefined,
+  };
+}
+
+export function elementShadowProps(element: JsonRecord) {
+  const shadow = isJsonRecord(element.shadow) ? element.shadow : null;
+  if (!shadow) return {};
+  return {
+    shadowColor: stringValue(shadow.color, "#000000"),
+    shadowBlur: Math.max(0, numberValue(shadow.blur, 0)),
+    shadowOpacity: numberValue(shadow.opacity, 1),
+    shadowOffsetX: numberValue(shadow.offset_x ?? shadow.offsetX, 0),
+    shadowOffsetY: numberValue(shadow.offset_y ?? shadow.offsetY, 0),
   };
 }
 
