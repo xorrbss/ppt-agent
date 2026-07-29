@@ -230,6 +230,56 @@ def test_layout_envelope_preserves_vector_path_topology_extensions():
     assert loaded.to_wire_value() == source
 
 
+def test_layout_envelope_preserves_unrendered_ellipse_extensions():
+    source = {
+        "layouts": [
+            {
+                "id": "ellipse-extension-slide",
+                "description": "Ellipse with latent path-only metadata",
+                "components": [
+                    {
+                        "id": "ellipse-body",
+                        "description": "Ellipse extension body",
+                        "position": {"x": 0, "y": 0},
+                        "elements": [
+                            {
+                                "type": "vector",
+                                "shape": "ellipse",
+                                "points": [
+                                    {
+                                        "x": 10,
+                                        "y": 20,
+                                        "future_point": {"pressure": 0.75},
+                                    },
+                                    {"x": 170, "y": 110},
+                                ],
+                                "closed": True,
+                                "corner_radii": [12, 7],
+                                "curve": {
+                                    "type": "smooth",
+                                    "tension": 0.4,
+                                    "segments": 8,
+                                    "future_curve": {"interpolation": "v3"},
+                                },
+                                "raw_path": "M917 811 L919 813",
+                                "future_vector": {"retained": True},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    wire = decode_wire_layouts(source)
+    wire.validate_strict()
+    stored = dump_storage_layouts(wire)
+    loaded = load_storage_layouts(stored)
+
+    assert stored == source
+    assert loaded.to_wire_value() == source
+
+
 def test_layout_envelope_strict_validation_rejects_unknown_discriminator():
     source = {
         "layouts": [
