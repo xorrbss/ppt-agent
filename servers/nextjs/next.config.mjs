@@ -36,6 +36,11 @@ const runtimeTailwindTrace = [
 const nextConfig = {
   reactStrictMode: false,
   distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
+  experimental: {
+    // Fidelity tests isolate their distDir per run. Avoid duplicating Turbopack's
+    // persistent dev cache on disk in that already-disposable Windows workspace.
+    turbopackFileSystemCacheForDev: !process.env.PRESENTON_TEST_NEXT_DIST_DIR,
+  },
   output: "standalone",
   // Runtime template CSS compilation needs Tailwind's real package __dirname.
   // Bundling it can bake the build machine path into fs.readFileSync calls.
