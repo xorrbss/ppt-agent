@@ -381,4 +381,118 @@ describe("TemplateV2SelectionToolbar", () => {
       ).to.equal(true);
     });
   });
+
+  it("renders bounded shape, chart, and table controls without replacing nested selections", () => {
+    const shapePatch = cy.spy().as("shapePatch");
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={["children", 2, "children", 1]}
+        initialElement={{
+          type: "vector",
+          shape: "polygon",
+          points: [{ x: 0, y: 0 }, { x: 50, y: 50 }],
+          fill: { color: "#ffffff", retained: "fill metadata" },
+          stroke: { color: "#111111", width: 1, retained: "stroke metadata" },
+          opacity: 1,
+          retained: { nested: true },
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={shapePatch}
+      />
+    );
+    setReactInputValue("Shape fill color", "#334455");
+    setReactInputValue("Shape stroke width", "2");
+    cy.get("[role=toolbar]").should("contain", "Fill");
+    cy.get("@shapePatch").then((subject) => {
+      const calls = (subject as unknown as { getCalls(): Array<{ args: [TemplateV2ToolbarPatch[], Record<string, unknown>] }> })
+        .getCalls()
+        .map((call) => call.args);
+      expect(calls).to.deep.include([
+        [{ path: ["fill", "color"], value: "#334455" }],
+        { historyKey: "toolbar:vector-fill", continuous: true },
+      ]);
+      expect(calls).to.deep.include([
+        [{ path: ["stroke", "width"], value: 2 }],
+        { historyKey: "toolbar:vector-stroke-width", continuous: true },
+      ]);
+    });
+
+    const chartPatch = cy.spy().as("chartPatch");
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        initialElement={{
+          type: "chart",
+          chart_type: "bar",
+          categories: ["Q1"],
+          colors: ["#2563eb"],
+          series: [{ name: "Revenue", values: [12], retained: "data stays put" }],
+          legend: false,
+          title_color: "#111827",
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={chartPatch}
+      />
+    );
+    cy.get('button[aria-label="Toggle chart legend"]')
+      .should("have.attr", "aria-pressed", "false")
+      .click()
+      .should("have.attr", "aria-pressed", "true");
+    setReactInputValue("Chart grid color", "#e5e7eb");
+    cy.get("@chartPatch").then((subject) => {
+      const calls = (subject as unknown as { getCalls(): Array<{ args: [TemplateV2ToolbarPatch[], Record<string, unknown>] }> })
+        .getCalls()
+        .map((call) => call.args);
+      expect(calls).to.deep.include([
+        [{ path: ["legend"], value: true }],
+        { historyKey: "toolbar:chart-legend" },
+      ]);
+      expect(calls).to.deep.include([
+        [{ path: ["grid_color"], value: "#e5e7eb" }],
+        { historyKey: "toolbar:chart-grid_color", continuous: true },
+      ]);
+    });
+
+    const tablePatch = cy.spy().as("tablePatch");
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        initialElement={{
+          type: "table",
+          columns: [
+            { runs: [{ text: "Name" }], color: { color: "#f1f5f9", retained: true } },
+            { runs: [{ text: "Value" }], color: "#f1f5f9" },
+          ],
+          rows: [[
+            { runs: [{ text: "Q1" }], color: "#ffffff" },
+            { runs: [{ text: "12" }], color: "#ffffff" },
+          ]],
+          min_columns: 2,
+          max_columns: 2,
+          min_rows: 1,
+          max_rows: 1,
+          opacity: 1,
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={tablePatch}
+      />
+    );
+    setReactInputValue("Table header fill color", "#ddeeff");
+    cy.get("@tablePatch").then((subject) => {
+      const observed = subject as unknown as {
+        lastCall: { args: [TemplateV2ToolbarPatch[], Record<string, unknown>] };
+      };
+      expect(observed.lastCall.args).to.deep.equal([
+        [
+          { path: ["columns", 0, "color", "color"], value: "#ddeeff" },
+          { path: ["columns", 1, "color"], value: "#ddeeff" },
+        ],
+        { historyKey: "toolbar:table-header-fill", continuous: true },
+      ]);
+    });
+  });
 });

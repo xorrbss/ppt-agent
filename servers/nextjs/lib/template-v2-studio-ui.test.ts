@@ -36,6 +36,20 @@ test("modifier selection starts a new selection when the sibling parent changes"
   );
 });
 
+test("modifier selection retains nested siblings and normalizes their child indexes", () => {
+  const laterChild = selection([2, "children", 3]);
+  const earlierChild = selection([2, "children", 1]);
+
+  assert.deepEqual(
+    toggleTemplateV2Selection([laterChild], earlierChild, true),
+    [earlierChild, laterChild]
+  );
+  assert.deepEqual(
+    toggleTemplateV2Selection([earlierChild, laterChild], laterChild, true),
+    [earlierChild]
+  );
+});
+
 test("plain selection always replaces the current selection", () => {
   const first = selection([0]);
   const second = selection([1]);

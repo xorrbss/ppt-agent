@@ -1,3 +1,11 @@
+import {
+  validateChartContract,
+  validateTableContract,
+} from "./template-v2-chart-table-contract.ts";
+import { isTemplateV2SafeColor } from "./template-v2-render-plan.mjs";
+import { planStudioElement } from "./template-v2-studio-plan.ts";
+import { projectTemplateV2ElementForRenderPlan } from "./template-v2-vector.ts";
+
 export type TemplateV2ToolbarRecord = Record<string, unknown>;
 
 export type TemplateV2ToolbarRoute =
@@ -8,8 +16,16 @@ export type TemplateV2ToolbarRoute =
       element: TemplateV2ToolbarRecord;
     }
   | {
+      kind: "vector" | "chart" | "table";
+      element: TemplateV2ToolbarRecord;
+    }
+  | {
       kind: "unsupported";
-      reason: "missing-element" | "design-variables" | "element-type";
+      reason:
+        | "missing-element"
+        | "design-variables"
+        | "element-type"
+        | "invalid-contract";
       element: TemplateV2ToolbarRecord | null;
     };
 
@@ -50,6 +66,119 @@ function hasUnsafeDesignVariables(element: TemplateV2ToolbarRecord): boolean {
   return variables != null && (!Array.isArray(variables) || variables.length > 0);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isBoundedNumber(
+  value: unknown,
+  minimum: number,
+  maximum: number
+): value is number {
+  return (
+    isFiniteNumber(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
+}
+
+function hasSupportedOptionalOpacity(value: unknown): boolean {
+  return value == null || isBoundedNumber(value, 0, 1);
+}
+
+function hasSupportedVectorPaint(
+  value: unknown,
+  options: { stroke?: boolean } = {}
+): boolean {
+  if (value == null) return true;
+  if (!isRecord(value) || !isTemplateV2SafeColor(value.color)) return false;
+  if (!hasSupportedOptionalOpacity(value.opacity)) return false;
+  if (!options.stroke) return true;
+  if (!isBoundedNumber(value.width, 0, 100)) return false;
+  if (value.dash == null) return true;
+  return (
+    Array.isArray(value.dash) &&
+    value.dash.every((part) => isBoundedNumber(part, 0, 1000))
+  );
+}
+
+function hasSupportedVectorShadow(value: unknown): boolean {
+  if (value == null) return true;
+  if (!isRecord(value)) return false;
+  if (value.color != null && !isTemplateV2SafeColor(value.color)) return false;
+  if (value.blur != null && !isBoundedNumber(value.blur, 0, 1000)) return false;
+  if (!hasSupportedOptionalOpacity(value.opacity)) return false;
+  for (const offset of [
+    value.offset_x,
+    value.offset_y,
+    value.offsetX,
+    value.offsetY,
+  ]) {
+    if (offset != null && !isFiniteNumber(offset)) return false;
+  }
+  return true;
+}
+
+function hasSupportedVectorContract(element: TemplateV2ToolbarRecord): boolean {
+  if (!Array.isArray(element.points) || element.points.length < 2) return false;
+  if (
+    element.shape != null &&
+    element.shape !== "polygon" &&
+    element.shape !== "ellipse"
+  ) {
+    return false;
+  }
+  if (element.shape === "ellipse" && element.points.length !== 2) return false;
+  if (!element.points.every(
+    (point) =>
+      isRecord(point) && isFiniteNumber(point.x) && isFiniteNumber(point.y)
+  )) {
+    return false;
+  }
+  const cornerRadii = element.corner_radii ?? element.cornerRadii;
+  if (
+    cornerRadii != null &&
+    (!Array.isArray(cornerRadii) ||
+      cornerRadii.length > element.points.length ||
+      !cornerRadii.every((radius) => isBoundedNumber(radius, 0, 10000)))
+  ) {
+    return false;
+  }
+  if (!hasSupportedOptionalOpacity(element.opacity)) return false;
+  if (!hasSupportedVectorPaint(element.fill)) return false;
+  if (!hasSupportedVectorPaint(element.stroke, { stroke: true })) return false;
+  if (!hasSupportedVectorShadow(element.shadow)) return false;
+
+  // The shared planner validates curve, rotation, size, and point geometry.
+  // Dash is fidelity-supported by Studio/export, so only its non-mutating
+  // planning projection is used here.
+  return Boolean(
+    planStudioElement(projectTemplateV2ElementForRenderPlan(element))
+  );
+}
+
+function hasSupportedChartContract(element: TemplateV2ToolbarRecord): boolean {
+  // Validation intentionally does not normalize. Rich controls must not appear
+  // for stale or malformed payloads that the toolbar could otherwise mutate.
+  return validateChartContract(element).ok;
+}
+
+function hasSupportedTableContract(element: TemplateV2ToolbarRecord): boolean {
+  // As with charts, do not synthesize missing table bounds in the toolbar.
+  // The enabled fill controls require both a header cell and a body cell.
+  // Structurally valid zero-sized tables remain renderable, but their toolbar
+  // stays fail-closed until there is a meaningful cell-level operation.
+  return (
+    validateTableContract(element).ok &&
+    Array.isArray(element.columns) &&
+    element.columns.length > 0 &&
+    Array.isArray(element.rows) &&
+    element.rows.length > 0 &&
+    Array.isArray(element.rows[0]) &&
+    element.rows[0].length > 0
+  );
+}
+
 export function resolveTemplateV2ToolbarRoute({
   selectionCount,
   element,
@@ -78,6 +207,21 @@ export function resolveTemplateV2ToolbarRoute({
   }
   if (element.type === "text" || element.type === "text-list") {
     return { kind: element.type, element };
+  }
+  if (element.type === "vector") {
+    return hasSupportedVectorContract(element)
+      ? { kind: "vector", element }
+      : { kind: "unsupported", reason: "invalid-contract", element };
+  }
+  if (element.type === "chart") {
+    return hasSupportedChartContract(element)
+      ? { kind: "chart", element }
+      : { kind: "unsupported", reason: "invalid-contract", element };
+  }
+  if (element.type === "table") {
+    return hasSupportedTableContract(element)
+      ? { kind: "table", element }
+      : { kind: "unsupported", reason: "invalid-contract", element };
   }
   return { kind: "unsupported", reason: "element-type", element };
 }
