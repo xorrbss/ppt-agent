@@ -200,7 +200,7 @@ describe("VectorToolbar geometry fidelity", () => {
     });
   });
 
-  it("creates and removes only canonical curves and converts explicit two-point shapes", () => {
+  it("creates and removes only canonical curves and converts two-point shapes including path", () => {
     const patch = cy.spy().as("patch");
     cy.mount(
       <StatefulVectorToolbar
@@ -248,6 +248,28 @@ describe("VectorToolbar geometry fidelity", () => {
         expect(templateV2UiToHtmlFragment({ elements: [persisted] }))
           .to.contain("<ellipse");
       });
+    cy.get('select[aria-label="Vector shape"]').select("path");
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["shape"], value: null }],
+      { historyKey: "toolbar:vector-shape" }
+    );
+    cy.get('[data-testid="persisted-vector"]')
+      .invoke("text")
+      .then((serialized) => {
+        const persisted = JSON.parse(serialized);
+        expect(persisted.shape).to.equal(null);
+        expect(persisted.future_vector).to.deep.equal({ retained: true });
+        expect(templateV2UiToHtmlFragment({ elements: [persisted] }))
+          .to.contain("<polyline");
+
+        const reentered = adaptTemplateV2LayoutToSlide({
+          id: "vector-path-reentry",
+          elements: [persisted],
+        }).elements[0] as unknown as TemplateV2ToolbarRecord;
+        expect(reentered.shape ?? null).to.equal(null);
+        expect(reentered.future_vector).to.deep.equal({ retained: true });
+      });
   });
 
   it("creates canonical radii without replacing point or vector extensions", () => {
@@ -279,6 +301,115 @@ describe("VectorToolbar geometry fidelity", () => {
       });
   });
 
+  it("adds, reorders, and deletes whole point records with canonical radii", () => {
+    const patch = cy.spy().as("patch");
+    const originalPoints = [
+      { x: 10, y: 20, future_point: { pressure: 0.75 } },
+      { x: 170, y: 15 },
+      { x: 155, y: 130 },
+      { x: 25, y: 145 },
+    ];
+    const addedPoints = [
+      originalPoints[0],
+      originalPoints[1],
+      { x: 162.5, y: 72.5 },
+      originalPoints[2],
+      originalPoints[3],
+    ];
+    cy.mount(
+      <StatefulVectorToolbar
+        initialElement={validVector}
+        observedPatch={patch}
+      />
+    );
+
+    cy.get('select[aria-label="Vector point"]').select("1");
+    cy.get('button[aria-label="Add vector point after"]').click();
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [
+        { path: ["points"], value: addedPoints },
+        { path: ["corner_radii"], value: [10, 8, 0, 6, 4] },
+      ],
+      { historyKey: "toolbar:vector-point-add-after" }
+    );
+    cy.get('select[aria-label="Vector point"]').should("have.value", "2");
+
+    cy.get('button[aria-label="Move vector point later"]').click();
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [
+        {
+          path: ["points"],
+          value: [
+            originalPoints[0],
+            originalPoints[1],
+            originalPoints[2],
+            { x: 162.5, y: 72.5 },
+            originalPoints[3],
+          ],
+        },
+        { path: ["corner_radii"], value: [10, 8, 6, 0, 4] },
+      ],
+      { historyKey: "toolbar:vector-point-move" }
+    );
+    cy.get('select[aria-label="Vector point"]').should("have.value", "3");
+
+    cy.get('button[aria-label="Move vector point earlier"]').click();
+    cy.get('select[aria-label="Vector point"]').should("have.value", "2");
+    cy.get('button[aria-label="Delete vector point"]').click();
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [
+        { path: ["points"], value: originalPoints },
+        { path: ["corner_radii"], value: [10, 8, 6, 4] },
+      ],
+      { historyKey: "toolbar:vector-point-delete" }
+    );
+
+    cy.get('[data-testid="persisted-vector"]')
+      .invoke("text")
+      .then((serialized) => {
+        const persisted = JSON.parse(serialized);
+        expect(persisted.points).to.deep.equal(originalPoints);
+        expect(persisted.corner_radii).to.deep.equal([10, 8, 6, 4]);
+        expect(persisted.points[0].future_point).to.deep.equal({
+          pressure: 0.75,
+        });
+        expect(persisted.future_vector).to.deep.equal({ retained: true });
+      });
+  });
+
+  it("edits point topology without creating an absent canonical radii field", () => {
+    const patch = cy.spy().as("patch");
+    const originalPoints = validVector.points as TemplateV2ToolbarRecord[];
+    const addedPoints = [
+      originalPoints[0],
+      { x: 90, y: 17.5 },
+      ...originalPoints.slice(1),
+    ];
+    cy.mount(
+      <StatefulVectorToolbar
+        initialElement={{ ...validVector, corner_radii: undefined }}
+        observedPatch={patch}
+      />
+    );
+
+    cy.get('button[aria-label="Add vector point after"]').click();
+    cy.get("@patch").should(
+      "have.been.calledWith",
+      [{ path: ["points"], value: addedPoints }],
+      { historyKey: "toolbar:vector-point-add-after" }
+    );
+    cy.get('[data-testid="persisted-vector"]')
+      .invoke("text")
+      .then((serialized) => {
+        const persisted = JSON.parse(serialized);
+        expect(persisted.points).to.deep.equal(addedPoints);
+        expect(persisted).not.to.have.property("corner_radii");
+      });
+  });
+
   it("fails closed for malformed geometry and ambiguous legacy radii", () => {
     cy.mount(
       <VectorToolbar
@@ -294,6 +425,8 @@ describe("VectorToolbar geometry fidelity", () => {
     cy.get('input[aria-label="Smooth vector curve"]').should("not.exist");
     cy.get('input[aria-label="Curve tension"]').should("not.exist");
     cy.get('input[aria-label="Curve segments"]').should("not.exist");
+    cy.get('select[aria-label="Vector shape"]').should("not.exist");
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
 
     cy.mount(
       <VectorToolbar
@@ -307,11 +440,16 @@ describe("VectorToolbar geometry fidelity", () => {
       />
     );
     cy.get('input[aria-label="Closed vector path"]').should("not.exist");
-    cy.get('select[aria-label="Vector shape"]').should("exist");
+    cy.get('select[aria-label="Vector shape"]')
+      .should("have.value", "ellipse")
+      .find("option")
+      .should("have.length", 1)
+      .and("have.value", "ellipse");
     cy.get('input[aria-label="Vector point X"]').should("exist");
     cy.get('input[aria-label="Smooth vector curve"]').should("not.exist");
     cy.get('input[aria-label="Curve tension"]').should("not.exist");
     cy.get('input[aria-label="Curve segments"]').should("not.exist");
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
 
     cy.mount(
       <VectorToolbar
@@ -325,6 +463,7 @@ describe("VectorToolbar geometry fidelity", () => {
     );
     cy.get('input[aria-label="Vector point X"]').should("exist");
     cy.get('input[aria-label="Vector corner radius"]').should("not.exist");
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
   });
 
   it("canonicalizes imported segment counts without dropping future metadata", () => {

@@ -34,6 +34,21 @@ export interface TemplateV2EditableVectorGeometry {
   cornerRadii: number[] | null;
 }
 
+export type TemplateV2VectorPointTopologyAction =
+  | { type: "add-after"; index: number }
+  | { type: "delete"; index: number }
+  | { type: "move"; index: number; direction: -1 | 1 };
+
+export interface TemplateV2VectorPointTopologyEdit {
+  points: JsonRecord[];
+  /**
+   * `null` means no canonical field exists and no radius patch is needed.
+   * A legacy alias is rejected before an edit is produced.
+   */
+  cornerRadii: number[] | null;
+  selectedIndex: number;
+}
+
 /**
  * Returns only geometry that every current renderer can consume without
  * coercion. The toolbar uses this as a fail-closed capability check before it
@@ -147,6 +162,117 @@ export function templateV2EditableVectorGeometry(
       ),
     },
     cornerRadii,
+  };
+}
+
+/**
+ * Ellipse renderers intentionally ignore closed paths, curves, and corner
+ * radii. Restrict shape changes to records where no latent geometry would be
+ * hidden or reactivated by the transition.
+ */
+export function templateV2CanChangeVectorEllipseShape(
+  element: JsonRecord
+): boolean {
+  const geometry = templateV2EditableVectorGeometry(element);
+  return Boolean(
+    geometry &&
+      geometry.points.length === 2 &&
+      !geometry.closed &&
+      element.curve == null &&
+      element.corner_radii == null &&
+      element.cornerRadii == null
+  );
+}
+
+/**
+ * Produces a lossless topology edit for non-ellipse vectors. Existing point
+ * records move as whole objects so extension keys remain attached to their
+ * authored point. Canonical corner radii move in lockstep; legacy aliases stay
+ * fail-closed because their wire contract is ambiguous.
+ */
+export function editTemplateV2VectorPointTopology(
+  element: JsonRecord,
+  action: TemplateV2VectorPointTopologyAction
+): TemplateV2VectorPointTopologyEdit | null {
+  const geometry = templateV2EditableVectorGeometry(element);
+  const hasCanonicalCornerRadii = Array.isArray(element.corner_radii);
+  const hasLegacyCornerRadii = element.cornerRadii != null;
+  if (
+    !geometry ||
+    geometry.shape === "ellipse" ||
+    hasLegacyCornerRadii ||
+    !Number.isInteger(action.index) ||
+    action.index < 0 ||
+    action.index >= geometry.points.length ||
+    !Array.isArray(element.points)
+  ) {
+    return null;
+  }
+
+  const points = element.points.map((point) => ({
+    ...(point as JsonRecord),
+  }));
+  const cornerRadii = hasCanonicalCornerRadii
+    ? [...(element.corner_radii as number[])]
+    : null;
+
+  if (action.type === "add-after") {
+    const insertionIndex = action.index + 1;
+    const current = geometry.points[action.index];
+    const next =
+      insertionIndex < geometry.points.length
+        ? geometry.points[insertionIndex]
+        : geometry.closed
+          ? geometry.points[0]
+          : current;
+    const x = current.x / 2 + next.x / 2;
+    const y = current.y / 2 + next.y / 2;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    points.splice(insertionIndex, 0, { x, y });
+    if (cornerRadii && insertionIndex <= cornerRadii.length) {
+      cornerRadii.splice(insertionIndex, 0, 0);
+    }
+    return {
+      points,
+      cornerRadii,
+      selectedIndex: insertionIndex,
+    };
+  }
+
+  if (action.type === "delete") {
+    if (points.length <= 2) return null;
+    points.splice(action.index, 1);
+    if (cornerRadii && action.index < cornerRadii.length) {
+      cornerRadii.splice(action.index, 1);
+    }
+    return {
+      points,
+      cornerRadii,
+      selectedIndex: Math.min(action.index, points.length - 1),
+    };
+  }
+
+  const targetIndex = action.index + action.direction;
+  if (targetIndex < 0 || targetIndex >= points.length) return null;
+  [points[action.index], points[targetIndex]] = [
+    points[targetIndex],
+    points[action.index],
+  ];
+  if (
+    cornerRadii &&
+    (action.index < cornerRadii.length || targetIndex < cornerRadii.length)
+  ) {
+    const requiredLength = Math.max(action.index, targetIndex) + 1;
+    while (cornerRadii.length < requiredLength) cornerRadii.push(0);
+    [cornerRadii[action.index], cornerRadii[targetIndex]] = [
+      cornerRadii[targetIndex],
+      cornerRadii[action.index],
+    ];
+  }
+  return {
+    points,
+    cornerRadii,
+    selectedIndex: targetIndex,
   };
 }
 
