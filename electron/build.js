@@ -78,6 +78,9 @@ const config = {
     target: ["dmg"],
     category: "public.app-category.productivity",
     icon: "resources/ui/assets/images/presenton_short_filled.png",
+    hardenedRuntime: true,
+    entitlements: "build/entitlements.mac.plist",
+    entitlementsInherit: "build/entitlements.mac.plist",
   },
   linux: {
     artifactName: "Presenton-${version}.${ext}",
@@ -114,6 +117,7 @@ const config = {
     applicationId: "PresentonAI.Presenton",
     
   },
+  afterSign: "scripts/notarize-macos.cjs",
 }
 
 // Packaging and publishing are intentionally separate release steps. Explicitly

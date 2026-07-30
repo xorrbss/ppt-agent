@@ -38,6 +38,8 @@
     "test:audit-release": "node --test scripts/audit-release-dependencies.test.cjs",
     "preflight:package": "node scripts/verify-packaging-inputs.cjs",
     "test:package-preflight": "node --test scripts/verify-packaging-inputs.test.cjs",
+    "verify:macos-release": "node scripts/verify-macos-release.cjs",
+    "test:macos-release": "node --test scripts/verify-macos-release.test.cjs",
     "lint:main": "npm run build:ts && npm run check:main-no-undef",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
     "build:vectorstore": "echo 'Using prebuilt shared icons vectorstore index'",
