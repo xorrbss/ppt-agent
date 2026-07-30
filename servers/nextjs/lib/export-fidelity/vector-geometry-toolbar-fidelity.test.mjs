@@ -8,6 +8,7 @@ import {
   projectTemplateV2ElementForRenderPlan,
   templateV2EditableVectorGeometry,
   templateV2ProvenVectorEditCapability,
+  templateV2ProvenVectorWrapEditCapability,
   templateV2VectorRenderGeometry,
 } from "../template-v2-vector.ts";
 
@@ -307,10 +308,33 @@ test("only the pinned upstream polygon add-after edit is enabled", () => {
 
   const edited = { ...authored, points: added.points };
   assert.equal(templateV2ProvenVectorEditCapability(edited), null);
+  assert.deepEqual(templateV2ProvenVectorWrapEditCapability(authored), {
+    kind: "polygon-add-after-last-wrap",
+    points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+  });
+  const wrapped = editTemplateV2VectorPointTopology(authored, {
+    type: "add-after",
+    index: 1,
+  });
+  assert.ok(wrapped);
+  assert.deepEqual(wrapped.points, [
+    authored.points[0],
+    authored.points[1],
+    { x: 50, y: 40 },
+  ]);
+  assert.equal(wrapped.cornerRadii, null);
+  assert.equal(wrapped.selectedIndex, 2);
+  assert.equal(
+    templateV2ProvenVectorWrapEditCapability({
+      ...authored,
+      points: wrapped.points,
+    }),
+    null
+  );
   assert.equal(
     editTemplateV2VectorPointTopology(authored, {
       type: "add-after",
-      index: 1,
+      index: 2,
     }),
     null
   );
@@ -358,10 +382,18 @@ test("only the pinned upstream polygon add-after edit is enabled", () => {
   ];
   unsupported.forEach((element) => {
     assert.equal(templateV2ProvenVectorEditCapability(element), null);
+    assert.equal(templateV2ProvenVectorWrapEditCapability(element), null);
     assert.equal(
       editTemplateV2VectorPointTopology(element, {
         type: "add-after",
         index: 0,
+      }),
+      null
+    );
+    assert.equal(
+      editTemplateV2VectorPointTopology(element, {
+        type: "add-after",
+        index: 1,
       }),
       null
     );

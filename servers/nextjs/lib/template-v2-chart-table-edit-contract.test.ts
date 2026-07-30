@@ -366,6 +366,32 @@ test("pinned upstream exact-bound table structural edits stay fail closed", () =
   );
 });
 
+test("unmodeled table column-width edits stay explicitly fail closed", () => {
+  const fixtureTable = pinnedUpstreamElements.elements.find(
+    (element) => element.type === "table",
+  );
+  assert.ok(fixtureTable);
+  const source = structuredClone(fixtureTable);
+  const snapshot = structuredClone(source);
+
+  assert.deepEqual(
+    buildTableContractEditPatches(
+      source,
+      {
+        kind: "column-width",
+        columnIndex: 0,
+        value: 1,
+      } as never,
+    ),
+    {
+      ok: false,
+      reason: "unsupported_table_edit",
+    },
+  );
+  assert.equal(source.upstream_element_extension, "table-vNext");
+  assert.deepEqual(source, snapshot);
+});
+
 test("table resize fails closed for unproven multi-step count changes", () => {
   const source = table();
   source.max_columns = 4;

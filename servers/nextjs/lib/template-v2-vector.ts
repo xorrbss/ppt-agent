@@ -36,7 +36,7 @@ export interface TemplateV2EditableVectorGeometry {
 
 export type TemplateV2VectorPointTopologyAction = {
   type: "add-after";
-  index: 0;
+  index: 0 | 1;
 };
 
 export interface TemplateV2VectorPointTopologyEdit {
@@ -50,6 +50,11 @@ export interface TemplateV2ProvenVectorEditCapability {
   points: [TemplateV2VectorPoint, TemplateV2VectorPoint];
 }
 
+export interface TemplateV2ProvenVectorWrapEditCapability {
+  kind: "polygon-add-after-last-wrap";
+  points: [TemplateV2VectorPoint, TemplateV2VectorPoint];
+}
+
 const PROVEN_VECTOR_WIRE_KEYS = new Set([
   "type",
   "shape",
@@ -59,14 +64,14 @@ const PROVEN_VECTOR_WIRE_KEYS = new Set([
 ]);
 
 /**
- * The only vector edit currently enabled is the exact operation demonstrated
- * by the pinned upstream fixture through import, edit, serialization, reload,
- * and render. Every other vector shape or field combination stays fail-closed
- * until it has its own fixed-fixture round-trip contract.
+ * Parses the exact two-point polygon shared by the independent first-point
+ * and last-wrap upstream witnesses. Every other vector shape or field
+ * combination stays fail-closed until it has its own fixed-fixture
+ * round-trip contract.
  */
-export function templateV2ProvenVectorEditCapability(
+function templateV2ProvenVectorPoints(
   element: JsonRecord
-): TemplateV2ProvenVectorEditCapability | null {
+): [TemplateV2VectorPoint, TemplateV2VectorPoint] | null {
   if (
     element.type !== "vector" ||
     element.shape !== "polygon" ||
@@ -94,10 +99,42 @@ export function templateV2ProvenVectorEditCapability(
   });
   if (points.some((point) => point === null)) return null;
 
-  return {
-    kind: "polygon-add-after-first-point",
-    points: points as [TemplateV2VectorPoint, TemplateV2VectorPoint],
-  };
+  const provenPoints = points as [
+    TemplateV2VectorPoint,
+    TemplateV2VectorPoint,
+  ];
+  if (
+    provenPoints[0].x !== 0 ||
+    provenPoints[0].y !== 0 ||
+    provenPoints[1].x !== 100 ||
+    provenPoints[1].y !== 80
+  ) {
+    return null;
+  }
+
+  return provenPoints;
+}
+
+export function templateV2ProvenVectorEditCapability(
+  element: JsonRecord
+): TemplateV2ProvenVectorEditCapability | null {
+  const points = templateV2ProvenVectorPoints(element);
+  return points
+    ? { kind: "polygon-add-after-first-point", points }
+    : null;
+}
+
+/**
+ * The last-to-first wrap insertion is kept as a separate capability because
+ * it has its own fixed upstream round-trip witness.
+ */
+export function templateV2ProvenVectorWrapEditCapability(
+  element: JsonRecord
+): TemplateV2ProvenVectorWrapEditCapability | null {
+  const points = templateV2ProvenVectorPoints(element);
+  return points
+    ? { kind: "polygon-add-after-last-wrap", points }
+    : null;
 }
 
 /**
@@ -216,34 +253,41 @@ export function templateV2EditableVectorGeometry(
 }
 
 /**
- * Produces the single topology edit proven by the pinned upstream fixture.
+ * Produces only the two topology edits with independent pinned upstream
+ * witnesses. Any other index or topology operation remains fail-closed.
  */
 export function editTemplateV2VectorPointTopology(
   element: JsonRecord,
   action: TemplateV2VectorPointTopologyAction
 ): TemplateV2VectorPointTopologyEdit | null {
-  const capability = templateV2ProvenVectorEditCapability(element);
+  const capability =
+    action.index === 0
+      ? templateV2ProvenVectorEditCapability(element)
+      : action.index === 1
+        ? templateV2ProvenVectorWrapEditCapability(element)
+        : null;
   if (
     !capability ||
     action.type !== "add-after" ||
-    action.index !== 0 ||
     !Array.isArray(element.points)
   ) {
     return null;
   }
 
-  const [current, next] = capability.points;
+  const [first, second] = capability.points;
+  const current = action.index === 0 ? first : second;
+  const next = action.index === 0 ? second : first;
   const x = current.x / 2 + next.x / 2;
   const y = current.y / 2 + next.y / 2;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const points = element.points.map((point) => ({
+    ...(point as JsonRecord),
+  }));
+  points.splice(action.index + 1, 0, { x, y });
   return {
-    points: [
-      { ...(element.points[0] as JsonRecord) },
-      { x, y },
-      { ...(element.points[1] as JsonRecord) },
-    ],
+    points,
     cornerRadii: null,
-    selectedIndex: 1,
+    selectedIndex: action.index + 1,
   };
 }
 

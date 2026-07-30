@@ -83,6 +83,9 @@ describe("VectorToolbar proven upstream edit contract", () => {
       />
     );
 
+    cy.get(
+      'button[aria-label="Add wrap vector point after last"]'
+    ).should("exist");
     cy.get('button[aria-label="Add vector point after"]').click();
     cy.get("@patch").should(
       "have.been.calledWith",
@@ -94,6 +97,9 @@ describe("VectorToolbar proven upstream edit contract", () => {
     );
     cy.get("@patch").should("have.been.calledOnce");
     cy.get('button[aria-label="Add vector point after"]').should("not.exist");
+    cy.get(
+      'button[aria-label="Add wrap vector point after last"]'
+    ).should("not.exist");
     cy.get('[data-testid="persisted-vector"]')
       .invoke("text")
       .then((serialized) => {
@@ -122,6 +128,41 @@ describe("VectorToolbar proven upstream edit contract", () => {
     cy.get('button[aria-label="Delete vector point"]').should("not.exist");
     cy.get('button[aria-label="Move vector point earlier"]').should("not.exist");
     cy.get('button[aria-label="Move vector point later"]').should("not.exist");
+  });
+
+  it("applies only the witnessed last-to-first wrap midpoint edit", () => {
+    const patch = cy.spy().as("wrapPatch");
+    cy.mount(
+      <StatefulVectorToolbar
+        initialElement={pinnedUpstreamVector}
+        observedPatch={patch}
+      />
+    );
+
+    cy.get(
+      'button[aria-label="Add wrap vector point after last"]'
+    ).click();
+    cy.get("@wrapPatch").should(
+      "have.been.calledWith",
+      [{
+        path: ["points"],
+        value: [{ x: 0, y: 0 }, { x: 100, y: 80 }, { x: 50, y: 40 }],
+      }],
+      { historyKey: "toolbar:vector-point-add-after-last-wrap" }
+    );
+    cy.get("@wrapPatch").should("have.been.calledOnce");
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
+    cy.get(
+      'button[aria-label="Add wrap vector point after last"]'
+    ).should("not.exist");
+    cy.get('[data-testid="persisted-vector"]')
+      .invoke("text")
+      .then((serialized) => {
+        expect(JSON.parse(serialized)).to.deep.equal({
+          ...pinnedUpstreamVector,
+          points: [{ x: 0, y: 0 }, { x: 100, y: 80 }, { x: 50, y: 40 }],
+        });
+      });
   });
 
   it("fails closed for every unproven vector variant", () => {
@@ -166,5 +207,8 @@ describe("VectorToolbar proven upstream edit contract", () => {
       </div>
     );
     cy.get('button[aria-label="Add vector point after"]').should("not.exist");
+    cy.get(
+      'button[aria-label="Add wrap vector point after last"]'
+    ).should("not.exist");
   });
 });

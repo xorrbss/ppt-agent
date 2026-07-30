@@ -26,6 +26,14 @@ export type TemplateV2DesignVariableEditCapability =
       options: [string, string];
       selectedOptionIndex: 0 | 1;
       targetPath: "runs.0.font.color";
+    }
+  | {
+      activation: "direct-option";
+      variableIndex: 0;
+      name: string;
+      options: [number, number];
+      selectedOptionIndex: 0 | 1;
+      targetPath: "runs.0.font.size";
     };
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -246,13 +254,10 @@ export function inspectTemplateV2DesignVariableEditCapability(
   const font = isPlainRecord(run) ? run.font : null;
   if (
     !isPlainRecord(variable) ||
-    !hasExactKeys(variable, ["name", "type", "options", "effect"]) ||
     typeof variable.name !== "string" ||
     variable.name.length === 0 ||
-    variable.type !== "color" ||
     !Array.isArray(variable.options) ||
     variable.options.length !== 2 ||
-    !variable.options.every(isTemplateV2SafeColor) ||
     variable.options[0] === variable.options[1] ||
     !Array.isArray(variable.effect) ||
     variable.effect.length !== 1 ||
@@ -266,27 +271,53 @@ export function inspectTemplateV2DesignVariableEditCapability(
   if (
     !isPlainRecord(effect) ||
     !hasExactKeys(effect, ["path", "effect"]) ||
-    effect.path !== "runs.0.font.color" ||
     effect.effect !== "$"
   ) {
     return { activation: "retention-only" };
   }
 
-  const selectedOptionIndex = variable.options.findIndex(
-    (option) => option === font.color,
-  );
-  if (selectedOptionIndex !== 0 && selectedOptionIndex !== 1) {
-    return { activation: "retention-only" };
+  if (
+    hasExactKeys(variable, ["name", "type", "options", "effect"]) &&
+    variable.type === "color" &&
+    variable.options.every(isTemplateV2SafeColor) &&
+    effect.path === "runs.0.font.color"
+  ) {
+    const selectedOptionIndex = variable.options.findIndex(
+      (option) => option === font.color,
+    );
+    if (selectedOptionIndex !== 0 && selectedOptionIndex !== 1) {
+      return { activation: "retention-only" };
+    }
+
+    return {
+      activation: "direct-option",
+      variableIndex: 0,
+      name: variable.name,
+      options: [variable.options[0], variable.options[1]],
+      selectedOptionIndex,
+      targetPath: "runs.0.font.color",
+    };
   }
 
-  return {
-    activation: "direct-option",
-    variableIndex: 0,
-    name: variable.name,
-    options: [variable.options[0], variable.options[1]],
-    selectedOptionIndex,
-    targetPath: "runs.0.font.color",
-  };
+  if (
+    hasExactKeys(variable, ["name", "options", "effect"]) &&
+    variable.name === "title_size" &&
+    variable.options[0] === 24 &&
+    variable.options[1] === 36 &&
+    effect.path === "runs.0.font.size" &&
+    font.size === 24
+  ) {
+    return {
+      activation: "direct-option",
+      variableIndex: 0,
+      name: variable.name,
+      options: [variable.options[0], variable.options[1]],
+      selectedOptionIndex: 0,
+      targetPath: "runs.0.font.size",
+    };
+  }
+
+  return { activation: "retention-only" };
 }
 
 /**
@@ -319,6 +350,7 @@ export function applyTemplateV2DirectDesignVariableOption(
 
   const run = (element.runs as Record<string, unknown>[])[0]!;
   const font = run.font as Record<string, unknown>;
+  const selectedOption = capability.options[selection.optionIndex];
   return {
     ...element,
     runs: [
@@ -326,7 +358,9 @@ export function applyTemplateV2DirectDesignVariableOption(
         ...run,
         font: {
           ...font,
-          color: capability.options[selection.optionIndex],
+          ...(capability.targetPath === "runs.0.font.color"
+            ? { color: selectedOption }
+            : { size: selectedOption }),
         },
       },
     ],

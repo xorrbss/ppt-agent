@@ -815,7 +815,7 @@ export function buildTableContractEditPatches(
       }
     }
     patches.push({ path: ["rows"], value: rows });
-  } else {
+  } else if (edit.kind === "column-count") {
     if (!Number.isInteger(edit.value) || (edit.value as number) < 1) {
       return { ok: false, reason: "invalid_table_column_count_edit" };
     }
@@ -846,6 +846,8 @@ export function buildTableContractEditPatches(
       { path: ["columns"], value: columns },
       { path: ["rows"], value: rows },
     );
+  } else {
+    return { ok: false, reason: "unsupported_table_edit" };
   }
 
   const result = validateTableValue(candidate);
