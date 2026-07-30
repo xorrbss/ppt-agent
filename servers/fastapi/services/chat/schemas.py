@@ -74,12 +74,15 @@ class SaveSlideInput(StrictSchemaModel):
         max_length=200000,
         description=(
             "A JSON-serialized object for slide content. "
-            "Example: '{\"title\": \"Q4 Revenue\", \"bullets\": [\"North America +22%\"]}'"
+            'Example: \'{"title": "Q4 Revenue", "bullets": ["North America +22%"]}\''
         ),
     )
     layout_id: str = Field(alias="layoutId", min_length=1, max_length=200)
     index: int = Field(ge=0, le=1000)
     replace_old_slide_at_index: bool = Field(alias="replaceOldSlideAtIndex")
+    expected_revision: str | None = Field(
+        default=None, alias="expectedRevision", min_length=1, max_length=128
+    )
 
     model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
 
@@ -99,6 +102,63 @@ class SaveSlideInput(StrictSchemaModel):
 
 class DeleteSlideInput(StrictSchemaModel):
     index: int = Field(ge=0, le=1000)
+
+
+class ChatContextToolInput(OpenAIStrictSchemaModel):
+    content: str | dict[str, Any] | None = Field(...)
+    index: int | None = Field(..., ge=0, le=1000)
+    from_index: int | None = Field(..., alias="fromIndex", ge=0, le=1000)
+    to_index: int | None = Field(..., alias="toIndex", ge=0, le=1000)
+    layout_id: str | None = Field(..., alias="layoutId", min_length=1, max_length=200)
+    query: str | None = Field(..., min_length=1, max_length=1000)
+    element_type: str | None = Field(
+        ..., alias="elementType", min_length=1, max_length=80
+    )
+    block_id: str | None = Field(..., alias="blockId", min_length=1, max_length=200)
+    include_full_content: bool | None = Field(..., alias="includeFullContent")
+    max_results: int | None = Field(..., alias="maxResults", ge=1, le=100)
+    max_chars: int | None = Field(..., alias="maxChars", ge=1000, le=30_000)
+    limit: int | None = Field(..., ge=1, le=10)
+    slide_content: dict[str, Any] | None = Field(..., alias="slideContent")
+
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+
+
+class SlideUIToolInput(OpenAIStrictSchemaModel):
+    index: int = Field(ge=0, le=1000)
+    expected_revision: str | None = Field(
+        ..., alias="expectedRevision", min_length=1, max_length=128
+    )
+    include_full_json: bool | None = Field(..., alias="includeFullJson")
+    ui: dict[str, Any] | None = Field(...)
+    path: str | None = Field(..., min_length=1, max_length=500)
+    paths: list[str] | None = Field(..., min_length=2, max_length=100)
+    component_id: str | None = Field(
+        ..., alias="componentId", min_length=1, max_length=200
+    )
+    element: dict[str, Any] | None = Field(...)
+    component: dict[str, Any] | None = Field(...)
+    content: dict[str, Any] | None = Field(...)
+    style: dict[str, Any] | None = Field(...)
+    position: dict[str, Any] | None = Field(...)
+    size: dict[str, Any] | None = Field(...)
+    rotation: float | None = Field(...)
+    insert_at: int | None = Field(..., alias="insertAt", ge=0, le=1000)
+    to_index: int | None = Field(..., alias="toIndex", ge=0, le=1000)
+    action: (
+        Literal[
+            "bring-to-front",
+            "send-to-back",
+            "move-forward",
+            "move-backward",
+            "move-to-index",
+        ]
+        | None
+    ) = Field(...)
+    name: str | None = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(..., min_length=1, max_length=300)
+
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
 
 
 class ThemeTextFontInput(OpenAIStrictSchemaModel):
