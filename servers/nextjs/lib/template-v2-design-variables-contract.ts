@@ -351,15 +351,20 @@ export function inspectTemplateV2DesignVariableEditCapability(
     variable.name === "title_size" &&
     variable.options[0] === 24 &&
     variable.options[1] === 36 &&
-    effect.path === "runs.0.font.size" &&
-    font.size === 24
+    effect.path === "runs.0.font.size"
   ) {
+    const selectedOptionIndex = variable.options.findIndex(
+      (option) => option === font.size,
+    );
+    if (selectedOptionIndex !== 0 && selectedOptionIndex !== 1) {
+      return { activation: "retention-only" };
+    }
     return {
       activation: "direct-option",
       variableIndex: 0,
       name: variable.name,
       options: [variable.options[0], variable.options[1]],
-      selectedOptionIndex: 0,
+      selectedOptionIndex,
       targetPath: "runs.0.font.size",
     };
   }

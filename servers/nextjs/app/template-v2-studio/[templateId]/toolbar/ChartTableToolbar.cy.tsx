@@ -304,6 +304,18 @@ describe("Chart and table toolbar contract", () => {
     );
     cy.get('select[aria-label="Table text target"]').should("have.value", "3");
 
+    cy.get('select[aria-label="Table cell alignment"]').select("right");
+    cy.get("@tablePatch").should(
+      "have.been.calledWith",
+      [{ path: ["rows", 0, 1, "alignment"], value: "right" }],
+      {
+        historyKey: "toolbar:table-alignment-3",
+        continuous: false,
+      }
+    );
+    cy.get('select[aria-label="Table cell alignment"]')
+      .should("have.value", "right");
+
     cy.get('button[aria-label="Add table row"]').click();
     cy.get("@tablePatch").then((subject) => {
       const spy = subject as unknown as {
@@ -318,6 +330,7 @@ describe("Chart and table toolbar contract", () => {
           {
             runs: [{ text: "125" }],
             font: { size: 20, color: "#dc2626", bold: true },
+            alignment: "right",
           },
         ],
         [

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from templates.v2.pptx.analyzer import analyze_ooxml_candidates
 from templates.v2.pptx.assembler import assemble_template_v2_draft
+from templates.v2.pptx.models import PresentationCandidates
 from templates.v2.pptx.ooxml_parser import parse_presentation_candidates
 from templates.v2.pptx.package_reader import PptxPackageReader
 from templates.v2.pptx.smartart_parser import (
@@ -46,11 +47,33 @@ SMARTART_SLIDE_XML = b"""\
   </p:graphicFrame>
  </p:spTree></p:cSld>
 </p:sld>"""
+SMARTART_COMPANION_RELATIONSHIPS_SLIDE_XML = SMARTART_SLIDE_XML.replace(
+    b'<dgm:relIds r:dm="rIdData"/>',
+    (
+        b'<dgm:relIds r:dm="rIdData" r:lo="rIdLayout" '
+        b'r:qs="rIdQuickStyle" r:cs="rIdColors"/>'
+    ),
+)
 SMARTART_RELS = b"""\
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
  <Relationship Id="rIdData"
   Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
   Target="../diagrams/data1.xml"/>
+</Relationships>"""
+SMARTART_COMPANION_RELS = b"""\
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rIdData"
+  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData"
+  Target="../diagrams/data1.xml"/>
+ <Relationship Id="rIdLayout"
+  Type="http://schemas.microsoft.com/office/2006/relationships/diagramLayout"
+  Target="../diagrams/layout1.xml"/>
+ <Relationship Id="rIdQuickStyle"
+  Type="http://schemas.microsoft.com/office/2006/relationships/diagramQuickStyle"
+  Target="../diagrams/quickStyle1.xml"/>
+ <Relationship Id="rIdColors"
+  Type="http://schemas.microsoft.com/office/2006/relationships/diagramColors"
+  Target="../diagrams/colors1.xml"/>
 </Relationships>"""
 SMARTART_DATA = b"""\
 <dgm:dataModel
@@ -81,7 +104,11 @@ def _pptx_bytes(
     *,
     include_relationship: bool = True,
     include_data_part: bool = True,
+    include_companion_parts: bool = False,
 ) -> bytes:
+    # This is intentionally parser-only OOXML. It lacks a valid content-type
+    # table, slide master/layout, theme, and cached SmartArt drawing, so it is
+    # not an edit/export/render round-trip fixture.
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("[Content_Types].xml", b"<Types/>")
@@ -90,14 +117,47 @@ def _pptx_bytes(
             "ppt/_rels/presentation.xml.rels",
             PRESENTATION_RELS,
         )
-        archive.writestr("ppt/slides/slide1.xml", SMARTART_SLIDE_XML)
+        archive.writestr(
+            "ppt/slides/slide1.xml",
+            (
+                SMARTART_COMPANION_RELATIONSHIPS_SLIDE_XML
+                if include_companion_parts
+                else SMARTART_SLIDE_XML
+            ),
+        )
         if include_relationship:
             archive.writestr(
                 "ppt/slides/_rels/slide1.xml.rels",
-                SMARTART_RELS,
+                (
+                    SMARTART_COMPANION_RELS
+                    if include_companion_parts
+                    else SMARTART_RELS
+                ),
             )
             if include_data_part:
                 archive.writestr("ppt/diagrams/data1.xml", SMARTART_DATA)
+            if include_companion_parts:
+                archive.writestr(
+                    "ppt/diagrams/layout1.xml",
+                    (
+                        b'<dgm:layoutDef xmlns:dgm="http://schemas.'
+                        b'openxmlformats.org/drawingml/2006/diagram"/>'
+                    ),
+                )
+                archive.writestr(
+                    "ppt/diagrams/quickStyle1.xml",
+                    (
+                        b'<dgm:styleDef xmlns:dgm="http://schemas.'
+                        b'openxmlformats.org/drawingml/2006/diagram"/>'
+                    ),
+                )
+                archive.writestr(
+                    "ppt/diagrams/colors1.xml",
+                    (
+                        b'<dgm:colorsDef xmlns:dgm="http://schemas.'
+                        b'openxmlformats.org/drawingml/2006/diagram"/>'
+                    ),
+                )
     return stream.getvalue()
 
 
@@ -110,7 +170,7 @@ def _parse(tmp_path: Path, filename: str, payload: bytes):
     )
 
 
-def test_smartart_round_trip_is_evidence_only_and_keeps_manual_fallback(
+def test_smartart_import_is_evidence_only_and_keeps_manual_fallback(
     tmp_path: Path,
 ) -> None:
     candidates = _parse(
@@ -149,6 +209,50 @@ def test_smartart_round_trip_is_evidence_only_and_keeps_manual_fallback(
     }
     assert unsupported["smartart_evidence"]["status"] == "structured"
     assert draft.manifest["slides"][0]["fallback"]["kind"] == "manual_review"
+
+
+def test_smartart_companion_parts_do_not_imply_edit_round_trip_support(
+    tmp_path: Path,
+) -> None:
+    payload = _pptx_bytes(include_companion_parts=True)
+    candidates = _parse(
+        tmp_path,
+        "smartart-companion-parts.pptx",
+        payload,
+    )
+
+    relationship_kinds = {
+        relationship.relationship_kind
+        for relationship in candidates.relationship_graph.relationships
+    }
+    assert {
+        "diagram_colors",
+        "diagram_data",
+        "diagram_layout",
+        "diagram_quick_style",
+    } <= relationship_kinds
+
+    # Evidence can cross the JSON contract, but it remains unsupported. This
+    # is not the missing package edit -> reload -> render proof.
+    reloaded = PresentationCandidates.model_validate_json(
+        candidates.model_dump_json()
+    )
+    smartart = reloaded.slides[0].shapes[0]
+    assert smartart.kind == "unsupported"
+    assert smartart.unsupported_reason == "unsupported_ooxml:smartArt"
+    assert smartart.smartart_evidence is not None
+    assert smartart.smartart_evidence.status == "structured"
+
+    draft = assemble_template_v2_draft(
+        analyze_ooxml_candidates(reloaded).candidates
+    )
+    assert draft.raw_layouts.layouts[0].elements == []
+    assert draft.layouts.layouts[0].components == []
+    assert draft.manifest["slides"][0]["unsupported"][0]["contract"] == {
+        "editable": False,
+        "source_preserved": True,
+        "action": "manual_rebuild",
+    }
 
 
 def test_smartart_missing_data_relationship_is_explicitly_unavailable(

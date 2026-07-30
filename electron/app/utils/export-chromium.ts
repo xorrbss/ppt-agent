@@ -8,6 +8,12 @@ import {
   detectBrowserPlatform,
   install,
 } from "@puppeteer/browsers";
+import {
+  exceedsCleanupLimit,
+  isContainedCleanupPath,
+  isDirectCleanupChild,
+  MAX_CACHE_DIRECTORIES_PER_RECOVERY,
+} from "./cleanup-boundaries";
 import { safeLog } from "./safe-console";
 
 /** Must match the Chrome revision expected by the bundled presentation-export runtime. */
@@ -115,24 +121,35 @@ export async function removeBrokenExportChromiumCaches(): Promise<number> {
   const cacheDir = resolvePuppeteerCacheRoot();
   const cache = new Cache(cacheDir);
   let removedCount = 0;
+  const chromeRoot = path.join(cacheDir, "chrome");
 
-  for (const installed of cache.getInstalledBrowsers()) {
-    if (installed.browser !== Browser.CHROME) {
-      continue;
-    }
-    if (fs.existsSync(installed.executablePath)) {
-      continue;
-    }
-    try {
-      await fs.promises.rm(installed.path, { recursive: true, force: true });
-      removedCount += 1;
-      safeLog(`[Chromium] Removed broken cache: ${installed.path}`);
-    } catch {
-      // Best effort cleanup only.
+  const brokenInstalled = cache.getInstalledBrowsers().filter((installed) => {
+    return (
+      installed.browser === Browser.CHROME &&
+      !fs.existsSync(installed.executablePath) &&
+      isContainedCleanupPath(chromeRoot, installed.path)
+    );
+  });
+  if (exceedsCleanupLimit(removedCount, brokenInstalled.length)) {
+    safeLog(
+      `[Chromium] Refusing ${brokenInstalled.length} broken cache entries (limit ${MAX_CACHE_DIRECTORIES_PER_RECOVERY}).`,
+    );
+  } else {
+    for (const installed of brokenInstalled) {
+      try {
+        if (fs.existsSync(installed.path) && fs.lstatSync(installed.path).isSymbolicLink()) {
+          continue;
+        }
+        await fs.promises.rm(installed.path, { recursive: true, force: true });
+        removedCount += 1;
+        safeLog(`[Chromium] Removed broken cache: ${installed.path}`);
+      } catch {
+        // Best effort cleanup only.
+      }
     }
   }
 
-  const chromeBaseDir = path.join(cacheDir, "chrome");
+  const chromeBaseDir = chromeRoot;
   const legacyRelativePaths = getLegacyExecutableRelativePaths();
   let revisionDirs: string[] = [];
   try {
@@ -144,20 +161,29 @@ export async function removeBrokenExportChromiumCaches(): Promise<number> {
     return removedCount;
   }
 
-  for (const revisionDir of revisionDirs) {
+  const brokenLegacyDirectories = revisionDirs.filter((revisionDir) => {
     const hasLegacyExecutable = legacyRelativePaths.some((relativePath) =>
       fs.existsSync(path.join(revisionDir, relativePath))
     );
     if (hasLegacyExecutable) {
-      continue;
+      return false;
     }
 
     const basename = path.basename(revisionDir);
-    if (basename.includes("-")) {
-      continue;
-    }
+    return /^\d+$/.test(basename) && isDirectCleanupChild(chromeBaseDir, revisionDir);
+  });
+  if (exceedsCleanupLimit(removedCount, brokenLegacyDirectories.length)) {
+    safeLog(
+      `[Chromium] Refusing ${brokenLegacyDirectories.length} legacy cache entries after ${removedCount} removals (run limit ${MAX_CACHE_DIRECTORIES_PER_RECOVERY}).`,
+    );
+    return removedCount;
+  }
 
+  for (const revisionDir of brokenLegacyDirectories) {
     try {
+      if (fs.lstatSync(revisionDir).isSymbolicLink()) {
+        continue;
+      }
       await fs.promises.rm(revisionDir, { recursive: true, force: true });
       removedCount += 1;
       safeLog(`[Chromium] Removed broken cache: ${revisionDir}`);

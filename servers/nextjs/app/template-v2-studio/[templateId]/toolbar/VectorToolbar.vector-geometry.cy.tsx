@@ -155,13 +155,29 @@ describe("VectorToolbar proven upstream edit contract", () => {
     cy.get(
       'button[aria-label="Add wrap vector point after last"]'
     ).should("not.exist");
+    cy.get(
+      'button[aria-label="Remove proven wrap vector midpoint"]'
+    ).click();
+    cy.get("@wrapPatch").should(
+      "have.been.calledWith",
+      [{
+        path: ["points"],
+        value: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+      }],
+      { historyKey: "toolbar:vector-point-remove-proven-wrap" }
+    );
+    cy.get("@wrapPatch").should("have.been.calledTwice");
+    cy.get('button[aria-label="Add vector point after"]').should("exist");
+    cy.get(
+      'button[aria-label="Add wrap vector point after last"]'
+    ).should("exist");
+    cy.get(
+      'button[aria-label="Remove proven wrap vector midpoint"]'
+    ).should("not.exist");
     cy.get('[data-testid="persisted-vector"]')
       .invoke("text")
       .then((serialized) => {
-        expect(JSON.parse(serialized)).to.deep.equal({
-          ...pinnedUpstreamVector,
-          points: [{ x: 0, y: 0 }, { x: 100, y: 80 }, { x: 50, y: 40 }],
-        });
+        expect(JSON.parse(serialized)).to.deep.equal(pinnedUpstreamVector);
       });
   });
 
@@ -209,6 +225,9 @@ describe("VectorToolbar proven upstream edit contract", () => {
     cy.get('button[aria-label="Add vector point after"]').should("not.exist");
     cy.get(
       'button[aria-label="Add wrap vector point after last"]'
+    ).should("not.exist");
+    cy.get(
+      'button[aria-label="Remove proven wrap vector midpoint"]'
     ).should("not.exist");
   });
 });

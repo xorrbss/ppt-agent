@@ -63,7 +63,12 @@ def parse_smartart_data_model(
     data_part: str,
     limits: SmartArtEvidenceLimits | None = None,
 ) -> SmartArtEvidence:
-    """Extract bounded, inert structure without promoting SmartArt to editable."""
+    """Extract bounded, inert structure without promoting SmartArt to editable.
+
+    Point order and concatenated text are observations only. Layout, color,
+    quick-style, and cached drawing parts are deliberately outside this parser,
+    so its output must not drive SmartArt edits or editable-shape promotion.
+    """
 
     if _bounded_data_part(data_part) is None:
         return unavailable_smartart_evidence("data_model_invalid")

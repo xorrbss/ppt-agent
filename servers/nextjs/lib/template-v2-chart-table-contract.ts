@@ -656,6 +656,13 @@ export type TableContractEdit =
       value: unknown;
     }
   | {
+      kind: "cell-alignment";
+      section: "header" | "body";
+      rowIndex?: number;
+      columnIndex: number;
+      value: unknown;
+    }
+  | {
       kind: "section-fill";
       section: "header" | "body";
       value: unknown;
@@ -678,7 +685,11 @@ export function buildTableContractEditPatches(
   const rows = candidate.rows as JsonRecord[][];
   const patches: TemplateV2ContractPatch[] = [];
 
-  if (edit.kind === "run-text" || edit.kind === "cell-font") {
+  if (
+    edit.kind === "run-text" ||
+    edit.kind === "cell-font" ||
+    edit.kind === "cell-alignment"
+  ) {
     if (
       !Number.isInteger(edit.columnIndex) ||
       edit.columnIndex < 0 ||
@@ -692,7 +703,9 @@ export function buildTableContractEditPatches(
         reason:
           edit.kind === "run-text"
             ? "invalid_table_text_edit"
-            : "invalid_table_font_edit",
+            : edit.kind === "cell-font"
+              ? "invalid_table_font_edit"
+              : "invalid_table_alignment_edit",
       };
     }
     let cell: JsonRecord | undefined;
@@ -707,7 +720,9 @@ export function buildTableContractEditPatches(
           reason:
             edit.kind === "run-text"
               ? "invalid_table_text_edit"
-              : "invalid_table_font_edit",
+              : edit.kind === "cell-font"
+                ? "invalid_table_font_edit"
+                : "invalid_table_alignment_edit",
         };
       }
       cell = rows[edit.rowIndex as number]?.[edit.columnIndex];
@@ -723,7 +738,9 @@ export function buildTableContractEditPatches(
         reason:
           edit.kind === "run-text"
             ? "invalid_table_text_edit"
-            : "invalid_table_font_edit",
+            : edit.kind === "cell-font"
+              ? "invalid_table_font_edit"
+              : "invalid_table_alignment_edit",
       };
     }
     if (edit.kind === "run-text") {
@@ -740,7 +757,7 @@ export function buildTableContractEditPatches(
         path: [...cellPath, "runs", edit.runIndex, "text"],
         value: edit.value,
       });
-    } else {
+    } else if (edit.kind === "cell-font") {
       const isBooleanField = ["bold", "italic", "underline"].includes(edit.field);
       const isNumberField = edit.field === "size";
       if (
@@ -756,6 +773,19 @@ export function buildTableContractEditPatches(
       cell.font = font;
       patches.push({
         path: [...cellPath, "font", edit.field],
+        value: edit.value,
+      });
+    } else {
+      if (
+        edit.value !== "left" &&
+        edit.value !== "center" &&
+        edit.value !== "right"
+      ) {
+        return { ok: false, reason: "invalid_table_alignment_edit" };
+      }
+      cell.alignment = edit.value;
+      patches.push({
+        path: [...cellPath, "alignment"],
         value: edit.value,
       });
     }

@@ -221,6 +221,34 @@ export default function TableToolbar({
               }
             />
           </ToolbarField>
+          <ToolbarField label="Table cell alignment">
+            <span aria-hidden="true">Align</span>
+            <ToolbarSelect
+              aria-label="Table cell alignment"
+              value={
+                selectedTarget.cell.alignment === "center" ||
+                selectedTarget.cell.alignment === "right"
+                  ? selectedTarget.cell.alignment
+                  : "left"
+              }
+              onChange={(event) =>
+                applyContractEdit(
+                  {
+                    kind: "cell-alignment",
+                    section: selectedTarget.edit.section,
+                    rowIndex: selectedRowIndex,
+                    columnIndex: selectedTarget.edit.columnIndex,
+                    value: event.target.value,
+                  },
+                  `toolbar:table-alignment-${safeTargetIndex}`
+                )
+              }
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </ToolbarSelect>
+          </ToolbarField>
           <ToolbarField label="Table cell font color">
             <span aria-hidden="true">Text</span>
             <input

@@ -14,6 +14,7 @@
     "test:template-v2-export-fidelity": "node --test lib/template-v2-general-renderer.test.mjs lib/export-fidelity/*.test.mjs"
   },
   "dependencies": {
+    "@babel/generator": "^7.29.7",
     "@babel/parser": "^7.28.4",
     "@babel/standalone": "^7.28.2",
     "@babel/traverse": "^7.29.0",
@@ -43,9 +44,10 @@
     "@radix-ui/react-tooltip": "^1.1.6",
     "@reduxjs/toolkit": "^2.2.8",
     "@tailwindcss/typography": "^0.5.16",
-    "@tiptap/extension-underline": "^2.0.0",
-    "@tiptap/react": "^2.11.5",
-    "@tiptap/starter-kit": "^2.11.5",
+    "@tiptap/core": "^3.29.2",
+    "@tiptap/pm": "^3.29.2",
+    "@tiptap/react": "^3.29.2",
+    "@tiptap/starter-kit": "^3.29.2",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.0",
@@ -75,7 +77,7 @@
     "tailwind-merge": "^2.5.3",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
-    "tiptap-markdown": "^0.8.10",
+    "tiptap-markdown": "^0.9.0",
     "uuid": "^11.1.1",
     "zod": "^4.0.5"
   },
@@ -93,9 +95,9 @@
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
     "babel-loader": "^10.1.1",
-    "cypress": "^14.3.3",
+    "cypress": "^15.19.0",
     "esbuild": "0.25.8",
-    "eslint": "^9",
+    "eslint": "^9.39.5",
     "eslint-config-next": "16.2.11",
     "typescript": "^5",
     "webpack": "^5.107.2"

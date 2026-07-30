@@ -146,15 +146,10 @@ test("pinned-contract-derived numeric Design Variable survives the Studio wire r
   );
   assert.deepEqual(
     inspectTemplateV2DesignVariableEditCapability(editedElement),
-    { activation: "retention-only" },
-  );
-  assert.throws(
-    () =>
-      applyTemplateV2DirectDesignVariableOption(editedElement, {
-        variableIndex: 0,
-        optionIndex: 0,
-      }),
-    /template_v2_design_variables_unproven_edit/,
+    {
+      ...expectedInitialCapability,
+      selectedOptionIndex: 1,
+    },
   );
 
   const saved = serializeStudioLayoutsForUpstream(
@@ -185,7 +180,10 @@ test("pinned-contract-derived numeric Design Variable survives the Studio wire r
   const reloadedElement = reloadedLayout.components[0]!.elements[0]!;
   assert.deepEqual(
     inspectTemplateV2DesignVariableEditCapability(reloadedElement),
-    { activation: "retention-only" },
+    {
+      ...expectedInitialCapability,
+      selectedOptionIndex: 1,
+    },
   );
 
   const slide = { id: "direct-numeric-design-variable", ui: reloadedLayout };
@@ -206,6 +204,50 @@ test("pinned-contract-derived numeric Design Variable survives the Studio wire r
   });
   assert.match(html, /Numeric bound title/);
   assert.match(html, /font-size:36px/);
+
+  const reversedLayouts = structuredClone(
+    reloadedDocument.studioLayouts,
+  ) as {
+    layouts: Array<{
+      components: Array<{ elements: Array<Record<string, unknown>> }>;
+    }>;
+  };
+  reversedLayouts.layouts[0]!.components[0]!.elements[0] =
+    applyTemplateV2DirectDesignVariableOption(reloadedElement, {
+      variableIndex: 0,
+      optionIndex: 0,
+    });
+  const reversedSaved = serializeStudioLayoutsForUpstream(
+    reloadedDocument,
+    reversedLayouts,
+  ) as NumericWire;
+  const reversedReloaded = adaptUpstreamTemplateV2LayoutsToStudio(
+    JSON.parse(JSON.stringify(reversedSaved)),
+  );
+  const reversedWire = serializeStudioLayoutsForUpstream(
+    reversedReloaded,
+  ) as NumericWire;
+  assert.deepEqual(reversedWire, fixture.wire);
+  const reversedLayout = (
+    reversedReloaded.studioLayouts.layouts as NumericLayout[]
+  )[0]!;
+  assert.deepEqual(
+    inspectTemplateV2DesignVariableEditCapability(
+      reversedLayout.components[0]!.elements[0]!,
+    ),
+    expectedInitialCapability,
+  );
+  assert.match(
+    renderTemplateV2GeneralPresentationHtml({
+      version: "v2-standard",
+      mode: "template",
+      slides: [{
+        id: "direct-numeric-design-variable-reversed",
+        ui: reversedLayout,
+      }],
+    }),
+    /font-size:24px/,
+  );
   assert.deepEqual(fixture.wire, originalWire);
 });
 

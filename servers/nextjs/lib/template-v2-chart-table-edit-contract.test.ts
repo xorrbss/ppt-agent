@@ -457,6 +457,45 @@ test("table cell font edits create canonical font objects without losing cell me
   );
 });
 
+test("table cell alignment edits one canonical cell and rejects unmodeled values", () => {
+  const source = table();
+  const changed = buildTableContractEditPatches(source, {
+    kind: "cell-alignment",
+    section: "body",
+    rowIndex: 0,
+    columnIndex: 1,
+    value: "right",
+  });
+  assert.equal(changed.ok, true);
+  if (!changed.ok) return;
+  assert.deepEqual(changed.value, [{
+    path: ["rows", 0, 1, "alignment"],
+    value: "right",
+  }]);
+  const result = applyPatches(source, changed.value);
+  assert.equal(validateTableContract(result).ok, true);
+  assert.equal(
+    (result.rows as Array<Array<Record<string, unknown>>>)[0]![1]!
+      .alignment,
+    "right",
+  );
+  assert.equal(
+    (result.rows as Array<Array<Record<string, unknown>>>)[0]![0]!
+      .alignment,
+    undefined,
+  );
+  assert.deepEqual(
+    buildTableContractEditPatches(source, {
+      kind: "cell-alignment",
+      section: "body",
+      rowIndex: 0,
+      columnIndex: 1,
+      value: "justify",
+    }),
+    { ok: false, reason: "invalid_table_alignment_edit" },
+  );
+});
+
 test("table section fill edits create canonical Fill objects and retain metadata", () => {
   const source = table();
   (source.columns[0] as Record<string, unknown>).color = {
@@ -578,6 +617,59 @@ test("pinned upstream table fill edit survives save, render, and reload", () => 
   assert.match(html, />Metric</);
   assert.match(html, />Revenue</);
   assert.deepEqual(source.layouts[0]!.components[0]!.elements[0], fixtureTable);
+});
+
+test("fixed upstream table cell alignment survives save, reload, and render", () => {
+  const source = structuredClone(tableStructureRoundTripFixture.document);
+  const document = adaptUpstreamTemplateV2LayoutsToStudio(source);
+  const edited = structuredClone(
+    document.studioLayouts,
+  ) as TableRoundTripEnvelope;
+  const element = edited.layouts[0]!.components[0]!.elements[0]!;
+  const patches = buildTableContractEditPatches(element, {
+    kind: "cell-alignment",
+    section: "header",
+    columnIndex: 0,
+    value: "center",
+  });
+  assert.equal(patches.ok, true);
+  if (!patches.ok) return;
+  edited.layouts[0]!.components[0]!.elements[0] = applyPatches(
+    element,
+    patches.value,
+  );
+
+  const saved = serializeStudioLayoutsForUpstream(
+    document,
+    edited,
+  ) as TableRoundTripEnvelope;
+  const reloaded = adaptUpstreamTemplateV2LayoutsToStudio(
+    JSON.parse(JSON.stringify(saved)),
+  );
+  const persisted = serializeStudioLayoutsForUpstream(
+    reloaded,
+  ) as TableRoundTripEnvelope;
+  const persistedTable =
+    persisted.layouts[0]!.components[0]!.elements[0]!;
+  assert.equal(validateTableContract(persistedTable).ok, true);
+  assert.equal(
+    (persistedTable.columns as Array<Record<string, unknown>>)[0]!
+      .alignment,
+    "center",
+  );
+  assert.equal(
+    (persistedTable.columns as Array<Record<string, unknown>>)[1]!
+      .alignment,
+    undefined,
+  );
+  assert.equal(persistedTable.upstream_element_extension, "table-vNext");
+  const html = renderTemplateV2GeneralSlideCanvasHtml({
+    id: persisted.layouts[0]!.id,
+    ui: persisted.layouts[0]!,
+  });
+  assert.match(html, /<th style="[^"]*text-align:center/);
+  assert.match(html, />Metric</);
+  assert.deepEqual(source, tableStructureRoundTripFixture.document);
 });
 
 test("fixed upstream table single-step additions survive save, reload, and render", () => {

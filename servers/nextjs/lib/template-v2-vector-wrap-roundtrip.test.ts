@@ -16,6 +16,7 @@ import {
   editTemplateV2VectorPointTopology,
   templateV2ProvenVectorEditCapability,
   templateV2ProvenVectorWrapEditCapability,
+  templateV2ProvenVectorWrapRemovalCapability,
 } from "./template-v2-vector.ts";
 
 type VectorRoundTripEnvelope = {
@@ -145,6 +146,18 @@ test("fixed upstream witness proves the Studio wire last-to-first wrap round-tri
     null,
   );
   assert.equal(templateV2ProvenVectorEditCapability(reloadedVector), null);
+  assert.deepEqual(
+    templateV2ProvenVectorWrapRemovalCapability(reloadedVector),
+    {
+      kind: "polygon-remove-proven-last-wrap-midpoint",
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 80 },
+        { x: 50, y: 40 },
+      ],
+      removableIndex: 2,
+    },
+  );
   assert.equal(
     editTemplateV2VectorPointTopology(reloadedVector, {
       type: "add-after",
@@ -174,6 +187,47 @@ test("fixed upstream witness proves the Studio wire last-to-first wrap round-tri
     ui: reloadedLayout,
   });
   assert.match(html, /<polygon points="0,0 100,80 50,40"/);
+
+  const removal = editTemplateV2VectorPointTopology(reloadedVector, {
+    type: "remove-proven-wrap-midpoint",
+    index: 2,
+  });
+  assert.ok(removal);
+  assert.equal(removal.selectedIndex, 1);
+  assert.deepEqual(removal.points, pinnedVector.points);
+  (reloadedVector as Record<string, unknown>).points = removal.points;
+
+  const removalSaved = serializeStudioLayoutsForUpstream(
+    reloaded,
+    reloadedEnvelope,
+  ) as VectorRoundTripEnvelope;
+  const removalReloaded = adaptUpstreamTemplateV2LayoutsToStudio(
+    JSON.parse(JSON.stringify(removalSaved)),
+  );
+  const removalPersisted = serializeStudioLayoutsForUpstream(
+    removalReloaded,
+  ) as VectorRoundTripEnvelope;
+  const removalVector = vectorFrom(removalPersisted);
+  assert.deepEqual(removalVector, pinnedVector);
+  assert.deepEqual(
+    templateV2ProvenVectorWrapEditCapability(removalVector),
+    {
+      kind: "polygon-add-after-last-wrap",
+      points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+    },
+  );
+  assert.equal(
+    templateV2ProvenVectorWrapRemovalCapability(removalVector),
+    null,
+  );
+  const removalLayout = removalPersisted.layouts[0]!;
+  assert.match(
+    renderTemplateV2GeneralSlideCanvasHtml({
+      id: removalLayout.id,
+      ui: removalLayout,
+    }),
+    /<polygon points="0,0 100,80"/,
+  );
   assert.deepEqual(source, witness.document);
 });
 
@@ -186,6 +240,17 @@ test("unwitnessed finite vector coordinates remain fail-closed", () => {
 
   assert.equal(templateV2ProvenVectorEditCapability(vector), null);
   assert.equal(templateV2ProvenVectorWrapEditCapability(vector), null);
+  assert.equal(
+    templateV2ProvenVectorWrapRemovalCapability({
+      ...structuredClone(vectorFrom(witness.document)),
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 80 },
+        { x: 50.01, y: 40 },
+      ],
+    }),
+    null,
+  );
   assert.equal(
     editTemplateV2VectorPointTopology(vector, {
       type: "add-after",

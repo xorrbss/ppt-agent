@@ -37,6 +37,9 @@ export interface TemplateV2EditableVectorGeometry {
 export type TemplateV2VectorPointTopologyAction = {
   type: "add-after";
   index: 0 | 1;
+} | {
+  type: "remove-proven-wrap-midpoint";
+  index: 2;
 };
 
 export interface TemplateV2VectorPointTopologyEdit {
@@ -53,6 +56,16 @@ export interface TemplateV2ProvenVectorEditCapability {
 export interface TemplateV2ProvenVectorWrapEditCapability {
   kind: "polygon-add-after-last-wrap";
   points: [TemplateV2VectorPoint, TemplateV2VectorPoint];
+}
+
+export interface TemplateV2ProvenVectorWrapRemovalCapability {
+  kind: "polygon-remove-proven-last-wrap-midpoint";
+  points: [
+    TemplateV2VectorPoint,
+    TemplateV2VectorPoint,
+    TemplateV2VectorPoint,
+  ];
+  removableIndex: 2;
 }
 
 const PROVEN_VECTOR_WIRE_KEYS = new Set([
@@ -135,6 +148,52 @@ export function templateV2ProvenVectorWrapEditCapability(
   return points
     ? { kind: "polygon-add-after-last-wrap", points }
     : null;
+}
+
+/**
+ * Recognizes only the exact three-point result produced by the pinned
+ * last-to-first wrap insertion witness. No other point deletion is enabled.
+ */
+export function templateV2ProvenVectorWrapRemovalCapability(
+  element: JsonRecord
+): TemplateV2ProvenVectorWrapRemovalCapability | null {
+  if (
+    element.type !== "vector" ||
+    element.shape !== "polygon" ||
+    element.closed !== true ||
+    element.upstream_element_extension !== "vector-vNext" ||
+    Object.keys(element).some((key) => !PROVEN_VECTOR_WIRE_KEYS.has(key)) ||
+    !Array.isArray(element.points) ||
+    element.points.length !== 3
+  ) {
+    return null;
+  }
+  const expected = [
+    { x: 0, y: 0 },
+    { x: 100, y: 80 },
+    { x: 50, y: 40 },
+  ] as const;
+  const points = element.points.map((point, index) => {
+    if (
+      !isRecord(point) ||
+      Object.keys(point).some((key) => key !== "x" && key !== "y") ||
+      point.x !== expected[index]!.x ||
+      point.y !== expected[index]!.y
+    ) {
+      return null;
+    }
+    return { x: point.x, y: point.y };
+  });
+  if (points.some((point) => point === null)) return null;
+  return {
+    kind: "polygon-remove-proven-last-wrap-midpoint",
+    points: points as [
+      TemplateV2VectorPoint,
+      TemplateV2VectorPoint,
+      TemplateV2VectorPoint,
+    ],
+    removableIndex: 2,
+  };
 }
 
 /**
@@ -260,6 +319,21 @@ export function editTemplateV2VectorPointTopology(
   element: JsonRecord,
   action: TemplateV2VectorPointTopologyAction
 ): TemplateV2VectorPointTopologyEdit | null {
+  if (action.type === "remove-proven-wrap-midpoint") {
+    const capability =
+      templateV2ProvenVectorWrapRemovalCapability(element);
+    if (!capability || action.index !== capability.removableIndex) {
+      return null;
+    }
+    const points = capability.points.map((point) => ({ ...point }));
+    points.splice(capability.removableIndex, 1);
+    return {
+      points,
+      cornerRadii: null,
+      selectedIndex: 1,
+    };
+  }
+
   const capability =
     action.index === 0
       ? templateV2ProvenVectorEditCapability(element)
