@@ -29,9 +29,11 @@ from templates.pptx_font_utils import (
     normalize_font_variants,
     replace_fonts_in_pptx,
 )
+from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from utils.asset_directory_utils import absolute_fastapi_asset_url
 from utils.download_helpers import download_file
 from utils.get_env import get_app_data_directory_env
+from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file
 
 
 class FontInfo(BaseModel):
@@ -272,6 +274,40 @@ def _build_modified_pptx_filename(original_filename: str) -> str:
     return f"{base_stem}-modified{extension or '.pptx'}"
 
 
+async def _store_and_preflight_preview_pptx(
+    pptx_file: UploadFile,
+    pptx_path: str,
+) -> None:
+    """Bound legacy preview uploads before any font parsing or conversion.
+
+    The preview endpoints remain intentionally compatible with their existing
+    extension-only request contract, while sharing the upload cap and OOXML ZIP
+    checks used by the structured Template V2 importer.  This prevents a legacy
+    preview request from bypassing the package limits before LibreOffice or font
+    tooling reads the file.
+    """
+
+    await stream_upload_to_file(
+        pptx_file,
+        pptx_path,
+        limit_bytes=get_single_upload_limit_bytes(),
+        label="PPTX file",
+    )
+    try:
+        with open(pptx_path, "rb") as stream:
+            if stream.read(4) != b"PK\x03\x04":
+                raise UnsafePptxPackage("invalid_pptx_zip_signature")
+        PptxPackageReader(pptx_path).preflight()
+    except UnsafePptxPackage as error:
+        # Do not retain invalid inputs when callers supply their own temp dir.
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(pptx_path)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid or unsafe PPTX package: {error.code}",
+        ) from error
+
+
 async def check_fonts_in_pptx_handler(pptx_file: UploadFile) -> FontCheckResponse:
     """
     Extract fonts from a PPTX file and check their availability in Google Fonts.
@@ -289,8 +325,7 @@ async def check_fonts_in_pptx_handler(pptx_file: UploadFile) -> FontCheckRespons
     with tempfile.TemporaryDirectory() as temp_dir:
         # Save uploaded PPTX file
         pptx_path = os.path.join(temp_dir, "presentation.pptx")
-        pptx_content = await pptx_file.read()
-        await asyncio.to_thread(_write_bytes_to_path, pptx_path, pptx_content)
+        await _store_and_preflight_preview_pptx(pptx_file, pptx_path)
         font_variants_by_name = await asyncio.to_thread(
             extract_used_font_variants_from_pptx, pptx_path
         )
@@ -374,8 +409,7 @@ async def upload_fonts_and_preview_handler(
     with temp_dir_context as temp_dir:
         # Save uploaded PPTX file
         pptx_path = os.path.join(temp_dir, "presentation.pptx")
-        pptx_content = await pptx_file.read()
-        await asyncio.to_thread(_write_bytes_to_path, pptx_path, pptx_content)
+        await _store_and_preflight_preview_pptx(pptx_file, pptx_path)
         logger.info(f"Saved PPTX file to {pptx_path}")
         variants_by_normalized_name = await asyncio.to_thread(
             _font_variants_by_normalized_name, pptx_path
