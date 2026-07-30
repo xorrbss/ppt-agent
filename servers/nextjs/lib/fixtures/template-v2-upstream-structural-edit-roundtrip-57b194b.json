@@ -1,0 +1,281 @@
+{
+  "upstream_sha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "model_path": "servers/fastapi/templates/v2/models/elements.py",
+  "document": {
+    "layouts": [
+      {
+        "id": "upstream-structural-edit-roundtrip",
+        "components": [
+          {
+            "id": "structural-component",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "elements": [
+              {
+                "type": "table",
+                "position": {
+                  "x": 20,
+                  "y": 20
+                },
+                "size": {
+                  "width": 440,
+                  "height": 220
+                },
+                "columns": [
+                  {
+                    "runs": [
+                      {
+                        "text": "Region",
+                        "font": {
+                          "bold": true
+                        }
+                      }
+                    ],
+                    "future_cell_field": {
+                      "id": "h-region"
+                    }
+                  },
+                  {
+                    "runs": [
+                      {
+                        "text": "Revenue"
+                      }
+                    ],
+                    "future_cell_field": {
+                      "id": "h-revenue"
+                    }
+                  },
+                  {
+                    "runs": [
+                      {
+                        "text": "Cost"
+                      }
+                    ],
+                    "future_cell_field": {
+                      "id": "h-cost"
+                    }
+                  }
+                ],
+                "rows": [
+                  [
+                    {
+                      "runs": [
+                        {
+                          "text": "North"
+                        }
+                      ],
+                      "future_cell_field": {
+                        "id": "north"
+                      }
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "10"
+                        }
+                      ],
+                      "future_cell_field": {
+                        "id": "north-revenue"
+                      }
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "4"
+                        }
+                      ],
+                      "future_cell_field": {
+                        "id": "north-cost"
+                      }
+                    }
+                  ],
+                  [
+                    {
+                      "runs": [
+                        {
+                          "text": "South"
+                        }
+                      ],
+                      "future_cell_field": {
+                        "id": "south"
+                      }
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "20"
+                        }
+                      ],
+                      "future_cell_field": {
+                        "id": "south-revenue"
+                      }
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "7"
+                        }
+                      ],
+                      "future_cell_field": {
+                        "id": "south-cost"
+                      }
+                    }
+                  ]
+                ],
+                "decorative": false,
+                "name": "regional metrics",
+                "min_columns": 1,
+                "max_columns": 4,
+                "min_rows": 0,
+                "max_rows": 3,
+                "upstream_element_extension": "table-vNext"
+              },
+              {
+                "type": "table",
+                "position": {
+                  "x": 500,
+                  "y": 20
+                },
+                "size": {
+                  "width": 440,
+                  "height": 220
+                },
+                "columns": [
+                  {
+                    "runs": [
+                      {
+                        "text": "Region"
+                      }
+                    ]
+                  },
+                  {
+                    "runs": [
+                      {
+                        "text": "Revenue"
+                      }
+                    ]
+                  },
+                  {
+                    "runs": [
+                      {
+                        "text": "Cost"
+                      }
+                    ]
+                  }
+                ],
+                "rows": [
+                  [
+                    {
+                      "runs": [
+                        {
+                          "text": "North"
+                        }
+                      ]
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "10"
+                        }
+                      ]
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "4"
+                        }
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "runs": [
+                        {
+                          "text": "South"
+                        }
+                      ]
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "20"
+                        }
+                      ]
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "7"
+                        }
+                      ]
+                    }
+                  ]
+                ],
+                "decorative": false,
+                "name": "chart source",
+                "min_columns": 3,
+                "max_columns": 3,
+                "min_rows": 2,
+                "max_rows": 2
+              },
+              {
+                "type": "chart",
+                "position": {
+                  "x": 20,
+                  "y": 280
+                },
+                "size": {
+                  "width": 560,
+                  "height": 260
+                },
+                "chart_type": "bar",
+                "categories": [
+                  "North",
+                  "South"
+                ],
+                "series": [
+                  {
+                    "name": "Revenue",
+                    "values": [
+                      10,
+                      20
+                    ],
+                    "future_series_field": {
+                      "id": "revenue"
+                    }
+                  },
+                  {
+                    "name": "Cost",
+                    "values": [
+                      4,
+                      7
+                    ],
+                    "future_series_field": {
+                      "id": "cost"
+                    }
+                  }
+                ],
+                "data_labels": "top",
+                "legend": true,
+                "decorative": false,
+                "name": "regional chart",
+                "upstream_element_extension": "chart-vNext"
+              }
+            ],
+            "future_component_field": {
+              "retained": true
+            }
+          }
+        ],
+        "future_layout_field": {
+          "retained": true
+        }
+      }
+    ],
+    "future_envelope_field": {
+      "retained": true
+    }
+  }
+}

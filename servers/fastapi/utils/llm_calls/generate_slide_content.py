@@ -14,7 +14,11 @@ from utils.content_preservation import (
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
-from utils.llm_utils import DisconnectChecker, generate_structured_with_schema_retries
+from utils.llm_utils import (
+    DisconnectChecker,
+    format_text_length_guidance,
+    generate_structured_with_schema_retries,
+)
 from utils.schema_utils import (
     add_field_in_schema,
     ensure_array_schemas_have_items,
@@ -53,6 +57,8 @@ You need to generate structured content json based on the schema.
 {verbosity_instructions}
 
 {output_fields_instructions}
+
+{text_length_guidance}
 """
 
 
@@ -130,6 +136,7 @@ def get_system_prompt(
     output_fields_instructions = "# Output Fields:\n" + _get_schema_markdown(
         response_schema
     )
+    text_length_guidance = format_text_length_guidance(response_schema or {})
 
     if preserve_source_content:
         verbosity_instructions = (
@@ -157,6 +164,7 @@ def get_system_prompt(
         verbosity_instructions=verbosity_instructions,
         output_fields_instructions=output_fields_instructions,
         content_depth_rules=content_depth_rules,
+        text_length_guidance=text_length_guidance,
     )
 
 

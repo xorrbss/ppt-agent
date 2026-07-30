@@ -3,6 +3,7 @@ import json
 import logging
 import threading
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import dirtyjson
@@ -130,12 +131,179 @@ def _resolve_ref(schema: Any, root: dict) -> Any:
         if ref.startswith("#/"):
             node: Any = root
             for part in ref[2:].split("/"):
+                part = part.replace("~1", "/").replace("~0", "~")
                 if isinstance(node, dict):
                     node = node.get(part, {})
                 else:
                     return {}
             return node if isinstance(node, dict) else {}
     return schema
+
+
+@dataclass(frozen=True)
+class TextLengthLimit:
+    path: str
+    recommended: int
+    maximum: int
+
+
+def _schema_variant_label(schema: dict) -> str:
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return ""
+    for discriminator in ("archetype", "type"):
+        spec = properties.get(discriminator)
+        if not isinstance(spec, dict):
+            continue
+        if isinstance(spec.get("const"), str):
+            return spec["const"]
+        values = spec.get("enum")
+        if (
+            isinstance(values, list)
+            and len(values) == 1
+            and isinstance(values[0], str)
+        ):
+            return values[0]
+    return ""
+
+
+def _schema_allows_string(
+    schema: Any,
+    root: dict,
+    active_refs: set[str] | None = None,
+) -> bool:
+    if not isinstance(schema, dict):
+        return False
+    schema_type = schema.get("type")
+    if schema_type == "string" or (
+        isinstance(schema_type, list) and "string" in schema_type
+    ):
+        return True
+    if isinstance(schema.get("const"), str):
+        return True
+    enum_values = schema.get("enum")
+    if isinstance(enum_values, list) and any(
+        isinstance(value, str) for value in enum_values
+    ):
+        return True
+
+    seen_refs = active_refs if active_refs is not None else set()
+    ref = schema.get("$ref")
+    if isinstance(ref, str) and ref not in seen_refs:
+        seen_refs.add(ref)
+        if _schema_allows_string(_resolve_ref(schema, root), root, seen_refs):
+            seen_refs.remove(ref)
+            return True
+        seen_refs.remove(ref)
+
+    for combiner in ("allOf", "oneOf", "anyOf"):
+        variants = schema.get(combiner)
+        if isinstance(variants, list) and any(
+            _schema_allows_string(variant, root, seen_refs)
+            for variant in variants
+        ):
+            return True
+    return False
+
+
+def extract_text_length_limits(
+    schema: dict,
+    *,
+    recommended_ratio: float = 0.8,
+) -> list[TextLengthLimit]:
+    """Return deterministic text budgets from a local JSON Schema.
+
+    Only explicit ``maxLength`` constraints are surfaced. Unsupported or
+    malformed schema shapes are ignored so prompt generation remains
+    fail-closed instead of inventing limits.
+    """
+    if not isinstance(schema, dict):
+        return []
+    ratio = min(0.85, max(0.75, recommended_ratio))
+    limits: dict[str, int] = {}
+    active_refs: set[str] = set()
+
+    def visit(node: Any, path: str) -> None:
+        if not isinstance(node, dict):
+            return
+        allows_string = _schema_allows_string(node, schema)
+        ref = node.get("$ref")
+        if isinstance(ref, str):
+            if ref not in active_refs:
+                active_refs.add(ref)
+                visit(_resolve_ref(node, schema), path)
+                active_refs.remove(ref)
+
+        max_length = node.get("maxLength")
+        if (
+            allows_string
+            and isinstance(max_length, int)
+            and not isinstance(max_length, bool)
+            and max_length >= 0
+            and path
+        ):
+            limits[path] = min(limits.get(path, max_length), max_length)
+
+        for combiner in ("allOf", "oneOf", "anyOf"):
+            variants = node.get(combiner)
+            if not isinstance(variants, list):
+                continue
+            for variant in variants:
+                resolved = _resolve_ref(variant, schema)
+                label = (
+                    _schema_variant_label(resolved)
+                    if isinstance(resolved, dict)
+                    else ""
+                )
+                variant_path = f"{path}.<{label}>" if label and path else path
+                visit(variant, variant_path)
+
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            for name, child in properties.items():
+                child_path = f"{path}.{name}" if path else name
+                visit(child, child_path)
+
+        items = node.get("items")
+        if isinstance(items, dict):
+            visit(items, f"{path}[]" if path else "[]")
+        prefix_items = node.get("prefixItems")
+        if isinstance(prefix_items, list):
+            for index, child in enumerate(prefix_items):
+                child_path = f"{path}[{index}]" if path else f"[{index}]"
+                visit(child, child_path)
+
+    visit(schema, "")
+    return [
+        TextLengthLimit(
+            path=path,
+            recommended=max(1, int(maximum * ratio)) if maximum else 0,
+            maximum=maximum,
+        )
+        for path, maximum in sorted(limits.items())
+    ]
+
+
+def format_text_length_guidance(schema: dict) -> str:
+    limits = extract_text_length_limits(schema)
+    if not limits:
+        return ""
+    lines = [
+        "# Text Length Budgets",
+        (
+            "Write to the recommended length when the source supports it. The "
+            "absolute maximum is a hard limit. Remove repetition or rephrase; "
+            "never end a title or sentence mid-word."
+        ),
+    ]
+    lines.extend(
+        (
+            f"- `{limit.path}`: recommended <= {limit.recommended} characters; "
+            f"absolute maximum {limit.maximum} characters."
+        )
+        for limit in limits
+    )
+    return "\n" + "\n".join(lines) + "\n"
 
 
 def clamp_to_schema(value: Any, schema: Any, root: dict) -> Any:

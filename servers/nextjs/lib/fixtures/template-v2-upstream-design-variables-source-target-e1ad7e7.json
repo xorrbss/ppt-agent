@@ -1,0 +1,124 @@
+{
+  "contract": {
+    "upstream_commit": "e1ad7e7f",
+    "witness_kind": "upstream-unit-test-derived",
+    "upstream_source": "servers/fastapi/tests/unit/test_templates_v2_generation.py",
+    "reviewed_slice": {
+      "variable_name": "scale_variant",
+      "variable_type": "object",
+      "option_count": 1,
+      "option": {
+        "width": 240,
+        "font_size": 28
+      },
+      "effects": [
+        {
+          "source": "$.width",
+          "target": "elements.0.size.width"
+        },
+        {
+          "source": "$.font_size",
+          "target": "elements.1.runs.0.font.size"
+        }
+      ],
+      "initial_width": 200,
+      "initial_font_size": 20
+    }
+  },
+  "edit": {
+    "variable_index": 0,
+    "option_index": 0
+  },
+  "wire": {
+    "future_top_level_field": {
+      "retain": "exactly"
+    },
+    "layouts": {
+      "future_envelope_field": [
+        "retain",
+        "exactly"
+      ],
+      "layouts": [
+        {
+          "id": "source-target-design-variable",
+          "future_layout_field": true,
+          "components": [
+            {
+              "id": "metric_card",
+              "description": "Reusable metric card with scalable typography.",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 200,
+                "height": 100
+              },
+              "design_variables": [
+                {
+                  "name": "scale_variant",
+                  "type": "object",
+                  "options": [
+                    {
+                      "width": 240,
+                      "font_size": 28
+                    }
+                  ],
+                  "effect": [
+                    {
+                      "source": "$.width",
+                      "target": "elements.0.size.width"
+                    },
+                    {
+                      "source": "$.font_size",
+                      "target": "elements.1.runs.0.font.size"
+                    }
+                  ]
+                }
+              ],
+              "elements": [
+                {
+                  "type": "rectangle",
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "size": {
+                    "width": 200,
+                    "height": 100
+                  }
+                },
+                {
+                  "type": "text",
+                  "position": {
+                    "x": 20,
+                    "y": 20
+                  },
+                  "size": {
+                    "width": 160,
+                    "height": 40
+                  },
+                  "fixed": false,
+                  "name": "metric",
+                  "min_length": 10,
+                  "max_length": 20,
+                  "runs": [
+                    {
+                      "text": "Metric",
+                      "font": {
+                        "size": 20
+                      }
+                    }
+                  ]
+                }
+              ],
+              "future_component_field": {
+                "retain": "exactly"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

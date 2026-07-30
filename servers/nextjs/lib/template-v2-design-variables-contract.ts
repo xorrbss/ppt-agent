@@ -36,6 +36,21 @@ export type TemplateV2DesignVariableEditCapability =
       targetPath: "runs.0.font.size";
     };
 
+export type TemplateV2ComponentDesignVariableEditCapability =
+  | {
+      activation: "none" | "retention-only";
+    }
+  | {
+      activation: "direct-option";
+      variableIndex: 0;
+      name: "scale_variant";
+      optionIndex: 0;
+      targets: [
+        "elements.0.size.width",
+        "elements.1.runs.0.font.size",
+      ];
+    };
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -174,6 +189,33 @@ function inspectElement(
   }
 }
 
+function inspectDeclarationOwner(
+  owner: Record<string, unknown>,
+  path: Array<string | number>,
+  declarations: TemplateV2DesignVariableDeclaration[],
+): void {
+  if (
+    !Object.prototype.hasOwnProperty.call(owner, "design_variables") ||
+    owner.design_variables === null
+  ) {
+    return;
+  }
+  if (!Array.isArray(owner.design_variables)) {
+    throw new Error(
+      `template_v2_design_variables_array_required:${path.join(".")}`,
+    );
+  }
+  declarations.push({
+    path: [...path, "design_variables"],
+    bindings: owner.design_variables.map((binding, index) =>
+      cloneJsonValue(
+        binding,
+        `${path.join(".")}.design_variables[${index}]`,
+      ),
+    ),
+  });
+}
+
 /**
  * Inventories design-variable JSON at the strict persisted `slide.ui`
  * boundary. This is deliberately retention-only: it does not interpret or
@@ -197,6 +239,11 @@ export function inspectTemplateV2DesignVariablesContract(
         `template_v2_design_variables_elements_required:${componentIndex}`,
       );
     }
+    inspectDeclarationOwner(
+      component,
+      ["ui", "components", componentIndex],
+      declarations,
+    );
     component.elements.forEach((element, elementIndex) => {
       if (!isPlainRecord(element)) {
         throw new Error(
@@ -321,6 +368,144 @@ export function inspectTemplateV2DesignVariableEditCapability(
 }
 
 /**
+ * Recognizes only the exact source/target component contract exercised by the
+ * pinned upstream backend unit witness. It deliberately does not expose the
+ * general expression evaluator or target-path resolver.
+ */
+export function inspectTemplateV2ComponentDesignVariableEditCapability(
+  component: unknown,
+): TemplateV2ComponentDesignVariableEditCapability {
+  if (!isPlainRecord(component)) {
+    return { activation: "retention-only" };
+  }
+  if (
+    !Object.prototype.hasOwnProperty.call(component, "design_variables") ||
+    component.design_variables === null
+  ) {
+    return { activation: "none" };
+  }
+  if (
+    !Array.isArray(component.design_variables) ||
+    component.design_variables.length !== 1 ||
+    !Array.isArray(component.elements) ||
+    component.elements.length !== 2
+  ) {
+    return { activation: "retention-only" };
+  }
+
+  const componentPosition = component.position;
+  const componentSize = component.size;
+  const variable = component.design_variables[0];
+  const container = component.elements[0];
+  const text = component.elements[1];
+  const containerPosition = isPlainRecord(container)
+    ? container.position
+    : null;
+  const containerSize = isPlainRecord(container) ? container.size : null;
+  const textPosition = isPlainRecord(text) ? text.position : null;
+  const textSize = isPlainRecord(text) ? text.size : null;
+  if (
+    component.id !== "metric_card" ||
+    component.description !==
+      "Reusable metric card with scalable typography." ||
+    !isPlainRecord(componentPosition) ||
+    !hasExactKeys(componentPosition, ["x", "y"]) ||
+    componentPosition.x !== 0 ||
+    componentPosition.y !== 0 ||
+    !isPlainRecord(componentSize) ||
+    !hasExactKeys(componentSize, ["width", "height"]) ||
+    componentSize.width !== 200 ||
+    componentSize.height !== 100 ||
+    !isPlainRecord(variable) ||
+    !hasExactKeys(variable, ["name", "type", "options", "effect"]) ||
+    variable.name !== "scale_variant" ||
+    variable.type !== "object" ||
+    !Array.isArray(variable.options) ||
+    variable.options.length !== 1 ||
+    !Array.isArray(variable.effect) ||
+    variable.effect.length !== 2 ||
+    !isPlainRecord(container) ||
+    !hasExactKeys(container, ["type", "position", "size"]) ||
+    container.type !== "container" ||
+    !isPlainRecord(containerPosition) ||
+    !hasExactKeys(containerPosition, ["x", "y"]) ||
+    containerPosition.x !== 0 ||
+    containerPosition.y !== 0 ||
+    !isPlainRecord(containerSize) ||
+    !hasExactKeys(containerSize, ["width", "height"]) ||
+    containerSize.width !== 200 ||
+    containerSize.height !== 100 ||
+    !isPlainRecord(text) ||
+    !hasExactKeys(text, [
+      "type",
+      "position",
+      "size",
+      "fixed",
+      "name",
+      "min_length",
+      "max_length",
+      "runs",
+    ]) ||
+    text.type !== "text" ||
+    !isPlainRecord(textPosition) ||
+    !hasExactKeys(textPosition, ["x", "y"]) ||
+    textPosition.x !== 20 ||
+    textPosition.y !== 20 ||
+    !isPlainRecord(textSize) ||
+    !hasExactKeys(textSize, ["width", "height"]) ||
+    textSize.width !== 160 ||
+    textSize.height !== 40 ||
+    text.fixed !== false ||
+    text.name !== "metric" ||
+    text.min_length !== 10 ||
+    text.max_length !== 20 ||
+    !Array.isArray(text.runs) ||
+    text.runs.length !== 1
+  ) {
+    return { activation: "retention-only" };
+  }
+
+  const option = variable.options[0];
+  const widthEffect = variable.effect[0];
+  const fontSizeEffect = variable.effect[1];
+  const run = text.runs[0];
+  const font = isPlainRecord(run) ? run.font : null;
+  if (
+    !isPlainRecord(option) ||
+    !hasExactKeys(option, ["width", "font_size"]) ||
+    option.width !== 240 ||
+    option.font_size !== 28 ||
+    !isPlainRecord(widthEffect) ||
+    !hasExactKeys(widthEffect, ["source", "target"]) ||
+    widthEffect.source !== "$.width" ||
+    widthEffect.target !== "elements.0.size.width" ||
+    !isPlainRecord(fontSizeEffect) ||
+    !hasExactKeys(fontSizeEffect, ["source", "target"]) ||
+    fontSizeEffect.source !== "$.font_size" ||
+    fontSizeEffect.target !== "elements.1.runs.0.font.size" ||
+    !isPlainRecord(run) ||
+    !hasExactKeys(run, ["text", "font"]) ||
+    run.text !== "Metric" ||
+    !isPlainRecord(font) ||
+    !hasExactKeys(font, ["size"]) ||
+    font.size !== 20
+  ) {
+    return { activation: "retention-only" };
+  }
+
+  return {
+    activation: "direct-option",
+    variableIndex: 0,
+    name: "scale_variant",
+    optionIndex: 0,
+    targets: [
+      "elements.0.size.width",
+      "elements.1.runs.0.font.size",
+    ],
+  };
+}
+
+/**
  * Applies a reviewed direct option without mutating the element or its
  * Design Variable declaration. No upstream expression language is executed.
  */
@@ -362,6 +547,70 @@ export function applyTemplateV2DirectDesignVariableOption(
             ? { color: selectedOption }
             : { size: selectedOption }),
         },
+      },
+    ],
+  };
+}
+
+/**
+ * Applies the exact component-level source/target witness immutably. Any
+ * variation remains retention-only and is rejected before mutation.
+ */
+export function applyTemplateV2DirectComponentDesignVariableOption(
+  component: unknown,
+  selection: unknown,
+): Record<string, unknown> {
+  const capability =
+    inspectTemplateV2ComponentDesignVariableEditCapability(component);
+  if (capability.activation !== "direct-option" || !isPlainRecord(component)) {
+    throw new Error("template_v2_design_variables_unproven_component_edit");
+  }
+  if (
+    !isPlainRecord(selection) ||
+    !hasExactKeys(selection, ["variableIndex", "optionIndex"]) ||
+    !Number.isInteger(selection.variableIndex) ||
+    !Number.isInteger(selection.optionIndex)
+  ) {
+    throw new Error("template_v2_design_variables_invalid_selection");
+  }
+  if (
+    selection.variableIndex !== capability.variableIndex
+  ) {
+    throw new Error("template_v2_design_variables_invalid_variable_index");
+  }
+  if (
+    selection.optionIndex !== capability.optionIndex
+  ) {
+    throw new Error("template_v2_design_variables_invalid_option_index");
+  }
+
+  const elements = component.elements as Record<string, unknown>[];
+  const container = elements[0]!;
+  const text = elements[1]!;
+  const size = container.size as Record<string, unknown>;
+  const run = (text.runs as Record<string, unknown>[])[0]!;
+  const font = run.font as Record<string, unknown>;
+  return {
+    ...component,
+    elements: [
+      {
+        ...container,
+        size: {
+          ...size,
+          width: 240,
+        },
+      },
+      {
+        ...text,
+        runs: [
+          {
+            ...run,
+            font: {
+              ...font,
+              size: 28,
+            },
+          },
+        ],
       },
     ],
   };
