@@ -104,12 +104,12 @@ git replace --graft fe35a083bceaf19514562884eb441b7813ccbc5a \
     c11f34ba24f4e7064234d632a832ed29dbc0a625 e43420e059cb490f7ef3f9692db09e108ee9ce29
 ```
 
-Verify (upstream counts hold while the baseline is pinned at `57b194b2`):
+Verify the graft point and inspect the current divergence:
 
 ```bash
 git merge-base origin/main upstream/main            # c11f34ba24f4e7064234d632a832ed29dbc0a625
-git rev-list --count origin/main..upstream/main     # 850  (upstream delta to review)
-git rev-list --count upstream/main..origin/main     # fork-only commits; grows with local work
+git rev-list --count origin/main..upstream/main     # upstream delta to review
+git rev-list --count upstream/main..origin/main     # fork-only commits
 git remote -v                                       # upstream push URL must read DISABLED
 ```
 

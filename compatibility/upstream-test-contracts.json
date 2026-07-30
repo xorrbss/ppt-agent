@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baselineUpstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "baselineUpstreamSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
   "sources": [
     {
       "path": "servers/fastapi/tests/unit/test_default_templates.py",
@@ -95,6 +95,32 @@
           "reason": "Adding a generic task listing query would expand the legacy API and database schema beyond Template V2 compatibility."
         }
       ]
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_templates_v2_generation.py",
+      "tests": [
+        {
+          "name": "test_generate_slide_layout_replaces_content_image_urls",
+          "disposition": "ported"
+        }
+      ]
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_presentation_template_v2_ui.py",
+      "tests": [
+        {
+          "name": "test_chat_template_image_content_stores_prompt",
+          "disposition": "excluded",
+          "reasonCode": "template-v2-chat-ui-hydration-not-ported",
+          "reason": "The local fork does not include the upstream PresentationChatMemoryLayer Template V2 UI hydration path; generated Template V2 layout images are normalized at the local generation boundary instead."
+        },
+        {
+          "name": "test_apply_template_image_content_avoids_stretching_generated_photos",
+          "disposition": "excluded",
+          "reasonCode": "template-v2-chat-ui-hydration-not-ported",
+          "reason": "The local fork does not hydrate Template V2 slide.ui through the upstream presentation endpoint helper; the applicable generated-layout contract is covered by the local prompted-layout tests."
+        }
+      ]
     }
   ],
   "excludedApiContracts": [
@@ -139,6 +165,17 @@
       "evidenceFiles": [
         "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
         "servers/fastapi/templates/router.py"
+      ]
+    },
+    {
+      "id": "template-v2-generated-content-image-cover",
+      "sourceConcept": "Generated raster content images use cover fitting while icons and decorative assets retain their existing semantics.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_template_v2_prompted_layout.py::test_prompted_layout_retries_and_normalizes_replaceable_assets",
+        "servers/fastapi/tests/unit/test_template_v2_prompted_layout.py::test_prompted_layout_normalizes_contained_content_images_to_cover"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/templates/v2/generation.py"
       ]
     }
   ]

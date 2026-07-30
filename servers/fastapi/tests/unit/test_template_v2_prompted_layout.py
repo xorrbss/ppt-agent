@@ -12,6 +12,7 @@ from api.v1.ppt.endpoints.template_v2_compat import (
 from models.sql.template_v2 import TemplateV2
 from services.template_v2_service import TemplateV2Record
 from templates.v2 import generation
+from templates.v2.models.elements import ImageFit
 from templates.v2.models.layouts import SlideLayout, SlideLayouts
 
 
@@ -107,11 +108,27 @@ def test_prompted_layout_retries_and_normalizes_replaceable_assets(monkeypatch):
     assert images[0].data == (
         "/static/images/replaceable_template_image.png"
     )
+    assert images[0].fit == ImageFit.COVER
     assert images[1].data == "/static/icons/placeholder.svg"
     assert images[2].data == "https://trusted.invalid/logo.png"
     assert source.layouts[0].components[0].elements[1].data == (
         "https://untrusted.invalid/content.png"
     )
+
+
+def test_prompted_layout_normalizes_contained_content_images_to_cover():
+    source = _layout("contained_layout")
+    content_image = source.components[0].elements[1]
+    content_image.fit = ImageFit.CONTAIN
+
+    result = generation._replace_content_image_urls(source)
+
+    normalized_image = result.components[0].elements[1]
+    assert normalized_image.data == (
+        "/static/images/replaceable_template_image.png"
+    )
+    assert normalized_image.fit == ImageFit.COVER
+    assert content_image.fit == ImageFit.CONTAIN
 
 
 @pytest.mark.parametrize(

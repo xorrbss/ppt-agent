@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baselineUpstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "baselineUpstreamSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
   "remoteIntakeReview": {
     "policy": "compatibility/upstream-intake-policy.json",
     "disposition": "report-only-until-human-review",
