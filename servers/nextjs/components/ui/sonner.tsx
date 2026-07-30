@@ -4,7 +4,7 @@ import type React from "react"
 import { BadgeCheck, Loader2, ShieldAlert, TriangleAlert } from "lucide-react"
 import { Toaster as Sonner, toast as sonnerToast, type ExternalToast } from "sonner"
 
-type NotifyOptions = Pick<ExternalToast, "duration" | "id">
+type NotifyOptions = Pick<ExternalToast, "duration" | "id" | "action">
 
 function toastOptions(
   description?: string,

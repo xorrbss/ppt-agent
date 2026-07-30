@@ -25,6 +25,33 @@ from utils.authored_styles import reference_images_for_role
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_AUTHOR_ATTEMPTS = 2
+_TRANSIENT_AUTHOR_ATTEMPTS = 4
+_TRANSIENT_RETRY_BASE_SECONDS = 1.5
+_TRANSIENT_RETRY_MAX_SECONDS = 8.0
+_TRANSIENT_ERROR_HINTS = (
+    "429",
+    "500",
+    "502",
+    "503",
+    "504",
+    "connection aborted",
+    "connection reset",
+    "incomplete chunked read",
+    "overload",
+    "peer closed",
+    "rate limit",
+    "temporarily unavailable",
+    "timed out",
+    "timeout",
+)
+
+
+def _is_transient_author_error(error: object) -> bool:
+    """Return True for provider/network failures that are safe to retry."""
+    message = str(error).lower()
+    return any(hint in message for hint in _TRANSIENT_ERROR_HINTS)
+
 
 @dataclass(frozen=True)
 class AuthoredDeckResult:
@@ -102,12 +129,17 @@ async def _author_one_resilient(
     n: int,
     reference_images=(),
 ) -> str:
-    """Author one slide with one retry and a branded fallback. Never raises and never
-    returns invalid HTML — so one bad slide degrades to a clean placeholder instead of
-    aborting the whole deck. (Concurrency is bounded inside author_slide_html.) A
-    fallback is logged at WARNING so a silently-degraded deck is visible to operators."""
+    """Author one slide with bounded retries and a branded fallback.
+
+    Ordinary invalid/permanent failures retain the original two-attempt behavior.
+    Provider overloads and broken streamed responses get two additional attempts with
+    exponential backoff so a brief upstream incident does not invalidate the whole deck.
+    """
     last_error: object = "invalid HTML"
-    for _ in range(2):
+    attempt_limit = _DEFAULT_AUTHOR_ATTEMPTS
+    attempts_made = 0
+    for attempt in range(_TRANSIENT_AUTHOR_ATTEMPTS):
+        attempts_made = attempt + 1
         try:
             if reference_images:
                 html = await author_slide_html(
@@ -127,11 +159,35 @@ async def _author_one_resilient(
                 return html
         except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
             last_error = e
+            if _is_transient_author_error(e):
+                attempt_limit = _TRANSIENT_AUTHOR_ATTEMPTS
+
+        if attempts_made >= attempt_limit:
+            break
+
+        if attempt_limit == _TRANSIENT_AUTHOR_ATTEMPTS:
+            delay = min(
+                _TRANSIENT_RETRY_BASE_SECONDS * (2**attempt),
+                _TRANSIENT_RETRY_MAX_SECONDS,
+            )
+            logger.warning(
+                "[authored] slide %d/%d transient authoring failure; "
+                "retrying attempt %d/%d in %.1fs (last error: %s)",
+                index + 1,
+                n,
+                attempts_made + 1,
+                attempt_limit,
+                delay,
+                last_error,
+            )
+            await asyncio.sleep(delay)
+
     logger.warning(
-        "[authored] slide %d/%d fell back to a branded placeholder after 2 attempts "
+        "[authored] slide %d/%d fell back to a branded placeholder after %d attempts "
         "(last error: %s)",
         index + 1,
         n,
+        attempts_made,
         last_error,
     )
     return fallback_slide_html(content, brand, role, index, n)

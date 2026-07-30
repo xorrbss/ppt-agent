@@ -169,7 +169,7 @@ def get_messages(
     instructions: Optional[str] = None,
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
-    response_schema: Optional[dict] = None,
+    schema: Optional[dict] = None,
 ) -> list[Message]:
     return [
         SystemMessage(
@@ -177,7 +177,7 @@ def get_messages(
                 instructions,
                 tone,
                 verbosity,
-                response_schema,
+                schema,
             )
         ),
         UserMessage(content=get_user_prompt(outline_text, language)),

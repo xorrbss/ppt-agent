@@ -93,6 +93,37 @@ export function getApiErrorDisplayMessage(
     : message;
 }
 
+/**
+ * These errors normally come from an upstream model provider. Retrying the same
+ * presentation is safe because the prepare endpoint persists slide structure
+ * only after generation succeeds.
+ */
+export function isRetryablePresentationGenerationError(error: unknown): boolean {
+  const apiError = error instanceof ApiError ? error : undefined;
+  const status = apiError?.status;
+  const code = apiError?.code?.toLowerCase() || "";
+  const message = apiError?.message?.toLowerCase() || "";
+
+  return (
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    code.includes("retryable") ||
+    code.includes("overload") ||
+    message.includes("overload") ||
+    message.includes("temporarily unavailable")
+  );
+}
+
+/** A concise Korean message for the presentation-generation retry flow. */
+export function getRetryablePresentationGenerationMessage(error: unknown): string {
+  const requestId = error instanceof ApiError ? error.requestId : undefined;
+  const message = "AI 생성 서비스가 일시적으로 혼잡합니다. 잠시 후 다시 시도해 주세요.";
+  return requestId ? `${message} (요청 ID: ${requestId})` : message;
+}
+
 // API Response Handler Utility
 export class ApiResponseHandler {
   private static normalizeErrorDetail(detail: unknown): string | null {

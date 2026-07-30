@@ -37,6 +37,7 @@ from utils.llm_calls.author_slide import (
     apply_style_defaults,
     build_design_system,
     fallback_slide_html,
+    is_fallback_slide_html,
     is_valid_slide_html,
 )
 from utils.llm_calls.critique_slide import SlideCritique
@@ -79,6 +80,7 @@ def test_is_valid_slide_html_rejects_garbage():
 def test_fallback_slide_html_is_valid_and_contains_content():
     html = fallback_slide_html("핵심 메시지 텍스트", _brand(), "COVER", 0, 5)
     assert is_valid_slide_html(html)
+    assert is_fallback_slide_html(html)
     assert "핵심 메시지 텍스트" in html
     assert "COVER" in html
     assert "#2563EB" in html
@@ -88,6 +90,15 @@ def test_fallback_slide_html_escapes_angle_brackets():
     html = fallback_slide_html("<script>x</script>", _brand(), "PROBLEM", 1, 3)
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
+
+
+def test_fallback_slide_html_uses_offline_safe_logical_font_stack():
+    html = fallback_slide_html("본문", _brand(), "PROBLEM", 1, 3)
+
+    assert 'font-family:"Noto Sans KR","Malgun Gothic",sans-serif' in html
+    assert "fonts.googleapis.com" not in html
+    assert "fonts.gstatic.com" not in html
+    assert "@import" not in html
 
 
 # --- author_deck resilience (mocked LLM) -------------------------------------
@@ -139,16 +150,67 @@ def test_author_deck_retries_then_succeeds(monkeypatch):
     assert calls["n"] == 2
 
 
+def test_author_deck_backs_off_and_retries_transient_provider_failures(monkeypatch):
+    calls = {"n": 0}
+    delays = []
+
+    async def flaky(content, ds, brand, role, index, n):
+        calls["n"] += 1
+        if calls["n"] < 4:
+            raise RuntimeError(
+                "Our servers are currently overloaded: incomplete chunked read"
+            )
+        return _VALID
+
+    async def record_sleep(delay):
+        delays.append(delay)
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", flaky)
+    monkeypatch.setattr(author_deck_mod.asyncio, "sleep", record_sleep)
+
+    htmls = _run(author_deck(_outline(1), _brand())).htmls
+
+    assert htmls == [_VALID]
+    assert calls["n"] == 4
+    assert delays == [1.5, 3.0, 6.0]
+
+
+def test_author_deck_keeps_two_attempt_limit_for_permanent_failures(monkeypatch):
+    calls = {"n": 0}
+
+    async def invalid_request(content, ds, brand, role, index, n):
+        calls["n"] += 1
+        raise RuntimeError("invalid authored slide request")
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", invalid_request)
+
+    htmls = _run(author_deck(_outline(1), _brand())).htmls
+
+    assert calls["n"] == 2
+    assert is_fallback_slide_html(htmls[0])
+
+
 def test_default_design_system_is_byte_for_byte_canonical_output():
-    expected_sha256 = "4d452fbef402c6aaacaccba10dd9668729c8167a768908e4951fee94e7071858"
+    expected_sha256 = "ab70a7bf5ecb84e9895c08071e297cbf4acd7b3b7edfdcc2ff9a9849b1727e4c"
     without_style = build_design_system(_brand())
     canonical_default = build_design_system(
         _brand(), SimpleNamespace(id="default", brief="this must not replace legacy")
     )
 
-    assert len(without_style) == 2806
+    assert len(without_style) == 3493
     assert hashlib.sha256(without_style.encode()).hexdigest() == expected_sha256
     assert canonical_default == without_style
+
+
+def test_design_system_prohibits_external_fonts_and_documents_local_fallbacks():
+    design_system = build_design_system(_brand())
+
+    assert "Never emit a Google Fonts <link>" in design_system
+    assert '"Noto Sans KR"/"Pretendard" -> "Malgun Gothic"' in design_system
+    assert '"Source Serif 4" -> "Cambria"' in design_system
+    assert '"IBM Plex Mono" -> "Consolas"' in design_system
+    assert "Load from Google Fonts" not in design_system
+    assert "fonts are embedded in the PPTX" in design_system
 
 
 def test_custom_design_system_injects_brief_without_weakening_common_rules():
@@ -603,6 +665,44 @@ def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkey
     assert ["slide-1" in html for html in result.deck.htmls] == [False, True]
     assert result.pngs == [b"png-0", b"png-1"]
     assert result.deck.design_system == "PIPELINED DESIGN SYSTEM"
+
+
+def test_slide_pipeline_rejects_fallback_instead_of_publishing_incomplete_deck(
+    monkeypatch,
+):
+    async def scenario():
+        plan = SimpleNamespace(
+            contents=("slide 0", "slide 1"), design_system="PIPELINED DESIGN SYSTEM"
+        )
+
+        async def fake_author(selected_plan, index):
+            assert selected_plan is plan
+            if index == 1:
+                return fallback_slide_html(
+                    "slide 1", _brand(), "PROBLEM", index, len(plan.contents)
+                )
+            return _VALID
+
+        async def fake_render(_html):
+            return b"png"
+
+        monkeypatch.setattr(
+            authored_service, "prepare_authored_deck", lambda *args: plan
+        )
+        monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
+        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+
+        return await authored_service._author_illustrate_render_pipeline(
+            _outline(2),
+            _brand(),
+            SimpleNamespace(id="default", illustration_prompt=None),
+        )
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"failed after retries for slide\(s\): 2",
+    ):
+        _run(scenario())
 
 
 # --- render resilience (mocked Chrome) ---------------------------------------

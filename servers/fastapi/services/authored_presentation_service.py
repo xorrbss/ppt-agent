@@ -37,7 +37,11 @@ from utils.llm_calls.author_deck import (
     plan_deck_roles,
     prepare_authored_deck,
 )
-from utils.llm_calls.author_slide import Brand, apply_style_defaults
+from utils.llm_calls.author_slide import (
+    Brand,
+    apply_style_defaults,
+    is_fallback_slide_html,
+)
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.outline_utils import get_presentation_title_from_presentation_outline
 from utils.slide_capture import _placeholder_png, find_chrome, render_html_to_png
@@ -201,6 +205,15 @@ async def _author_illustrate_render_pipeline(
             *(process_slide(index) for index in range(len(plan.contents)))
         )
     )
+    fallback_slides = [
+        index + 1 for index, html, *_ in results if is_fallback_slide_html(html)
+    ]
+    if fallback_slides:
+        slide_numbers = ", ".join(str(index) for index in fallback_slides)
+        raise RuntimeError(
+            "Authored slide generation failed after retries for slide(s): "
+            f"{slide_numbers}. The incomplete fallback deck was not published."
+        )
     if results and all(render_failed for _, _, _, render_failed, *_ in results):
         raise RuntimeError(
             "Every authored slide failed to render. Install Playwright's Chromium "

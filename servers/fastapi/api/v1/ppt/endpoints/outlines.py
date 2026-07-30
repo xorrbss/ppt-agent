@@ -1,5 +1,7 @@
 import asyncio
 import json
+import logging
+import os
 import traceback
 import uuid
 import dirtyjson
@@ -37,6 +39,10 @@ from utils.llm_calls.generate_presentation_outlines import (
 )
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
+LOGGER = logging.getLogger(__name__)
+CONTENT_BRIEF_TIMEOUT_SECONDS = float(
+    os.getenv("CONTENT_BRIEF_TIMEOUT_SECONDS", "45")
+)
 
 
 @OUTLINES_ROUTER.get("/stream/{id}")
@@ -59,6 +65,17 @@ async def stream_outlines(
         yield SSEStatusResponse(
             status="Generating presentation outlines..."
         ).to_string()
+
+        # EventSource reconnects automatically when a proxy/server connection is
+        # interrupted. If this presentation already finished, replay the persisted
+        # completion instead of starting a second expensive LLM generation. This
+        # also lets a client that missed the original "complete" event recover
+        # immediately from a progress screen parked at 95%.
+        if presentation.outlines:
+            yield SSECompleteResponse(
+                key="presentation", value=presentation.model_dump(mode="json")
+            ).to_string()
+            return
 
         additional_context = ""
         if presentation.file_paths:
@@ -83,19 +100,29 @@ async def stream_outlines(
         ).to_string()
         outline_context = additional_context
         try:
-            content_brief = await generate_content_brief(
-                presentation.content,
-                presentation.language,
-                additional_context,
-                presentation.tone,
-                presentation.verbosity,
-                presentation.instructions,
+            content_brief = await asyncio.wait_for(
+                generate_content_brief(
+                    presentation.content,
+                    presentation.language,
+                    additional_context,
+                    presentation.tone,
+                    presentation.verbosity,
+                    presentation.instructions,
+                ),
+                timeout=CONTENT_BRIEF_TIMEOUT_SECONDS,
             )
             brief_context = content_brief.to_prompt_context()
             outline_context = (
                 f"{additional_context}\n\n{brief_context}".strip()
                 if additional_context
                 else brief_context
+            )
+        except asyncio.TimeoutError:
+            LOGGER.warning(
+                "Content brief generation timed out after %.1f seconds for "
+                "presentation %s; continuing with the source content",
+                CONTENT_BRIEF_TIMEOUT_SECONDS,
+                presentation.id,
             )
         except Exception:
             traceback.print_exc()

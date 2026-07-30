@@ -88,12 +88,21 @@ const nextConfig = {
       }
     : {}),
 
-  // Rewrites for development - proxy font requests to FastAPI backend
+  // Keep direct Next.js access usable in development as well as the
+  // single-origin local proxy. Browser API calls are same-origin, so without
+  // this rewrite opening port 3000 directly returns a Next.js 404.
   async rewrites() {
+    const fastApiUrl =
+      process.env.FAST_API_INTERNAL_URL || "http://127.0.0.1:8000";
+
     return [
       {
-        source: '/app_data/fonts/:path*',
-        destination: 'http://localhost:5000/app_data/fonts/:path*',
+        source: "/api/v1/:path*",
+        destination: `${fastApiUrl}/api/v1/:path*`,
+      },
+      {
+        source: "/app_data/:path*",
+        destination: `${fastApiUrl}/app_data/:path*`,
       },
     ];
   },

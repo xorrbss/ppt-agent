@@ -104,6 +104,9 @@ const SlideCountSelect: React.FC<{
                             onChange={(e) => {
                                 const next = sanitizeToPositiveInteger(e.target.value);
                                 setCustomInput(next);
+                                if (next && Number(next) > 0) {
+                                    onValueChange(next);
+                                }
                             }}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") {

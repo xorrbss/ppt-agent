@@ -135,6 +135,39 @@ def test_load_pdf_requires_temp_dir_when_images_are_requested():
     assert "temp_dir is required" in exc.value.detail
 
 
+@pytest.mark.parametrize(
+    ("suffix", "encoding"),
+    [
+        (".md", "utf-8"),
+        (".markdown", "utf-16"),
+        (".txt", "cp949"),
+    ],
+)
+def test_load_text_documents_supports_markdown_and_korean_encodings(
+    tmp_path, suffix, encoding
+):
+    source = "# 발표 개요\r\n\r\n- 첫 번째 슬라이드"
+    file_path = tmp_path / f"brief{suffix}"
+    file_path.write_bytes(source.encode(encoding))
+
+    loader = DocumentsLoader(file_paths=[str(file_path)])
+    asyncio.run(loader.load_documents())
+
+    assert loader.documents == ["# 발표 개요\n\n- 첫 번째 슬라이드"]
+
+
+def test_load_text_document_reports_unsupported_encoding(tmp_path):
+    file_path = tmp_path / "brief.md"
+    file_path.write_bytes(b"\x81")
+
+    loader = DocumentsLoader(file_paths=[str(file_path)])
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(loader.load_documents())
+
+    assert exc.value.status_code == 422
+    assert "brief.md" in exc.value.detail
+
+
 def _make_mock_page(text: str) -> MagicMock:
     page = MagicMock()
     page.extract_text.return_value = text

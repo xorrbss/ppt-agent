@@ -79,6 +79,35 @@ describe("usePresentationGeneration async generation", () => {
     });
   });
 
+  it("shows a retry action without a dev error overlay for transient authored failures", () => {
+    cy.stub(console, "error").as("consoleError");
+    cy.stub(console, "warn");
+    cy.stub(notify, "error").as("notifyError");
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync").rejects(
+      new ApiError("Presentation generation failed", {
+        status: 503,
+        code: "upstream_overloaded",
+        requestId: "authored-request-6",
+      })
+    );
+
+    mountHarness();
+    cy.contains("button", "Generate").click();
+
+    cy.get("@notifyError").should(
+      "have.been.calledWithMatch",
+      "생성이 일시 중단되었습니다",
+      Cypress.sinon.match("요청 ID: authored-request-6"),
+      Cypress.sinon.match({
+        action: Cypress.sinon.match({ label: "다시 시도" }),
+      })
+    );
+    cy.get("@consoleError").should(
+      "not.have.been.calledWithMatch",
+      Cypress.sinon.match("Error in authored generation.")
+    );
+  });
+
   it("shows revision conflicts with the backend request ID", () => {
     cy.stub(notify, "error").as("notifyError");
     cy.stub(PresentationGenerationApi, "generateTemplateV2Async").rejects(
@@ -152,8 +181,8 @@ describe("usePresentationGeneration async generation", () => {
     cy.get("@getStatus").should("have.been.calledOnce");
     cy.get("@notifyError").should(
       "have.been.calledWithMatch",
-      "생성 오류",
-      Cypress.sinon.match("Request ID: timeout-request-9")
+      "생성이 일시 중단되었습니다",
+      Cypress.sinon.match("요청 ID: timeout-request-9")
     );
   });
 
