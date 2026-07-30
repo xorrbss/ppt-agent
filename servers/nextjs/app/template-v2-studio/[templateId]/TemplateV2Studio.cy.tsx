@@ -848,6 +848,18 @@ describe("TemplateV2Studio API integration", () => {
       "PATCH",
       `**/api/v1/ppt/structured-templates/${templateId}`,
       (request) => {
+        const elements =
+          request.body.layouts.layouts[0].components[0].elements;
+        if (
+          elements.length === 3 &&
+          elements.every(
+            (element: { position: { y: number } }) =>
+              element.position.y === 1
+          ) &&
+          elements[2].position.x === 290.5
+        ) {
+          request.alias = "saveAlignedTemplate";
+        }
         request.reply({
           statusCode: 200,
           body: response(
@@ -856,7 +868,7 @@ describe("TemplateV2Studio API integration", () => {
           ),
         });
       }
-    ).as("saveAlignedTemplate");
+    );
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");

@@ -47,6 +47,61 @@ class ValidatedTextRunCandidate(AnalyzerContractModel):
     underline: StrictBool | None = None
 
 
+class ValidatedSmartArtNodeEvidence(AnalyzerContractModel):
+    model_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    node_type: Annotated[StrictStr, Field(max_length=80)] | None = None
+    text: Annotated[StrictStr, Field(max_length=2_000)] | None = None
+
+
+class ValidatedSmartArtConnectionEvidence(AnalyzerContractModel):
+    model_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    source_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    destination_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    connection_type: Annotated[StrictStr, Field(max_length=80)] | None = None
+
+
+class ValidatedSmartArtEvidence(AnalyzerContractModel):
+    evidence_version: Literal[1] = 1
+    status: Literal["structured", "unavailable"]
+    diagnostic: Literal[
+        "none",
+        "data_relationship_missing",
+        "data_relationship_invalid",
+        "data_part_missing",
+        "data_model_invalid",
+        "data_model_limits_exceeded",
+    ]
+    data_part: Annotated[StrictStr, Field(max_length=512)] | None = None
+    nodes: list[ValidatedSmartArtNodeEvidence] = Field(default_factory=list)
+    connections: list[ValidatedSmartArtConnectionEvidence] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def validate_status_payload(self) -> ValidatedSmartArtEvidence:
+        if self.status == "structured":
+            if self.diagnostic != "none" or self.data_part is None:
+                raise ValueError("invalid_structured_smartart_evidence")
+            node_ids = [node.model_id for node in self.nodes]
+            connection_ids = [
+                connection.model_id for connection in self.connections
+            ]
+            if len(node_ids) != len(set(node_ids)) or len(connection_ids) != len(
+                set(connection_ids)
+            ):
+                raise ValueError("duplicate_smartart_evidence_id")
+            known_nodes = set(node_ids)
+            if any(
+                connection.source_id not in known_nodes
+                or connection.destination_id not in known_nodes
+                for connection in self.connections
+            ):
+                raise ValueError("unknown_smartart_connection_endpoint")
+        elif self.diagnostic == "none" or self.nodes or self.connections:
+            raise ValueError("invalid_unavailable_smartart_evidence")
+        return self
+
+
 class ValidatedShapeCandidate(AnalyzerContractModel):
     source_id: NonEmptyString
     name: NonEmptyString
@@ -62,6 +117,7 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     chart_type: StrictStr | None = None
     chart_categories: list[StrictStr] | None = None
     chart_series: list[ValidatedChartSeriesCandidate] | None = None
+    smartart_evidence: ValidatedSmartArtEvidence | None = None
     children: list["ValidatedShapeCandidate"] | None = None
     fill_color: StrictStr | None = None
     confidence: Confidence
@@ -117,6 +173,11 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             raise ValueError("unsupported_candidate_requires_reason")
         if self.kind != "unsupported" and self.unsupported_reason is not None:
             raise ValueError("supported_candidate_cannot_have_unsupported_reason")
+        if self.smartart_evidence is not None and (
+            self.kind != "unsupported"
+            or self.unsupported_reason != "unsupported_ooxml:smartArt"
+        ):
+            raise ValueError("smartart_evidence_requires_smartart_fallback")
         return self
 
 
@@ -255,6 +316,8 @@ def candidate_payload_sha256(
     def remove_empty_additive_fields(shape: dict[str, Any]) -> None:
         if shape.get("text_runs") is None:
             shape.pop("text_runs", None)
+        if shape.get("smartart_evidence") is None:
+            shape.pop("smartart_evidence", None)
         for child in shape.get("children") or []:
             remove_empty_additive_fields(child)
 

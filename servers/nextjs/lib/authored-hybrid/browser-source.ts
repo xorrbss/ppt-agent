@@ -6,6 +6,9 @@
 export const AUTHORED_HYBRID_RESULT_MARKER_ID =
   "__presenton_authored_hybrid_result_v1__";
 
+export const AUTHORED_HYBRID_COMPLETION_MARKER_NAME =
+  "__presenton_authored_hybrid_complete_v1__";
+
 export const AUTHORED_HYBRID_ELEMENT_ATTRIBUTE =
   "data-presenton-authored-hybrid-id";
 
@@ -14,10 +17,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   "use strict";
 
   var MARKER_ID = "__presenton_authored_hybrid_result_v1__";
+  var COMPLETION_MARKER_NAME = "__presenton_authored_hybrid_complete_v1__";
   var ELEMENT_ATTRIBUTE = "data-presenton-authored-hybrid-id";
   var WIDTH = 1280;
   var HEIGHT = 720;
   var config = window.__PRESENTON_AUTHORED_HYBRID_CONFIG__ || {};
+  var completionToken = typeof config.completionToken === "string" ? config.completionToken : "";
   var promotedElements = Array.isArray(config.promotedElements)
     ? config.promotedElements
     : [];
@@ -3217,6 +3222,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     marker.id = MARKER_ID;
     marker.textContent = btoa(binary);
     document.body.appendChild(marker);
+    if (completionToken) {
+      var completion = document.createElement("meta");
+      completion.name = COMPLETION_MARKER_NAME;
+      completion.content = completionToken;
+      document.body.appendChild(completion);
+    }
   }
 
   try {

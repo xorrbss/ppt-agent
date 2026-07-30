@@ -328,6 +328,15 @@ def assemble_template_v2_draft(
                             "source_preserved": True,
                             "action": "manual_rebuild",
                         },
+                        **(
+                            {
+                                "smartart_evidence": (
+                                    shape.smartart_evidence.model_dump(mode="json")
+                                )
+                            }
+                            if shape.smartart_evidence is not None
+                            else {}
+                        ),
                     }
                     for shape in unsupported
                 ],

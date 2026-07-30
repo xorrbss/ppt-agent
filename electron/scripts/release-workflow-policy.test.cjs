@@ -78,3 +78,60 @@ test("R2 synchronization fails closed before it uploads release assets", () => {
   assert.match(source, /RCLONE_CONFIG_R2_SECRET_ACCESS_KEY/);
   assert.match(source, /rclone deletefile "\$probe_remote"/);
 });
+
+test("cross-platform packages are dependency-gated before build", () => {
+  const source = readWorkflow("cross-platform-packaging-security.yml");
+  const rootManifestTrigger = source.indexOf('- "package.json"');
+  const rootLockTrigger = source.indexOf('- "package-lock.json"');
+  const install = source.indexOf("npm ci --prefix electron");
+  const rootProductionAudit = source.indexOf(
+    "npm audit --omit=dev --audit-level=info"
+  );
+  const nextProductionAudit = source.indexOf(
+    "npm audit --omit=dev --audit-level=info --prefix servers/nextjs"
+  );
+  const electronAuditTest = source.indexOf(
+    "npm run test:audit-release --prefix electron"
+  );
+  const electronProductionAudit = source.indexOf(
+    "npm run audit:release --prefix electron"
+  );
+  const nextBuild = source.indexOf("npm run build:nextjs");
+  const fastapiBuild = source.indexOf("npm run build:fastapi");
+  const electronBuild = source.indexOf("npm run build:electron");
+
+  for (const [name, index] of Object.entries({
+    rootManifestTrigger,
+    rootLockTrigger,
+    install,
+    rootProductionAudit,
+    nextProductionAudit,
+    electronAuditTest,
+    electronProductionAudit,
+    nextBuild,
+    fastapiBuild,
+    electronBuild,
+  })) {
+    assert.notEqual(index, -1, `packaging workflow is missing ${name}`);
+  }
+
+  assert.ok(install < rootProductionAudit, "audit requires the locked install");
+  assert.ok(
+    rootProductionAudit < nextProductionAudit,
+    "the root runtime must pass before auditing Next.js"
+  );
+  assert.ok(
+    nextProductionAudit < electronAuditTest,
+    "both web runtime audits must precede the Electron audit contract"
+  );
+  assert.ok(
+    electronAuditTest < electronProductionAudit,
+    "the Electron audit parser must be regression-tested before use"
+  );
+  for (const build of [nextBuild, fastapiBuild, electronBuild]) {
+    assert.ok(
+      electronProductionAudit < build,
+      "all production dependency gates must pass before any package build"
+    );
+  }
+});

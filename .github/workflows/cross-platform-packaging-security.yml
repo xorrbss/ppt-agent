@@ -3,6 +3,8 @@ name: Cross-platform packaging and malware gate
 on:
   pull_request:
     paths:
+      - "package.json"
+      - "package-lock.json"
       - "electron/**"
       - "servers/fastapi/**"
       - "servers/nextjs/**"
@@ -68,6 +70,13 @@ jobs:
           npm ci --prefix servers/nextjs
           npm ci --prefix electron
           uv sync --frozen --directory servers/fastapi
+
+      - name: Gate packaged production dependencies
+        run: |
+          npm audit --omit=dev --audit-level=info
+          npm audit --omit=dev --audit-level=info --prefix servers/nextjs
+          npm run test:audit-release --prefix electron
+          npm run audit:release --prefix electron
 
       - name: Test operational preflight policy
         run: node --test scripts/operational-release-preflight.test.mjs

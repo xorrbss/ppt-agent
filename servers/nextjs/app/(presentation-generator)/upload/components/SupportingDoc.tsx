@@ -304,9 +304,13 @@ export function isAllowedFile(file: File): boolean {
     const type = (file.type || '').toLowerCase()
     const name = (file.name || '').toLowerCase()
     const typeAllowed = ALLOWED_MIME_TYPES.includes(type) || ALLOWED_MIME_PREFIXES.some((prefix) => type.startsWith(prefix))
+    const extension = name.includes('.') ? `.${name.split('.').pop()}` : ''
 
-    if (typeAllowed) return true
-    return ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext))
+    // A named file must be approved by extension. Browsers can omit or
+    // generalize MIME types, but a benign claimed MIME must never allow an
+    // arbitrary executable extension through the client-side preflight.
+    if (extension) return ALLOWED_EXTENSIONS.includes(extension)
+    return typeAllowed
 }
 
 export default SupportingDoc

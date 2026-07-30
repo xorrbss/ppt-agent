@@ -47,6 +47,7 @@ import {
 import ThemeSelector from "./ThemeSelector";
 import VersionHistoryPopover from "./VersionHistoryPopover";
 import SharePopover from "./SharePopover";
+import GenerationInfoDialog from "./GenerationInfoDialog";
 import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
@@ -705,6 +706,13 @@ const PresentationHeader = ({
             presentationId={presentation_id}
             disabled={isStreaming === true}
           />
+
+          {presentationData && (
+            <GenerationInfoDialog
+              presentationId={presentation_id}
+              disabled={isStreaming === true}
+            />
+          )}
 
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
