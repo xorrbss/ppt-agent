@@ -59,7 +59,12 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     rotation: FiniteFloat = 0
     text: StrictStr | None = None
     table_rows: list[list[StrictStr]] | None = None
-    table_spans: list[list[ValidatedTableCellSpanCandidate]] | None = None
+    # Keep the v1 canonical candidate digest stable for pre-span payloads while
+    # including the lossless grid metadata whenever the parser actually emits it.
+    table_spans: list[list[ValidatedTableCellSpanCandidate]] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     chart_type: StrictStr | None = None
     chart_categories: list[StrictStr] | None = None
     chart_series: list[ValidatedChartSeriesCandidate] | None = None
