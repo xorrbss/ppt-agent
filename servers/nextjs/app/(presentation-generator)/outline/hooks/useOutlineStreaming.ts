@@ -26,10 +26,6 @@ export const useOutlineStreaming = (
   const [hasCompleted, setHasCompleted] = useState(false);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number | null>(null);
   const [highestActiveIndex, setHighestActiveIndex] = useState<number>(-1);
-  // A streamed chunk is written to Redux so the UI can render it progressively.
-  // Remember only the outlines that existed before this hook mounted; otherwise
-  // the first partial chunk would look like a completed, pre-existing outline.
-  const outlinesPreexistingRef = useRef(outlines.length > 0);
   const prevSlidesRef = useRef<{ content: string }[]>([]);
   const activeIndexRef = useRef<number>(-1);
   const highestIndexRef = useRef<number>(-1);
