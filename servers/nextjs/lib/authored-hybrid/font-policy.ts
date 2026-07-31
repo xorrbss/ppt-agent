@@ -11,22 +11,11 @@ export interface AuthoredFontFallback {
   logical: string;
   local: string;
   generic: "sans-serif" | "serif" | "monospace";
-  /**
-   * Office and Chromium can render the same font program with slightly
-   * different metrics. This calibration is applied only when the logical
-   * typeface itself is retained in OOXML, never when its local fallback wins.
-   */
-  powerPointMetricScale?: number;
 }
 
 export const FONT_FALLBACK_REGISTRY: readonly AuthoredFontFallback[] =
   Object.freeze([
-    {
-      logical: "Noto Sans KR",
-      local: "Malgun Gothic",
-      generic: "sans-serif",
-      powerPointMetricScale: 0.96,
-    },
+    { logical: "Noto Sans KR", local: "Malgun Gothic", generic: "sans-serif" },
     { logical: "Pretendard", local: "Malgun Gothic", generic: "sans-serif" },
     { logical: "Noto Serif KR", local: "Batang", generic: "serif" },
     { logical: "Inter", local: "Aptos", generic: "sans-serif" },
@@ -74,17 +63,6 @@ export function isGenericFontFamily(value: string): boolean {
 export function resolveFontFamily(value: string): string {
   const trimmed = value.trim().replace(/^(['"])(.*)\1$/u, "$2").trim();
   return FALLBACK_BY_LOGICAL.get(normalizedFontName(trimmed))?.local ?? trimmed;
-}
-
-/**
- * Return the empirically calibrated native PowerPoint metric scale for a
- * retained typeface. Local Office fallbacks and unknown fonts stay at 1.
- */
-export function powerPointFontMetricScale(value: string): number {
-  const scale =
-    FALLBACK_BY_LOGICAL.get(normalizedFontName(value))?.powerPointMetricScale ??
-    1;
-  return Number.isFinite(scale) && scale > 0 && scale <= 1 ? scale : 1;
 }
 
 /**

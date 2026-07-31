@@ -5,7 +5,6 @@ import {
   cssFontStack,
   expandKnownFontFamilyList,
   FONT_FALLBACK_REGISTRY,
-  powerPointFontMetricScale,
   resolveFontCandidates,
   resolveFontFamily,
   rewriteKnownFontFamiliesInCss,
@@ -54,13 +53,6 @@ test("unknown local fonts are preserved and generic candidates are skipped", () 
     resolveFontCandidates(["Noto Sans KR", "sans-serif"], "Aptos", []),
     "Malgun Gothic"
   );
-});
-
-test("PowerPoint metric calibration applies only to the retained web typeface", () => {
-  assert.equal(powerPointFontMetricScale("Noto Sans KR"), 0.96);
-  assert.equal(powerPointFontMetricScale('"NOTO SANS KR"'), 0.96);
-  assert.equal(powerPointFontMetricScale("Malgun Gothic"), 1);
-  assert.equal(powerPointFontMetricScale("Acme Corporate"), 1);
 });
 
 test("CSS family lists keep verified logical fonts and append matching local fallbacks", () => {
