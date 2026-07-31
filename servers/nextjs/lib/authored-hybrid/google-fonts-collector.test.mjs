@@ -488,3 +488,35 @@ test("hash-addressed cache is reused and rejects tampered objects", async (t) =>
   assert.equal((await third.prepareHtml(html)).status, "success");
   assert.deepEqual(thirdRequests.map((entry) => entry.url), [FONT_URL]);
 });
+
+test("disabled collection stays offline and falls back without any fetch", async () => {
+  const cacheDirectory = await fs.mkdtemp(
+    path.join(os.tmpdir(), "google-fonts-disabled-")
+  );
+  let fetches = 0;
+  const collector = new GoogleFontsCollector({
+    cacheDirectory,
+    enabled: false,
+    fetchImpl: async () => {
+      fetches += 1;
+      throw new Error("collection must not reach the network when disabled");
+    },
+  });
+
+  const html = `<!doctype html><html><head><link rel="stylesheet" href="${CSS_URL}"></head><body><p>한글</p></body></html>`;
+  const prepared = await collector.prepareHtml(html);
+
+  assert.equal(fetches, 0);
+  assert.equal(prepared.status, "unavailable");
+  assert.equal(prepared.reason, "google-font-collection-disabled");
+  assert.equal(prepared.usedFallback, true);
+  assert.equal(prepared.requestedStylesheets, 1);
+  assert.deepEqual(prepared.trustedFamilies, []);
+  // The sanitized document is still returned, so the deck renders with the
+  // local fallback stacks instead of failing the export.
+  assert.equal(prepared.htmlForChrome, prepared.htmlForPreflight);
+  assert.ok(!prepared.htmlForChrome.includes("fonts.googleapis.com"));
+  assert.deepEqual(preflightAuthoredHtmlForHybrid(prepared.htmlForPreflight), {
+    ok: true,
+  });
+});

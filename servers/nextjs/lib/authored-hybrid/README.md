@@ -93,6 +93,11 @@ server-side boundary in `google-fonts-collector.ts` and handed to the otherwise
 offline Chrome run. Only the sanitized document is preflighted, so untrusted
 HTML can never self-authorize a data font face.
 
+Set `DISABLE_GOOGLE_FONTS_COLLECTION=true` to keep export fully offline.
+Decks that reference Google Fonts then render with the local fallback stacks
+instead of reaching fonts.googleapis.com, and the per-slide result reports
+`google-font-collection-disabled`.
+
 Font *delivery* to the browser is separate from font *embedding* in OOXML.
 Embedding is opt-in and handled by `font-embedding-policy.ts` and
 `pptx-font-embedding.ts`. Native editable text keeps an authored typeface only

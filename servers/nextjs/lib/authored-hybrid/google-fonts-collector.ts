@@ -170,6 +170,25 @@ export class GoogleFontsCollector {
       };
     }
 
+    if (!this.options.enabled) {
+      // Offline deployments turn collection off entirely. The sanitized
+      // document is still returned so the deck renders with the local
+      // fallback stacks rather than failing the export.
+      return {
+        htmlForPreflight: extracted.htmlForPreflight,
+        htmlForChrome: extracted.htmlForPreflight,
+        status: "unavailable",
+        reason: "google-font-collection-disabled",
+        usedFallback: true,
+        requestedStylesheets: extracted.stylesheets.length,
+        requestedFontFaces: extracted.inlineFontFaceBodies.length,
+        loadedStylesheets: 0,
+        fontFiles: 0,
+        trustedFamilies: [],
+        failures: [],
+      };
+    }
+
     const failures: GoogleFontsCollectionFailure[] = [];
     const trustedCss: string[] = [];
     const trustedFamilies = new Set<string>();

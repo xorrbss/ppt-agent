@@ -36,6 +36,12 @@ const ALLOWED_WOFF2_CONTENT_TYPES = new Set([
 
 export interface GoogleFontsCollectorOptions {
   cacheDirectory: string;
+  /**
+   * Set false to keep the export fully offline. Decks that reference Google
+   * Fonts then render with the local fallback stacks instead of reaching the
+   * network. Defaults to true.
+   */
+  enabled?: boolean;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   maxCssBytes?: number;
@@ -47,6 +53,7 @@ export interface GoogleFontsCollectorOptions {
 
 export interface NormalizedGoogleFontsCollectorOptions {
   cacheDirectory: string;
+  enabled: boolean;
   fetchImpl: typeof fetch;
   timeoutMs: number;
   maxCssBytes: number;
@@ -357,6 +364,7 @@ export function normalizeGoogleFontsCollectorOptions(
   }
   return {
     cacheDirectory: path.resolve(options.cacheDirectory),
+    enabled: options.enabled ?? true,
     fetchImpl: options.fetchImpl ?? fetch,
     timeoutMs: positiveInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS, "timeoutMs"),
     maxCssBytes: positiveInteger(
