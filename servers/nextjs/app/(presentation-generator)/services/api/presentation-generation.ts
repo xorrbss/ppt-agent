@@ -34,19 +34,18 @@ export class PresentationGenerationApi {
     language?: string | null
   ) {
     try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/files/decompose`),
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify({
-            file_paths: documentKeys,
-            language: language ?? null,
-          }),
-          cache: "no-cache",
-        }
-      );
-      
+      // Document conversion/OCR can take longer than Next's rewrite proxy allows.
+      // Use the route handler that forwards the request with no short proxy timeout.
+      const response = await fetch("/api/decompose-documents", {
+        method: "POST",
+        headers: getHeader(),
+        body: JSON.stringify({
+          file_paths: documentKeys,
+          language: language ?? null,
+        }),
+        cache: "no-cache",
+      });
+
       return await ApiResponseHandler.handleResponse(response, "Failed to decompose documents");
     } catch (error) {
       console.error("Error in Decompose Files", error);
@@ -275,7 +274,7 @@ export class PresentationGenerationApi {
           result?.request_id || response.headers.get("x-request-id") || undefined,
       };
     } catch (error) {
-      console.error("error starting authored generation", error);
+      console.warn("error starting authored generation", error);
       throw error;
     }
   }
@@ -316,7 +315,7 @@ export class PresentationGenerationApi {
           result?.request_id || response.headers.get("x-request-id") || undefined,
       };
     } catch (error) {
-      console.error("error starting structured-template generation", error);
+      console.warn("error starting structured-template generation", error);
       throw error;
     }
   }
@@ -342,7 +341,7 @@ export class PresentationGenerationApi {
           result?.request_id || response.headers.get("x-request-id") || undefined,
       };
     } catch (error) {
-      console.error("error polling generation status", error);
+      console.warn("error polling generation status", error);
       throw error;
     }
   }
@@ -361,7 +360,9 @@ export class PresentationGenerationApi {
       
       return await ApiResponseHandler.handleResponse(response, "Failed to prepare presentation");
     } catch (error) {
-      console.error("error in data generation", error);
+      // The caller renders a user-facing notification. Logging a handled ApiError
+      // with console.error makes the Next.js development overlay cover that UI.
+      console.warn("presentation preparation failed", error);
       throw error;
     }
   }
