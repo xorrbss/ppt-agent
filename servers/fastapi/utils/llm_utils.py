@@ -24,6 +24,10 @@ from utils.schema_utils import get_schema_validation_errors
 
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
+TRANSIENT_LLM_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+TRANSIENT_LLM_MAX_ATTEMPTS = 4
+TRANSIENT_LLM_RETRY_BASE_DELAY_SECONDS = 1.0
+TRANSIENT_LLM_RETRY_MAX_DELAY_SECONDS = 8.0
 DisconnectChecker = Callable[[], Awaitable[bool]]
 
 
@@ -69,6 +73,73 @@ async def _generate_structured_content(
     if content is not None:
         return content
     return extract_structured_content("".join(streamed_text))
+
+
+def _exception_status_code(error: Exception) -> Optional[int]:
+    """Return an HTTP-like status code from provider and normalized LLM errors."""
+    status_code = getattr(error, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code
+
+    response = getattr(error, "response", None)
+    response_status_code = getattr(response, "status_code", None)
+    if isinstance(response_status_code, int):
+        return response_status_code
+    return None
+
+
+async def _generate_structured_content_with_transient_retries(
+    client: Any,
+    *,
+    disconnect_checker: Optional[DisconnectChecker],
+    **kwargs: Any,
+) -> Optional[dict]:
+    """Retry only transient provider failures, then expose a retryable 503."""
+    for attempt in range(1, TRANSIENT_LLM_MAX_ATTEMPTS + 1):
+        await _raise_if_client_disconnected(disconnect_checker)
+        try:
+            return await _generate_structured_content(
+                client,
+                disconnect_checker=disconnect_checker,
+                **kwargs,
+            )
+        except Exception as error:
+            status_code = _exception_status_code(error)
+            is_transient = status_code in TRANSIENT_LLM_STATUS_CODES
+            if not is_transient:
+                raise
+
+            if attempt == TRANSIENT_LLM_MAX_ATTEMPTS:
+                LOGGER.error(
+                    "Structured LLM generation unavailable after %s attempts "
+                    "(last_status=%s)",
+                    attempt,
+                    status_code,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "The presentation model is temporarily unavailable after "
+                        "multiple attempts. Please try again later."
+                    ),
+                    headers={"Retry-After": "10"},
+                ) from error
+
+            delay_seconds = min(
+                TRANSIENT_LLM_RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1)),
+                TRANSIENT_LLM_RETRY_MAX_DELAY_SECONDS,
+            )
+            LOGGER.warning(
+                "Structured LLM generation temporarily unavailable "
+                "(status=%s, attempt=%s/%s); retrying in %.1fs",
+                status_code,
+                attempt,
+                TRANSIENT_LLM_MAX_ATTEMPTS,
+                delay_seconds,
+            )
+            await asyncio.sleep(delay_seconds)
+
+    raise RuntimeError("Transient LLM retry loop exited unexpectedly")
 
 
 def get_generate_kwargs(
@@ -446,7 +517,7 @@ async def generate_structured_with_schema_retries(
         content: Optional[dict] = None
         for attempt in range(3):
             await _raise_if_client_disconnected(disconnect_checker)
-            content = await _generate_structured_content(
+            content = await _generate_structured_content_with_transient_retries(
                 client,
                 disconnect_checker=disconnect_checker,
                 **get_generate_kwargs(
@@ -598,6 +669,7 @@ async def stream_generate_events(
     client: Any,
     *,
     disconnect_checker: Optional[DisconnectChecker] = None,
+    inactivity_timeout_seconds: Optional[float] = None,
     **kwargs,
 ) -> AsyncGenerator[Any, None]:
     loop = asyncio.get_running_loop()
@@ -641,20 +713,30 @@ async def stream_generate_events(
 
     worker_task = asyncio.create_task(asyncio.to_thread(worker))
     completed = False
+    last_event_at = loop.time()
     try:
         while True:
             await _raise_if_client_disconnected(disconnect_checker)
+            poll_timeout = (
+                CLIENT_DISCONNECT_POLL_SECONDS
+                if disconnect_checker
+                else inactivity_timeout_seconds
+            )
             try:
                 item = await asyncio.wait_for(
                     queue.get(),
-                    timeout=(
-                        CLIENT_DISCONNECT_POLL_SECONDS
-                        if disconnect_checker
-                        else None
-                    ),
+                    timeout=poll_timeout,
                 )
             except asyncio.TimeoutError:
+                if (
+                    inactivity_timeout_seconds is not None
+                    and loop.time() - last_event_at >= inactivity_timeout_seconds
+                ):
+                    raise TimeoutError(
+                        "The language model stopped responding. Please try again."
+                    )
                 continue
+            last_event_at = loop.time()
             if item is sentinel:
                 completed = True
                 break

@@ -73,6 +73,7 @@ def test_generate_ppt_outline_streams_json_chunks_and_keeps_schema_shape():
     assert len(validated.slides) == 1
     assert validated.slides[0].content.startswith("## Intro")
     assert captured_kwargs["disconnect_checker"] is is_disconnected
+    assert captured_kwargs["inactivity_timeout_seconds"] == 120
 
 
 def test_generate_ppt_outline_returns_http_exception_chunk_on_failure():

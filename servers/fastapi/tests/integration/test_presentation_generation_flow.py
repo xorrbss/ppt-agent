@@ -22,6 +22,22 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def test_failed_slide_asset_task_still_releases_stream_waiter():
+    async def scenario():
+        async def fail_assets():
+            raise RuntimeError("image provider unavailable")
+
+        events = asyncio.Queue()
+        asset_task = asyncio.create_task(fail_assets())
+        await presentation_core._notify_slide_assets_ready(4, asset_task, events)
+        return events.get_nowait()
+
+    slide_index, generated_assets = _run(scenario())
+
+    assert slide_index == 4
+    assert generated_assets == []
+
+
 def _fake_request() -> types.SimpleNamespace:
     # Minimal stand-in for the FastAPI Request passed as request_http;
     # build_export_cookie_header only reads headers/cookies/state.

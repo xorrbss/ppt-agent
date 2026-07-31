@@ -216,7 +216,12 @@ async def compose_slides(
             client,
             model,
             messages=get_messages(
-                outline.to_string(), language, instructions, tone, verbosity, schema
+                outline.to_string(),
+                language,
+                instructions,
+                tone,
+                verbosity,
+                schema,
             ),
             response_format=response_format,
             json_schema=schema,

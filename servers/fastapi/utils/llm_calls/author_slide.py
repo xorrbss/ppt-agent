@@ -42,13 +42,13 @@ def _env_int(name: str, default: int) -> int:
 
 
 # Per-slide authoring makes a blocking provider call (~75s of model reasoning). Run it
-# in a DEDICATED thread pool — NOT asyncio's shared default executor — so a deck's dozen
+# in a DEDICATED thread pool — NOT asyncio's shared default executor — so a deck's
 # concurrent authoring threads can't starve unrelated blocking work (other LLM calls,
 # exports) that also relies on the default executor. The pool size IS the process-wide
 # authoring concurrency cap: every caller (author_deck's first pass AND the vision-QA
 # re-author) funnels through author_slide_html, so excess calls queue here instead of
 # fanning out to hundreds of provider requests at once. Tune via AUTHORED_AUTHOR_CONCURRENCY.
-AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 12)
+AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 5)
 _AUTHOR_EXECUTOR = ThreadPoolExecutor(
     max_workers=AUTHOR_CONCURRENCY, thread_name_prefix="author-slide"
 )
@@ -62,6 +62,14 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 - Brand primary colour: {primary}. Brand fonts: {fonts}. Deck language: {language}.
 - Canvas: a single 16:9 slide that renders at EXACTLY 1280x720px. Inline <style> only, no
   external JS. Body 1280x720, margin 0, overflow hidden.
+- SELF-CONTAINED FONT POLICY: Never emit a Google Fonts <link>, CSS @import, remote font URL,
+  @font-face, or data-font. Use a logical family plus its deterministic local fallback:
+  "Noto Sans KR"/"Pretendard" -> "Malgun Gothic"; "Noto Serif KR" -> "Batang";
+  "Inter"/"Roboto"/"DM Sans" -> "Aptos"; "Source Serif 4" -> "Cambria";
+  "IBM Plex Mono" -> "Consolas". Example:
+  `font-family:"Noto Sans KR","Malgun Gothic",sans-serif`.
+  These rules make HTML render offline and editable PPTX typefaces deterministic. They do NOT
+  mean that fonts are embedded in the PPTX; font embedding is outside this authoring workflow.
 {style_brief}
 - FORBIDDEN: default round bullet dots; identical heavy-shadow boxed cards on every item;
   clutter; lorem/placeholder; text overflowing/clipping the frame; low contrast; off-palette hues.
@@ -86,7 +94,8 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
 Return ONLY the complete HTML document."""
 
 _DEFAULT_STYLE_BRIEF = """\
-- Fonts: load the brand fonts ({fonts}) from Google Fonts; headings 800-900 weight, body 400-500.
+- Fonts: use the offline-safe logical stack {font_stack}; headings 800-900 weight, body
+  400-500. Do not add any external font resource.
 - Palette: build everything from the brand primary ({primary}) + neutrals (ink #0F172A, muted
   #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues.
 - Margins ~64px (except intentional full-bleed colour zones).
@@ -108,6 +117,42 @@ class Brand:
     wordmark: str = ""
     primary_is_explicit: bool = False
     fonts_are_explicit: bool = False
+
+
+_LOCAL_FONT_FALLBACKS = {
+    "noto sans kr": ("Noto Sans KR", "Malgun Gothic", "sans-serif"),
+    "pretendard": ("Pretendard", "Malgun Gothic", "sans-serif"),
+    "noto serif kr": ("Noto Serif KR", "Batang", "serif"),
+    "inter": ("Inter", "Aptos", "sans-serif"),
+    "roboto": ("Roboto", "Aptos", "sans-serif"),
+    "dm sans": ("DM Sans", "Aptos", "sans-serif"),
+    "source serif 4": ("Source Serif 4", "Cambria", "serif"),
+    "ibm plex mono": ("IBM Plex Mono", "Consolas", "monospace"),
+}
+
+_FALLBACK_SLIDE_MARKER = 'data-presenton-authored-fallback="true"'
+
+
+def is_fallback_slide_html(html: str) -> bool:
+    """Return whether HTML came from the emergency authored-slide fallback."""
+    return _FALLBACK_SLIDE_MARKER in (html or "")
+
+
+def _css_font_stack(value: str) -> str:
+    """Return the authored CSS stack matching the converter's central policy.
+
+    The TypeScript converter registry remains authoritative for export-time CSS
+    rewriting and native OOXML. This prompt-side mirror prevents new HTML from
+    requesting external font resources in the first place.
+    """
+    family = (value or "Noto Sans KR").split(",", 1)[0].strip().strip("\"'")
+    logical, local, generic = _LOCAL_FONT_FALLBACKS.get(
+        " ".join(family.lower().split()),
+        (family, "Aptos", "sans-serif"),
+    )
+    logical = logical.replace("\\", "\\\\").replace('"', '\\"')
+    local = local.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{logical}","{local}",{generic}'
 
 
 class AuthoredStyleLike(Protocol):
@@ -183,7 +228,7 @@ def build_design_system(
     if style is None or style.id == "default":
         style_brief = _DEFAULT_STYLE_BRIEF.format(
             primary=brand.primary or "#2563EB",
-            fonts=brand.fonts or "Noto Sans KR",
+            font_stack=_css_font_stack(brand.fonts or "Noto Sans KR"),
         )
     else:
         style_brief = style.brief.strip()
@@ -298,16 +343,17 @@ def fallback_slide_html(
     invalid HTML — so one bad slide degrades to a simple branded slide instead of
     aborting the whole deck. System-font stack (no network dependency) for resilience."""
     primary = brand.primary or "#2563EB"
-    fonts = brand.fonts or "Noto Sans KR"
+    font_stack = _css_font_stack(brand.fonts or "Noto Sans KR")
     text = _html.escape((content or "").strip())
     if len(text) > 420:
         text = text[:420].rstrip() + "…"
     eyebrow = _html.escape(role or "")
     marker = f"{index + 1:02d} / {n:02d}"
     return (
-        "<!DOCTYPE html><html lang=\"ko\"><head><meta charset=\"utf-8\"><style>"
+        f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
+        "<head><meta charset=\"utf-8\"><style>"
         f"body{{margin:0;width:1280px;height:720px;overflow:hidden;background:#F8FAFC;"
-        f"font-family:'{fonts}',system-ui,-apple-system,'Malgun Gothic',sans-serif;"
+        f"font-family:{font_stack};"
         "box-sizing:border-box;padding:64px;display:flex;flex-direction:column;}"
         f".bar{{width:56px;height:6px;background:{primary};margin-bottom:24px;}}"
         f".eyebrow{{font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:{primary};"

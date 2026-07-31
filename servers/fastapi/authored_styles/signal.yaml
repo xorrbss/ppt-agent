@@ -45,9 +45,11 @@ brief: >-
   (a) short rules, (b) italic emphasis inside headlines/leads, (c) numerical
   figures, (d) kickers. Gold never fills backgrounds, never colors body text.
 
-  TYPOGRAPHY: Load from Google Fonts: "Source Serif 4" + "Noto Serif KR"
-  (headline voice), "DM Sans" + "Noto Sans KR" (body substance), "IBM Plex
-  Mono" (metadata chrome). The ladder is fixed — serif for display/h1/h2/h3,
+  TYPOGRAPHY: Use offline-safe logical stacks with no external font links or
+  imports: "Source Serif 4", "Cambria", serif + "Noto Serif KR", "Batang",
+  serif (headline voice); "DM Sans", "Aptos", sans-serif + "Noto Sans KR",
+  "Malgun Gothic", sans-serif (body substance); "IBM Plex Mono", "Consolas",
+  monospace (metadata chrome). The ladder is fixed — serif for display/h1/h2/h3,
   sans for lead/body/caption, mono ONLY for kickers/labels/counters/notes.
   Scale on the 1280x720 canvas: display 120px w700 lh0.96 ls-0.02em; h1 66px
   w600 lh1.08 ls-0.01em; h2 38px w600 lh1.18; h3 24px w500; lead 18px lh1.58;
