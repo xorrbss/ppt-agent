@@ -311,6 +311,12 @@ const PresentationHeader = ({
         }
         downloadLink(pptxPath, safePptxFileName);
         if (payload.quality) setExportQuality(payload.quality);
+        if (payload.exportMetadata && !payload.quality) {
+          notify.info(
+            "PPTX export information",
+            `${payload.exportMetadata.editableSlides}/${payload.exportMetadata.totalSlides} slides include editable elements.`
+          );
+        }
       }
       notify.success(
         "내보내기 완료",
