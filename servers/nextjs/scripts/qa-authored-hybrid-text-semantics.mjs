@@ -6,7 +6,7 @@ import {
   extractAuthoredSlideDom,
   resolveAuthoredHybridChromeExecutable,
 } from "../lib/authored-hybrid/index.ts";
-import { googleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
+import { getGoogleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
 import {
   prepareNativeElements,
   serializePreparedNativeElement,
@@ -168,7 +168,7 @@ for (const [slideIndex, slide] of slides.entries()) {
   if (Number.isFinite(requestedSlide) && requestedSlide !== slideIndex + 1) {
     continue;
   }
-  const collection = await googleFontsCollector.prepareHtml(slide.html);
+  const collection = await getGoogleFontsCollector().prepareHtml(slide.html);
   const preflight = preflightAuthoredHtmlForHybrid(collection.htmlForPreflight);
   if (!preflight.ok) {
     throw new Error(

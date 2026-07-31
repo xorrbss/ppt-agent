@@ -34,7 +34,7 @@ import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
 } from "./export-performance.ts";
-import { googleFontsCollector } from "./google-fonts-runtime.ts";
+import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
 import { summarizeAuthoredHybridExport } from "./export-metadata.ts";
 import { mergePowerPointTextLayout } from "./font-layout.ts";
 import {
@@ -254,7 +254,7 @@ async function prepareSlideLayer(
   // preflighted, so untrusted authored HTML can never self-authorize a data
   // font face; the verified form carrying collector-built @font-face rules is
   // used only after that preflight succeeds.
-  const fontCollection = await googleFontsCollector.prepareHtml(html);
+  const fontCollection = await getGoogleFontsCollector().prepareHtml(html);
   const fontRendering = {
     browserFontFilesCollected: fontCollection.fontFiles,
     browserCollectionFailures: fontCollection.failures.length,

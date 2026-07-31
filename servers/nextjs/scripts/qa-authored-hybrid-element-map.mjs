@@ -6,7 +6,7 @@ import {
   extractAuthoredSlideDom,
   resolveAuthoredHybridChromeExecutable,
 } from "../lib/authored-hybrid/index.ts";
-import { googleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
+import { getGoogleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
 import { preflightAuthoredHtmlForHybrid } from "../lib/authored-hybrid/security.ts";
 
 function usage() {
@@ -247,7 +247,7 @@ const [slides, chromeExecutable] = await Promise.all([
 if (!chromeExecutable) throw new Error("Chrome/Chromium is unavailable.");
 
 const mappedSlides = await mapConcurrent(slides, 2, async (slide, index) => {
-  const collection = await googleFontsCollector.prepareHtml(slide.html);
+  const collection = await getGoogleFontsCollector().prepareHtml(slide.html);
   const preflight = preflightAuthoredHtmlForHybrid(collection.htmlForPreflight);
   if (!preflight.ok) {
     return {

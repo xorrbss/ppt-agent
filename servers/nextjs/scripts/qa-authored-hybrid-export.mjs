@@ -7,7 +7,7 @@ import {
   renderAuthoredBackplate,
   resolveAuthoredHybridChromeExecutable,
 } from "../lib/authored-hybrid/index.ts";
-import { googleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
+import { getGoogleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
 import { mergePowerPointTextLayout } from "../lib/authored-hybrid/font-layout.ts";
 import { resolveFontEmbeddingPlan } from "../lib/authored-hybrid/font-embedding-policy.ts";
 import {
@@ -155,7 +155,7 @@ async function prepareSlide(
   chromeExecutable,
   embeddedTypefaceFamilies = []
 ) {
-  const fontCollection = await googleFontsCollector.prepareHtml(html);
+  const fontCollection = await getGoogleFontsCollector().prepareHtml(html);
   const fontRendering = {
     browserFontFilesCollected: fontCollection.fontFiles,
     browserCollectionFailures: fontCollection.failures.length,
