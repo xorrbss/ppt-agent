@@ -35,6 +35,7 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "minimal-vellum",
     "neo-grid-bold",
     "neon-venture",
+    "osb-smart-banking",
     "prestige-gold",
     "prime-noir",
     "prismatic-tech",
@@ -332,13 +333,13 @@ brief: private
     assert "must stay inside authored_style_assets" in caplog.text
 
 
-def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
+def test_authored_catalogue_has_complete_contracts(caplog):
     sources = sorted(AUTHORED_STYLES_DIRECTORY.glob("*.yaml"))
 
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
         styles = load_authored_styles()
 
-    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 35
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 36
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
     assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
     assert not [
@@ -370,7 +371,7 @@ def test_authored_catalogue_has_exactly_30_complete_contracts(caplog):
 
         preview = data["preview"]
         expected_preview_fields = {"bg", "accent", "palette", "variant"}
-        if style_id in {"cyber-ai", "tech-blueprint"}:
+        if style_id in {"cyber-ai", "osb-smart-banking", "tech-blueprint"}:
             expected_preview_fields.add("image")
         assert set(preview) == expected_preview_fields
         assert len(preview["palette"]) >= 3
@@ -409,7 +410,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 35
+    assert len(body) == 36
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
     assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
     assert all(
@@ -435,12 +436,16 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     assert by_id["tech-blueprint"]["preview"]["image"] == (
         "/api/v1/ppt/authored/styles/tech-blueprint/preview"
     )
+    assert by_id["osb-smart-banking"]["preview"]["image"] == (
+        "/api/v1/ppt/authored/styles/osb-smart-banking/preview"
+    )
     assert by_id["default"]["name"] == "기본 블루프린트"
     assert by_id["default"]["description"] == (
         "깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일"
     )
     expected_categories = {
         "default": "general",
+        "osb-smart-banking": "business",
         "strategic-navy": "business",
         "editorial-tritone": "editorial",
         "neo-grid-bold": "creative",
@@ -465,7 +470,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
         "variant": "executive-ledger",
     }
 
-    for style_id in ("cyber-ai", "tech-blueprint"):
+    for style_id in ("cyber-ai", "osb-smart-banking", "tech-blueprint"):
         preview_response = client.get(
             f"/api/v1/ppt/authored/styles/{style_id}/preview"
         )

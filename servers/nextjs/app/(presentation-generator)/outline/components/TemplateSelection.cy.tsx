@@ -95,7 +95,7 @@ describe("<TemplateSelection /> authored style catalog", () => {
     );
   });
 
-  it("renders 30 styles with Korean category counts while preserving both template sections", () => {
+  it("renders 31 styles with Korean category counts while preserving both template sections", () => {
     interceptCatalog();
     mountSelection();
     cy.wait("@authoredStyles");
@@ -103,7 +103,8 @@ describe("<TemplateSelection /> authored style catalog", () => {
     cy.get('[data-testid="authored-template-section"]')
       .should("contain", "AI 저작 템플릿(고품질)")
       .and("contain", "기본 블루프린트")
-      .and("contain", "사이버 AI");
+      .and("contain", "사이버 AI")
+      .and("contain", "OSB 스마트뱅킹");
     cy.get('[data-testid="layout-template-section"]')
       .should("contain", "레이아웃 템플릿(편집 가능 PPTX)");
     cy.get('[data-testid="layout-template-grid"] > :first-child').should(
@@ -112,12 +113,12 @@ describe("<TemplateSelection /> authored style catalog", () => {
     );
     cy.get('[data-testid="authored-style-grid"]')
       .find('[data-testid^="authored-style-card-"]')
-      .should("have.length", 30);
+      .should("have.length", 31);
 
     const expectedCounts = {
-      all: ["전체", 30],
+      all: ["전체", 31],
       general: ["범용", 1],
-      business: ["비즈니스", 7],
+      business: ["비즈니스", 8],
       technology: ["기술", 6],
       research: ["리서치", 4],
       editorial: ["에디토리얼", 7],
@@ -140,7 +141,7 @@ describe("<TemplateSelection /> authored style catalog", () => {
       .should("have.attr", "aria-pressed", "true");
     cy.get('[data-testid="authored-style-grid"]')
       .find('[data-testid^="authored-style-card-"]')
-      .should("have.length", 7);
+      .should("have.length", 8);
     cy.get('[data-testid="authored-style-search"]').type("이사회");
     cy.get('[data-testid="authored-style-grid"]')
       .find('[data-testid^="authored-style-card-"]')
@@ -238,7 +239,7 @@ describe("<TemplateSelection /> authored style catalog", () => {
     cy.contains("button", "필터 초기화").click();
     cy.get('[data-testid="authored-style-grid"]')
       .find('[data-testid^="authored-style-card-"]')
-      .should("have.length", 30);
+      .should("have.length", 31);
   });
 
   it("keeps a selection and QA setting when filters hide and reveal the card", () => {
