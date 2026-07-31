@@ -36,7 +36,7 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 // prepare/stream path. Sentinel id shared with the selection card
 // (AUTHORED_TEMPLATE_ID) so the card and this branch can never disagree.
 const AUTHORED_POLL_MS = 4000;
-const AUTHORED_TIMEOUT_MS = 20 * 60 * 1000;
+const AUTHORED_TIMEOUT_MS = 30 * 60 * 1000;
 // Tolerate a few consecutive transient status-poll failures (a 502/network blip during
 // the minutes-long poll) before aborting — the backend task keeps running regardless.
 const AUTHORED_MAX_POLL_ERRORS = 3;
@@ -580,5 +580,17 @@ export const usePresentationGeneration = (
     };
   }, [handleSubmit]);
 
-  return { loadingState, handleSubmit };
+  // Invalidate the active run so every in-flight loop bails at its next
+  // isActiveRun() check. There is no backend cancel API for generation tasks, so
+  // an already-started server job may still finish in the background.
+  const cancelGeneration = useCallback(() => {
+    generationRunRef.current += 1;
+    setLoadingState(DEFAULT_LOADING_STATE);
+    notify.info(
+      "생성을 취소했습니다",
+      "이미 시작된 서버 작업은 백그라운드에서 계속 완료될 수 있습니다."
+    );
+  }, []);
+
+  return { loadingState, handleSubmit, cancelGeneration };
 };

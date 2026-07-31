@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -39,9 +40,10 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   const generationTemplate = auto ? autoTemplate : selectedTemplate;
 
   // Custom hooks
+  const router = useRouter();
   const streamState = useOutlineStreaming(presentation_id);
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
-  const { loadingState, handleSubmit } = usePresentationGeneration(
+  const { loadingState, handleSubmit, cancelGeneration } = usePresentationGeneration(
     presentation_id,
     outlines,
     generationTemplate,
@@ -100,6 +102,11 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
           }
           showProgress={true}
           duration={generating ? loadingState.duration : 60}
+          // While generating: invalidate the run and fall back to the outline UI
+          // so the user can review/edit and regenerate. While the outline is still
+          // streaming: go back to compose (unmount closes the SSE stream).
+          onCancel={generating ? cancelGeneration : () => router.back()}
+          cancelText={generating ? "생성 취소" : "취소하고 돌아가기"}
         />
       </div>
     );
@@ -122,6 +129,8 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
         text={loadingState.message}
         showProgress={loadingState.showProgress}
         duration={loadingState.duration}
+        onCancel={cancelGeneration}
+        cancelText="생성 취소"
       />
 
       <Wrapper className="flex flex-col w-full relative px-5 sm:px-10 lg:px-20 ">

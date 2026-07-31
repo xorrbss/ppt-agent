@@ -173,7 +173,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(makeTemplateV2SelectionId("brand-template", 4));
     cy.contains("button", "Generate").click();
     cy.get("@startGeneration").should("have.been.calledOnce");
-    cy.tick(20 * 60 * 1000 + 1);
+    cy.tick(30 * 60 * 1000 + 1);
 
     cy.get("@getStatus").should("have.been.calledOnce");
     cy.get("@notifyError").should(
