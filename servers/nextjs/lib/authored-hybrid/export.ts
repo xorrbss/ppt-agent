@@ -53,7 +53,6 @@ import {
   type PresentationExportQualityReport,
   type PresentationExportSlideQuality,
 } from "../presentation-export-quality.ts";
-import { summarizeAuthoredHybridExport } from "./export-metadata.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;

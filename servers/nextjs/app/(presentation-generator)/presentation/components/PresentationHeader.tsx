@@ -36,7 +36,6 @@ import {
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { Separator } from "@/components/ui/separator";
 import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
-import type { AuthoredHybridExportMetadata } from "@/lib/authored-hybrid/export-metadata";
 import {
   Dialog,
   DialogContent,

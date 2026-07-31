@@ -66,9 +66,6 @@ import {
   type TemplateV2ToolbarPatch,
   type TemplateV2ToolbarPatchOptions,
 } from "./toolbar";
-import TemplateV2QualityInspector from "./TemplateV2QualityInspector";
-import TemplateV2SlideVariantsPanel from "./TemplateV2SlideVariantsPanel";
-import TemplateV2TableEditorPanel from "./TemplateV2TableEditorPanel";
 import { useTemplateV2StudioPersistence } from "./useTemplateV2StudioPersistence";
 
 const TEMPLATE_V2_TOOLBAR_WIDTH = 760;
