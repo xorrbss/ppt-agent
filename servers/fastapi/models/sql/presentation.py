@@ -11,7 +11,7 @@ from models.presentation_layout import PresentationLayoutModel
 from models.slide_spec_model import PresentationComposition
 from utils.datetime_utils import get_current_utc_datetime
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 
 PRESENTATION_LIFECYCLE_STAGING = "staging"
 PRESENTATION_LIFECYCLE_PUBLISHED = "published"

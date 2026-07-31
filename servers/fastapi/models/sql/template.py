@@ -6,7 +6,7 @@ from sqlalchemy import Column, DateTime, ForeignKey
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 
 
 class TemplateModel(SQLModel, table=True):

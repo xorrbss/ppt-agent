@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from api.v1.async_tasks.router import API_V1_ASYNC_TASKS_ROUTER
-from api.v1.auth.context import (
+from utils.owner_context import (
     reset_current_owner_id,
     set_current_owner_id,
 )
@@ -301,8 +301,16 @@ def test_http_contract_exposes_list_check_and_get_without_breaking_legacy(
                     f"/api/v1/async-tasks/{own_task.id}",
                     headers=headers,
                 )
+                legacy_checked = await client.get(
+                    f"/api/v1/ppt/presentation/status/{own_task.id}",
+                    headers=headers,
+                )
                 hidden = await client.get(
                     "/api/v1/async-tasks/task-http-foreign",
+                    headers=headers,
+                )
+                legacy_hidden = await client.get(
+                    "/api/v1/ppt/presentation/status/task-http-foreign",
                     headers=headers,
                 )
                 invalid_page = await client.get(
@@ -316,8 +324,14 @@ def test_http_contract_exposes_list_check_and_get_without_breaking_legacy(
             assert checked.status_code == 200
             assert fetched.json() == checked.json()
             assert checked.json()["terminal"] is True
+            assert legacy_checked.status_code == 200
+            assert legacy_checked.json()["id"] == own_task.id
             assert hidden.status_code == 404
             assert hidden.json() == {"detail": "No async task found"}
+            assert legacy_hidden.status_code == 404
+            assert legacy_hidden.json() == {
+                "detail": "No presentation generation task found"
+            }
             assert invalid_page.status_code == 422
 
             paths = app.openapi()["paths"]

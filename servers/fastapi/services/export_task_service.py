@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError, model_validator
 
 from services.liteparse_service import _command_str, _snippet
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 from utils.asset_directory_utils import (
     get_exports_directory,
     resolve_app_path_to_filesystem,

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.v1.auth import internal
 from api.v1.auth.config import SESSION_COOKIE_NAME
-from api.v1.auth.context import reset_current_owner_id, set_current_owner_id
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from api.v1.auth.users import (
     PASSWORD_HELPER,
     UserManager,

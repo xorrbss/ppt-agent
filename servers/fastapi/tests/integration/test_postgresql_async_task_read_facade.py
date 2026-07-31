@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
-from api.v1.auth.context import (
+from utils.owner_context import (
     reset_current_owner_id,
     set_current_owner_id,
 )

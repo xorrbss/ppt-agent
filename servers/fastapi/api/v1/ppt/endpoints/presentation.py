@@ -64,7 +64,7 @@ from utils.process_slides import (
 )
 from utils.authored_styles import load_authored_styles
 
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 from api.v1.ppt.endpoints.presentation_helpers import (
     build_export_cookie_header,
     resolve_presentation_fonts,

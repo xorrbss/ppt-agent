@@ -9,7 +9,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel, select
 
-from api.v1.auth.context import reset_current_owner_id, set_current_owner_id
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2

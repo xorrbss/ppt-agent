@@ -14,7 +14,7 @@ from api.v1.auth.assets import (
     is_app_data_path_authorized,
     normalized_app_data_parts,
 )
-from api.v1.auth.context import get_current_owner_id, get_current_owner_is_admin
+from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 
 
 def _owned_directory(root_name: str) -> str:

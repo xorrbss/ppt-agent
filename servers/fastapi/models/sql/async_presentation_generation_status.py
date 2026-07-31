@@ -5,7 +5,7 @@ import uuid
 
 from sqlalchemy import JSON, Column, Uuid
 from sqlmodel import Field, SQLModel
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 
 
 class AsyncPresentationGenerationTaskModel(SQLModel, table=True):

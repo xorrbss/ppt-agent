@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy import JSON, Column, DateTime, String, Uuid
 from sqlmodel import Field, SQLModel
 
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 from enums.async_task_status import AsyncTaskStatus
 from utils.datetime_utils import get_current_utc_datetime
 

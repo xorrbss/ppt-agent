@@ -17,6 +17,7 @@ from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
 from utils.get_env import (
     get_app_data_directory_env,
+    get_enable_mock_endpoints_env,
     get_sentry_dsn_env,
     get_sentry_send_default_pii_env,
     get_sentry_traces_sample_rate_env,
@@ -64,7 +65,9 @@ install_api_error_handling(app)
 app.include_router(API_V1_PPT_ROUTER)
 app.include_router(API_V1_ASYNC_TASKS_ROUTER)
 app.include_router(API_V1_WEBHOOK_ROUTER)
-app.include_router(API_V1_MOCK_ROUTER)
+# Mock endpoints are a dev-only surface; keep them off production deployments.
+if (get_enable_mock_endpoints_env() or "").lower() == "true":
+    app.include_router(API_V1_MOCK_ROUTER)
 app.include_router(API_V1_AUTH_ROUTER)
 app.include_router(API_V1_ADMIN_ROUTER)
 

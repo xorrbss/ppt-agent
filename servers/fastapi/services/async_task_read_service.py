@@ -6,7 +6,7 @@ from typing import Literal
 from sqlalchemy import Select, case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 from enums.async_task_status import AsyncTaskStatus
 from models.async_task_read import AsyncTaskReadModel
 from models.sql.async_presentation_generation_status import (

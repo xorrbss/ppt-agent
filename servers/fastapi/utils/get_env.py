@@ -258,6 +258,10 @@ def get_disable_image_generation_env():
     return os.getenv("DISABLE_IMAGE_GENERATION")
 
 
+def get_enable_mock_endpoints_env():
+    return os.getenv("ENABLE_MOCK_ENDPOINTS")
+
+
 def is_parallel_image_generation_enabled() -> bool:
     """Whether image provider requests may run concurrently.
 

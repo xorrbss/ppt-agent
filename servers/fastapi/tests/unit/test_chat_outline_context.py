@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from api.v1.auth.context import (
+from utils.owner_context import (
     reset_current_owner_id,
     set_current_owner_id,
 )

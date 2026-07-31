@@ -9,7 +9,7 @@ from jsonschema import Draft202012Validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from api.v1.auth.context import get_current_owner_id, get_current_owner_is_admin
+from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset

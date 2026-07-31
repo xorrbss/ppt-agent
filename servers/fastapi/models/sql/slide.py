@@ -7,7 +7,7 @@ from sqlalchemy.types import JSON, TypeDecorator
 from sqlmodel import Field, Column, SQLModel
 
 from templates.v2.persistence import canonicalize_slide_ui
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 
 
 class NativeSlideUIJSON(TypeDecorator):

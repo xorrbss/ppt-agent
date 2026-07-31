@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlmodel import select
 
-from api.v1.auth.context import get_current_owner_id, get_current_owner_is_admin
+from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.chat.slide_ui_content import update_element

@@ -19,7 +19,7 @@ from typing import Any, Protocol
 from sqlalchemy import update
 from sqlmodel import select
 
-from api.v1.auth.context import get_current_owner_id, get_current_owner_is_admin
+from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel

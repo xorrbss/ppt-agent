@@ -4,7 +4,7 @@ from typing import Optional, Union
 
 from fastapi import HTTPException
 
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 from utils.get_env import get_temp_directory_env
 
 

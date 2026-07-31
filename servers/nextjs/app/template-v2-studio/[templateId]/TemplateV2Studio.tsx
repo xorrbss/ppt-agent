@@ -497,6 +497,13 @@ export default function TemplateV2Studio({
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 px-6 py-4">
         <div>
+          <Link
+            href="/templates"
+            data-testid="studio-back-to-templates"
+            className="mb-1 inline-flex items-center gap-1 text-sm text-slate-400 transition hover:text-slate-200"
+          >
+            ← 템플릿 목록
+          </Link>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
             Template V2 Studio · Experimental
           </p>

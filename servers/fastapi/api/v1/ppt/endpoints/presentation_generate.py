@@ -30,7 +30,6 @@ from fastapi import (
     Path,
     Request,
 )
-
 from constants.presentation import DEFAULT_TEMPLATES, MAX_NUMBER_OF_SLIDES
 from enums.webhook_event import WebhookEvent
 from models.api_error_model import APIErrorModel
@@ -95,6 +94,7 @@ from utils.asset_directory_utils import get_images_directory
 from utils.export_utils import export_presentation
 from utils.get_env import get_next_internal_base_url
 from utils.get_layout_by_name import get_layout_by_name
+from utils.owner_context import get_current_owner_id
 from utils.llm_calls.compose_slides import compose_and_project
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.document_context import build_document_context
@@ -1282,7 +1282,19 @@ async def check_async_presentation_generation_status(
     id: str = Path(description="ID of the presentation generation task"),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    status = await sql_session.get(AsyncPresentationGenerationTaskModel, id)
+    owner_id = get_current_owner_id()
+    owner_filter = (
+        AsyncPresentationGenerationTaskModel.owner_id.is_(None)
+        if owner_id is None
+        else AsyncPresentationGenerationTaskModel.owner_id == owner_id
+    )
+    status = (
+        await sql_session.execute(
+            select(AsyncPresentationGenerationTaskModel)
+            .where(AsyncPresentationGenerationTaskModel.id == id)
+            .where(owner_filter)
+        )
+    ).scalar_one_or_none()
     if not status:
         raise HTTPException(
             status_code=404, detail="No presentation generation task found"
