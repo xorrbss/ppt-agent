@@ -417,6 +417,14 @@ These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the bac
 
 The parallel image generation option applies everywhere images are generated: initial presentation generation, slide editing and regeneration, direct image requests, and assistant image tools.
 
+#### PPTX export fonts
+
+- **DISABLE_GOOGLE_FONTS_COLLECTION**=[true/false]: Set to **true** to keep PPTX
+  export fully offline. Decks that reference Google Fonts are otherwise served by a
+  validated server-side collector before the headless browser runs; with this set,
+  they render with local Office/Windows fallback typefaces instead and no request
+  leaves the host. Use it for air-gapped deployments.
+
 #### Telemetry
 
 - **DISABLE_ANONYMOUS_TRACKING**=[true/false]: Set to **true** to disable anonymous telemetry.
