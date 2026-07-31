@@ -80,7 +80,7 @@ capability-specific integration gates:
 | Workflow | Required environment | Role |
 | --- | --- | --- |
 | `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, and the selected Cypress component suite. It also validates the local runner's complete dry-run plan. |
-| `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and the real PostgreSQL migration integration test. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
+| `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and real PostgreSQL migration, canary rollback, and owner-scoped async-read integration tests. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
 | `upstream-intake.yml` | Offline fixture on pull requests; GitHub API on schedule/manual dispatch | Detects upstream movement without merging it. Live intake is intentionally not a pull-request dependency. |
 | `template-v2-export-fidelity.yml` | Ubuntu and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on both operating systems. |
 | `g4-pptx-roundtrip.yml` | Ubuntu Docker; Windows for release gates | Pinned export-runtime contract, Windows Electron/resource safety tests, optional manual Windows packaging, and required adaptive plus legacy end-to-end PPTX round trips. |
@@ -98,10 +98,11 @@ all of the stronger properties in one place:
 - `uv run pytest -q --no-header` runs the complete SQLite/default-feature suite;
 - PyInstaller still builds `server.spec`.
 
-The PostgreSQL test was not folded into that job. It uses a digest-pinned real
-PostgreSQL service, requires a test-only database name, and exercises
-`test_postgresql_template_v2_migrations.py`; those dependencies and semantics
-are distinct from the full SQLite suite.
+The PostgreSQL tests were not folded into that job. They use a digest-pinned
+real PostgreSQL service, require a test-only database name, and exercise the
+Template V2 migration/canary rollback contracts plus the durable,
+owner-scoped async-task read facade; those dependencies and semantics are
+distinct from the full SQLite suite.
 
 ## Action and image pinning policy
 

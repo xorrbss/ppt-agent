@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "3d4e5f6a7b8c",
+  "localTipRevision": "e1b3c5d7f9a2",
   "databaseCompatibility": {
     "verified": [
       {
@@ -55,7 +55,13 @@
     { "revision": "0a1b2c3d4e5f", "downRevision": "f9a0b1c2d3e4", "file": "0a1b2c3d4e5f_harden_template_v2_delete_cascade.py" },
     { "revision": "1b2c3d4e5f6a", "downRevision": "0a1b2c3d4e5f", "file": "1b2c3d4e5f6a_add_template_v2_import_review_boundary.py" },
     { "revision": "2c3d4e5f6a7b", "downRevision": "1b2c3d4e5f6a", "file": "2c3d4e5f6a7b_add_template_v2_revision_journal.py" },
-    { "revision": "3d4e5f6a7b8c", "downRevision": "2c3d4e5f6a7b", "file": "3d4e5f6a7b8c_add_durable_generation_jobs.py" }
+    { "revision": "3d4e5f6a7b8c", "downRevision": "2c3d4e5f6a7b", "file": "3d4e5f6a7b8c_add_durable_generation_jobs.py" },
+    { "revision": "4e5f6a7b8c9d", "downRevision": "3d4e5f6a7b8c", "file": "4e5f6a7b8c9d_reconcile_presenton_multi_user.py" },
+    { "revision": "a7d4c9e2f1b3", "downRevision": "4e5f6a7b8c9d", "file": "a7d4c9e2f1b3_add_async_tasks.py" },
+    { "revision": "b8e2f4a7c9d1", "downRevision": "a7d4c9e2f1b3", "file": "b8e2f4a7c9d1_normalize_async_task_statuses.py" },
+    { "revision": "c9f1a2b3d4e5", "downRevision": "b8e2f4a7c9d1", "file": "c9f1a2b3d4e5_multi_user_auth_and_ownership.py" },
+    { "revision": "d0a2b4c6e8f1", "downRevision": "c9f1a2b3d4e5", "file": "d0a2b4c6e8f1_username_only_provider_settings.py" },
+    { "revision": "e1b3c5d7f9a2", "downRevision": "d0a2b4c6e8f1", "file": "e1b3c5d7f9a2_primary_admin_slot.py" }
   ],
   "translations": [
     {
@@ -87,7 +93,11 @@
       "upstreamRevision": "1d9a4c7b8e2f",
       "localRevisions": [],
       "disposition": "intentionally-untranslated",
-      "note": "The local Template V2 product flow does not persist the upstream chat-scope foreign key."
+      "evidenceFiles": [
+        "servers/fastapi/models/sql/slide.py",
+        "servers/fastapi/templates/v2/persistence.py"
+      ],
+      "note": "The local flow persists canonical slide UI under presentation ownership and has no demonstrated multi-chat/template association that requires the upstream chat-scope foreign key. Hydration uses the existing SlideModel.ui field; it does not justify a migration."
     },
     {
       "upstreamRevision": "2c8f4a1b9d7e",
@@ -99,7 +109,11 @@
       "upstreamRevision": "5d7e9a1b2c3f",
       "localRevisions": [],
       "disposition": "intentionally-untranslated",
-      "note": "The upstream font_uploads persistence table is outside the local Template V2 compatibility surface."
+      "evidenceFiles": [
+        "servers/fastapi/api/v1/ppt/endpoints/fonts.py",
+        "servers/fastapi/templates/fonts_and_slides_preview.py"
+      ],
+      "note": "The upstream font_uploads table maps to the existing local validated font upload/list/preview surface. A second persistence table would duplicate that contract."
     },
     {
       "upstreamRevision": "3f2a1b4c5d6e",
@@ -115,16 +129,28 @@
     },
     {
       "upstreamRevision": "a7d4c9e2f1b3",
-      "localRevisions": [],
-      "disposition": "intentionally-untranslated",
-      "evidenceFiles": ["servers/fastapi/alembic/versions/00b3c27a13bc_init.py"],
-      "note": "The local runtime retains async_presentation_generation_tasks rather than introducing upstream async_tasks."
+      "localRevisions": ["a7d4c9e2f1b3"],
+      "disposition": "reused-with-local-runtime-boundary",
+      "evidenceFiles": [
+        "servers/fastapi/alembic/versions/a7d4c9e2f1b3_add_async_tasks.py",
+        "servers/fastapi/alembic/versions/00b3c27a13bc_init.py",
+        "servers/fastapi/api/v1/async_tasks/router.py",
+        "servers/fastapi/services/async_task_read_service.py",
+        "servers/fastapi/models/sql/async_presentation_generation_status.py",
+        "servers/fastapi/models/sql/presentation_generation_job.py",
+        "servers/fastapi/tests/unit/test_async_task_read_facade.py",
+        "servers/fastapi/tests/integration/test_postgresql_async_task_read_facade.py"
+      ],
+      "note": "The guarded upstream-shaped async_tasks migration remains data compatibility only. The implemented owner-scoped generic list/check/get facade maps existing async_presentation_generation_tasks plus durable generation jobs, including filtering, pagination, ordering, and terminal-state semantics, without creating a second execution path or persistence table. Legacy presentation-specific status routes remain intact."
     },
     {
       "upstreamRevision": "b8e2f4a7c9d1",
-      "localRevisions": [],
-      "disposition": "not-applicable",
-      "note": "Status normalization targets the upstream-only async_tasks table."
+      "localRevisions": ["b8e2f4a7c9d1"],
+      "disposition": "reused-with-local-runtime-boundary",
+      "evidenceFiles": [
+        "servers/fastapi/alembic/versions/b8e2f4a7c9d1_normalize_async_task_statuses.py"
+      ],
+      "note": "The local chain includes the upstream async_tasks status normalization. It does not replace the durable presentation-generation task status contract."
     }
   ],
   "localOnlyExtensions": [
@@ -171,6 +197,22 @@
     {
       "revision": "3d4e5f6a7b8c",
       "purpose": "Durable presentation generation jobs and staging-to-published lifecycle"
+    },
+    {
+      "revision": "4e5f6a7b8c9d",
+      "purpose": "Reconciled multi-user baseline after durable generation jobs"
+    },
+    {
+      "revision": "c9f1a2b3d4e5",
+      "purpose": "Multi-user authentication and presentation ownership"
+    },
+    {
+      "revision": "d0a2b4c6e8f1",
+      "purpose": "Username-only provider settings"
+    },
+    {
+      "revision": "e1b3c5d7f9a2",
+      "purpose": "Single primary administrator slot"
     }
   ]
 }

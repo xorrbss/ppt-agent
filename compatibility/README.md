@@ -16,6 +16,12 @@ because prose is not covered by that check and would go stale silently.
 - `upstream-test-contracts.json` records each reviewed upstream default-template
   and generic async-task test, including machine-readable exclusion reasons and
   the non-conflicting local regression contracts retained in its place.
+- `../docs/template-v2-chat-parity-matrix-20260731.md` is the behavior-level
+  Template V2 Chat parity audit. It distinguishes tested local support from
+  pending integration and schema/product decisions. Text-run ranges and table
+  merge/split are classified as implemented only with their schema, mutation,
+  renderer/export, import, hydration, and round-trip regression evidence, so an
+  exclusion is never relabeled as ported on prose alone.
 - `upstream-intake-policy.json` controls the separate, read-only observation of
   official `presenton/presenton:main`, including the pinned commit metadata,
   review categories, and contract-risk escalation rules.
