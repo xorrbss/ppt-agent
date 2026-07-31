@@ -729,8 +729,9 @@ export const usePresentationGeneration = (
   }, [handleSubmit]);
 
   // Invalidate the active run so every in-flight loop bails at its next
-  // isActiveRun() check. There is no backend cancel API for generation tasks, so
-  // an already-started server job may still finish in the background.
+  // isActiveRun() check, and ask the backend to stop the durable job. The
+  // server-side stop is best-effort: an attempt already in its final commit
+  // can still publish the deck.
   const cancelGeneration = useCallback(() => {
     generationRunRef.current += 1;
     activeDurableTaskRef.current = null;
@@ -738,12 +739,19 @@ export const usePresentationGeneration = (
     submittingDurableTaskRef.current = null;
     const durableTask = findDurableGenerationTask(presentationId);
     if (durableTask) {
+      if (durableTask.taskId) {
+        void PresentationGenerationApi.cancelGeneration(
+          durableTask.taskId
+        ).catch((error) => {
+          console.warn("Failed to cancel generation on the server", error);
+        });
+      }
       clearDurableGenerationTask(durableTask.idempotencyKey);
     }
     setLoadingState(DEFAULT_LOADING_STATE);
     notify.info(
       "생성을 취소했습니다",
-      "이미 시작된 서버 작업은 백그라운드에서 계속 완료될 수 있습니다."
+      "서버에 작업 중지를 요청했습니다. 이미 마무리 단계인 작업은 완료될 수 있습니다."
     );
   }, [presentationId]);
 

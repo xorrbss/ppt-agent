@@ -395,6 +395,20 @@ export class PresentationGenerationApi {
     }
   }
 
+  static async cancelGeneration(taskId: string) {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/status/${taskId}/cancel`),
+      {
+        method: "POST",
+        headers: getHeader(),
+      }
+    );
+    return ApiResponseHandler.handleResponse(
+      response,
+      "Failed to cancel generation"
+    );
+  }
+
   static async presentationPrepare(presentationData: any) {
     try {
       const response = await fetch(

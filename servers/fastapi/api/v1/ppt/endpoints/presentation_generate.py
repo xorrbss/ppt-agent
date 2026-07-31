@@ -64,10 +64,12 @@ from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
 from services.presentation_generation_job_service import (
+    cancel_generation_job,
     claim_generation_job,
     finalize_generation_job,
     heartbeat_generation_job_loop,
     idempotency_key_hash,
+    launch_generation_job,
     release_generation_job,
     request_sha256,
 )
@@ -1171,7 +1173,7 @@ async def queue_presentation_generation(
                 )
             if existing.state == "awaiting_resume":
                 background_tasks.add_task(
-                    run_generation_job,
+                    launch_generation_job,
                     existing.id,
                     export_cookie_header,
                 )
@@ -1237,7 +1239,7 @@ async def queue_presentation_generation(
         return existing_status
 
     background_tasks.add_task(
-        run_generation_job,
+        launch_generation_job,
         job.id,
         export_cookie_header,
     )
@@ -1300,3 +1302,23 @@ async def check_async_presentation_generation_status(
             status_code=404, detail="No presentation generation task found"
         )
     return status
+
+
+@PRESENTATION_GENERATE_ROUTER.post(
+    "/status/{id}/cancel", response_model=AsyncPresentationGenerationTaskModel
+)
+async def cancel_async_presentation_generation(
+    id: str = Path(description="ID of the presentation generation task"),
+):
+    """Durably cancel a queued/running generation task owned by the caller.
+
+    The job is marked terminal so it can never be (re)dispatched; the attempt
+    running in this worker is interrupted best-effort. Already-terminal tasks
+    are returned unchanged.
+    """
+    task = await cancel_generation_job(id)
+    if task is None:
+        raise HTTPException(
+            status_code=404, detail="No presentation generation task found"
+        )
+    return task

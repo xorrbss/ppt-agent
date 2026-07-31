@@ -27,7 +27,9 @@ NONTERMINAL_STATES = frozenset({"queued", "running", "staging", "awaiting_resume
 TERMINAL_STATES = frozenset({"published", "failed"})
 
 _dispatcher_task: asyncio.Task[None] | None = None
-_active_jobs: set[asyncio.Task[None]] = set()
+# Keyed by job id so a user-initiated cancel can interrupt the in-process
+# attempt this worker is running (best-effort; other workers keep no handle).
+_active_jobs: dict[uuid.UUID, asyncio.Task[None]] = {}
 
 
 def utc_now() -> datetime:
@@ -272,9 +274,89 @@ async def recover_generation_jobs() -> int:
         return len(rows)
 
 
-async def _dispatch_ready_jobs() -> None:
+async def launch_generation_job(
+    job_id: uuid.UUID,
+    export_cookie_header: str | None = None,
+) -> None:
+    """Run one job as a tracked asyncio task so a cancel can interrupt it."""
+
     from api.v1.ppt.endpoints.presentation_generate import run_generation_job
 
+    task = asyncio.create_task(run_generation_job(job_id, export_cookie_header))
+    _active_jobs[job_id] = task
+
+    def _discard(done: asyncio.Task[None]) -> None:
+        if _active_jobs.get(job_id) is done:
+            _active_jobs.pop(job_id, None)
+
+    task.add_done_callback(_discard)
+
+
+async def cancel_generation_job(
+    task_id: str,
+) -> AsyncPresentationGenerationTaskModel | None:
+    """Durably cancel an owner-scoped generation task.
+
+    Marks the job terminal so the dispatcher and recovery never (re)start it,
+    then cancels the in-process attempt when this worker holds its handle.
+    Returns the task row (unchanged if already terminal), or None when no
+    owner-scoped task exists.
+    """
+
+    owner_id = get_current_owner_id()
+    now = utc_now()
+    job_id: uuid.UUID | None = None
+    async with async_session_maker() as session:
+        owner_filter = (
+            AsyncPresentationGenerationTaskModel.owner_id.is_(None)
+            if owner_id is None
+            else AsyncPresentationGenerationTaskModel.owner_id == owner_id
+        )
+        task = (
+            await session.execute(
+                select(AsyncPresentationGenerationTaskModel)
+                .where(AsyncPresentationGenerationTaskModel.id == task_id)
+                .where(owner_filter)
+            )
+        ).scalar_one_or_none()
+        if task is None:
+            return None
+        if task.status in ("completed", "error"):
+            return task
+        job = (
+            await session.execute(
+                select(PresentationGenerationJob).where(
+                    PresentationGenerationJob.task_id == task_id
+                )
+            )
+        ).scalar_one_or_none()
+        if job is not None and job.state in NONTERMINAL_STATES:
+            job.state = "failed"
+            job.failed_at = now
+            job.attempt_token = None
+            job.lease_expires_at = None
+            job.updated_at = now
+            session.add(job)
+            job_id = job.id
+        task.status = "error"
+        task.message = "Generation cancelled by user"
+        task.error = {
+            "status_code": 499,
+            "code": "generation_cancelled",
+            "detail": "Generation cancelled by user",
+        }
+        task.updated_at = now
+        session.add(task)
+        await session.commit()
+
+    if job_id is not None:
+        handle = _active_jobs.get(job_id)
+        if handle is not None:
+            handle.cancel()
+    return task
+
+
+async def _dispatch_ready_jobs() -> None:
     async with async_session_maker() as session:
         job_ids = list(
             await session.scalars(
@@ -286,9 +368,7 @@ async def _dispatch_ready_jobs() -> None:
             )
         )
     for job_id in job_ids:
-        task = asyncio.create_task(run_generation_job(job_id, None))
-        _active_jobs.add(task)
-        task.add_done_callback(_active_jobs.discard)
+        await launch_generation_job(job_id, None)
 
 
 async def _dispatcher_loop() -> None:
@@ -318,7 +398,7 @@ async def stop_presentation_generation_dispatcher() -> None:
         _dispatcher_task.cancel()
         await asyncio.gather(_dispatcher_task, return_exceptions=True)
         _dispatcher_task = None
-    active = tuple(_active_jobs)
+    active = tuple(_active_jobs.values())
     for task in active:
         task.cancel()
     if active:
