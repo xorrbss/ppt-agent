@@ -126,11 +126,14 @@ test("collected data fonts require supported MIME, base64, magic, and size", () 
   const decoded = validateHybridDataFontUrl(woff2);
   assert.equal(decoded.ok, true);
   if (decoded.ok) assert.equal(decoded.mime, "woff2");
+  // A well-formed font payload is still rejected inside the untrusted
+  // document. Only the server-side collector may introduce @font-face data,
+  // and it injects it into the separate document that bypasses preflight.
   assert.deepEqual(
     preflightAuthoredHtmlForHybrid(
       `<style>@font-face{font-family:Inter;src:url("${woff2}")}</style><p>x</p>`
     ),
-    { ok: true }
+    { ok: false, reason: "unsafe-css-url" }
   );
   assert.equal(
     validateHybridDataFontUrl(woff2.replace("font/woff2", "font/woff")).ok,

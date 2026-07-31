@@ -34,7 +34,8 @@ import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
 } from "./export-performance.ts";
-import { collectGoogleFontsForAuthoredHtml } from "./google-font-collector.ts";
+import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
+import { summarizeAuthoredHybridExport } from "./export-metadata.ts";
 import { mergePowerPointTextLayout } from "./font-layout.ts";
 import {
   resolveFontEmbeddingPlan,
@@ -64,7 +65,10 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides simply keep their fidelity (image) render.
 const HYBRID_DECK_BUDGET_MS = 8 * 60_000;
 const HYBRID_CACHE_VERSION =
-  "authored-hybrid-v4-powerpoint-font-layout";
+  "authored-hybrid-v5-powerpoint-font-layout-verified-collection";
+// The collector adds a bounded network step ahead of each browser pass, so
+// the per-pass ceiling is higher than the pre-collection 20s.
+const HYBRID_BROWSER_PASS_TIMEOUT_MS = 45_000;
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
@@ -247,13 +251,18 @@ async function prepareSlideLayer(
 ): Promise<PreparedSlideOutcome> {
   // Network access is permitted only in this validated server-side collector.
   // The resulting document is self-contained before isolated Chrome receives it.
-  const fontCollection = await collectGoogleFontsForAuthoredHtml(html);
+  // The collector returns two documents on purpose. Only the sanitized form is
+  // preflighted, so untrusted authored HTML can never self-authorize a data
+  // font face; the verified form carrying collector-built @font-face rules is
+  // used only after that preflight succeeds.
+  const fontCollection = await getGoogleFontsCollector().prepareHtml(html);
   const fontRendering = {
-    browserFontFilesCollected: fontCollection.collectedFontFiles,
+    browserFontFilesCollected: fontCollection.fontFiles,
     browserCollectionFailures: fontCollection.failures.length,
   };
-  const collectedHtml = fontCollection.html;
-  const preflight = preflightAuthoredHtmlForHybrid(collectedHtml);
+  const preflight = preflightAuthoredHtmlForHybrid(
+    fontCollection.htmlForPreflight
+  );
   if (!preflight.ok) {
     return {
       layer: null,
@@ -264,7 +273,11 @@ async function prepareSlideLayer(
       fontRendering,
     };
   }
-  const extractionOptions = { chromeExecutable, timeoutMs: 20_000 };
+  const collectedHtml = fontCollection.htmlForChrome;
+  const extractionOptions = {
+    chromeExecutable,
+    timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
+  };
   const contract = await extractAuthoredSlideDom(collectedHtml, extractionOptions);
   let nativeLayoutElements = contract.elements;
   try {
@@ -661,11 +674,16 @@ async function attachQualityReport(
     console.warn("[authored-hybrid] quality sidecar could not be persisted", error);
     await fs.rm(temporaryPath, { force: true }).catch(() => {});
   }
-  return {
-    ...result,
-    quality,
-    exportMetadata: summarizeAuthoredHybridExport(quality),
-  };
+  // The client-facing summary is derived from the same per-slide quality the
+  // sidecar records, so the editor toast and the persisted report can never
+  // disagree about how many slides stayed editable.
+  const exportMetadata = summarizeAuthoredHybridExport(
+    quality.slides.map((slide) => ({
+      editable: slide.editable,
+      fallbackReason: slide.fallbackReasons[0],
+    }))
+  );
+  return { ...result, quality, exportMetadata };
 }
 
 async function runUncachedAuthoredHybridExport(

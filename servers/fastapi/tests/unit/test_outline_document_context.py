@@ -2,8 +2,9 @@ import asyncio
 import json
 import types
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import HTTPException
 from api.v1.ppt.endpoints import outlines as outlines_endpoint
 from models.content_brief_model import ContentBrief
 from models.sql.presentation import PresentationModel
@@ -58,6 +59,59 @@ def test_source_document_boundary_tags_are_escaped_inside_untrusted_context():
         assert "&lt;/untrusted_source_documents&gt;" in user_prompt
         assert "&lt;UNTRUSTED_SOURCE_DOCUMENTS data-fake='true'&gt;" in user_prompt
         assert user_prompt.count("</untrusted_source_documents>") == 1
+
+
+def test_stream_outlines_stops_after_content_brief_usage_limit(tmp_path):
+    presentation_id = uuid.uuid4()
+    presentation = PresentationModel(
+        id=presentation_id,
+        content="Create a deck.",
+        n_slides=1,
+        language="English",
+        tone="professional",
+        verbosity="standard",
+        instructions=None,
+    )
+    session = FakeAsyncSession(get_results={presentation_id: presentation})
+    request = types.SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
+    generate_outline = MagicMock()
+
+    async def consume_stream():
+        response = await outlines_endpoint.stream_outlines(
+            presentation_id,
+            request,
+            session,
+        )
+        return [chunk async for chunk in response.body_iterator]
+
+    with patch.object(
+        outlines_endpoint.TEMP_FILE_SERVICE,
+        "create_temp_dir",
+        return_value=str(tmp_path),
+    ), patch.object(
+        outlines_endpoint,
+        "generate_content_brief",
+        new=AsyncMock(
+            side_effect=HTTPException(
+                status_code=429,
+                detail=(
+                    "AI provider usage limit reached. It should reset in about "
+                    "4 days 20 hours. Try again then, or choose a different "
+                    "provider in Settings."
+                ),
+            )
+        ),
+    ), patch.object(
+        outlines_endpoint,
+        "generate_ppt_outline",
+        generate_outline,
+    ):
+        chunks = _run(consume_stream())
+
+    assert len(chunks) == 3
+    assert '"type": "error"' in chunks[-1]
+    assert "usage limit reached" in chunks[-1]
+    generate_outline.assert_not_called()
 
 
 def test_stream_outlines_preserves_markdown_document_in_brief_outline_and_memory(

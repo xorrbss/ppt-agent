@@ -285,6 +285,42 @@ test("route request preserves additive hybrid quality metadata", async () => {
   );
 });
 
+test("route request preserves additive authored-hybrid export metadata", async () => {
+  const exportMetadata = {
+    version: 1,
+    strategy: "authored-hybrid",
+    totalSlides: 3,
+    editableSlides: 2,
+    imageFallbackSlides: 1,
+    fallbackReasons: [{ reason: "preflight-unsafe-css-url", slideCount: 1 }],
+  };
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.hybrid = async () => ({
+    path: "hybrid.pptx",
+    exportMetadata,
+  });
+
+  const result = await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "hybrid",
+    },
+    "session=test",
+    dependencies
+  );
+
+  assert.equal(result.path, "hybrid.pptx");
+  assert.deepEqual(
+    (result as { exportMetadata?: unknown }).exportMetadata,
+    exportMetadata
+  );
+});
+
 test("route request uses the default hybrid mode for authored PPTX", async () => {
   const { calls, dependencies } = boundarySpies({
     version: "v1-standard",

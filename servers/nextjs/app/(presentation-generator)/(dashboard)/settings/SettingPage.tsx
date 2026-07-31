@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { Loader2, Download, CheckCircle, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ui/sonner";
@@ -48,6 +48,21 @@ const SettingsPage = () => {
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
+  );
+  const handleLlmInputChange = useCallback(
+    (value: string | boolean, field: string) => {
+      setLlmConfig((prev) => {
+        if (prev[field as keyof LLMConfig] === value) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [field]: value,
+        };
+      });
+    },
+    []
   );
   const canChangeKeys = userConfigState.can_change_keys;
   const [buttonState, setButtonState] = useState<ButtonState>({
@@ -436,14 +451,7 @@ const SettingsPage = () => {
             <h4>Nano Banana</h4>
           </div>}
           {mode === 'presenton' && selectedProvider === 'text-provider' && <TextProvider
-
-
-            onInputChange={(value, field) => {
-              setLlmConfig(prev => ({
-                ...prev,
-                [field]: value
-              }));
-            }}
+            onInputChange={handleLlmInputChange}
             llmConfig={llmConfig}
           />}
           {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}

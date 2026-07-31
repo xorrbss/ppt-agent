@@ -821,7 +821,7 @@ describe("TemplateV2Studio API integration", () => {
     cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
       "not.exist"
     );
-    cy.get("textarea")
+    cy.get('textarea[aria-label$=" content"]')
       .first()
       .should("be.visible")
       .type("{selectall}Edited bound title", { waitForAnimations: false });
@@ -855,7 +855,7 @@ describe("TemplateV2Studio API integration", () => {
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadDesignVariableTemplate");
     cy.contains("button[aria-pressed]", /^title/).click();
-    cy.get("textarea").first().should("have.value", "Edited bound title");
+    cy.get('textarea[aria-label$=" content"]').first().should("have.value", "Edited bound title");
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
   });
 
@@ -1053,7 +1053,7 @@ describe("TemplateV2Studio API integration", () => {
     cy.get("dt").contains(/^Elements$/).next("dd").should("have.text", "3");
 
     cy.contains("button[aria-pressed]", /^title/).click();
-    cy.get("textarea").first().trigger("keydown", {
+    cy.get('textarea[aria-label$=" content"]').first().trigger("keydown", {
       key: "z",
       ctrlKey: true,
       waitForAnimations: false,

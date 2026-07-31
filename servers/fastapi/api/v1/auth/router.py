@@ -215,15 +215,36 @@ async def login(
     client_key = _login_client_key(request)
     _assert_login_allowed(client_key)
 
-    if not verify_credentials(body.username, body.password):
+    username = normalize_username(body.username)
+    user = await session.scalar(
+        select(User).where(func.lower(User.username) == username.casefold())
+    )
+    if user is None or not user.is_active:
+        # Keep unknown-user requests close to the cost of a real password check.
+        PASSWORD_HELPER.hash(body.password)
         _record_login_failure(client_key)
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    verified, replacement_hash = PASSWORD_HELPER.verify_and_update(
+        body.password, user.hashed_password
+    )
+    if not verified:
+        _record_login_failure(client_key)
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if replacement_hash:
+        user.hashed_password = replacement_hash
+        await session.commit()
+        if user.is_superuser:
+            persist_admin_credentials(user.username, replacement_hash)
+
     _login_failures.pop(client_key, None)
-    username = body.username.strip()
-    token = create_session_token(username)
+    token = await get_jwt_strategy().write_token(user)
     response = JSONResponse(
-        {"configured": True, "authenticated": True, "username": username}
+        {
+            "configured": True,
+            "authenticated": True,
+            **serialize_user(user),
+        }
     )
     _set_login_cookie(response, token, request)
     return response

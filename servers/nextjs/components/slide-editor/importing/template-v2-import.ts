@@ -1,4 +1,5 @@
 import { resolveBackendAssetUrl } from "@/utils/api";
+import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
 import { chartDataFromSeriesWithColors } from "@/components/slide-editor/charts/chart-data";
 import { renderMarkdownTextRuns } from "@/components/slide-editor/text/markdown-text";
 import { adaptTemplateV2TableCellSpanMetadata } from "@/components/slide-editor/importing/template-v2-table-span";
@@ -95,7 +96,9 @@ export function adaptTemplateV2ResponseToDeck(
     throw new Error("Template response did not include any layouts.");
   }
 
-  const slides = layouts.slice(0, 50).map(adaptLayoutToSlide);
+  const slides = layouts
+    .slice(0, MAX_NUMBER_OF_SLIDES)
+    .map(adaptLayoutToSlide);
   const deck = {
     title: truncateString(readString(template.name) ?? "Imported template", 90),
     description:
@@ -148,7 +151,7 @@ export function adaptGeneratedTemplateV2PresentationToDeck(
 
   const slides =
     generatedSlides.length > 0
-      ? generatedSlides.slice(0, 50).map((slide, index) => {
+      ? generatedSlides.slice(0, MAX_NUMBER_OF_SLIDES).map((slide, index) => {
         const uiLayout = readGeneratedSlideUiLayout(slide);
         if (uiLayout) {
           return adaptLayoutToSlide(uiLayout, index);
@@ -165,7 +168,7 @@ export function adaptGeneratedTemplateV2PresentationToDeck(
         }
         return adaptLayoutToSlide(layout, index);
       })
-      : layouts.slice(0, 50).map(adaptLayoutToSlide);
+      : layouts.slice(0, MAX_NUMBER_OF_SLIDES).map(adaptLayoutToSlide);
 
   const deck = {
     title: truncateString(

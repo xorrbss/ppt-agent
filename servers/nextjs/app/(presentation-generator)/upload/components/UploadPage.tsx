@@ -193,7 +193,7 @@ const UploadPage = () => {
     }
   };
   const [config, setConfig] = useState<PresentationConfig>({
-    slides: null,
+    slides: "8",
     language: LanguageType.Korean,
     prompt: "",
     tone: ToneType.Default,

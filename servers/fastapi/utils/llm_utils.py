@@ -31,6 +31,13 @@ TRANSIENT_LLM_RETRY_MAX_DELAY_SECONDS = 8.0
 DisconnectChecker = Callable[[], Awaitable[bool]]
 
 
+@dataclass(frozen=True)
+class TextLengthLimit:
+    path: str
+    recommended: int
+    maximum: int
+
+
 async def _raise_if_client_disconnected(
     disconnect_checker: Optional[DisconnectChecker],
 ) -> None:
@@ -210,13 +217,6 @@ def _resolve_ref(schema: Any, root: dict) -> Any:
                     return {}
             return node if isinstance(node, dict) else {}
     return schema
-
-
-@dataclass(frozen=True)
-class TextLengthLimit:
-    path: str
-    recommended: int
-    maximum: int
 
 
 def _schema_variant_label(schema: dict) -> str:
@@ -620,12 +620,12 @@ async def generate_structured_with_schema_retries(
             remaining = get_schema_validation_errors(json_schema, clamped, strict=strict)
             if remaining:
                 LOGGER.warning(
-                    "Validation errors after max fixes + clamp (returning clamped): %s",
+                    "Validation errors remain after final schema clamp: %s",
                     " | ".join(remaining),
                 )
             else:
                 LOGGER.warning(
-                    "Validation errors fixed by clamping after max fixes: %s",
+                    "Validation errors fixed by final schema clamp: %s",
                     formatted_validation_errors,
                 )
             return clamped

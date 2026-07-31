@@ -7,7 +7,7 @@ import {
   renderAuthoredBackplate,
   resolveAuthoredHybridChromeExecutable,
 } from "../lib/authored-hybrid/index.ts";
-import { collectGoogleFontsForAuthoredHtml } from "../lib/authored-hybrid/google-font-collector.ts";
+import { getGoogleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
 import { mergePowerPointTextLayout } from "../lib/authored-hybrid/font-layout.ts";
 import { resolveFontEmbeddingPlan } from "../lib/authored-hybrid/font-embedding-policy.ts";
 import {
@@ -155,13 +155,15 @@ async function prepareSlide(
   chromeExecutable,
   embeddedTypefaceFamilies = []
 ) {
-  const fontCollection = await collectGoogleFontsForAuthoredHtml(html);
+  const fontCollection = await getGoogleFontsCollector().prepareHtml(html);
   const fontRendering = {
-    browserFontFilesCollected: fontCollection.collectedFontFiles,
+    browserFontFilesCollected: fontCollection.fontFiles,
     browserCollectionFailures: fontCollection.failures.length,
   };
-  const collectedHtml = fontCollection.html;
-  const preflight = preflightAuthoredHtmlForHybrid(collectedHtml);
+  const collectedHtml = fontCollection.htmlForChrome;
+  const preflight = preflightAuthoredHtmlForHybrid(
+    fontCollection.htmlForPreflight
+  );
   if (!preflight.ok) {
     return {
       layer: null,

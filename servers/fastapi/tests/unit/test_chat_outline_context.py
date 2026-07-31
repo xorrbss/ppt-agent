@@ -7,6 +7,7 @@ from api.v1.auth.context import (
     reset_current_owner_id,
     set_current_owner_id,
 )
+from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2
@@ -152,7 +153,10 @@ async def test_layout_slide_uses_existing_save_path_and_max_slide_guard():
         }
     ]
 
-    context, _, memory = _context(presentation, scalar_results=[[object()] * 50])
+    context, _, memory = _context(
+        presentation,
+        scalar_results=[[object()] * MAX_NUMBER_OF_SLIDES],
+    )
     blocked = await context.add_new_slide_layout(
         content={}, layout_id="title", index=None
     )

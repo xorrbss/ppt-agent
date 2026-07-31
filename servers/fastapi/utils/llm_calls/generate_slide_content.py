@@ -125,12 +125,15 @@ def get_system_prompt(
         )
     elif verbosity == "text-heavy":
         verbosity_instructions += (
-            "Use roughly 90-100% of each text field's maximum length and populate the MAXIMUM number of list items the schema allows. Maximize substantive, specific detail."
+            "Use the field-specific recommended budgets and populate the maximum number "
+            "of useful list items the schema allows. Maximize substantive, specific detail "
+            "without treating hard maximum lengths as targets."
         )
     else:
         # standard / default: still apply real density pressure (this is the common path)
         verbosity_instructions += (
-            "Use roughly 75-90% of each text field's maximum length and populate most or all allowed list items. Favor substance over brevity."
+            "Aim for the field-specific recommended budgets (normally 80% of each hard "
+            "maximum) and populate most or all useful list items. Favor substance over filler."
         )
 
     output_fields_instructions = "# Output Fields:\n" + _get_schema_markdown(
@@ -154,7 +157,7 @@ def get_system_prompt(
         content_depth_rules = """# Content Depth
 - Be specific and concrete: prefer named examples, figures, dates, percentages, and cause-effect detail over generic statements.
 - Genuinely expand each outline point into substantive prose — do not merely restate or summarize the outline.
-- Fill each text field toward its maximum length budget, and populate the MAXIMUM number of list items the schema allows. Do not leave fields near their minimum or ship under-filled lists.
+- Fill each text field toward its recommended length budget, and populate the maximum number of useful list items the schema allows. Do not add filler merely to consume space.
 - Every bullet or point must carry real, distinct information; never use filler such as \"various aspects\", \"many benefits\", or vague placeholders."""
 
     return SLIDE_CONTENT_SYSTEM_PROMPT.format(

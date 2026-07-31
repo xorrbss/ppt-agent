@@ -64,8 +64,8 @@ describe('<UploadPage />', () => {
       cy.get('[data-testid="slides-select"]').click({ force: true })
       // The slide popover is fixed-positioned and overlaps the template grid in
       // the component-test layout, so force the click past the cover check.
-      cy.get('[role="option"]').contains('슬라이드 12개').click({ force: true })
-      cy.get('[data-testid="slides-select"]').should('contain', '12')
+      cy.get('[role="option"]').contains('슬라이드 100개').click({ force: true })
+      cy.get('[data-testid="slides-select"]').should('contain', '100')
     })
 
     it('opens the advanced-settings modal', () => {

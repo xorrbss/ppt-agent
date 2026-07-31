@@ -57,6 +57,9 @@ import TemplateV2ElementTree, {
 import TemplateV2GeometryInspector from "./TemplateV2GeometryInspector";
 import TemplateV2ImageReplacementPanel from "./TemplateV2ImageReplacementPanel";
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
+import TemplateV2QualityInspector from "./TemplateV2QualityInspector";
+import TemplateV2SlideVariantsPanel from "./TemplateV2SlideVariantsPanel";
+import TemplateV2TableEditorPanel from "./TemplateV2TableEditorPanel";
 import {
   TemplateV2SelectionToolbar,
   type TemplateV2ImageCropDraft,

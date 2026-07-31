@@ -10,11 +10,20 @@ const MAX_STREAM_RETRIES = 3;
 const STREAM_RETRY_DELAY_MS = 1_000;
 const OUTLINE_RECOVERY_INTERVAL_MS = 5_000;
 
-export const useOutlineStreaming = (presentationId: string | null) => {
+export type OutlineEventSourceFactory = (url: string) => EventSource;
+
+const createBrowserEventSource: OutlineEventSourceFactory = (url) =>
+  new EventSource(url);
+
+export const useOutlineStreaming = (
+  presentationId: string | null,
+  createEventSource: OutlineEventSourceFactory = createBrowserEventSource
+) => {
   const dispatch = useDispatch();
   const { outlines } = useSelector((state: RootState) => state.presentationGeneration);
   const [isStreaming, setIsStreaming] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasCompleted, setHasCompleted] = useState(false);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number | null>(null);
   const [highestActiveIndex, setHighestActiveIndex] = useState<number>(-1);
   const prevSlidesRef = useRef<{ content: string }[]>([]);
@@ -34,6 +43,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
       // the UI doesn't sit on a permanent "개요를 생성하는 중…" loader forever.
       setIsStreaming(false);
       setIsLoading(false);
+      setHasCompleted(false);
       return;
     }
 
@@ -69,6 +79,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
     const resetStreamingState = () => {
       setIsStreaming(false);
       setIsLoading(false);
+      setHasCompleted(false);
       setActiveSlideIndex(null);
       setHighestActiveIndex(-1);
       activeIndexRef.current = -1;
@@ -79,6 +90,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
       dispatch(setOutlines(outlineSlides));
       setIsStreaming(false);
       setIsLoading(false);
+      setHasCompleted(true);
       setActiveSlideIndex(null);
       setHighestActiveIndex(-1);
       prevSlidesRef.current = outlineSlides;
@@ -141,7 +153,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
 
     const openStream = () => {
       closeEventSource();
-      eventSource = new EventSource(
+      eventSource = createEventSource(
         `/api/outline-stream/${encodeURIComponent(presentationId)}`
       );
 
@@ -217,6 +229,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
           case "closing":
             setIsStreaming(false);
             setIsLoading(false);
+            setHasCompleted(false);
             setActiveSlideIndex(null);
             setHighestActiveIndex(-1);
             activeIndexRef.current = -1;
@@ -251,6 +264,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
 
     setIsStreaming(true);
     setIsLoading(true);
+    setHasCompleted(false);
     recoveryTimer = setInterval(() => {
       void recoverSavedOutlines();
     }, OUTLINE_RECOVERY_INTERVAL_MS);
@@ -266,7 +280,13 @@ export const useOutlineStreaming = (presentationId: string | null) => {
       clearRetryTimer();
       clearRecoveryTimer();
     };
-  }, [presentationId, dispatch]);
+  }, [presentationId, dispatch, createEventSource]);
 
-  return { isStreaming, isLoading, activeSlideIndex, highestActiveIndex };
+  return {
+    isStreaming,
+    isLoading,
+    hasCompleted,
+    activeSlideIndex,
+    highestActiveIndex,
+  };
 };

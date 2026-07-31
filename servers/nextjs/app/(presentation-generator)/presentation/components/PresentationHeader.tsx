@@ -56,6 +56,10 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
 import AuthoredQualityReview from "./AuthoredQualityReview";
+import {
+  formatAuthoredHybridExportSummary,
+  type AuthoredHybridExportMetadata,
+} from "@/lib/authored-hybrid/export-metadata";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 
 const MAX_EXPORT_TITLE_LENGTH = 40;
@@ -250,6 +254,7 @@ const PresentationHeader = ({
     if (isStreaming || isExporting) return;
 
     let exportToastId: string | number | undefined;
+    let exportSummary: string | undefined;
     try {
       trackEvent(MixpanelEvent.Presentation_Export_Started, {
         pathname,
@@ -297,10 +302,14 @@ const PresentationHeader = ({
           exportMetadata?: AuthoredHybridExportMetadata;
         };
         const pptxPath = payload.path;
+        const exportMetadata = payload.exportMetadata;
         if (!pptxPath) {
           throw new Error("내보내기 경로를 받지 못했습니다.");
         }
 
+        if (exportMetadata?.strategy === "authored-hybrid") {
+          exportSummary = formatAuthoredHybridExportSummary(exportMetadata);
+        }
         downloadLink(pptxPath, safePptxFileName);
         if (payload.quality) setExportQuality(payload.quality);
         if (payload.exportMetadata && !payload.quality) {
@@ -312,7 +321,7 @@ const PresentationHeader = ({
       }
       notify.success(
         "내보내기 완료",
-        "PPTX 파일이 다운로드되었습니다.",
+        exportSummary ?? "PPTX 파일이 다운로드되었습니다.",
         { id: exportToastId }
       );
     } catch (error) {

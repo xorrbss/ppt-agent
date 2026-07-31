@@ -1,6 +1,7 @@
 import csv
 import errno
 import json
+import locale
 import os
 import shutil
 import subprocess
@@ -19,6 +20,15 @@ RETRY_DELAY_SECONDS = 0.05
 MAX_IO_ATTEMPTS = 6
 
 
+def _subprocess_text_kwargs() -> dict[str, object]:
+    """Decode localized Windows command output without crashing reader threads."""
+    return {
+        "text": True,
+        "encoding": locale.getpreferredencoding(False) or "utf-8",
+        "errors": "replace",
+    }
+
+
 def _windows_current_user_sid() -> str | None:
     """Return the current Windows principal SID without depending on its name."""
     try:
@@ -26,8 +36,8 @@ def _windows_current_user_sid() -> str | None:
             ["whoami", "/user", "/fo", "csv", "/nh"],
             check=True,
             capture_output=True,
-            text=True,
             timeout=5,
+            **_subprocess_text_kwargs(),
         )
         rows = list(csv.reader(result.stdout.splitlines()))
         if rows and len(rows[0]) >= 2 and rows[0][1].startswith("S-"):
@@ -66,8 +76,8 @@ def _secure_config_file(file_path: str) -> bool:
             ],
             check=False,
             capture_output=True,
-            text=True,
             timeout=10,
+            **_subprocess_text_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):
         return False

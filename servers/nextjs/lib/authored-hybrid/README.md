@@ -86,6 +86,25 @@ duplicate entries, unsupported compression, and oversized payloads. Chrome
 work directories and interim PPTX files are deleted in `finally` paths;
 download paths are contained to the configured export directory.
 
+## Font delivery and editable typefaces
+
+Google Fonts referenced by authored HTML are collected only by the trusted
+server-side boundary in `google-fonts-collector.ts` and handed to the otherwise
+offline Chrome run. Only the sanitized document is preflighted, so untrusted
+HTML can never self-authorize a data font face.
+
+Set `DISABLE_GOOGLE_FONTS_COLLECTION=true` to keep export fully offline.
+Decks that reference Google Fonts then render with the local fallback stacks
+instead of reaching fonts.googleapis.com, and the per-slide result reports
+`google-font-collection-disabled`.
+
+Font *delivery* to the browser is separate from font *embedding* in OOXML.
+Embedding is opt-in and handled by `font-embedding-policy.ts` and
+`pptx-font-embedding.ts`. Native editable text keeps an authored typeface only
+when that family was actually embedded in the package; otherwise it uses the
+deterministic Office/Windows substitute from `font-policy.ts`, and CSS
+collector fallback must use `cssFontStack` from the same module.
+
 ## Optional export quality metadata
 
 Hybrid export responses may include additive `quality` metadata using

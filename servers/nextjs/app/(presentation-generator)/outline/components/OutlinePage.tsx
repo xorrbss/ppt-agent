@@ -58,11 +58,20 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     if (!auto || autoSubmittedRef.current) return;
     if (outlinesPreexistingRef.current) return;
     if (!presentation_id || streamState.isStreaming) return;
+    if (!streamState.hasCompleted) return;
     if (!outlines || outlines.length === 0) return;
     if (!generationTemplate) return;
     autoSubmittedRef.current = true;
     handleSubmit();
-  }, [auto, presentation_id, streamState.isStreaming, outlines, generationTemplate, handleSubmit]);
+  }, [
+    auto,
+    presentation_id,
+    streamState.isStreaming,
+    streamState.hasCompleted,
+    outlines,
+    generationTemplate,
+    handleSubmit,
+  ]);
 
   if (!presentation_id) {
     return <EmptyStateView />;

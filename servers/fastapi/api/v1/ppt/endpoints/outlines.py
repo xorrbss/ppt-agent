@@ -117,6 +117,11 @@ async def stream_outlines(
                 if additional_context
                 else brief_context
             )
+        except HTTPException as error:
+            if error.status_code == 429:
+                yield SSEErrorResponse(detail=str(error.detail)).to_string()
+                return
+            traceback.print_exc()
         except asyncio.TimeoutError:
             LOGGER.warning(
                 "Content brief generation timed out after %.1f seconds for "
