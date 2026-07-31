@@ -164,8 +164,8 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
       return;
     }
 
-    setAvailableModels([]);
-    setModelsChecked(false);
+    setAvailableModels((models) => (models.length === 0 ? models : []));
+    setModelsChecked((checked) => (checked ? false : checked));
     if (currentModelField) {
       onInputChange("", currentModelField);
     }

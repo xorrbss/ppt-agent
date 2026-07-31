@@ -364,7 +364,22 @@ def test_handle_llm_client_exceptions(monkeypatch):
     from llmai.shared.errors import BaseError as LLMAIBaseError
 
     llmai_err = LLMAIBaseError(status_code=429, message="busy")
-    assert handle_llm_client_exceptions(llmai_err).detail == "busy"
+    assert (
+        handle_llm_client_exceptions(llmai_err).detail
+        == "AI provider is temporarily rate limited. Please wait and try again."
+    )
+
+    usage_limit_err = LLMAIBaseError(
+        status_code=429,
+        message=(
+            "Error code: 429 - {'error': {'type': 'usage_limit_reached', "
+            "'resets_in_seconds': 419033}}"
+        ),
+    )
+    usage_limit_detail = handle_llm_client_exceptions(usage_limit_err).detail
+    assert "usage limit reached" in usage_limit_detail
+    assert "4 days 20 hours" in usage_limit_detail
+    assert "usage_limit_reached" not in usage_limit_detail
 
     assert "OpenAI API error" in handle_llm_client_exceptions(
         OpenAIAPIError(
