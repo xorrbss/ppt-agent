@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import {
-  createPowerPointFontData,
-  embedPowerPointFonts,
-} from "./pptx-font-embedding.ts";
+import { createPowerPointFontData } from "./pptx-font-data.ts";
+import { embedPowerPointFonts } from "./pptx-font-embedding.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
 
 const CONTENT_TYPES = `<?xml version="1.0"?>
