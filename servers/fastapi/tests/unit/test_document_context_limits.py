@@ -39,24 +39,24 @@ def test_build_document_context_accepts_exact_limits_without_truncating():
     assert context == f"{documents[0]}\n\n{documents[1]}"
 
 
-def test_default_limits_accept_single_document_larger_than_legacy_cap(
+def test_default_limits_accept_large_single_document(
     monkeypatch,
 ):
     monkeypatch.delenv("PRESENTON_MAX_DOCUMENT_CONTEXT_CHARS", raising=False)
     monkeypatch.delenv("PRESENTON_MAX_DOCUMENT_CHARS", raising=False)
-    document = "x" * 56_982
+    document = "x" * 117_486
 
-    assert get_document_context_limits() == (80_000, 80_000)
+    assert get_document_context_limits() == (200_000, 200_000)
     assert build_document_context([document], ["uploaded.txt"]) == document
 
 
-def test_text_loader_accepts_document_larger_than_legacy_cap(
+def test_text_loader_accepts_large_document(
     monkeypatch,
     tmp_path,
 ):
     monkeypatch.delenv("PRESENTON_MAX_DOCUMENT_CONTEXT_CHARS", raising=False)
     monkeypatch.delenv("PRESENTON_MAX_DOCUMENT_CHARS", raising=False)
-    document = "x" * 56_982
+    document = "x" * 117_486
     document_path = tmp_path / "uploaded.txt"
     document_path.write_text(document, encoding="utf-8")
 
@@ -211,7 +211,7 @@ def test_direct_generation_returns_413_before_any_llm_call():
     session = FakeAsyncSession()
     loader = MagicMock()
     loader.load_documents = AsyncMock()
-    loader.documents = ["x" * 80_001]
+    loader.documents = ["x" * 200_001]
 
     with patch.object(
         presentation_generate,

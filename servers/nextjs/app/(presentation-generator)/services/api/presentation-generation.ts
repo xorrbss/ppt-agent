@@ -2,6 +2,7 @@ import { getHeader, getHeaderForFormData } from "./header";
 import { IconSearch, ImageGenerate, PreviousGeneratedImagesResponse } from "./params";
 import { ApiResponseHandler } from "./api-error-handler";
 import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
+import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
 
 export type BlankPresentationResponse = {
   id: string;
@@ -22,7 +23,7 @@ export class PresentationGenerationApi {
     });
 
     try {
-      const response = await fetch(
+      const response = await fetchWithNetworkRetry(
         getApiUrl(`/api/v1/ppt/files/upload`),
         {
           method: "POST",

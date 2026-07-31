@@ -71,20 +71,40 @@ def test_windows_hardening_uses_current_user_sid_acl(monkeypatch, tmp_path):
     monkeypatch.setattr(user_config_store.subprocess, "run", run)
 
     assert user_config_store._secure_config_file(str(config_path)) is True
-    assert calls == [
-        (
-            [
-                "icacls",
-                str(config_path),
-                "/inheritance:r",
-                "/grant:r",
-                "*S-1-5-21-1000:(R,W)",
-                "/grant:r",
-                "*S-1-5-18:(F)",
-            ],
-            {"check": False, "capture_output": True, "text": True, "timeout": 10},
-        )
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    assert command == [
+        "icacls",
+        str(config_path),
+        "/inheritance:r",
+        "/grant:r",
+        "*S-1-5-21-1000:(R,W)",
+        "/grant:r",
+        "*S-1-5-18:(F)",
     ]
+    assert kwargs == {
+        "check": False,
+        "capture_output": True,
+        "timeout": 10,
+        **user_config_store._subprocess_text_kwargs(),
+    }
+
+
+def test_windows_sid_command_replaces_undecodable_localized_output(monkeypatch):
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(
+            stdout='"DESKTOP\\\\user","S-1-5-21-1000"\n',
+            returncode=0,
+        )
+
+    monkeypatch.setattr(user_config_store.subprocess, "run", run)
+
+    assert user_config_store._windows_current_user_sid() == "S-1-5-21-1000"
+    assert calls[0][1]["errors"] == "replace"
+    assert calls[0][1]["encoding"]
 
 
 def test_windows_acl_timeout_fails_closed(monkeypatch, tmp_path):

@@ -97,6 +97,11 @@ async def stream_outlines(
                 if additional_context
                 else brief_context
             )
+        except HTTPException as error:
+            if error.status_code == 429:
+                yield SSEErrorResponse(detail=str(error.detail)).to_string()
+                return
+            traceback.print_exc()
         except Exception:
             traceback.print_exc()
 

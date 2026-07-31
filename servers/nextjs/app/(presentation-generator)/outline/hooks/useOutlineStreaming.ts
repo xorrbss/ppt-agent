@@ -9,27 +9,39 @@ import { getApiUrl } from "@/utils/api";
 const MAX_STREAM_RETRIES = 3;
 const STREAM_RETRY_DELAY_MS = 1_000;
 
+export type OutlineEventSourceFactory = (url: string) => EventSource;
 
+const createBrowserEventSource: OutlineEventSourceFactory = (url) =>
+  new EventSource(url);
 
-export const useOutlineStreaming = (presentationId: string | null) => {
+export const useOutlineStreaming = (
+  presentationId: string | null,
+  createEventSource: OutlineEventSourceFactory = createBrowserEventSource
+) => {
   const dispatch = useDispatch();
   const { outlines } = useSelector((state: RootState) => state.presentationGeneration);
   const [isStreaming, setIsStreaming] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasCompleted, setHasCompleted] = useState(false);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number | null>(null);
   const [highestActiveIndex, setHighestActiveIndex] = useState<number>(-1);
+  // A streamed chunk is written to Redux so the UI can render it progressively.
+  // Remember only the outlines that existed before this hook mounted; otherwise
+  // the first partial chunk would look like a completed, pre-existing outline.
+  const outlinesPreexistingRef = useRef(outlines.length > 0);
   const prevSlidesRef = useRef<{ content: string }[]>([]);
   const activeIndexRef = useRef<number>(-1);
   const highestIndexRef = useRef<number>(-1);
 
   useEffect(() => {
-    if (!presentationId || outlines.length > 0) {
+    if (!presentationId || outlinesPreexistingRef.current) {
       // Nothing to stream: either there is no presentation yet, or the outlines
       // are already in the store (e.g. back-navigation into an already-completed
       // auto flow). isStreaming/isLoading initialize to true; clear them here so
       // the UI doesn't sit on a permanent "개요를 생성하는 중…" loader forever.
       setIsStreaming(false);
       setIsLoading(false);
+      setHasCompleted(false);
       return;
     }
 
@@ -56,6 +68,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
     const resetStreamingState = () => {
       setIsStreaming(false);
       setIsLoading(false);
+      setHasCompleted(false);
       setActiveSlideIndex(null);
       setHighestActiveIndex(-1);
       activeIndexRef.current = -1;
@@ -91,7 +104,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
 
     const openStream = () => {
       closeEventSource();
-      eventSource = new EventSource(
+      eventSource = createEventSource(
         getApiUrl(`/api/v1/ppt/outlines/stream/${presentationId}`)
       );
 
@@ -157,6 +170,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
               dispatch(setOutlines(outlinesData));
               setIsStreaming(false);
               setIsLoading(false);
+              setHasCompleted(true);
               setActiveSlideIndex(null);
               setHighestActiveIndex(-1);
               prevSlidesRef.current = outlinesData;
@@ -178,6 +192,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
           case "closing":
             setIsStreaming(false);
             setIsLoading(false);
+            setHasCompleted(false);
             setActiveSlideIndex(null);
             setHighestActiveIndex(-1);
             activeIndexRef.current = -1;
@@ -212,6 +227,7 @@ export const useOutlineStreaming = (presentationId: string | null) => {
 
     setIsStreaming(true);
     setIsLoading(true);
+    setHasCompleted(false);
     openStream();
 
     return () => {
@@ -219,7 +235,13 @@ export const useOutlineStreaming = (presentationId: string | null) => {
       closeEventSource();
       clearRetryTimer();
     };
-  }, [presentationId, dispatch, outlines.length]);
+  }, [presentationId, dispatch, createEventSource]);
 
-  return { isStreaming, isLoading, activeSlideIndex, highestActiveIndex };
+  return {
+    isStreaming,
+    isLoading,
+    hasCompleted,
+    activeSlideIndex,
+    highestActiveIndex,
+  };
 };

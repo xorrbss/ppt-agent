@@ -542,6 +542,10 @@ async def generate_presentation_handler(
                     if additional_context
                     else brief_context
                 )
+            except HTTPException as error:
+                if error.status_code == 429:
+                    raise
+                traceback.print_exc()
             except Exception:
                 traceback.print_exc()
 

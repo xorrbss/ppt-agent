@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 from fastapi import HTTPException
 
 
-DEFAULT_MAX_DOCUMENT_CONTEXT_CHARS = 80_000
+DEFAULT_MAX_DOCUMENT_CONTEXT_CHARS = 200_000
 # By default, one document may use the full context budget. Keeping a lower
 # implicit per-document cap rejects otherwise valid single-file uploads.
 DEFAULT_MAX_DOCUMENT_CHARS = DEFAULT_MAX_DOCUMENT_CONTEXT_CHARS
