@@ -56,3 +56,13 @@ magic bytes and safe decoded pixels. Archives reject traversal, encryption,
 ZIP64, duplicate entries, unsupported compression, and oversized payloads.
 Chrome work directories and interim PPTX files are deleted in `finally` paths;
 download paths are contained to the configured export directory.
+
+## Font delivery and editable typefaces
+
+Google Fonts used by legacy authored HTML may be collected only by the trusted
+server-side preprocessing boundary and supplied to the otherwise offline
+Chrome run. That browser-rendering step is separate from font embedding.
+Authored-hybrid does **not** embed font programs in OOXML. Native editable text
+uses the deterministic Office/Windows substitute in `font-policy.ts`, and CSS
+collector fallback must use `cssFontStack` from the same module. Full OOXML
+font embedding remains a separate follow-up scope.

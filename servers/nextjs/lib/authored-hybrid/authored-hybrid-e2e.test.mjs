@@ -188,19 +188,22 @@ test("v0.4.2 authored-hybrid representative fixtures preserve editable structure
     assert.ok(xml2.includes(text), `slide 2 lost editable CJK text: ${text}`);
   }
   assert.match(xml2, /\bsz="900"/, "authored sub-9pt text must clamp to 9pt");
-  const lineElements = results[1].layer.elements.filter(
-    (element) => element.kind === "shape" && element.source.shape.shape === "line"
+  const railElements = results[1].layer.elements.filter(
+    (element) =>
+      element.kind === "shape" &&
+      element.source.shape.shape === "rectangle" &&
+      Math.min(element.source.bounds.px.width, element.source.bounds.px.height) <= 3
   );
-  assert.ok(lineElements.length >= 2, "both axis-aligned rules must stay editable");
-  const lineTransforms = [...xml2.matchAll(/<a:xfrm[^>]*>[\s\S]*?<a:ext cx="(\d+)" cy="(\d+)"\/>[\s\S]*?<\/a:xfrm>/g)]
-    .map((match) => [Number(match[1]), Number(match[2])]);
-  assert.ok(
-    lineTransforms.some(([cx, cy]) => cx > 1_000_000 && cy <= 100),
-    "horizontal line must be serialized on an exact PowerPoint axis"
+  assert.equal(railElements.length, 2, "both thin filled rules must stay editable rectangles");
+  assert.match(
+    xml2,
+    /<a:ext cx="9906000" cy="19050"\/><\/a:xfrm><a:prstGeom prst="rect">/,
+    "horizontal filled rail must retain its authored rectangular thickness"
   );
-  assert.ok(
-    lineTransforms.some(([cx, cy]) => cy > 1_000_000 && cx <= 100),
-    "vertical line must be serialized on an exact PowerPoint axis"
+  assert.match(
+    xml2,
+    /<a:ext cx="19050" cy="4000500"\/><\/a:xfrm><a:prstGeom prst="rect">/,
+    "vertical filled rail must retain its authored rectangular thickness"
   );
 
   for (const text of [

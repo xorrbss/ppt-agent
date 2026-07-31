@@ -8,6 +8,7 @@ import {
   prepareNativeElements,
   selectLayerSafeNativeElements,
   serializePreparedNativeElement,
+  serializePreparedNativeElementOverlay,
 } from "./native-plan.ts";
 
 const bounds = (x, y, width, height) => ({
@@ -156,7 +157,7 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
   const textXml = serializePreparedNativeElement(prepared[0], 3);
   assert.match(textXml, /<a:t xml:space="preserve">서울 <\/a:t>/);
   assert.match(textXml, /<a:t xml:space="preserve">Hybrid<\/a:t>/);
-  assert.match(textXml, /<a:latin typeface="Pretendard"\/>/);
+  assert.match(textXml, /<a:latin typeface="Malgun Gothic"\/>/);
   assert.match(textXml, /<a:ea typeface="Malgun Gothic"\/>/);
   assert.match(textXml, /algn="ctr"/);
   assert.match(textXml, /anchor="ctr"/);
@@ -164,7 +165,7 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
   assert.match(textXml, /horzOverflow="clip"/);
   assert.match(textXml, /vertOverflow="clip"/);
   assert.match(textXml, /<a:noAutofit\/>/);
-  assert.match(textXml, /<a:spcPct val="125000"\/>/);
+  assert.match(textXml, /<a:lnSpc><a:spcPts val="3000"\/><\/a:lnSpc>/);
   assert.doesNotMatch(textXml, /<a:normAutofit/);
   assert.match(textXml, /rot="21150000"/);
   assert.match(textXml, /<a:alpha val="80000"\/>/);
@@ -177,6 +178,75 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
   const imageXml = serializePreparedNativeElement(prepared[2], 5, "rId99");
   assert.match(imageXml, /r:embed="rId99"/);
   assert.match(imageXml, /<a:alphaModFix amt="65000"\/>/);
+});
+
+test("native OOXML uses the central local fallback policy for logical web fonts", async () => {
+  const cases = [
+    ["Noto Sans KR", "Malgun Gothic", "Noto Sans KR", "Malgun Gothic"],
+    ["Pretendard", "Malgun Gothic", "Noto Sans KR", "Malgun Gothic"],
+    ["Noto Serif KR", "Batang", "Noto Serif KR", "Batang"],
+    ["Inter", "Aptos", "Noto Sans KR", "Malgun Gothic"],
+    ["Roboto", "Aptos", "Noto Sans KR", "Malgun Gothic"],
+    ["DM Sans", "Aptos", "Noto Sans KR", "Malgun Gothic"],
+    ["Source Serif 4", "Cambria", "Noto Serif KR", "Batang"],
+    ["IBM Plex Mono", "Consolas", "Noto Sans KR", "Malgun Gothic"],
+  ];
+
+  for (const [logical, local, cjkLogical, cjkLocal] of cases) {
+    const element = {
+      ...base(`font-${logical}`, 0, 0, bounds(80, 80, 400, 80)),
+      classification: { mode: "native", kind: "text", confidence: "safe" },
+      text: {
+        role: "body",
+        plainText: "Editable type",
+        paragraphs: ["Editable type"],
+        style: style({
+          fontFamily: logical,
+          fontFamilies: [logical, "sans-serif"],
+          cjkFallbackFamilies: [cjkLogical],
+        }),
+        runs: [],
+      },
+    };
+    const [prepared] = await prepareNativeElements([element]);
+    const xml = serializePreparedNativeElement(prepared, 20);
+    assert.match(xml, new RegExp(`<a:latin typeface="${local}"\\/>`));
+    assert.match(xml, new RegExp(`<a:ea typeface="${cjkLocal}"\\/>`));
+  }
+});
+
+test("collector-verified families retain authored native typefaces", async () => {
+  const element = {
+    ...base("trusted-noto", 0, 0, bounds(80, 80, 400, 80)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body",
+      plainText: "편집 가능한 원본 글꼴",
+      paragraphs: ["편집 가능한 원본 글꼴"],
+      style: style({
+        fontFamily: "Noto Sans KR, sans-serif",
+        fontFamilies: ["Noto Sans KR", "sans-serif"],
+        cjkFallbackFamilies: ["Malgun Gothic"],
+        letterSpacingPt: 0.5,
+      }),
+      runs: [],
+    },
+  };
+  const [prepared] = await prepareNativeElements([element], {
+    trustedFontFamilies: ["Noto Sans KR"],
+  });
+  const xml = serializePreparedNativeElement(prepared, 20);
+  assert.match(xml, /<a:latin typeface="Noto Sans KR"\/>/);
+  assert.match(xml, /<a:ea typeface="Noto Sans KR"\/>/);
+  assert.match(xml, /\bsz="2304"/);
+  assert.match(xml, /\bspc="48"/);
+
+  const [fallback] = await prepareNativeElements([element]);
+  const fallbackXml = serializePreparedNativeElement(fallback, 21);
+  assert.match(fallbackXml, /<a:latin typeface="Malgun Gothic"\/>/);
+  assert.match(fallbackXml, /<a:ea typeface="Malgun Gothic"\/>/);
+  assert.match(fallbackXml, /\bsz="2400"/);
+  assert.match(fallbackXml, /\bspc="50"/);
 });
 
 test("invalid native images and z-order inversions stay on the raster backplate", async () => {
@@ -683,6 +753,39 @@ test("decorated text becomes one editable PowerPoint shape with safe text insets
   assert.match(xml, /tIns="190500"/);
   assert.match(xml, /bIns="190500"/);
   assert.doesNotMatch(xml, /txBox="1"/);
+});
+
+test("ellipse container text uses a rectangular overlay to preserve browser line width", async () => {
+  const element = {
+    ...base("circle-label", 0, 0, bounds(100, 100, 117, 117)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "caption",
+      plainText: "자율화의 핵심은\n‘코드 생성’보다\n‘통제 연결’",
+      paragraphs: ["자율화의 핵심은", "‘코드 생성’보다", "‘통제 연결’"],
+      style: style({
+        fontSizePt: 9.75,
+        lineHeight: { points: 14.6, multiple: 1.5, source: "computed" },
+      }),
+      runs: [],
+      containerShape: {
+        bounds: bounds(100, 100, 117, 117),
+        shape: {
+          shape: "ellipse",
+          fill: null,
+          stroke: { hex: "2457D6", alpha: 1 },
+          strokeWidthPt: 2.25,
+          radiusPt: 58.5,
+        },
+      },
+    },
+  };
+  const prepared = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElementOverlay(prepared[0], 3);
+
+  assert.match(xml, /prst="rect"/);
+  assert.doesNotMatch(xml, /prst="ellipse"/);
+  assert.match(xml, /자율화의 핵심은/);
 });
 
 test("backplate decoration keeps a transparent outer box for multiline fit", async () => {

@@ -798,7 +798,7 @@ test("Chrome suppresses decorated raster text selected by editable export", asyn
   assert.deepEqual(result.fallbackElementIds, []);
 });
 
-test("Chrome promotes editable cards, circles, and lines without removing nested text", async (t) => {
+test("Chrome promotes editable cards, circles, and filled rails without removing nested text", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
     if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
@@ -826,22 +826,28 @@ test("Chrome promotes editable cards, circles, and lines without removing nested
   const circle = slide.elements.find(
     (element) => "shape" in element && element.shape.shape === "ellipse"
   );
-  const line = slide.elements.find(
-    (element) => "shape" in element && element.shape.shape === "line"
+  const rail = slide.elements.find(
+    (element) =>
+      "shape" in element &&
+      element.shape.shape === "rectangle" &&
+      element.bounds.px.width === 310 &&
+      element.bounds.px.height === 3
   );
   const nestedText = textElement(slide, "Nested editable text");
   const badge = textElement(slide, "Editable badge");
 
-  assert.ok(card && circle && line && nestedText && badge);
+  assert.ok(card && circle && rail && nestedText && badge);
   assert.equal(card.classification.mode, "native");
   assert.equal(circle.classification.mode, "native");
-  assert.equal(line.classification.mode, "native");
+  assert.equal(rail.classification.mode, "native");
+  assert.deepEqual(rail.shape.fill, { hex: "2F6BCA", alpha: 1 });
+  assert.equal(rail.shape.stroke, null);
   assert.equal(nestedText.classification.mode, "native");
   assert.equal(badge.classification.mode, "raster");
   assert.ok(slide.backplate.eligibleElementIds.includes(badge.id));
   assert.equal(badge.text.containerShape?.shape.shape, "round-rectangle");
 
-  const promotedIds = [card.id, circle.id, line.id, nestedText.id, badge.id];
+  const promotedIds = [card.id, circle.id, rail.id, nestedText.id, badge.id];
   const result = await renderAuthoredBackplate(html, slide, promotedIds, options);
   assert.deepEqual(result.appliedPromotedElementIds, promotedIds);
   assert.deepEqual(result.fallbackElementIds, []);
@@ -1121,6 +1127,38 @@ test("large semantic HTML visuals become selectable pictures while their labels 
   );
 });
 
+test("large semantic HTML scenes become selectable pictures", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const nodes = Array.from({ length: 12 }, () => '<span class="scene-node"></span>').join("");
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#f7fafc}
+    .scene{position:absolute;left:700px;top:90px;width:510px;height:540px;background:#f4efff}
+    .scene-node{display:inline-block;width:24px;height:24px;margin:10px;background:#7c5ce7}
+  </style></head><body>
+    <section class="scene" aria-label="Editable scene illustration">${nodes}</section>
+  </body></html>`;
+  const slide = await extractAuthoredSlideDom(html, {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+
+  const scene = slide.elements.find(
+    (element) =>
+      element.tagName === "section" &&
+      "image" in element &&
+      element.image.alt === "Editable scene illustration"
+  );
+  assert.ok(scene, "the semantic scene should become one selectable picture");
+  assert.equal(scene.classification.mode, "native");
+  assert.match(scene.image.src, /^data:image\/png;base64,/);
+});
+
 test("connector paths and detached arrowheads preserve authored SVG coordinates", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
@@ -1212,14 +1250,19 @@ test("CSS border-triangle arrows remain separate editable tips at authored coord
     chromeExecutable,
     timeoutMs: 30_000,
   });
-  const line = slide.elements.find(
-    (element) => element.tagName === "div" && "shape" in element && element.shape.shape === "line"
+  const shaft = slide.elements.find(
+    (element) =>
+      element.tagName === "div" &&
+      "shape" in element &&
+      element.shape.shape === "rectangle"
   );
   const tip = slide.elements.find(
     (element) => element.tagName === "pseudo" && "shape" in element && element.shape.shape === "freeform"
   );
-  assert.ok(line);
-  assert.equal(line.shape.endArrow, undefined);
+  assert.ok(shaft);
+  assert.deepEqual(shaft.bounds.px, { x: 100, y: 100, width: 80, height: 2 });
+  assert.deepEqual(shaft.shape.fill, { hex: "72AEEF", alpha: 1 });
+  assert.equal(shaft.shape.stroke, null);
   assert.ok(tip);
   assert.equal(tip.shape.closed, true);
   assert.equal(tip.shape.fill.hex, "2878D8");
@@ -1479,12 +1522,20 @@ test("empty painted pseudo-elements become independently editable shapes", async
   assert.equal(pseudos.length, 2);
   assert.deepEqual(
     pseudos.map((element) => element.shape.shape).sort(),
-    ["ellipse", "line"]
+    ["ellipse", "rectangle"]
   );
   const child = slide.elements.find((element) => element.domPath.endsWith("div:nth-of-type(1) > div:nth-of-type(1)"));
   const before = pseudos.find((element) => element.domPath.endsWith("::before"));
   const after = pseudos.find((element) => element.domPath.endsWith("::after"));
   assert.ok(child && before && after);
+  assert.deepEqual(before.bounds.px, {
+    x: 130,
+    y: 140,
+    width: 240,
+    height: 3,
+  });
+  assert.deepEqual(before.shape.fill, { hex: "2878D8", alpha: 1 });
+  assert.equal(before.shape.stroke, null);
   assert.ok(before.sourceIndex <= child.sourceIndex, "::before paints before descendants");
   assert.ok(after.sourceIndex >= child.sourceIndex, "::after paints after descendants");
   const pseudoText = slide.elements.find(

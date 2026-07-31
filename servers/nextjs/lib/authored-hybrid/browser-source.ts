@@ -15,6 +15,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
 
   var MARKER_ID = "__presenton_authored_hybrid_result_v1__";
   var ELEMENT_ATTRIBUTE = "data-presenton-authored-hybrid-id";
+  var ISOLATED_INLINE_ATTRIBUTE = "data-presenton-authored-layout-isolated-inline";
   var WIDTH = 1280;
   var HEIGHT = 720;
   var config = window.__PRESENTON_AUTHORED_HYBRID_CONFIG__ || {};
@@ -1062,14 +1063,15 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     ) {
       return "complex-diagram";
     }
-    // Some authored templates use a semantic .visual wrapper for a large,
-    // CSS-built hero illustration instead of an SVG. Its nested browser/card/
-    // connector primitives cannot be reconstructed reliably as independent
-    // PowerPoint shapes, but the complete illustration should still be a
-    // selectable object rather than remain fused into the slide backplate.
+    // Some authored templates use a semantic .visual or .scene wrapper for a
+    // large, CSS-built hero illustration instead of an SVG. Its nested
+    // browser/card/connector primitives cannot be reconstructed reliably as
+    // independent PowerPoint shapes, but the complete illustration should
+    // still be a selectable object rather than remain fused into the slide
+    // backplate.
     // Require an accessible label and substantial geometry so small helpers
     // such as .visual-title are not accidentally collapsed into pictures.
-    if (/(^|\s)visual(\s|$)/.test(classes)) {
+    if (/(^|\s)(visual|scene)(\s|$)/.test(classes)) {
       var visualRect = element.getBoundingClientRect();
       if (
         (element.getAttribute("aria-label") || "").trim() &&
@@ -1297,6 +1299,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         return;
       }
       if (node.nodeType !== Node.ELEMENT_NODE) return;
+      if (
+        node !== element &&
+        node.hasAttribute(ISOLATED_INLINE_ATTRIBUTE)
+      ) return;
       if (node.tagName === "BR") {
         var parent = node.parentElement || element;
         var rect = parent.getBoundingClientRect();
@@ -2123,7 +2129,18 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       ? Math.min(radii[0], bounds.width / 2, bounds.height / 2)
       : 0;
     var shape = "rectangle";
-    if (Math.min(bounds.width, bounds.height) <= 3 && Math.max(bounds.width, bounds.height) >= 8) {
+    // A thin CSS box with a background is still a filled rectangle. Turning
+    // it into DrawingML line geometry gives the shape a tiny non-zero
+    // orthogonal extent, which PowerPoint renders as a visible diagonal at
+    // high zoom. Reserve line geometry for genuinely border-only CSS rules;
+    // authored background rails and pseudo-element markers keep their exact
+    // rectangular bounds.
+    if (
+      !fill &&
+      !gradient &&
+      Math.min(bounds.width, bounds.height) <= 3 &&
+      Math.max(bounds.width, bounds.height) >= 8
+    ) {
       shape = "line";
     } else if (
       radiusValues.every(function (value) { return /^(?:50(?:\.0+)?)%$/.test(String(value)); }) ||
@@ -2139,11 +2156,6 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     var strokeWidthPt = uniformBorder
       ? round(activeBorders[0].width * 0.75)
       : 0;
-    if (shape === "line" && !stroke && fill) {
-      stroke = fill;
-      fill = null;
-      strokeWidthPt = round(Math.max(0.75, Math.min(bounds.width, bounds.height) * 0.75));
-    }
     var payload = {
       shape: shape,
       fill: fill,
@@ -2971,10 +2983,13 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       var display = getComputedStyle(element).display;
       var generatedFlexItem = ["flex", "inline-flex", "grid", "inline-grid"].includes(display) &&
         (pseudoPainted(element, "::before") || pseudoPainted(element, "::after"));
+      var hasDirectLineBreak = Array.from(element.children).some(function (child) {
+        return child.tagName === "BR";
+      });
       if (
         !nestedBlockContent(element) &&
         !hasDecoratedDescendant(element) &&
-        !generatedFlexItem
+        (!generatedFlexItem || hasDirectLineBreak)
       ) return;
       Array.from(element.childNodes).forEach(function (node) {
         if (node.nodeType !== Node.TEXT_NODE || !(node.textContent || "").trim()) return;
@@ -2983,6 +2998,19 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
         node.parentNode.insertBefore(span, node);
         span.appendChild(node);
       });
+    });
+
+    // Floated inline descendants participate in their parent's prose flow in
+    // the DOM, but are laid out as independent boxes by CSS. Preserve that
+    // separation in PowerPoint so right-aligned KPIs and badges do not get
+    // appended to the preceding paragraph at its left edge.
+    Array.from(document.body.querySelectorAll("*")).forEach(function (element) {
+      if (
+        getComputedStyle(element).cssFloat !== "none" &&
+        Boolean((element.innerText || element.textContent || "").trim())
+      ) {
+        element.setAttribute(ISOLATED_INLINE_ATTRIBUTE, "true");
+      }
     });
 
     // Body owns the full-slide background in many authored templates. Treat it
@@ -3006,7 +3034,7 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       } else if (
         svgElement.tagName && svgElement.namespaceURI !== "http://www.w3.org/2000/svg" &&
         complexKind(svgElement) === "complex-diagram" &&
-        /(^|\s)visual(\s|$)/.test(
+        /(^|\s)(visual|scene)(\s|$)/.test(
           typeof svgElement.className === "string" ? svgElement.className.toLowerCase() : ""
         )
       ) {
@@ -3026,7 +3054,10 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
       if (["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) {
         return;
       }
-      if (coveredRoots.some(function (root) { return root.contains(element); })) return;
+      if (
+        !element.hasAttribute(ISOLATED_INLINE_ATTRIBUTE) &&
+        coveredRoots.some(function (root) { return root.contains(element); })
+      ) return;
       if (!visibleElement(element)) return;
 
       var complexReason = complexKind(element);
@@ -3091,8 +3122,12 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
             (["TEXT", "TEXTPATH"].includes(tagName) ? element.textContent : "") || "";
           var extractedRuns = textRuns(element);
           var renderedPlainText = extractedRuns.runs.map(function (run) { return run.text; }).join("");
+          var ownsIsolatedInline = Boolean(
+            element.querySelector("[" + ISOLATED_INLINE_ATTRIBUTE + "]")
+          );
           if (extractedRuns.failed) reasons.push("run-extraction-error");
           if (
+            !ownsIsolatedInline &&
             normalizeWhitespace(extractedRuns.identityText) !== normalizeWhitespace(browserPlainText)
           ) {
             reasons.push("ambiguous-whitespace");

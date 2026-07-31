@@ -33,17 +33,31 @@ import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
 } from "./export-performance.ts";
+import {
+  resolveFontEmbeddingPlan,
+  type FontEmbeddingPlan,
+} from "./font-embedding-policy.ts";
+import {
+  embedPowerPointFonts,
+  type PowerPointTypefaceInput,
+} from "./pptx-font-embedding.ts";
+import {
+  summarizeAuthoredHybridExport,
+  type AuthoredHybridSlideOutcome,
+} from "./export-metadata.ts";
+import { GoogleFontsCollector } from "./google-fonts-collector.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
 const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
-// take ~60s worst case (extract + up to 2 backplate relaunches); without a ceiling a
+// take ~135s worst case (extract + up to 2 backplate relaunches); without a ceiling a
 // pathological deck holds the export request for tens of minutes. When the budget is
 // spent the remaining slides simply keep their fidelity (image) render.
 const HYBRID_DECK_BUDGET_MS = 8 * 60_000;
-const HYBRID_CACHE_VERSION = "authored-hybrid-v3-minimum-9pt-text";
+const HYBRID_BROWSER_PASS_TIMEOUT_MS = 45_000;
+const HYBRID_CACHE_VERSION = "authored-hybrid-v10-semantic-scenes-45s";
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
@@ -52,11 +66,21 @@ const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   8
 );
 
-const completedHybridExports = new Map<string, string>();
+const completedHybridExports = new Map<
+  string,
+  BundledPresentationExportResult
+>();
 const inFlightHybridExports = new Map<
   string,
   Promise<BundledPresentationExportResult>
 >();
+const googleFontsCollector = new GoogleFontsCollector({
+  cacheDirectory: path.join(
+    resolveAppDataDirectory(),
+    "authored-hybrid",
+    "google-fonts"
+  ),
+});
 
 interface StoredSlide {
   index?: unknown;
@@ -80,6 +104,10 @@ interface AuthoredHybridExportParams {
 interface FetchedPresentation {
   presentation: StoredPresentation;
   sourceSha256: string;
+}
+
+interface PreparedSlideLayerResult extends AuthoredHybridSlideOutcome {
+  layer: AuthoredHybridSlideLayer | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -157,15 +185,47 @@ function sameIds(
 async function prepareSlideLayer(
   html: string,
   slideNumber: number,
-  chromeExecutable: string
-): Promise<AuthoredHybridSlideLayer | null> {
-  if (!preflightAuthoredHtmlForHybrid(html).ok) return null;
-  const extractionOptions = { chromeExecutable, timeoutMs: 20_000 };
-  const contract = await extractAuthoredSlideDom(html, extractionOptions);
+  chromeExecutable: string,
+  embeddedTypefaceFamilies: readonly string[] = []
+): Promise<PreparedSlideLayerResult> {
+  // Only the collector may cross this trust boundary. Its sanitized form is
+  // checked by the existing preflight; its verified data-font form is used
+  // only after that succeeds. Chrome itself remains fully offline.
+  const collectedFonts = await googleFontsCollector.prepareHtml(html);
+  const preflight = preflightAuthoredHtmlForHybrid(
+    collectedFonts.htmlForPreflight
+  );
+  if (!preflight.ok) {
+    return {
+      editable: false,
+      fallbackReason: `preflight-${preflight.reason}`,
+      layer: null,
+    };
+  }
+  const htmlForChrome = collectedFonts.htmlForChrome;
+  const extractionOptions = {
+    chromeExecutable,
+    timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
+  };
+  const contract = await extractAuthoredSlideDom(
+    htmlForChrome,
+    extractionOptions
+  );
   const prepared = preSerializePreparedElements(
     await prepareNativeElements(contract.elements, {
       includeRasterText: true,
       includeRasterShapes: true,
+      // A locally packaged font is as safe to preserve in the native text
+      // layer as a font verified by the Google Fonts collector. Without this
+      // union, offline/authored decks are embedded with Noto Sans KR while the
+      // editable runs are rewritten to Malgun Gothic, so PowerPoint never uses
+      // the embedded face and line wrapping drifts from the fidelity render.
+      trustedFontFamilies: [
+        ...new Set([
+          ...collectedFonts.trustedFamilies,
+          ...embeddedTypefaceFamilies,
+        ]),
+      ],
     })
   );
   let selected = selectLayerSafeNativeElements(
@@ -177,10 +237,16 @@ async function prepareSlideLayer(
     // otherwise translucent ancestor cards would wash out later SVG artwork.
     { promoteTextAboveRaster: true, promoteShapesAboveRaster: false }
   );
-  if (!selected.length) return null;
+  if (!selected.length) {
+    return {
+      editable: false,
+      fallbackReason: "no-editable-elements",
+      layer: null,
+    };
+  }
 
   let backplate = await renderAuthoredBackplate(
-    html,
+    htmlForChrome,
     contract,
     selected.map((element) => element.source.id),
     extractionOptions
@@ -192,25 +258,40 @@ async function prepareSlideLayer(
     applied,
     { promoteTextAboveRaster: true, promoteShapesAboveRaster: false }
   );
-  if (!finalSelected.length) return null;
+  if (!finalSelected.length) {
+    return {
+      editable: false,
+      fallbackReason: "no-layer-safe-elements",
+      layer: null,
+    };
+  }
 
   if (!sameIds(finalSelected, backplate.appliedPromotedElementIds)) {
     selected = finalSelected;
     backplate = await renderAuthoredBackplate(
-      html,
+      htmlForChrome,
       contract,
       selected.map((element) => element.source.id),
       extractionOptions
     );
-    if (!sameIds(selected, backplate.appliedPromotedElementIds)) return null;
+    if (!sameIds(selected, backplate.appliedPromotedElementIds)) {
+      return {
+        editable: false,
+        fallbackReason: "promotion-mismatch",
+        layer: null,
+      };
+    }
   } else {
     selected = finalSelected;
   }
 
   return {
-    slideNumber,
-    backplatePng: backplate.backplatePng,
-    elements: selected,
+    editable: true,
+    layer: {
+      slideNumber,
+      backplatePng: backplate.backplatePng,
+      elements: selected,
+    },
   };
 }
 
@@ -235,12 +316,68 @@ async function resolveSafeFidelityPptx(outPath: string): Promise<string> {
   return resolved;
 }
 
+function powerPointFontInputs(
+  plan: FontEmbeddingPlan
+): PowerPointTypefaceInput[] {
+  const filesById = new Map(plan.files.map((file) => [file.sourceId, file]));
+  const byFamily = new Map<
+    string,
+    Partial<
+      Record<
+        "regular" | "bold" | "italic" | "boldItalic",
+        { data: Buffer; subset: boolean; source: string }
+      >
+    >
+  >();
+  for (const face of plan.faces) {
+    const file = filesById.get(face.sourceId);
+    if (!file) continue;
+    const faces = byFamily.get(face.family) ?? {};
+    faces[face.face] = {
+      data: file.data,
+      subset: plan.strategy === "subset",
+      source: file.sourcePath,
+    };
+    byFamily.set(face.family, faces);
+  }
+  return [...byFamily.entries()].map(([typeface, faces]) => ({
+    typeface,
+    pitchFamily: 34,
+    charset: 129,
+    faces,
+  }));
+}
+
+async function embedAuthoredFonts(
+  fidelityPath: string,
+  plan: FontEmbeddingPlan
+): Promise<Buffer | null> {
+  if (!plan.status.eligible) return null;
+  try {
+    const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
+    const fidelityBytes = await fs.readFile(safeFidelityPath);
+    const packaged = embedPowerPointFonts(
+      fidelityBytes,
+      powerPointFontInputs(plan)
+    );
+    return packaged.result.applied ? packaged.pptx : null;
+  } catch (error) {
+    console.warn(
+      "[authored-hybrid] automatic font embedding failed; continuing without embedded fonts",
+      error
+    );
+    return null;
+  }
+}
+
 async function writeHybridPptx(
   fidelityPath: string,
-  layers: readonly AuthoredHybridSlideLayer[]
+  layers: readonly AuthoredHybridSlideLayer[],
+  preparedFidelityBytes?: Buffer
 ): Promise<string> {
   const safeFidelityPath = await resolveSafeFidelityPptx(fidelityPath);
-  const fidelityBytes = await fs.readFile(safeFidelityPath);
+  const fidelityBytes =
+    preparedFidelityBytes ?? (await fs.readFile(safeFidelityPath));
   const hybridBytes = assembleAuthoredHybridPptx(fidelityBytes, layers);
   const parsed = path.parse(safeFidelityPath);
   const suffix = randomUUID();
@@ -268,6 +405,7 @@ async function runUncachedAuthoredHybridExport(
   params: AuthoredHybridExportParams,
   presentation: StoredPresentation,
   sourceSha256: string,
+  fontEmbeddingPlan: FontEmbeddingPlan,
   cacheKey: string,
   requestStartedAt: number
 ): Promise<BundledPresentationExportResult> {
@@ -280,28 +418,49 @@ async function runUncachedAuthoredHybridExport(
     expectedPresentationSha256: sourceSha256,
   });
   const fidelityMs = elapsedMs(fidelityStartedAt);
+  const embeddedFidelityBytes = await embedAuthoredFonts(
+    fidelity.path,
+    fontEmbeddingPlan
+  );
 
   try {
     const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
     const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
     if (!chromeExecutable) {
+      const exportMetadata = summarizeAuthoredHybridExport(
+        slides.map(() => ({
+          editable: false,
+          fallbackReason: "chrome-unavailable",
+        }))
+      );
       console.info(
         `[authored-hybrid] fidelity-only total=${elapsedMs(requestStartedAt)}ms ` +
           `fidelity=${fidelityMs}ms reason=chrome-unavailable`
       );
-      return fidelity;
+      if (!embeddedFidelityBytes) return { ...fidelity, exportMetadata };
+      return {
+        path: await writeHybridPptx(fidelity.path, [], embeddedFidelityBytes),
+        exportMetadata,
+      };
     }
 
     const slideInputs = slides
       .map((rawSlide, arrayIndex) => {
-        if (!isRecord(rawSlide)) return null;
+        if (!isRecord(rawSlide)) {
+          return {
+            html: null,
+            slideNumber: arrayIndex + 1,
+            fallbackReason: "invalid-slide",
+          };
+        }
         const slide = rawSlide as StoredSlide;
         const html = typeof slide.html_content === "string" ? slide.html_content : "";
-        return html ? { html, slideNumber: arrayIndex + 1 } : null;
-      })
-      .filter(
-        (value): value is { html: string; slideNumber: number } => value !== null
-      );
+        return {
+          html: html || null,
+          slideNumber: arrayIndex + 1,
+          fallbackReason: html ? undefined : "missing-html",
+        };
+      });
 
     const deckStart = Date.now();
     const slidesStartedAt = performance.now();
@@ -309,7 +468,14 @@ async function runUncachedAuthoredHybridExport(
     const preparedLayers = await mapWithConcurrency(
       slideInputs,
       HYBRID_EXPORT_CONCURRENCY,
-      async ({ html, slideNumber }) => {
+      async ({ html, slideNumber, fallbackReason }) => {
+        if (!html) {
+          return {
+            editable: false,
+            fallbackReason: fallbackReason ?? "missing-html",
+            layer: null,
+          } satisfies PreparedSlideLayerResult;
+        }
         if (Date.now() - deckStart > HYBRID_DECK_BUDGET_MS) {
           if (!budgetWarningWritten) {
             budgetWarningWritten = true;
@@ -318,41 +484,94 @@ async function runUncachedAuthoredHybridExport(
                 "keep the fidelity render"
             );
           }
-          return null;
+          return {
+            editable: false,
+            fallbackReason: "deck-time-budget-exhausted",
+            layer: null,
+          } satisfies PreparedSlideLayerResult;
         }
         try {
-          return await prepareSlideLayer(html, slideNumber, chromeExecutable);
+          return await prepareSlideLayer(
+            html,
+            slideNumber,
+            chromeExecutable,
+            [...fontEmbeddingPlan.eligibleFamilies]
+          );
         } catch (error) {
           console.warn(
             `[authored-hybrid:slide-${slideNumber}] fidelity fallback after slide processing failure`,
             error
           );
-          return null;
+          return {
+            editable: false,
+            fallbackReason: "slide-processing-failed",
+            layer: null,
+          } satisfies PreparedSlideLayerResult;
         }
       }
     );
-    const layers = preparedLayers.filter(
-      (layer): layer is AuthoredHybridSlideLayer => layer !== null
+    const layers = preparedLayers
+      .map((result) => result.layer)
+      .filter(
+        (layer): layer is AuthoredHybridSlideLayer => layer !== null
+      );
+    const exportMetadata = summarizeAuthoredHybridExport(
+      preparedLayers.map(({ editable, fallbackReason }) => ({
+        editable,
+        fallbackReason,
+      }))
     );
     const slidesMs = elapsedMs(slidesStartedAt);
-    if (!layers.length) return fidelity;
+    if (!layers.length) {
+      console.info(
+        `[authored-hybrid] fidelity-only total=${elapsedMs(requestStartedAt)}ms ` +
+          `fidelity=${fidelityMs}ms slides=${slidesMs}ms ` +
+          `editable=0/${slides.length} reasons=${JSON.stringify(exportMetadata.fallbackReasons)}`
+      );
+      if (!embeddedFidelityBytes) return { ...fidelity, exportMetadata };
+      return {
+        path: await writeHybridPptx(fidelity.path, [], embeddedFidelityBytes),
+        exportMetadata,
+      };
+    }
     const assemblyStartedAt = performance.now();
-    const hybridPath = await writeHybridPptx(fidelity.path, layers);
+    const hybridPath = await writeHybridPptx(
+      fidelity.path,
+      layers,
+      embeddedFidelityBytes ?? undefined
+    );
     const assemblyMs = elapsedMs(assemblyStartedAt);
-    rememberCompletedHybridExport(cacheKey, hybridPath);
+    const result = { path: hybridPath, exportMetadata };
+    rememberCompletedHybridExport(cacheKey, result);
     console.info(
       `[authored-hybrid] complete total=${elapsedMs(requestStartedAt)}ms ` +
         `fidelity=${fidelityMs}ms slides=${slidesMs}ms assembly=${assemblyMs}ms ` +
         `editable=${layers.length}/${slides.length} ` +
         `concurrency=${HYBRID_EXPORT_CONCURRENCY}`
     );
-    return { path: hybridPath };
+    return result;
   } catch (error) {
     console.warn(
       "[authored-hybrid] fidelity fallback after hybrid processing failure",
       error
     );
-    return fidelity;
+    const slides = Array.isArray(presentation.slides) ? presentation.slides : [];
+    const exportMetadata = summarizeAuthoredHybridExport(
+      slides.map(() => ({
+        editable: false,
+        fallbackReason: "hybrid-processing-failed",
+      }))
+    );
+    if (embeddedFidelityBytes) {
+      return {
+        path: await writeHybridPptx(fidelity.path, [], embeddedFidelityBytes),
+        exportMetadata,
+      };
+    }
+    return {
+      ...fidelity,
+      exportMetadata,
+    };
   }
 }
 
@@ -393,21 +612,38 @@ export async function runAuthoredHybridPresentationExport(
       cookieHeader: params.cookieHeader,
     });
   }
+  const fontEmbeddingPlan = await resolveFontEmbeddingPlan({
+    requested: true,
+    families: ["Noto Sans KR"],
+    strategy: "full",
+    allowVariableFonts: false,
+  });
   if (
     presentation.slides.length === 0 ||
     presentation.slides.length > MAX_HYBRID_SLIDES
   ) {
-    return runBundledPresentationExport({
+    const fidelity = await runBundledPresentationExport({
       format: "pptx",
       presentationId: params.presentationId,
       title: params.title,
       cookieHeader: params.cookieHeader,
     });
+    if (presentation.slides.length === 0) return fidelity;
+    return {
+      ...fidelity,
+      exportMetadata: summarizeAuthoredHybridExport(
+        presentation.slides.map(() => ({
+          editable: false,
+          fallbackReason: "slide-limit-exceeded",
+        }))
+      ),
+    };
   }
 
   const cacheKey = createHybridCacheKey(
     params.presentationId,
-    fetched.sourceSha256
+    fetched.sourceSha256,
+    fontEmbeddingPlan.cacheDiscriminator
   );
   const cached = await readCompletedHybridExport(cacheKey);
   if (cached) {
@@ -427,6 +663,7 @@ export async function runAuthoredHybridPresentationExport(
     params,
     presentation,
     fetched.sourceSha256,
+    fontEmbeddingPlan,
     cacheKey,
     requestStartedAt
   ).finally(() => {
@@ -440,7 +677,8 @@ export async function runAuthoredHybridPresentationExport(
 
 function createHybridCacheKey(
   presentationId: string,
-  sourceSha256: string
+  sourceSha256: string,
+  fontEmbeddingDiscriminator: string
 ): string {
   return createHash("sha256")
     .update(HYBRID_CACHE_VERSION)
@@ -448,12 +686,17 @@ function createHybridCacheKey(
     .update(presentationId)
     .update("\0")
     .update(sourceSha256)
+    .update("\0")
+    .update(fontEmbeddingDiscriminator)
     .digest("hex");
 }
 
-function rememberCompletedHybridExport(cacheKey: string, outPath: string): void {
+function rememberCompletedHybridExport(
+  cacheKey: string,
+  result: BundledPresentationExportResult
+): void {
   completedHybridExports.delete(cacheKey);
-  completedHybridExports.set(cacheKey, outPath);
+  completedHybridExports.set(cacheKey, result);
   while (completedHybridExports.size > HYBRID_RESULT_CACHE_LIMIT) {
     const oldestKey = completedHybridExports.keys().next().value;
     if (typeof oldestKey !== "string") break;
@@ -464,13 +707,14 @@ function rememberCompletedHybridExport(cacheKey: string, outPath: string): void 
 async function readCompletedHybridExport(
   cacheKey: string
 ): Promise<BundledPresentationExportResult | null> {
-  const cachedPath = completedHybridExports.get(cacheKey);
-  if (!cachedPath) return null;
+  const cached = completedHybridExports.get(cacheKey);
+  if (!cached) return null;
   try {
-    const safePath = await resolveSafeFidelityPptx(cachedPath);
+    const safePath = await resolveSafeFidelityPptx(cached.path);
     completedHybridExports.delete(cacheKey);
-    completedHybridExports.set(cacheKey, safePath);
-    return { path: safePath };
+    const safeResult = { ...cached, path: safePath };
+    completedHybridExports.set(cacheKey, safeResult);
+    return safeResult;
   } catch {
     completedHybridExports.delete(cacheKey);
     return null;

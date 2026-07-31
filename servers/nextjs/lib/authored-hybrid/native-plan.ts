@@ -13,6 +13,10 @@ import type {
   AuthoredHybridTextPayload,
   AuthoredHybridTextStyle,
 } from "./schema.ts";
+import {
+  powerPointFontMetricScale,
+  resolveFontCandidates,
+} from "./font-policy.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
@@ -23,7 +27,11 @@ const MAX_IMAGE_PIXELS = 40_000_000;
 const MAX_TEXT_CODE_POINTS = 100_000;
 
 export type PreparedNativeElement =
-  | { kind: "text"; source: AuthoredHybridEditableTextElement }
+  | {
+      kind: "text";
+      source: AuthoredHybridEditableTextElement;
+      trustedFontFamilies: readonly string[];
+    }
   | { kind: "shape"; source: AuthoredHybridEditableShapeElement }
   | {
       kind: "image";
@@ -52,6 +60,11 @@ type AuthoredHybridPromotableElement =
 export interface PrepareNativeElementOptions {
   includeRasterText?: boolean;
   includeRasterShapes?: boolean;
+  /**
+   * Family names supplied by the validated server-side font collector. Raw
+   * authored HTML cannot populate this trust-boundary value.
+   */
+  trustedFontFamilies?: readonly string[];
 }
 
 export interface LayerSelectionOptions {
@@ -332,6 +345,11 @@ export async function prepareNativeElements(
         prepared.push({
           kind: "text",
           source: clipUnrotatedTextToSlide(enforceMinimumTextSize(candidate)),
+          trustedFontFamilies: [...new Set(
+            (options.trustedFontFamilies ?? [])
+              .map((family) => family.trim())
+              .filter(Boolean)
+          )],
         });
       } else if (isEditableShapeCandidate(candidate)) {
         prepared.push({ kind: "shape", source: candidate });
@@ -457,40 +475,59 @@ function gradientColorXml(color: AuthoredHybridColor, opacity: number): string {
   return `<a:srgbClr val="${color.hex}">${alpha < 100_000 ? `<a:alpha val="${alpha}"/>` : ""}</a:srgbClr>`;
 }
 
-function fontName(candidates: readonly string[], fallback: string): string {
-  const generic = new Set([
-    "serif",
-    "sans-serif",
-    "monospace",
-    "cursive",
-    "fantasy",
-    "system-ui",
-  ]);
-  const selected = candidates.find(
-    (candidate) => candidate.trim() && !generic.has(candidate.trim().toLowerCase())
-  );
-  return (selected ?? fallback).trim().slice(0, 127);
-}
-
 function runPropertiesXml(
   style: AuthoredHybridTextStyle,
-  opacity: number
+  opacity: number,
+  trustedFontFamilies: readonly string[]
 ): string {
-  const latin = fontName(style.fontFamilies, "Aptos");
-  const eastAsian = fontName(
-    style.cjkFallbackFamilies,
-    process.platform === "win32" ? "Malgun Gothic" : "Noto Sans CJK KR"
+  // Preserve the authored family only when the server-side collector verified
+  // and loaded it. Otherwise store the registry's deterministic Office/Windows
+  // substitute. Font programs are still not embedded in OOXML.
+  const latin = resolveFontCandidates(
+    style.fontFamilies,
+    "Aptos",
+    trustedFontFamilies
+  );
+  const trustedNames = new Set(
+    trustedFontFamilies.map((family) => family.trim().toLocaleLowerCase("en-US"))
+  );
+  const trustedCjkPrimary = style.fontFamilies.find((family) => {
+    const normalized = family
+      .trim()
+      .replace(/^(['"])(.*)\1$/u, "$2")
+      .trim();
+    return (
+      trustedNames.has(normalized.toLocaleLowerCase("en-US")) &&
+      /(?:\bkr\b|korean|cjk|hangul|nanum)/iu.test(normalized)
+    );
+  });
+  const eastAsian = resolveFontCandidates(
+    trustedCjkPrimary
+      ? [trustedCjkPrimary]
+      : style.cjkFallbackFamilies.length
+      ? style.cjkFallbackFamilies
+      : style.fontFamilies,
+    "Malgun Gothic",
+    trustedFontFamilies
+  );
+  const metricScale = Math.min(
+    powerPointFontMetricScale(latin),
+    powerPointFontMetricScale(eastAsian)
+  );
+  const nativeFontSizePt = Math.max(
+    MIN_EDITABLE_FONT_SIZE_PT,
+    Math.max(MIN_EDITABLE_FONT_SIZE_PT, style.fontSizePt) * metricScale
   );
   const attributes = [
     `lang="ko-KR"`,
     `altLang="en-US"`,
-    `sz="${Math.round(Math.max(MIN_EDITABLE_FONT_SIZE_PT, style.fontSizePt) * 100)}"`,
+    `sz="${Math.round(nativeFontSizePt * 100)}"`,
     style.bold ? `b="1"` : "",
     style.italic ? `i="1"` : "",
     style.underline ? `u="sng"` : "",
     style.strike ? `strike="sngStrike"` : "",
     style.letterSpacingPt
-      ? `spc="${Math.round(style.letterSpacingPt * 100)}"`
+      ? `spc="${Math.round(style.letterSpacingPt * metricScale * 100)}"`
       : "",
   ].filter(Boolean);
   return `<a:rPr ${attributes.join(" ")}>${colorXml(style.color, opacity)}<a:latin typeface="${escapeXml(latin)}"/><a:ea typeface="${escapeXml(eastAsian)}"/><a:cs typeface="${escapeXml(latin)}"/></a:rPr>`;
@@ -550,18 +587,25 @@ function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[]
   }];
 }
 
-function paragraphsXml(element: AuthoredHybridEditableTextElement): string {
+function paragraphsXml(
+  element: AuthoredHybridEditableTextElement,
+  trustedFontFamilies: readonly string[]
+): string {
   const alignment = {
     left: "l",
     center: "ctr",
     right: "r",
     justify: "just",
   }[element.text.style.horizontalAlignment];
-  const lineSpacing = Math.max(
-    1_000,
-    Math.min(500_000, Math.round(element.text.style.lineHeight.multiple * 100_000))
+  // DrawingML percentage spacing is relative to PowerPoint's font metrics,
+  // whose built-in leading is larger than a browser CSS line box. Preserve the
+  // captured CSS line-height as an absolute point value so multi-line text does
+  // not progressively drift down the slide.
+  const lineSpacingPoints = Math.max(
+    1,
+    Math.min(201_168, Math.round(element.text.style.lineHeight.points * 100))
   );
-  const pPr = `<a:pPr algn="${alignment}" marL="0" indent="0"${element.text.style.direction === "rtl" ? ` rtl="1"` : ""}><a:lnSpc><a:spcPct val="${lineSpacing}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr>`;
+  const pPr = `<a:pPr algn="${alignment}" marL="0" indent="0"${element.text.style.direction === "rtl" ? ` rtl="1"` : ""}><a:lnSpc><a:spcPts val="${lineSpacingPoints}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr>`;
   const contents: string[] = [];
   for (const segment of textSegments(element)) {
     const pieces = segment.text.split("\n");
@@ -573,7 +617,7 @@ function paragraphsXml(element: AuthoredHybridEditableTextElement): string {
       if (index > 0) contents.push("<a:br/>");
       if (piece || pieces.length === 1) {
         contents.push(
-          `<a:r>${runPropertiesXml(segment.style, element.opacity)}<a:t xml:space="preserve">${escapeXml(piece)}</a:t></a:r>`
+          `<a:r>${runPropertiesXml(segment.style, element.opacity, trustedFontFamilies)}<a:t xml:space="preserve">${escapeXml(piece)}</a:t></a:r>`
         );
       }
     });
@@ -918,6 +962,7 @@ function transparentTextOverlayItem(
   if (!container) return item;
   return {
     kind: "text",
+    trustedFontFamilies: item.trustedFontFamilies,
     source: {
       ...item.source,
       text: {
@@ -926,6 +971,12 @@ function transparentTextOverlayItem(
           ...container,
           shape: {
             ...container.shape,
+            // The painted container is emitted separately as the underlay.
+            // Keep the editable text overlay rectangular so PowerPoint does
+            // not apply the reduced inscribed text area used by ellipses.
+            // Browser text inside a CSS circle still uses the full element
+            // content box, so an ellipse overlay can introduce extra wrapping.
+            shape: "rectangle",
             fill: null,
             gradient: undefined,
             stroke: null,
@@ -1018,7 +1069,7 @@ export function serializePreparedNativeElement(
     const paint = container
       ? shapePaintXml(container.shape, element.opacity)
       : "<a:noFill/><a:ln><a:noFill/></a:ln>";
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="clip" vertOverflow="clip" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphsXml(element)}</p:txBody></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="clip" vertOverflow="clip" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphsXml(element, item.trustedFontFamilies)}</p:txBody></p:sp>`;
   }
   if (item.kind === "shape") {
     const element = item.source;

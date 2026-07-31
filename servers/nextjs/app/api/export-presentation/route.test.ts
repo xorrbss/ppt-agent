@@ -119,6 +119,51 @@ test("route request sends authored to hybrid only for explicit hybrid", async ()
   assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 1 });
 });
 
+test("route boundary preserves additive authored hybrid export metadata", async () => {
+  const exportMetadata = {
+    version: 1 as const,
+    strategy: "authored-hybrid" as const,
+    totalSlides: 3,
+    editableSlides: 2,
+    imageFallbackSlides: 1,
+    fallbackReasons: [
+      { reason: "preflight-active-or-external-html", slideCount: 1 },
+    ],
+  };
+
+  const result = await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "hybrid",
+    },
+    "session=test",
+    {
+      async packageAvailable() {
+        return true;
+      },
+      async fetchPresentation() {
+        return {
+          version: "v1-standard",
+          mode: "authored",
+          slides: [{ html_content: "<section>editable</section>" }],
+        };
+      },
+      registry: {
+        async general() {
+          return { path: "general.pptx", exportMetadata };
+        },
+        async hybrid() {
+          return { path: "hybrid.pptx", exportMetadata };
+        },
+      },
+    }
+  );
+
+  assert.equal(result.path, "hybrid.pptx");
+  assert.deepEqual(result.exportMetadata, exportMetadata);
+});
+
 for (const [format, pptxMode] of [
   ["pptx", undefined],
   ["pptx", "fidelity"],

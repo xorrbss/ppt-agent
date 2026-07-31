@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   try {
     body = await readExportPresentationRouteBody(req);
-    const { path: outPath } = await executeExportPresentationRouteRequest(
+    const exportResult = await executeExportPresentationRouteRequest(
       body,
       cookieHeader,
       {
@@ -87,10 +87,14 @@ export async function POST(req: NextRequest) {
         },
       },
     );
+    const outPath = exportResult.path;
 
     return NextResponse.json({
       success: true,
       path: buildExportDownloadUrl(outPath),
+      ...(exportResult.exportMetadata
+        ? { exportMetadata: exportResult.exportMetadata }
+        : {}),
     });
   } catch (e) {
     if (e instanceof ExportPresentationRequestError) {
