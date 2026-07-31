@@ -36,6 +36,7 @@ import {
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { Separator } from "@/components/ui/separator";
 import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
+import type { AuthoredHybridExportMetadata } from "@/lib/authored-hybrid/export-metadata";
 import {
   Dialog,
   DialogContent,
@@ -293,6 +294,7 @@ const PresentationHeader = ({
         const payload = (await response.json()) as {
           path?: string;
           quality?: PresentationExportQualityReport;
+          exportMetadata?: AuthoredHybridExportMetadata;
         };
         const pptxPath = payload.path;
         if (!pptxPath) {
@@ -301,6 +303,12 @@ const PresentationHeader = ({
 
         downloadLink(pptxPath, safePptxFileName);
         if (payload.quality) setExportQuality(payload.quality);
+        if (payload.exportMetadata && !payload.quality) {
+          notify.info(
+            "PPTX export information",
+            `${payload.exportMetadata.editableSlides}/${payload.exportMetadata.totalSlides} slides include editable elements.`
+          );
+        }
       }
       notify.success(
         "내보내기 완료",

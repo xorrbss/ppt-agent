@@ -52,6 +52,7 @@ import {
   type PresentationExportQualityReport,
   type PresentationExportSlideQuality,
 } from "../presentation-export-quality.ts";
+import { summarizeAuthoredHybridExport } from "./export-metadata.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
@@ -660,7 +661,11 @@ async function attachQualityReport(
     console.warn("[authored-hybrid] quality sidecar could not be persisted", error);
     await fs.rm(temporaryPath, { force: true }).catch(() => {});
   }
-  return { ...result, quality };
+  return {
+    ...result,
+    quality,
+    exportMetadata: summarizeAuthoredHybridExport(quality),
+  };
 }
 
 async function runUncachedAuthoredHybridExport(

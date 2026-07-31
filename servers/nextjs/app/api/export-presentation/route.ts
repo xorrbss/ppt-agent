@@ -98,6 +98,9 @@ export async function POST(req: NextRequest) {
       success: true,
       path: buildExportDownloadUrl(exportResult.path),
       ...(exportResult.quality ? { quality: exportResult.quality } : {}),
+      ...(exportResult.exportMetadata
+        ? { exportMetadata: exportResult.exportMetadata }
+        : {}),
     });
   } catch (e) {
     if (e instanceof ExportPresentationRequestError) {
