@@ -26,6 +26,14 @@ import ToolTip from "@/components/ToolTip";
 // import { CodeEditor } from "./CodeEditor";
 // import SlideSelectionEditor from "./SlideSelectionEditor";
 import SchemaElementHighlighter from "../SchemaElementHighlighter";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 
 const EachSlide: React.FC<EachSlideProps> = ({
@@ -40,6 +48,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
   onClearSchemaPreview,
 }) => {
   const [localPreviewData, setLocalPreviewData] = useState<Record<string, any> | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Use schema preview data from parent if available, otherwise use local
   const previewData = schemaPreviewData ?? localPreviewData;
@@ -148,6 +157,12 @@ const EachSlide: React.FC<EachSlideProps> = ({
     );
     if (!confirmed) return;
     setSlides(prev => prev.filter((_, i) => i !== index));
+    setIsDeleteDialogOpen(false);
+  };
+
+  const confirmDeleteSlide = () => {
+    setSlides(prev => prev.filter((_, i) => i !== index));
+    setIsDeleteDialogOpen(false);
   };
 
   const isSlideReady = slide.processed && !slide.processing;
@@ -155,7 +170,8 @@ const EachSlide: React.FC<EachSlideProps> = ({
   const hasError = !!slide.error;
 
   return (
-    <div className="group max-w-[1440px] mx-auto relative bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-[#D1D5DB]">
+    <>
+      <div className="group max-w-[1440px] mx-auto relative bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-[#D1D5DB]">
       {/* Slide Header */}
       <div className="px-5 py-4 border-b border-[#F3F4F6] bg-gradient-to-r from-[#FAFAFA] to-white">
         <div className="flex items-center justify-between">
@@ -477,7 +493,42 @@ const EachSlide: React.FC<EachSlideProps> = ({
           <div className="w-3 h-3 rounded-full bg-[#EF4444] animate-pulse" />
         </div>
       )}
-    </div>
+      </div>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="w-[calc(100vw-32px)] max-w-[432px] gap-0 rounded-[24px] border-0 bg-white p-0 font-syne shadow-[0_24px_80px_rgba(15,23,42,0.18)] [&>button]:hidden">
+          <DialogHeader className="px-7 pb-6 pt-7 text-left">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF3F2]">
+              <Trash2 className="h-5 w-5 text-[#D92D20]" />
+            </div>
+            <DialogTitle className="text-xl font-semibold leading-7 text-[#101323]">
+              Delete slide {index + 1}?
+            </DialogTitle>
+            <DialogDescription className="pt-1 text-sm leading-6 text-[#667085]">
+              This slide will be permanently removed from the template. This
+              action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row border-t border-[#EAECF0] p-4 sm:justify-end sm:space-x-0">
+            <button
+              type="button"
+              className="h-10 rounded-full border border-[#E1E1E5] px-5 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
+              onClick={() => setIsDeleteDialogOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#D92D20] px-5 text-xs font-semibold text-white transition hover:bg-[#B42318]"
+              onClick={confirmDeleteSlide}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete slide
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

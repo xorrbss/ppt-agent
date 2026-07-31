@@ -2,11 +2,12 @@ from copy import deepcopy
 from typing import Optional
 import uuid
 from pydantic import field_validator, model_validator
-from sqlalchemy import CheckConstraint, ForeignKey
+from sqlalchemy import CheckConstraint, ForeignKey, Uuid
 from sqlalchemy.types import JSON, TypeDecorator
 from sqlmodel import Field, Column, SQLModel
 
 from templates.v2.persistence import canonicalize_slide_ui
+from api.v1.auth.context import get_current_owner_id
 
 
 class NativeSlideUIJSON(TypeDecorator):
@@ -35,6 +36,13 @@ class SlideModel(SQLModel, table=True):
     )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    owner_id: Optional[uuid.UUID] = Field(
+        default_factory=get_current_owner_id,
+        exclude=True,
+        # The production FK is managed by Alembic; omit it from ORM metadata so
+        # partial-schema fixtures can create slides independently.
+        sa_column=Column(Uuid, nullable=True, index=True),
+    )
     presentation: uuid.UUID = Field(
         sa_column=Column(ForeignKey("presentations.id", ondelete="CASCADE"), index=True)
     )
@@ -66,6 +74,7 @@ class SlideModel(SQLModel, table=True):
     def get_new_slide(self, presentation: uuid.UUID, content: Optional[dict] = None):
         return SlideModel(
             id=uuid.uuid4(),
+            owner_id=self.owner_id,
             presentation=presentation,
             layout_group=self.layout_group,
             layout=self.layout,

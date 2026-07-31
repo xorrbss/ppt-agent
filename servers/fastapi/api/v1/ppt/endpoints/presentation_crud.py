@@ -35,6 +35,7 @@ from services.presentation_deletion_service import (
 )
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
+from utils.document_path_security import validate_document_paths
 
 PRESENTATION_CRUD_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
@@ -188,6 +189,8 @@ async def create_presentation(
     web_search: Annotated[bool, Body()] = False,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    if file_paths:
+        file_paths = validate_document_paths(file_paths)
 
     if n_slides is not None and n_slides < 1:
         raise HTTPException(

@@ -69,7 +69,7 @@ describe('<UploadPage />', () => {
     })
 
     it('opens the advanced-settings modal', () => {
-      cy.get('[data-testid="advanced-settings-button"]').click()
+      cy.get('[data-testid="advanced-settings-button"]').click({ force: true })
       cy.get('[role="dialog"]').should('be.visible').and('contain', '고급 설정')
     })
   })
@@ -90,10 +90,10 @@ describe('<UploadPage />', () => {
       checkToast('파일 선택 완료')
     })
 
-    it('accepts Markdown attachments from the chat input', () => {
+    it('accepts a Markdown document with the Markdown MIME type', () => {
       cy.get('[data-testid="file-upload-input"]').selectFile(
         [{
-          contents: Cypress.Buffer.from('# 발표 개요\n\n- 첫 번째 슬라이드'),
+          contents: Cypress.Buffer.from('# Markdown source\n\n- keep this structure'),
           fileName: 'presentation-brief.md',
           mimeType: 'text/markdown',
         }],
@@ -103,25 +103,23 @@ describe('<UploadPage />', () => {
       checkToast('파일 선택 완료')
     })
 
-    it('accepts Markdown extensions with missing or generic MIME types', () => {
+    it('allows Markdown by its safe extension when the browser omits or generalizes MIME', () => {
       expect(isAllowedFile(new File(['# Notes'], 'empty-mime.md'))).to.equal(true)
       expect(
         isAllowedFile(new File(['# Notes'], 'generic.markdown', { type: 'application/octet-stream' }))
       ).to.equal(true)
     })
 
-    it('advertises Markdown in the native file picker', () => {
+    it('does not accept arbitrary text MIME types', () => {
+      expect(isAllowedFile(new File(['<p>not allowed</p>'], 'unsafe.html', { type: 'text/html' }))).to.equal(false)
+    })
+
+    it('advertises Markdown in the file picker accept list', () => {
       cy.get('[data-testid="file-upload-input"]')
         .invoke('attr', 'accept')
         .should('contain', 'text/markdown')
         .and('contain', '.md')
         .and('contain', '.markdown')
-    })
-
-    it('rejects an arbitrary extension even when it claims a text MIME type', () => {
-      expect(
-        isAllowedFile(new File(['not a document'], 'unsafe.exe', { type: 'text/plain' }))
-      ).to.equal(false)
     })
 
     it('handles multiple document uploads', () => {

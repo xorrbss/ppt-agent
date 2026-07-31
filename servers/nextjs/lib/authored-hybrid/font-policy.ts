@@ -261,3 +261,130 @@ export function rewriteKnownFontFamiliesInCss(css: string): string {
       `${prefix}${expandKnownFontShorthand(value.trim())}`
   );
 }
+
+/* --------------------------------------------------------------------------
+ * PowerPoint typeface selection.
+ *
+ * These helpers drive Chromium layout capture and native OOXML typeface
+ * serialization. They derive from FONT_FALLBACK_REGISTRY above rather than
+ * carrying a second table, so CSS rewriting and native serialization cannot
+ * drift onto different substitutes for the same logical face.
+ * ----------------------------------------------------------------------- */
+
+export interface AuthoredFontFallbackRule {
+  readonly authored: string;
+  readonly powerpoint: string;
+}
+
+export const AUTHORED_FONT_FALLBACK_POLICY: readonly AuthoredFontFallbackRule[] =
+  Object.freeze(
+    FONT_FALLBACK_REGISTRY.map((entry) =>
+      Object.freeze({ authored: entry.logical, powerpoint: entry.local })
+    )
+  );
+
+/**
+ * Generic CSS families have no logical entry in the registry, so their
+ * PowerPoint substitutes are declared here.
+ */
+export const POWERPOINT_GENERIC_FONT_FALLBACK_POLICY: readonly AuthoredFontFallbackRule[] =
+  Object.freeze([
+    { authored: "sans-serif", powerpoint: "Aptos" },
+    { authored: "system-ui", powerpoint: "Aptos" },
+    { authored: "serif", powerpoint: "Cambria" },
+    { authored: "monospace", powerpoint: "Consolas" },
+  ] as const satisfies readonly AuthoredFontFallbackRule[]);
+
+const GENERIC_FALLBACKS = new Map<string, string>(
+  POWERPOINT_GENERIC_FONT_FALLBACK_POLICY.map((rule) => [
+    rule.authored,
+    rule.powerpoint,
+  ])
+);
+
+export function resolveAuthoredFontFallback(
+  family: string
+): string | undefined {
+  const normalized = normalizedFontName(family);
+  return (
+    FALLBACK_BY_LOGICAL.get(normalized)?.local ??
+    GENERIC_FALLBACKS.get(normalized)
+  );
+}
+
+function appendUnique(
+  result: string[],
+  seen: Set<string>,
+  family: string
+): void {
+  const normalized = family.trim().replace(/^['"]|['"]$/g, "");
+  const key = normalized.toLowerCase();
+  if (!normalized || seen.has(key)) return;
+  seen.add(key);
+  result.push(normalized);
+}
+
+export function expandAuthoredFontFamilyStack(
+  families: readonly string[]
+): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const family of families) {
+    appendUnique(result, seen, family);
+    const fallback = FALLBACK_BY_LOGICAL.get(normalizedFontName(family))?.local;
+    if (fallback) appendUnique(result, seen, fallback);
+  }
+  return result;
+}
+
+/**
+ * Builds a mapped-first CSS stack for the editable text measurement pass.
+ *
+ * Keep this separate from `expandAuthoredFontFamilyStack`: the source-fidelity
+ * backplate still needs the collected authored face first, while native text
+ * geometry needs the PowerPoint-compatible face first. Keeping the authored
+ * face second also preserves a deterministic fallback when the mapped local
+ * face is unavailable.
+ */
+export function expandPowerPointLayoutFontFamilyStack(
+  families: readonly string[]
+): string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const family of families) {
+    const normalized = family.trim().replace(/^['"]|['"]$/g, "");
+    const mapped = resolveAuthoredFontFallback(normalized);
+    if (mapped) appendUnique(result, seen, mapped);
+    appendUnique(result, seen, normalized);
+  }
+  return result;
+}
+
+export function resolvePowerPointTypeface(
+  families: readonly string[],
+  fallback: string,
+  options: {
+    /**
+     * Families in this set were actually packaged into the PPTX. Merely
+     * finding an eligible local font is not sufficient to preserve it.
+     */
+    preserveAuthoredFamilies?: ReadonlySet<string>;
+  } = {}
+): string {
+  const preservedFamilies = new Set(
+    [...(options.preserveAuthoredFamilies ?? [])].map((family) =>
+      normalizedFontName(family)
+    )
+  );
+  for (const family of families) {
+    const normalized = family.trim().replace(/^['"]|['"]$/g, "");
+    if (!normalized) continue;
+    if (preservedFamilies.has(normalizedFontName(normalized))) {
+      return normalized.slice(0, 127);
+    }
+    const mapped = resolveAuthoredFontFallback(normalized);
+    if (mapped) return mapped.slice(0, 127);
+    if (!isGenericFontFamily(normalized)) return normalized.slice(0, 127);
+  }
+  return fallback.trim().slice(0, 127);
+}

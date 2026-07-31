@@ -21,6 +21,7 @@ on:
       - "servers/nextjs/app/api/export-presentation/route.ts"
       - "servers/nextjs/next.config.mjs"
       - "servers/fastapi/api/v1/ppt/**"
+      - "servers/fastapi/api/v1/async_tasks/**"
       - "servers/fastapi/api/v1/auth/**"
       - "servers/fastapi/api/lifespan.py"
       - "servers/fastapi/api/middlewares.py"
@@ -30,6 +31,7 @@ on:
       - "servers/fastapi/alembic/versions/**"
       - "servers/fastapi/migrations.py"
       - "servers/fastapi/services/presentation_deletion_service.py"
+      - "servers/fastapi/services/async_task_read_service.py"
       - "servers/fastapi/services/template_v2_pptx_analysis_service.py"
       - "servers/fastapi/services/template_v2_pptx_dispatcher.py"
       - "servers/fastapi/services/template_v2_pptx_ingestion_service.py"
@@ -45,6 +47,7 @@ on:
       - "servers/fastapi/tests/unit/test_template_v2_pptx_operations.py"
       - "servers/fastapi/tests/integration/test_postgresql_template_v2_canary_rollback.py"
       - "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
+      - "servers/fastapi/tests/integration/test_postgresql_async_task_read_facade.py"
       - "docs/template-v2-canary-rehearsal-prompt-20260725.md"
       - "docs/template-v2-canary-runbook.md"
       - "electron/app/main.ts"
@@ -133,3 +136,4 @@ jobs:
           uv run pytest -q --no-header
           tests/integration/test_postgresql_template_v2_migrations.py
           tests/integration/test_postgresql_template_v2_canary_rollback.py
+          tests/integration/test_postgresql_async_task_read_facade.py

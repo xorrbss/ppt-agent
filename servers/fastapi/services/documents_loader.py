@@ -22,7 +22,13 @@ from services.document_conversion_service import (
     DocumentConversionService,
 )
 from services.liteparse_service import LiteParseError, LiteParseService
+from utils.document_context import (
+    DocumentContextLimitError,
+    ensure_document_within_limit,
+    get_document_context_limits,
+)
 from utils.ocr_language import presentation_language_to_ocr_code
+from utils.document_path_security import validate_document_paths
 
 # Optional fallback converter (primarily useful on Windows)
 try:
@@ -31,6 +37,9 @@ except Exception:
     DocumentServiceCls = None
 
 LOGGER = logging.getLogger(__name__)
+
+_MAX_TEXT_BYTES_PER_CHARACTER = 4
+_TEXT_BOM_ALLOWANCE_BYTES = 4
 
 
 def _normalize_text_newlines(text: str) -> str:
@@ -224,12 +233,9 @@ class DocumentsLoader:
         documents: List[str] = []
         images: List[List[str]] = []
 
-        for file_path in self._file_paths:
-            if not os.path.exists(file_path):
-                raise HTTPException(
-                    status_code=404, detail=f"File {file_path} not found"
-                )
+        self._file_paths = validate_document_paths(self._file_paths)
 
+        for file_path in self._file_paths:
             document = ""
             imgs: List[str] = []
 
@@ -308,12 +314,33 @@ class DocumentsLoader:
             return False
 
     async def load_text(self, file_path: str) -> str:
-        def _read_bytes() -> bytes:
-            with open(file_path, "rb") as file:
-                return file.read()
+        _, per_document_limit = get_document_context_limits()
+        filename = os.path.basename(file_path)
+        max_encoded_bytes = (
+            per_document_limit * _MAX_TEXT_BYTES_PER_CHARACTER
+            + _TEXT_BOM_ALLOWANCE_BYTES
+        )
 
-        data = await asyncio.to_thread(_read_bytes)
-        return _decode_text_bytes(data, os.path.basename(file_path))
+        def _read_bounded() -> bytes:
+            with open(file_path, "rb") as file:
+                return file.read(max_encoded_bytes + 1)
+
+        data = await asyncio.to_thread(_read_bounded)
+        if len(data) > max_encoded_bytes:
+            raise DocumentContextLimitError(
+                actual_chars=per_document_limit + 1,
+                limit_chars=per_document_limit,
+                scope="document",
+                filename=filename,
+            )
+
+        text = _decode_text_bytes(data, filename)
+        ensure_document_within_limit(
+            text,
+            filename=filename,
+            per_document_limit=per_document_limit,
+        )
+        return text
 
     def load_office_document(self, file_path: str, temp_dir: Optional[str] = None) -> str:
         # No LibreOffice (e.g. native Windows): extract text directly for the

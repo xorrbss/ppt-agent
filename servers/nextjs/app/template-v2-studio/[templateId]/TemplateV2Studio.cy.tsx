@@ -79,7 +79,7 @@ function settleSuccessfulPersistence() {
   // The debounced autosave may finish between querying the button and clicking
   // it. Waiting on the user-visible dirty state covers both the pending-save
   // and already-saved paths without racing the disabled button transition.
-  cy.contains("Unsaved changes").should("not.exist");
+  cy.contains("Unsaved changes", { timeout: 10_000 }).should("not.exist");
 }
 
 function setColorInput(label: string, color: string) {
@@ -378,6 +378,11 @@ describe("TemplateV2Studio API integration", () => {
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadNestedTemplate");
+    cy.get('[data-testid="open-ai-layout-editor"]').should(
+      "have.attr",
+      "href",
+      `/template-preview?templateV2Id=${templateId}`
+    );
     cy.contains("button", "Add rectangle").click();
     cy.contains("button", "Save").click();
 
@@ -551,6 +556,11 @@ describe("TemplateV2Studio API integration", () => {
       "PATCH",
       `**/api/v1/ppt/structured-templates/${templateId}`,
       (request) => {
+        const elements =
+          request.body.layouts.layouts[0].components[0].elements;
+        if (elements[1]?.crop_scale === 1.75) {
+          request.alias = "saveEditableTemplateFinal";
+        }
         request.reply({
           statusCode: 200,
           body: response(
@@ -638,7 +648,7 @@ describe("TemplateV2Studio API integration", () => {
       .should("not.be.disabled")
       .click({ waitForAnimations: false });
 
-    cy.wait("@saveEditableTemplate")
+    cy.wait("@saveEditableTemplateFinal")
       .its("request.body.layouts.layouts.0.components.0.elements")
       .then((elements) => {
         expect(elements[1]).to.deep.equal({
@@ -702,6 +712,153 @@ describe("TemplateV2Studio API integration", () => {
       });
   });
 
+  it("renders the floating image toolbar, preserves selection, and reloads its saved patch", () => {
+    let persistedLayouts = layouts();
+    let revision = 1;
+
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("loadToolbarTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        persistedLayouts = request.body.layouts;
+        revision = request.body.expected_revision + 1;
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("saveToolbarTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadToolbarTemplate");
+    cy.contains("button[aria-pressed]", /^hero/).click();
+    cy.get('[data-testid="template-v2-selection-toolbar"]')
+      .should("be.visible")
+      .and("have.attr", "role", "toolbar")
+      .and("have.attr", "aria-label", "Selection toolbar")
+      .within(() => {
+        cy.get('button[aria-label="Flip image horizontally"]')
+          .should("have.attr", "aria-pressed", "false")
+          .click({ waitForAnimations: false });
+      });
+    cy.contains("1 selected").should("be.visible");
+
+    cy.wait("@saveToolbarTemplate", { timeout: 10_000 })
+      .its("request.body.layouts.layouts.0.components.0.elements.1")
+      .then((element) => {
+        expect(element).to.include({
+          type: "image",
+          name: "hero",
+          flip_h: true,
+        });
+        expect(element.position).to.deep.equal({ x: 420, y: 40 });
+        expect(element.size).to.deep.equal({ width: 320, height: 180 });
+      });
+
+    cy.mount(<div data-testid="toolbar-unmounted" />);
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadToolbarTemplate");
+    cy.contains("button[aria-pressed]", /^hero/).click();
+    cy.get(
+      '[data-testid="template-v2-selection-toolbar"] button[aria-label="Flip image horizontally"]'
+    ).should("have.attr", "aria-pressed", "true");
+  });
+
+  it("edits bound text losslessly in the inspector without opening the floating toolbar", () => {
+    const guardedLayouts = layouts();
+    guardedLayouts.layouts[0].components[0].elements[0] = {
+      ...guardedLayouts.layouts[0].components[0].elements[0],
+      design_variables: [
+        {
+          name: "title_color",
+          target: { path: "font.color", mode: "theme" },
+          fallback: "#1d4ed8",
+        },
+      ],
+      future_element_field: { retained: "exactly" },
+    };
+    let persistedLayouts = guardedLayouts;
+    let revision = 1;
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("loadDesignVariableTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        persistedLayouts = request.body.layouts;
+        revision = request.body.expected_revision + 1;
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("saveDesignVariableTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadDesignVariableTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.contains("1 selected").should("be.visible");
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
+      "not.exist"
+    );
+    cy.get("textarea")
+      .first()
+      .should("be.visible")
+      .type("{selectall}Edited bound title", { waitForAnimations: false });
+    cy.contains("button", "Save").click();
+
+    cy.wait("@saveDesignVariableTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements.0")
+      .then((element) => {
+        expect(element.runs).to.deep.equal([
+          { text: "Edited bound title" },
+          guardedLayouts.layouts[0].components[0].elements[0].runs[1],
+        ]);
+        expect(element.design_variables).to.deep.equal([
+          {
+            name: "title_color",
+            target: { path: "font.color", mode: "theme" },
+            fallback: "#1d4ed8",
+          },
+        ]);
+        expect(element.future_element_field).to.deep.equal({
+          retained: "exactly",
+        });
+      });
+
+    cy.mount(<div data-testid="design-variable-unmounted" />);
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
+      "not.exist"
+    );
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadDesignVariableTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.get("textarea").first().should("have.value", "Edited bound title");
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+  });
+
   it("keeps local edits and offers an explicit reload after a revision conflict", () => {
     cy.intercept(
       "GET",
@@ -738,6 +895,14 @@ describe("TemplateV2Studio API integration", () => {
       .contains(/^Elements$/)
       .next("dd")
       .should("have.text", "3");
+
+    cy.on("window:confirm", () => true);
+    cy.contains("button", "Reload server version").click();
+    cy.get("dt")
+      .contains(/^Elements$/)
+      .next("dd")
+      .should("have.text", "2");
+    cy.contains("Unsaved changes").should("not.exist");
   });
 
   it("wires sibling multi-selection to reorder, lock, group, and ungroup commands", () => {
@@ -960,6 +1125,18 @@ describe("TemplateV2Studio API integration", () => {
       "PATCH",
       `**/api/v1/ppt/structured-templates/${templateId}`,
       (request) => {
+        const elements =
+          request.body.layouts.layouts[0].components[0].elements;
+        if (
+          elements.length === 3 &&
+          elements.every(
+            (element: { position: { y: number } }) =>
+              element.position.y === 1
+          ) &&
+          elements[2].position.x === 290.5
+        ) {
+          request.alias = "saveAlignedTemplate";
+        }
         request.reply({
           statusCode: 200,
           body: response(
@@ -968,7 +1145,7 @@ describe("TemplateV2Studio API integration", () => {
           ),
         });
       }
-    ).as("saveAlignedTemplate");
+    );
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");

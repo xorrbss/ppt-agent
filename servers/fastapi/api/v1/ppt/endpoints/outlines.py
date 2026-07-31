@@ -23,6 +23,10 @@ from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from utils.document_context import (
+    DocumentContextLimitError,
+    build_document_context,
+)
 from utils.llm_utils import message_content_to_text
 from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
@@ -75,14 +79,19 @@ async def stream_outlines(
 
         additional_context = ""
         if presentation.file_paths:
-            documents_loader = DocumentsLoader(
-                file_paths=presentation.file_paths,
-                presentation_language=presentation.language,
-            )
-            await documents_loader.load_documents(temp_dir)
-            documents = documents_loader.documents
-            if documents:
-                additional_context = "\n\n".join(documents)
+            try:
+                documents_loader = DocumentsLoader(
+                    file_paths=presentation.file_paths,
+                    presentation_language=presentation.language,
+                )
+                await documents_loader.load_documents(temp_dir)
+                additional_context = build_document_context(
+                    documents_loader.documents,
+                    presentation.file_paths,
+                )
+            except DocumentContextLimitError as error:
+                yield SSEErrorResponse(detail=error.to_sse_detail()).to_string()
+                return
 
         # Stage A - Knowledge Brief: research rich, grounded substance first,
         # then ground the outline in it. Falls back to documents-only on failure.

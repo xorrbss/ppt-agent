@@ -98,20 +98,21 @@ describe("PresentationHeader authored export", () => {
     cy.get("@getThemes").should("have.been.calledOnce");
   });
 
-  it("sends fidelity by default for the authored design-preserving option", () => {
+  it("sends hybrid by default for the authored separated-elements option", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     expectExportBody({
       format: "pptx",
       id: "deck-1",
       title: "deck",
-      pptxMode: "fidelity",
+      pptxMode: "hybrid",
+      fontEmbedding: false,
     });
   });
 
-  it("sends hybrid for editable text and preserves the PDF request shape", () => {
+  it("preserves the PDF request shape after a separated-elements export", () => {
     mountHeader(true);
 
     openExportOptions();
@@ -121,6 +122,7 @@ describe("PresentationHeader authored export", () => {
       id: "deck-1",
       title: "deck",
       pptxMode: "hybrid",
+      fontEmbedding: false,
     });
 
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
@@ -133,12 +135,111 @@ describe("PresentationHeader authored export", () => {
     });
   });
 
+  it("keeps embedding off by default and sends an explicit opt-in with a warning", () => {
+    mountHeader(true);
+
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid-embedded"]')
+      .should("contain.text", "글꼴 포함")
+      .and("contain.text", "파일 크기가 크게 늘 수 있습니다")
+      .click({ force: true });
+    expectExportBody({
+      format: "pptx",
+      id: "deck-1",
+      title: "deck",
+      pptxMode: "hybrid",
+      fontEmbedding: true,
+    });
+  });
+  it("shows optional hybrid editability metadata and warns on image fallback", () => {
+    cy.intercept("POST", "**/api/export-presentation", {
+      statusCode: 200,
+      body: {
+        path: "/exports/deck.pptx",
+        quality: {
+          schemaVersion: "presenton.export-quality/v1",
+          mode: "hybrid",
+          // A stale/cached producer may contradict its detailed counts. The UI
+          // must still warn from the independent fallback evidence.
+          status: "fully-editable",
+          totalSlides: 2,
+          editableSlides: 1,
+          imageFallbackSlides: 1,
+          nativeTextElements: 3,
+          nativeShapeElements: 1,
+          nativeGroupElements: 1,
+          nativeImageElements: 0,
+          rasterFallbackElements: 1,
+          fallbackReasonCounts: { "clip-path": 1 },
+          fontEmbedding: false,
+          fontEmbeddingStatus: {
+            policy: "opt-in",
+            requested: false,
+            applied: false,
+            embeddedFontFiles: 0,
+            reason: "not-requested",
+          },
+          fontRendering: {
+            browserFontFilesCollected: 2,
+            browserCollectionFailures: 0,
+            powerpointTypefacePolicy: "central-compatible-fallbacks",
+          },
+          slides: [
+            {
+              slideNumber: 1,
+              editable: true,
+              imageFallback: false,
+              nativeTextElements: 3,
+              nativeShapeElements: 1,
+              nativeGroupElements: 1,
+              nativeImageElements: 0,
+              rasterFallbackElements: 0,
+              fallbackReasons: [],
+              fallbackElements: [],
+            },
+            {
+              slideNumber: 2,
+              editable: false,
+              imageFallback: true,
+              nativeTextElements: 0,
+              nativeShapeElements: 0,
+              nativeGroupElements: 0,
+              nativeImageElements: 0,
+              rasterFallbackElements: 1,
+              fallbackReasons: ["clip-path"],
+              fallbackElements: [
+                {
+                  elementId: "hero::before",
+                  candidateKind: "complex",
+                  reasons: ["clip-path"],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    }).as("qualityExport");
+    mountHeader(true);
+
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
+    cy.wait("@qualityExport");
+    cy.get('[data-testid="export-quality-dialog"]')
+      .should("contain.text", "전체 2장")
+      .and("contain.text", "이미지 fallback 1장")
+      .and("contain.text", "완전 편집형이 아닙니다")
+      .and("contain.text", "그룹 1개")
+      .and("contain.text", "잔여 raster 1개")
+      .and("contain.text", "hero::before")
+      .and("contain.text", "이 내보내기에는 글꼴이 포함되지 않아");
+  });
+
   it("does not expose authored choices or alter the adaptive PPTX body", () => {
     mountHeader(false);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').should("not.exist");
     cy.get('[data-testid="authored-export-hybrid"]').should("not.exist");
+    cy.get('[data-testid="authored-export-hybrid-embedded"]').should("not.exist");
     cy.get('[data-testid="export-pptx"]').click();
     expectExportBody({
       format: "pptx",
@@ -160,10 +261,10 @@ describe("PresentationHeader authored export", () => {
       .focus()
       .should("be.focused");
     cy.get('[data-testid="export-trigger"]').click();
-    cy.get('[data-testid="authored-export-fidelity"]')
+    cy.get('[data-testid="authored-export-hybrid"]')
       .should("have.attr", "aria-label")
       .and("not.be.empty");
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     cy.wait("@exportPresentation");
     cy.get('[data-testid="export-trigger"]').should("be.focused");
   });
@@ -177,7 +278,7 @@ describe("PresentationHeader authored export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     cy.get('[data-testid="export-trigger"]').should("be.disabled");
     cy.get('[role="status"]').should("exist");
     cy.wait("@slowExport");
@@ -191,7 +292,7 @@ describe("PresentationHeader authored export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-fidelity"]').click();
+    cy.get('[data-testid="authored-export-hybrid"]').click();
     cy.wait("@failedExport");
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
   });

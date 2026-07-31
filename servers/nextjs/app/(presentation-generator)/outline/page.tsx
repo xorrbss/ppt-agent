@@ -32,7 +32,7 @@ const page = async ({
       <Header />
       <OutlinePage auto={auto === '1'} />
     </div>
-  )
-}
+  );
+};
 
-export default page
+export default page;

@@ -7,7 +7,10 @@ import {
   fetchPersistedPresentationForExport,
   readExportPresentationRouteBody,
 } from "../../../lib/export-presentation-route.ts";
-import { PRESENTATION_SOURCE_SHA256 } from "../../../lib/presentation-export-strategy.ts";
+import {
+  PRESENTATION_SOURCE_SHA256,
+  type PresentationExportExecutionParams,
+} from "../../../lib/presentation-export-strategy.ts";
 
 async function rejectedRequestError(
   operation: Promise<unknown>
@@ -36,11 +39,13 @@ function boundarySpies(presentation: Record<string, unknown>) {
         return presentation;
       },
       registry: {
-        async general() {
+        async general(params: PresentationExportExecutionParams) {
+          void params;
           calls.general += 1;
           return { path: "general.pptx" };
         },
-        async hybrid() {
+        async hybrid(params: PresentationExportExecutionParams) {
+          void params;
           calls.hybrid += 1;
           return { path: "hybrid.pptx" };
         },
@@ -119,17 +124,149 @@ test("route request sends authored to hybrid only for explicit hybrid", async ()
   assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 1 });
 });
 
-test("route boundary preserves additive authored hybrid export metadata", async () => {
-  const exportMetadata = {
-    version: 1 as const,
-    strategy: "authored-hybrid" as const,
-    totalSlides: 3,
-    editableSlides: 2,
-    imageFallbackSlides: 1,
-    fallbackReasons: [
-      { reason: "preflight-active-or-external-html", slideCount: 1 },
-    ],
+test("route request forwards explicit font embedding only to authored hybrid", async () => {
+  let receivedFontEmbedding: boolean | undefined;
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.hybrid = async (
+    params: PresentationExportExecutionParams
+  ) => {
+    receivedFontEmbedding = params.fontEmbedding;
+    return { path: "hybrid-embedded.pptx" };
   };
+
+  const result = await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "hybrid",
+      fontEmbedding: true,
+    },
+    "session=test",
+    dependencies
+  );
+
+  assert.equal(result.path, "hybrid-embedded.pptx");
+  assert.equal(receivedFontEmbedding, true);
+});
+
+test("route request defaults font embedding off and rejects invalid values", async () => {
+  let receivedFontEmbedding: boolean | undefined;
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.hybrid = async (
+    params: PresentationExportExecutionParams
+  ) => {
+    receivedFontEmbedding = params.fontEmbedding;
+    return { path: "hybrid.pptx" };
+  };
+
+  await executeExportPresentationRouteRequest(
+    { format: "pptx", id: "persisted-id", pptxMode: "hybrid" },
+    "session=test",
+    dependencies
+  );
+  assert.equal(receivedFontEmbedding, false);
+
+  for (const fontEmbedding of ["true", 1, null, {}, []]) {
+    const error = await rejectedRequestError(
+      executeExportPresentationRouteRequest(
+        {
+          format: "pptx",
+          id: "persisted-id",
+          pptxMode: "hybrid",
+          fontEmbedding,
+        },
+        "session=test",
+        dependencies
+      )
+    );
+    assert.equal(error.status, 400);
+    assert.equal(error.message, "Invalid font embedding option");
+  }
+});
+
+test("route request rejects font embedding outside hybrid PPTX", async () => {
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  for (const request of [
+    { format: "pptx", pptxMode: "fidelity" },
+    { format: "pdf", pptxMode: "hybrid" },
+  ] as const) {
+    const error = await rejectedRequestError(
+      executeExportPresentationRouteRequest(
+        {
+          ...request,
+          id: "persisted-id",
+          fontEmbedding: true,
+        },
+        "session=test",
+        dependencies
+      )
+    );
+    assert.equal(error.status, 400);
+    assert.equal(
+      error.message,
+      "Font embedding requires hybrid PPTX export"
+    );
+  }
+});
+
+test("persisted identity cannot redirect an embedding request to general export", async () => {
+  const { calls, dependencies } = boundarySpies({
+    version: "v2-standard",
+    mode: "template",
+    slides: [{ ui: { id: "native" }, html_content: null }],
+  });
+  await assert.rejects(
+    executeExportPresentationRouteRequest(
+      {
+        format: "pptx",
+        id: "persisted-id",
+        pptxMode: "hybrid",
+        fontEmbedding: true,
+      },
+      "session=test",
+      dependencies
+    ),
+    /font_embedding_requires_authored_hybrid_export/
+  );
+  assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 0 });
+});
+
+test("route request preserves additive hybrid quality metadata", async () => {
+  const quality = {
+    schemaVersion: "presenton.export-quality/v1",
+    mode: "hybrid",
+    status: "partially-editable",
+    nativeGroupElements: 2,
+    fallbackReasonCounts: { "clip-path": 1 },
+    fontEmbeddingStatus: {
+      policy: "opt-in",
+      requested: false,
+      applied: false,
+      embeddedFontFiles: 0,
+      reason: "not-requested",
+    },
+  };
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.hybrid = async () => ({
+    path: "hybrid.pptx",
+    quality,
+  });
 
   const result = await executeExportPresentationRouteRequest(
     {
@@ -138,34 +275,70 @@ test("route boundary preserves additive authored hybrid export metadata", async 
       pptxMode: "hybrid",
     },
     "session=test",
-    {
-      async packageAvailable() {
-        return true;
-      },
-      async fetchPresentation() {
-        return {
-          version: "v1-standard",
-          mode: "authored",
-          slides: [{ html_content: "<section>editable</section>" }],
-        };
-      },
-      registry: {
-        async general() {
-          return { path: "general.pptx", exportMetadata };
-        },
-        async hybrid() {
-          return { path: "hybrid.pptx", exportMetadata };
-        },
-      },
-    }
+    dependencies
   );
 
   assert.equal(result.path, "hybrid.pptx");
-  assert.deepEqual(result.exportMetadata, exportMetadata);
+  assert.deepEqual(
+    (result as { quality?: unknown }).quality,
+    quality
+  );
+});
+
+test("route request preserves additive authored-hybrid export metadata", async () => {
+  const exportMetadata = {
+    version: 1,
+    strategy: "authored-hybrid",
+    totalSlides: 3,
+    editableSlides: 2,
+    imageFallbackSlides: 1,
+    fallbackReasons: [{ reason: "preflight-unsafe-css-url", slideCount: 1 }],
+  };
+  const { dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+  dependencies.registry.hybrid = async () => ({
+    path: "hybrid.pptx",
+    exportMetadata,
+  });
+
+  const result = await executeExportPresentationRouteRequest(
+    {
+      format: "pptx",
+      id: "persisted-id",
+      pptxMode: "hybrid",
+    },
+    "session=test",
+    dependencies
+  );
+
+  assert.equal(result.path, "hybrid.pptx");
+  assert.deepEqual(
+    (result as { exportMetadata?: unknown }).exportMetadata,
+    exportMetadata
+  );
+});
+
+test("route request uses the default hybrid mode for authored PPTX", async () => {
+  const { calls, dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+
+  const result = await executeExportPresentationRouteRequest(
+    { format: "pptx", id: "persisted-id" },
+    "session=test",
+    dependencies
+  );
+
+  assert.equal(result.path, "hybrid.pptx");
+  assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 1 });
 });
 
 for (const [format, pptxMode] of [
-  ["pptx", undefined],
   ["pptx", "fidelity"],
   ["pdf", "hybrid"],
 ] as const) {

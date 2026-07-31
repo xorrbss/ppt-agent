@@ -53,12 +53,16 @@ def test_template_v2_routes_stay_in_api_v1_and_preserve_legacy_async_status():
     )
 
 
-def test_compat_router_merges_mutations_into_legacy_template_item_openapi_path():
+def test_compat_router_adds_advanced_routes_without_legacy_collisions():
     compat_methods = _methods_by_path(TEMPLATE_V2_COMPAT_ROUTER)
     root_methods = _methods_by_path(API_V1_PPT_ROUTER)
 
     assert compat_methods == {
+        "/template/layouts/generate": {"POST"},
         "/template/{template_id}": {"PATCH", "DELETE"},
+    }
+    assert root_methods["/api/v1/ppt/template/layouts/generate"] == {
+        "POST"
     }
     assert root_methods["/api/v1/ppt/template/{template_id}"] == {
         "GET",

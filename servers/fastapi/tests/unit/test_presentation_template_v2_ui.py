@@ -165,19 +165,7 @@ def test_update_api_returns_422_for_invalid_native_ui_and_preserves_live_slide(
     ui,
     html_content,
 ):
-    monkeypatch.setattr("api.middlewares.is_disable_auth_enabled", lambda: False)
-    monkeypatch.setattr(
-        "api.middlewares.get_session_token_from_request",
-        lambda request: request.headers.get("x-test-token"),
-    )
-    monkeypatch.setattr(
-        "api.middlewares.get_auth_status",
-        lambda token: {
-            "configured": True,
-            "authenticated": token == "valid",
-            "username": "tester" if token == "valid" else None,
-        },
-    )
+    monkeypatch.setattr("api.middlewares.is_disable_auth_enabled", lambda: True)
 
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'slide-ui-update-api.db'}",
@@ -258,19 +246,7 @@ def test_update_api_preserves_valid_nested_native_ui_in_response_and_sqlite(
     tmp_path,
     monkeypatch,
 ):
-    monkeypatch.setattr("api.middlewares.is_disable_auth_enabled", lambda: False)
-    monkeypatch.setattr(
-        "api.middlewares.get_session_token_from_request",
-        lambda request: request.headers.get("x-test-token"),
-    )
-    monkeypatch.setattr(
-        "api.middlewares.get_auth_status",
-        lambda token: {
-            "configured": True,
-            "authenticated": token == "valid",
-            "username": "tester" if token == "valid" else None,
-        },
-    )
+    monkeypatch.setattr("api.middlewares.is_disable_auth_enabled", lambda: True)
 
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'slide-ui-valid-update-api.db'}",

@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import json
 from unittest.mock import MagicMock, patch
 
@@ -7,9 +8,16 @@ from fastapi import HTTPException
 
 from services.documents_loader import (
     DocumentsLoader,
+    _decode_text_bytes,
     _unwrap_liteparse_json_line_if_stored,
     clean_extracted_document_text,
 )
+from services.temp_file_service import TEMP_FILE_SERVICE
+
+
+@pytest.fixture(autouse=True)
+def _allow_test_temp_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(TEMP_FILE_SERVICE, "base_dir", str(tmp_path))
 
 
 def test_unwrap_liteparse_json_line_extracts_text_field():
@@ -45,6 +53,69 @@ def test_clean_extracted_document_text_unwraps_nested_liteparse_payloads():
         }
     )
     assert clean_extracted_document_text(nested) == "final body"
+
+
+@pytest.mark.parametrize(
+    ("extension", "encoded"),
+    [
+        (".txt", "제목\r\n본문\r끝".encode("utf-8")),
+        (".md", codecs.BOM_UTF8 + "# 제목\r\n\r\n- 항목".encode("utf-8")),
+        (".markdown", codecs.BOM_UTF16_LE + "# 제목\r\n본문".encode("utf-16-le")),
+        (".txt", codecs.BOM_UTF16_BE + "제목\r본문".encode("utf-16-be")),
+        (".md", "# 제목\r\n한글 본문".encode("cp949")),
+    ],
+)
+def test_load_documents_decodes_supported_text_encodings_and_normalizes_newlines(
+    tmp_path, extension, encoded
+):
+    source = tmp_path / f"source{extension}"
+    source.write_bytes(encoded)
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    asyncio.run(loader.load_documents())
+
+    assert "\r" not in loader.documents[0]
+    assert "제목" in loader.documents[0]
+    assert not loader.documents[0].startswith("\ufeff")
+
+
+def test_load_documents_preserves_markdown_structure(tmp_path):
+    markdown = (
+        "# 제목\r\n\r\n- 첫 번째\r\n- 두 번째\r\n\r\n"
+        "줄바꿈<br>표기\r\n\r\n```python\r\nprint('ok')\r\n```"
+    )
+    source = tmp_path / "source.md"
+    source.write_bytes(markdown.encode("utf-8"))
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    asyncio.run(loader.load_documents())
+
+    assert loader.documents == [
+        "# 제목\n\n- 첫 번째\n- 두 번째\n\n"
+        "줄바꿈<br>표기\n\n```python\nprint('ok')\n```"
+    ]
+
+
+def test_load_documents_does_not_unwrap_json_shaped_plain_text(tmp_path):
+    text = json.dumps(
+        {"ok": True, "filePath": "source.md", "text": "must not replace original"}
+    )
+    source = tmp_path / "source.md"
+    source.write_text(text, encoding="utf-8")
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    asyncio.run(loader.load_documents())
+
+    assert loader.documents == [text]
+
+
+def test_decode_text_bytes_reports_actionable_error():
+    with pytest.raises(HTTPException) as exc:
+        _decode_text_bytes(b"\x81\x00", "broken.md")
+
+    assert exc.value.status_code == 422
+    assert "broken.md" in exc.value.detail
+    assert "UTF-8" in exc.value.detail
 
 
 def test_load_pdf_requires_temp_dir_when_images_are_requested():

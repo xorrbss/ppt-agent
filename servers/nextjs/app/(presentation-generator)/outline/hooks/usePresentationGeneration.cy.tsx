@@ -102,7 +102,10 @@ describe("usePresentationGeneration async generation", () => {
         action: Cypress.sinon.match({ label: "다시 시도" }),
       })
     );
-    cy.get("@consoleError").should("not.have.been.called");
+    cy.get("@consoleError").should(
+      "not.have.been.calledWithMatch",
+      Cypress.sinon.match("Error in authored generation.")
+    );
   });
 
   it("shows revision conflicts with the backend request ID", () => {

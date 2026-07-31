@@ -32,6 +32,9 @@ test("electron packaging never publishes as a build side effect", () => {
     Array.from(receivedOptions.config.win.target),
     ["nsis", "appx"],
   )
+  assert.equal(receivedOptions.config.mac.hardenedRuntime, true)
+  assert.equal(receivedOptions.config.mac.entitlements, "build/entitlements.mac.plist")
+  assert.equal(receivedOptions.config.afterSign, "scripts/notarize-macos.cjs")
 })
 
 test("packaged FastAPI keeps standard streams available for Uvicorn", () => {

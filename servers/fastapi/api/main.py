@@ -10,6 +10,8 @@ from api.error_handling import install_api_error_handling
 from api.lifespan import app_lifespan
 from api.middlewares import SessionAuthMiddleware, UserConfigEnvUpdateMiddleware
 from api.v1.auth.router import API_V1_AUTH_ROUTER
+from api.v1.admin.router import API_V1_ADMIN_ROUTER
+from api.v1.async_tasks.router import API_V1_ASYNC_TASKS_ROUTER
 from api.v1.mock.router import API_V1_MOCK_ROUTER
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
@@ -60,6 +62,7 @@ install_api_error_handling(app)
 
 # Routers
 app.include_router(API_V1_PPT_ROUTER)
+app.include_router(API_V1_ASYNC_TASKS_ROUTER)
 app.include_router(API_V1_WEBHOOK_ROUTER)
 app.include_router(API_V1_MOCK_ROUTER)
 app.include_router(API_V1_AUTH_ROUTER)

@@ -56,9 +56,9 @@ You need to generate structured content json based on the schema.
 
 {verbosity_instructions}
 
-{text_length_guidance}
-
 {output_fields_instructions}
+
+{text_length_guidance}
 """
 
 
@@ -136,12 +136,10 @@ def get_system_prompt(
             "maximum) and populate most or all useful list items. Favor substance over filler."
         )
 
-    text_length_guidance = (
-        format_text_length_guidance(response_schema) if response_schema else ""
-    )
     output_fields_instructions = "# Output Fields:\n" + _get_schema_markdown(
         response_schema
     )
+    text_length_guidance = format_text_length_guidance(response_schema or {})
 
     if preserve_source_content:
         verbosity_instructions = (
@@ -167,9 +165,9 @@ def get_system_prompt(
         user_instructions=user_instructions,
         tone_instructions=tone_instructions,
         verbosity_instructions=verbosity_instructions,
-        text_length_guidance=text_length_guidance,
         output_fields_instructions=output_fields_instructions,
         content_depth_rules=content_depth_rules,
+        text_length_guidance=text_length_guidance,
     )
 
 

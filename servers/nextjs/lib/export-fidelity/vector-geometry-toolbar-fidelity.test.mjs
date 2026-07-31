@@ -1,0 +1,500 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { renderTemplateV2GeneralPresentationHtml } from "../template-v2-general-renderer.mjs";
+import { createTemplateV2SlideRenderPlan } from "../template-v2-render-plan.mjs";
+import {
+  editTemplateV2VectorPointTopology,
+  projectTemplateV2ElementForRenderPlan,
+  templateV2EditableVectorGeometry,
+  templateV2ProvenVectorEditCapability,
+  templateV2ProvenVectorWrapEditCapability,
+  templateV2VectorRenderGeometry,
+} from "../template-v2-vector.ts";
+
+function slideWith(vector) {
+  return {
+    id: "vector-geometry-fidelity",
+    ui: {
+      components: [{
+        id: "body",
+        position: { x: 0, y: 0 },
+        elements: [vector],
+      }],
+    },
+  };
+}
+
+function presentationWith(vector) {
+  return {
+    version: "v2-standard",
+    mode: "template",
+    slides: [slideWith(vector)],
+  };
+}
+
+function applyAtPath(root, path, value) {
+  const result = { ...root };
+  let cursor = result;
+  path.forEach((segment, index) => {
+    if (index === path.length - 1) {
+      cursor[segment] = value;
+      return;
+    }
+    const current = cursor[segment];
+    const next = Array.isArray(current)
+      ? [...current]
+      : current && typeof current === "object"
+        ? { ...current }
+        : {};
+    cursor[segment] = next;
+    cursor = next;
+  });
+  return result;
+}
+
+function parseSvgPoints(html, tag) {
+  const value = html.match(new RegExp(`<${tag} points="([^"]+)"`))?.[1];
+  assert.ok(value, `${tag} points are present`);
+  return value.split(" ").map((pair) => {
+    const [x, y] = pair.split(",").map(Number);
+    return { x, y };
+  });
+}
+
+function assertPointsClose(actual, expected, tolerance = 1e-10) {
+  assert.equal(actual.length, expected.length);
+  actual.forEach((point, index) => {
+    assert.ok(Math.abs(point.x - expected[index].x) <= tolerance);
+    assert.ok(Math.abs(point.y - expected[index].y) <= tolerance);
+  });
+}
+
+test("leaf geometry edits preserve unknown JSON and match Konva and PPT geometry", () => {
+  const authored = {
+    type: "vector",
+    shape: "polygon",
+    points: [
+      { x: 40, y: 30, future_point: { pressure: 0.75 } },
+      { x: 210, y: 45, future_point: { pressure: 0.5 } },
+      { x: 185, y: 180 },
+      { x: 25, y: 145 },
+    ],
+    closed: true,
+    corner_radii: [14, 8, 11, 6],
+    curve: {
+      type: "smooth",
+      tension: 0.35,
+      segments: 8,
+      future_curve: { interpolation: "v3" },
+    },
+    fill: { color: "#123456" },
+    stroke: { color: "#abcdef", width: 3 },
+    future_vector: { retained: true },
+  };
+
+  const edited = applyAtPath(
+    applyAtPath(
+      applyAtPath(
+        applyAtPath(authored, ["points", 0, "x"], 52.25),
+        ["corner_radii", 0],
+        18
+      ),
+      ["curve", "tension"],
+      0.62
+    ),
+    ["curve", "segments"],
+    12
+  );
+  const persisted = JSON.parse(JSON.stringify(edited));
+
+  assert.deepEqual(persisted.future_vector, authored.future_vector);
+  assert.deepEqual(persisted.points[0].future_point, authored.points[0].future_point);
+  assert.deepEqual(persisted.curve.future_curve, authored.curve.future_curve);
+  assert.equal(persisted.points[0].x, 52.25);
+  assert.deepEqual(persisted.corner_radii, [18, 8, 11, 6]);
+  assert.equal(persisted.curve.tension, 0.62);
+  assert.equal(persisted.curve.segments, 12);
+  assert.deepEqual(templateV2EditableVectorGeometry(persisted), {
+    shape: "polygon",
+    closed: true,
+    points: [
+      { x: 52.25, y: 30 },
+      { x: 210, y: 45 },
+      { x: 185, y: 180 },
+      { x: 25, y: 145 },
+    ],
+    curve: { tension: 0.62, segments: 12, canRemove: false },
+    cornerRadii: [18, 8, 11, 6],
+  });
+
+  const projected = projectTemplateV2ElementForRenderPlan(persisted);
+  const plan = createTemplateV2SlideRenderPlan(slideWith(projected));
+  const vectorPlan = plan.components[0].elements[0].vector;
+  assert.ok(vectorPlan);
+  const konvaGeometry = templateV2VectorRenderGeometry(persisted, vectorPlan);
+
+  const pptHtml = renderTemplateV2GeneralPresentationHtml(
+    presentationWith(persisted)
+  );
+  const pptPoints = parseSvgPoints(pptHtml, "polygon");
+  assertPointsClose(pptPoints, konvaGeometry.points);
+  assert.ok(pptPoints.length > persisted.points.length);
+});
+
+test("canonical curve lifecycle and explicit two-point shape conversion are lossless", () => {
+  const authored = {
+    type: "vector",
+    shape: "polygon",
+    points: [
+      { x: 10, y: 20, future_point: { retained: true } },
+      { x: 130, y: 90 },
+    ],
+    closed: false,
+    curve: null,
+    stroke: { color: "#001122", width: 2 },
+    future_vector: { version: 3 },
+  };
+  const curved = JSON.parse(JSON.stringify(applyAtPath(
+    authored,
+    ["curve"],
+    { type: "smooth", tension: 0.5, segments: 16 }
+  )));
+  assert.deepEqual(templateV2EditableVectorGeometry(curved)?.curve, {
+    tension: 0.5,
+    segments: 16,
+    canRemove: true,
+  });
+  assert.deepEqual(curved.points[0].future_point, { retained: true });
+  assert.deepEqual(curved.future_vector, { version: 3 });
+
+  const uncurved = applyAtPath(curved, ["curve"], null);
+  const ellipse = JSON.parse(JSON.stringify(
+    applyAtPath(uncurved, ["shape"], "ellipse")
+  ));
+  assert.equal(templateV2EditableVectorGeometry(ellipse)?.shape, "ellipse");
+  assert.deepEqual(ellipse.points[0].future_point, { retained: true });
+  assert.deepEqual(ellipse.future_vector, { version: 3 });
+  assert.equal(templateV2ProvenVectorEditCapability(ellipse), null);
+
+  const plan = createTemplateV2SlideRenderPlan(slideWith(ellipse));
+  assert.equal(plan.components[0].elements[0].vector?.shape, "ellipse");
+  assert.match(
+    renderTemplateV2GeneralPresentationHtml(presentationWith(ellipse)),
+    /<ellipse /
+  );
+
+  const path = JSON.parse(JSON.stringify(
+    applyAtPath(ellipse, ["shape"], null)
+  ));
+  assert.equal(templateV2EditableVectorGeometry(path)?.shape, null);
+  assert.deepEqual(path.points[0].future_point, { retained: true });
+  assert.deepEqual(path.future_vector, { version: 3 });
+  assert.match(
+    renderTemplateV2GeneralPresentationHtml(presentationWith(path)),
+    /<polyline /
+  );
+  assert.equal(
+    templateV2ProvenVectorEditCapability({
+      ...path,
+      curve: { type: "smooth", tension: 0.5, segments: 8 },
+    }),
+    null
+  );
+  assert.equal(
+    templateV2ProvenVectorEditCapability({
+      ...path,
+      closed: true,
+    }),
+    null
+  );
+  assert.equal(
+    templateV2ProvenVectorEditCapability({
+      ...path,
+      corner_radii: [0, 0],
+    }),
+    null
+  );
+});
+
+test("ellipse-only latent geometry stays lossless and cannot become path semantics", () => {
+  const authored = {
+    type: "vector",
+    shape: "ellipse",
+    points: [
+      { x: 10, y: 20, future_point: { retained: true } },
+      { x: 170, y: 110 },
+    ],
+    closed: true,
+    corner_radii: [12, 7],
+    curve: {
+      type: "smooth",
+      tension: 0.4,
+      segments: 8,
+      future_curve: { interpolation: "v3" },
+    },
+    raw_path: "M917 811 L919 813",
+    fill: { color: "#123456" },
+    stroke: { color: "#abcdef", width: 2 },
+    future_vector: { retained: true },
+  };
+  const persisted = JSON.parse(JSON.stringify(
+    applyAtPath(authored, ["points", 0, "x"], 15.5)
+  ));
+
+  assert.deepEqual(persisted.points[0].future_point, { retained: true });
+  assert.deepEqual(persisted.curve.future_curve, { interpolation: "v3" });
+  assert.equal(persisted.raw_path, authored.raw_path);
+  assert.deepEqual(persisted.future_vector, { retained: true });
+  assert.deepEqual(templateV2EditableVectorGeometry(persisted), {
+    shape: "ellipse",
+    closed: true,
+    points: [{ x: 15.5, y: 20 }, { x: 170, y: 110 }],
+    curve: { tension: 0.4, segments: 8, canRemove: false },
+    cornerRadii: [12, 7],
+  });
+  assert.equal(templateV2ProvenVectorEditCapability(persisted), null);
+  assert.equal(
+    editTemplateV2VectorPointTopology(
+      persisted,
+      { type: "add-after", index: 0 }
+    ),
+    null
+  );
+
+  const plan = createTemplateV2SlideRenderPlan(slideWith(persisted));
+  const vectorPlan = plan.components[0].elements[0].vector;
+  assert.ok(vectorPlan);
+  assert.equal(vectorPlan.shape, "ellipse");
+  const konvaGeometry = templateV2VectorRenderGeometry(persisted, vectorPlan);
+  assert.deepEqual(konvaGeometry.points, vectorPlan.points);
+
+  const pptHtml = renderTemplateV2GeneralPresentationHtml(
+    presentationWith(persisted)
+  );
+  assert.match(pptHtml, /<ellipse /);
+  assert.doesNotMatch(pptHtml, /<polygon |<polyline /);
+  assert.doesNotMatch(pptHtml, /M917 811 L919 813/);
+});
+
+test("only the pinned upstream polygon add-after edit is enabled", () => {
+  const authored = {
+    type: "vector",
+    shape: "polygon",
+    points: [
+      { x: 0, y: 0 },
+      { x: 100, y: 80 },
+    ],
+    closed: true,
+    upstream_element_extension: "vector-vNext",
+  };
+
+  assert.deepEqual(templateV2ProvenVectorEditCapability(authored), {
+    kind: "polygon-add-after-first-point",
+    points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+  });
+  const added = editTemplateV2VectorPointTopology(authored, {
+    type: "add-after",
+    index: 0,
+  });
+  assert.ok(added);
+  assert.deepEqual(added.points, [
+    authored.points[0],
+    { x: 50, y: 40 },
+    authored.points[1],
+  ]);
+  assert.equal(added.cornerRadii, null);
+  assert.equal(added.selectedIndex, 1);
+
+  const edited = { ...authored, points: added.points };
+  assert.equal(templateV2ProvenVectorEditCapability(edited), null);
+  assert.deepEqual(templateV2ProvenVectorWrapEditCapability(authored), {
+    kind: "polygon-add-after-last-wrap",
+    points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+  });
+  const wrapped = editTemplateV2VectorPointTopology(authored, {
+    type: "add-after",
+    index: 1,
+  });
+  assert.ok(wrapped);
+  assert.deepEqual(wrapped.points, [
+    authored.points[0],
+    authored.points[1],
+    { x: 50, y: 40 },
+  ]);
+  assert.equal(wrapped.cornerRadii, null);
+  assert.equal(wrapped.selectedIndex, 2);
+  assert.equal(
+    templateV2ProvenVectorWrapEditCapability({
+      ...authored,
+      points: wrapped.points,
+    }),
+    null
+  );
+  assert.equal(
+    editTemplateV2VectorPointTopology(authored, {
+      type: "add-after",
+      index: 2,
+    }),
+    null
+  );
+  assert.equal(
+    editTemplateV2VectorPointTopology(authored, {
+      type: "delete",
+      index: 0,
+    }),
+    null
+  );
+  assert.equal(
+    editTemplateV2VectorPointTopology(authored, {
+      type: "move",
+      index: 0,
+      direction: 1,
+    }),
+    null
+  );
+  const projected = projectTemplateV2ElementForRenderPlan(edited);
+  const plan = createTemplateV2SlideRenderPlan(slideWith(projected));
+  const vectorPlan = plan.components[0].elements[0].vector;
+  assert.ok(vectorPlan);
+  const konvaGeometry = templateV2VectorRenderGeometry(edited, vectorPlan);
+  const pptHtml = renderTemplateV2GeneralPresentationHtml(
+    presentationWith(edited)
+  );
+  assertPointsClose(parseSvgPoints(pptHtml, "polygon"), konvaGeometry.points);
+
+  const unsupported = [
+    { ...authored, shape: "ellipse" },
+    { ...authored, closed: false },
+    { ...authored, curve: { type: "smooth", tension: 0.5, segments: 8 } },
+    { ...authored, corner_radii: [0, 0] },
+    { ...authored, raw_path: "M0 0 L100 80" },
+    { ...authored, fill: { color: "#123456" } },
+    { ...authored, points: [...authored.points, { x: 50, y: 40 }] },
+    {
+      ...authored,
+      points: [
+        { x: 0, y: 0, future_point: true },
+        authored.points[1],
+      ],
+    },
+    { ...authored, upstream_element_extension: "vector-future" },
+  ];
+  unsupported.forEach((element) => {
+    assert.equal(templateV2ProvenVectorEditCapability(element), null);
+    assert.equal(templateV2ProvenVectorWrapEditCapability(element), null);
+    assert.equal(
+      editTemplateV2VectorPointTopology(element, {
+        type: "add-after",
+        index: 0,
+      }),
+      null
+    );
+    assert.equal(
+      editTemplateV2VectorPointTopology(element, {
+        type: "add-after",
+        index: 1,
+      }),
+      null
+    );
+  });
+});
+
+test("open path is represented consistently and does not acquire a fill", () => {
+  const vector = {
+    type: "vector",
+    points: [
+      { x: 10, y: 20 },
+      { x: 90, y: 5 },
+      { x: 140, y: 80 },
+    ],
+    closed: false,
+    curve: { type: "smooth", tension: 0.45, segments: 7 },
+    fill: { color: "#ff0000" },
+    stroke: { color: "#001122", width: 2 },
+  };
+  const plan = createTemplateV2SlideRenderPlan(slideWith(vector));
+  const vectorPlan = plan.components[0].elements[0].vector;
+  assert.ok(vectorPlan);
+  assert.equal(vectorPlan.closed, false);
+
+  const konvaGeometry = templateV2VectorRenderGeometry(vector, vectorPlan);
+  const pptHtml = renderTemplateV2GeneralPresentationHtml(
+    presentationWith(vector)
+  );
+  assert.doesNotMatch(pptHtml, /<polygon points=/);
+  assert.match(pptHtml, /<polyline points="[^"]+" fill="none"/);
+  assertPointsClose(parseSvgPoints(pptHtml, "polyline"), konvaGeometry.points);
+});
+
+test("editable geometry capability fails closed at renderer contract boundaries", () => {
+  const valid = {
+    type: "vector",
+    points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+    stroke: { color: "#000000", width: 1 },
+  };
+  assert.deepEqual(templateV2EditableVectorGeometry(valid), {
+    shape: null,
+    closed: false,
+    points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+    curve: null,
+    cornerRadii: [],
+  });
+  assert.deepEqual(
+    templateV2EditableVectorGeometry({
+      ...valid,
+      curve: { type: "smooth", future_curve: true },
+    }),
+    {
+      shape: null,
+      closed: false,
+      points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+      curve: { tension: 0.5, segments: 16, canRemove: false },
+      cornerRadii: [],
+    }
+  );
+  assert.deepEqual(
+    templateV2EditableVectorGeometry({
+      ...valid,
+      shape: "polygon",
+      closed: true,
+      cornerRadii: [4, 3],
+    }),
+    {
+      shape: "polygon",
+      closed: true,
+      points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+      curve: null,
+      cornerRadii: null,
+    }
+  );
+
+  const invalidCases = [
+    { ...valid, points: [{ x: 0, y: 0 }] },
+    { ...valid, points: [{ x: 0, y: Number.NaN }, { x: 1, y: 1 }] },
+    { ...valid, shape: "triangle" },
+    { ...valid, shape: "ellipse", points: [...valid.points, { x: 20, y: 20 }] },
+    { ...valid, closed: "false" },
+    { ...valid, corner_radii: [1, 2, 3] },
+    { ...valid, corner_radii: [1, -2] },
+    { ...valid, corner_radii: [1, 10001] },
+    { ...valid, curve: { type: "bezier", tension: 0.5, segments: 8 } },
+    { ...valid, curve: { type: "smooth", tension: 1.1, segments: 8 } },
+    { ...valid, curve: { type: "smooth", tension: 0.5, segments: 8.5 } },
+    { ...valid, curve: { type: "smooth", tension: 0.5, segments: 97 } },
+  ];
+  invalidCases.forEach((value) => {
+    assert.equal(templateV2EditableVectorGeometry(value), null);
+  });
+
+  assert.throws(
+    () =>
+      renderTemplateV2GeneralPresentationHtml(
+        presentationWith({
+          ...valid,
+          curve: { type: "smooth", tension: 0.5, segments: 8.5 },
+        })
+      ),
+    /template_v2_renderer_invalid_vector_segments/
+  );
+});

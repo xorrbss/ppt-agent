@@ -2,6 +2,11 @@ import { app, session } from "electron";
 import fs from "fs";
 import path from "path";
 import { addMainBreadcrumb, captureMainException } from "../sentry/main";
+import {
+  exceedsCleanupLimit,
+  isDirectCleanupChild,
+  MAX_CACHE_DIRECTORIES_PER_RECOVERY,
+} from "./cleanup-boundaries";
 import { safeError, safeLog, safeWarn } from "./safe-console";
 
 export type ChromiumCacheRecoveryStatus = {
@@ -97,7 +102,16 @@ function quarantineIfPresent(
     return;
   }
 
+  if (!isDirectCleanupChild(path.dirname(source), source)) {
+    status.errors.push(`${label}: refusing an unsafe cache path`);
+    return;
+  }
+
   try {
+    if (fs.lstatSync(source).isSymbolicLink()) {
+      status.errors.push(`${label}: refusing a symbolic-link cache path`);
+      return;
+    }
     fs.mkdirSync(quarantineRoot, { recursive: true });
     fs.renameSync(source, uniqueQuarantinePath(quarantineRoot, label));
     status.quarantined.push(label);
@@ -114,11 +128,31 @@ function removeOldDirectories(dir: string, status: ChromiumCacheRecoveryStatus):
 
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name.startsWith("old_")) {
-        fs.rmSync(path.join(dir, entry.name), { recursive: true, force: true });
-        status.removedStaleDirectories += 1;
+    const staleEntries = entries.filter((entry) => entry.name.startsWith("old_"));
+    if (exceedsCleanupLimit(status.removedStaleDirectories, staleEntries.length)) {
+      status.errors.push(
+        `old-cache-cleanup: refusing ${staleEntries.length} stale cache entries after ${status.removedStaleDirectories} removals (run limit ${MAX_CACHE_DIRECTORIES_PER_RECOVERY})`,
+      );
+      return;
+    }
+
+    // Validate the entire batch before deleting anything. Unexpected files or
+    // links are retained for manual inspection instead of being followed.
+    for (const entry of staleEntries) {
+      const candidate = path.join(dir, entry.name);
+      if (
+        !entry.isDirectory() ||
+        entry.isSymbolicLink() ||
+        !isDirectCleanupChild(dir, candidate)
+      ) {
+        status.errors.push(`old-cache-cleanup: refusing unsafe entry ${entry.name}`);
+        return;
       }
+    }
+
+    for (const entry of staleEntries) {
+      fs.rmSync(path.join(dir, entry.name), { recursive: true, force: true });
+      status.removedStaleDirectories += 1;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

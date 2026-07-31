@@ -130,8 +130,8 @@ def test_formats_recommended_and_absolute_budgets_for_prompt():
     )
 
     assert "`title`: recommended <= 64 characters; absolute maximum 80" in guidance
-    assert "Remove repetition, filler, and decorative modifiers" in guidance
-    assert "Never end a title or sentence mid-word" in guidance
+    assert "Remove repetition or rephrase" in guidance
+    assert "never end a title or sentence mid-word" in guidance
 
 
 def test_field_compaction_preserves_siblings_and_complete_sentence():

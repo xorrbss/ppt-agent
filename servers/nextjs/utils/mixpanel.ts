@@ -18,6 +18,40 @@ export enum MixpanelEvent {
 
   Codex_SignIn_API_Call = 'Codex Sign In API Call',
 
+  Auth_Gate_Viewed = 'Auth Gate Viewed',
+  Auth_Status_Checked = 'Auth Status Checked',
+  Auth_Unauthorized_Redirect = 'Auth Unauthorized Redirect',
+  Auth_Validation_Failed = 'Auth Validation Failed',
+  Auth_Setup_Started = 'Auth Setup Started',
+  Auth_Setup_Completed = 'Auth Setup Completed',
+  Auth_Setup_Failed = 'Auth Setup Failed',
+  Auth_SignIn_Started = 'Auth Sign In Started',
+  Auth_SignIn_Completed = 'Auth Sign In Completed',
+  Auth_SignIn_Failed = 'Auth Sign In Failed',
+  Auth_SignOut_Started = 'Auth Sign Out Started',
+  Auth_Signed_Out = 'Auth Signed Out',
+  Auth_SignOut_Failed = 'Auth Sign Out Failed',
+  Auth_Admin_Viewed = 'Auth Admin Viewed',
+  Auth_Admin_User_List_Loaded = 'Auth Admin User List Loaded',
+  Auth_Admin_User_List_Failed = 'Auth Admin User List Failed',
+  Auth_Admin_User_Create_Started = 'Auth Admin User Create Started',
+  Auth_Admin_User_Create_Completed = 'Auth Admin User Create Completed',
+  Auth_Admin_User_Create_Failed = 'Auth Admin User Create Failed',
+  Auth_Admin_User_Password_Reset_Started = 'Auth Admin User Password Reset Started',
+  Auth_Admin_User_Password_Reset_Completed = 'Auth Admin User Password Reset Completed',
+  Auth_Admin_User_Password_Reset_Failed = 'Auth Admin User Password Reset Failed',
+  Auth_Admin_User_Delete_Started = 'Auth Admin User Delete Started',
+  Auth_Admin_User_Delete_Completed = 'Auth Admin User Delete Completed',
+  Auth_Admin_User_Delete_Failed = 'Auth Admin User Delete Failed',
+  Auth_Admin_API_Key_List_Loaded = 'Auth Admin API Key List Loaded',
+  Auth_Admin_API_Key_List_Failed = 'Auth Admin API Key List Failed',
+  Auth_Admin_API_Key_Create_Started = 'Auth Admin API Key Create Started',
+  Auth_Admin_API_Key_Create_Completed = 'Auth Admin API Key Create Completed',
+  Auth_Admin_API_Key_Create_Failed = 'Auth Admin API Key Create Failed',
+  Auth_Admin_API_Key_Revoke_Started = 'Auth Admin API Key Revoke Started',
+  Auth_Admin_API_Key_Revoke_Completed = 'Auth Admin API Key Revoke Completed',
+  Auth_Admin_API_Key_Revoke_Failed = 'Auth Admin API Key Revoke Failed',
+
   Upload_Configuration_Invalid = 'Upload Configuration Invalid',
   Upload_Generation_Started = 'Upload Generation Started',
   Upload_Documents_Processed = 'Upload Documents Processed',
@@ -81,6 +115,8 @@ export enum MixpanelEvent {
 
   Dashboard_Page_Viewed = 'Dashboard Page Viewed',
   Dashboard_New_Presentation_Clicked = 'Dashboard New Presentation Clicked',
+  Dashboard_Blank_Presentation_Created = 'Dashboard Blank Presentation Created',
+  Dashboard_Blank_Presentation_Create_Failed = 'Dashboard Blank Presentation Create Failed',
   Dashboard_Presentation_Opened = 'Dashboard Presentation Opened',
   Dashboard_Presentation_Deleted = 'Dashboard Presentation Deleted',
   Dashboard_Create_New_Card_Clicked = 'Dashboard Create New Card Clicked',
@@ -188,6 +224,23 @@ export function track(eventName: string, props?: Record<string, unknown>): void 
 
 export function trackEvent(event: MixpanelEvent, props?: MixpanelProps): void {
   track(event, props);
+}
+
+export async function trackEventImmediately(
+  event: MixpanelEvent,
+  props?: MixpanelProps
+): Promise<void> {
+  if (!canUseMixpanel()) return;
+  const enabled = await ensureTelemetryStatus();
+  if (!enabled) return;
+  if (!window.__mixpanel_initialized) {
+    mixpanel.init(MIXPANEL_TOKEN as string, {
+      track_pageview: false,
+      api_host: 'https://api-eu.mixpanel.com',
+    });
+    window.__mixpanel_initialized = true;
+  }
+  mixpanel.track(event, props, { transport: 'sendBeacon' });
 }
 
 export function getDistinctId(): string | undefined {

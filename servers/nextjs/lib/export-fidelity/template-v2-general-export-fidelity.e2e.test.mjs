@@ -21,7 +21,9 @@ import { renderTemplateV2SourceHtml } from "./source-render.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..");
-const EXPORT_ROOT = path.join(REPO_ROOT, "presentation-export");
+const EXPORT_ROOT =
+  process.env.EXPORT_PACKAGE_ROOT?.trim() ||
+  path.join(REPO_ROOT, "presentation-export");
 const NEXT_ROOT = path.join(REPO_ROOT, "servers", "nextjs");
 const FIXTURE_ROOT = path.join(HERE, "fixtures", "template-v2-general");
 
@@ -97,6 +99,17 @@ async function stopProcess(child) {
 
 async function startNextDev({ port, fastApiUrl, appData, tempRoot, nextDistDir, chrome, fixtureId }) {
   const nextBin = path.join(NEXT_ROOT, "node_modules", "next", "dist", "bin", "next");
+  const nextArgs = [
+    nextBin,
+    "dev",
+    "--hostname",
+    "127.0.0.1",
+    "--port",
+    String(port),
+  ];
+  if (process.env.PRESENTON_TEST_USE_WEBPACK === "1") {
+    nextArgs.splice(2, 0, "--webpack");
+  }
   const converter = path.join(
     EXPORT_ROOT,
     "py",
@@ -106,7 +119,7 @@ async function startNextDev({ port, fastApiUrl, appData, tempRoot, nextDistDir, 
   const logs = [];
   const child = spawn(
     process.execPath,
-    [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
+    nextArgs,
     {
       cwd: NEXT_ROOT,
       env: {
@@ -189,7 +202,12 @@ test("Template V2 persisted JSON always crosses the production strategy boundary
   }
 });
 
-test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.2", { timeout: 240_000 }, async (t) => {
+// A cold Next compilation plus three real LibreOffice conversions regularly
+// crosses four minutes on Windows. Keep the tighter CI budget elsewhere while
+// leaving enough time for the test's mandatory child-process cleanup.
+const EXPORT_E2E_TIMEOUT_MS = process.platform === "win32" ? 360_000 : 240_000;
+
+test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.2", { timeout: EXPORT_E2E_TIMEOUT_MS }, async (t) => {
   const [{ manifest, presentations }, chrome, installedVersion] = await Promise.all([
     loadCorpus(),
     resolveAuthoredHybridChromeExecutable(),
@@ -207,6 +225,21 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
   ));
   const fastApi = http.createServer((request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
+    if (url.pathname === "/api/v1/auth/status") {
+      if (!request.headers.cookie) {
+        response.writeHead(401).end("session required");
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" })
+        .end(JSON.stringify({
+          configured: true,
+          authenticated: true,
+          username: "fidelity",
+          user_id: null,
+          role: "admin",
+        }));
+      return;
+    }
     const prefix = "/api/v1/ppt/presentation/";
     if (!url.pathname.startsWith(prefix)) {
       response.writeHead(404).end("unknown fake FastAPI route");
@@ -273,7 +306,9 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
       );
       assert.equal(routeBody.success, true);
       assert.match(routeBody.path, /^\/api\/export-presentation\/file\?name=/);
-      const downloadResponse = await fetch(`${nextBaseUrl}${routeBody.path}`);
+      const downloadResponse = await fetch(`${nextBaseUrl}${routeBody.path}`, {
+        headers: { Cookie: "presenton_session=fidelity" },
+      });
       assert.equal(downloadResponse.status, 200);
       const pptx = Buffer.from(await downloadResponse.arrayBuffer());
       const pptxPath = path.join(tempRoot, `${fixture.id}.pptx`);

@@ -4,6 +4,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { AUTHORED_HYBRID_COMPLETION_MARKER_NAME } from "./browser-source.ts";
 import { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
 
 export { resolveAuthoredHybridChromeExecutable } from "./chrome-runtime-discovery.ts";
@@ -23,6 +24,8 @@ interface ChromeRunOptions extends AuthoredHybridChromeOptions {
   html: string;
   dumpDom: boolean;
   screenshot: boolean;
+  /** Opaque token emitted by the injected analyser after its result marker. */
+  domCompletionToken?: string;
   /** Outer Chrome window size used while calibrating a fixed CSS viewport. */
   windowSizePx?: { width: number; height: number };
 }
@@ -76,19 +79,24 @@ async function startNetworkDenyProxy(): Promise<NetworkDenyProxy> {
 }
 
 const KILL_GRACE_MS = 5_000;
+// CIM enumeration can be slow on otherwise healthy Windows hosts. Keep the
+// helper bounded without turning normal process inspection into a failure.
+const WINDOWS_HELPER_TIMEOUT_MS = 10_000;
 
-/** Kill Chrome and resolve only once the process has actually exited, so callers
- * can delete the work directory afterwards. On Windows the detached child holds a
- * lock on `--user-data-dir`; deleting before it exits raises EBUSY and leaks the
- * temp dir. A grace timer guarantees we never hang if `exit` is never reported. */
-function terminateChrome(child: ChildProcess): Promise<void> {
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function waitForChildExit(child: ChildProcess): Promise<void> {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
-    if (!child.pid || child.exitCode !== null || child.signalCode !== null) {
-      resolve();
-      return;
-    }
     let done = false;
-    let grace: ReturnType<typeof setTimeout>;
     const settle = () => {
       if (done) return;
       done = true;
@@ -96,19 +104,180 @@ function terminateChrome(child: ChildProcess): Promise<void> {
       resolve();
     };
     child.once("exit", settle);
-    grace = setTimeout(settle, KILL_GRACE_MS);
+    const grace = setTimeout(settle, KILL_GRACE_MS);
     grace.unref?.();
-    if (process.platform === "win32") {
-      const killer = spawn(
-        "taskkill",
-        ["/pid", String(child.pid), "/T", "/F"],
-        { stdio: "ignore", windowsHide: true }
-      );
-      killer.unref();
-    } else {
-      child.kill("SIGKILL");
-    }
   });
+}
+
+async function runWindowsHelper(
+  command: string,
+  args: string[],
+  options: { env?: NodeJS.ProcessEnv; timeoutMs?: number } = {}
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      env: options.env,
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    const timeoutMs = options.timeoutMs ?? WINDOWS_HELPER_TIMEOUT_MS;
+    let settled = false;
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const timer = setTimeout(() => {
+      // These helpers are direct children, not Chrome. Terminate only this
+      // helper before failing the capture rather than leaving a hung cleanup
+      // command to block the profile removal indefinitely.
+      child.kill();
+      settle(() =>
+        reject(
+          new Error(
+            `Windows cleanup helper ${command} timed out after ${timeoutMs}ms.`
+          )
+        )
+      );
+    }, timeoutMs);
+    child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.once("error", (error) =>
+      settle(() =>
+        reject(new Error(`Windows cleanup helper ${command} failed to start.`, { cause: error }))
+      )
+    );
+    child.once("close", (code, signal) =>
+      settle(() => {
+        if (code === 0) {
+          resolve(Buffer.concat(stdout));
+          return;
+        }
+        const stderrText = Buffer.concat(stderr).toString("utf8").trim();
+        reject(
+          new Error(
+            `Windows cleanup helper ${command} exited with code ${code ?? "unknown"}${signal ? ` (${signal})` : ""}${stderrText ? `: ${stderrText}` : ""}`
+          )
+        );
+      })
+    );
+  });
+}
+
+async function taskkillProcessTree(pid: number): Promise<void> {
+  await runWindowsHelper("taskkill", ["/pid", String(pid), "/T", "/F"]);
+}
+
+async function windowsProcessesUsingProfile(profilePath: string): Promise<number[]> {
+  const output = await runWindowsHelper(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "$target=[Environment]::GetEnvironmentVariable('PRESENTON_AUTHORED_HYBRID_PROFILE');$pattern='(?i)(?:^|\\s)(?:\"--user-data-dir=([^\"]*)\"|''--user-data-dir=([^'']*)''|--user-data-dir=(?:\"([^\"]*)\"|''([^'']*)''|([^\\s\"'']+)))';Get-CimInstance Win32_Process | Where-Object { $line=[string]$_.CommandLine;$values=@([regex]::Matches($line,$pattern) | ForEach-Object { if ($_.Groups[1].Success) { $_.Groups[1].Value } elseif ($_.Groups[2].Success) { $_.Groups[2].Value } elseif ($_.Groups[3].Success) { $_.Groups[3].Value } elseif ($_.Groups[4].Success) { $_.Groups[4].Value } else { $_.Groups[5].Value } });@($values | Where-Object { $_ -ceq $target }).Count -gt 0 } | ForEach-Object { $_.ProcessId }",
+    ],
+    {
+      env: {
+        ...process.env,
+        PRESENTON_AUTHORED_HYBRID_PROFILE: profilePath,
+      },
+    }
+  );
+  return [...new Set(
+    output
+      .toString("utf8")
+      .split(/\s+/)
+      .map((value) => Number(value))
+      .filter((value) => Number.isSafeInteger(value) && value > 0)
+  )];
+}
+
+async function terminateWindowsProfileProcesses(profilePath: string): Promise<void> {
+  // chrome.exe may hand off to a browser process and exit before Node sees its
+  // `close` event. The per-capture profile is unique, so it is a safe process
+  // identity even after the original launcher PID no longer exists.
+  const helperErrors: unknown[] = [];
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const pids = await windowsProcessesUsingProfile(profilePath);
+    if (pids.length === 0) break;
+    const terminations = await Promise.allSettled(
+      pids.map((pid) => taskkillProcessTree(pid))
+    );
+    helperErrors.push(
+      ...terminations
+        .filter((result) => result.status === "rejected")
+        .map((result) => (result as PromiseRejectedResult).reason)
+    );
+    await delay(100);
+  }
+  const remaining = await windowsProcessesUsingProfile(profilePath);
+  if (remaining.length > 0) {
+    const residualError = new Error(
+      `Windows Chrome cleanup left profile-associated process IDs: ${remaining.join(", ")}.`
+    );
+    throw new AggregateError(
+      [...helperErrors, residualError],
+      "Windows Chrome cleanup could not remove every profile-associated process."
+    );
+  }
+}
+
+export const __testOnlyRunWindowsHelper = runWindowsHelper;
+export const __testOnlyAssertWindowsProfileGone = async (
+  profilePath: string
+): Promise<void> => {
+  const remaining = await windowsProcessesUsingProfile(profilePath);
+  if (remaining.length > 0) {
+    throw new Error(
+      `Windows Chrome cleanup left profile-associated process IDs: ${remaining.join(", ")}.`
+    );
+  }
+};
+
+function domCompletionPattern(token: string): RegExp {
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `<meta\\b(?=[^>]*\\bname\\s*=\\s*["']${AUTHORED_HYBRID_COMPLETION_MARKER_NAME}["'])(?=[^>]*\\bcontent\\s*=\\s*["']${escapedToken}["'])[^>]*>`,
+    "i"
+  );
+}
+
+/** Kill Chrome and resolve only once the process has actually exited, so callers
+ * can delete the work directory afterwards. On Windows the detached child holds a
+ * lock on `--user-data-dir`; deleting before it exits raises EBUSY and leaks the
+ * temp dir. A grace timer guarantees we never hang if `exit` is never reported. */
+async function terminateChrome(
+  child: ChildProcess,
+  profilePath?: string
+): Promise<void> {
+  if (process.platform === "win32") {
+    if (child.pid && child.exitCode === null && child.signalCode === null) {
+      try {
+        await taskkillProcessTree(child.pid);
+      } catch (error) {
+        // A launcher can exit in the small race between the state check and
+        // taskkill. That is only benign when it has demonstrably exited; a
+        // still-running launcher is a failed cleanup, never a success.
+        await waitForChildExit(child);
+        if (child.exitCode === null && child.signalCode === null) {
+          throw new Error("Windows Chrome launcher could not be terminated.", {
+            cause: error,
+          });
+        }
+      }
+    }
+    if (profilePath) await terminateWindowsProfileProcesses(profilePath);
+    await waitForChildExit(child);
+    return;
+  }
+  if (child.pid && child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+  }
+  await waitForChildExit(child);
 }
 
 function appendBounded(
@@ -130,7 +299,10 @@ async function spawnChrome(
   executable: string,
   args: string[],
   timeoutMs: number,
-  completedScreenshotPath?: string
+  completedScreenshotPath?: string,
+  expectDomOutput = false,
+  completionToken?: string,
+  profilePath?: string
 ): Promise<{ stdout: Buffer; stderr: Buffer }> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
@@ -145,6 +317,12 @@ async function spawnChrome(
     let screenshotPollInFlight = false;
     let screenshotPoll: ReturnType<typeof setInterval> | undefined;
     let timer: ReturnType<typeof setTimeout>;
+    const completionPattern = completionToken
+      ? domCompletionPattern(completionToken)
+      : undefined;
+    let domOutputComplete = !expectDomOutput;
+    let screenshotOutputComplete = !completedScreenshotPath;
+    let stdoutTail = "";
 
     const finish = (callback: () => void) => {
       if (settled) return;
@@ -153,14 +331,46 @@ async function spawnChrome(
       if (screenshotPoll) clearInterval(screenshotPoll);
       callback();
     };
+    const afterTermination = (
+      onClean: () => void,
+      primaryError?: unknown
+    ) => {
+      void terminateChrome(child, profilePath).then(
+        () => {
+          if (primaryError !== undefined) {
+            reject(primaryError);
+            return;
+          }
+          onClean();
+        },
+        (cleanupError) => {
+          reject(
+            primaryError === undefined
+              ? cleanupError
+              : new AggregateError(
+                  [primaryError, cleanupError],
+                  `Chrome capture failed and Windows cleanup also failed: ${describeError(primaryError)}`
+                )
+          );
+        }
+      );
+    };
+    const harvestCompletedOutput = () => {
+      if (!domOutputComplete || !screenshotOutputComplete) return;
+      finish(() => {
+        // Windows Chrome may retain a browser child after it has written the
+        // requested artifacts. Those artifacts are the complete capture
+        // contract, so do not wait for an unrelated background process to exit.
+        afterTermination(() =>
+          resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) })
+        );
+      });
+    };
     timer = setTimeout(() => {
       finish(() => {
-        void terminateChrome(child).then(() =>
-          reject(
-            new Error(
-              `Chrome authored hybrid capture timed out after ${timeoutMs}ms.`
-            )
-          )
+        afterTermination(
+          () => {},
+          new Error(`Chrome authored hybrid capture timed out after ${timeoutMs}ms.`)
         );
       });
     }, timeoutMs);
@@ -169,8 +379,9 @@ async function spawnChrome(
       // complete on disk but keep the browser process alive indefinitely. IEND
       // is the definitive end of a PNG stream, so harvest that completed output
       // and terminate the otherwise-idle process instead of waiting for the
-      // outer watchdog. This path is used only for screenshot-only captures;
-      // combined DOM + screenshot runs still require Chrome to close normally.
+      // outer watchdog. When a DOM dump is also requested, wait for both
+      // complete artifacts before returning; this keeps the extraction
+      // fail-closed while avoiding Windows launcher-process hangs.
       screenshotPoll = setInterval(() => {
         if (screenshotPollInFlight || settled) return;
         screenshotPollInFlight = true;
@@ -181,14 +392,8 @@ async function spawnChrome(
               png.length >= 24 &&
               png.subarray(-COMPLETE_PNG_SUFFIX.length).equals(COMPLETE_PNG_SUFFIX)
             ) {
-              finish(() => {
-                void terminateChrome(child).then(() =>
-                  resolve({
-                    stdout: Buffer.concat(stdout),
-                    stderr: Buffer.concat(stderr),
-                  })
-                );
-              });
+              screenshotOutputComplete = true;
+              harvestCompletedOutput();
             }
           })
           .catch(() => {})
@@ -202,9 +407,17 @@ async function spawnChrome(
     child.stdout?.on("data", (chunk: Buffer) => {
       try {
         stdoutBytes = appendBounded(stdout, chunk, stdoutBytes);
+        // Only the analyser appends this per-capture marker, and it does so
+        // after writing its observation. A user-authored `</html>` is not an
+        // output boundary: it may occur anywhere in a streamed DOM dump.
+        stdoutTail = `${stdoutTail}${chunk.toString("utf8")}`.slice(-1024);
+        if (expectDomOutput && completionPattern?.test(stdoutTail)) {
+          domOutputComplete = true;
+          harvestCompletedOutput();
+        }
       } catch (error) {
         finish(() => {
-          void terminateChrome(child).then(() => reject(error));
+          afterTermination(() => {}, error);
         });
       }
     });
@@ -213,21 +426,36 @@ async function spawnChrome(
         stderrBytes = appendBounded(stderr, chunk, stderrBytes);
       } catch (error) {
         finish(() => {
-          void terminateChrome(child).then(() => reject(error));
+          afterTermination(() => {}, error);
         });
       }
     });
-    child.once("error", (error) => finish(() => reject(error)));
+    child.once("error", (error) =>
+      finish(() => {
+        afterTermination(() => {}, error);
+      })
+    );
     child.once("close", (code, signal) => {
       if (code === 0) {
-        finish(() =>
-          resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) })
-        );
+        // On Windows chrome.exe can act as a launcher: the process we spawned
+        // exits successfully before its browser child has flushed the requested
+        // PNG. Keep the existing bounded IEND poll alive for screenshot-only
+        // captures instead of deleting the work directory under that child.
+        if (
+          completedScreenshotPath ||
+          (expectDomOutput && completionPattern && !domOutputComplete)
+        ) return;
+        finish(() => {
+          afterTermination(() =>
+            resolve({ stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) })
+          );
+        });
         return;
       }
       const stderrText = Buffer.concat(stderr).toString("utf8").trim();
       finish(() =>
-        reject(
+        afterTermination(
+          () => {},
           new Error(
             `Chrome authored hybrid capture exited with code ${code ?? "unknown"}${signal ? ` (${signal})` : ""}${stderrText ? `: ${stderrText}` : ""}`
           )
@@ -262,6 +490,8 @@ export async function runAuthoredHybridChrome(
   const screenshotPath = path.join(workDirectory, "backplate.png");
   const profilePath = path.join(workDirectory, "chrome-profile");
   let networkDenyProxy: NetworkDenyProxy | undefined;
+  let result: ChromeRunResult | undefined;
+  let captureError: unknown;
 
   try {
     networkDenyProxy = await startNetworkDenyProxy();
@@ -294,9 +524,12 @@ export async function runAuthoredHybridChrome(
       executable,
       args,
       options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-      options.screenshot && !options.dumpDom ? screenshotPath : undefined
+      options.screenshot ? screenshotPath : undefined,
+      options.dumpDom,
+      options.domCompletionToken,
+      profilePath
     );
-    const result: ChromeRunResult = {};
+    result = {};
     if (options.dumpDom) result.serializedDom = completed.stdout.toString("utf8");
     if (options.screenshot) {
       try {
@@ -308,9 +541,40 @@ export async function runAuthoredHybridChrome(
         );
       }
     }
-    return result;
-  } finally {
-    await networkDenyProxy?.close().catch(() => {});
-    await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => {});
+  } catch (error) {
+    captureError = error;
   }
+
+  // Preserve the original capture failure as the first aggregate member. A
+  // cleanup problem remains observable, but must not erase the reason the
+  // caller's Chrome capture originally failed.
+  let cleanupError: unknown;
+  try {
+    await networkDenyProxy?.close().catch(() => {});
+    await fs
+      .rm(workDirectory, {
+        recursive: true,
+        force: true,
+        // Windows can retain chrome_debug.log briefly after taskkill reports
+        // success. Node retries only transient filesystem errors here.
+        maxRetries: process.platform === "win32" ? 5 : 0,
+        retryDelay: 100,
+      });
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (captureError !== undefined) {
+    if (cleanupError !== undefined) {
+      throw new AggregateError(
+        [captureError, cleanupError],
+        `Chrome capture failed and its work-directory cleanup also failed: ${describeError(captureError)}`
+      );
+    }
+    throw captureError;
+  }
+  if (cleanupError !== undefined) throw cleanupError;
+  if (!result) {
+    throw new Error("Chrome capture completed without a result.");
+  }
+  return result;
 }

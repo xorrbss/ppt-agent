@@ -97,6 +97,7 @@ from utils.get_env import get_next_internal_base_url
 from utils.get_layout_by_name import get_layout_by_name
 from utils.llm_calls.compose_slides import compose_and_project
 from utils.llm_calls.generate_content_brief import generate_content_brief
+from utils.document_context import build_document_context
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
     get_messages as get_outline_messages,
@@ -111,6 +112,7 @@ from utils.outline_utils import (
     get_presentation_title_from_presentation_outline,
 )
 from utils.process_slides import process_slide_and_fetch_assets
+from utils.document_path_security import validate_document_paths
 
 from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
 
@@ -157,6 +159,9 @@ async def check_if_api_request_is_valid(
             status_code=400,
             detail="Either content or slides markdown or files is required to generate presentation",
         )
+
+    if request.files:
+        request.files = validate_document_paths(request.files)
 
     if request.n_slides is not None and request.n_slides <= 0:
         raise HTTPException(
@@ -250,6 +255,21 @@ async def check_if_api_request_is_valid(
             )
 
     return (presentation_id,)
+
+
+async def _load_document_context(
+    file_paths: List[str],
+    presentation_language: Optional[str],
+) -> str:
+    documents_loader = DocumentsLoader(
+        file_paths=file_paths,
+        presentation_language=presentation_language,
+    )
+    await documents_loader.load_documents()
+    return build_document_context(
+        documents_loader.documents,
+        file_paths,
+    )
 
 
 async def _generate_template_v2_presentation(
@@ -499,14 +519,10 @@ async def generate_presentation_handler(
                 await sql_session.commit()
 
             if request.files:
-                documents_loader = DocumentsLoader(
-                    file_paths=request.files,
-                    presentation_language=request.language,
+                additional_context = await _load_document_context(
+                    request.files,
+                    request.language,
                 )
-                await documents_loader.load_documents()
-                documents = documents_loader.documents
-                if documents:
-                    additional_context = "\n\n".join(documents)
 
             # Stage A - Knowledge Brief: research rich, grounded substance first,
             # then ground the outline in it. Falls back to documents-only on failure.
@@ -1158,6 +1174,10 @@ async def queue_presentation_generation(
             return existing_status
 
     (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
+    if request.files:
+        # Reject oversized extracted input before persisting a durable job.
+        await _load_document_context(request.files, request.language)
+
     # Validation may normalize legacy template identifiers. Persist the exact
     # admitted request that the worker will execute. The fingerprint remains
     # tied to the caller's canonical submitted payload for stable replay.

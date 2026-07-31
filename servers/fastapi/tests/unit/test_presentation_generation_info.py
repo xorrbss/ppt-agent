@@ -10,6 +10,10 @@ from api.v1.ppt.endpoints.presentation_crud import (
     get_presentation_generation_info,
 )
 from models.sql.presentation import PresentationModel
+from templates.v2.constants import (
+    LEGACY_PRESENTATION_VERSION,
+    TEMPLATE_V2_VERSION,
+)
 
 
 def _run(coro):
@@ -23,7 +27,7 @@ async def _make_engine(db_path):
     return engine
 
 
-def test_generation_info_returns_prompt_file_names_and_settings(tmp_path):
+def test_generation_info_returns_basename_only_and_saved_settings(tmp_path):
     async def runner():
         engine = await _make_engine(tmp_path / "generation-info.db")
         presentation_id = uuid.uuid4()
@@ -46,6 +50,7 @@ def test_generation_info_returns_prompt_file_names_and_settings(tmp_path):
                     include_title_slide=True,
                     web_search=False,
                     mode="authored",
+                    version=TEMPLATE_V2_VERSION,
                 )
             )
             await session.commit()
@@ -69,6 +74,39 @@ def test_generation_info_returns_prompt_file_names_and_settings(tmp_path):
             assert info.settings.include_title_slide is True
             assert info.settings.web_search is False
             assert info.settings.mode == "authored"
+            assert info.settings.version == TEMPLATE_V2_VERSION
+
+        await engine.dispose()
+
+    _run(runner())
+
+
+def test_generation_info_returns_empty_attachments_and_legacy_default(tmp_path):
+    async def runner():
+        engine = await _make_engine(tmp_path / "generation-info-defaults.db")
+        presentation_id = uuid.uuid4()
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            session.add(
+                PresentationModel(
+                    id=presentation_id,
+                    content="Create a short summary",
+                    n_slides=3,
+                    language="en",
+                )
+            )
+            await session.commit()
+
+            info = await get_presentation_generation_info(
+                id=presentation_id,
+                sql_session=session,
+            )
+
+            assert info.attachment_file_names == []
+            assert info.settings.version == LEGACY_PRESENTATION_VERSION
+            assert info.settings.include_table_of_contents is False
+            assert info.settings.include_title_slide is True
+            assert info.settings.web_search is False
 
         await engine.dispose()
 
@@ -86,6 +124,7 @@ def test_generation_info_returns_404_for_unknown_presentation(tmp_path):
                     sql_session=session,
                 )
             assert exc.value.status_code == 404
+            assert exc.value.detail == "Presentation not found"
 
         await engine.dispose()
 

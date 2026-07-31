@@ -1,8 +1,14 @@
+// Only the untrusted authored document passes through here. Collector-built
+// @font-face CSS is injected into a separate document after this preflight
+// succeeds, so the preflighted HTML never carries inlined font payloads.
 const MAX_AUTHORED_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_DATA_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_DATA_FONT_BYTES = 8 * 1024 * 1024;
 
 const DATA_IMAGE_PATTERN =
   /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]*={0,2})$/i;
+const DATA_FONT_PATTERN =
+  /^data:font\/(woff2|woff|otf|ttf);base64,([A-Za-z0-9+/]*={0,2})$/i;
 
 export interface HybridHtmlPreflightResult {
   ok: boolean;
@@ -122,8 +128,11 @@ export function preflightAuthoredHtmlForHybrid(
     return { ok: false, reason: "active-or-external-html" };
   }
 
-  // Every CSS url() must be an embedded safe raster. Static SVG markup itself
-  // remains eligible for the backplate, but SVG data URLs are intentionally not.
+  // Every CSS url() must be an embedded safe raster. A font program is never
+  // accepted from the untrusted document: only the server-side collector may
+  // introduce @font-face payloads, and it does so in the separate document
+  // that bypasses this preflight. Static SVG markup itself remains eligible
+  // for the backplate, but SVG data URLs are intentionally not.
   const cssUrlPattern = /url\(\s*(["']?)(.*?)\1\s*\)/gis;
   for (const match of html.matchAll(cssUrlPattern)) {
     const value = match[2].trim();
@@ -185,4 +194,46 @@ export function validateHybridDataImageUrl(
   return magicMatches
     ? { ok: true, mime, bytes }
     : { ok: false, reason: "image-mime-mismatch" };
+}
+
+export type HybridDataFontResult =
+  | {
+      ok: true;
+      mime: "woff2" | "woff" | "otf" | "ttf";
+      bytes: Buffer;
+    }
+  | { ok: false; reason: string };
+
+export function validateHybridDataFontUrl(
+  source: string
+): HybridDataFontResult {
+  const match = DATA_FONT_PATTERN.exec(source.trim());
+  if (!match) return { ok: false, reason: "unsupported-font-url" };
+  const length = decodedBase64Length(match[2]);
+  if (length < 0 || length > MAX_DATA_FONT_BYTES) {
+    return { ok: false, reason: "invalid-font-size" };
+  }
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length !== length) return { ok: false, reason: "invalid-base64" };
+
+  const mime = match[1].toLowerCase() as "woff2" | "woff" | "otf" | "ttf";
+  const magicMatches =
+    (mime === "woff2" &&
+      bytes.length >= 4 &&
+      bytes.toString("ascii", 0, 4) === "wOF2") ||
+    (mime === "woff" &&
+      bytes.length >= 4 &&
+      bytes.toString("ascii", 0, 4) === "wOFF") ||
+    (mime === "otf" &&
+      bytes.length >= 4 &&
+      bytes.toString("ascii", 0, 4) === "OTTO") ||
+    (mime === "ttf" &&
+      bytes.length >= 4 &&
+      bytes[0] === 0x00 &&
+      bytes[1] === 0x01 &&
+      bytes[2] === 0x00 &&
+      bytes[3] === 0x00);
+  return magicMatches
+    ? { ok: true, mime, bytes }
+    : { ok: false, reason: "font-mime-mismatch" };
 }

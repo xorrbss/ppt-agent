@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,10 +9,17 @@ import {
   extractAuthoredSlideDom,
   resolveAuthoredHybridChromeExecutable,
 } from "./index.ts";
-import { runAuthoredHybridChrome } from "./chrome-runner.ts";
+import {
+  __testOnlyAssertWindowsProfileGone,
+  __testOnlyRunWindowsHelper,
+  runAuthoredHybridChrome,
+} from "./chrome-runner.ts";
+import { instrumentAuthoredHtml } from "./html-instrumentation.ts";
 
 const COMPLETE_ONE_PIXEL_PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
+const FIXTURE_COMPLETION_TOKEN = "authored-hybrid-fixture-complete";
+const COMPLETION_MARKER_NAME = "__presenton_authored_hybrid_complete_v1__";
 
 test("legacy static HTML is extracted without leaving Chrome temp artifacts", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
@@ -80,8 +88,8 @@ test("a timed-out capture still removes its Chrome work directory", async (t) =>
 });
 
 test(
-  "a completed screenshot is harvested when headless Chrome stays alive",
-  { skip: process.platform === "win32" ? "POSIX headless-process regression" : false },
+  "completed Chrome artifacts wait for the trusted marker, not a streamed closing tag",
+  { skip: process.platform === "win32" ? "POSIX process-lifecycle regression" : false },
   async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "presenton-hybrid-hung-"));
   const fakeChromeScript = path.join(root, "fake-chrome.mjs");
@@ -90,8 +98,10 @@ test(
     fakeChromeScript,
     `import fs from "node:fs";
 const output = process.argv.find((arg) => arg.startsWith("--screenshot="))?.slice(13);
-if (!output) process.exit(2);
-fs.writeFileSync(output, Buffer.from("${COMPLETE_ONE_PIXEL_PNG}", "base64"));
+if (output) fs.writeFileSync(output, Buffer.from("${COMPLETE_ONE_PIXEL_PNG}", "base64"));
+process.stdout.write("<!doctype html><html><body>complete capture</body></ht");
+setTimeout(() => process.stdout.write("ml>"), 15);
+setTimeout(() => process.stdout.write('<meta name="${COMPLETION_MARKER_NAME}" content="${FIXTURE_COMPLETION_TOKEN}">'), 30);
 setInterval(() => {}, 1000);
 `,
     "utf8"
@@ -107,10 +117,13 @@ setInterval(() => {}, 1000);
     const capture = await runAuthoredHybridChrome({
       chromeExecutable: fakeChromeExecutable,
       timeoutMs: 5_000,
-      dumpDom: false,
+      dumpDom: true,
       screenshot: true,
+      domCompletionToken: FIXTURE_COMPLETION_TOKEN,
       html: "<!doctype html><body>complete screenshot</body>",
     });
+    assert.match(capture.serializedDom ?? "", /complete capture/);
+    assert.match(capture.serializedDom ?? "", new RegExp(FIXTURE_COMPLETION_TOKEN));
     assert.deepEqual(
       capture.screenshotPng,
       Buffer.from(COMPLETE_ONE_PIXEL_PNG, "base64")
@@ -119,8 +132,135 @@ setInterval(() => {}, 1000);
       Date.now() - startedAt < 3_000,
       "completed screenshot should return before the outer watchdog"
     );
+
+    const domOnly = await runAuthoredHybridChrome({
+      chromeExecutable: fakeChromeExecutable,
+      timeoutMs: 5_000,
+      dumpDom: true,
+      screenshot: false,
+      domCompletionToken: FIXTURE_COMPLETION_TOKEN,
+      html: "<!doctype html><body>complete DOM</body>",
+    });
+    assert.match(domOnly.serializedDom ?? "", /complete capture/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+  }
+);
+
+test(
+  "Windows launcher handoff still removes the unique Chrome profile",
+  { skip: process.platform === "win32" ? false : "Windows Chrome launcher regression" },
+  async (t) => {
+    const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+    if (!chromeExecutable) {
+      if (process.env.CI === "true") {
+        assert.fail("CI must provide Chrome/Chromium for authored cleanup coverage");
+      }
+      t.skip("Chrome/Chromium is unavailable");
+      return;
+    }
+
+    const originalTemp = process.env.TEMP_DIRECTORY;
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "presenton-hybrid-launcher-"));
+    const completionToken = "windows-launcher-handoff-token";
+    process.env.TEMP_DIRECTORY = root;
+    try {
+      const capture = await runAuthoredHybridChrome({
+        chromeExecutable,
+        timeoutMs: 30_000,
+        dumpDom: true,
+        screenshot: true,
+        domCompletionToken: completionToken,
+        html: instrumentAuthoredHtml("<!doctype html><body>launcher handoff</body>", {
+          completionToken,
+        }),
+      });
+      assert.match(capture.serializedDom ?? "", /launcher handoff/);
+      assert.ok(capture.screenshotPng?.length);
+      assert.deepEqual(await fs.readdir(root), []);
+    } finally {
+      if (originalTemp === undefined) delete process.env.TEMP_DIRECTORY;
+      else process.env.TEMP_DIRECTORY = originalTemp;
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
+  "Windows cleanup helpers fail closed for timeout, nonzero exit, and residual profile processes",
+  { skip: process.platform === "win32" ? false : "Windows cleanup helper regression" },
+  async () => {
+    await assert.rejects(
+      __testOnlyRunWindowsHelper(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", "exit 7"],
+        { timeoutMs: 10_000 }
+      ),
+      /exited with code 7/
+    );
+
+    const timeoutStartedAt = Date.now();
+    await assert.rejects(
+      __testOnlyRunWindowsHelper(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 10"],
+        { timeoutMs: 100 }
+      ),
+      /timed out after 100ms/
+    );
+    assert.ok(
+      Date.now() - timeoutStartedAt < 2_000,
+      "a hung cleanup helper must be bounded and killed"
+    );
+
+    const profilePath = path.join(
+      os.tmpdir(),
+      `presenton hybrid residue ${Date.now()} ${process.pid}`
+    );
+    const stopResident = async (resident) => {
+      if (resident.exitCode === null && resident.signalCode === null) {
+        resident.kill();
+      }
+      if (resident.exitCode === null && resident.signalCode === null) {
+        await new Promise((resolve) => resident.once("close", resolve));
+      }
+    };
+    const prefixedResident = spawn(
+      process.execPath,
+      [
+        "-e",
+        "setTimeout(() => {}, 10_000)",
+        "--",
+        `--user-data-dir=${profilePath}-prefix`,
+      ],
+      { stdio: "ignore", windowsHide: true }
+    );
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await __testOnlyAssertWindowsProfileGone(profilePath);
+    } finally {
+      await stopResident(prefixedResident);
+    }
+
+    const exactResident = spawn(
+      process.execPath,
+      [
+        "-e",
+        "setTimeout(() => {}, 10_000)",
+        "--",
+        `--user-data-dir=${profilePath}`,
+      ],
+      { stdio: "ignore", windowsHide: true }
+    );
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await assert.rejects(
+        __testOnlyAssertWindowsProfileGone(profilePath),
+        /profile-associated process IDs/
+      );
+    } finally {
+      await stopResident(exactResident);
+    }
   }
 );

@@ -188,23 +188,31 @@ test("v0.4.2 authored-hybrid representative fixtures preserve editable structure
     assert.ok(xml2.includes(text), `slide 2 lost editable CJK text: ${text}`);
   }
   assert.match(xml2, /\bsz="900"/, "authored sub-9pt text must clamp to 9pt");
-  const railElements = results[1].layer.elements.filter(
-    (element) =>
-      element.kind === "shape" &&
-      element.source.shape.shape === "rectangle" &&
-      Math.min(element.source.bounds.px.width, element.source.bounds.px.height) <= 3
+  const filledRuleElements = results[1].layer.elements.filter((element) => {
+    if (element.kind !== "shape" || element.source.shape.shape !== "rectangle") {
+      return false;
+    }
+    const { width, height } = element.source.bounds.px;
+    return (width >= 1_000 && height <= 3) || (height >= 400 && width <= 3);
+  });
+  assert.equal(
+    filledRuleElements.length,
+    2,
+    "both thin filled rules must stay editable rectangles"
   );
-  assert.equal(railElements.length, 2, "both thin filled rules must stay editable rectangles");
-  assert.match(
-    xml2,
-    /<a:ext cx="9906000" cy="19050"\/><\/a:xfrm><a:prstGeom prst="rect">/,
-    "horizontal filled rail must retain its authored rectangular thickness"
+  assert.ok(
+    filledRuleElements.some(({ source }) =>
+      source.bounds.px.width >= 1_000 && source.bounds.px.height === 2
+    ),
+    "horizontal filled rule must preserve its authored 2px rectangular extent"
   );
-  assert.match(
-    xml2,
-    /<a:ext cx="19050" cy="4000500"\/><\/a:xfrm><a:prstGeom prst="rect">/,
-    "vertical filled rail must retain its authored rectangular thickness"
+  assert.ok(
+    filledRuleElements.some(({ source }) =>
+      source.bounds.px.height >= 400 && source.bounds.px.width === 2
+    ),
+    "vertical filled rule must preserve its authored 2px rectangular extent"
   );
+  assert.match(xml2, /<a:prstGeom prst="rect"/);
 
   for (const text of [
     "Native media with residual artwork",

@@ -9,6 +9,7 @@ interface StockSearchOptions {
   strictApiKey?: boolean;
 }
 
+const REDACTED_SECRET_PLACEHOLDER = "__configured__";
 
 export class ImagesApi {
  
@@ -70,7 +71,7 @@ export class ImagesApi {
 
       const headers: Record<string, string> = {};
       const trimmedApiKey = (options.apiKey || "").trim();
-      if (trimmedApiKey) {
+      if (trimmedApiKey && trimmedApiKey !== REDACTED_SECRET_PLACEHOLDER) {
         headers["X-Provider-Api-Key"] = trimmedApiKey;
       }
 

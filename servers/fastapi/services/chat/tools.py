@@ -1,12 +1,16 @@
 import json
 import logging
 import re
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import dirtyjson  # type: ignore[import-untyped]
 from llmai.shared import AssistantToolCall, Tool  # type: ignore[import-not-found]
 
+from services.chat.outline_context import OutlineTemplateContext
+from services.chat.presentation_context_store import PresentationContextStore
 from services.chat.schemas import (
+    ChatContextToolInput,
     DeleteSlideInput,
     GenerateAssetsInput,
     GenerateIconInput,
@@ -17,8 +21,9 @@ from services.chat.schemas import (
     SaveSlideInput,
     SearchSlidesInput,
     SetPresentationThemeInput,
+    SlideUIToolInput,
 )
-from services.chat.presentation_context_store import PresentationContextStore
+from services.chat.slide_ui_mutations import SlideUIMutationService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,6 +33,18 @@ ToolHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 class ChatTools:
     def __init__(self, memory: PresentationContextStore):
         self._memory = memory
+        sql_session = getattr(
+            memory, "sql_session", getattr(memory, "_sql_session", None)
+        )
+        presentation_id = getattr(
+            memory, "presentation_id", getattr(memory, "_presentation_id", None)
+        )
+        self._outline_context = OutlineTemplateContext(
+            sql_session=sql_session,
+            presentation_id=presentation_id,
+            memory=memory,
+        )
+        self._ui_mutations = SlideUIMutationService(sql_session, presentation_id)
         self._tool_handlers: dict[str, ToolHandler] = {
             "getPresentationOutline": self._get_presentation_outline,
             "searchSlides": self._search_slides,
@@ -42,9 +59,17 @@ class ChatTools:
             "deleteSlide": self._delete_slide,
             "setPresentationTheme": self._set_presentation_theme,
         }
+        for name in self._context_tool_names():
+            self._tool_handlers[name] = lambda args, tool_name=name: (
+                self._execute_context_tool(tool_name, args)
+            )
+        for name in self._ui_tool_names():
+            self._tool_handlers[name] = lambda args, tool_name=name: (
+                self._execute_ui_tool(tool_name, args)
+            )
 
     def get_tool_definitions(self) -> list[Tool]:
-        return [
+        tools = [
             Tool(
                 name="getPresentationOutline",
                 description=(
@@ -154,6 +179,25 @@ class ChatTools:
                 strict=True,
             ),
         ]
+        tools.extend(
+            Tool(
+                name=name,
+                description=f"Presentation-scoped Chat operation: {name}.",
+                schema=ChatContextToolInput,
+                strict=True,
+            )
+            for name in self._context_tool_names()
+        )
+        tools.extend(
+            Tool(
+                name=name,
+                description=f"Revision-checked native slide UI operation: {name}.",
+                schema=SlideUIToolInput,
+                strict=True,
+            )
+            for name in self._ui_tool_names()
+        )
+        return tools
 
     async def execute_tool_call(self, tool_call: AssistantToolCall) -> dict[str, Any]:
         handler = self._tool_handlers.get(tool_call.name)
@@ -365,6 +409,7 @@ class ChatTools:
             layout_id=payload.layout_id,
             index=payload.index,
             replace_old_slide_at_index=payload.replace_old_slide_at_index,
+            expected_revision=payload.expected_revision,
         )
 
     async def _delete_slide(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -382,6 +427,215 @@ class ChatTools:
             ),
             save_custom_theme=bool(payload.save_custom_theme),
         )
+
+    @staticmethod
+    def _context_tool_names() -> tuple[str, ...]:
+        return (
+            "getOutlineDraft",
+            "addOutline",
+            "updateOutline",
+            "deleteOutline",
+            "moveOutline",
+            "addNewSlide",
+            "addNewSlideLayout",
+            "getAvailableBlocks",
+            "getTemplateSummary",
+            "readSourceDocuments",
+            "searchSlide",
+        )
+
+    @staticmethod
+    def _ui_tool_names() -> tuple[str, ...]:
+        return (
+            "getSlideUI",
+            "updateSlide",
+            "addElement",
+            "updateElement",
+            "deleteElement",
+            "duplicateElement",
+            "reorderElement",
+            "groupElements",
+            "ungroupElement",
+            "addComponent",
+            "createComponent",
+            "updateComponent",
+            "deleteComponent",
+            "duplicateComponent",
+            "reorderComponent",
+            "bringToFront",
+            "sendToBack",
+            "moveElement",
+            "resizeElement",
+            "updateText",
+            "updateImage",
+            "updateChart",
+            "updateTable",
+            "updateList",
+            "updateInfographic",
+            "addSlideElement",
+            "updateSlideElement",
+            "deleteSlideElement",
+            "duplicateSlideElement",
+            "reorderSlideElement",
+            "groupSlideElements",
+            "ungroupSlideElements",
+            "ungroupElements",
+            "addSlideComponent",
+            "createSlideComponent",
+            "updateSlideComponent",
+            "deleteSlideComponent",
+            "bringElementToFront",
+            "sendElementToBack",
+            "moveSlideElement",
+            "resizeSlideElement",
+            "updateTextElement",
+            "updateImageElement",
+            "updateChartElement",
+            "updateTableElement",
+            "updateListElement",
+            "updateInfographicElement",
+        )
+
+    async def _execute_context_tool(
+        self, name: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        payload = ChatContextToolInput(**args).model_dump(exclude_none=True)
+        mapping = {
+            "getOutlineDraft": ("get_outline_draft", ()),
+            "addOutline": ("add_outline", ("content", "index")),
+            "updateOutline": ("update_outline", ("index", "content")),
+            "deleteOutline": ("delete_outline", ("index",)),
+            "moveOutline": ("move_outline", ("from_index", "to_index")),
+            "addNewSlide": ("add_new_slide", ("index",)),
+            "addNewSlideLayout": (
+                "add_new_slide_layout",
+                ("content", "slide_content", "layout_id", "index"),
+            ),
+            "getAvailableBlocks": (
+                "get_available_blocks",
+                (
+                    "query",
+                    "layout_id",
+                    "element_type",
+                    "block_id",
+                    "include_full_content",
+                    "max_results",
+                ),
+            ),
+            "getTemplateSummary": ("get_template_summary", ()),
+            "readSourceDocuments": ("read_source_documents", ("query", "max_chars")),
+            "searchSlide": ("search_slide", ("query", "limit")),
+        }
+        method_name, allowed = mapping[name]
+        selected = {key: payload[key] for key in allowed if key in payload}
+        if "slide_content" in selected:
+            selected.setdefault("content", selected.pop("slide_content"))
+        return await getattr(self._outline_context, method_name)(**selected)
+
+    async def _execute_ui_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
+        name = {
+            "addSlideElement": "addElement",
+            "updateSlideElement": "updateElement",
+            "deleteSlideElement": "deleteElement",
+            "duplicateSlideElement": "duplicateElement",
+            "reorderSlideElement": "reorderElement",
+            "groupSlideElements": "groupElements",
+            "ungroupSlideElements": "ungroupElement",
+            "ungroupElements": "ungroupElement",
+            "addSlideComponent": "addComponent",
+            "createSlideComponent": "createComponent",
+            "updateSlideComponent": "updateComponent",
+            "deleteSlideComponent": "deleteComponent",
+            "bringElementToFront": "bringToFront",
+            "sendElementToBack": "sendToBack",
+            "moveSlideElement": "moveElement",
+            "resizeSlideElement": "resizeElement",
+            "updateTextElement": "updateText",
+            "updateImageElement": "updateImage",
+            "updateChartElement": "updateChart",
+            "updateTableElement": "updateTable",
+            "updateListElement": "updateList",
+            "updateInfographicElement": "updateInfographic",
+        }.get(name, name)
+        payload = SlideUIToolInput(**args).model_dump(exclude_none=True)
+        method = "update_element"
+        allowed = (
+            "index",
+            "path",
+            "expected_revision",
+            "content",
+            "style",
+            "position",
+            "size",
+            "rotation",
+        )
+        direct: dict[str, tuple[str, tuple[str, ...]]] = {
+            "getSlideUI": ("get_slide_ui", ("index", "include_full_json")),
+            "updateSlide": ("update_slide_ui", ("index", "expected_revision", "ui")),
+            "addElement": (
+                "add_element",
+                ("index", "component_id", "element", "expected_revision", "insert_at"),
+            ),
+            "deleteElement": ("delete_element", ("index", "path", "expected_revision")),
+            "duplicateElement": (
+                "duplicate_element",
+                ("index", "path", "expected_revision"),
+            ),
+            "reorderElement": (
+                "reorder_element",
+                ("index", "path", "expected_revision", "action", "to_index"),
+            ),
+            "groupElements": (
+                "group_elements",
+                ("index", "paths", "name", "expected_revision"),
+            ),
+            "ungroupElement": (
+                "ungroup_element",
+                ("index", "path", "expected_revision"),
+            ),
+            "addComponent": (
+                "add_component",
+                ("index", "component", "expected_revision", "insert_at"),
+            ),
+            "createComponent": (
+                "add_component",
+                ("index", "component", "expected_revision", "insert_at"),
+            ),
+            "updateComponent": (
+                "update_component",
+                (
+                    "index",
+                    "component_id",
+                    "expected_revision",
+                    "description",
+                    "position",
+                    "size",
+                ),
+            ),
+            "deleteComponent": (
+                "delete_component",
+                ("index", "component_id", "expected_revision"),
+            ),
+            "duplicateComponent": (
+                "duplicate_component",
+                ("index", "component_id", "expected_revision"),
+            ),
+            "reorderComponent": (
+                "reorder_component",
+                ("index", "component_id", "expected_revision", "to_index"),
+            ),
+        }
+        if name in direct:
+            method, allowed = direct[name]
+        elif name in {"bringToFront", "sendToBack"}:
+            method = "reorder_element"
+            allowed = ("index", "path", "expected_revision")
+            payload["action"] = (
+                "bring-to-front" if name == "bringToFront" else "send-to-back"
+            )
+            allowed = (*allowed, "action")
+        selected = {key: payload[key] for key in allowed if key in payload}
+        return await getattr(self._ui_mutations, method)(**selected)
 
     @staticmethod
     def _parse_args(arguments: str | None) -> dict[str, Any]:

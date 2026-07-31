@@ -1,5 +1,6 @@
 import sharp from "sharp";
 
+import { resolvePowerPointTypeface } from "./font-policy.ts";
 import type {
   AuthoredHybridBounds,
   AuthoredHybridColor,
@@ -13,10 +14,6 @@ import type {
   AuthoredHybridTextPayload,
   AuthoredHybridTextStyle,
 } from "./schema.ts";
-import {
-  powerPointFontMetricScale,
-  resolveFontCandidates,
-} from "./font-policy.ts";
 import { validateHybridDataImageUrl } from "./security.ts";
 
 export const EMU_PER_CSS_PX = 9_525;
@@ -30,7 +27,6 @@ export type PreparedNativeElement =
   | {
       kind: "text";
       source: AuthoredHybridEditableTextElement;
-      trustedFontFamilies: readonly string[];
     }
   | { kind: "shape"; source: AuthoredHybridEditableShapeElement }
   | {
@@ -60,16 +56,22 @@ type AuthoredHybridPromotableElement =
 export interface PrepareNativeElementOptions {
   includeRasterText?: boolean;
   includeRasterShapes?: boolean;
-  /**
-   * Family names supplied by the validated server-side font collector. Raw
-   * authored HTML cannot populate this trust-boundary value.
-   */
-  trustedFontFamilies?: readonly string[];
 }
 
 export interface LayerSelectionOptions {
   promoteTextAboveRaster?: boolean;
   promoteShapesAboveRaster?: boolean;
+  retainedChildPaint?: "all" | "slide-root" | "none";
+}
+
+/**
+ * Typeface names are preserved only after OOXML font packaging reports that
+ * the corresponding family was actually embedded. With this option omitted
+ * (the default and every failure path), serialization keeps the central
+ * PowerPoint-compatible fallback policy.
+ */
+export interface PowerPointTypefaceSerializationOptions {
+  embeddedTypefaceFamilies?: readonly string[];
 }
 
 function isEditableRasterText(
@@ -100,16 +102,126 @@ const UNSAFE_RASTER_SHAPE_REASONS = new Set([
   "filter",
   "backdrop-filter",
   "mix-blend-mode",
-  "complex-transform",
   "transformed-ancestor",
   "animated",
   "unsupported-background",
   "unsupported-opacity",
 ]);
 
+function colorIsSafe(color: AuthoredHybridColor): boolean {
+  return /^[0-9A-F]{6}$/.test(color.hex) &&
+    Number.isFinite(color.alpha) &&
+    color.alpha >= 0 &&
+    color.alpha <= 1;
+}
+
+function normalizedPointsAreSafe(
+  shape: AuthoredHybridShapePayload
+): boolean {
+  const points = shape.points ?? [];
+  const minimumPointCount = shape.closed ? 3 : 2;
+  return shape.shape === "freeform" &&
+    points.length >= minimumPointCount &&
+    points.length <= 2_048 &&
+    points.every(
+      (point) =>
+        Number.isFinite(point.x) &&
+        Number.isFinite(point.y) &&
+        point.x >= 0 &&
+        point.x <= 1 &&
+        point.y >= 0 &&
+        point.y <= 1
+    );
+}
+
+function shapeIsSafe(shape: AuthoredHybridShapePayload): boolean {
+  if (
+    !Number.isFinite(shape.strokeWidthPt) ||
+    shape.strokeWidthPt < 0 ||
+    shape.strokeWidthPt > 1_000 ||
+    !Number.isFinite(shape.radiusPt) ||
+    shape.radiusPt < 0 ||
+    shape.radiusPt > 10_000 ||
+    (shape.fill !== null && !colorIsSafe(shape.fill)) ||
+    (shape.stroke !== null && !colorIsSafe(shape.stroke))
+  ) {
+    return false;
+  }
+  if (
+    shape.shape === "freeform" &&
+    !normalizedPointsAreSafe(shape)
+  ) {
+    return false;
+  }
+  if (shape.gradient) {
+    if (
+      !Number.isFinite(shape.gradient.angleDeg) ||
+      shape.gradient.stops.length < 2 ||
+      shape.gradient.stops.length > 256
+    ) {
+      return false;
+    }
+    let previousPosition = -Infinity;
+    for (const stop of shape.gradient.stops) {
+      if (
+        !colorIsSafe(stop.color) ||
+        !Number.isFinite(stop.position) ||
+        stop.position < 0 ||
+        stop.position > 1 ||
+        stop.position < previousPosition
+      ) {
+        return false;
+      }
+      previousPosition = stop.position;
+    }
+  }
+  if (
+    shape.borderLines?.some(
+      (border) =>
+        !colorIsSafe(border.color) ||
+        !Number.isFinite(border.widthPt) ||
+        border.widthPt <= 0 ||
+        border.widthPt > 1_000
+    )
+  ) {
+    return false;
+  }
+  if (
+    shape.shadowLayers?.some(
+      (layer) =>
+        !colorIsSafe(layer.color) ||
+        ![layer.offsetXPx, layer.offsetYPx, layer.spreadPx].every(
+          (value) => Number.isFinite(value) && Math.abs(value) <= 20_000
+        )
+    )
+  ) {
+    return false;
+  }
+  if (
+    shape.outline &&
+    (
+      !colorIsSafe(shape.outline.color) ||
+      !Number.isFinite(shape.outline.widthPt) ||
+      shape.outline.widthPt <= 0 ||
+      shape.outline.widthPt > 1_000 ||
+      !Number.isFinite(shape.outline.offsetPx) ||
+      Math.abs(shape.outline.offsetPx) > 20_000
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function isEditableRasterShape(
   element: AuthoredHybridElement
 ): element is AuthoredHybridRasterElement & { shape: AuthoredHybridShapePayload } {
+  const hasSafelyFlattenedTransform =
+    element.classification.mode === "raster" &&
+    element.classification.reasons.includes("complex-transform") &&
+    "shape" in element &&
+    element.shape !== undefined &&
+    normalizedPointsAreSafe(element.shape);
   return (
     element.classification.mode === "raster" &&
     element.classification.candidateKind === "shape" &&
@@ -118,12 +230,18 @@ function isEditableRasterShape(
     !element.classification.reasons.some((reason) =>
       UNSAFE_RASTER_SHAPE_REASONS.has(reason)
     ) &&
+    (
+      !element.classification.reasons.includes("complex-transform") ||
+      hasSafelyFlattenedTransform
+    ) &&
+    shapeIsSafe(element.shape) &&
     Boolean(
       element.shape.fill ||
         element.shape.gradient ||
         element.shape.stroke ||
         element.shape.borderLines?.length ||
-        element.shape.shadowLayers?.length
+        element.shape.shadowLayers?.length ||
+        element.shape.outline
     )
   );
 }
@@ -345,14 +463,11 @@ export async function prepareNativeElements(
         prepared.push({
           kind: "text",
           source: clipUnrotatedTextToSlide(enforceMinimumTextSize(candidate)),
-          trustedFontFamilies: [...new Set(
-            (options.trustedFontFamilies ?? [])
-              .map((family) => family.trim())
-              .filter(Boolean)
-          )],
         });
       } else if (isEditableShapeCandidate(candidate)) {
-        prepared.push({ kind: "shape", source: candidate });
+        if (shapeIsSafe(candidate.shape)) {
+          prepared.push({ kind: "shape", source: candidate });
+        }
       } else {
         const png = await renderImageToBox(candidate);
         if (png) prepared.push({ kind: "image", source: candidate, png });
@@ -373,6 +488,29 @@ function intersects(a: AuthoredHybridElement, b: AuthoredHybridElement): boolean
     ar.y < br.y + br.height &&
     ar.y + ar.height > br.y
   );
+}
+
+function isRetainedChildPaint(
+  item: PreparedNativeElement,
+  other: AuthoredHybridElement,
+  policy: NonNullable<LayerSelectionOptions["retainedChildPaint"]>
+): boolean {
+  if (
+    policy === "none" ||
+    item.kind !== "shape" ||
+    item.source.shape.preserveContents !== true ||
+    (
+      policy === "slide-root" &&
+      item.source.domPath.trim().toLowerCase() !== "body"
+    )
+  ) {
+    return false;
+  }
+  const ownerPath = item.source.domPath.trim();
+  const otherPath = other.domPath.trim();
+  if (!ownerPath || !otherPath) return false;
+  return otherPath.startsWith(`${ownerPath} > `) ||
+    otherPath.startsWith(`${ownerPath}::`);
 }
 
 /**
@@ -411,6 +549,11 @@ export function selectLayerSafeNativeElements(
           (other) =>
             !promotedIds.has(other.id) &&
             isAbove(other, item) &&
+            !isRetainedChildPaint(
+              item,
+              other,
+              options.retainedChildPaint ?? "all"
+            ) &&
             intersects(item.source, other)
         )
       ) {
@@ -442,13 +585,31 @@ function emu(value: number): number {
   return Math.max(0, Math.round(value * EMU_PER_CSS_PX));
 }
 
+function coordinateEmu(value: number): number {
+  return Math.round(value * EMU_PER_CSS_PX);
+}
+
+function rectAxisEmu(start: number, length: number): {
+  offset: number;
+  extent: number;
+} {
+  const offset = coordinateEmu(start);
+  // Quantize both authored edges onto the same PowerPoint grid. Computing the
+  // extent from those edges keeps shared card/row boundaries and CSS gaps
+  // exact instead of accumulating independent position/size rounding error.
+  const end = coordinateEmu(start + Math.max(0, length));
+  return { offset, extent: Math.max(1, end - offset) };
+}
+
 function rotation(value: number): number {
   const normalized = ((value % 360) + 360) % 360;
   return Math.round(normalized * 60_000);
 }
 
 function transformRectXml(rect: AuthoredHybridRect, rotationDeg: number): string {
-  return `<a:xfrm${rotation(rotationDeg) ? ` rot="${rotation(rotationDeg)}"` : ""}><a:off x="${emu(rect.x)}" y="${emu(rect.y)}"/><a:ext cx="${emu(rect.width)}" cy="${emu(rect.height)}"/></a:xfrm>`;
+  const horizontal = rectAxisEmu(rect.x, rect.width);
+  const vertical = rectAxisEmu(rect.y, rect.height);
+  return `<a:xfrm${rotation(rotationDeg) ? ` rot="${rotation(rotationDeg)}"` : ""}><a:off x="${horizontal.offset}" y="${vertical.offset}"/><a:ext cx="${horizontal.extent}" cy="${vertical.extent}"/></a:xfrm>`;
 }
 
 function isCompositeHtmlIllustration(item: PreparedNativeElement): boolean {
@@ -478,56 +639,42 @@ function gradientColorXml(color: AuthoredHybridColor, opacity: number): string {
 function runPropertiesXml(
   style: AuthoredHybridTextStyle,
   opacity: number,
-  trustedFontFamilies: readonly string[]
+  options: PowerPointTypefaceSerializationOptions
 ): string {
-  // Preserve the authored family only when the server-side collector verified
-  // and loaded it. Otherwise store the registry's deterministic Office/Windows
-  // substitute. Font programs are still not embedded in OOXML.
-  const latin = resolveFontCandidates(
-    style.fontFamilies,
-    "Aptos",
-    trustedFontFamilies
+  const embeddedFamilies = new Set(options.embeddedTypefaceFamilies ?? []);
+  const normalizedEmbeddedFamilies = new Set(
+    [...embeddedFamilies].map((family) =>
+      family.trim().replace(/^['"]|['"]$/g, "").toLowerCase()
+    )
   );
-  const trustedNames = new Set(
-    trustedFontFamilies.map((family) => family.trim().toLocaleLowerCase("en-US"))
-  );
-  const trustedCjkPrimary = style.fontFamilies.find((family) => {
-    const normalized = family
-      .trim()
-      .replace(/^(['"])(.*)\1$/u, "$2")
-      .trim();
-    return (
-      trustedNames.has(normalized.toLocaleLowerCase("en-US")) &&
-      /(?:\bkr\b|korean|cjk|hangul|nanum)/iu.test(normalized)
-    );
+  const latin = resolvePowerPointTypeface(style.fontFamilies, "Aptos", {
+    preserveAuthoredFamilies: embeddedFamilies,
   });
-  const eastAsian = resolveFontCandidates(
-    trustedCjkPrimary
-      ? [trustedCjkPrimary]
-      : style.cjkFallbackFamilies.length
-      ? style.cjkFallbackFamilies
-      : style.fontFamilies,
-    "Malgun Gothic",
-    trustedFontFamilies
+  const latinWasEmbedded = normalizedEmbeddedFamilies.has(
+    latin.toLowerCase()
   );
-  const metricScale = Math.min(
-    powerPointFontMetricScale(latin),
-    powerPointFontMetricScale(eastAsian)
-  );
-  const nativeFontSizePt = Math.max(
-    MIN_EDITABLE_FONT_SIZE_PT,
-    Math.max(MIN_EDITABLE_FONT_SIZE_PT, style.fontSizePt) * metricScale
-  );
+  const eastAsian =
+    latinWasEmbedded
+      ? latin
+      : resolvePowerPointTypeface(
+          style.cjkFallbackFamilies,
+          process.platform === "win32" ? "Malgun Gothic" : "Noto Sans CJK KR",
+          { preserveAuthoredFamilies: embeddedFamilies }
+        );
   const attributes = [
     `lang="ko-KR"`,
     `altLang="en-US"`,
-    `sz="${Math.round(nativeFontSizePt * 100)}"`,
-    style.bold ? `b="1"` : "",
+    `sz="${Math.round(Math.max(MIN_EDITABLE_FONT_SIZE_PT, style.fontSizePt) * 100)}"`,
+    // Bold runs override the paragraph's explicit regular default. Keeping
+    // `b="0"` on the paragraph end marker (rather than every regular run)
+    // preserves mixed-weight semantics without changing regular glyph shaping
+    // in LibreOffice and PowerPoint's renderer.
+    style.bold || style.fontWeight >= 600 ? `b="1"` : "",
     style.italic ? `i="1"` : "",
     style.underline ? `u="sng"` : "",
     style.strike ? `strike="sngStrike"` : "",
     style.letterSpacingPt
-      ? `spc="${Math.round(style.letterSpacingPt * metricScale * 100)}"`
+      ? `spc="${Math.round(style.letterSpacingPt * 100)}"`
       : "",
   ].filter(Boolean);
   return `<a:rPr ${attributes.join(" ")}>${colorXml(style.color, opacity)}<a:latin typeface="${escapeXml(latin)}"/><a:ea typeface="${escapeXml(eastAsian)}"/><a:cs typeface="${escapeXml(latin)}"/></a:rPr>`;
@@ -536,10 +683,23 @@ function runPropertiesXml(
 interface TextSegment {
   text: string;
   style: AuthoredHybridTextStyle;
+  breakKind?: "soft" | "line" | "paragraph";
 }
 
 function collapseCapturedLineBreaks(element: AuthoredHybridEditableTextElement): boolean {
   if (!element.text.plainText.includes("\n")) return false;
+  // An authored <br>, preserved source newline, or block boundary is part of
+  // the document contract. Only browser-generated/legacy visual wraps may be
+  // collapsed by the narrow single-line compatibility heuristic below.
+  if (
+    element.text.runs.some(
+      (run) =>
+        run.text.includes("\n") &&
+        (run.breakKind === "line" || run.breakKind === "paragraph")
+    )
+  ) {
+    return false;
+  }
   const lineHeightPx = Math.max(
     element.text.style.fontSizePt / 0.75,
     element.text.style.lineHeight.points / 0.75
@@ -569,16 +729,44 @@ function collapseCapturedLineBreaks(element: AuthoredHybridEditableTextElement):
 function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[] {
   const collapseBreaks = collapseCapturedLineBreaks(element);
   const joined = element.text.runs.map((run) => run.text).join("");
+  const joinedWithoutSoftBreaks = element.text.runs
+    .map((run) =>
+      run.breakKind === "soft" ? run.text.replace(/\n/g, "") : run.text
+    )
+    .join("");
   const sameTextIgnoringCollapsibleWhitespace =
     joined.replace(/\s+/g, " ").trim() ===
     element.text.plainText.replace(/\s+/g, " ").trim();
+  // A captured soft wrap may replace an authored space (Latin text) or add no
+  // semantic space at all (CJK text), even within the same text root. If the
+  // non-whitespace characters are identical, retain the run formatting and
+  // the browser-confirmed visual breaks instead of flattening rich text.
+  const sameTextIgnoringWhitespace =
+    joined.replace(/\s/g, "") === element.text.plainText.replace(/\s/g, "");
+  const nonWhitespaceRunStyles = new Set(
+    element.text.runs
+      .filter((run) => run.text.replace(/\s/g, "").length > 0)
+      .map((run) => JSON.stringify(run.style))
+  );
+  const hasMeaningfulRunStyleVariation = nonWhitespaceRunStyles.size > 1;
+  const preservesRichTextAcrossSoftWraps =
+    hasMeaningfulRunStyleVariation &&
+    (
+      joinedWithoutSoftBreaks === element.text.plainText ||
+      sameTextIgnoringWhitespace
+    );
   if (
     element.text.runs.length &&
-    (joined === element.text.plainText || sameTextIgnoringCollapsibleWhitespace)
+    (
+      joined === element.text.plainText ||
+      sameTextIgnoringCollapsibleWhitespace ||
+      preservesRichTextAcrossSoftWraps
+    )
   ) {
     return element.text.runs.map((run) => ({
       text: collapseBreaks ? run.text.replace(/\n+/g, " ") : run.text,
       style: run.style,
+      ...(run.breakKind ? { breakKind: run.breakKind } : {}),
     }));
   }
   return [{
@@ -587,9 +775,129 @@ function textSegments(element: AuthoredHybridEditableTextElement): TextSegment[]
   }];
 }
 
+interface PowerPointTextPiece {
+  kind: "run" | "break";
+  text: string;
+  style: AuthoredHybridTextStyle;
+}
+
+function powerPointTextParagraphs(
+  element: AuthoredHybridEditableTextElement
+): PowerPointTextPiece[][] {
+  const paragraphs: PowerPointTextPiece[][] = [[]];
+  for (const segment of textSegments(element)) {
+    const pieces = segment.text.split("\n");
+    pieces.forEach((piece, index) => {
+      if (index > 0) {
+        if (segment.breakKind === "paragraph") {
+          paragraphs.push([]);
+        } else {
+          paragraphs[paragraphs.length - 1].push({
+            kind: "break",
+            text: "",
+            style: segment.style,
+          });
+        }
+      }
+      if (piece || pieces.length === 1) {
+        paragraphs[paragraphs.length - 1].push({
+          kind: "run",
+          text: piece,
+          style: segment.style,
+        });
+      }
+    });
+  }
+  return paragraphs;
+}
+
+function textSpacingPointValue(points: number): number {
+  return Math.max(0, Math.min(20_116_800, Math.round(points * 100)));
+}
+
+function cssPixelsToTextSpacingPointValue(cssPixels: number): number {
+  return textSpacingPointValue(cssPixels * 0.75);
+}
+
+function hasZeroTextBoxPadding(
+  element: AuthoredHybridEditableTextElement
+): boolean {
+  const padding = element.text.layout?.paddingPx;
+  return !padding || [padding.top, padding.right, padding.bottom, padding.left]
+    .every((value) => Math.abs(value) < 0.01);
+}
+
+function shouldUseProportionalLineSpacing(
+  element: AuthoredHybridEditableTextElement,
+  fontSizes: number[]
+): boolean {
+  const authoredBreakCount = element.text.runs.filter(
+    (run) =>
+      run.text.includes("\n") &&
+      (run.breakKind === "line" || run.breakKind === "paragraph")
+  ).length;
+  if (!authoredBreakCount || !fontSizes.length || !hasZeroTextBoxPadding(element)) {
+    return false;
+  }
+
+  const maximumFontSizePt = Math.max(...fontSizes);
+  const lineCount = element.text.layout?.lineCount ?? authoredBreakCount + 1;
+  const expectedHeightPx =
+    (element.text.style.lineHeight.points / 0.75) * lineCount;
+  const isTightlyFitted =
+    Math.abs(element.bounds.px.height - expectedHeightPx) <= 2;
+  const isDisplayTitle =
+    element.text.role === "title" &&
+    maximumFontSizePt >= 24 &&
+    lineCount >= 2 &&
+    isTightlyFitted;
+  const isCenteredTwoLineLabel =
+    element.text.style.horizontalAlignment === "center" &&
+    maximumFontSizePt <= 12 &&
+    lineCount === 2 &&
+    isTightlyFitted;
+  const isCompactCaptionToken =
+    element.text.role === "caption" &&
+    maximumFontSizePt <= 10 &&
+    Math.abs(element.text.style.lineHeight.multiple - 1.4) <= 0.001;
+
+  // Proportional spacing is reserved for tightly fitted, font-metric-sensitive
+  // authored layouts. Ordinary multiline text uses exact point spacing so a
+  // PowerPoint font substitution cannot move surrounding content.
+  return isDisplayTitle || isCenteredTwoLineLabel || isCompactCaptionToken;
+}
+
+function lineSpacingXml(
+  element: AuthoredHybridEditableTextElement
+): string {
+  if (element.text.style.lineHeight.source !== "computed") return "";
+
+  const fontSizes = textSegments(element)
+    .filter((segment) => segment.text.replace(/\n/g, "").length > 0)
+    .map((segment) => segment.style.fontSizePt);
+  const hasMixedFontSizes = fontSizes.some(
+    (fontSizePt) => Math.abs(fontSizePt - fontSizes[0]) > 0.01
+  );
+
+  if (hasMixedFontSizes || !shouldUseProportionalLineSpacing(element, fontSizes)) {
+    return `<a:lnSpc><a:spcPts val="${textSpacingPointValue(
+      element.text.style.lineHeight.points
+    )}"/></a:lnSpc>`;
+  }
+
+  const percentage = Math.max(
+    0,
+    Math.min(
+      20_116_800,
+      Math.round(element.text.style.lineHeight.multiple * 100_000)
+    )
+  );
+  return `<a:lnSpc><a:spcPct val="${percentage}"/></a:lnSpc>`;
+}
+
 function paragraphsXml(
   element: AuthoredHybridEditableTextElement,
-  trustedFontFamilies: readonly string[]
+  options: PowerPointTypefaceSerializationOptions
 ): string {
   const alignment = {
     left: "l",
@@ -597,32 +905,38 @@ function paragraphsXml(
     right: "r",
     justify: "just",
   }[element.text.style.horizontalAlignment];
-  // DrawingML percentage spacing is relative to PowerPoint's font metrics,
-  // whose built-in leading is larger than a browser CSS line box. Preserve the
-  // captured CSS line-height as an absolute point value so multi-line text does
-  // not progressively drift down the slide.
-  const lineSpacingPoints = Math.max(
-    1,
-    Math.min(201_168, Math.round(element.text.style.lineHeight.points * 100))
-  );
-  const pPr = `<a:pPr algn="${alignment}" marL="0" indent="0"${element.text.style.direction === "rtl" ? ` rtl="1"` : ""}><a:lnSpc><a:spcPts val="${lineSpacingPoints}"/></a:lnSpc><a:spcBef><a:spcPts val="0"/></a:spcBef><a:spcAft><a:spcPts val="0"/></a:spcAft></a:pPr>`;
-  const contents: string[] = [];
-  for (const segment of textSegments(element)) {
-    const pieces = segment.text.split("\n");
-    pieces.forEach((piece, index) => {
-      // Browser visual lines and HTML <br> nodes are line breaks inside one
-      // text block, not separate PowerPoint paragraphs. Separate paragraphs
-      // can inherit theme spacing and clip the final line in tight Korean UI
-      // labels even when every glyph is present in the OOXML.
-      if (index > 0) contents.push("<a:br/>");
-      if (piece || pieces.length === 1) {
-        contents.push(
-          `<a:r>${runPropertiesXml(segment.style, element.opacity, trustedFontFamilies)}<a:t xml:space="preserve">${escapeXml(piece)}</a:t></a:r>`
-        );
-      }
-    });
-  }
-  return `<a:p>${pPr}${contents.join("")}<a:endParaRPr lang="ko-KR"/></a:p>`;
+  // CSS `line-height: normal` is a font-engine metric, not an authored
+  // numeric spacing value. The browser contract carries a 1.2 estimate for
+  // geometry. Preserve PowerPoint's font-native normal spacing unless CSS
+  // supplied a numeric line height. Uniform-size text is serialized as the
+  // authored CSS multiple so PowerPoint can apply the active font's native
+  // metrics. Mixed-size text keeps exact point spacing because proportional
+  // spacing is recalculated from the tallest run and drifts from the browser.
+  const lineSpacing = lineSpacingXml(element);
+  const paragraphs = powerPointTextParagraphs(element);
+  const paragraphSpacing = element.text.layout?.paragraphSpacingPx ?? {
+    before: 0,
+    after: 0,
+  };
+  return paragraphs.map((paragraph, paragraphIndex) => {
+    // CSS block margins surround the complete extracted text root. When a
+    // block boundary creates multiple DrawingML paragraphs, apply them only
+    // to the outer edges so the browser's internal paragraph gap is not
+    // multiplied by the number of editable paragraphs.
+    const before = paragraphIndex === 0
+      ? cssPixelsToTextSpacingPointValue(paragraphSpacing.before)
+      : 0;
+    const after = paragraphIndex === paragraphs.length - 1
+      ? cssPixelsToTextSpacingPointValue(paragraphSpacing.after)
+      : 0;
+    const pPr = `<a:pPr algn="${alignment}" marL="0" indent="0"${element.text.style.direction === "rtl" ? ` rtl="1"` : ""}>${lineSpacing}<a:spcBef><a:spcPts val="${before}"/></a:spcBef><a:spcAft><a:spcPts val="${after}"/></a:spcAft></a:pPr>`;
+    const contents = paragraph.map((piece) =>
+      piece.kind === "break"
+        ? "<a:br/>"
+        : `<a:r>${runPropertiesXml(piece.style, element.opacity, options)}<a:t xml:space="preserve">${escapeXml(piece.text)}</a:t></a:r>`
+    );
+    return `<a:p>${pPr}${contents.join("")}<a:endParaRPr lang="ko-KR" b="0"/></a:p>`;
+  }).join("");
 }
 
 function powerPointSafeTextInsets(
@@ -630,6 +944,10 @@ function powerPointSafeTextInsets(
   shapeBounds: AuthoredHybridRect,
   insets: { left: number; top: number; right: number; bottom: number }
 ): { left: number; top: number; right: number; bottom: number } {
+  // Browser-computed box/content geometry is authoritative. Reclaiming an
+  // explicitly authored asymmetric padding would move badges, table cells,
+  // and card bodies away from their CSS alignment contract.
+  if (element.text.layout) return insets;
   const lineCount = collapseCapturedLineBreaks(element)
     ? 1
     : Math.max(
@@ -682,11 +1000,87 @@ function powerPointSafeTextInsets(
   return { ...insets, top, bottom };
 }
 
+function capturedTextInsets(
+  element: AuthoredHybridEditableTextElement,
+  shapeBounds: AuthoredHybridRect
+): { left: number; top: number; right: number; bottom: number } {
+  const layout = element.text.layout;
+  if (layout) {
+    const box = layout.boxBounds.px;
+    const content = layout.contentBounds.px;
+    return {
+      left: Math.max(0, content.x - box.x),
+      top: Math.max(0, content.y - box.y),
+      right: Math.max(
+        0,
+        box.x + box.width - content.x - content.width
+      ),
+      bottom: Math.max(
+        0,
+        box.y + box.height - content.y - content.height
+      ),
+    };
+  }
+  const container = element.text.containerShape;
+  if (!container) return { left: 0, top: 0, right: 0, bottom: 0 };
+  const textBounds = element.bounds.px;
+  return {
+    left: Math.max(0, textBounds.x - shapeBounds.x),
+    top: Math.max(0, textBounds.y - shapeBounds.y),
+    right: Math.max(
+      0,
+      shapeBounds.x + shapeBounds.width - textBounds.x - textBounds.width
+    ),
+    bottom: Math.max(
+      0,
+      shapeBounds.y + shapeBounds.height - textBounds.y - textBounds.height
+    ),
+  };
+}
+
 function powerPointSafeTextBounds(
   element: AuthoredHybridEditableTextElement,
   bounds: AuthoredHybridRect
 ): AuthoredHybridRect {
   if (Math.abs(element.rotationDeg) >= 0.001) return bounds;
+  let adjustedBounds = bounds;
+  if (
+    !element.text.containerShape &&
+    element.text.style.verticalAlignment === "top"
+  ) {
+    const paintedTop = Math.min(
+      ...element.text.runs.flatMap((run) =>
+        run.fragments
+          .filter(
+            (fragment) =>
+              Number.isFinite(fragment.px.y) &&
+              Number.isFinite(fragment.px.height) &&
+              fragment.px.height > 0
+          )
+          .map((fragment) => fragment.px.y)
+      )
+    );
+    const upwardShift = bounds.y - paintedTop;
+    const fontSizePx = element.text.style.fontSizePt / 0.75;
+    // A browser line box can begin a few pixels below its painted glyph
+    // range, especially for Korean headings. PowerPoint starts its own glyph
+    // ascent at the textbox origin, so using only the CSS box top shifts the
+    // editable text visibly downward. Preserve the authored bottom edge while
+    // accepting only a small, font-relative ascent correction; remote or
+    // unrelated run rectangles must never move the box.
+    if (
+      Number.isFinite(paintedTop) &&
+      upwardShift >= 0.5 &&
+      upwardShift <= Math.max(2, fontSizePx * 0.4)
+    ) {
+      const y = Math.max(0, paintedTop);
+      adjustedBounds = {
+        ...bounds,
+        y,
+        height: Math.min(720 - y, bounds.height + bounds.y - y),
+      };
+    }
+  }
   const segments = textSegments(element);
   const lineHeightsPx = [0];
   for (const segment of segments) {
@@ -726,10 +1120,10 @@ function powerPointSafeTextBounds(
       0
     ) + Math.max(4, lineCount * 6)
   );
-  if (bounds.height >= requiredHeight - 0.01) return bounds;
+  if (adjustedBounds.height >= requiredHeight - 0.01) return adjustedBounds;
 
-  const extra = requiredHeight - bounds.height;
-  let y = bounds.y;
+  const extra = requiredHeight - adjustedBounds.height;
+  let y = adjustedBounds.y;
   if (element.text.style.verticalAlignment === "bottom") y -= extra;
   else if (element.text.style.verticalAlignment === "middle") y -= extra / 2;
 
@@ -737,9 +1131,9 @@ function powerPointSafeTextBounds(
   // allowance itself from creating off-canvas text at footers and edge labels.
   y = Math.max(0, Math.min(720 - requiredHeight, y));
   return {
-    x: bounds.x,
+    x: adjustedBounds.x,
     y,
-    width: bounds.width,
+    width: adjustedBounds.width,
     height: requiredHeight,
   };
 }
@@ -874,6 +1268,24 @@ function shiftedShadowBounds(
   };
 }
 
+function outlineBounds(
+  bounds: AuthoredHybridRect,
+  outline: NonNullable<AuthoredHybridShapePayload["outline"]>
+): AuthoredHybridRect {
+  const widthPx = outline.widthPt / 0.75;
+  const expansion = outline.offsetPx + widthPx / 2;
+  const maximumInset = Math.max(
+    -Math.min(bounds.width, bounds.height) / 2 + 0.005,
+    expansion
+  );
+  return {
+    x: bounds.x - maximumInset,
+    y: bounds.y - maximumInset,
+    width: Math.max(0.01, bounds.width + maximumInset * 2),
+    height: Math.max(0.01, bounds.height + maximumInset * 2),
+  };
+}
+
 function shadowShape(
   shape: AuthoredHybridShapePayload,
   color: AuthoredHybridColor,
@@ -890,7 +1302,26 @@ function shadowShape(
       : 0,
     borderLines: undefined,
     shadowLayers: undefined,
+    outline: undefined,
     dash: undefined,
+    endArrow: undefined,
+  };
+}
+
+function outlineShape(
+  shape: AuthoredHybridShapePayload,
+  outline: NonNullable<AuthoredHybridShapePayload["outline"]>
+): AuthoredHybridShapePayload {
+  return {
+    ...shape,
+    fill: null,
+    gradient: undefined,
+    stroke: outline.color,
+    strokeWidthPt: outline.widthPt,
+    dash: outline.dash,
+    borderLines: undefined,
+    shadowLayers: undefined,
+    outline: undefined,
     endArrow: undefined,
   };
 }
@@ -915,7 +1346,7 @@ function ellipseBorderArcPoints(
 }
 
 function shapeHasBaseObject(shape: AuthoredHybridShapePayload): boolean {
-  return Boolean(shape.fill || shape.gradient || shape.stroke || !shape.borderLines?.length);
+  return Boolean(shape.fill || shape.gradient || shape.stroke);
 }
 
 function shapeBaseObjectCount(shape: AuthoredHybridShapePayload): number {
@@ -962,7 +1393,6 @@ function transparentTextOverlayItem(
   if (!container) return item;
   return {
     kind: "text",
-    trustedFontFamilies: item.trustedFontFamilies,
     source: {
       ...item.source,
       text: {
@@ -999,6 +1429,7 @@ export function preparedNativeElementUnderlayNonVisualIdCount(
       : null;
   if (!shapeItem) return 0;
   return (shapeItem.source.shape.shadowLayers?.length ?? 0) +
+    (shapeItem.source.shape.outline ? 1 : 0) +
     shapeBaseObjectCount(shapeItem.source.shape) +
     (shapeItem.source.shape.borderLines?.length ?? 0);
 }
@@ -1014,8 +1445,14 @@ function powerPointWrapMode(
 ): "none" | "square" {
   if (element.text.style.wrapMode === "no-wrap") return "none";
 
-  const hasCapturedLineBreak = !collapseCapturedLineBreaks(element) &&
-    element.text.runs.some((run) => run.text.includes("\n"));
+  const hasCapturedLineBreak = textSegments(element).some((segment) =>
+    segment.text.includes("\n")
+  );
+  // Once Chromium has supplied the authored visual lines, PowerPoint must not
+  // invent a second set of wraps with the wider Office fallback typeface.
+  // Explicit <a:br/> nodes remain editable and normAutofit below can absorb
+  // small cross-platform width differences without changing line membership.
+  if (hasCapturedLineBreak) return "none";
   const lineHeightPx = element.text.style.lineHeight.points / 0.75;
   const isSingleLineHeight =
     !hasCapturedLineBreak &&
@@ -1030,6 +1467,15 @@ function powerPointWrapMode(
   return isSingleLineHeight ? "none" : "square";
 }
 
+function powerPointAutofitXml(
+  element: AuthoredHybridEditableTextElement
+): string {
+  const hasCapturedLineBreak = textSegments(element).some((segment) =>
+    segment.text.includes("\n")
+  );
+  return hasCapturedLineBreak ? "<a:normAutofit/>" : "<a:noAutofit/>";
+}
+
 function nonVisualName(element: AuthoredHybridElement): string {
   return `Presenton hybrid ${element.classification.mode === "native" ? element.classification.kind : "raster"} ${element.id}`;
 }
@@ -1037,7 +1483,8 @@ function nonVisualName(element: AuthoredHybridElement): string {
 export function serializePreparedNativeElement(
   item: PreparedNativeElement,
   nonVisualId: number,
-  relationshipId?: string
+  relationshipId?: string,
+  options: PowerPointTypefaceSerializationOptions = {}
 ): string {
   if (item.kind === "text") {
     const element = item.source;
@@ -1047,17 +1494,13 @@ export function serializePreparedNativeElement(
     ];
     const wrap = powerPointWrapMode(element);
     const container = element.text.containerShape;
+    const authoredBoxBounds = element.text.layout?.boxBounds.px;
     const shapeBounds = container?.bounds.px ??
-      powerPointSafeTextBounds(element, element.bounds.px);
-    const textBounds = element.bounds.px;
-    const capturedInsets = container
-      ? {
-          left: Math.max(0, textBounds.x - shapeBounds.x),
-          top: Math.max(0, textBounds.y - shapeBounds.y),
-          right: Math.max(0, shapeBounds.x + shapeBounds.width - textBounds.x - textBounds.width),
-          bottom: Math.max(0, shapeBounds.y + shapeBounds.height - textBounds.y - textBounds.height),
-        }
-      : { left: 0, top: 0, right: 0, bottom: 0 };
+      powerPointSafeTextBounds(
+        element,
+        authoredBoxBounds ?? element.bounds.px
+      );
+    const capturedInsets = capturedTextInsets(element, shapeBounds);
     const insets = powerPointSafeTextInsets(
       element,
       shapeBounds,
@@ -1069,7 +1512,7 @@ export function serializePreparedNativeElement(
     const paint = container
       ? shapePaintXml(container.shape, element.opacity)
       : "<a:noFill/><a:ln><a:noFill/></a:ln>";
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="clip" vertOverflow="clip" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}"><a:noAutofit/></a:bodyPr><a:lstStyle/>${paragraphsXml(element, item.trustedFontFamilies)}</p:txBody></p:sp>`;
+    return `<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId}" name="${name}"/>${container ? "<p:cNvSpPr/>" : '<p:cNvSpPr txBox="1"/>'}<p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(shapeBounds, element.rotationDeg)}${geometry}${paint}</p:spPr><p:txBody><a:bodyPr wrap="${wrap}" horzOverflow="clip" vertOverflow="clip" anchor="${anchor}" lIns="${emu(insets.left)}" tIns="${emu(insets.top)}" rIns="${emu(insets.right)}" bIns="${emu(insets.bottom)}">${powerPointAutofitXml(element)}</a:bodyPr><a:lstStyle/>${paragraphsXml(element, options)}</p:txBody></p:sp>`;
   }
   if (item.kind === "shape") {
     const element = item.source;
@@ -1082,6 +1525,12 @@ export function serializePreparedNativeElement(
       shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} shadow ${index + 1}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity)}</p:spPr></p:sp>`);
       idOffset += 1;
     });
+    if (element.shape.outline) {
+      const bounds = outlineBounds(element.bounds.px, element.shape.outline);
+      const paintShape = outlineShape(element.shape, element.shape.outline);
+      shapes.push(`<p:sp><p:nvSpPr><p:cNvPr id="${nonVisualId + idOffset}" name="${name} outline"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${transformRectXml(bounds, element.rotationDeg)}${shapeGeometryXml(paintShape, bounds)}${shapePaintXml(paintShape, element.opacity)}</p:spPr></p:sp>`);
+      idOffset += 1;
+    }
     if (shapeHasBaseObject(element.shape)) {
       const bounds = element.shape.shape === "line"
         ? axisAlignedLineBounds(element.bounds.px, element.rotationDeg)
@@ -1122,28 +1571,36 @@ export function serializePreparedNativeElement(
 
 export function serializePreparedNativeElementUnderlay(
   item: PreparedNativeElement,
-  nonVisualId: number
+  nonVisualId: number,
+  options: PowerPointTypefaceSerializationOptions = {}
 ): string {
   if (item.kind === "shape") {
-    return serializePreparedNativeElement(item, nonVisualId);
+    return serializePreparedNativeElement(item, nonVisualId, undefined, options);
   }
   if (item.kind !== "text") return "";
   const containerItem = textContainerShapeItem(item);
   return containerItem
-    ? serializePreparedNativeElement(containerItem, nonVisualId)
+    ? serializePreparedNativeElement(
+      containerItem,
+      nonVisualId,
+      undefined,
+      options
+    )
     : "";
 }
 
 export function serializePreparedNativeElementOverlay(
   item: PreparedNativeElement,
   nonVisualId: number,
-  relationshipId?: string
+  relationshipId?: string,
+  options: PowerPointTypefaceSerializationOptions = {}
 ): string {
   if (item.kind === "shape") return "";
   return serializePreparedNativeElement(
     item.kind === "text" ? transparentTextOverlayItem(item) : item,
     nonVisualId,
-    relationshipId
+    relationshipId,
+    options
   );
 }
 

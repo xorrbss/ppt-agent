@@ -1,5 +1,6 @@
 import { isAuthoredPresentation } from "./authored-hybrid/presentation-mode.ts";
 import type { PptxMode } from "./authored-hybrid/mode.ts";
+import type { PresentationExportQualityReport } from "./presentation-export-quality.ts";
 
 export type PersistedExportStrategy =
   | "template-v2-general"
@@ -24,11 +25,15 @@ export interface PresentationExportExecutionParams {
   title?: string;
   cookieHeader?: string;
   pptxMode?: PptxMode;
+  /** Explicit opt-in. Omitted and false are both non-embedding requests. */
+  fontEmbedding?: boolean;
   expectedPresentationSha256?: string;
 }
 
 export interface PresentationExportResult {
   path: string;
+  /** Optional additive metadata; legacy exporters and callers may omit it. */
+  quality?: PresentationExportQualityReport;
 }
 
 export interface PresentationExportAdapterRegistry<
@@ -157,6 +162,16 @@ export async function executePersistedPresentationExport<
   registry: PresentationExportAdapterRegistry<Result>
 ): Promise<Result> {
   const strategy = resolvePersistedExportStrategy(presentation);
+  if (
+    params.fontEmbedding === true &&
+    !(
+      params.format === "pptx" &&
+      params.pptxMode === "hybrid" &&
+      strategy === "authored-hybrid"
+    )
+  ) {
+    throw new Error("font_embedding_requires_authored_hybrid_export");
+  }
   if (
     params.format === "pptx" &&
     params.pptxMode === "hybrid" &&

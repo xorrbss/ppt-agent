@@ -8,7 +8,7 @@ import {
   prepareNativeElements,
   selectLayerSafeNativeElements,
   serializePreparedNativeElement,
-  serializePreparedNativeElementOverlay,
+  serializePreparedNativeElementUnderlay,
 } from "./native-plan.ts";
 
 const bounds = (x, y, width, height) => ({
@@ -180,73 +180,114 @@ test("rich CJK text, a simple shape, and a safe data image become native OOXML",
   assert.match(imageXml, /<a:alphaModFix amt="65000"\/>/);
 });
 
-test("native OOXML uses the central local fallback policy for logical web fonts", async () => {
-  const cases = [
-    ["Noto Sans KR", "Malgun Gothic", "Noto Sans KR", "Malgun Gothic"],
-    ["Pretendard", "Malgun Gothic", "Noto Sans KR", "Malgun Gothic"],
-    ["Noto Serif KR", "Batang", "Noto Serif KR", "Batang"],
-    ["Inter", "Aptos", "Noto Sans KR", "Malgun Gothic"],
-    ["Roboto", "Aptos", "Noto Sans KR", "Malgun Gothic"],
-    ["DM Sans", "Aptos", "Noto Sans KR", "Malgun Gothic"],
-    ["Source Serif 4", "Cambria", "Noto Serif KR", "Batang"],
-    ["IBM Plex Mono", "Consolas", "Noto Sans KR", "Malgun Gothic"],
+test("native OOXML typefaces use the same compatibility policy as CSS layout", async () => {
+  const mappings = [
+    ["Noto Sans KR", "Malgun Gothic"],
+    ["Pretendard", "Malgun Gothic"],
+    ["Noto Serif KR", "Batang"],
+    ["Inter", "Aptos"],
+    ["Roboto", "Aptos"],
+    ["DM Sans", "Aptos"],
+    ["Source Serif 4", "Cambria"],
+    ["IBM Plex Mono", "Consolas"],
   ];
-
-  for (const [logical, local, cjkLogical, cjkLocal] of cases) {
-    const element = {
-      ...base(`font-${logical}`, 0, 0, bounds(80, 80, 400, 80)),
-      classification: { mode: "native", kind: "text", confidence: "safe" },
-      text: {
-        role: "body",
-        plainText: "Editable type",
-        paragraphs: ["Editable type"],
-        style: style({
-          fontFamily: logical,
-          fontFamilies: [logical, "sans-serif"],
-          cjkFallbackFamilies: [cjkLogical],
-        }),
-        runs: [],
+  for (const [authored, expected] of mappings) {
+    const [prepared] = await prepareNativeElements([
+      {
+        ...base(`font-${authored}`, 0, 0, bounds(20, 20, 400, 60)),
+        classification: { mode: "native", kind: "text", confidence: "safe" },
+        text: {
+          role: "body",
+          plainText: "폰트 width test",
+          paragraphs: ["폰트 width test"],
+          style: style({
+            fontFamily: `${authored}, sans-serif`,
+            fontFamilies: [authored, "sans-serif"],
+            cjkFallbackFamilies: [authored, "Malgun Gothic"],
+          }),
+          runs: [],
+        },
       },
-    };
-    const [prepared] = await prepareNativeElements([element]);
-    const xml = serializePreparedNativeElement(prepared, 20);
-    assert.match(xml, new RegExp(`<a:latin typeface="${local}"\\/>`));
-    assert.match(xml, new RegExp(`<a:ea typeface="${cjkLocal}"\\/>`));
+    ]);
+    const xml = serializePreparedNativeElement(prepared, 2);
+    assert.match(
+      xml,
+      new RegExp(
+        `<a:latin typeface="${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\/>`
+      ),
+      authored
+    );
   }
 });
 
-test("collector-verified families retain authored native typefaces", async () => {
-  const element = {
-    ...base("trusted-noto", 0, 0, bounds(80, 80, 400, 80)),
-    classification: { mode: "native", kind: "text", confidence: "safe" },
-    text: {
-      role: "body",
-      plainText: "편집 가능한 원본 글꼴",
-      paragraphs: ["편집 가능한 원본 글꼴"],
-      style: style({
-        fontFamily: "Noto Sans KR, sans-serif",
-        fontFamilies: ["Noto Sans KR", "sans-serif"],
-        cjkFallbackFamilies: ["Malgun Gothic"],
-        letterSpacingPt: 0.5,
-      }),
-      runs: [],
-    },
-  };
-  const [prepared] = await prepareNativeElements([element], {
-    trustedFontFamilies: ["Noto Sans KR"],
+test("native OOXML preserves authored run typeface only for an applied embedded family", async () => {
+  const regularStyle = style({
+    fontFamily: "Noto Sans KR, sans-serif",
+    fontFamilies: ["Noto Sans KR", "sans-serif"],
+    cjkFallbackFamilies: ["Malgun Gothic"],
+    fontWeight: 400,
+    bold: false,
   });
-  const xml = serializePreparedNativeElement(prepared, 20);
-  assert.match(xml, /<a:latin typeface="Noto Sans KR"\/>/);
-  assert.match(xml, /<a:ea typeface="Noto Sans KR"\/>/);
-  assert.match(xml, /\bsz="2304"/);
-  assert.match(xml, /\bspc="48"/);
+  const boldStyle = style({
+    fontFamily: "Noto Sans KR, sans-serif",
+    fontFamilies: ["Noto Sans KR", "sans-serif"],
+    cjkFallbackFamilies: ["Malgun Gothic"],
+    fontWeight: 700,
+    bold: true,
+  });
+  const [prepared] = await prepareNativeElements([
+    {
+      ...base("embedded-noto-runs", 0, 0, bounds(20, 20, 400, 60)),
+      classification: { mode: "native", kind: "text", confidence: "safe" },
+      text: {
+        role: "body",
+        plainText: "Regular Bold",
+        paragraphs: ["Regular Bold"],
+        style: regularStyle,
+        runs: [
+          {
+            text: "Regular ",
+            bounds: bounds(20, 20, 180, 40),
+            fragments: [bounds(20, 20, 180, 40)],
+            style: regularStyle,
+          },
+          {
+            text: "Bold",
+            bounds: bounds(200, 20, 90, 40),
+            fragments: [bounds(200, 20, 90, 40)],
+            style: boldStyle,
+          },
+        ],
+      },
+    },
+  ]);
 
-  const [fallback] = await prepareNativeElements([element]);
-  const fallbackXml = serializePreparedNativeElement(fallback, 21);
+  const fallbackXml = serializePreparedNativeElement(prepared, 2);
+  assert.doesNotMatch(fallbackXml, /typeface="Noto Sans KR"/);
   assert.match(fallbackXml, /<a:latin typeface="Malgun Gothic"\/>/);
-  assert.match(fallbackXml, /<a:ea typeface="Malgun Gothic"\/>/);
-  assert.match(fallbackXml, /\bsz="2400"/);
-  assert.match(fallbackXml, /\bspc="50"/);
+
+  const embeddedXml = serializePreparedNativeElement(
+    prepared,
+    2,
+    undefined,
+    { embeddedTypefaceFamilies: [' "nOtO sAnS Kr" '] }
+  );
+  assert.doesNotMatch(embeddedXml, /typeface="Malgun Gothic"/);
+  assert.equal(
+    (embeddedXml.match(/<a:latin typeface="Noto Sans KR"\/>/g) ?? []).length,
+    2
+  );
+  assert.equal(
+    (embeddedXml.match(/<a:ea typeface="Noto Sans KR"\/>/g) ?? []).length,
+    2
+  );
+  assert.equal(
+    (embeddedXml.match(/<a:cs typeface="Noto Sans KR"\/>/g) ?? []).length,
+    2
+  );
+  assert.match(embeddedXml, /<a:t xml:space="preserve">Regular <\/a:t>/);
+  assert.match(embeddedXml, /<a:t xml:space="preserve">Bold<\/a:t>/);
+  assert.equal((embeddedXml.match(/\sb="1"/g) ?? []).length, 1);
 });
 
 test("invalid native images and z-order inversions stay on the raster backplate", async () => {
@@ -388,7 +429,39 @@ test("a browser-confirmed single line cannot rewrap into the content below", asy
   assert.match(xml, /wrap="none"/);
 });
 
-test("captured visual lines retain PowerPoint wrapping as an overflow safety net", async () => {
+test("standalone top-aligned text follows the browser painted glyph top", async () => {
+  const headingStyle = style({
+    fontSizePt: 23.25,
+    lineHeight: { points: 27.435, multiple: 1.18, source: "computed" },
+    verticalAlignment: "top",
+  });
+  const element = {
+    ...base("korean-heading", 0, 0, bounds(42, 57, 487.921875, 36.578125)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "title",
+      plainText: "목표 운영모델과 4대 업무 전환 시나리오",
+      paragraphs: ["목표 운영모델과 4대 업무 전환 시나리오"],
+      style: headingStyle,
+      runs: [
+        {
+          text: "목표 운영모델과 4대 업무 전환 시나리오",
+          bounds: bounds(42, 52, 487.921875, 45),
+          fragments: [bounds(42, 52, 487.921875, 45)],
+          style: headingStyle,
+        },
+      ],
+    },
+  };
+
+  const prepared = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared[0], 3);
+
+  assert.match(xml, /<a:off x="400050" y="495300"\/>/);
+  assert.match(xml, /<a:ext cx="4647456" cy="405575"\/>/);
+});
+
+test("captured visual lines disable PowerPoint rewrap and use editable autofit", async () => {
   const runStyle = style({
     fontSizePt: 13.5,
     lineHeight: { points: 17, multiple: 1.259259, source: "computed" },
@@ -410,11 +483,298 @@ test("captured visual lines retain PowerPoint wrapping as an overflow safety net
   };
   const prepared = await prepareNativeElements([element]);
   const xml = serializePreparedNativeElement(prepared[0], 3);
-  assert.match(xml, /wrap="square"/);
+  assert.match(xml, /wrap="none"/);
   assert.match(xml, /<a:br\/>/);
+  assert.match(xml, /<a:normAutofit\/>/);
+  assert.doesNotMatch(xml, /<a:noAutofit\/>/);
   assert.equal((xml.match(/<a:p>/g) || []).length, 1);
   assert.match(xml, /<a:spcBef><a:spcPts val="0"\/><\/a:spcBef>/);
   assert.match(xml, /<a:spcAft><a:spcPts val="0"\/><\/a:spcAft>/);
+});
+
+test("computed table-cell layout maps asymmetric insets, exact line height, paragraphs, and partial bold", async () => {
+  const regularStyle = style({
+    fontSizePt: 12,
+    fontWeight: 400,
+    bold: false,
+    lineHeight: { points: 18, multiple: 1.5, source: "computed" },
+    horizontalAlignment: "right",
+    verticalAlignment: "bottom",
+  });
+  const strongStyle = style({
+    ...regularStyle,
+    fontSizePt: 14,
+    fontWeight: 700,
+    bold: false,
+    color: { hex: "D92344", alpha: 1 },
+  });
+  const element = {
+    ...base("table-cell", 0, 0, bounds(112, 218, 262, 58)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body",
+      plainText: "Alpha bold\nSecond",
+      paragraphs: ["Alpha bold", "Second"],
+      style: regularStyle,
+      runs: [
+        { text: "Alpha ", bounds: bounds(112, 218, 70, 20), fragments: [], style: regularStyle },
+        { text: "bold", bounds: bounds(182, 218, 40, 22), fragments: [], style: strongStyle },
+        {
+          text: "\n",
+          bounds: bounds(112, 240, 0, 0),
+          fragments: [],
+          style: regularStyle,
+          breakKind: "paragraph",
+        },
+        { text: "Second", bounds: bounds(112, 250, 70, 20), fragments: [], style: regularStyle },
+      ],
+      layout: {
+        boxBounds: bounds(100, 200, 300, 100),
+        contentBounds: bounds(112, 218, 262, 58),
+        paintedTextBounds: bounds(112, 218, 110, 52),
+        paddingPx: { top: 16, right: 24, bottom: 22, left: 10 },
+        borderPx: { top: 2, right: 2, bottom: 2, left: 2 },
+        marginPx: { top: 8, right: 0, bottom: 12, left: 0 },
+        rowGapPx: 0,
+        columnGapPx: 0,
+        display: "table-cell",
+        flexDirection: null,
+        alignItems: "normal",
+        justifyContent: "normal",
+        textAlignSource: "self",
+        lineCount: 2,
+        singleLine: false,
+        paragraphSpacingPx: { before: 8, after: 12 },
+      },
+      containerShape: {
+        bounds: bounds(100, 200, 300, 100),
+        shape: {
+          shape: "rectangle",
+          fill: { hex: "F4F7FF", alpha: 1 },
+          stroke: { hex: "CCD5EA", alpha: 1 },
+          strokeWidthPt: 1.5,
+          radiusPt: 0,
+        },
+      },
+    },
+  };
+
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 3);
+  const paragraphs = xml.match(/<a:p>.*?<\/a:p>/g) ?? [];
+
+  assert.equal(paragraphs.length, 2);
+  assert.doesNotMatch(xml, /<a:br\/>/);
+  assert.match(xml, /algn="r"/);
+  assert.match(xml, /anchor="b"/);
+  assert.match(xml, /lIns="114300"/);
+  assert.match(xml, /tIns="171450"/);
+  assert.match(xml, /rIns="247650"/);
+  assert.match(xml, /bIns="228600"/);
+  assert.match(xml, /<a:lnSpc><a:spcPts val="1800"\/><\/a:lnSpc>/);
+  assert.match(paragraphs[0], /<a:spcBef><a:spcPts val="600"\/><\/a:spcBef>/);
+  assert.match(paragraphs[0], /<a:spcAft><a:spcPts val="0"\/><\/a:spcAft>/);
+  assert.match(paragraphs[1], /<a:spcBef><a:spcPts val="0"\/><\/a:spcBef>/);
+  assert.match(paragraphs[1], /<a:spcAft><a:spcPts val="900"\/><\/a:spcAft>/);
+  assert.equal((xml.match(/\sb="1"/g) ?? []).length, 1);
+  assert.equal((xml.match(/\sb="0"/g) ?? []).length, 2);
+  assert.match(xml, /sz="1400" b="1"/);
+  assert.match(xml, /<a:srgbClr val="D92344">/);
+});
+
+test("centered mixed-weight runs keep one centered paragraph across a browser soft wrap", async () => {
+  const regularStyle = style({
+    fontSizePt: 13,
+    fontWeight: 400,
+    bold: false,
+    lineHeight: { points: 20, multiple: 20 / 13, source: "computed" },
+    horizontalAlignment: "center",
+    verticalAlignment: "middle",
+  });
+  const boldStyle = style({
+    ...regularStyle,
+    fontWeight: 700,
+    bold: true,
+  });
+  const blueStyle = style({
+    ...regularStyle,
+    color: { hex: "2457D6", alpha: 1 },
+  });
+  const element = {
+    ...base("centered-runs", 0, 0, bounds(416, 112, 288, 56)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "caption",
+      // The browser-only soft wrap is captured in runs, not authored text.
+      plainText: "Center boldblue",
+      paragraphs: ["Center boldblue"],
+      style: regularStyle,
+      runs: [
+        { text: "Center ", bounds: bounds(470, 112, 75, 20), fragments: [], style: regularStyle },
+        { text: "bold", bounds: bounds(545, 112, 40, 20), fragments: [], style: boldStyle },
+        {
+          text: "\n",
+          bounds: bounds(416, 132, 0, 0),
+          fragments: [],
+          style: regularStyle,
+          breakKind: "soft",
+        },
+        { text: "blue", bounds: bounds(540, 140, 40, 20), fragments: [], style: blueStyle },
+      ],
+      layout: {
+        boxBounds: bounds(400, 100, 320, 80),
+        contentBounds: bounds(416, 112, 288, 56),
+        paintedTextBounds: bounds(470, 112, 115, 48),
+        paddingPx: { top: 12, right: 16, bottom: 12, left: 16 },
+        borderPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        marginPx: { top: 0, right: 0, bottom: 0, left: 0 },
+        rowGapPx: 0,
+        columnGapPx: 0,
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlignSource: "self",
+        lineCount: 2,
+        singleLine: false,
+        paragraphSpacingPx: { before: 0, after: 0 },
+      },
+    },
+  };
+
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 3);
+
+  assert.equal((xml.match(/<a:p>/g) ?? []).length, 1);
+  assert.equal((xml.match(/<a:br\/>/g) ?? []).length, 1);
+  assert.match(xml, /algn="ctr"/);
+  assert.match(xml, /anchor="ctr"/);
+  assert.match(xml, /wrap="none"/);
+  assert.match(xml, /<a:normAutofit\/>/);
+  assert.match(xml, /<a:lnSpc><a:spcPts val="2000"\/><\/a:lnSpc>/);
+  assert.equal((xml.match(/\sb="1"/g) ?? []).length, 1);
+  assert.equal((xml.match(/\sb="0"/g) ?? []).length, 1);
+  assert.match(xml, /<a:t xml:space="preserve">Center <\/a:t>/);
+  assert.match(xml, /<a:t xml:space="preserve">bold<\/a:t>/);
+  assert.match(xml, /<a:srgbClr val="2457D6">/);
+});
+
+test("uniform CJK text keeps authored whitespace instead of browser soft-wrap markup", async () => {
+  const uniformStyle = style({
+    fontSizePt: 9,
+    fontWeight: 400,
+    bold: false,
+  });
+  const authoredText = "이 문장은 완전하게 보존되어야 합니다.";
+  const element = {
+    ...base("uniform-cjk-soft-wrap", 0, 0, bounds(40, 40, 280, 40)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body",
+      plainText: authoredText,
+      paragraphs: [authoredText],
+      style: uniformStyle,
+      runs: [
+        {
+          text: "이 문장은 완전하게 보존",
+          bounds: bounds(40, 40, 150, 14),
+          fragments: [],
+          style: uniformStyle,
+        },
+        {
+          text: "\n",
+          bounds: bounds(190, 40, 0, 0),
+          fragments: [],
+          style: uniformStyle,
+          breakKind: "soft",
+        },
+        {
+          text: "되어야 합니다.",
+          bounds: bounds(40, 54, 80, 14),
+          fragments: [],
+          style: uniformStyle,
+        },
+      ],
+    },
+  };
+
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 4);
+
+  assert.match(xml, new RegExp(`<a:t xml:space="preserve">${authoredText}</a:t>`));
+  assert.doesNotMatch(xml, /<a:br\/>/);
+});
+
+test("font-native normal line height is not serialized as an estimated exact spacing", async () => {
+  const normalStyle = style({
+    fontSizePt: 12,
+    lineHeight: { points: 14.4, multiple: 1.2, source: "normal" },
+  });
+  const element = {
+    ...base("normal-line-height", 0, 0, bounds(40, 40, 280, 40)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "body",
+      plainText: "Font-native normal",
+      paragraphs: ["Font-native normal"],
+      style: normalStyle,
+      runs: [{
+        text: "Font-native normal",
+        bounds: bounds(40, 40, 160, 20),
+        fragments: [],
+        style: normalStyle,
+      }],
+    },
+  };
+
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 3);
+
+  assert.doesNotMatch(xml, /<a:lnSpc>/);
+});
+
+test("compact authored captions use proportional spacing for active font metrics", async () => {
+  const uniformStyle = style({
+    fontSizePt: 9,
+    lineHeight: { points: 12.6, multiple: 1.4, source: "computed" },
+  });
+  const element = {
+    ...base("compact-caption-line-height", 0, 0, bounds(40, 40, 280, 34)),
+    classification: { mode: "native", kind: "text", confidence: "safe" },
+    text: {
+      role: "caption",
+      plainText: "Uniform\nspacing",
+      paragraphs: ["Uniform", "spacing"],
+      style: uniformStyle,
+      runs: [
+        {
+          text: "Uniform",
+          bounds: bounds(40, 40, 80, 18),
+          fragments: [],
+          style: uniformStyle,
+        },
+        {
+          text: "\n",
+          bounds: bounds(40, 58, 0, 0),
+          fragments: [],
+          style: uniformStyle,
+          breakKind: "line",
+        },
+        {
+          text: "spacing",
+          bounds: bounds(40, 58, 70, 18),
+          fragments: [],
+          style: uniformStyle,
+        },
+      ],
+    },
+  };
+
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 3);
+
+  assert.match(xml, /<a:lnSpc><a:spcPct val="140000"\/><\/a:lnSpc>/);
+  assert.doesNotMatch(xml, /<a:lnSpc><a:spcPts/);
 });
 
 test("editable mode promotes raster-classified text above retained artwork", async () => {
@@ -522,6 +882,64 @@ test("thin vertical lines are locked to a PowerPoint axis", async () => {
   const xml = serializePreparedNativeElement(prepared[0], 3);
 
   assert.match(xml, /<a:off x="1914525" y="952500"\/><a:ext cx="95" cy="2667000"\/>/);
+});
+
+test("repeated card edges and CSS gaps share one PowerPoint rounding grid", async () => {
+  const card = (id, x, width) => ({
+    ...base(id, 0, 0, bounds(x, 120.333333, width, 80.666667)),
+    classification: { mode: "native", kind: "shape", confidence: "safe" },
+    shape: {
+      shape: "rectangle",
+      fill: { hex: "EAF0FF", alpha: 1 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 0,
+    },
+  });
+  const cssGap = 17.333333;
+  const firstWidth = 203.333333;
+  const firstX = 71.666667;
+  const elements = [
+    card("card-a", firstX, firstWidth),
+    card("card-b", firstX + firstWidth + cssGap, 203.333334),
+  ];
+  const prepared = await prepareNativeElements(elements);
+  const xmlA = serializePreparedNativeElement(prepared[0], 3);
+  const xmlB = serializePreparedNativeElement(prepared[1], 4);
+  const geometry = (xml) => {
+    const match = xml.match(
+      /<a:off x="(-?\d+)" y="(-?\d+)"\/><a:ext cx="(\d+)" cy="(\d+)"\/>/
+    );
+    assert.ok(match);
+    return { x: Number(match[1]), width: Number(match[3]) };
+  };
+  const a = geometry(xmlA);
+  const b = geometry(xmlB);
+  assert.equal(
+    b.x - (a.x + a.width),
+    Math.round((firstX + firstWidth + cssGap) * 9525) -
+      Math.round((firstX + firstWidth) * 9525)
+  );
+});
+
+test("partially off-slide rotated geometry preserves its authored coordinate", async () => {
+  const element = {
+    ...base("slide-3-edge-label", 0, 0, bounds(-0.005, 92.25, 9.2, 154.5)),
+    rotationDeg: -90,
+    classification: { mode: "native", kind: "shape", confidence: "safe" },
+    shape: {
+      shape: "rectangle",
+      fill: { hex: "2457D6", alpha: 1 },
+      stroke: null,
+      strokeWidthPt: 0,
+      radiusPt: 0,
+    },
+  };
+  const [prepared] = await prepareNativeElements([element]);
+  const xml = serializePreparedNativeElement(prepared, 3);
+  assert.match(xml, /<a:off x="-48" y="878681"\/>/);
+  assert.match(xml, /<a:ext cx="87630" cy="1471613"\/>/);
+  assert.match(xml, /rot="16200000"/);
 });
 
 test("gradient rails export as one editable axis-aligned PowerPoint line", async () => {
@@ -755,37 +1173,51 @@ test("decorated text becomes one editable PowerPoint shape with safe text insets
   assert.doesNotMatch(xml, /txBox="1"/);
 });
 
-test("ellipse container text uses a rectangular overlay to preserve browser line width", async () => {
+test("outlined circular text containers retain editable outline, border, and number layers", async () => {
   const element = {
-    ...base("circle-label", 0, 0, bounds(100, 100, 117, 117)),
-    classification: { mode: "native", kind: "text", confidence: "safe" },
+    ...base("step-node", 0, 0, bounds(104, 104, 35, 35)),
+    classification: {
+      mode: "raster",
+      candidateKind: "text",
+      reasons: ["external-paint"],
+    },
     text: {
       role: "caption",
-      plainText: "자율화의 핵심은\n‘코드 생성’보다\n‘통제 연결’",
-      paragraphs: ["자율화의 핵심은", "‘코드 생성’보다", "‘통제 연결’"],
-      style: style({
-        fontSizePt: 9.75,
-        lineHeight: { points: 14.6, multiple: 1.5, source: "computed" },
-      }),
+      plainText: "1",
+      paragraphs: ["1"],
+      style: style({ fontSizePt: 9.75 }),
       runs: [],
       containerShape: {
-        bounds: bounds(100, 100, 117, 117),
+        bounds: bounds(100, 100, 43, 43),
         shape: {
           shape: "ellipse",
-          fill: null,
-          stroke: { hex: "2457D6", alpha: 1 },
-          strokeWidthPt: 2.25,
-          radiusPt: 58.5,
+          fill: { hex: "F4F7F4", alpha: 1 },
+          stroke: { hex: "182235", alpha: 1 },
+          strokeWidthPt: 3,
+          radiusPt: 16.125,
+          outline: {
+            color: { hex: "2457D6", alpha: 1 },
+            widthPt: 1.5,
+            offsetPx: 0,
+          },
         },
       },
     },
   };
-  const prepared = await prepareNativeElements([element]);
-  const xml = serializePreparedNativeElementOverlay(prepared[0], 3);
+  const prepared = await prepareNativeElements([element], {
+    includeRasterText: true,
+  });
+  assert.equal(prepared.length, 1);
+  assert.equal(preparedNativeElementNonVisualIdCount(prepared[0]), 3);
 
-  assert.match(xml, /prst="rect"/);
-  assert.doesNotMatch(xml, /prst="ellipse"/);
-  assert.match(xml, /자율화의 핵심은/);
+  const underlay = serializePreparedNativeElementUnderlay(prepared[0], 3);
+  assert.equal((underlay.match(/<p:sp>/g) ?? []).length, 2);
+  assert.match(underlay, /Presenton hybrid shape step-node-container outline/);
+  assert.match(underlay, /<a:off x="942975" y="942975"\/><a:ext cx="428625" cy="428625"\/>/);
+  assert.match(underlay, /<a:srgbClr val="2457D6">/);
+  assert.match(underlay, /<a:off x="952500" y="952500"\/><a:ext cx="409575" cy="409575"\/>/);
+  assert.match(underlay, /<a:srgbClr val="182235">/);
+  assert.match(underlay, /<a:srgbClr val="F4F7F4">/);
 });
 
 test("backplate decoration keeps a transparent outer box for multiline fit", async () => {

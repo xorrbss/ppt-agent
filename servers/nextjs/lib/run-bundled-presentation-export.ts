@@ -13,6 +13,7 @@ import {
   resolveExportRenderBaseUrl,
 } from "@/lib/export-render-url";
 import { resolveAppDataDirectory } from "@/lib/app-data-directory";
+import type { PresentationExportResult } from "./presentation-export-strategy.ts";
 import {
   resolveExportProcessLimits,
   superviseExportProcess,
@@ -136,11 +137,10 @@ export async function bundledExportPackageAvailable(): Promise<boolean> {
 
 export type BundledPresentationExportFormat = "pdf" | "pptx";
 
-export type BundledPresentationExportResult = {
-  path: string;
+export type BundledPresentationExportResult = PresentationExportResult & {
   /**
    * Optional additive diagnostics for authored hybrid PPTX exports.
-   * General/PDF exports intentionally keep returning only `path`.
+   * General/PDF exports intentionally keep returning only the base result.
    */
   exportMetadata?: AuthoredHybridExportMetadata;
 };

@@ -110,6 +110,49 @@ export interface AuthoredHybridTextRun {
   bounds: AuthoredHybridBounds;
   fragments: AuthoredHybridBounds[];
   style: AuthoredHybridTextStyle;
+  /**
+   * Present only on an extracted newline run. Soft breaks are browser wrapping,
+   * line breaks come from authored <br>/preserved source newlines, and paragraph
+   * breaks separate block-flow text.
+   */
+  breakKind?: "soft" | "line" | "paragraph";
+}
+
+export interface AuthoredHybridTextBoxEdgesPx {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/**
+ * Browser-computed text layout facts. All scalar lengths remain CSS pixels so
+ * downstream PowerPoint mapping can apply one CSS-DPI conversion consistently.
+ */
+export interface AuthoredHybridTextLayout {
+  /** CSS border box before editable text is narrowed to its content box. */
+  boxBounds: AuthoredHybridBounds;
+  /** CSS content box after border and padding. */
+  contentBounds: AuthoredHybridBounds;
+  /** Union of painted glyph fragments, or null when no glyph fragment exists. */
+  paintedTextBounds: AuthoredHybridBounds | null;
+  paddingPx: AuthoredHybridTextBoxEdgesPx;
+  borderPx: AuthoredHybridTextBoxEdgesPx;
+  marginPx: AuthoredHybridTextBoxEdgesPx;
+  rowGapPx: number;
+  columnGapPx: number;
+  display: string;
+  flexDirection: "row" | "row-reverse" | "column" | "column-reverse" | null;
+  alignItems: string;
+  justifyContent: string;
+  /** Whether the computed text-align came from this box, an ancestor, or initial CSS. */
+  textAlignSource: "self" | "inherited" | "default";
+  lineCount: number;
+  singleLine: boolean;
+  paragraphSpacingPx: {
+    before: number;
+    after: number;
+  };
 }
 
 export interface AuthoredHybridTextPayload {
@@ -118,6 +161,8 @@ export interface AuthoredHybridTextPayload {
   paragraphs: string[];
   style: AuthoredHybridTextStyle;
   runs: AuthoredHybridTextRun[];
+  /** Optional for backward compatibility with authored-hybrid/v1 observations. */
+  layout?: AuthoredHybridTextLayout;
   /** A simple CSS fill/border owned by the text root, exported as one text shape. */
   containerShape?: {
     bounds: AuthoredHybridBounds;
@@ -179,6 +224,17 @@ export interface AuthoredHybridShapePayload {
     spreadPx: number;
     color: AuthoredHybridColor;
   }>;
+  /**
+   * A simple CSS outline reconstructed as an independent editable PowerPoint
+   * shape outside the owning shape. Unlike a border, an outline does not
+   * participate in the element's CSS box dimensions.
+   */
+  outline?: {
+    color: AuthoredHybridColor;
+    widthPt: number;
+    offsetPx: number;
+    dash?: "dash" | "dot";
+  };
   /** Arrowhead reconstructed from a CSS pseudo-element on a thin connector. */
   endArrow?: "triangle";
   /**

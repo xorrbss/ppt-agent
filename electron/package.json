@@ -40,6 +40,8 @@
     "preflight:package": "node scripts/verify-packaging-inputs.cjs",
     "test:package-preflight": "node --test scripts/verify-packaging-inputs.test.cjs",
     "smoke:packaged-servers": "node scripts/smoke-packaged-servers.cjs",
+    "verify:macos-release": "node scripts/verify-macos-release.cjs",
+    "test:macos-release": "node --test scripts/verify-macos-release.test.cjs",
     "lint:main": "npm run build:ts && npm run check:main-no-undef",
     "build:css": "tailwindcss -i ./resources/ui/assets/css/tailwind.import.css -o ./resources/ui/assets/css/tailwind.css --watch",
     "build:vectorstore": "echo 'Using prebuilt shared icons vectorstore index'",
@@ -77,7 +79,7 @@
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "electron": "42.2.0",
+    "electron": "43.2.0",
     "electron-builder": "^26.8.1",
     "typescript": "^5.8.3"
   },

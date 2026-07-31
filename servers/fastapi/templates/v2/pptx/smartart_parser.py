@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 from xml.etree.ElementTree import Element
 
 from .models import (
@@ -13,6 +14,14 @@ NS = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "dgm": "http://schemas.openxmlformats.org/drawingml/2006/diagram",
 }
+DATA_MODEL_TAG = f"{{{NS['dgm']}}}dataModel"
+SmartArtDiagnostic = Literal[
+    "data_relationship_missing",
+    "data_relationship_invalid",
+    "data_part_missing",
+    "data_model_invalid",
+    "data_model_limits_exceeded",
+]
 
 
 @dataclass(frozen=True)
@@ -32,15 +41,19 @@ class SmartArtEvidenceLimits:
             raise ValueError("smartart_evidence_limits_must_be_positive")
 
 
+def _bounded_data_part(data_part: str | None) -> str | None:
+    return data_part if data_part is not None and len(data_part) <= 512 else None
+
+
 def unavailable_smartart_evidence(
-    diagnostic: str,
+    diagnostic: SmartArtDiagnostic,
     *,
     data_part: str | None = None,
 ) -> SmartArtEvidence:
     return SmartArtEvidence(
         status="unavailable",
         diagnostic=diagnostic,
-        data_part=data_part,
+        data_part=_bounded_data_part(data_part),
     )
 
 
@@ -50,10 +63,27 @@ def parse_smartart_data_model(
     data_part: str,
     limits: SmartArtEvidenceLimits | None = None,
 ) -> SmartArtEvidence:
-    """Extract bounded, inert structure without promoting SmartArt to editable."""
+    """Extract bounded, inert structure without promoting SmartArt to editable.
 
+    Point order and concatenated text are observations only. Layout, color,
+    quick-style, and cached drawing parts are deliberately outside this parser,
+    so its output must not drive SmartArt edits or editable-shape promotion.
+    """
+
+    if _bounded_data_part(data_part) is None:
+        return unavailable_smartart_evidence("data_model_invalid")
     evidence_limits = limits or SmartArtEvidenceLimits()
+    if root.tag != DATA_MODEL_TAG:
+        return unavailable_smartart_evidence(
+            "data_model_invalid",
+            data_part=data_part,
+        )
     point_nodes = root.findall("./dgm:ptLst/dgm:pt", NS)
+    if not point_nodes:
+        return unavailable_smartart_evidence(
+            "data_model_invalid",
+            data_part=data_part,
+        )
     connection_nodes = root.findall("./dgm:cxnLst/dgm:cxn", NS)
     if (
         len(point_nodes) > evidence_limits.max_nodes

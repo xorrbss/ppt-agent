@@ -1,17 +1,77 @@
+import csv
 import errno
 import json
 import os
 import shutil
+import subprocess
 import time
 import uuid
 from contextlib import contextmanager
 from typing import Callable, Iterator
 
 
-LOCK_TIMEOUT_SECONDS = 5.0
+# ACL hardening on Windows invokes icacls for the primary, backup, and atomic
+# replacement.  It can take several seconds under endpoint protection, so a
+# short lock timeout caused otherwise-safe concurrent updates to fail.
+LOCK_TIMEOUT_SECONDS = 30.0
 LOCK_STALE_SECONDS = 30.0
 RETRY_DELAY_SECONDS = 0.05
 MAX_IO_ATTEMPTS = 6
+
+
+def _windows_current_user_sid() -> str | None:
+    """Return the current Windows principal SID without depending on its name."""
+    try:
+        result = subprocess.run(
+            ["whoami", "/user", "/fo", "csv", "/nh"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        rows = list(csv.reader(result.stdout.splitlines()))
+        if rows and len(rows[0]) >= 2 and rows[0][1].startswith("S-"):
+            return rows[0][1]
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return None
+
+
+def _secure_config_file(file_path: str) -> bool:
+    """Restrict a credential file to the app user on each supported OS.
+
+    Windows does not expose POSIX group/other mode bits through ``stat``.  A
+    successful ``chmod(0o600)`` there only toggles the read-only attribute, so
+    use an explicit ACL instead.  SYSTEM retains full access for normal OS
+    servicing; the current user's SID is used rather than a localized account
+    name.
+    """
+    if os.name != "nt":
+        os.chmod(file_path, 0o600)
+        return True
+
+    sid = _windows_current_user_sid()
+    if not sid:
+        return False
+    try:
+        result = subprocess.run(
+            [
+                "icacls",
+                file_path,
+                "/inheritance:r",
+                "/grant:r",
+                f"*{sid}:(R,W)",
+                "/grant:r",
+                "*S-1-5-18:(F)",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
 
 
 def _backup_path(config_path: str) -> str:
@@ -20,6 +80,22 @@ def _backup_path(config_path: str) -> str:
 
 def _lock_path(config_path: str) -> str:
     return f"{config_path}.lock"
+
+
+def _harden_existing_config_permissions(config_path: str) -> None:
+    for file_path in (config_path, _backup_path(config_path)):
+        try:
+            if not _secure_config_file(file_path):
+                raise OSError("could not secure the Windows user config ACL")
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            # Permission hardening must never make a readable credential file
+            # appear empty to callers and trigger destructive re-initialization.
+            print(
+                f"[Presenton] Failed to secure "
+                f"{os.path.basename(file_path)} permissions: {error}"
+            )
 
 
 def _is_retryable_os_error(error: BaseException) -> bool:
@@ -149,6 +225,12 @@ def _copy_backup_if_possible(config_path: str, primary_valid: bool) -> None:
                 "initialize user config backup",
                 lambda: shutil.copy2(config_path, config_backup_path),
             )
+        if os.path.exists(config_backup_path) and not _secure_config_file(
+            config_backup_path
+        ):
+            # Never retain an unprotected credential-bearing recovery copy.
+            os.unlink(config_backup_path)
+            raise OSError("could not secure user config backup")
     except Exception as error:
         print(f"[Presenton] Failed to update user config backup: {error}")
 
@@ -162,11 +244,24 @@ def _write_atomic_json(config_path: str, config: dict, primary_valid: bool) -> N
         f"{uuid.uuid4().hex}.tmp"
     )
     try:
-        with open(temp_path, "w", encoding="utf-8") as file:
+        descriptor = os.open(
+            temp_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+        # A newly-created file inherits its parent ACL on Windows.  Secure it
+        # before serializing credential material, not only after replace.
+        if not _secure_config_file(temp_path):
+            os.close(descriptor)
+            descriptor = -1
+            raise OSError("could not secure the Windows user config ACL")
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
             json.dump(config, file, separators=(",", ":"))
             file.flush()
             os.fsync(file.fileno())
         _retry("replace user config", lambda: os.replace(temp_path, config_path))
+        if not _secure_config_file(config_path):
+            raise OSError("could not secure the Windows user config ACL")
         _copy_backup_if_possible(config_path, False)
     except Exception:
         try:
@@ -179,6 +274,7 @@ def _write_atomic_json(config_path: str, config: dict, primary_valid: bool) -> N
 def read_user_config_file(config_path: str) -> dict:
     try:
         _ensure_parent_directory(config_path)
+        _harden_existing_config_permissions(config_path)
         config, _ = _read_snapshot(config_path)
         return dict(config)
     except Exception:

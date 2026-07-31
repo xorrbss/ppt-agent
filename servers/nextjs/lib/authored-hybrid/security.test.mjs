@@ -9,6 +9,7 @@ import {
 import {
   preflightAuthoredHtmlForHybrid,
   readBoundedResponseText,
+  validateHybridDataFontUrl,
   validateHybridDataImageUrl,
 } from "./security.ts";
 
@@ -115,6 +116,36 @@ test("data image MIME, base64, and magic bytes must agree", () => {
     false
   );
   assert.equal(validateHybridDataImageUrl("data:image/png;base64,abc").ok, false);
+});
+
+test("collected data fonts require supported MIME, base64, magic, and size", () => {
+  const woff2 = `data:font/woff2;base64,${Buffer.concat([
+    Buffer.from("wOF2"),
+    Buffer.alloc(32),
+  ]).toString("base64")}`;
+  const decoded = validateHybridDataFontUrl(woff2);
+  assert.equal(decoded.ok, true);
+  if (decoded.ok) assert.equal(decoded.mime, "woff2");
+  // A well-formed font payload is still rejected inside the untrusted
+  // document. Only the server-side collector may introduce @font-face data,
+  // and it injects it into the separate document that bypasses preflight.
+  assert.deepEqual(
+    preflightAuthoredHtmlForHybrid(
+      `<style>@font-face{font-family:Inter;src:url("${woff2}")}</style><p>x</p>`
+    ),
+    { ok: false, reason: "unsafe-css-url" }
+  );
+  assert.equal(
+    validateHybridDataFontUrl(woff2.replace("font/woff2", "font/woff")).ok,
+    false
+  );
+  assert.equal(validateHybridDataFontUrl("data:font/woff2;base64,abc").ok, false);
+  assert.equal(
+    preflightAuthoredHtmlForHybrid(
+      '<style>@font-face{src:url("data:font/woff2;base64,AAAA")}</style>'
+    ).ok,
+    false
+  );
 });
 
 test("presentation response reads are byte-bounded for declared and streamed sizes", async () => {

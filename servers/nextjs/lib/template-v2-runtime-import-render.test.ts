@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createTemplateV2SlideRenderPlan } from "./template-v2-render-plan.mjs";
 import { renderTemplateV2GeneralSlideCanvasHtml } from "./template-v2-general-renderer.mjs";
+import { adaptTemplateV2TableCellSpanMetadata } from "../components/slide-editor/importing/template-v2-table-span.ts";
 
 /**
  * Both cases below are what the runtime PPTX analyzer actually persists, and both
@@ -67,6 +68,52 @@ function slideWith(element: Record<string, unknown>) {
 function planOnlyElement(element: Record<string, unknown>) {
   return createTemplateV2SlideRenderPlan(slideWith(element)).components[0].elements[0];
 }
+
+test("the slide-editor import adapter preserves native table span metadata", () => {
+  assert.deepEqual(
+    adaptTemplateV2TableCellSpanMetadata({
+      rowspan: 2,
+      colspan: 3,
+    }),
+    {
+      rowspan: 2,
+      colspan: 3,
+    },
+  );
+  assert.deepEqual(
+    adaptTemplateV2TableCellSpanMetadata({
+      covered_by: { row: 0, column: 1 },
+    }),
+    {
+      covered_by: { row: 0, column: 1 },
+    },
+  );
+
+  assert.throws(
+    () =>
+      adaptTemplateV2TableCellSpanMetadata({
+        rowspan: 0,
+        colspan: 1.5,
+        covered_by: { row: -1, column: 0 },
+      }),
+    /template_v2_table_rowspan_invalid/,
+  );
+  assert.throws(
+    () =>
+      adaptTemplateV2TableCellSpanMetadata({
+        covered_by: { row: 0 },
+      }),
+    /template_v2_table_covered_by_invalid/,
+  );
+  assert.throws(
+    () =>
+      adaptTemplateV2TableCellSpanMetadata({
+        rowspan: 2,
+        covered_by: { row: 0, column: 0 },
+      }),
+    /template_v2_table_covered_cell_span_invalid/,
+  );
+});
 
 test("a null vector shape means absent, not an invalid shape", () => {
   // The bundled converter emits straight-line connectors with no `shape` key at all;

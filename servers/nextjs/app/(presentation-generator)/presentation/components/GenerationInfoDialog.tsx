@@ -44,24 +44,22 @@ const displayValue = (value: string | null | undefined) => {
 
 const booleanLabel = (value: boolean) => (value ? "사용" : "사용 안 함");
 
-const SettingItem = ({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) => (
-  <div className="rounded-xl border border-[#ECEBF1] bg-white px-3.5 py-3">
-    <dt className="text-[11px] font-medium text-[#77727E]">{label}</dt>
-    <dd className="mt-1 text-sm font-semibold text-[#19161F]">{value}</dd>
-  </div>
-);
+function SettingItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[#ECEBF1] bg-white px-3.5 py-3">
+      <dt className="text-[11px] font-medium text-[#77727E]">{label}</dt>
+      <dd className="mt-1 text-sm font-semibold text-[#19161F]">{value}</dd>
+    </div>
+  );
+}
 
-const EmptyMessage = ({ children }: { children: React.ReactNode }) => (
-  <p className="rounded-xl border border-dashed border-[#DDD9E5] bg-[#FAFAFC] px-4 py-5 text-center text-sm text-[#77727E]">
-    {children}
-  </p>
-);
+function EmptyMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-xl border border-dashed border-[#DDD9E5] bg-[#FAFAFC] px-4 py-5 text-center text-sm text-[#77727E]">
+      {children}
+    </p>
+  );
+}
 
 export default function GenerationInfoDialog({
   presentationId,
@@ -71,42 +69,59 @@ export default function GenerationInfoDialog({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [info, setInfo] = useState<PresentationGenerationInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasError, setHasError] = useState(false);
+  const [infoState, setInfoState] = useState<{
+    presentationId: string;
+    value: PresentationGenerationInfo;
+  } | null>(null);
+  const [loadingPresentationId, setLoadingPresentationId] = useState<string | null>(null);
+  const [errorPresentationId, setErrorPresentationId] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const info = infoState?.presentationId === presentationId ? infoState.value : null;
+  const isLoading = loadingPresentationId === presentationId;
+  const hasError = errorPresentationId === presentationId;
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setInfoState(null);
+      setLoadingPresentationId(null);
+      setErrorPresentationId(null);
+    }
+    setOpen(nextOpen);
+  };
 
   useEffect(() => {
-    if (!open || info) return;
+    if (!open) return;
 
     let cancelled = false;
-    setIsLoading(true);
-    setHasError(false);
+    setLoadingPresentationId(presentationId);
+    setErrorPresentationId(null);
 
     DashboardApi.getPresentationGenerationInfo(presentationId)
       .then((generationInfo) => {
-        if (!cancelled) setInfo(generationInfo);
+        if (!cancelled) {
+          setInfoState({ presentationId, value: generationInfo });
+        }
       })
       .catch(() => {
-        if (!cancelled) setHasError(true);
+        if (!cancelled) setErrorPresentationId(presentationId);
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setLoadingPresentationId(null);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [info, open, presentationId, retryCount]);
+  }, [open, presentationId, retryCount]);
 
   const retry = () => {
-    setInfo(null);
-    setHasError(false);
+    setInfoState(null);
+    setErrorPresentationId(null);
     setRetryCount((count) => count + 1);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button
           type="button"
@@ -147,7 +162,10 @@ export default function GenerationInfoDialog({
             )}
 
             {hasError && !isLoading && (
-              <div className="flex min-h-48 flex-col items-center justify-center gap-3">
+              <div
+                className="flex min-h-48 flex-col items-center justify-center gap-3"
+                role="alert"
+              >
                 <p className="text-sm text-[#77727E]">
                   생성 정보를 불러오지 못했습니다.
                 </p>
@@ -224,46 +242,22 @@ export default function GenerationInfoDialog({
                   <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                     <SettingItem
                       label="슬라이드 수"
-                      value={
-                        info.settings.n_slides > 0
-                          ? `${info.settings.n_slides}장`
-                          : "자동"
-                      }
+                      value={info.settings.n_slides > 0 ? `${info.settings.n_slides}장` : "자동"}
                     />
-                    <SettingItem
-                      label="언어"
-                      value={displayValue(info.settings.language)}
-                    />
-                    <SettingItem
-                      label="톤"
-                      value={displayValue(info.settings.tone)}
-                    />
-                    <SettingItem
-                      label="내용 분량"
-                      value={displayValue(info.settings.verbosity)}
-                    />
+                    <SettingItem label="언어" value={displayValue(info.settings.language)} />
+                    <SettingItem label="톤" value={displayValue(info.settings.tone)} />
+                    <SettingItem label="내용 분량" value={displayValue(info.settings.verbosity)} />
                     <SettingItem
                       label="표지 슬라이드"
                       value={booleanLabel(info.settings.include_title_slide)}
                     />
                     <SettingItem
                       label="목차"
-                      value={booleanLabel(
-                        info.settings.include_table_of_contents
-                      )}
+                      value={booleanLabel(info.settings.include_table_of_contents)}
                     />
-                    <SettingItem
-                      label="웹 검색"
-                      value={booleanLabel(info.settings.web_search)}
-                    />
-                    <SettingItem
-                      label="생성 모드"
-                      value={displayValue(info.settings.mode)}
-                    />
-                    <SettingItem
-                      label="문서 버전"
-                      value={displayValue(info.settings.version)}
-                    />
+                    <SettingItem label="웹 검색" value={booleanLabel(info.settings.web_search)} />
+                    <SettingItem label="생성 모드" value={displayValue(info.settings.mode)} />
+                    <SettingItem label="문서 버전" value={displayValue(info.settings.version)} />
                   </dl>
 
                   {info.settings.instructions?.trim() && (

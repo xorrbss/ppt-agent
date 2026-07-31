@@ -147,7 +147,6 @@ def force_set_credentials(username: str, password: str) -> None:
     config = _load_user_config()
     config["AUTH_USERNAME"] = cleaned_username
     config["AUTH_PASSWORD_HASH"] = _encode_password_hash(password)
-    # Rotate the signing secret so any previously-issued tokens stop validating.
     config["AUTH_SECRET_KEY"] = _base64url_encode(secrets.token_bytes(32))
     _save_user_config(config)
 
@@ -189,7 +188,6 @@ def _sign_payload(payload_encoded: str, secret: str) -> str:
 def create_session_token(username: str) -> str:
     config = _load_user_config()
     secret = _get_or_create_auth_secret(config)
-
     issued_at = int(time.time())
     payload = {
         "v": 1,
@@ -197,7 +195,6 @@ def create_session_token(username: str) -> str:
         "iat": issued_at,
         "exp": issued_at + SESSION_TTL_SECONDS,
     }
-
     payload_encoded = _base64url_encode(
         json.dumps(payload, separators=(",", ":")).encode("utf-8")
     )
@@ -211,11 +208,8 @@ def validate_session_token(token: Optional[str]) -> Optional[str]:
 
     config = _load_user_config()
     stored_username = config.get("AUTH_USERNAME")
-    if not stored_username:
-        return None
-
     secret = config.get("AUTH_SECRET_KEY")
-    if not secret:
+    if not stored_username or not secret:
         return None
 
     try:
@@ -228,8 +222,7 @@ def validate_session_token(token: Optional[str]) -> Optional[str]:
         return None
 
     try:
-        payload_raw = _base64url_decode(payload_encoded)
-        payload = json.loads(payload_raw)
+        payload = json.loads(_base64url_decode(payload_encoded))
     except Exception:
         return None
 
@@ -238,16 +231,10 @@ def validate_session_token(token: Optional[str]) -> Optional[str]:
     expires_at = payload.get("exp")
     if not isinstance(username, str) or not isinstance(expires_at, int):
         return None
-
-    if version != 1:
+    if version != 1 or not hmac.compare_digest(username, stored_username):
         return None
-
-    if not hmac.compare_digest(username, stored_username):
-        return None
-
     if expires_at < int(time.time()):
         return None
-
     return username
 
 
@@ -259,7 +246,6 @@ def get_session_token_from_request(request: Request) -> Optional[str]:
     auth_header = request.headers.get("Authorization", "")
     if auth_header.lower().startswith("bearer "):
         return auth_header[7:].strip() or None
-
     return None
 
 
@@ -281,7 +267,6 @@ def get_basic_auth_credentials_from_request(
 
     if ":" not in decoded_value:
         return None
-
     username, password = decoded_value.split(":", 1)
     return username, password
 
@@ -289,13 +274,8 @@ def get_basic_auth_credentials_from_request(
 def get_auth_status(session_token: Optional[str] = None) -> dict:
     config = _load_user_config()
     configured = bool(config.get("AUTH_USERNAME") and config.get("AUTH_PASSWORD_HASH"))
-
     if not configured:
-        return {
-            "configured": False,
-            "authenticated": False,
-            "username": None,
-        }
+        return {"configured": False, "authenticated": False, "username": None}
 
     username = validate_session_token(session_token)
     return {
@@ -313,7 +293,6 @@ def get_internal_auth_headers() -> dict[str, str]:
     username = get_configured_auth_username()
     if not username:
         return {}
-
     return {"Authorization": f"Bearer {create_session_token(username)}"}
 
 

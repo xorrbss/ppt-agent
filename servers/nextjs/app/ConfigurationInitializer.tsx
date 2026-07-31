@@ -9,6 +9,7 @@ import { checkIfSelectedOllamaModelIsPulled } from '@/utils/providerUtils';
 import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
 import Image from 'next/image';
+import { notify } from '@/components/ui/sonner';
 
 const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
   try {
@@ -126,6 +127,28 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         setIsLoading(false);
       }
     } else {
+      try {
+        const res = await fetch("/api/runtime-config", {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const runtime = await res.json();
+          const runtimeConfig = normalizeLLMConfig(
+            (runtime.config || {}) as LLMConfig
+          );
+          dispatch(setLLMConfig(runtimeConfig));
+          if (!runtime.configured) {
+            notify.error(
+              "Instance not configured",
+              "Ask the administrator to configure the AI providers in Settings."
+            );
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch runtime configuration:", error);
+      }
       if (route === '/') {
         router.push('/upload');
         setLoadingToFalseAfterNavigatingTo('/upload');

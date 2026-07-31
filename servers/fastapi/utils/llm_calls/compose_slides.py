@@ -66,7 +66,7 @@ def get_system_prompt(
     instructions: Optional[str] = None,
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
-    text_length_guidance: str = "",
+    response_schema: Optional[dict] = None,
 ) -> str:
     preserve_source_content = requires_content_preservation(instructions)
     instructions = without_content_preservation_marker(instructions)
@@ -150,9 +150,9 @@ def get_system_prompt(
         "Omit `variant` to use the default. Only set the values listed above.\n"
         + content_depth
         + f"\n# Verbosity\n{verbosity_instruction}\n"
-        + text_length_guidance
         + (f"\n# Tone\nMake the slides {tone}.\n" if tone else "")
         + (f"\n# User Instructions\n{instructions}\n" if instructions else "")
+        + format_text_length_guidance(response_schema or {})
     )
 
 
@@ -171,16 +171,13 @@ def get_messages(
     verbosity: Optional[str] = None,
     schema: Optional[dict] = None,
 ) -> list[Message]:
-    text_length_guidance = (
-        format_text_length_guidance(schema) if schema is not None else ""
-    )
     return [
         SystemMessage(
             content=get_system_prompt(
                 instructions,
                 tone,
                 verbosity,
-                text_length_guidance,
+                schema,
             )
         ),
         UserMessage(content=get_user_prompt(outline_text, language)),

@@ -23,7 +23,7 @@ interface OutlineContentProps {
     isStreaming: boolean;
     activeSlideIndex: number | null;
     highestActiveIndex: number;
-    onDragEnd: (event: any) => void;
+    onDragEnd: (oldIndex: number, newIndex: number) => void;
     onAddSlide: () => void;
 }
 
@@ -82,7 +82,16 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
-                        onDragEnd={onDragEnd}
+                        onDragEnd={({ active, over }) => {
+                            if (!over || active.id === over.id) return;
+                            const oldIndex = outlines.findIndex(
+                                (_, index) => `slide-${index}` === active.id
+                            );
+                            const newIndex = outlines.findIndex(
+                                (_, index) => `slide-${index}` === over.id
+                            );
+                            onDragEnd(oldIndex, newIndex);
+                        }}
                     >
                         <SortableContext
                             items={outlines.map((_, index) => `slide-${index}`)}

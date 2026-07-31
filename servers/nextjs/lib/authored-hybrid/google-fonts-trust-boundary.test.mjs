@@ -171,9 +171,7 @@ test("trusted collection makes legacy Google Fonts HTML editable in offline Chro
   assert.equal(metric.classification.mode, "native");
   assert.equal(direct.classification.mode, "native");
 
-  const native = await prepareNativeElements([title, metric, direct], {
-    trustedFontFamilies: prepared.trustedFamilies,
-  });
+  const native = await prepareNativeElements([title, metric, direct]);
   assert.deepEqual(native.map((element) => element.kind), [
     "text",
     "text",
@@ -182,8 +180,14 @@ test("trusted collection makes legacy Google Fonts HTML editable in offline Chro
   const titleXml = serializePreparedNativeElement(native[0], 10);
   const metricXml = serializePreparedNativeElement(native[1], 11);
   const directXml = serializePreparedNativeElement(native[2], 12);
-  assert.match(titleXml, /<a:latin typeface="Noto Sans KR"\/>/);
-  assert.match(titleXml, /<a:ea typeface="Noto Sans KR"\/>/);
-  assert.match(metricXml, /<a:latin typeface="Inter"\/>/);
-  assert.match(directXml, /<a:latin typeface="Roboto"\/>/);
+
+  // Collection makes the text editable; it does not by itself license the
+  // authored family in OOXML. A face the collector merely loaded for Chrome is
+  // not present on the recipient's machine, so native runs carry the registry
+  // substitute. Only a family actually packaged into the PPTX is preserved --
+  // that path is covered by native-plan's embedded-typeface tests.
+  assert.match(titleXml, /<a:latin typeface="Malgun Gothic"\/>/);
+  assert.match(titleXml, /<a:ea typeface="Malgun Gothic"\/>/);
+  assert.match(metricXml, /<a:latin typeface="Aptos"\/>/);
+  assert.match(directXml, /<a:latin typeface="Aptos"\/>/);
 });

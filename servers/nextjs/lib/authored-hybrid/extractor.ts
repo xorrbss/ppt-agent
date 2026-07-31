@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   authoredHtmlSha256,
   assertAuthoredHybridSlide,
@@ -11,6 +12,7 @@ import {
   instrumentAuthoredHtml,
   normalizeAuthoredHybridBaseUrl,
   parseAuthoredHybridDomDump,
+  type AuthoredHybridFontLayoutMode,
 } from "./html-instrumentation.ts";
 import type { AuthoredHybridExpectedPromotedElement } from "./observation.ts";
 import type {
@@ -27,6 +29,8 @@ export interface AuthoredHybridExtractionOptions
   extends AuthoredHybridChromeOptions {
   /** Base used to resolve relative HTML assets. Persist and reuse for backplate. */
   baseUrl?: string;
+  /** Optional editable-layout measurement mode; omitted/default remains source fidelity. */
+  fontLayoutMode?: AuthoredHybridFontLayoutMode;
 }
 
 const calibratedWindowSizes = new Map<
@@ -37,6 +41,7 @@ const calibratedWindowSizes = new Map<
 async function captureWithFixedViewport(
   instrumentedHtml: string,
   screenshot: boolean,
+  domCompletionToken: string,
   options: AuthoredHybridExtractionOptions
 ) {
   const cacheKey = options.chromeExecutable ?? `auto:${process.platform}`;
@@ -53,6 +58,7 @@ async function captureWithFixedViewport(
       chromeExecutable: options.chromeExecutable,
       timeoutMs: options.timeoutMs,
       windowSizePx: windowSize,
+      domCompletionToken,
     });
     if (!capture.serializedDom) {
       throw new Error("Chrome did not return authored hybrid DOM output.");
@@ -85,10 +91,16 @@ export async function extractAuthoredSlideDom(
   options: AuthoredHybridExtractionOptions = {}
 ): Promise<AuthoredHybridSlideV1> {
   const baseUrl = normalizeAuthoredHybridBaseUrl(options.baseUrl);
-  const instrumented = instrumentAuthoredHtml(html, { baseUrl });
+  const domCompletionToken = randomUUID();
+  const instrumented = instrumentAuthoredHtml(html, {
+    baseUrl,
+    fontLayoutMode: options.fontLayoutMode,
+    completionToken: domCompletionToken,
+  });
   const { observation } = await captureWithFixedViewport(
     instrumented,
     false,
+    domCompletionToken,
     options
   );
   return buildAuthoredHybridSlide(html, observation, baseUrl);
@@ -255,13 +267,16 @@ export async function renderAuthoredBackplate(
   }
   const promoted = validatePromotedElementIds(slide, promotedElementIds);
   const promotedElements = expectedPromotedElements(slide, promoted);
+  const domCompletionToken = randomUUID();
   const instrumented = instrumentAuthoredHtml(html, {
     baseUrl,
     promotedElements,
+    completionToken: domCompletionToken,
   });
   const { capture, observation } = await captureWithFixedViewport(
     instrumented,
     true,
+    domCompletionToken,
     options
   );
   if (!capture.screenshotPng) {

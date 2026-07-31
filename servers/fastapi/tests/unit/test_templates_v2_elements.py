@@ -188,6 +188,27 @@ def test_table_rejects_ragged_rows():
         )
 
 
+@pytest.mark.parametrize("field", ["stroke", "border"])
+@pytest.mark.parametrize("section", ["columns", "rows"])
+def test_table_cell_rejects_undeclared_border_shapes(field, section):
+    table = {
+        "type": "table",
+        "columns": [{"runs": [{"text": "Header"}]}],
+        "rows": [[{"runs": [{"text": "Body"}]}]],
+        "decorative": False,
+        "name": "metrics",
+        "min_columns": 1,
+        "max_columns": 1,
+        "min_rows": 1,
+        "max_rows": 1,
+    }
+    cell = table["columns"][0] if section == "columns" else table["rows"][0][0]
+    cell[field] = {"color": "#111827", "width": 1}
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        _validate_element(table)
+
+
 @pytest.mark.parametrize("element_type", ["flex", "grid"])
 @pytest.mark.parametrize("gap_name", ["gap", "column_gap", "row_gap"])
 def test_layout_elements_reject_negative_gaps(element_type, gap_name):
@@ -251,6 +272,35 @@ def test_infographic_rejects_invalid_ranges_and_out_of_bounds_values(data):
                 "data": data,
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [("progress_bar", 64.5), ("gauge", 0), ("gauge", 100)],
+)
+def test_infographic_value_round_trips_through_the_strict_model(kind, value):
+    layout = _validate_element(
+        {
+            "type": "infographic",
+            "decorative": False,
+            "name": "metric",
+            "data": {
+                "type": kind,
+                "min_value": 0,
+                "max_value": 100,
+                "value": value,
+            },
+            "colors": ["#e5e7eb", "#2563eb"],
+        }
+    )
+
+    dumped = layout.model_dump(mode="json")["elements"][0]
+    assert dumped["data"] == {
+        "type": kind,
+        "max_value": 100.0,
+        "min_value": 0.0,
+        "value": float(value),
+    }
 
 
 def test_ellipse_requires_exactly_two_bounding_points():

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "repository": "presenton/presenton",
   "branch": "main",
-  "baselineSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "baselineSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
   "baselineMetadata": {
-    "committedAt": "2026-07-23T12:15:14Z",
-    "subject": "Refactor code structure for improved readability and maintainability"
+    "committedAt": "2026-07-29T16:21:43Z",
+    "subject": "Merge pull request #795 from presenton/saurav/convert-content-image-fills"
   },
   "requestTimeoutMs": 20000,
   "maximumCompareFiles": 300,

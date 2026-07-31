@@ -452,5 +452,10 @@ def save_codex_tokens_to_user_config() -> None:
 
     try:
         update_user_config_file(user_config_path, merge_codex_tokens)
+        from services.provider_settings import (
+            sync_legacy_file_to_provider_settings,
+        )
+
+        sync_legacy_file_to_provider_settings()
     except Exception as error:
         print(f"Error while saving Codex tokens to user config: {error}")

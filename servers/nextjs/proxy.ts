@@ -20,6 +20,23 @@ function getFastApiBaseUrl(): string {
   return "http://127.0.0.1:8000";
 }
 
+function isFastApiApiPath(pathname: string): boolean {
+  return (
+    pathname === "/api/v1" ||
+    pathname.startsWith("/api/v1/") ||
+    pathname === "/api/v2" ||
+    pathname.startsWith("/api/v2/")
+  );
+}
+
+function rewriteToFastApi(request: NextRequest): NextResponse {
+  const destination = new URL(
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    `${getFastApiBaseUrl()}/`
+  );
+  return NextResponse.rewrite(destination);
+}
+
 type AuthStatus = {
   configured: boolean;
   authenticated: boolean;
@@ -102,6 +119,18 @@ export async function proxy(request: NextRequest) {
 
   if (request.method === "OPTIONS" || isApiAuthExempt(pathname)) {
     return NextResponse.next();
+  }
+
+  const authorization = request.headers.get("authorization") || "";
+  if (authorization.toLowerCase().startsWith("bearer sk-presenton-")) {
+    // FastAPI validates admin-owned API keys. Do not treat them as browser
+    // sessions or expose them to local Next.js configuration routes.
+    return isFastApiApiPath(pathname)
+      ? rewriteToFastApi(request)
+      : NextResponse.json(
+          { detail: "API keys are only accepted by the Presenton API" },
+          { status: 403 }
+        );
   }
 
   const authStatus = await getAuthStatus(request);
