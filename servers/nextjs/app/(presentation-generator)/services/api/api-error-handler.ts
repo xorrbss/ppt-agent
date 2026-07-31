@@ -40,15 +40,15 @@ export class ApiError extends Error {
 
 const TEMPLATE_V2_ERROR_MESSAGES: Record<string, string> = {
   template_v2_revision_invalid:
-    "The selected template revision is invalid. Please select the template again.",
+    "선택한 템플릿 리비전이 유효하지 않습니다. 템플릿을 다시 선택해 주세요.",
   template_v2_revision_conflict:
-    "The selected template has changed. Please select the latest revision and retry.",
+    "선택한 템플릿이 변경되었습니다. 최신 리비전을 선택한 뒤 다시 시도해 주세요.",
   template_v2_source_invalid:
-    "The structured template source is invalid. Please repair or republish the template.",
+    "구조화 템플릿 소스가 유효하지 않습니다. 템플릿을 복구하거나 다시 게시해 주세요.",
   template_v2_layouts_invalid:
-    "The structured template layout schema is invalid. Please repair or republish the template.",
+    "구조화 템플릿 레이아웃 스키마가 유효하지 않습니다. 템플릿을 복구하거나 다시 게시해 주세요.",
   template_v2_generation_invalid:
-    "The generated content did not match the structured template schema.",
+    "생성된 콘텐츠가 구조화 템플릿 스키마와 일치하지 않습니다.",
 };
 
 export function apiErrorFromPayload(
@@ -281,27 +281,27 @@ export class ApiResponseHandler {
   private static getStatusBasedErrorMessage(status: number, defaultMessage: string): string {
     switch (status) {
       case 400:
-        return "Bad request. Please check your input and try again.";
+        return "잘못된 요청입니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.";
       case 401:
-        return "Unauthorized. Please log in and try again.";
+        return "인증이 필요합니다. 로그인 후 다시 시도해 주세요.";
       case 403:
-        return "Access forbidden. You don't have permission to perform this action.";
+        return "접근이 거부되었습니다. 이 작업을 수행할 권한이 없습니다.";
       case 404:
-        return "Resource not found. The requested item may have been deleted or moved.";
+        return "리소스를 찾을 수 없습니다. 삭제되었거나 이동되었을 수 있습니다.";
       case 409:
-        return "Conflict. The resource already exists or there's a conflict with the current state.";
+        return "충돌이 발생했습니다. 리소스가 이미 존재하거나 현재 상태와 충돌합니다.";
       case 422:
-        return "Validation error. Please check your input and try again.";
+        return "입력값 검증에 실패했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.";
       case 429:
-        return "Too many requests. Please wait a moment and try again.";
+        return "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.";
       case 500:
-        return "Internal server error. Please try again later.";
+        return "서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
       case 502:
-        return "Bad gateway. The server is temporarily unavailable.";
+        return "게이트웨이 오류입니다. 서버를 일시적으로 사용할 수 없습니다.";
       case 503:
-        return "Service unavailable. Please try again later.";
+        return "서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.";
       case 504:
-        return "Gateway timeout. The request took too long to process.";
+        return "게이트웨이 시간 초과입니다. 요청 처리가 너무 오래 걸렸습니다.";
       default:
         return defaultMessage;
     }

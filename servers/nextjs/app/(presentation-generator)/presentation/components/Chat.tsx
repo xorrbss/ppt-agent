@@ -1131,7 +1131,8 @@ const Chat = ({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    // Skip while an IME composition is active so confirming Korean input doesn't submit.
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       void submitMessage(input);
     }

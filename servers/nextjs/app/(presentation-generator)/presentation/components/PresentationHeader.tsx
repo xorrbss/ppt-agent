@@ -107,12 +107,14 @@ const buildSafeExportFileName = (
 const PresentationHeader = ({
   presentation_id,
   isPresentationSaving,
+  isPresentationSaveFailed = false,
   currentSlide,
   onReload,
   isAuthoredDeck = false,
 }: {
   presentation_id: string;
   isPresentationSaving: boolean;
+  isPresentationSaveFailed?: boolean;
   currentSlide?: number;
   onReload?: () => void;
   isAuthoredDeck?: boolean;
@@ -313,8 +315,8 @@ const PresentationHeader = ({
         if (payload.quality) setExportQuality(payload.quality);
         if (payload.exportMetadata && !payload.quality) {
           notify.info(
-            "PPTX export information",
-            `${payload.exportMetadata.editableSlides}/${payload.exportMetadata.totalSlides} slides include editable elements.`
+            "PPTX 내보내기 정보",
+            `${payload.exportMetadata.editableSlides}/${payload.exportMetadata.totalSlides}개 슬라이드에 편집 가능한 요소가 포함되어 있습니다.`
           );
         }
       }
@@ -531,7 +533,8 @@ const PresentationHeader = ({
             onChange={(e) => setDraftTitle(e.target.value)}
             onBlur={handleTitleBlur}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              // Skip while an IME composition is active so confirming Korean input doesn't commit.
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 titleBlurIntentRef.current = "save";
                 commitTitleEdit();
@@ -623,6 +626,12 @@ const PresentationHeader = ({
           {isPresentationSaving && (
             <div className="flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            </div>
+          )}
+          {isPresentationSaveFailed && !isPresentationSaving && (
+            <div className="flex items-center gap-1.5 text-red-600" role="status">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span className="text-xs font-medium">저장 안 됨</span>
             </div>
           )}
           {presentationData && isAuthoredDeck ? (

@@ -34,26 +34,32 @@ const BuiltInTemplateCard = memo(function BuiltInTemplateCard({
   return (
     <Card
       className={cn(
-        "cursor-pointer relative hover:shadow-sm transition-all duration-200 group overflow-hidden rounded-[22px] bg-white border",
+        "relative hover:shadow-sm transition-all duration-200 group overflow-hidden rounded-[22px] bg-white border",
         isSelected
           ? " border-blue-500 ring-2 ring-blue-500/25 shadow-sm"
           : " border-[#E8E9EC]"
       )}
-      onClick={handleClick}
     >
-      <TemplatePreviewStage>
-        <InbuiltTemplatePreview layouts={template.layouts} templateId={template.id} isOutline={true} />
-      </TemplatePreviewStage>
-      <div className="flex items-center justify-between px-6 py-5 bg-white border-t border-[#EDEEEF] relative z-40">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-gray-900 capitalize font-syne">
-            {template.name}
-          </h3>
-          <p className="text-xs text-gray-600 line-clamp-2 font-syne">
-            {template.description}
-          </p>
+      <button
+        type="button"
+        aria-pressed={isSelected}
+        className="block h-full w-full min-w-0 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+        onClick={handleClick}
+      >
+        <TemplatePreviewStage>
+          <InbuiltTemplatePreview layouts={template.layouts} templateId={template.id} isOutline={true} />
+        </TemplatePreviewStage>
+        <div className="flex items-center justify-between px-6 py-5 bg-white border-t border-[#EDEEEF] relative z-40">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-bold text-gray-900 capitalize font-syne">
+              {template.name}
+            </h3>
+            <p className="text-xs text-gray-600 line-clamp-2 font-syne">
+              {template.description}
+            </p>
+          </div>
         </div>
-      </div>
+      </button>
     </Card>
   );
 });

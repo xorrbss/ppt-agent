@@ -17,7 +17,7 @@ export const useSlideEdit = (
   const handleSave = async (): Promise<boolean> => {
 
     if (!prompt.trim()) {
-      alert("Please enter a prompt before saving.");
+      notify.warning("프롬프트를 입력해 주세요", "저장하기 전에 수정할 내용을 입력해야 합니다.");
       return false;
     }
 

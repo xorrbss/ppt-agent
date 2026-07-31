@@ -65,7 +65,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       : undefined;
 
   // Auto-save functionality
-  const { isSaving } = useAutoSave({
+  const { isSaving, saveFailed } = useAutoSave({
     debounceMs: 2000,
     enabled: !!presentationData && !isStreaming,
   });
@@ -302,6 +302,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         <PresentationHeader
           presentation_id={presentation_id}
           isPresentationSaving={isSaving}
+          isPresentationSaveFailed={saveFailed}
           currentSlide={selectedSlide}
           isAuthoredDeck={isAuthoredDeck}
           onReload={() => fetchUserSlides({ clearHistory: true })}

@@ -195,7 +195,7 @@ export const usePresentationStreaming = (
           data = JSON.parse(event.data);
         } catch {
           if (!scheduleRetry("invalid SSE payload")) {
-            finalizeFailure("Failed to parse stream response.");
+            finalizeFailure("스트림 응답을 해석하지 못했습니다.");
           }
           return;
         }
@@ -269,7 +269,7 @@ export const usePresentationStreaming = (
               window.history.replaceState({}, "", newUrl.toString());
             } catch {
               if (!scheduleRetry("failed to parse complete payload")) {
-                finalizeFailure("Failed to parse final presentation payload.");
+                finalizeFailure("최종 발표자료 데이터를 해석하지 못했습니다.");
               }
             }
             accumulatedChunks = "";
@@ -298,7 +298,7 @@ export const usePresentationStreaming = (
             ) {
               finalizeFailure(
                 data.detail ||
-                  "Failed to connect to the server. Please try again."
+                  "서버에 연결하지 못했습니다. 다시 시도해 주세요."
               );
             }
             break;
@@ -308,7 +308,7 @@ export const usePresentationStreaming = (
       eventSource.onerror = (error) => {
         console.error("EventSource failed:", error);
         if (!scheduleRetry("connection lost")) {
-          finalizeFailure("Failed to connect to the server. Please try again.");
+          finalizeFailure("서버에 연결하지 못했습니다. 다시 시도해 주세요.");
         }
       };
     };
