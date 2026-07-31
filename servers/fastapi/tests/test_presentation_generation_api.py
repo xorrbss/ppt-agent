@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api.v1.ppt.endpoints.presentation_generate import generate_presentation_sync
+from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
 
@@ -121,6 +122,54 @@ class TestPresentationGenerationAPI:
 
         assert exc.value.status_code == 400
         assert exc.value.detail == "Number of slides must be greater than 0"
+
+    def test_generate_presentation_accepts_maximum_slide_count(self):
+        request = GeneratePresentationRequest(
+            content="Create a long presentation",
+            n_slides=MAX_NUMBER_OF_SLIDES,
+            language="English",
+            export_as="pptx",
+            template="korean-biz",
+        )
+        response_payload = PresentationPathAndEditPath(
+            presentation_id=uuid.uuid4(),
+            path="/tmp/exports/maximum.pptx",
+            edit_path="/presentation?id=maximum",
+        )
+
+        with patch(
+            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
+            new=AsyncMock(return_value=response_payload),
+        ):
+            response = asyncio.run(
+                generate_presentation_sync(
+                    _fake_request(), request, sql_session=FakeAsyncSession()
+                )
+            )
+
+        assert response == response_payload
+
+    def test_generate_presentation_rejects_slide_count_above_maximum(self):
+        request = GeneratePresentationRequest(
+            content="Create a presentation that is too long",
+            n_slides=MAX_NUMBER_OF_SLIDES + 1,
+            language="English",
+            export_as="pptx",
+            template="korean-biz",
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                generate_presentation_sync(
+                    _fake_request(), request, sql_session=FakeAsyncSession()
+                )
+            )
+
+        assert exc.value.status_code == 400
+        assert (
+            exc.value.detail
+            == f"Number of slides cannot be greater than {MAX_NUMBER_OF_SLIDES}"
+        )
 
     def test_generate_presentation_with_invalid_export_type(self):
         with pytest.raises(ValidationError):
