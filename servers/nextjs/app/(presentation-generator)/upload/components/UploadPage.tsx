@@ -16,7 +16,13 @@ import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { PromptInput } from "./PromptInput";
 import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
-import SupportingDoc, { isAllowedFile, MAX_SUPPORTED_FILES } from "./SupportingDoc";
+import SupportingDoc, {
+  isAllowedFile,
+  MAX_SUPPORTED_FILES,
+  SUPPORTED_FILE_FORMATS_DESCRIPTION,
+  TEXT_EXTENSIONS,
+  TEXT_MIME_TYPES,
+} from "./SupportingDoc";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { notify } from "@/components/ui/sonner";
@@ -41,7 +47,7 @@ const FILE_TYPE_PRESENTATION = new Set([".ppt", ".pptx", ".pptm", ".odp"]);
 const FILE_TYPE_SPREADSHEET = new Set([".xls", ".xlsx", ".xlsm", ".ods", ".csv", ".tsv"]);
 const FILE_TYPE_IMAGE = new Set([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"]);
 const FILE_TYPE_PDF = new Set([".pdf"]);
-const FILE_TYPE_TEXT = new Set([".txt"]);
+const FILE_TYPE_TEXT = new Set<string>(TEXT_EXTENSIONS);
 
 // Types for loading state
 interface LoadingState {
@@ -65,7 +71,7 @@ const getFileCategory = (file: File): string => {
   if (FILE_TYPE_SPREADSHEET.has(extension)) return "spreadsheet";
   if (FILE_TYPE_IMAGE.has(extension) || (file.type || "").startsWith("image/")) return "image";
   if (FILE_TYPE_PDF.has(extension) || file.type === "application/pdf") return "pdf";
-  if (FILE_TYPE_TEXT.has(extension) || file.type === "text/plain") return "text";
+  if (FILE_TYPE_TEXT.has(extension) || TEXT_MIME_TYPES.some((mime) => mime === (file.type || "").toLowerCase())) return "text";
   return "other";
 };
 
@@ -159,7 +165,7 @@ const UploadPage = () => {
     if (allowed.length !== nextFiles.length) {
       notify.error(
         "지원하지 않는 파일이 있습니다",
-        "지원 형식: Word, PowerPoint, 스프레드시트, PDF/TXT, 이미지 파일."
+        `지원 형식: ${SUPPORTED_FILE_FORMATS_DESCRIPTION}`
       );
     }
     if (allowed.length > MAX_SUPPORTED_FILES) {
@@ -176,7 +182,7 @@ const UploadPage = () => {
     }
   };
   const [config, setConfig] = useState<PresentationConfig>({
-    slides: null,
+    slides: "8",
     language: LanguageType.Korean,
     prompt: "",
     tone: ToneType.Default,

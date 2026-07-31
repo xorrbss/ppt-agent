@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import json
 import logging
 import os
@@ -30,6 +31,34 @@ except Exception:
     DocumentServiceCls = None
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _normalize_text_newlines(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _decode_text_bytes(data: bytes, filename: str) -> str:
+    """Decode plain-text and Markdown uploads using supported Korean encodings."""
+    try:
+        if data.startswith(codecs.BOM_UTF8):
+            text = data.decode("utf-8-sig", errors="strict")
+        elif data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+            text = data.decode("utf-16", errors="strict")
+        else:
+            try:
+                text = data.decode("utf-8", errors="strict")
+            except UnicodeDecodeError:
+                text = data.decode("cp949", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unable to decode text file '{filename}'. "
+                "Save it as UTF-8, UTF-16 with BOM, or CP949 and try again."
+            ),
+        ) from exc
+
+    return _normalize_text_newlines(text)
 
 
 def _unwrap_liteparse_json_line_if_stored(text: str) -> str:
@@ -232,7 +261,8 @@ class DocumentsLoader:
             else:
                 document = await asyncio.to_thread(self._parse_with_liteparse, file_path)
 
-            document = clean_extracted_document_text(document)
+            if extension not in TEXT_EXTENSIONS:
+                document = clean_extracted_document_text(document)
             documents.append(document)
             images.append(imgs)
 
@@ -278,8 +308,12 @@ class DocumentsLoader:
             return False
 
     async def load_text(self, file_path: str) -> str:
-        with open(file_path, "r", encoding="utf-8") as file:
-            return await asyncio.to_thread(file.read)
+        def _read_bytes() -> bytes:
+            with open(file_path, "rb") as file:
+                return file.read()
+
+        data = await asyncio.to_thread(_read_bytes)
+        return _decode_text_bytes(data, os.path.basename(file_path))
 
     def load_office_document(self, file_path: str, temp_dir: Optional[str] = None) -> str:
         # No LibreOffice (e.g. native Windows): extract text directly for the

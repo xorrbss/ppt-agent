@@ -7,6 +7,7 @@
 // (notify -> sonner), so the mount wrapper includes one — mirroring the real app.
 import React from 'react'
 import UploadPage from './UploadPage'
+import { isAllowedFile } from './SupportingDoc'
 import { mount } from 'cypress/react'
 import { store } from '@/store/store'
 import { Provider } from 'react-redux'
@@ -87,6 +88,40 @@ describe('<UploadPage />', () => {
       cy.get('[data-testid="file-upload-input"]').selectFile('@testFile', { force: true })
       cy.get('[data-testid="file-list"]').should('contain', 'example.txt')
       checkToast('파일 선택 완료')
+    })
+
+    it('accepts Markdown attachments from the chat input', () => {
+      cy.get('[data-testid="file-upload-input"]').selectFile(
+        [{
+          contents: Cypress.Buffer.from('# 발표 개요\n\n- 첫 번째 슬라이드'),
+          fileName: 'presentation-brief.md',
+          mimeType: 'text/markdown',
+        }],
+        { force: true }
+      )
+      cy.get('[data-testid="file-list"]').should('contain', 'presentation-brief.md')
+      checkToast('파일 선택 완료')
+    })
+
+    it('accepts Markdown extensions with missing or generic MIME types', () => {
+      expect(isAllowedFile(new File(['# Notes'], 'empty-mime.md'))).to.equal(true)
+      expect(
+        isAllowedFile(new File(['# Notes'], 'generic.markdown', { type: 'application/octet-stream' }))
+      ).to.equal(true)
+    })
+
+    it('advertises Markdown in the native file picker', () => {
+      cy.get('[data-testid="file-upload-input"]')
+        .invoke('attr', 'accept')
+        .should('contain', 'text/markdown')
+        .and('contain', '.md')
+        .and('contain', '.markdown')
+    })
+
+    it('rejects an arbitrary extension even when it claims a text MIME type', () => {
+      expect(
+        isAllowedFile(new File(['not a document'], 'unsafe.exe', { type: 'text/plain' }))
+      ).to.equal(false)
     })
 
     it('handles multiple document uploads', () => {

@@ -2,7 +2,7 @@ import os
 from typing import Annotated, List, Optional
 from fastapi import APIRouter, Body, UploadFile, HTTPException
 
-from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
+from constants.documents import TEXT_EXTENSIONS, UPLOAD_ACCEPTED_FILE_TYPES
 from models.decomposed_file_info import DecomposedFileInfo
 from services.document_conversion_service import DocumentConversionError
 from services.temp_file_service import TEMP_FILE_SERVICE
@@ -68,7 +68,7 @@ async def decompose_files(
     txt_files = []
     other_files = []
     for file_path in file_paths:
-        if file_path.endswith(".txt"):
+        if os.path.splitext(file_path)[1].lower() in TEXT_EXTENSIONS:
             txt_files.append(file_path)
         else:
             other_files.append(file_path)
