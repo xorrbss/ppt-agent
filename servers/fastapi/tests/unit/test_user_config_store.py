@@ -33,7 +33,9 @@ def test_reads_backup_when_primary_json_is_malformed(tmp_path):
     assert read_user_config_file(str(config_path)) == {"LLM": "openai"}
 
 
-def test_read_secures_existing_config_files_without_changing_contents(tmp_path):
+def test_read_secures_existing_config_files_without_changing_contents(
+    monkeypatch, tmp_path
+):
     config_path = tmp_path / "userConfig.json"
     backup_path = config_path.with_suffix(config_path.suffix + ".bak")
     primary_content = json.dumps({"AUTH_PASSWORD_HASH": "preserved"})

@@ -47,7 +47,13 @@ from models.sql.provider_settings import ProviderSettings  # noqa: F401, E402
 alembic_config = context.config
 
 if alembic_config.config_file_name is not None:
-    fileConfig(alembic_config.config_file_name)
+    # Alembic runs in-process during startup and integration tests. The
+    # ``fileConfig`` default disables every already-imported non-Alembic logger,
+    # which makes application telemetry disappear after a migration.
+    fileConfig(
+        alembic_config.config_file_name,
+        disable_existing_loggers=False,
+    )
 
 target_metadata = SQLModel.metadata
 

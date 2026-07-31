@@ -1,7 +1,14 @@
 "use client";
 
-import { memo } from "react";
-import { Group, Image as KonvaImage, Rect, Text } from "react-konva";
+import { memo, type ComponentProps } from "react";
+import {
+  Ellipse,
+  Group,
+  Image as KonvaImage,
+  Line,
+  Rect,
+  Text,
+} from "react-konva";
 
 import {
   elementPosition,
@@ -12,12 +19,21 @@ import {
   pathKey,
   stringValue,
 } from "@/lib/template-v2-konva";
-import { isJsonRecord, records } from "@/lib/template-v2-studio";
+import {
+  isJsonRecord,
+  records,
+  type JsonRecord,
+} from "@/lib/template-v2-studio";
 import {
   planStudioElement,
   rebaseStudioChild,
   resolveStudioPlanFrame,
+  type TemplateV2RenderPlanNode,
 } from "@/lib/template-v2-studio-plan";
+import {
+  projectTemplateV2ElementForRenderPlan,
+  templateV2VectorRenderGeometry,
+} from "@/lib/template-v2-vector";
 import {
   StudioInfographic,
   StudioList,
@@ -26,8 +42,8 @@ import {
 import {
   clipRoundedRect,
   cornerRadius,
-  fillColor,
-  fillOpacity,
+  elementShadowProps,
+  fillProps,
   imagePlacement,
   interactionProps,
   measureTextRun,
@@ -35,11 +51,67 @@ import {
   useTemplateImage,
   type StudioElementProps,
 } from "./TemplateV2CanvasHelpers";
-import { StudioChart, StudioVector } from "./TemplateV2CanvasPlanned";
+import {
+  StudioChart,
+  type StudioPlanBox,
+} from "./TemplateV2CanvasPlanned";
 
 // Children of flex/grid live inside a non-listening subtree; keeping them out of
 // the node registry prevents the transformer from ever attaching to them.
 const noopSetNode = () => {};
+
+function StudioVector({
+  element,
+  node,
+  box,
+  groupProps,
+}: {
+  element: JsonRecord;
+  node: TemplateV2RenderPlanNode;
+  box: StudioPlanBox;
+  groupProps?: ComponentProps<typeof Group>;
+}) {
+  const vector = node.vector;
+  if (!vector) return null;
+  const geometry = templateV2VectorRenderGeometry(element, vector);
+  const paint = fillProps(element, "");
+  const stroke = strokeProps(element, "", 0);
+  const shadow = elementShadowProps(element);
+  return (
+    <Group
+      x={box.x}
+      y={box.y}
+      width={box.width}
+      height={box.height}
+      rotation={node.rotation}
+      opacity={numberValue(element.opacity, 1)}
+      {...groupProps}
+    >
+      {vector.shape === "ellipse" ? (
+        <Ellipse
+          x={box.width / 2}
+          y={box.height / 2}
+          radiusX={box.width / 2}
+          radiusY={box.height / 2}
+          {...paint}
+          {...stroke}
+          {...shadow}
+        />
+      ) : (
+        <Line
+          points={geometry.points.flatMap((point) => [point.x, point.y])}
+          scaleX={box.width / geometry.width}
+          scaleY={box.height / geometry.height}
+          closed={vector.closed}
+          fill={vector.closed ? paint.fill || undefined : undefined}
+          fillOpacity={paint.fillOpacity}
+          {...stroke}
+          {...shadow}
+        />
+      )}
+    </Group>
+  );
+}
 
 function StudioImage(props: StudioElementProps) {
   const { cropDraft, element, path } = props;
@@ -78,6 +150,7 @@ function StudioImage(props: StudioElementProps) {
         stroke={image ? "#cbd5e1" : "#94a3b8"}
         dash={image ? undefined : [8, 6]}
         cornerRadius={radius}
+        {...elementShadowProps(element)}
       />
       {image && placement ? (
         <Group
@@ -121,7 +194,13 @@ function StudioElementView(props: StudioElementProps) {
   if (element.type === "text") {
     const layout = layoutTemplateV2TextRuns(element, size.width, measureTextRun);
     return (
-      <Group {...position} {...size} rotation={rotation} {...common}>
+      <Group
+        {...position}
+        {...size}
+        rotation={rotation}
+        opacity={numberValue(element.opacity, 1)}
+        {...common}
+      >
         <Rect {...size} fill="rgba(0, 0, 0, 0.001)" />
         {layout.mode === "runs" ? (
           layout.runs.map((run) => (
@@ -142,6 +221,7 @@ function StudioElementView(props: StudioElementProps) {
               verticalAlign="middle"
               wrap="none"
               listening={false}
+              {...elementShadowProps(element)}
             />
           ))
         ) : (
@@ -151,6 +231,7 @@ function StudioElementView(props: StudioElementProps) {
             text={layout.text}
             verticalAlign="middle"
             listening={false}
+            {...elementShadowProps(element)}
           />
         )}
       </Group>
@@ -160,12 +241,18 @@ function StudioElementView(props: StudioElementProps) {
   if (element.type === "container") {
     const child = isJsonRecord(element.child) ? element.child : null;
     return (
-      <Group {...position} {...size} rotation={rotation} {...common}>
+      <Group
+        {...position}
+        {...size}
+        rotation={rotation}
+        opacity={numberValue(element.opacity, 1)}
+        {...common}
+      >
         <Rect
           {...size}
-          fill={fillColor(element)}
-          opacity={fillOpacity(element)}
+          {...fillProps(element)}
           {...strokeProps(element)}
+          {...elementShadowProps(element)}
           cornerRadius={cornerRadius(element)}
         />
         {child ? (
@@ -188,6 +275,38 @@ function StudioElementView(props: StudioElementProps) {
   }
 
   if (element.type === "infographic") {
+    // The content renderer intentionally tolerates missing values for legacy
+    // previews, but Studio editing must share the stricter export boundary.
+    // Keep the invalid node selectable while refusing to render a clamped value
+    // that would later fail during save/export.
+    const node = planStudioElement(element);
+    if (!node?.infographic) {
+      return (
+        <Group
+          {...position}
+          {...size}
+          rotation={rotation}
+          {...common}
+        >
+          <Rect
+            {...size}
+            fill="#fef2f2"
+            stroke="#f87171"
+            dash={[8, 6]}
+            listening={false}
+          />
+          <Text
+            x={8}
+            y={8}
+            width={Math.max(40, size.width - 16)}
+            text="Invalid: infographic"
+            fill="#b91c1c"
+            fontSize={14}
+            listening={false}
+          />
+        </Group>
+      );
+    }
     return <StudioInfographic {...props} />;
   }
 
@@ -212,7 +331,9 @@ function StudioElementView(props: StudioElementProps) {
     element.type === "flex" ||
     element.type === "grid"
   ) {
-    const node = planStudioElement(element);
+    const node = planStudioElement(
+      projectTemplateV2ElementForRenderPlan(element)
+    );
     if (!node) {
       return (
         <Group {...position} {...size}>

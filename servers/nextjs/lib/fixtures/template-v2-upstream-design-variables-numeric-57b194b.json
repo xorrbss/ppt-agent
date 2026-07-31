@@ -1,0 +1,108 @@
+{
+  "contract": {
+    "upstream_sha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+    "witness_kind": "pinned-contract-derived",
+    "import_boundary": "studio-upstream-wire-compatibility",
+    "upstream_sources": [
+      "servers/nextjs/components/slide-editor/types.ts",
+      "servers/nextjs/components/slide-editor/importing/template-v2-import.ts",
+      "servers/nextjs/components/slide-editor/model/design-variables.ts"
+    ],
+    "reviewed_slice": {
+      "element_type": "text",
+      "run_count": 1,
+      "variable_count": 1,
+      "variable_type": "omitted",
+      "options": [
+        24,
+        36
+      ],
+      "option_policy": "exact fixed witness [24, 36]",
+      "effect_count": 1,
+      "effect_path": "runs.0.font.size",
+      "effect_expression": "$",
+      "upstream_target_scaling": "round(value * 10000) / 10000"
+    }
+  },
+  "edit": {
+    "variable_index": 0,
+    "option_index": 1
+  },
+  "wire": {
+    "future_top_level_field": {
+      "source": "pinned-upstream-contract-witness"
+    },
+    "layouts": {
+      "future_envelope_field": [
+        "retain",
+        "exactly"
+      ],
+      "layouts": [
+        {
+          "id": "direct-numeric-design-variable",
+          "future_layout_field": {
+            "retain": true
+          },
+          "components": [
+            {
+              "id": "hero",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "elements": [
+                {
+                  "type": "text",
+                  "name": "title",
+                  "position": {
+                    "x": 20,
+                    "y": 30
+                  },
+                  "size": {
+                    "width": 600,
+                    "height": 80
+                  },
+                  "runs": [
+                    {
+                      "text": "Numeric bound title",
+                      "font": {
+                        "family": "Arial",
+                        "size": 24,
+                        "color": "#0F172A",
+                        "future_font_field": {
+                          "retain": "exactly"
+                        }
+                      },
+                      "future_run_field": [
+                        "retain",
+                        "exactly"
+                      ]
+                    }
+                  ],
+                  "design_variables": [
+                    {
+                      "name": "title_size",
+                      "options": [
+                        24,
+                        36
+                      ],
+                      "effect": [
+                        {
+                          "path": "runs.0.font.size",
+                          "effect": "$"
+                        }
+                      ]
+                    }
+                  ],
+                  "future_element_field": {
+                    "retain": "exactly"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,7 +1,7 @@
-// Collected webfonts are base64-inlined before the document reaches Chrome.
-// The collector caps decoded font data at 24 MiB; 40 MiB covers base64
-// expansion while preserving a hard upper bound on temporary HTML allocation.
-const MAX_AUTHORED_HTML_BYTES = 40 * 1024 * 1024;
+// Only the untrusted authored document passes through here. Collector-built
+// @font-face CSS is injected into a separate document after this preflight
+// succeeds, so the preflighted HTML never carries inlined font payloads.
+const MAX_AUTHORED_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_DATA_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_DATA_FONT_BYTES = 8 * 1024 * 1024;
 
@@ -128,18 +128,18 @@ export function preflightAuthoredHtmlForHybrid(
     return { ok: false, reason: "active-or-external-html" };
   }
 
-  // Every CSS url() must be an embedded safe raster or a magic-validated font
-  // collected by the server. Static SVG markup itself remains eligible for the
-  // backplate, but SVG data URLs are intentionally not.
+  // Every CSS url() must be an embedded safe raster. A font program is never
+  // accepted from the untrusted document: only the server-side collector may
+  // introduce @font-face payloads, and it does so in the separate document
+  // that bypasses this preflight. Static SVG markup itself remains eligible
+  // for the backplate, but SVG data URLs are intentionally not.
   const cssUrlPattern = /url\(\s*(["']?)(.*?)\1\s*\)/gis;
   for (const match of html.matchAll(cssUrlPattern)) {
     const value = match[2].trim();
     // Same-document SVG paint servers and markers (for example
     // marker-end:url(#arrow)) do not load external content.
     if (/^#[A-Za-z_][A-Za-z0-9_.:-]*$/.test(value)) continue;
-    const result = value.toLowerCase().startsWith("data:font/")
-      ? validateHybridDataFontUrl(value)
-      : validateHybridDataImageUrl(value);
+    const result = validateHybridDataImageUrl(value);
     if (!result.ok) return { ok: false, reason: "unsafe-css-url" };
   }
 

@@ -7,7 +7,10 @@ export async function renderTemplateV2SourceHtml(html, options = {}) {
     dumpDom: false,
     screenshot: true,
     chromeExecutable: options.chromeExecutable,
-    timeoutMs: options.timeoutMs ?? 30_000,
+    // Hosted macOS ARM runners can spend more than 30 seconds in the first
+    // Chromium cold start. Keep the fidelity gate strict, but allow the capture
+    // to finish instead of reporting an infrastructure timeout as a regression.
+    timeoutMs: options.timeoutMs ?? 60_000,
     windowSizePx: { width: 1280, height: 720 },
   });
   if (!result.screenshotPng) {

@@ -381,4 +381,243 @@ describe("TemplateV2SelectionToolbar", () => {
       ).to.equal(true);
     });
   });
+
+  it("renders proven vector, chart, and table controls without replacing nested selections", () => {
+    const shapePatch = cy.spy().as("shapePatch");
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={["children", 2, "children", 1]}
+        initialElement={{
+          type: "vector",
+          shape: "polygon",
+          points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+          closed: true,
+          upstream_element_extension: "vector-vNext",
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={shapePatch}
+      />
+    );
+    cy.get('button[aria-label="Add vector point after"]').click();
+    cy.get("@shapePatch").then((subject) => {
+      const calls = (subject as unknown as { getCalls(): Array<{ args: [TemplateV2ToolbarPatch[], Record<string, unknown>] }> })
+        .getCalls()
+        .map((call) => call.args);
+      expect(calls).to.deep.include([
+        [{
+          path: ["points"],
+          value: [{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 80 }],
+        }],
+        { historyKey: "toolbar:vector-point-add-after" },
+      ]);
+    });
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
+
+    const chartPatch = cy.spy().as("chartPatch");
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        initialElement={{
+          type: "chart",
+          chart_type: "bar",
+          categories: ["Q1"],
+          colors: ["#2563eb"],
+          series: [{ name: "Revenue", values: [12], retained: "data stays put" }],
+          legend: false,
+          title_color: "#111827",
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={chartPatch}
+      />
+    );
+    cy.get('button[aria-label="Toggle chart legend"]')
+      .should("have.attr", "aria-pressed", "false")
+      .click()
+      .should("have.attr", "aria-pressed", "true");
+    setReactInputValue("Chart grid color", "#e5e7eb");
+    cy.get("@chartPatch").then((subject) => {
+      const calls = (subject as unknown as { getCalls(): Array<{ args: [TemplateV2ToolbarPatch[], Record<string, unknown>] }> })
+        .getCalls()
+        .map((call) => call.args);
+      expect(calls).to.deep.include([
+        [{ path: ["legend"], value: true }],
+        { historyKey: "toolbar:chart-legend" },
+      ]);
+      expect(calls).to.deep.include([
+        [{ path: ["grid_color"], value: "#e5e7eb" }],
+        { historyKey: "toolbar:chart-grid_color", continuous: true },
+      ]);
+    });
+
+    const tablePatch = cy.spy().as("tablePatch");
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        initialElement={{
+          type: "table",
+          columns: [
+            { runs: [{ text: "Name" }], color: { color: "#f1f5f9", retained: true } },
+            { runs: [{ text: "Value" }], color: { color: "#f1f5f9" } },
+          ],
+          rows: [[
+            { runs: [{ text: "Q1" }], color: { color: "#ffffff" } },
+            { runs: [{ text: "12" }], color: { color: "#ffffff" } },
+          ]],
+          min_columns: 2,
+          max_columns: 2,
+          min_rows: 1,
+          max_rows: 1,
+          opacity: 1,
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={tablePatch}
+      />
+    );
+    setReactInputValue("Table header fill color", "#ddeeff");
+    cy.get("@tablePatch").then((subject) => {
+      const observed = subject as unknown as {
+        lastCall: { args: [TemplateV2ToolbarPatch[], Record<string, unknown>] };
+      };
+      expect(observed.lastCall.args).to.deep.equal([
+        [
+          { path: ["columns", 0, "color", "color"], value: "#ddeeff" },
+          { path: ["columns", 1, "color", "color"], value: "#ddeeff" },
+        ],
+        { historyKey: "toolbar:table-header-fill", continuous: true },
+      ]);
+    });
+  });
+
+  it("keeps a nested selection path stable across a proven vector edit and persisted remount", () => {
+    const path = ["children", 2, "children", 1];
+    const patch = cy.spy().as("persistedShapePatch");
+    const lock = cy.spy().as("persistedShapeLock");
+    const duplicate = cy.spy().as("persistedShapeDuplicate");
+    const initialElement = {
+      type: "vector",
+      shape: "polygon",
+      points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+      closed: true,
+      upstream_element_extension: "vector-vNext",
+    };
+
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={initialElement}
+        position={position}
+        actions={{ onLockChange: lock, onDuplicate: duplicate }}
+        observedPatch={patch}
+      />
+    );
+
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should("be.visible");
+    cy.get('button[aria-label="Add vector point after"]').click();
+    cy.get('button[aria-label="Lock selection"]').click();
+    cy.get('button[aria-label="Duplicate selection"]').click();
+    cy.get("@persistedShapePatch").then((subject) => {
+      const calls = (
+        subject as unknown as {
+          getCalls(): Array<{
+            args: [TemplateV2ToolbarPatch[], Record<string, unknown>];
+          }>;
+        }
+      )
+        .getCalls()
+        .map((call) => call.args);
+      expect(calls).to.deep.include([
+        [{
+          path: ["points"],
+          value: [{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 80 }],
+        }],
+        { historyKey: "toolbar:vector-point-add-after" },
+      ]);
+    });
+    cy.get("@persistedShapeLock").should("have.been.calledWith", true);
+    cy.get("@persistedShapeDuplicate").should("have.been.calledOnce");
+    cy.wrap(path).should("deep.equal", ["children", 2, "children", 1]);
+
+    // This mirrors an optimistic save followed by a reload: the controller
+    // supplies the same ElementPath and persisted rich element without a
+    // toolbar-specific state channel.
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={{
+          ...initialElement,
+          points: [{ x: 0, y: 0 }, { x: 50, y: 40 }, { x: 100, y: 80 }],
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={() => {}}
+      />
+    );
+    cy.get('button[aria-label="Add vector point after"]').should("not.exist");
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("exist");
+    cy.wrap(path).should("deep.equal", ["children", 2, "children", 1]);
+  });
+
+  it("routes a strict infographic leaf edit without losing selection and cleans up its portal", () => {
+    const path = ["children", 4];
+    const patch = cy.spy().as("infographicSelectionPatch");
+    const initialElement = {
+      type: "infographic",
+      data: {
+        type: "progress_bar",
+        min_value: 0,
+        max_value: 100,
+        value: 35,
+        retained_data: { source: "upstream" },
+      },
+      colors: ["#e5e7eb", "#2563eb"],
+      retained_root: { owner: "template" },
+    };
+
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={initialElement}
+        position={position}
+        actions={emptyActions}
+        observedPatch={patch}
+      />
+    );
+
+    setReactInputValue("Infographic value", "64");
+    cy.get("@infographicSelectionPatch").should(
+      "have.been.calledWith",
+      [{ path: ["data", "value"], value: 64 }],
+      {
+        historyKey: "toolbar:infographic-value",
+        continuous: true,
+      }
+    );
+    cy.get('input[aria-label="Infographic value"]').should("have.value", "64");
+    cy.wrap(path).should("deep.equal", ["children", 4]);
+
+    cy.mount(
+      <StatefulToolbar
+        selectionCount={1}
+        selectionPath={path}
+        initialElement={{
+          ...initialElement,
+          data: { ...initialElement.data, value: 64 },
+        }}
+        position={position}
+        actions={emptyActions}
+        observedPatch={() => {}}
+      />
+    );
+    cy.get('input[aria-label="Infographic value"]').should("have.value", "64");
+
+    cy.mount(<div data-testid="infographic-replacement">Replacement</div>);
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+  });
 });

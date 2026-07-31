@@ -876,7 +876,7 @@ function renderPolygon(item: JsonRecord, mode: RenderMode): string {
     }${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
   return `<div style="${frameStyleFromBox(box, mode)}${transformStyle(
     item
-  )}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
+  )}${vectorEffectStyle(item)}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
     box.width ?? 1
   )} ${cssNumber(
     box.height ?? 1
@@ -918,7 +918,7 @@ function renderEllipseVector(item: JsonRecord, mode: RenderMode): string {
 
   return `<div style="${frameStyleFromBox(box, mode)}${transformStyle(
     item
-  )}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
+  )}${vectorEffectStyle(item)}overflow:visible"><svg width="100%" height="100%" viewBox="0 0 ${cssNumber(
     width
   )} ${cssNumber(
     height
@@ -2024,10 +2024,26 @@ function curveSettings(item: JsonRecord) {
   if (!curve) return null;
   const rawType = readString(curve.type)?.trim().toLowerCase();
   if (rawType !== "smooth") return null;
+  const rawTension = curve.tension;
+  const tension = rawTension == null ? 0.5 : rawTension;
+  const rawSegments = curve.segments;
+  const segments = rawSegments == null ? 16 : rawSegments;
+  if (
+    typeof tension !== "number" ||
+    !Number.isFinite(tension) ||
+    tension < 0 ||
+    tension > 1 ||
+    typeof segments !== "number" ||
+    !Number.isInteger(segments) ||
+    segments < 1 ||
+    segments > 96
+  ) {
+    return null;
+  }
   return {
     type: "smooth",
-    tension: clamp(readNumber(curve.tension) ?? 0.4, 0, 1),
-    segments: Math.max(1, Math.min(96, Math.round(readNumber(curve.segments) ?? 16))),
+    tension,
+    segments,
   };
 }
 
@@ -2093,6 +2109,9 @@ function polygonClosed(item: JsonRecord, points: Point[]): boolean {
   const value = item.closed;
   if (value === false || value === "false" || value === "0") return false;
   if (value === true || value === "true" || value === "1") return true;
+  if (readString(item.type) === "vector") {
+    return vectorShape(item) === "polygon";
+  }
   return points.length > 2;
 }
 
@@ -2146,6 +2165,14 @@ function boxStyle(item: JsonRecord): string {
 function textShadowStyle(item: JsonRecord): string {
   const shadowValue = shadowCssValue(readRecord(item.shadow));
   return shadowValue ? `text-shadow:${shadowValue};` : "";
+}
+
+function vectorEffectStyle(item: JsonRecord): string {
+  const shadowValue = shadowCssValue(readRecord(item.shadow));
+  const opacity = readNumber(item.opacity);
+  return `${shadowValue ? `filter:drop-shadow(${shadowValue});` : ""}${
+    opacity != null ? `opacity:${cssNumber(clamp(opacity, 0, 1))};` : ""
+  }`;
 }
 
 function shadowCssValue(shadow: JsonRecord): string {

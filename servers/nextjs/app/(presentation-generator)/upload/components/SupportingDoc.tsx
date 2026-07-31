@@ -304,9 +304,14 @@ export function isAllowedFile(file: File): boolean {
     const type = (file.type || '').toLowerCase()
     const name = (file.name || '').toLowerCase()
     const typeAllowed = ALLOWED_MIME_TYPES.includes(type) || ALLOWED_MIME_PREFIXES.some((prefix) => type.startsWith(prefix))
+    const extension = name.includes('.') ? `.${name.split('.').pop()}` : ''
 
-    if (typeAllowed) return true
-    return ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext))
+    // Browsers often report Markdown as text/plain, application/octet-stream,
+    // or an empty MIME type. For named files, the allow-listed extension is
+    // authoritative so an arbitrary extension cannot bypass validation by
+    // claiming a benign MIME type.
+    if (extension) return ALLOWED_EXTENSIONS.includes(extension)
+    return typeAllowed
 }
 
 export default SupportingDoc

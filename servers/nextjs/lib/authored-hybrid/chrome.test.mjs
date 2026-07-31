@@ -1421,6 +1421,38 @@ test("large semantic HTML visuals become selectable pictures while their labels 
   );
 });
 
+test("large semantic HTML scenes become selectable pictures", async (t) => {
+  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+  if (!chromeExecutable) {
+    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
+    t.skip("Chrome/Chromium is unavailable");
+    return;
+  }
+
+  const nodes = Array.from({ length: 12 }, () => '<span class="scene-node"></span>').join("");
+  const html = `<!doctype html><html><head><style>
+    html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#f7fafc}
+    .scene{position:absolute;left:700px;top:90px;width:510px;height:540px;background:#f4efff}
+    .scene-node{display:inline-block;width:24px;height:24px;margin:10px;background:#7c5ce7}
+  </style></head><body>
+    <section class="scene" aria-label="Editable scene illustration">${nodes}</section>
+  </body></html>`;
+  const slide = await extractAuthoredSlideDom(html, {
+    chromeExecutable,
+    timeoutMs: 30_000,
+  });
+
+  const scene = slide.elements.find(
+    (element) =>
+      element.tagName === "section" &&
+      "image" in element &&
+      element.image.alt === "Editable scene illustration"
+  );
+  assert.ok(scene, "the semantic scene should become one selectable picture");
+  assert.equal(scene.classification.mode, "native");
+  assert.match(scene.image.src, /^data:image\/png;base64,/);
+});
+
 test("connector paths and detached arrowheads preserve authored SVG coordinates", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {

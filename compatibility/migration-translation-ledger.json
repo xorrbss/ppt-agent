@@ -200,19 +200,19 @@
     },
     {
       "revision": "4e5f6a7b8c9d",
-      "purpose": "Reconciled multi-user baseline after durable generation jobs"
+      "purpose": "Reconcile the fork schema before the reviewed upstream async-task migrations"
     },
     {
       "revision": "c9f1a2b3d4e5",
-      "purpose": "Multi-user authentication and presentation ownership"
+      "purpose": "Multi-user authentication and resource ownership"
     },
     {
       "revision": "d0a2b4c6e8f1",
-      "purpose": "Username-only provider settings"
+      "purpose": "Username-only accounts and database-backed provider settings"
     },
     {
       "revision": "e1b3c5d7f9a2",
-      "purpose": "Single primary administrator slot"
+      "purpose": "Single primary-administrator enforcement"
     }
   ]
 }

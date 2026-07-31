@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import tempfile
 import urllib
 import zipfile
@@ -33,6 +34,7 @@ _SFNT_FORMATS = {
     "wOFF": "WOFF",
     "wOF2": "WOFF2",
 }
+_SFNT_SIGNATURE_BYTES = (b"OTTO", b"ttcf", b"\x00\x01\x00\x00", b"true")
 
 
 def _create_temp_fontconfig_file(temp_dir: str) -> str:
@@ -111,15 +113,6 @@ _STYLE_TOKENS = {
     "extrablack",
     "ultrablack",
     "heavy",
-    "narrow",
-    "condensed",
-    "semicondensed",
-    "extracondensed",
-    "ultracondensed",
-    "expanded",
-    "semiexpanded",
-    "extraexpanded",
-    "ultraexpanded",
 }
 _STYLE_MODIFIERS = {"semi", "demi", "extra", "ultra"}
 
@@ -1243,41 +1236,32 @@ def extract_font_from_eot(eot_path: Path) -> bytes:
     with open(eot_path, "rb") as f:
         data = f.read()
 
-    # EOT file structure:
-    # - Header (variable length)
-    # - Font family name (Unicode, null-terminated)
-    # - Font style name (Unicode, null-terminated)
-    # - Font version (Unicode, null-terminated)
-    # - Font full name (Unicode, null-terminated)
-    # - RootString (Unicode, null-terminated)
-    # - Signature (4 bytes: "BSGP")
-    # - Embedded font data (TTF/OTF) starts with "OTTO" or "ttcf"
+    if len(data) >= 8:
+        eot_size, font_data_size = struct.unpack_from("<II", data, 0)
+        font_start = eot_size - font_data_size
+        font_end = font_start + font_data_size
+        if (
+            font_data_size > 0
+            and 0 <= font_start < len(data)
+            and font_end <= len(data)
+        ):
+            embedded_font = data[font_start:font_end]
+            if embedded_font.startswith(_SFNT_SIGNATURE_BYTES):
+                return embedded_font
 
-    # Find the OpenType font signature - this marks the start of the embedded font
-    # "OTTO" = OpenType with CFF (PostScript outlines)
-    # "ttcf" = TrueType Collection
-    # "\x00\x01\x00\x00" = TrueType with TrueType outlines
-    otto_pos = data.find(b"OTTO")
-    ttcf_pos = data.find(b"ttcf")
-    ttf_pos = data.find(b"\x00\x01\x00\x00")
+    candidate_positions: Set[int] = set()
+    for signature in _SFNT_SIGNATURE_BYTES:
+        position = data.find(signature)
+        while position != -1:
+            candidate_positions.add(position)
+            position = data.find(signature, position + 1)
 
-    font_start = -1
-    if otto_pos != -1:
-        font_start = otto_pos
-    elif ttcf_pos != -1:
-        font_start = ttcf_pos
-    elif ttf_pos != -1:
-        font_start = ttf_pos
-
-    if font_start == -1:
+    if not candidate_positions:
         raise ValueError(
             "Could not find embedded font signature (OTTO/ttcf/TTF) in EOT file"
         )
 
-    # Extract the embedded font from the found position to the end of file
-    embedded_font = data[font_start:]
-
-    return embedded_font
+    return data[min(candidate_positions) :]
 
 
 def get_font_details(path: str) -> FontDetail:

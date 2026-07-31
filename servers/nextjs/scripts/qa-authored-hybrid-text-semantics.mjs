@@ -6,7 +6,7 @@ import {
   extractAuthoredSlideDom,
   resolveAuthoredHybridChromeExecutable,
 } from "../lib/authored-hybrid/index.ts";
-import { collectGoogleFontsForAuthoredHtml } from "../lib/authored-hybrid/google-font-collector.ts";
+import { getGoogleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
 import {
   prepareNativeElements,
   serializePreparedNativeElement,
@@ -168,14 +168,14 @@ for (const [slideIndex, slide] of slides.entries()) {
   if (Number.isFinite(requestedSlide) && requestedSlide !== slideIndex + 1) {
     continue;
   }
-  const collection = await collectGoogleFontsForAuthoredHtml(slide.html);
-  const preflight = preflightAuthoredHtmlForHybrid(collection.html);
+  const collection = await getGoogleFontsCollector().prepareHtml(slide.html);
+  const preflight = preflightAuthoredHtmlForHybrid(collection.htmlForPreflight);
   if (!preflight.ok) {
     throw new Error(
       `Slide ${slideIndex + 1} preflight failed: ${preflight.reason}`
     );
   }
-  const contract = await extractAuthoredSlideDom(collection.html, {
+  const contract = await extractAuthoredSlideDom(collection.htmlForChrome, {
     chromeExecutable,
     timeoutMs: 40_000,
   });

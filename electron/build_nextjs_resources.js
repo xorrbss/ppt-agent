@@ -27,13 +27,21 @@ console.log("Running Next.js production build (BUILD_TARGET=electron)…")
 
 rm(nextBuildDir)
 
-const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm"
-const build = spawnSync(npmCmd, ["run", "build"], {
+const npmCmd =
+  process.platform === "win32"
+    ? process.env.ComSpec || "cmd.exe"
+    : "npm"
+const npmArgs =
+  process.platform === "win32"
+    ? ["/d", "/s", "/c", "npm.cmd run build"]
+    : ["run", "build"]
+const build = spawnSync(npmCmd, npmArgs, {
   cwd: nextjsDir,
   env: { ...process.env, BUILD_TARGET: "electron" },
   stdio: "inherit",
-  // Windows: cmd is required to run npm.cmd; without shell, spawnSync can throw EINVAL.
-  shell: process.platform === "win32",
+  // npm.cmd needs cmd.exe on Windows. Invoke it explicitly so Node does not
+  // concatenate unescaped arguments through shell:true (DEP0190).
+  shell: false,
 })
 
 if (build.error) {

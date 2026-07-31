@@ -47,7 +47,7 @@ def _normalize_text_newlines(text: str) -> str:
 
 
 def _decode_text_bytes(data: bytes, filename: str) -> str:
-    """Decode an uploaded text document without guessing arbitrary encodings."""
+    """Decode plain-text and Markdown uploads using supported Korean encodings."""
     try:
         if data.startswith(codecs.BOM_UTF8):
             text = data.decode("utf-8-sig", errors="strict")

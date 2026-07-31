@@ -14,7 +14,10 @@ from services.template_v2_pptx_operations import (
     get_template_v2_operational_status,
     template_v2_database_safety,
 )
-from services.template_v2_pptx_storage import get_private_storage_health
+from services.template_v2_pptx_storage import (
+    get_malware_scan_health,
+    get_private_storage_health,
+)
 from templates.v2.policy import get_structured_template_policy
 
 
@@ -43,7 +46,7 @@ async def _run_live_preflight() -> tuple[dict[str, object], bool]:
                     .scalars()
                     .all()
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 - fail closed at the operational boundary
             return (
                 {
                     "database_reachable": False,
@@ -85,12 +88,16 @@ async def _run_live_preflight() -> tuple[dict[str, object], bool]:
             payload["preflight_code"] = storage.code
             return payload, False
 
+        malware_scan = get_malware_scan_health()
+        payload.update(malware_scan.as_dict())
+        if not malware_scan.ready:
+            payload["preflight_code"] = malware_scan.code
+            return payload, False
+
         try:
             operational_status = await get_template_v2_operational_status()
-        except Exception:
-            payload["operational_health_code"] = (
-                "template_v2_operations_check_failed"
-            )
+        except Exception:  # noqa: BLE001 - expose only a stable health code
+            payload["operational_health_code"] = "template_v2_operations_check_failed"
             payload["preflight_code"] = "template_v2_operations_check_failed"
             return payload, False
         payload.update(operational_status.as_dict())
@@ -125,7 +132,7 @@ def main() -> int:
 
     try:
         live_payload, live_ready = asyncio.run(_run_live_preflight())
-    except Exception:
+    except Exception:  # noqa: BLE001 - keep preflight output content-free
         live_payload = {
             "database_reachable": False,
             "database_check_code": "template_v2_preflight_failed",

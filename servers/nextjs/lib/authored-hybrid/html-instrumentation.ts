@@ -26,6 +26,8 @@ export type AuthoredHybridFontLayoutMode = "source" | "powerpoint";
 interface InstrumentAuthoredHtmlOptions {
   baseUrl?: string;
   promotedElements?: readonly AuthoredHybridExpectedPromotedElement[];
+  /** Opaque, runner-verified token emitted after the browser observation. */
+  completionToken?: string;
   /**
    * `source` (the default) preserves the authored/collected face for fidelity
    * rendering. `powerpoint` measures editable text with the local typeface that
@@ -105,6 +107,9 @@ export function instrumentAuthoredHtml(
     fontFallbackPolicy: AUTHORED_FONT_FALLBACK_POLICY,
     ...(options.fontLayoutMode
       ? { fontLayoutMode: options.fontLayoutMode }
+      : {}),
+    ...(options.completionToken
+      ? { completionToken: options.completionToken }
       : {}),
   }).replaceAll("<", "\\u003c");
   const baseInjection = baseUrl

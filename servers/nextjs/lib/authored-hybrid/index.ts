@@ -7,3 +7,12 @@ export {
   resolveAuthoredHybridChromeExecutable,
   type AuthoredHybridChromeOptions,
 } from "./chrome-runner.ts";
+export {
+  buildPowerPointCalibrationProbes,
+  derivePowerPointCalibrationProfiles,
+} from "./powerpoint-desktop-calibration.ts";
+export type {
+  PowerPointCalibrationMeasurement,
+  PowerPointCalibrationProbe,
+  PowerPointCalibrationProfile,
+} from "./powerpoint-desktop-calibration.ts";

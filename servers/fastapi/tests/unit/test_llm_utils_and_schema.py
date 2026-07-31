@@ -45,3 +45,28 @@ def test_ensure_array_schemas_have_items_adds_missing_items_recursively():
     assert fixed["properties"]["slides"]["items"]["properties"]["tags"]["items"] == {
         "type": "string"
     }
+
+
+def test_legacy_slide_prompt_includes_selected_layout_text_budgets():
+    from utils.llm_calls.generate_slide_content import get_system_prompt
+
+    prompt = get_system_prompt(
+        response_schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "maxLength": 50},
+                "cards": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "body": {"type": "string", "maxLength": 100},
+                        },
+                    },
+                },
+            },
+        }
+    )
+
+    assert "`title`: recommended <= 40 characters; absolute maximum 50" in prompt
+    assert "`cards[].body`: recommended <= 80 characters; absolute maximum 100" in prompt

@@ -11,6 +11,7 @@ from api.v1.auth import bootstrap
 from api.v1.auth.users import PASSWORD_HELPER
 from models.sql.access_token import AccessToken
 from models.sql.user import User
+from utils import user_config_store
 
 
 def assert_private_config_file(config_path):

@@ -37,6 +37,71 @@ class ValidatedChartSeriesCandidate(AnalyzerContractModel):
     values: list[FiniteFloat]
 
 
+class ValidatedTextRunCandidate(AnalyzerContractModel):
+    text: StrictStr
+    font_size: PositiveFinite | None = None
+    font_family: StrictStr | None = None
+    font_color: StrictStr | None = None
+    bold: StrictBool | None = None
+    italic: StrictBool | None = None
+    underline: StrictBool | None = None
+
+
+class ValidatedSmartArtNodeEvidence(AnalyzerContractModel):
+    model_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    node_type: Annotated[StrictStr, Field(max_length=80)] | None = None
+    text: Annotated[StrictStr, Field(max_length=2_000)] | None = None
+
+
+class ValidatedSmartArtConnectionEvidence(AnalyzerContractModel):
+    model_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    source_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    destination_id: Annotated[StrictStr, Field(min_length=1, max_length=256)]
+    connection_type: Annotated[StrictStr, Field(max_length=80)] | None = None
+
+
+class ValidatedSmartArtEvidence(AnalyzerContractModel):
+    evidence_version: Literal[1] = 1
+    status: Literal["structured", "unavailable"]
+    diagnostic: Literal[
+        "none",
+        "data_relationship_missing",
+        "data_relationship_invalid",
+        "data_part_missing",
+        "data_model_invalid",
+        "data_model_limits_exceeded",
+    ]
+    data_part: Annotated[StrictStr, Field(max_length=512)] | None = None
+    nodes: list[ValidatedSmartArtNodeEvidence] = Field(default_factory=list)
+    connections: list[ValidatedSmartArtConnectionEvidence] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def validate_status_payload(self) -> ValidatedSmartArtEvidence:
+        if self.status == "structured":
+            if self.diagnostic != "none" or self.data_part is None:
+                raise ValueError("invalid_structured_smartart_evidence")
+            node_ids = [node.model_id for node in self.nodes]
+            connection_ids = [
+                connection.model_id for connection in self.connections
+            ]
+            if len(node_ids) != len(set(node_ids)) or len(connection_ids) != len(
+                set(connection_ids)
+            ):
+                raise ValueError("duplicate_smartart_evidence_id")
+            known_nodes = set(node_ids)
+            if any(
+                connection.source_id not in known_nodes
+                or connection.destination_id not in known_nodes
+                for connection in self.connections
+            ):
+                raise ValueError("unknown_smartart_connection_endpoint")
+        elif self.diagnostic == "none" or self.nodes or self.connections:
+            raise ValueError("invalid_unavailable_smartart_evidence")
+        return self
+
+
 class ValidatedTableCellReferenceCandidate(AnalyzerContractModel):
     row: Annotated[StrictInt, Field(ge=0)]
     column: Annotated[StrictInt, Field(ge=0)]
@@ -58,6 +123,7 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     height: NonNegativeFinite = 0
     rotation: FiniteFloat = 0
     text: StrictStr | None = None
+    text_runs: list[ValidatedTextRunCandidate] | None = None
     table_rows: list[list[StrictStr]] | None = None
     # Keep the v1 canonical candidate digest stable for pre-span payloads while
     # including the lossless grid metadata whenever the parser actually emits it.
@@ -68,6 +134,7 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     chart_type: StrictStr | None = None
     chart_categories: list[StrictStr] | None = None
     chart_series: list[ValidatedChartSeriesCandidate] | None = None
+    smartart_evidence: ValidatedSmartArtEvidence | None = None
     children: list["ValidatedShapeCandidate"] | None = None
     fill_color: StrictStr | None = None
     confidence: Confidence
@@ -79,6 +146,14 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             raise ValueError("text_candidate_requires_text")
         if self.kind != "text" and self.text is not None:
             raise ValueError("non_text_candidate_cannot_contain_text")
+        if self.kind == "text":
+            if self.text_runs is not None:
+                if not self.text_runs:
+                    raise ValueError("text_candidate_runs_cannot_be_empty")
+                if "".join(run.text for run in self.text_runs) != self.text:
+                    raise ValueError("text_candidate_run_content_mismatch")
+        elif self.text_runs is not None:
+            raise ValueError("non_text_candidate_cannot_contain_text_runs")
         if self.kind == "table":
             if not self.table_rows or not self.table_rows[0]:
                 raise ValueError("table_candidate_requires_cells")
@@ -163,6 +238,11 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             raise ValueError("unsupported_candidate_requires_reason")
         if self.kind != "unsupported" and self.unsupported_reason is not None:
             raise ValueError("supported_candidate_cannot_have_unsupported_reason")
+        if self.smartart_evidence is not None and (
+            self.kind != "unsupported"
+            or self.unsupported_reason != "unsupported_ooxml:smartArt"
+        ):
+            raise ValueError("smartart_evidence_requires_smartart_fallback")
         return self
 
 
@@ -229,6 +309,9 @@ class ValidatedRelationshipGraphEvidence(AnalyzerContractModel):
     missing_parts: list[NonEmptyString] = Field(default_factory=list)
     cycle_count: Annotated[StrictInt, Field(ge=0)] = 0
     skipped_relationship_count: Annotated[StrictInt, Field(ge=0)] = 0
+    blocked_relationship_kind_counts: dict[
+        NonEmptyString, Annotated[StrictInt, Field(ge=1)]
+    ] = Field(default_factory=dict)
     local_render_enabled: StrictBool = False
     ocr_enabled: StrictBool = False
     external_model_access: StrictBool = False
@@ -293,8 +376,27 @@ class ValidatedPresentationCandidates(AnalyzerContractModel):
 def candidate_payload_sha256(
     candidates: ValidatedPresentationCandidates,
 ) -> str:
+    payload_value = candidates.model_dump(mode="json")
+
+    def remove_empty_additive_fields(shape: dict[str, Any]) -> None:
+        if shape.get("text_runs") is None:
+            shape.pop("text_runs", None)
+        if shape.get("smartart_evidence") is None:
+            shape.pop("smartart_evidence", None)
+        for child in shape.get("children") or []:
+            remove_empty_additive_fields(child)
+
+    for slide in payload_value["slides"]:
+        for shape in slide["shapes"]:
+            remove_empty_additive_fields(shape)
+    relationship_graph = payload_value.get("relationship_graph")
+    if (
+        relationship_graph is not None
+        and not relationship_graph.get("blocked_relationship_kind_counts")
+    ):
+        relationship_graph.pop("blocked_relationship_kind_counts", None)
     payload = json.dumps(
-        candidates.model_dump(mode="json"),
+        payload_value,
         ensure_ascii=False,
         allow_nan=False,
         separators=(",", ":"),

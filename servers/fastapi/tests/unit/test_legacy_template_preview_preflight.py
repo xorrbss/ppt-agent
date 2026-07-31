@@ -80,3 +80,39 @@ def test_legacy_preview_preflight_enforces_shared_upload_limit(
 
     assert caught.value.status_code == 413
     assert not target.exists()
+
+# Handler-level guarantees carried over: the preview endpoints must preflight
+# before any font parsing or LibreOffice conversion touches the upload.
+
+class ChunkedUpload:
+    def __init__(self, payload: bytes) -> None:
+        self.filename = "presentation.pptx"
+        self._payload = io.BytesIO(payload)
+        self.read_sizes: list[int] = []
+
+    async def read(self, size: int) -> bytes:
+        self.read_sizes.append(size)
+        return self._payload.read(size)
+
+
+@pytest.mark.anyio
+async def test_font_check_handler_preflights_before_parsing() -> None:
+    with pytest.raises(HTTPException) as raised:
+        await preview.check_fonts_in_pptx_handler(
+            ChunkedUpload(b"not-a-zip")
+        )
+
+    assert raised.value.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_slide_preview_handler_preflights_before_conversion() -> None:
+    with pytest.raises(HTTPException) as raised:
+        await preview.upload_fonts_and_preview_handler(
+            ChunkedUpload(b"not-a-zip"),
+            upload_fonts=False,
+            get_slide_images=False,
+            upload_presentation=False,
+        )
+
+    assert raised.value.status_code == 400

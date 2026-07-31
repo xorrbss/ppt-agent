@@ -16,7 +16,10 @@ from services.template_v2_pptx_operations import (
 from services.template_v2_pptx_retention_service import (
     cleanup_expired_private_sources,
 )
-from services.template_v2_pptx_storage import get_private_storage_health
+from services.template_v2_pptx_storage import (
+    get_malware_scan_health,
+    get_private_storage_health,
+)
 from utils.get_env import get_app_data_directory_env
 
 
@@ -34,15 +37,21 @@ async def _run(mode: str) -> tuple[dict[str, object], bool]:
         storage = get_private_storage_health()
         if mode == "health" and not storage.ready:
             return {"mode": mode, **storage.as_dict()}, False
+        malware_scan = get_malware_scan_health()
+        if mode == "health" and not malware_scan.ready:
+            return {
+                "mode": mode,
+                **storage.as_dict(),
+                **malware_scan.as_dict(),
+            }, False
         status = await get_template_v2_operational_status()
         payload = {
             "mode": mode,
             **status.as_dict(),
             **storage.as_dict(),
+            **malware_scan.as_dict(),
         }
-        return payload, (
-            status.rollback_safe if mode == "rollback" else status.healthy
-        )
+        return payload, (status.rollback_safe if mode == "rollback" else status.healthy)
     finally:
         await dispose_engines()
 
@@ -57,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         payload, ready = asyncio.run(_run(args.mode))
-    except Exception:
+    except Exception:  # noqa: BLE001 - keep operator output content-free
         payload = {
             "mode": args.mode,
             "code": "template_v2_operations_check_failed",

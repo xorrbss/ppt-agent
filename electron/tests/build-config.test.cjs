@@ -36,3 +36,21 @@ test("electron packaging never publishes as a build side effect", () => {
   assert.equal(receivedOptions.config.mac.entitlements, "build/entitlements.mac.plist")
   assert.equal(receivedOptions.config.afterSign, "scripts/notarize-macos.cjs")
 })
+
+test("packaged FastAPI keeps standard streams available for Uvicorn", () => {
+  const specPath = path.join(
+    __dirname,
+    "..",
+    "..",
+    "servers",
+    "fastapi",
+    "server.spec",
+  )
+  const source = fs.readFileSync(specPath, "utf8")
+
+  assert.match(
+    source,
+    /\bconsole=True\b/,
+    "Electron hides the child process window; PyInstaller must still provide stdio",
+  )
+})

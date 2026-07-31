@@ -24,7 +24,10 @@ from utils.get_dynamic_models import get_composition_model_with_n_slides
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
-from utils.llm_utils import generate_structured_with_schema_retries
+from utils.llm_utils import (
+    format_text_length_guidance,
+    generate_structured_with_schema_retries,
+)
 from utils.schema_utils import prepare_schema_for_validation
 
 
@@ -63,6 +66,7 @@ def get_system_prompt(
     instructions: Optional[str] = None,
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
+    response_schema: Optional[dict] = None,
 ) -> str:
     preserve_source_content = requires_content_preservation(instructions)
     instructions = without_content_preservation_marker(instructions)
@@ -148,6 +152,7 @@ def get_system_prompt(
         + f"\n# Verbosity\n{verbosity_instruction}\n"
         + (f"\n# Tone\nMake the slides {tone}.\n" if tone else "")
         + (f"\n# User Instructions\n{instructions}\n" if instructions else "")
+        + format_text_length_guidance(response_schema or {})
     )
 
 
@@ -164,9 +169,17 @@ def get_messages(
     instructions: Optional[str] = None,
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
+    schema: Optional[dict] = None,
 ) -> list[Message]:
     return [
-        SystemMessage(content=get_system_prompt(instructions, tone, verbosity)),
+        SystemMessage(
+            content=get_system_prompt(
+                instructions,
+                tone,
+                verbosity,
+                schema,
+            )
+        ),
         UserMessage(content=get_user_prompt(outline_text, language)),
     ]
 
@@ -200,7 +213,12 @@ async def compose_slides(
             client,
             model,
             messages=get_messages(
-                outline.to_string(), language, instructions, tone, verbosity
+                outline.to_string(),
+                language,
+                instructions,
+                tone,
+                verbosity,
+                schema,
             ),
             response_format=response_format,
             json_schema=schema,

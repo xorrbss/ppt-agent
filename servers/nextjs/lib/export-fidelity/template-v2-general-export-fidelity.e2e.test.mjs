@@ -11,13 +11,19 @@ import { readPptxArchive } from "../authored-hybrid/pptx-archive.ts";
 import { resolveAuthoredHybridChromeExecutable } from "../authored-hybrid/chrome-runtime-discovery.ts";
 import { executeExportAtProductionBoundary } from "../presentation-export-boundary.ts";
 import { renderTemplateV2GeneralPresentationHtml } from "../template-v2-general-renderer.mjs";
-import { compareSlidePngs, writeFidelityFailureArtifacts } from "./image-compare.mjs";
+import {
+  compareSlidePngs,
+  writeFidelityComparisonErrorArtifacts,
+  writeFidelityFailureArtifacts,
+} from "./image-compare.mjs";
 import { renderPptxToPngPages, resolvePptxRenderTools } from "./pptx-render.mjs";
 import { renderTemplateV2SourceHtml } from "./source-render.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..");
-const EXPORT_ROOT = path.join(REPO_ROOT, "presentation-export");
+const EXPORT_ROOT =
+  process.env.EXPORT_PACKAGE_ROOT?.trim() ||
+  path.join(REPO_ROOT, "presentation-export");
 const NEXT_ROOT = path.join(REPO_ROOT, "servers", "nextjs");
 const FIXTURE_ROOT = path.join(HERE, "fixtures", "template-v2-general");
 
@@ -93,6 +99,17 @@ async function stopProcess(child) {
 
 async function startNextDev({ port, fastApiUrl, appData, tempRoot, nextDistDir, chrome, fixtureId }) {
   const nextBin = path.join(NEXT_ROOT, "node_modules", "next", "dist", "bin", "next");
+  const nextArgs = [
+    nextBin,
+    "dev",
+    "--hostname",
+    "127.0.0.1",
+    "--port",
+    String(port),
+  ];
+  if (process.env.PRESENTON_TEST_USE_WEBPACK === "1") {
+    nextArgs.splice(2, 0, "--webpack");
+  }
   const converter = path.join(
     EXPORT_ROOT,
     "py",
@@ -102,7 +119,7 @@ async function startNextDev({ port, fastApiUrl, appData, tempRoot, nextDistDir, 
   const logs = [];
   const child = spawn(
     process.execPath,
-    [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
+    nextArgs,
     {
       cwd: NEXT_ROOT,
       env: {
@@ -185,7 +202,12 @@ test("Template V2 persisted JSON always crosses the production strategy boundary
   }
 });
 
-test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.2", { timeout: 240_000 }, async (t) => {
+// A cold Next compilation plus three real LibreOffice conversions regularly
+// crosses four minutes on Windows. Keep the tighter CI budget elsewhere while
+// leaving enough time for the test's mandatory child-process cleanup.
+const EXPORT_E2E_TIMEOUT_MS = process.platform === "win32" ? 360_000 : 240_000;
+
+test("actual API route renders Template V2 through /pdf-maker and presentation-export v0.4.2", { timeout: EXPORT_E2E_TIMEOUT_MS }, async (t) => {
   const [{ manifest, presentations }, chrome, installedVersion] = await Promise.all([
     loadCorpus(),
     resolveAuthoredHybridChromeExecutable(),
@@ -316,17 +338,45 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
       // regression hides the others, so a shift that moves the whole corpus takes
       // one CI round trip per fixture to discover and gets retoleranced blind.
       const regressions = [];
+      // GitHub's hosted macOS ARM runners have repeatedly needed just over the
+      // normal 60-second cold-start ceiling. Keep production and other CI
+      // platforms unchanged while retaining a finite infrastructure timeout.
+      const sourceCaptureTimeoutMs =
+        process.env.CI === "true" && process.platform === "darwin"
+          ? 120_000
+          : undefined;
       for (const fixture of manifest.cases) {
-        const sourcePng = await renderTemplateV2SourceHtml(renderedHtml.get(fixture.id), { chromeExecutable: chrome });
+        const sourcePng = await renderTemplateV2SourceHtml(
+          renderedHtml.get(fixture.id),
+          {
+            chromeExecutable: chrome,
+            timeoutMs: sourceCaptureTimeoutMs,
+          }
+        );
         const [pptxPng] = await renderPptxToPngPages({
           pptxPath: exported.get(fixture.id),
           outputDirectory: path.join(tempRoot, "rendered", fixture.id),
           pageCount: 1,
           tools,
         });
-        const comparison = await compareSlidePngs(sourcePng, pptxPng, {
-          tolerances: { ...manifest.defaults, ...fixture.tolerances },
-        });
+        let comparison;
+        try {
+          comparison = await compareSlidePngs(sourcePng, pptxPng, {
+            tolerances: { ...manifest.defaults, ...fixture.tolerances },
+          });
+        } catch (error) {
+          const artifacts = await writeFidelityComparisonErrorArtifacts({
+            outputDirectory: process.env.TEST_ARTIFACT_DIR || path.join(tempRoot, "artifacts"),
+            label: fixture.id,
+            sourcePng,
+            pptxPng,
+            error,
+          });
+          regressions.push(
+            `${fixture.id} visual comparison error; artifacts: ${artifacts}; error: ${error instanceof Error ? error.message : String(error)}`
+          );
+          continue;
+        }
         console.log(`fidelity ${fixture.id}: ${comparison.passed ? "pass" : "FAIL"} ${JSON.stringify(comparison.metrics)}`);
         if (!comparison.passed) {
           const artifacts = await writeFidelityFailureArtifacts({

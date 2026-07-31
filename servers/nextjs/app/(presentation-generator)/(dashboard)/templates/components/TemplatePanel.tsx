@@ -92,13 +92,6 @@ const LayoutPreview = () => {
 
     useEffect(() => {
         trackEvent(MixpanelEvent.Templates_Page_Viewed);
-        const existingScript = document.querySelector('script[src*="tailwindcss.com"]');
-        if (!existingScript) {
-            const script = document.createElement("script");
-            script.src = "https://cdn.tailwindcss.com";
-            script.async = true;
-            document.head.appendChild(script);
-        }
     }, []);
 
     const handleOpenPreview = useCallback((id: string) => {

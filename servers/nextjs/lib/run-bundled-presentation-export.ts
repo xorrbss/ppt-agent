@@ -18,6 +18,7 @@ import {
   resolveExportProcessLimits,
   superviseExportProcess,
 } from "@/lib/export-process-supervisor";
+import type { AuthoredHybridExportMetadata } from "@/lib/authored-hybrid/export-metadata";
 
 /** Repo `presentation-export/` at app root (`/app/presentation-export` in Docker). */
 export function getExportPackageRoot(): string {
@@ -136,7 +137,13 @@ export async function bundledExportPackageAvailable(): Promise<boolean> {
 
 export type BundledPresentationExportFormat = "pdf" | "pptx";
 
-export type BundledPresentationExportResult = PresentationExportResult;
+export type BundledPresentationExportResult = PresentationExportResult & {
+  /**
+   * Optional additive diagnostics for authored hybrid PPTX exports.
+   * General/PDF exports intentionally keep returning only the base result.
+   */
+  exportMetadata?: AuthoredHybridExportMetadata;
+};
 
 const EXPORT_DIRECTORY_MODE = 0o755;
 const EXPORT_FILE_MODE = 0o644;

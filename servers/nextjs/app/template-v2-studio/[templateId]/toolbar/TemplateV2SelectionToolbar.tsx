@@ -4,11 +4,15 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { resolveTemplateV2ToolbarRoute } from "@/lib/template-v2-toolbar";
+import ChartToolbar from "./ChartToolbar";
 import IconToolbar from "./IconToolbar";
 import ImageToolbar from "./ImageToolbar";
+import InfographicToolbar from "./InfographicToolbar";
 import MultiSelectionToolbar from "./MultiSelectionToolbar";
 import SelectionActions from "./SelectionActions";
+import TableToolbar from "./TableToolbar";
 import TextToolbar from "./TextToolbar";
+import VectorToolbar from "./VectorToolbar";
 import type { TemplateV2SelectionToolbarProps } from "./types";
 
 export function TemplateV2SelectionToolbar({
@@ -72,6 +76,18 @@ export function TemplateV2SelectionToolbar({
             fontFamilies={fontFamilies}
             onPatch={onPatch}
           />
+        )}
+        {route.kind === "vector" && (
+          <VectorToolbar element={route.element} onPatch={onPatch} />
+        )}
+        {route.kind === "chart" && (
+          <ChartToolbar element={route.element} onPatch={onPatch} />
+        )}
+        {route.kind === "table" && (
+          <TableToolbar element={route.element} onPatch={onPatch} />
+        )}
+        {route.kind === "infographic" && (
+          <InfographicToolbar element={route.element} onPatch={onPatch} />
         )}
         <SelectionActions actions={actions} />
       </>

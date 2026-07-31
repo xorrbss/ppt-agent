@@ -36,8 +36,10 @@
     "check:main-no-undef": "node scripts/check-main-no-undef.cjs",
     "audit:release": "node scripts/audit-release-dependencies.cjs",
     "test:audit-release": "node --test scripts/audit-release-dependencies.test.cjs",
+    "test:release-workflows": "node --test scripts/release-workflow-policy.test.cjs",
     "preflight:package": "node scripts/verify-packaging-inputs.cjs",
     "test:package-preflight": "node --test scripts/verify-packaging-inputs.test.cjs",
+    "smoke:packaged-servers": "node scripts/smoke-packaged-servers.cjs",
     "verify:macos-release": "node scripts/verify-macos-release.cjs",
     "test:macos-release": "node --test scripts/verify-macos-release.test.cjs",
     "lint:main": "npm run build:ts && npm run check:main-no-undef",
@@ -51,7 +53,7 @@
     "test:build-config": "node --test tests/build-config.test.cjs",
     "test:standalone-copy": "node --test tests/standalone-copy.test.cjs",
     "test:update-channel": "npm run build:ts && node --test tests/update-channel.test.cjs",
-    "build:fastapi": "node scripts/rmrf.cjs resources/fastapi && npm run build:vectorstore && cross-env MEM0_SPACY_STRICT=true node ensure_spacy_model.js && cd ../servers/fastapi && uv run --with pyinstaller python -m PyInstaller --distpath ../../electron/resources server.spec && cd ../../electron && node copy_fastapi_assets.js",
+    "build:fastapi": "node scripts/rmrf.cjs resources/fastapi && npm run build:vectorstore && cross-env MEM0_SPACY_STRICT=true node ensure_spacy_model.js && cd ../servers/fastapi && uv run --with pyinstaller python -m PyInstaller --distpath ../../electron/resources server.spec && cd ../../electron && node copy_fastapi_assets.js && node scripts/materialize-fastapi-resources.cjs",
     "generate:version": "node generate_update.js",
     "upload:sourcemaps": "node scripts/upload-sourcemaps.cjs",
     "build:electron": "npm run generate:version && npm run build:export-runtime && npm run typecheck && npm run build:ts && npm run check:main-no-undef && npm run preflight:package && node build.js",
@@ -77,7 +79,7 @@
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "electron": "42.2.0",
+    "electron": "43.2.0",
     "electron-builder": "^26.8.1",
     "typescript": "^5.8.3"
   },

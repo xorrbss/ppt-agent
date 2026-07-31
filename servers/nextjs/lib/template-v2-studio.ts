@@ -8,6 +8,11 @@ import {
   updateTemplateV2ContentRun,
   type TemplateV2RunTarget,
 } from "./template-v2-studio-content.ts";
+import {
+  applyTemplateV2TextSelectionPatch,
+  type TemplateV2TextSelectionPatch,
+} from "./template-v2-ai-rewrite.ts";
+import { templateV2VariantDigest } from "./template-v2-slide-variants.ts";
 import { translateTemplateV2Vector } from "./template-v2-vector.ts";
 
 export type JsonRecord = Record<string, unknown>;
@@ -134,6 +139,7 @@ export type TemplateV2StudioCommand =
 
 export type TemplateV2StudioAction =
   | { type: "load"; layouts: JsonRecord }
+  | { type: "restore-draft"; layouts: JsonRecord }
   | { type: "begin-save"; token: number; layouts: JsonRecord }
   | { type: "save-succeeded"; token: number; layouts: JsonRecord }
   | { type: "save-failed"; token: number }
@@ -172,6 +178,27 @@ export type TemplateV2StudioAction =
       target: TemplateV2RunTarget;
       text: string;
       historyKey?: string;
+    }
+  | {
+      type: "apply-text-selection-patch";
+      selection: StudioSelection;
+      patch: TemplateV2TextSelectionPatch;
+      historyKey: string;
+    }
+  | {
+      type: "apply-bounded-layouts";
+      layouts: JsonRecord;
+      expectedDigest: string;
+      historyKey: string;
+    }
+  | {
+      type: "apply-bounded-element";
+      selection: StudioSelection;
+      replacement: JsonRecord;
+      expectedElementDigest: string;
+      expectedRevision: number;
+      currentRevision: number;
+      historyKey: string;
     }
   | {
       type: "add-rectangle";
@@ -632,6 +659,26 @@ export function templateV2StudioReducer(
         activeComponentId: active.componentId,
       };
     }
+    case "restore-draft": {
+      if (!state.savedLayouts) return state;
+      const active = defaultActiveIds(action.layouts);
+      return {
+        ...state,
+        layouts: action.layouts,
+        activeLayoutId: active.layoutId,
+        activeComponentId: active.componentId,
+        selection: null,
+        selectionSet: [],
+        lockedElementKeys: new Set<string>(),
+        past: state.layouts ? [state.layouts] : [],
+        pastSessionHistory: [],
+        future: [],
+        futureSessionHistory: [],
+        pendingSave: null,
+        lastHistoryKey: null,
+        dirty: action.layouts !== state.savedLayouts,
+      };
+    }
     case "begin-save":
       if (
         !state.layouts ||
@@ -803,6 +850,65 @@ export function templateV2StudioReducer(
         ),
         action.historyKey
       );
+    case "apply-text-selection-patch":
+      if (!state.layouts) return state;
+      if (
+        isTemplateV2SelectionLocked(
+          state.lockedElementKeys,
+          action.selection
+        )
+      ) {
+        return state;
+      }
+      return commit(
+        state,
+        updateTemplateV2Element(state.layouts, action.selection, (element) => {
+          const result = applyTemplateV2TextSelectionPatch(
+            element,
+            action.patch
+          );
+          return result.ok ? result.element : element;
+        }),
+        action.historyKey
+      );
+    case "apply-bounded-layouts":
+      if (
+        !state.layouts ||
+        templateV2VariantDigest(state.layouts) !== action.expectedDigest
+      ) {
+        return state;
+      }
+      return commit(state, action.layouts, action.historyKey);
+    case "apply-bounded-element": {
+      if (
+        !state.layouts ||
+        action.expectedRevision !== action.currentRevision ||
+        isTemplateV2SelectionLocked(
+          state.lockedElementKeys,
+          action.selection
+        )
+      ) {
+        return state;
+      }
+      const current = getSelectedElement(state.layouts, action.selection);
+      if (
+        !current ||
+        templateV2VariantDigest(current) !== action.expectedElementDigest ||
+        (typeof current.id === "string" &&
+          action.replacement.id !== current.id)
+      ) {
+        return state;
+      }
+      return commit(
+        state,
+        updateTemplateV2Element(
+          state.layouts,
+          action.selection,
+          () => action.replacement
+        ),
+        action.historyKey
+      );
+    }
     case "add-rectangle":
       if (!state.layouts) return state;
       {

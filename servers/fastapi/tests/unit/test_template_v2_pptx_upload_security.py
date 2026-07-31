@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 from pathlib import Path
+import subprocess
 import uuid
 import zipfile
 
@@ -18,6 +19,7 @@ from services.template_v2_pptx_storage import (
     private_import_root,
     private_source_storage_key,
     resolve_private_source,
+    scan_private_pptx,
     store_private_pptx,
     verify_private_source,
 )
@@ -193,6 +195,74 @@ def test_upload_preflight_rejects_unsafe_zip_and_removes_partial_source(
     )
     assert not source.exists()
     assert not source.with_suffix(".uploading").exists()
+
+
+def test_required_malware_scan_fails_closed_before_private_promotion(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
+    monkeypatch.setenv("TEMPLATE_V2_PPTX_MALWARE_SCAN_MODE", "required")
+    import_id = uuid.uuid4()
+
+    monkeypatch.setattr(storage.shutil, "which", lambda _name: None)
+    _assert_rejection(
+        "template_v2_pptx_malware_scanner_unavailable",
+        lambda: asyncio.run(
+            store_private_pptx(_upload(_pptx_bytes()), import_id=import_id)
+        ),
+    )
+
+    source = resolve_private_source(
+        private_source_storage_key(import_id),
+        expected_import_id=import_id,
+    )
+    assert not source.exists()
+    assert not source.with_suffix(".uploading").exists()
+
+
+@pytest.mark.parametrize(
+    ("returncode", "expected"),
+    [
+        (0, "template_v2_pptx_malware_scan_clean"),
+        (1, "template_v2_pptx_malware_detected"),
+        (2, "template_v2_pptx_malware_scan_failed"),
+    ],
+)
+def test_malware_scanner_contract_is_bounded_and_secret_free(
+    tmp_path: Path,
+    returncode: int,
+    expected: str,
+) -> None:
+    source = tmp_path / "staged.uploading"
+    source.write_bytes(b"private")
+    calls = []
+
+    def runner(command, **options):
+        calls.append((command, options))
+        return subprocess.CompletedProcess(command, returncode)
+
+    action = lambda: scan_private_pptx(
+        source,
+        environ={"TEMPLATE_V2_PPTX_MALWARE_SCAN_MODE": "required"},
+        runner=runner,
+        which=lambda _name: "bounded-clamscan",
+    )
+    if returncode == 0:
+        assert action() == expected
+    else:
+        _assert_rejection(expected, action)
+    assert calls[0][0][:3] == [
+        "bounded-clamscan",
+        "--no-summary",
+        "--infected",
+    ]
+    assert calls[0][1] == {
+        "capture_output": True,
+        "text": True,
+        "timeout": 60,
+        "check": False,
+    }
 
 
 @pytest.mark.parametrize(

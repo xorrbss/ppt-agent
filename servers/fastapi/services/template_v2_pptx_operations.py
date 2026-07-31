@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 import os
@@ -34,6 +34,10 @@ _ROLLBACK_BLOCKING_STATES = (
 )
 _ACTIVE_STATES = ("processing", "finalizing")
 _SOURCE_CLEANUP_STATES = ("review_required", "failed", "cancelled")
+TEMPLATE_V2_QUEUED_ALERT_SECONDS = "TEMPLATE_V2_PPTX_QUEUED_ALERT_SECONDS"
+DEFAULT_QUEUED_ALERT_SECONDS = 300
+MIN_QUEUED_ALERT_SECONDS = 30
+MAX_QUEUED_ALERT_SECONDS = 86_400
 
 
 def _get_session_maker():
@@ -71,6 +75,9 @@ class TemplateV2OperationalStatus:
     failed_count: int
     review_required_count: int
     overdue_cleanup_count: int
+    queued_count: int = 0
+    aged_queued_count: int = 0
+    stale_cleanup_claim_count: int = 0
 
     def as_dict(self) -> dict[str, bool | int | str]:
         return asdict(self)
@@ -126,6 +133,25 @@ def require_template_v2_database_safety(
     return safety
 
 
+def get_template_v2_queued_alert_threshold(
+    environ: Mapping[str, str] | None = None,
+) -> timedelta:
+    """Return a bounded queue-age threshold suitable for alerts and health."""
+
+    values = os.environ if environ is None else environ
+    raw = values.get(TEMPLATE_V2_QUEUED_ALERT_SECONDS)
+    if raw is None or not raw.strip():
+        seconds = DEFAULT_QUEUED_ALERT_SECONDS
+    else:
+        value = raw.strip()
+        if not value.isascii() or not value.isdecimal():
+            raise RuntimeError("invalid_template_v2_pptx_queued_alert_seconds")
+        seconds = int(value)
+    if not MIN_QUEUED_ALERT_SECONDS <= seconds <= MAX_QUEUED_ALERT_SECONDS:
+        raise RuntimeError("template_v2_pptx_queued_alert_seconds_out_of_range")
+    return timedelta(seconds=seconds)
+
+
 async def get_template_v2_operational_status(
     *,
     now: datetime | None = None,
@@ -135,6 +161,7 @@ async def get_template_v2_operational_status(
     from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 
     observed_at = now or get_current_utc_datetime()
+    queued_before = observed_at - get_template_v2_queued_alert_threshold()
     async with _get_session_maker()() as session:
         state_counts = dict(
             (
@@ -165,12 +192,41 @@ async def get_template_v2_operational_status(
                     select(func.count(TemplateV2PptxImport.id)).where(
                         TemplateV2PptxImport.state.in_(_SOURCE_CLEANUP_STATES),
                         TemplateV2PptxImport.attempt_token.is_(None),
+                        TemplateV2PptxImport.source_cleanup_token.is_(None),
                         TemplateV2PptxImport.source_deleted_at.is_(None),
                         TemplateV2PptxImport.source_retention_expires_at.is_not(
                             None
                         ),
                         TemplateV2PptxImport.source_retention_expires_at
                         <= observed_at,
+                    )
+                )
+            ).one()
+        )
+        aged_queued_count = int(
+            (
+                await session.exec(
+                    select(func.count(TemplateV2PptxImport.id)).where(
+                        TemplateV2PptxImport.state == "queued",
+                        TemplateV2PptxImport.created_at <= queued_before,
+                    )
+                )
+            ).one()
+        )
+        stale_cleanup_claim_count = int(
+            (
+                await session.exec(
+                    select(func.count(TemplateV2PptxImport.id)).where(
+                        TemplateV2PptxImport.state.in_(_SOURCE_CLEANUP_STATES),
+                        TemplateV2PptxImport.source_deleted_at.is_(None),
+                        TemplateV2PptxImport.source_cleanup_token.is_not(None),
+                        or_(
+                            TemplateV2PptxImport.source_cleanup_lease_expires_at.is_(
+                                None
+                            ),
+                            TemplateV2PptxImport.source_cleanup_lease_expires_at
+                            <= observed_at,
+                        ),
                     )
                 )
             ).one()
@@ -182,8 +238,13 @@ async def get_template_v2_operational_status(
     active_count = sum(int(state_counts.get(state, 0)) for state in _ACTIVE_STATES)
     failed_count = int(state_counts.get("failed", 0))
     review_required_count = int(state_counts.get("review_required", 0))
+    queued_count = int(state_counts.get("queued", 0))
     if stale_active_count:
         health_code = "template_v2_stale_imports_detected"
+    elif stale_cleanup_claim_count:
+        health_code = "template_v2_stale_cleanup_claims_detected"
+    elif aged_queued_count:
+        health_code = "template_v2_queued_imports_over_age_threshold"
     elif failed_count:
         health_code = "template_v2_failed_imports_require_attention"
     elif review_required_count:
@@ -208,6 +269,9 @@ async def get_template_v2_operational_status(
         failed_count=failed_count,
         review_required_count=review_required_count,
         overdue_cleanup_count=overdue_cleanup_count,
+        queued_count=queued_count,
+        aged_queued_count=aged_queued_count,
+        stale_cleanup_claim_count=stale_cleanup_claim_count,
     )
 
 

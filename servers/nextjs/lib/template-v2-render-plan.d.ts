@@ -98,6 +98,8 @@ export interface TemplateV2PlannedImage {
 export const TEMPLATE_V2_PLAN_ELEMENT_TYPES: readonly string[];
 export const TEMPLATE_V2_PLAN_CHART_TYPES: readonly string[];
 
+export function isTemplateV2SafeColor(value: unknown): value is string;
+
 export function sampleTemplateV2SmoothPoints(
   points: unknown,
   options?: {

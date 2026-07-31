@@ -10,7 +10,6 @@ import {
   ArrowUpRight,
   Pencil,
   Check,
-  Keyboard,
   X,
   AlertTriangle,
 } from "lucide-react";
@@ -48,6 +47,7 @@ import {
 import ThemeSelector from "./ThemeSelector";
 import VersionHistoryPopover from "./VersionHistoryPopover";
 import SharePopover from "./SharePopover";
+import GenerationInfoDialog from "./GenerationInfoDialog";
 import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
@@ -55,6 +55,10 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
 import AuthoredQualityReview from "./AuthoredQualityReview";
+import {
+  formatAuthoredHybridExportSummary,
+  type AuthoredHybridExportMetadata,
+} from "@/lib/authored-hybrid/export-metadata";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 
 const MAX_EXPORT_TITLE_LENGTH = 40;
@@ -249,6 +253,7 @@ const PresentationHeader = ({
     if (isStreaming || isExporting) return;
 
     let exportToastId: string | number | undefined;
+    let exportSummary: string | undefined;
     try {
       trackEvent(MixpanelEvent.Presentation_Export_Started, {
         pathname,
@@ -293,18 +298,29 @@ const PresentationHeader = ({
         const payload = (await response.json()) as {
           path?: string;
           quality?: PresentationExportQualityReport;
+          exportMetadata?: AuthoredHybridExportMetadata;
         };
         const pptxPath = payload.path;
+        const exportMetadata = payload.exportMetadata;
         if (!pptxPath) {
           throw new Error("내보내기 경로를 받지 못했습니다.");
         }
 
+        if (exportMetadata?.strategy === "authored-hybrid") {
+          exportSummary = formatAuthoredHybridExportSummary(exportMetadata);
+        }
         downloadLink(pptxPath, safePptxFileName);
         if (payload.quality) setExportQuality(payload.quality);
+        if (payload.exportMetadata && !payload.quality) {
+          notify.info(
+            "PPTX export information",
+            `${payload.exportMetadata.editableSlides}/${payload.exportMetadata.totalSlides} slides include editable elements.`
+          );
+        }
       }
       notify.success(
         "내보내기 완료",
-        "PPTX 파일이 다운로드되었습니다.",
+        exportSummary ?? "PPTX 파일이 다운로드되었습니다.",
         { id: exportToastId }
       );
     } catch (error) {
@@ -447,15 +463,19 @@ const PresentationHeader = ({
               disabled={isExporting || isStreaming === true}
               data-testid="authored-export-hybrid-embedded"
               variant="ghost"
-              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 텍스트 편집 가능 및 글꼴 포함"
+              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-2 text-left text-xs text-black hover:bg-amber-50 disabled:cursor-not-allowed"
+              aria-label="PPTX로 내보내기, 편집 가능 및 글꼴 포함"
             >
               <span className="min-w-0">
                 <span className="block font-medium">
-                  PPTX · 텍스트 편집 가능 + 글꼴 포함
+                  PPTX · 편집 가능 + 글꼴 포함
                 </span>
-                <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
-                  텍스트와 일부 요소를 편집할 수 있으며 허용된 글꼴을 자동으로 포함합니다.
+                <span
+                  className="mt-1 block text-[11px] font-normal leading-snug text-amber-900"
+                  role="note"
+                >
+                  명시적 opt-in입니다. 서버에서 허용된 글꼴만 포함하며 파일
+                  크기가 크게 늘 수 있습니다. 실패 시 호환 글꼴로 대체됩니다.
                 </span>
               </span>
               <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -702,6 +722,13 @@ const PresentationHeader = ({
             presentationId={presentation_id}
             disabled={isStreaming === true}
           />
+
+          {presentationData && (
+            <GenerationInfoDialog
+              presentationId={presentation_id}
+              disabled={isStreaming === true}
+            />
+          )}
 
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>

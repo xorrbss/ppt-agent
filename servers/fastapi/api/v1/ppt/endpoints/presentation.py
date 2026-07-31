@@ -9,6 +9,7 @@ edit/derive (re-export with new content).
 
 import asyncio
 import json
+import logging
 import uuid
 from typing import Annotated, List, Optional
 
@@ -72,6 +73,32 @@ from api.v1.ppt.endpoints.presentation_generate import queue_presentation_genera
 
 PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 _build_export_cookie_header = build_export_cookie_header
+logger = logging.getLogger(__name__)
+
+
+async def _notify_slide_assets_ready(
+    slide_index: int,
+    asset_task: asyncio.Task,
+    asset_events: asyncio.Queue,
+) -> None:
+    """Always release the stream waiter, even when one asset provider fails.
+
+    Slide content already contains local placeholder assets at this point, so a
+    transient image/icon provider failure must degrade to those placeholders
+    instead of leaving the SSE stream waiting forever.
+    """
+    try:
+        generated_assets = await asset_task
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception(
+            "Asset generation failed for slide %s; keeping placeholders",
+            slide_index,
+        )
+        generated_assets = []
+
+    await asset_events.put((slide_index, generated_assets))
 
 
 def _is_authored_slide(slide: SlideModel) -> bool:
@@ -344,14 +371,10 @@ async def stream_presentation(
         deck_plan = presentation.get_deck_plan()
         image_urls_for_slides = get_images_for_slides_from_outline(outline.slides)
 
-        async_assets_generation_tasks: List[asyncio.Task] = []
         asset_events: asyncio.Queue = asyncio.Queue()
 
-        async def notify_slide_assets_ready(slide_index: int, asset_task: asyncio.Task):
-            await asset_task
-            await asset_events.put(slide_index)
-
         slides: List[SlideModel] = []
+        generated_assets_by_slide: List[list] = []
         yield SSEResponse(
             event="response",
             data=json.dumps({"type": "chunk", "chunk": '{ "slides": [ '}),
@@ -411,8 +434,10 @@ async def stream_presentation(
                     icon_weight=icon_weight,
                 )
             )
-            async_assets_generation_tasks.append(asset_task)
-            asyncio.create_task(notify_slide_assets_ready(i, asset_task))
+            generated_assets_by_slide.append([])
+            asyncio.create_task(
+                _notify_slide_assets_ready(i, asset_task, asset_events)
+            )
 
             yield SSEResponse(
                 event="response",
@@ -421,9 +446,10 @@ async def stream_presentation(
 
             while True:
                 try:
-                    done_idx = asset_events.get_nowait()
+                    done_idx, assets = asset_events.get_nowait()
                 except asyncio.QueueEmpty:
                     break
+                generated_assets_by_slide[done_idx] = assets
                 yielded_slide_asset_sse_count += 1
                 yield SSEResponse(
                     event="response",
@@ -442,7 +468,8 @@ async def stream_presentation(
         ).to_string()
 
         while yielded_slide_asset_sse_count < len(slides):
-            done_idx = await asset_events.get()
+            done_idx, assets = await asset_events.get()
+            generated_assets_by_slide[done_idx] = assets
             yielded_slide_asset_sse_count += 1
             yield SSEResponse(
                 event="response",
@@ -455,9 +482,8 @@ async def stream_presentation(
                 ),
             ).to_string()
 
-        generated_assets_lists = await asyncio.gather(*async_assets_generation_tasks)
         generated_assets = []
-        for assets_list in generated_assets_lists:
+        for assets_list in generated_assets_by_slide:
             generated_assets.extend(assets_list)
 
         # Moved this here to make sure new slides are generated before deleting the old ones

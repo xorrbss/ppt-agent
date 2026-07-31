@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap"
+    />
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap");
+
+      @font-face {
+        font-family: "Roboto";
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        src: url("https://fonts.gstatic.com/s/roboto/v1/roboto.woff2")
+          format("woff2");
+      }
+
+      html,
+      body {
+        width: 1280px;
+        height: 720px;
+        margin: 0;
+        overflow: hidden;
+        background: #f5f7fb;
+      }
+
+      .title {
+        position: absolute;
+        left: 96px;
+        top: 88px;
+        width: 1088px;
+        margin: 0;
+        color: #17365d;
+        font: 700 48px/1.2 "Noto Sans KR", sans-serif;
+      }
+
+      .metric {
+        position: absolute;
+        left: 96px;
+        top: 220px;
+        width: 1088px;
+        margin: 0;
+        color: #2764c5;
+        font: 600 42px/1.2 "Inter", sans-serif;
+      }
+
+      .body {
+        position: absolute;
+        left: 96px;
+        top: 330px;
+        width: 880px;
+        margin: 0;
+        color: #25364d;
+        font: 400 24px/1.55 "Noto Sans KR", sans-serif;
+      }
+
+      .direct {
+        position: absolute;
+        left: 96px;
+        top: 500px;
+        width: 1088px;
+        margin: 0;
+        color: #25364d;
+        font: 500 22px/1.4 "Roboto", sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="title">편집 가능한 Google Fonts 호환성</h1>
+    <p class="metric">Editable text remains native</p>
+    <p class="body">
+      허용된 Google Fonts 참조는 변환 전에 검증된 로컬 폰트 또는 결정론적
+      Office 폰트 fallback으로 치환되어야 합니다.
+    </p>
+    <p class="direct">Direct remote font-face remains editable</p>
+  </body>
+</html>

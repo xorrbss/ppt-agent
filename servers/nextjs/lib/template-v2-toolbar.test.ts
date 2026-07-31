@@ -7,7 +7,7 @@ import {
   resolveTemplateV2ToolbarRoute,
 } from "./template-v2-toolbar.ts";
 
-test("routes no, multi, image, icon, text, and text-list selections", () => {
+test("routes no, multi, image, icon, text, text-list, and bounded rich selections", () => {
   assert.deepEqual(
     resolveTemplateV2ToolbarRoute({ selectionCount: 0, element: null }),
     { kind: "none" }
@@ -47,6 +47,61 @@ test("routes no, multi, image, icon, text, and text-list selections", () => {
     }).kind,
     "text-list"
   );
+  assert.equal(
+    resolveTemplateV2ToolbarRoute({
+      selectionCount: 1,
+      element: {
+        type: "vector",
+        shape: "polygon",
+        points: [{ x: 0, y: 0 }, { x: 20, y: 20 }],
+      },
+    }).kind,
+    "vector"
+  );
+  assert.equal(
+    resolveTemplateV2ToolbarRoute({
+      selectionCount: 1,
+      element: {
+        type: "chart",
+        chart_type: "bar",
+        categories: ["Q1"],
+        colors: ["#2563eb"],
+        series: [{ name: "Revenue", values: [10] }],
+      },
+    }).kind,
+    "chart"
+  );
+  assert.equal(
+    resolveTemplateV2ToolbarRoute({
+      selectionCount: 1,
+      element: {
+        type: "table",
+        columns: [{ runs: [{ text: "Header" }] }],
+        rows: [[{ runs: [{ text: "Body" }] }]],
+        min_columns: 1,
+        max_columns: 1,
+        min_rows: 1,
+        max_rows: 1,
+      },
+    }).kind,
+    "table"
+  );
+  assert.equal(
+    resolveTemplateV2ToolbarRoute({
+      selectionCount: 1,
+      element: {
+        type: "infographic",
+        data: {
+          type: "progress_bar",
+          min_value: 0,
+          max_value: 100,
+          value: 62,
+        },
+        colors: ["#e5e7eb", "#2563eb"],
+      },
+    }).kind,
+    "infographic"
+  );
 });
 
 test("fails closed for design variables and unsupported element types", () => {
@@ -65,11 +120,7 @@ test("fails closed for design variables and unsupported element types", () => {
       selectionCount: 1,
       element: { type: "chart" },
     }),
-    {
-      kind: "unsupported",
-      reason: "element-type",
-      element: { type: "chart" },
-    }
+    { kind: "unsupported", reason: "invalid-contract", element: { type: "chart" } }
   );
   assert.equal(
     resolveTemplateV2ToolbarRoute({
@@ -77,6 +128,119 @@ test("fails closed for design variables and unsupported element types", () => {
       element: { type: "text", design_variables: [] },
     }).kind,
     "text"
+  );
+});
+
+test("fails closed for malformed or ambiguous vector, chart, and table payloads", () => {
+  for (const element of [
+    { type: "vector", shape: "ellipse", points: [{ x: 0, y: 0 }, { x: "bad", y: 2 }] },
+    {
+      type: "vector",
+      shape: "polygon",
+      points: [{ x: 0, y: 0 }, { x: 20, y: 20 }],
+      fill: { color: "#2563eb", opacity: 2 },
+    },
+    {
+      type: "vector",
+      shape: "polygon",
+      points: [{ x: 0, y: 0 }, { x: 20, y: 20 }],
+      stroke: { color: "#2563eb", width: 2, dash: [4, -1] },
+    },
+    {
+      type: "vector",
+      shape: "polygon",
+      points: [{ x: 0, y: 0 }, { x: 20, y: 20 }],
+      corner_radii: [4, Number.NaN],
+    },
+    {
+      type: "chart",
+      chart_type: "pie",
+      categories: ["A"],
+      colors: ["#2563eb"],
+      series: [{ name: "first", values: [1] }, { name: "second", values: [2] }],
+    },
+    {
+      type: "chart",
+      chart_type: "bar",
+      categories: ["A"],
+      colors: ["#2563eb"],
+      series: [{ name: "first", values: [1, 2] }],
+    },
+    {
+      type: "table",
+      columns: [{ text: "A" }, { text: "B" }],
+      rows: [[{ text: "only one cell" }]],
+    },
+    {
+      type: "table",
+      columns: [],
+      rows: [],
+      min_columns: 0,
+      max_columns: 0,
+      min_rows: 0,
+      max_rows: 0,
+    },
+    {
+      type: "infographic",
+      data: {
+        type: "gauge",
+        min_value: 0,
+        max_value: 100,
+        value: 101,
+      },
+    },
+  ]) {
+    assert.deepEqual(resolveTemplateV2ToolbarRoute({ selectionCount: 1, element }), {
+      kind: "unsupported",
+      reason: "invalid-contract",
+      element,
+    });
+  }
+});
+
+test("non-empty design variables take precedence over infographic routing", () => {
+  const element = {
+    type: "infographic",
+    data: {
+      type: "progress_bar",
+      min_value: 0,
+      max_value: 100,
+      value: 40,
+    },
+    design_variables: [{ name: "retention-only" }],
+  };
+
+  assert.deepEqual(
+    resolveTemplateV2ToolbarRoute({ selectionCount: 1, element }),
+    { kind: "unsupported", reason: "design-variables", element }
+  );
+});
+
+test("rich route checks are pure so the external selection controller retains its payload identity", () => {
+  const selected = {
+    type: "chart",
+    chart_type: "bar",
+    categories: ["Q1"],
+    series: [{ name: "Revenue", values: [12], source: { retained: true } }],
+    legend: false,
+    metadata: { owner: "nested-selection" },
+  };
+  const before = structuredClone(selected);
+
+  assert.deepEqual(
+    resolveTemplateV2ToolbarRoute({ selectionCount: 1, element: selected }),
+    { kind: "chart", element: selected }
+  );
+  assert.deepEqual(selected, before);
+
+  // A multi-selection is routed before inspecting its representative element.
+  // This keeps the command facade in control even if a rich element is stale.
+  assert.deepEqual(
+    resolveTemplateV2ToolbarRoute({
+      selectionCount: 2,
+      element: { type: "chart", chart_type: "not-a-chart" },
+    }),
+    { kind: "multi", count: 2 }
   );
 });
 

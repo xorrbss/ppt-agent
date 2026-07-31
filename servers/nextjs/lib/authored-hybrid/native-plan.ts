@@ -24,7 +24,10 @@ const MAX_IMAGE_PIXELS = 40_000_000;
 const MAX_TEXT_CODE_POINTS = 100_000;
 
 export type PreparedNativeElement =
-  | { kind: "text"; source: AuthoredHybridEditableTextElement }
+  | {
+      kind: "text";
+      source: AuthoredHybridEditableTextElement;
+    }
   | { kind: "shape"; source: AuthoredHybridEditableShapeElement }
   | {
       kind: "image";
@@ -1398,6 +1401,12 @@ function transparentTextOverlayItem(
           ...container,
           shape: {
             ...container.shape,
+            // The painted container is emitted separately as the underlay.
+            // Keep the editable text overlay rectangular so PowerPoint does
+            // not apply the reduced inscribed text area used by ellipses.
+            // Browser text inside a CSS circle still uses the full element
+            // content box, so an ellipse overlay can introduce extra wrapping.
+            shape: "rectangle",
             fill: null,
             gradient: undefined,
             stroke: null,

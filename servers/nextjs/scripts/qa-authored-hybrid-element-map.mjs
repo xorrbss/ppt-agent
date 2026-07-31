@@ -6,7 +6,7 @@ import {
   extractAuthoredSlideDom,
   resolveAuthoredHybridChromeExecutable,
 } from "../lib/authored-hybrid/index.ts";
-import { collectGoogleFontsForAuthoredHtml } from "../lib/authored-hybrid/google-font-collector.ts";
+import { getGoogleFontsCollector } from "../lib/authored-hybrid/google-fonts-runtime.ts";
 import { preflightAuthoredHtmlForHybrid } from "../lib/authored-hybrid/security.ts";
 
 function usage() {
@@ -247,8 +247,8 @@ const [slides, chromeExecutable] = await Promise.all([
 if (!chromeExecutable) throw new Error("Chrome/Chromium is unavailable.");
 
 const mappedSlides = await mapConcurrent(slides, 2, async (slide, index) => {
-  const collection = await collectGoogleFontsForAuthoredHtml(slide.html);
-  const preflight = preflightAuthoredHtmlForHybrid(collection.html);
+  const collection = await getGoogleFontsCollector().prepareHtml(slide.html);
+  const preflight = preflightAuthoredHtmlForHybrid(collection.htmlForPreflight);
   if (!preflight.ok) {
     return {
       slideNumber: index + 1,
@@ -259,8 +259,8 @@ const mappedSlides = await mapConcurrent(slides, 2, async (slide, index) => {
   }
   const options = { chromeExecutable, timeoutMs: 20_000 };
   const [authored, powerPoint] = await Promise.all([
-    extractAuthoredSlideDom(collection.html, options),
-    extractAuthoredSlideDom(collection.html, {
+    extractAuthoredSlideDom(collection.htmlForChrome, options),
+    extractAuthoredSlideDom(collection.htmlForChrome, {
       ...options,
       fontLayoutMode: "powerpoint",
     }),
@@ -276,9 +276,10 @@ const mappedSlides = await mapConcurrent(slides, 2, async (slide, index) => {
     sourceIndex: slide.index,
     canvas: authored.canvas,
     fontCollection: {
-      requestedFamilies: collection.requestedFamilies,
-      collectedFamilies: collection.collectedFamilies,
-      unresolvedFamilies: collection.unresolvedFamilies,
+      status: collection.status,
+      requestedFontFaces: collection.requestedFontFaces,
+      collectedFamilies: collection.trustedFamilies,
+      failures: collection.failures,
     },
     fontGeometry: summarizeFontGeometry(elements),
     elements,

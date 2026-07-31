@@ -218,6 +218,7 @@ async def generate_ppt_outline(
         async for event in stream_generate_events(
             client,
             disconnect_checker=disconnect_checker,
+            inactivity_timeout_seconds=120,
             **get_generate_kwargs(
                 model=model,
                 messages=get_messages(

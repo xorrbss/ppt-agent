@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 
 import { compileCustomLayout, CompiledLayout } from "./compileLayout";
 import TemplateService from "../(presentation-generator)/services/api/template";
+import { ensureRuntimeTailwindCss } from "@/lib/runtime-tailwind-client";
 
 /**
  * API response types
@@ -106,6 +107,7 @@ export async function getCustomTemplateFirstSlidePreview(
                 return null;
             }
 
+            await ensureRuntimeTailwindCss([firstLayout.layout_code]);
             const compiled = compileCustomLayout(firstLayout.layout_code);
             customTemplateFirstSlideCache.set(presentationId, compiled);
             return compiled;
@@ -153,6 +155,7 @@ export async function getCustomTemplateDetails(
     const fetchPromise = (async (): Promise<CustomTemplateDetail | null> => {
         try {
             const data: CustomTemplateDetailResponse = await TemplateService.getCustomTemplateDetails(templateId);
+            await ensureRuntimeTailwindCss(data.layouts.map((layout) => layout.layout_code));
 
             // Compile each layout
             const compiledLayouts: CustomTemplateLayout[] = [];
@@ -302,6 +305,7 @@ export function useCustomTemplateDetails(templateDetail: { id: string, name: str
         const fetchPromise = (async (): Promise<CustomTemplateDetail | null> => {
             try {
                 const data: CustomTemplateDetailResponse = await TemplateService.getCustomTemplateDetails(templateDetail.id);
+                await ensureRuntimeTailwindCss(data.layouts.map((layout) => layout.layout_code));
 
                 // Compile each layout
                 const compiledLayouts: CustomTemplateLayout[] = [];
@@ -391,11 +395,15 @@ export function useCustomTemplatePreview(presentationId: string) {
         const fetchPreviews = async () => {
             try {
                 setLoading(true);
-                const data = await TemplateService.getCustomTemplateDetails(presentationId);
+                const data: CustomTemplateDetailResponse =
+                    await TemplateService.getCustomTemplateDetails(presentationId);
 
                 // Compile first 4 layouts for preview
                 const compiled: CompiledLayout[] = [];
                 const layoutsToPreview = data.layouts.slice(0, 4);
+                await ensureRuntimeTailwindCss(
+                    layoutsToPreview.map((layout) => layout.layout_code)
+                );
 
                 for (const layout of layoutsToPreview) {
                     try {

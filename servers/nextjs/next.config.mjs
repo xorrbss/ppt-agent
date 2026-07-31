@@ -27,17 +27,31 @@ const linkFreeRuntimeTrace = [
   "node_modules/source-map-js/**/*",
   "node_modules/styled-jsx/**/*",
 ];
+const runtimeTailwindTrace = [
+  // Tailwind reads this file with fs.readFileSync while constructing its core
+  // plugins. Next's JS tracer cannot infer that runtime path for standalone.
+  "node_modules/tailwindcss/lib/css/**/*",
+];
 
 const nextConfig = {
   reactStrictMode: false,
   distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
+  experimental: {
+    // Fidelity tests isolate their distDir per run. Avoid duplicating Turbopack's
+    // persistent dev cache on disk in that already-disposable Windows workspace.
+    turbopackFileSystemCacheForDev: !process.env.PRESENTON_TEST_NEXT_DIST_DIR,
+  },
   output: "standalone",
+  // Runtime template CSS compilation needs Tailwind's real package __dirname.
+  // Bundling it can bake the build machine path into fs.readFileSync calls.
+  serverExternalPackages: ["postcss", "tailwindcss"],
   outputFileTracingRoot: repositoryRoot,
   outputFileTracingIncludes: {
     "/*": [
       ...semverRuntimeTrace,
       ...sharpNativeRuntimeTrace,
       ...linkFreeRuntimeTrace,
+      ...runtimeTailwindTrace,
     ],
     "/api/export-presentation": exportRuntimeTrace,
   },
@@ -74,12 +88,21 @@ const nextConfig = {
       }
     : {}),
 
-  // Rewrites for development - proxy font requests to FastAPI backend
+  // Keep direct Next.js access usable in development as well as the
+  // single-origin local proxy. Browser API calls are same-origin, so without
+  // this rewrite opening port 3000 directly returns a Next.js 404.
   async rewrites() {
+    const fastApiUrl =
+      process.env.FAST_API_INTERNAL_URL || "http://127.0.0.1:8000";
+
     return [
       {
-        source: '/app_data/fonts/:path*',
-        destination: 'http://localhost:5000/app_data/fonts/:path*',
+        source: "/api/v1/:path*",
+        destination: `${fastApiUrl}/api/v1/:path*`,
+      },
+      {
+        source: "/app_data/:path*",
+        destination: `${fastApiUrl}/app_data/:path*`,
       },
     ];
   },

@@ -323,7 +323,7 @@ async def check_fonts_in_pptx_handler(pptx_file: UploadFile) -> FontCheckRespons
         )
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Save uploaded PPTX file
+        # Stage and preflight the uploaded PPTX before any parser or converter sees it.
         pptx_path = os.path.join(temp_dir, "presentation.pptx")
         await _store_and_preflight_preview_pptx(pptx_file, pptx_path)
         font_variants_by_name = await asyncio.to_thread(
@@ -407,7 +407,7 @@ async def upload_fonts_and_preview_handler(
         contextlib.nullcontext(temp_dir) if temp_dir else tempfile.TemporaryDirectory()
     )
     with temp_dir_context as temp_dir:
-        # Save uploaded PPTX file
+        # Stage and preflight the uploaded PPTX before any parser or converter sees it.
         pptx_path = os.path.join(temp_dir, "presentation.pptx")
         await _store_and_preflight_preview_pptx(pptx_file, pptx_path)
         logger.info(f"Saved PPTX file to {pptx_path}")

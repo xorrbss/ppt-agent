@@ -1,0 +1,46 @@
+{
+  "upstream_sha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "import_boundary": "studio-upstream-wire-compatibility",
+  "source_fixture": "servers/fastapi/tests/fixtures/template_v2/upstream-elements-57b194b.json",
+  "operation": "polygon_add_after_last_wrap",
+  "document": {
+    "layouts": [
+      {
+        "id": "upstream-vector-wrap-roundtrip",
+        "components": [
+          {
+            "id": "vector-component",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "elements": [
+              {
+                "type": "vector",
+                "shape": "polygon",
+                "points": [
+                  {
+                    "x": 0,
+                    "y": 0
+                  },
+                  {
+                    "x": 100,
+                    "y": 80
+                  }
+                ],
+                "closed": true,
+                "upstream_element_extension": "vector-vNext"
+              }
+            ]
+          }
+        ],
+        "upstream_layout_extension": {
+          "retained": true
+        }
+      }
+    ],
+    "future_envelope_field": {
+      "retained": true
+    }
+  }
+}

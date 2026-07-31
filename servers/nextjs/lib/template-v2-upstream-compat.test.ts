@@ -1,11 +1,35 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import {
+  renderTemplateV2GeneralSlideCanvasHtml,
+} from "./template-v2-general-renderer.mjs";
+import {
+  createTemplateV2SlideRenderPlan,
+} from "./template-v2-render-plan.mjs";
 import {
   adaptGeneratedTemplateV2UiToStudio,
   adaptUpstreamTemplateV2LayoutsToStudio,
   serializeStudioLayoutsForUpstream,
 } from "./template-v2-upstream-compat.ts";
+import {
+  editTemplateV2VectorPointTopology,
+  templateV2ProvenVectorEditCapability,
+} from "./template-v2-vector.ts";
+
+const pinnedUpstreamElements = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../fastapi/tests/fixtures/template_v2/upstream-elements-57b194b.json",
+      import.meta.url
+    ),
+    "utf8"
+  )
+) as {
+  upstream_sha: string;
+  elements: Array<Record<string, unknown>>;
+};
 
 test("round-trips every pinned upstream layouts envelope without data loss", () => {
   const layout = {
@@ -40,6 +64,120 @@ test("round-trips every pinned upstream layouts envelope without data loss", () 
     const document = adaptUpstreamTemplateV2LayoutsToStudio(value);
     assert.deepEqual(serializeStudioLayoutsForUpstream(document), value);
   }
+});
+
+test("round-trips the pinned upstream vector after one proven topology edit", () => {
+  assert.equal(
+    pinnedUpstreamElements.upstream_sha,
+    "57b194b234b42c8b28f8a507a30322de200e3e83"
+  );
+  const fixtureVector = pinnedUpstreamElements.elements.find(
+    (element) => element.type === "vector"
+  );
+  assert.ok(fixtureVector);
+
+  const source = {
+    layouts: [{
+      id: "upstream-vector-roundtrip",
+      components: [{
+        id: "vector-component",
+        position: { x: 0, y: 0 },
+        elements: [structuredClone(fixtureVector)],
+      }],
+    }],
+    future_envelope_field: "kept",
+  };
+  const document = adaptUpstreamTemplateV2LayoutsToStudio(source);
+  const edited = structuredClone(document.studioLayouts);
+  const layout = (edited.layouts as Array<Record<string, unknown>>)[0];
+  const component = (
+    layout.components as Array<Record<string, unknown>>
+  )[0];
+  const vector = (
+    component.elements as Array<Record<string, unknown>>
+  )[0];
+
+  assert.deepEqual(templateV2ProvenVectorEditCapability(vector), {
+    kind: "polygon-add-after-first-point",
+    points: [{ x: 0, y: 0 }, { x: 100, y: 80 }],
+  });
+  const topologyEdit = editTemplateV2VectorPointTopology(vector, {
+    type: "add-after",
+    index: 0,
+  });
+  assert.ok(topologyEdit);
+  vector.points = topologyEdit.points;
+  if (topologyEdit.cornerRadii !== null) {
+    vector.corner_radii = topologyEdit.cornerRadii;
+  }
+
+  const wire = serializeStudioLayoutsForUpstream(document, edited) as {
+    layouts: Array<Record<string, unknown>>;
+    future_envelope_field: string;
+  };
+  assert.equal(wire.future_envelope_field, "kept");
+  const savedLayout = wire.layouts[0];
+  const savedComponent = (
+    savedLayout.components as Array<Record<string, unknown>>
+  )[0];
+  const savedVector = (
+    savedComponent.elements as Array<Record<string, unknown>>
+  )[0];
+  assert.deepEqual(savedVector, {
+    ...fixtureVector,
+    points: [
+      { x: 0, y: 0 },
+      { x: 50, y: 40 },
+      { x: 100, y: 80 },
+    ],
+  });
+  assert.deepEqual(
+    (source.layouts[0].components[0].elements[0] as Record<string, unknown>)
+      .points,
+    fixtureVector.points
+  );
+
+  const reentered = adaptUpstreamTemplateV2LayoutsToStudio(wire);
+  assert.deepEqual(
+    serializeStudioLayoutsForUpstream(reentered),
+    wire
+  );
+  const reloadedLayouts = reentered.studioLayouts as {
+    layouts: Array<Record<string, unknown>>;
+  };
+  const reloadedLayout = reloadedLayouts.layouts[0];
+  const reloadedComponent = (
+    reloadedLayout.components as Array<Record<string, unknown>>
+  )[0];
+  const reloadedVector = (
+    reloadedComponent.elements as Array<Record<string, unknown>>
+  )[0];
+  assert.deepEqual(reloadedVector, savedVector);
+  assert.equal(templateV2ProvenVectorEditCapability(reloadedVector), null);
+
+  const plan = createTemplateV2SlideRenderPlan({
+    id: "upstream-vector-roundtrip",
+    ui: reloadedLayout,
+  });
+  assert.deepEqual(plan.components[0].elements[0].vector, {
+    shape: "polygon",
+    frame: { x: 0, y: 0, width: 100, height: 80 },
+    points: [
+      { x: 0, y: 0 },
+      { x: 50, y: 40 },
+      { x: 100, y: 80 },
+    ],
+    closed: true,
+    tension: null,
+    segments: null,
+  });
+  assert.match(
+    renderTemplateV2GeneralSlideCanvasHtml({
+      id: "upstream-vector-roundtrip",
+      ui: reloadedLayout,
+    }),
+    /<polygon /
+  );
 });
 
 test("merges Studio edits while preserving unknown upstream fields and shape", () => {

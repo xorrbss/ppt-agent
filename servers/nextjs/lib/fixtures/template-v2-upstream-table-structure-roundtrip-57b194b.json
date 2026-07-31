@@ -1,0 +1,78 @@
+{
+  "upstream_sha": "57b194b234b42c8b28f8a507a30322de200e3e83",
+  "model_path": "servers/fastapi/templates/v2/models/elements.py",
+  "document": {
+    "layouts": [
+      {
+        "id": "upstream-table-structure-roundtrip",
+        "components": [
+          {
+            "id": "table-component",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "elements": [
+              {
+                "type": "table",
+                "columns": [
+                  {
+                    "runs": [
+                      {
+                        "text": "Metric",
+                        "font": {
+                          "bold": true
+                        }
+                      }
+                    ],
+                    "color": {
+                      "color": "#E2E8F0"
+                    }
+                  },
+                  {
+                    "runs": [
+                      {
+                        "text": "Actual"
+                      }
+                    ]
+                  }
+                ],
+                "rows": [
+                  [
+                    {
+                      "runs": [
+                        {
+                          "text": "Revenue"
+                        }
+                      ]
+                    },
+                    {
+                      "runs": [
+                        {
+                          "text": "$12M"
+                        }
+                      ]
+                    }
+                  ]
+                ],
+                "decorative": false,
+                "name": "metrics",
+                "min_columns": 1,
+                "max_columns": 3,
+                "min_rows": 0,
+                "max_rows": 2,
+                "upstream_element_extension": "table-vNext"
+              }
+            ]
+          }
+        ],
+        "upstream_layout_extension": {
+          "retained": true
+        }
+      }
+    ],
+    "future_envelope_field": {
+      "retained": true
+    }
+  }
+}

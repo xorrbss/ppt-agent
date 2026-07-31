@@ -9,9 +9,13 @@ import {
 export default function TemplateV2ConflictRecovery({
   snapshot,
   onReload,
+  onRebase,
+  rebasing,
 }: {
   snapshot: TemplateV2ConflictSnapshot;
   onReload: () => void;
+  onRebase: () => void;
+  rebasing: boolean;
 }) {
   function downloadLocalEdits() {
     const capturedAt = new Date();
@@ -34,6 +38,15 @@ export default function TemplateV2ConflictRecovery({
 
   return (
     <div className="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        className="rounded border border-red-300/40 px-3 py-1 disabled:opacity-50"
+        onClick={onRebase}
+        disabled={rebasing}
+        title="Only succeeds when the latest server layouts still match the revision you edited"
+      >
+        {rebasing ? "Checking latest revision…" : "Rebase local draft"}
+      </button>
       <button
         type="button"
         className="rounded border border-red-300/40 px-3 py-1"

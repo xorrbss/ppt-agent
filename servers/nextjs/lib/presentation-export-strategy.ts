@@ -1,5 +1,6 @@
 import { isAuthoredPresentation } from "./authored-hybrid/presentation-mode.ts";
 import type { PptxMode } from "./authored-hybrid/mode.ts";
+import type { AuthoredHybridExportMetadata } from "./authored-hybrid/export-metadata.ts";
 import type { PresentationExportQualityReport } from "./presentation-export-quality.ts";
 
 export type PersistedExportStrategy =
@@ -34,6 +35,8 @@ export interface PresentationExportResult {
   path: string;
   /** Optional additive metadata; legacy exporters and callers may omit it. */
   quality?: PresentationExportQualityReport;
+  /** Stable aggregate summary for authored-hybrid API consumers. */
+  exportMetadata?: AuthoredHybridExportMetadata;
 }
 
 export interface PresentationExportAdapterRegistry<

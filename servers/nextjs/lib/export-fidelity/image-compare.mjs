@@ -12,6 +12,21 @@ export const DEFAULT_FIDELITY_TOLERANCES = Object.freeze({
   pixelDelta: 32,
 });
 
+const THRESHOLD_DEFINITIONS = Object.freeze([
+  Object.freeze({
+    metric: "meanAbsoluteError",
+    tolerance: "maxMeanAbsoluteError",
+  }),
+  Object.freeze({
+    metric: "badPixelRatio",
+    tolerance: "maxBadPixelRatio",
+  }),
+  Object.freeze({
+    metric: "largestBadComponentPixels",
+    tolerance: "maxBadComponentPixels",
+  }),
+]);
+
 async function rgbaAtCanvas(png, canvas) {
   const image = sharp(png).flatten({ background: "#ffffff" }).ensureAlpha();
   const metadata = await image.metadata();
@@ -103,16 +118,75 @@ export async function compareSlidePngs(sourcePng, pptxPng, options = {}) {
     largestBadComponentPixels,
     tolerances,
   };
-  const passed =
-    meanAbsoluteError <= tolerances.maxMeanAbsoluteError &&
-    badPixelRatio <= tolerances.maxBadPixelRatio &&
-    largestBadComponentPixels <= tolerances.maxBadComponentPixels;
+  const thresholdResults = THRESHOLD_DEFINITIONS.map(({ metric, tolerance }) => {
+    const actual = metrics[metric];
+    const maximum = tolerances[tolerance];
+    return {
+      metric,
+      tolerance,
+      actual,
+      maximum,
+      passed: actual <= maximum,
+      exceededBy: Math.max(0, actual - maximum),
+    };
+  });
+  const failedThresholds = thresholdResults
+    .filter((threshold) => !threshold.passed)
+    .map((threshold) => threshold.metric);
+  const passed = failedThresholds.length === 0;
   return {
     passed,
-    metrics,
+    metrics: {
+      ...metrics,
+      thresholdResults,
+      failedThresholds,
+    },
     diffPng: await sharp(diff, {
       raw: { width: canvas.width, height: canvas.height, channels: 4 },
     }).png().toBuffer(),
+  };
+}
+
+function formatDiagnosticNumber(value) {
+  if (Number.isInteger(value)) return String(value);
+  return Number(value).toPrecision(6).replace(/(?:\.0+|(\.\d+?)0+)$/, "$1");
+}
+
+function thresholdDiagnosticsMarkdown(label, comparison) {
+  const rows = comparison.metrics.thresholdResults.map((threshold) => {
+    const delta = threshold.passed
+      ? "-"
+      : `+${formatDiagnosticNumber(threshold.exceededBy)}`;
+    return `| ${threshold.metric} | ${formatDiagnosticNumber(threshold.actual)} | ${formatDiagnosticNumber(threshold.maximum)} | ${threshold.passed ? "PASS" : "FAIL"} | ${delta} |`;
+  });
+  return [
+    `# Template V2 fidelity diagnostic: ${label}`,
+    "",
+    `Result: **${comparison.passed ? "PASS" : "FAIL"}**`,
+    "",
+    "| Product metric | Actual | Maximum | Result | Exceeded by |",
+    "| --- | ---: | ---: | --- | ---: |",
+    ...rows,
+    "",
+    `Pixel classification delta: ${formatDiagnosticNumber(comparison.metrics.tolerances.pixelDelta)}`,
+    `Canvas: ${comparison.metrics.canvas.width} x ${comparison.metrics.canvas.height}`,
+    "",
+    "Inspect `source.png`, `pptx.png`, and the red-overlay `diff.png` together.",
+    "",
+  ].join("\n");
+}
+
+function serializeError(error) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return {
+    name: "Error",
+    message: String(error),
   };
 }
 
@@ -132,6 +206,42 @@ export async function writeFidelityFailureArtifacts({
     fs.writeFile(
       path.join(artifactDirectory, "metrics.json"),
       `${JSON.stringify({ passed: comparison.passed, ...comparison.metrics }, null, 2)}\n`
+    ),
+    fs.writeFile(
+      path.join(artifactDirectory, "diagnostics.md"),
+      thresholdDiagnosticsMarkdown(label, comparison)
+    ),
+  ]);
+  return artifactDirectory;
+}
+
+export async function writeFidelityComparisonErrorArtifacts({
+  outputDirectory,
+  label,
+  sourcePng,
+  pptxPng,
+  error,
+}) {
+  const artifactDirectory = path.join(outputDirectory, label);
+  const serializedError = serializeError(error);
+  await fs.mkdir(artifactDirectory, { recursive: true });
+  await Promise.all([
+    fs.writeFile(path.join(artifactDirectory, "source.png"), sourcePng),
+    fs.writeFile(path.join(artifactDirectory, "pptx.png"), pptxPng),
+    fs.writeFile(
+      path.join(artifactDirectory, "comparison-error.json"),
+      `${JSON.stringify(serializedError, null, 2)}\n`
+    ),
+    fs.writeFile(
+      path.join(artifactDirectory, "diagnostics.md"),
+      [
+        `# Template V2 fidelity comparison error: ${label}`,
+        "",
+        `The visual comparison could not produce product metrics: ${serializedError.message}`,
+        "",
+        "Inspect `source.png` and `pptx.png` for canvas or renderer differences.",
+        "",
+      ].join("\n")
     ),
   ]);
   return artifactDirectory;

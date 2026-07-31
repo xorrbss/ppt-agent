@@ -76,12 +76,278 @@ function response(payloadLayouts = layouts(), revision = 1) {
 }
 
 function settleSuccessfulPersistence() {
-  // Autosave can disable the button between Cypress's actionability check and
-  // click dispatch. Waiting on the persisted state avoids that timing race.
+  // The debounced autosave may finish between querying the button and clicking
+  // it. Waiting on the user-visible dirty state covers both the pending-save
+  // and already-saved paths without racing the disabled button transition.
   cy.contains("Unsaved changes", { timeout: 10_000 }).should("not.exist");
 }
 
+function setColorInput(label: string, color: string) {
+  cy.contains("label", label)
+    .find('input[type="color"]')
+    .then(($input) => {
+      const input = $input[0] as HTMLInputElement;
+      const view = input.ownerDocument.defaultView;
+      const setter = view
+        ? Object.getOwnPropertyDescriptor(
+            view.HTMLInputElement.prototype,
+            "value"
+          )?.set
+        : undefined;
+      expect(setter, "native color value setter").to.be.a("function");
+      setter?.call(input, color);
+      input.dispatchEvent(new view!.Event("input", { bubbles: true }));
+      input.dispatchEvent(new view!.Event("change", { bubbles: true }));
+    })
+    .should("have.value", color);
+}
+
+function selectTextareaRange(selector: string, start: number, end: number) {
+  cy.get(selector)
+    .then(($textarea) => {
+      const textarea = $textarea[0] as HTMLTextAreaElement;
+      textarea.focus();
+      textarea.setSelectionRange(start, end);
+    })
+    .trigger("mouseup", { force: true, waitForAnimations: false });
+}
+
 describe("TemplateV2Studio API integration", () => {
+  it("previews, cancels, applies, undoes, and autosaves a bounded AI run rewrite", () => {
+    const aiLayouts = layouts();
+    const title = aiLayouts.layouts[0].components[0].elements[0];
+    title.runs[1].future_run_field = { retained: true };
+
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response(aiLayouts) }
+    ).as("loadAiTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("saveAiTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadAiTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click({
+      waitForAnimations: false,
+    });
+    cy.get('[aria-label="AI rewrite text run"]').select("1", { force: true });
+    selectTextareaRange('[aria-label="AI rewrite source run 2"]', 0, 5);
+    cy.contains("Selected UTF-16 range 0–5").should("be.visible");
+    cy.contains("button", "Generate 3 candidates").click({
+      waitForAnimations: false,
+    });
+    cy.get('[aria-label="AI rewrite candidates"] input[type="radio"]').should(
+      "have.length",
+      3
+    );
+    cy.contains("Before: “title”").should("be.visible");
+    cy.get('[aria-label="AI rewrite candidates"] del').first().should(
+      "have.text",
+      "le"
+    );
+    cy.contains("button", "Cancel").click({ waitForAnimations: false });
+    cy.contains("Preview canceled. No template data changed.").should(
+      "be.visible"
+    );
+    cy.get('textarea[aria-label="Run 2 content"]').should(
+      "have.value",
+      "title",
+    );
+
+    cy.contains("button", "Generate 3 candidates").click({
+      waitForAnimations: false,
+    });
+    cy.contains("button", "Apply selected").click({
+      waitForAnimations: false,
+    });
+    cy.contains("AI rewrite applied. Autosave scheduled.").should("be.visible");
+    cy.get('textarea[aria-label="Run 2 content"]').should("have.value", "tit");
+
+    cy.contains("button", /^Undo$/).click({ waitForAnimations: false });
+    cy.contains("button[aria-pressed]", /^title/).click({
+      waitForAnimations: false,
+    });
+    cy.get('textarea[aria-label="Run 2 content"]').should(
+      "have.value",
+      "title",
+    );
+    cy.contains("button", /^Redo$/).click({ waitForAnimations: false });
+    cy.contains("button[aria-pressed]", /^title/).click({
+      waitForAnimations: false,
+    });
+    cy.get('textarea[aria-label="Run 2 content"]').should("have.value", "tit");
+    cy.contains("button", "Save").click({ waitForAnimations: false });
+
+    cy.wait("@saveAiTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements.0")
+      .then((savedTitle) => {
+        expect(savedTitle.runs).to.deep.equal([
+          { text: "Original " },
+          {
+            text: "tit",
+            font: {
+              family: "Georgia",
+              size: 34,
+              color: "#dc2626",
+              bold: false,
+              italic: true,
+              underline: true,
+            },
+            future_run_field: { retained: true },
+          },
+        ]);
+        expect(savedTitle.decorative).to.equal(false);
+        expect(savedTitle.max_length).to.equal(120);
+      });
+  });
+
+  it("shows overflow candidates but blocks explicit AI rewrite apply", () => {
+    const constrainedLayouts = layouts();
+    constrainedLayouts.layouts[0].components[0].elements[0].max_length = 10;
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response(constrainedLayouts) }
+    ).as("loadConstrainedTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadConstrainedTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click({
+      waitForAnimations: false,
+    });
+    cy.get('[aria-label="AI rewrite text run"]').select("1", { force: true });
+    selectTextareaRange('[aria-label="AI rewrite source run 2"]', 0, 5);
+    cy.contains("button", "Generate 3 candidates").click({
+      waitForAnimations: false,
+    });
+
+    cy.get(
+      '[aria-label="AI rewrite candidates"] label > span > span:last-child'
+    )
+      .should("have.length", 3)
+      .each(($status) => {
+        expect($status).to.have.text("Overflow · apply blocked");
+      });
+    cy.contains("button", "Apply selected").should("be.disabled");
+    cy.get('textarea[aria-label="Run 2 content"]').should(
+      "have.value",
+      "title",
+    );
+  });
+
+  it("compares, cancels, applies, and journal-restores slide-scoped variants", () => {
+    const variantLayouts = layouts();
+    const variantLayout = variantLayouts.layouts[0];
+    variantLayout.future_variant_metadata = { retained: true };
+    variantLayout.components[0].elements[1].fit = "contain";
+    variantLayout.components[0].elements.push({
+      type: "chart",
+      name: "trend",
+      decorative: false,
+      chart_type: "line",
+      legend: false,
+      categories: ["Q1", "Q2"],
+      series: [{ name: "Revenue", values: [10, 12] }],
+      future_chart_metadata: { retained: true },
+    });
+    const savedLayouts: ReturnType<typeof layouts>[] = [];
+
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response(variantLayouts, 11) }
+    ).as("loadVariantTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        savedLayouts.push(request.body.layouts);
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("saveVariantTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadVariantTemplate");
+    cy.contains("button", "Compare slide variants")
+      .should("be.visible")
+      .and("not.be.disabled")
+      .click({ waitForAnimations: false });
+    cy.get('[aria-label="Slide variant candidates"] label').should(
+      "have.length",
+      3
+    );
+    cy.contains("semantic").should("be.visible");
+    cy.contains("button", "Cancel").click({ waitForAnimations: false });
+    cy.contains("Preview canceled. No slide data changed.").should(
+      "be.visible"
+    );
+    cy.contains("Unsaved changes").should("not.exist");
+
+    cy.contains("button", "Compare slide variants")
+      .should("be.visible")
+      .and("not.be.disabled")
+      .click({ waitForAnimations: false });
+    cy.contains("label", "Executive summary").click({
+      waitForAnimations: false,
+    });
+    cy.contains("button", "Apply selected").click({
+      waitForAnimations: false,
+    });
+    cy.contains("Slide variant applied. Autosave and global undo are available.")
+      .should("be.visible");
+    cy.contains("button", "Restore original slide").should("be.visible");
+    cy.contains("button", "Save").click({ waitForAnimations: false });
+    cy.wait("@saveVariantTemplate");
+    cy.then(() => {
+      const applied = savedLayouts.at(-1)!;
+      expect(
+        applied.layouts[0].components[0].elements[0].font.bold
+      ).to.equal(false);
+      expect(
+        applied.layouts[0].components[0].elements[0].runs
+      ).to.deep.equal(variantLayout.components[0].elements[0].runs);
+      expect(applied.layouts[0].future_variant_metadata).to.deep.equal({
+        retained: true,
+      });
+      expect(
+        applied.layouts[0].components[0].elements[2].future_chart_metadata
+      ).to.deep.equal({ retained: true });
+    });
+
+    cy.contains("button", "Restore original slide").click({
+      waitForAnimations: false,
+    });
+    cy.contains("Restored the original slide-scoped snapshot.").should(
+      "be.visible"
+    );
+    cy.wait("@saveVariantTemplate");
+    cy.then(() => {
+      const restored = savedLayouts.at(-1)!;
+      expect(
+        restored.layouts[0].components[0].elements[0].font.bold
+      ).to.equal(true);
+      expect(restored).to.deep.equal(variantLayouts);
+    });
+  });
+
   it("edits a nested upstream envelope and saves its original shape and unknown fields", () => {
     const nestedLayouts = {
       layouts: {
@@ -230,6 +496,222 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("Saved").should("be.visible");
   });
 
+  it("edits chart data, table styles, and safe image assets through autosave", () => {
+    const editableLayouts = layouts();
+    editableLayouts.layouts[0].components[0].elements.push({
+      type: "chart",
+      name: "revenue",
+      position: { x: 40, y: 260 },
+      size: { width: 420, height: 240 },
+      chart_type: "bar",
+      title: "Revenue",
+      categories: ["Q1", "Q2"],
+      series: [
+        {
+          name: "Actual",
+          values: [10, 20],
+          future_series_field: { retained: true },
+        },
+        {
+          name: "Forecast",
+          values: [12, 24],
+          future_series_field: { retained: "second" },
+        },
+      ],
+      future_chart_field: "retained",
+    });
+    editableLayouts.layouts[0].components[0].elements.push({
+      type: "table",
+      name: "forecast table",
+      position: { x: 500, y: 260 },
+      size: { width: 300, height: 180 },
+      columns: [
+        {
+          runs: [{ text: "Metric", future_run_field: "retained" }],
+          alignment: "left",
+          color: { color: "#ffffff", opacity: 0.8 },
+        },
+      ],
+      rows: [
+        [
+          {
+            runs: [{ text: "Revenue" }],
+            alignment: "right",
+            future_cell_field: { retained: true },
+          },
+        ],
+      ],
+      min_columns: 1,
+      max_columns: 1,
+      min_rows: 1,
+      max_rows: 1,
+      decorative: false,
+    });
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response(editableLayouts) }
+    ).as("loadEditableTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        const elements =
+          request.body.layouts.layouts[0].components[0].elements;
+        if (elements[1]?.crop_scale === 1.75) {
+          request.alias = "saveEditableTemplateFinal";
+        }
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("saveEditableTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadEditableTemplate");
+    cy.contains("button[aria-pressed]", /^revenue/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Chart title")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("Bookings", { waitForAnimations: false });
+    cy.contains("label", "Category 2")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("FY26 Q2", { waitForAnimations: false });
+    cy.contains("label", "Series 1 name")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("Forecast", { waitForAnimations: false });
+    cy.contains("label", "Series 1, value 2")
+      .find("input")
+      .type("{selectall}42.5", { waitForAnimations: false });
+    cy.get('button[aria-label="Move series 2 up"]').click({
+      waitForAnimations: false,
+    });
+    cy.contains("button", "Save")
+      .should("not.be.disabled")
+      .click({ waitForAnimations: false });
+    cy.wait("@saveEditableTemplate");
+
+    cy.contains("button[aria-pressed]", /^forecast table/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Header 1 alignment")
+      .find("select")
+      .select("center", { force: true });
+    setColorInput("Header 1 fill", "#1d4ed8");
+    cy.contains("label", "Row 1, cell 1 alignment")
+      .find("select")
+      .select("left", { force: true });
+    setColorInput("Row 1, cell 1 fill", "#fee2e2");
+    cy.contains("button", "Save")
+      .should("not.be.disabled")
+      .click({ waitForAnimations: false });
+    cy.wait("@saveEditableTemplate");
+
+    cy.contains("button[aria-pressed]", /^hero/).click({
+      waitForAnimations: false,
+    });
+    cy.contains("label", "Asset source")
+      .find("textarea")
+      .type("{selectall}/app_data/images/updated.png", {
+        waitForAnimations: false,
+      });
+    cy.contains("label", "Asset fit")
+      .find("select")
+      .select("contain", { force: true });
+    cy.contains("label", "Horizontal focus (%)")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("25.5", { waitForAnimations: false })
+      .should("have.value", "25.5")
+      .blur();
+    cy.contains("label", "Vertical focus (%)")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("75", { waitForAnimations: false })
+      .should("have.value", "75")
+      .blur();
+    cy.contains("label", "Crop scale")
+      .find("input")
+      .clear({ waitForAnimations: false })
+      .type("1.75", { waitForAnimations: false })
+      .should("have.value", "1.75")
+      .blur();
+    cy.contains("button", "Save")
+      .should("not.be.disabled")
+      .click({ waitForAnimations: false });
+
+    cy.wait("@saveEditableTemplateFinal")
+      .its("request.body.layouts.layouts.0.components.0.elements")
+      .then((elements) => {
+        expect(elements[1]).to.deep.equal({
+          ...unsupportedImage,
+          data: "/app_data/images/updated.png",
+          fit: "contain",
+          focus_x: 25.5,
+          focus_y: 75,
+          crop_scale: 1.75,
+        });
+        expect(elements[2]).to.deep.equal({
+          type: "chart",
+          name: "revenue",
+          position: { x: 40, y: 260 },
+          size: { width: 420, height: 240 },
+          chart_type: "bar",
+          title: "Bookings",
+          categories: ["Q1", "FY26 Q2"],
+          series: [
+            {
+              name: "Forecast",
+              values: [12, 24],
+              future_series_field: { retained: "second" },
+            },
+            {
+              name: "Forecast",
+              values: [10, 42.5],
+              future_series_field: { retained: true },
+            },
+          ],
+          future_chart_field: "retained",
+        });
+        expect(elements[3]).to.include({
+          type: "table",
+          name: "forecast table",
+          min_columns: 1,
+          max_columns: 1,
+          min_rows: 1,
+          max_rows: 1,
+          decorative: false,
+        });
+        expect(elements[3].position).to.deep.equal({ x: 500, y: 260 });
+        expect(elements[3].size).to.deep.equal({ width: 300, height: 180 });
+        expect(elements[3].columns).to.deep.equal([
+          {
+            runs: [{ text: "Metric", future_run_field: "retained" }],
+            alignment: "center",
+            color: { color: "#1d4ed8", opacity: 0.8 },
+          },
+        ]);
+        expect(elements[3].rows).to.deep.equal([
+          [
+            {
+              runs: [{ text: "Revenue" }],
+              alignment: "left",
+              color: { color: "#fee2e2" },
+              future_cell_field: { retained: true },
+            },
+          ],
+        ]);
+      });
+  });
+
   it("renders the floating image toolbar, preserves selection, and reloads its saved patch", () => {
     let persistedLayouts = layouts();
     let revision = 1;
@@ -262,10 +744,12 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("button[aria-pressed]", /^hero/).click();
     cy.get('[data-testid="template-v2-selection-toolbar"]')
       .should("be.visible")
+      .and("have.attr", "role", "toolbar")
+      .and("have.attr", "aria-label", "Selection toolbar")
       .within(() => {
         cy.get('button[aria-label="Flip image horizontally"]')
           .should("have.attr", "aria-pressed", "false")
-          .click();
+          .click({ waitForAnimations: false });
       });
     cy.contains("1 selected").should("be.visible");
 
@@ -289,6 +773,90 @@ describe("TemplateV2Studio API integration", () => {
     cy.get(
       '[data-testid="template-v2-selection-toolbar"] button[aria-label="Flip image horizontally"]'
     ).should("have.attr", "aria-pressed", "true");
+  });
+
+  it("edits bound text losslessly in the inspector without opening the floating toolbar", () => {
+    const guardedLayouts = layouts();
+    guardedLayouts.layouts[0].components[0].elements[0] = {
+      ...guardedLayouts.layouts[0].components[0].elements[0],
+      design_variables: [
+        {
+          name: "title_color",
+          target: { path: "font.color", mode: "theme" },
+          fallback: "#1d4ed8",
+        },
+      ],
+      future_element_field: { retained: "exactly" },
+    };
+    let persistedLayouts = guardedLayouts;
+    let revision = 1;
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("loadDesignVariableTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        persistedLayouts = request.body.layouts;
+        revision = request.body.expected_revision + 1;
+        request.reply({
+          statusCode: 200,
+          body: response(persistedLayouts, revision),
+        });
+      }
+    ).as("saveDesignVariableTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadDesignVariableTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.contains("1 selected").should("be.visible");
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
+      "not.exist"
+    );
+    cy.get('textarea[aria-label$=" content"]')
+      .first()
+      .should("be.visible")
+      .type("{selectall}Edited bound title", { waitForAnimations: false });
+    cy.contains("button", "Save").click();
+
+    cy.wait("@saveDesignVariableTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements.0")
+      .then((element) => {
+        expect(element.runs).to.deep.equal([
+          { text: "Edited bound title" },
+          guardedLayouts.layouts[0].components[0].elements[0].runs[1],
+        ]);
+        expect(element.design_variables).to.deep.equal([
+          {
+            name: "title_color",
+            target: { path: "font.color", mode: "theme" },
+            fallback: "#1d4ed8",
+          },
+        ]);
+        expect(element.future_element_field).to.deep.equal({
+          retained: "exactly",
+        });
+      });
+
+    cy.mount(<div data-testid="design-variable-unmounted" />);
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
+    cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
+      "not.exist"
+    );
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadDesignVariableTemplate");
+    cy.contains("button[aria-pressed]", /^title/).click();
+    cy.get('textarea[aria-label$=" content"]').first().should("have.value", "Edited bound title");
+    cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
   });
 
   it("keeps local edits and offers an explicit reload after a revision conflict", () => {
@@ -327,6 +895,14 @@ describe("TemplateV2Studio API integration", () => {
       .contains(/^Elements$/)
       .next("dd")
       .should("have.text", "3");
+
+    cy.on("window:confirm", () => true);
+    cy.contains("button", "Reload server version").click();
+    cy.get("dt")
+      .contains(/^Elements$/)
+      .next("dd")
+      .should("have.text", "2");
+    cy.contains("Unsaved changes").should("not.exist");
   });
 
   it("wires sibling multi-selection to reorder, lock, group, and ungroup commands", () => {
@@ -364,8 +940,16 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("button", "Bring to front").should("be.disabled");
     cy.contains("button", "Unlock selected").should("be.enabled");
     cy.get('[aria-label="Locked"]').should("have.length", 2);
+    cy.get('[role="application"]')
+      .should("have.attr", "data-konva-move-enabled", "false")
+      .and("have.attr", "data-konva-resize-enabled", "false")
+      .and("have.attr", "data-konva-rotate-enabled", "false");
 
     cy.contains("button", "Unlock selected").click({ waitForAnimations: false });
+    cy.get('[role="application"]')
+      .should("have.attr", "data-konva-move-enabled", "true")
+      .and("have.attr", "data-konva-resize-enabled", "true")
+      .and("have.attr", "data-konva-rotate-enabled", "true");
     cy.contains("button", "Bring to front").click({
       waitForAnimations: false,
     });
@@ -469,7 +1053,7 @@ describe("TemplateV2Studio API integration", () => {
     cy.get("dt").contains(/^Elements$/).next("dd").should("have.text", "3");
 
     cy.contains("button[aria-pressed]", /^title/).click();
-    cy.get("textarea").first().trigger("keydown", {
+    cy.get('textarea[aria-label$=" content"]').first().trigger("keydown", {
       key: "z",
       ctrlKey: true,
       waitForAnimations: false,
@@ -541,6 +1125,18 @@ describe("TemplateV2Studio API integration", () => {
       "PATCH",
       `**/api/v1/ppt/structured-templates/${templateId}`,
       (request) => {
+        const elements =
+          request.body.layouts.layouts[0].components[0].elements;
+        if (
+          elements.length === 3 &&
+          elements.every(
+            (element: { position: { y: number } }) =>
+              element.position.y === 1
+          ) &&
+          elements[2].position.x === 290.5
+        ) {
+          request.alias = "saveAlignedTemplate";
+        }
         request.reply({
           statusCode: 200,
           body: response(
@@ -549,7 +1145,7 @@ describe("TemplateV2Studio API integration", () => {
           ),
         });
       }
-    ).as("saveAlignedTemplate");
+    );
 
     cy.mount(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");

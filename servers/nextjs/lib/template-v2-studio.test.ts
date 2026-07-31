@@ -22,6 +22,7 @@ import {
   preserveTemplateV2ViewportOnResize,
   zoomTemplateV2Viewport,
 } from "./template-v2-konva.ts";
+import { templateV2VariantDigest } from "./template-v2-slide-variants.ts";
 
 function fixture(): JsonRecord {
   return {
@@ -120,6 +121,32 @@ test("load and navigation use stable layout and component ids without dirtying",
   assert.equal(switched.activeComponentId, null);
   assert.equal(switched.dirty, false);
   assert.equal(getTemplateV2Scene(switched.layouts, "layout-2", null), null);
+});
+
+test("restoring a browser journal keeps the server snapshot and marks the draft dirty", () => {
+  const serverLayouts = fixture();
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: serverLayouts,
+  });
+  const draftLayouts = structuredClone(serverLayouts);
+  const draftElements = (
+    ((draftLayouts.layouts as JsonRecord[])[0].components as JsonRecord[])[0]
+      .elements as JsonRecord[]
+  );
+  draftElements.push(createTemplateV2Rectangle());
+
+  const restored = templateV2StudioReducer(loaded, {
+    type: "restore-draft",
+    layouts: draftLayouts,
+  });
+
+  assert.equal(restored.layouts, draftLayouts);
+  assert.equal(restored.savedLayouts, serverLayouts);
+  assert.equal(restored.dirty, true);
+  assert.equal(restored.past.length, 1);
+  assert.equal(restored.activeLayoutId, "layout-1");
+  assert.equal(restored.activeComponentId, "component-1");
 });
 
 test("path update changes only a nested element and preserves group-only geometry", () => {
@@ -1814,4 +1841,61 @@ test("transform normalization folds scale and excludes unsupported group rotatio
     ),
     { x: 2, y: 3 }
   );
+});
+
+test("bounded element apply enforces revision, digest, locks, and undo history", () => {
+  const loaded = templateV2StudioReducer(EMPTY_TEMPLATE_V2_STUDIO_STATE, {
+    type: "load",
+    layouts: fixture(),
+  });
+  const current = getSelectedElement(loaded.layouts, titleSelection);
+  assert.ok(current);
+  const replacement = {
+    ...current,
+    runs: [{ text: "Bounded", font: { bold: true } }],
+    unknown_metadata: { retained: true },
+  };
+  const action = {
+    type: "apply-bounded-element" as const,
+    selection: titleSelection,
+    replacement,
+    expectedElementDigest: templateV2VariantDigest(current),
+    expectedRevision: 7,
+    currentRevision: 7,
+    historyKey: "bounded-element:test",
+  };
+
+  const updated = templateV2StudioReducer(loaded, action);
+  assert.equal(updated.dirty, true);
+  assert.deepEqual(
+    getSelectedElement(updated.layouts, titleSelection),
+    replacement,
+  );
+  assert.deepEqual(
+    getSelectedElement(
+      templateV2StudioReducer(updated, { type: "undo" }).layouts,
+      titleSelection,
+    ),
+    current,
+  );
+
+  const staleRevision = templateV2StudioReducer(loaded, {
+    ...action,
+    currentRevision: 8,
+  });
+  const staleDigest = templateV2StudioReducer(loaded, {
+    ...action,
+    expectedElementDigest: "changed",
+  });
+  const locked = templateV2StudioReducer(
+    templateV2StudioReducer(loaded, {
+      type: "set-element-lock",
+      selection: titleSelection,
+      locked: true,
+    }),
+    action,
+  );
+  assert.equal(staleRevision, loaded);
+  assert.equal(staleDigest, loaded);
+  assert.deepEqual(getSelectedElement(locked.layouts, titleSelection), current);
 });

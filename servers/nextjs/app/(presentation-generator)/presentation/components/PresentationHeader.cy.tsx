@@ -112,17 +112,17 @@ describe("PresentationHeader authored export", () => {
     });
   });
 
-  it("sends hybrid with font embedding by default and preserves the PDF request shape", () => {
+  it("preserves the PDF request shape after a separated-elements export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid-embedded"]').click({ force: true });
+    cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
     expectExportBody({
       format: "pptx",
       id: "deck-1",
       title: "deck",
       pptxMode: "hybrid",
-      fontEmbedding: true,
+      fontEmbedding: false,
     });
 
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
@@ -135,6 +135,22 @@ describe("PresentationHeader authored export", () => {
     });
   });
 
+  it("keeps embedding off by default and sends an explicit opt-in with a warning", () => {
+    mountHeader(true);
+
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid-embedded"]')
+      .should("contain.text", "글꼴 포함")
+      .and("contain.text", "파일 크기가 크게 늘 수 있습니다")
+      .click({ force: true });
+    expectExportBody({
+      format: "pptx",
+      id: "deck-1",
+      title: "deck",
+      pptxMode: "hybrid",
+      fontEmbedding: true,
+    });
+  });
   it("shows optional hybrid editability metadata and warns on image fallback", () => {
     cy.intercept("POST", "**/api/export-presentation", {
       statusCode: 200,
@@ -206,7 +222,7 @@ describe("PresentationHeader authored export", () => {
     mountHeader(true);
 
     openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid-embedded"]').click({ force: true });
+    cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
     cy.wait("@qualityExport");
     cy.get('[data-testid="export-quality-dialog"]')
       .should("contain.text", "전체 2장")

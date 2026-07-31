@@ -20,6 +20,8 @@ import {
   ApiError,
   apiErrorFromPayload,
   getApiErrorDisplayMessage,
+  getRetryablePresentationGenerationMessage,
+  isRetryablePresentationGenerationError,
 } from "../../services/api/api-error-handler";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
@@ -38,6 +40,12 @@ const AUTHORED_TIMEOUT_MS = 20 * 60 * 1000;
 // Tolerate a few consecutive transient status-poll failures (a 502/network blip during
 // the minutes-long poll) before aborting — the backend task keeps running regardless.
 const AUTHORED_MAX_POLL_ERRORS = 3;
+const PREPARE_RECOVERY_ATTEMPTS = 4;
+const PREPARE_RECOVERY_POLL_MS = 1000;
+
+const hasPreparedStructure = (presentation: any): boolean =>
+  Array.isArray(presentation?.structure?.slides) &&
+  presentation.structure.slides.length > 0;
 
 export const usePresentationGeneration = (
   presentationId: string | null,
@@ -64,6 +72,7 @@ export const usePresentationGeneration = (
     DEFAULT_LOADING_STATE
   );
   const generationRunRef = useRef(0);
+  const retrySubmitRef = useRef<(() => void) | null>(null);
 
   useEffect(
     () => () => {
@@ -224,14 +233,30 @@ export const usePresentationGeneration = (
         }
       } catch (error: any) {
         if (!isActiveRun()) return;
-        console.error("Error in authored generation.", error);
-        notify.error(
-          "생성 오류",
-          getApiErrorDisplayMessage(
-            error,
-            "An error occurred while generating the presentation."
-          )
-        );
+        // This is an expected failure path handled by the in-app notification.
+        // console.error(Error) is rendered as a blocking Next.js dev overlay.
+        console.warn("Authored presentation generation did not complete.", error);
+        if (isRetryablePresentationGenerationError(error)) {
+          notify.error(
+            "생성이 일시 중단되었습니다",
+            getRetryablePresentationGenerationMessage(error),
+            {
+              duration: 12_000,
+              action: {
+                label: "다시 시도",
+                onClick: () => retrySubmitRef.current?.(),
+              },
+            }
+          );
+        } else {
+          notify.error(
+            "생성 오류",
+            getApiErrorDisplayMessage(
+              error,
+              "An error occurred while generating the presentation."
+            )
+          );
+        }
       } finally {
         if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
@@ -344,14 +369,31 @@ export const usePresentationGeneration = (
         }
       } catch (error: any) {
         if (!isActiveRun()) return;
-        console.error("Error in structured-template generation.", error);
-        notify.error(
-          "생성 오류",
-          getApiErrorDisplayMessage(
-            error,
-            "An error occurred during structured-template generation."
-          )
+        console.warn(
+          "Structured-template presentation generation did not complete.",
+          error
         );
+        if (isRetryablePresentationGenerationError(error)) {
+          notify.error(
+            "생성이 일시 중단되었습니다",
+            getRetryablePresentationGenerationMessage(error),
+            {
+              duration: 12_000,
+              action: {
+                label: "다시 시도",
+                onClick: () => retrySubmitRef.current?.(),
+              },
+            }
+          );
+        } else {
+          notify.error(
+            "생성 오류",
+            getApiErrorDisplayMessage(
+              error,
+              "An error occurred during structured-template generation."
+            )
+          );
+        }
       } finally {
         if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
@@ -468,15 +510,75 @@ export const usePresentationGeneration = (
         );
       }
     } catch (error: any) {
-      console.error("Error In Presentation Generation(prepare).", error);
-      notify.error(
-        "생성 오류",
-        error.message || "프레젠테이션 생성 중 오류가 발생했습니다."
-      );
-      } finally {
-        if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
+      // This failure is handled below with an in-app notification. Keep it out of
+      // the Next.js development error overlay so the user can retry normally.
+      console.warn("Presentation preparation did not complete.", error);
+
+      // The browser can lose the long-running prepare response just before the
+      // backend commits the finished structure. Confirm the persisted result for
+      // a few seconds before reporting a failure so a completed deck is not
+      // stranded behind an error toast.
+      if (presentationId && isActiveRun()) {
+        for (let attempt = 0; attempt < PREPARE_RECOVERY_ATTEMPTS; attempt += 1) {
+          if (attempt > 0) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, PREPARE_RECOVERY_POLL_MS)
+            );
+          }
+          if (!isActiveRun()) return;
+
+          try {
+            const savedPresentation =
+              await DashboardApi.getPresentation(presentationId);
+            if (hasPreparedStructure(savedPresentation)) {
+              dispatch(clearPresentationData());
+              clearTheme();
+              router.replace(
+                `/presentation?id=${presentationId}&stream=true&type=standard`
+              );
+              return;
+            }
+          } catch {
+            // The original prepare error remains the useful message. A transient
+            // recovery-read failure should not replace it with a second error.
+          }
+        }
       }
+
+      if (isRetryablePresentationGenerationError(error)) {
+        notify.error(
+          "생성이 일시 중단되었습니다",
+          getRetryablePresentationGenerationMessage(error),
+          {
+            duration: 12_000,
+            action: {
+              label: "다시 시도",
+              onClick: () => retrySubmitRef.current?.(),
+            },
+          }
+        );
+      } else {
+        notify.error(
+          "생성 오류",
+          getApiErrorDisplayMessage(
+            error,
+            "발표자료를 생성하는 중 문제가 발생했습니다."
+          )
+        );
+      }
+    } finally {
+      if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
+    }
   }, [selectedTemplate, validateInputs, pathname, presentationId, outlines, setActiveTab, authoredVisionQa, language, authoredStyle, dispatch, router]);
+
+  useEffect(() => {
+    retrySubmitRef.current = () => {
+      void handleSubmit();
+    };
+    return () => {
+      retrySubmitRef.current = null;
+    };
+  }, [handleSubmit]);
 
   return { loadingState, handleSubmit };
 };

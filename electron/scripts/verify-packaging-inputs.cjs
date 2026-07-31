@@ -370,7 +370,11 @@ function validatePackagingInputs(options = {}) {
   requireCompatibleBinary(fastapiBinary, "FastAPI executable", platform);
 
   scanTree(exportRoot, { workspaceRoot, platform });
-  scanTree(fastapiRoot, { workspaceRoot, platform });
+  scanTree(fastapiRoot, {
+    workspaceRoot,
+    allowLinks: false,
+    platform,
+  });
   (options.nextSharpCheck ||
     ((root) => defaultSharpCheck(root, "Next.js")))(standalone.serverRoot);
   (options.sharpCheck ||
