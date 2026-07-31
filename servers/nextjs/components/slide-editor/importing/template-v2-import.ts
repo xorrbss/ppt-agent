@@ -1,6 +1,7 @@
 import { resolveBackendAssetUrl } from "@/utils/api";
 import { chartDataFromSeriesWithColors } from "@/components/slide-editor/charts/chart-data";
 import { renderMarkdownTextRuns } from "@/components/slide-editor/text/markdown-text";
+import { adaptTemplateV2TableCellSpanMetadata } from "@/components/slide-editor/importing/template-v2-table-span";
 import {
   EDITOR_STAGE_HEIGHT,
   EDITOR_STAGE_WIDTH,
@@ -811,11 +812,10 @@ function adaptTextList(raw: UnknownRecord): SlideElement {
 }
 
 function adaptTable(raw: UnknownRecord): SlideElement {
-  const columns = adaptTableCells(readArray(raw, "columns")).slice(0, 6);
+  const columns = adaptTableCells(readArray(raw, "columns"));
   const rows = readArray(raw, "rows")
     .map((row) => adaptTableCells(Array.isArray(row) ? row : []))
-    .filter((row) => row.length > 0)
-    .slice(0, 7);
+    .filter((row) => row.length > 0);
 
   return {
     ...baseElement(raw),
@@ -1524,6 +1524,7 @@ function adaptTableCells(value: unknown[]): TableCell[] {
             ? [textRun(text)]
             : [];
       return stripNullish({
+        ...adaptTemplateV2TableCellSpanMetadata(record),
         color:
           adaptFill(readRecord(record, "color")) ??
           adaptFill(readRecord(record, "fill")),

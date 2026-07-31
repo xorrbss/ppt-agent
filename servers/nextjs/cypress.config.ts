@@ -8,6 +8,9 @@ import webpack from "webpack";
 // bundles React/TSX component specs directly (alias + babel), which is all the
 // component tests need.
 export default defineConfig({
+  // Cypress 15 deprecates exposing Cypress.env() to browser code. Component
+  // specs use network fixtures rather than browser-visible secrets.
+  allowCypressEnv: false,
   component: {
     devServer: {
       framework: "react",

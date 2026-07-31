@@ -434,6 +434,7 @@ def test_export_includes_optional_fastapi_param():
 
 def test_export_uses_next_internal_url_when_public_url_is_unset(monkeypatch):
     monkeypatch.delenv("NEXT_PUBLIC_URL", raising=False)
+    monkeypatch.delenv("NEXT_PUBLIC_FAST_API", raising=False)
     monkeypatch.setenv("NEXT_INTERNAL_URL", "http://localhost:5000/")
 
     async def runner():

@@ -26,6 +26,11 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { PresentationChatApi } from "../../services/api/chat";
 import type { ChatStreamTrace, ChatAttachmentPayload } from "../../services/api/chat";
 import { filesToChatAttachments } from "../utils/chatAttachments";
+import {
+  getChatToolLabel,
+  isPresentationMutationTool,
+  isSlideFocusTool,
+} from "./chatToolMetadata";
 
 const suggestions: { id: string; icon: ReactNode; suggestion: string }[] = [
   {
@@ -282,18 +287,15 @@ const TOOL_LABELS: Record<string, string> = {
   setPresentationTheme: "테마 적용",
 };
 
-const MUTATING_TOOLS = new Set(["saveSlide", "deleteSlide", "setPresentationTheme"]);
-// Only focus slides when the agent is actively mutating them.
-// Read/open traces (e.g. getSlideAtIndex) can happen ahead of edits and feel jumpy.
-const SLIDE_FOCUS_TOOLS = new Set(["saveSlide", "deleteSlide"]);
-const SLIDE_FOCUS_STATUSES = new Set(["start"]);
+// Success traces carry the authoritative index for created/reordered slides.
+const SLIDE_FOCUS_STATUSES = new Set(["start", "success"]);
 const MIN_SLIDE_FOCUS_DWELL_MS = 700;
 
 const getToolLabel = (tool?: string) => {
   if (!tool) {
     return "";
   }
-  return TOOL_LABELS[tool] ?? tool;
+  return getChatToolLabel(tool) || TOOL_LABELS[tool] || tool;
 };
 
 const humanizeTraceMessage = (message: string, tool?: string) => {
@@ -481,6 +483,14 @@ const readTraceSlideIndex = (trace: ChatStreamTrace) => {
   if (typeof trace.slideNumber === "number" && trace.slideNumber > 0) {
     return trace.slideNumber - 1;
   }
+  const targetIndex = trace.targetSlideIndices?.find((index) => index >= 0);
+  if (typeof targetIndex === "number") {
+    return targetIndex;
+  }
+  const targetNumber = trace.targetSlideNumbers?.find((number) => number > 0);
+  if (typeof targetNumber === "number") {
+    return targetNumber - 1;
+  }
   return null;
 };
 
@@ -659,7 +669,7 @@ const Chat = ({
   );
 
   const updateMutationToolActivity = (tool: string | undefined, isActive: boolean) => {
-    if (!tool || !MUTATING_TOOLS.has(tool)) {
+    if (!isPresentationMutationTool(tool)) {
       return;
     }
     setActiveMutationToolCount((previous) =>
@@ -678,7 +688,7 @@ const Chat = ({
         eventId: `${Date.now()}-${focusEventSequenceRef.current}`,
         tool: trace.tool,
         status: trace.status,
-        isMutatingTool: Boolean(trace.tool && MUTATING_TOOLS.has(trace.tool)),
+        isMutatingTool: isPresentationMutationTool(trace.tool),
       });
       activeFocusedSlideRef.current = targetSlideIndex;
       lastFocusDispatchAtRef.current = Date.now();
@@ -714,7 +724,10 @@ const Chat = ({
 
   const maybeFollowAgentSlide = useCallback(
     (trace: ChatStreamTrace) => {
-      if (!trace.tool || !SLIDE_FOCUS_TOOLS.has(trace.tool)) {
+      if (!isFollowAgentEnabled) {
+        return;
+      }
+      if (!isSlideFocusTool(trace.tool)) {
         return;
       }
       if (!trace.status || !SLIDE_FOCUS_STATUSES.has(trace.status)) {
@@ -752,7 +765,7 @@ const Chat = ({
       pendingFocusTraceRef.current = trace;
       schedulePendingSlideFocus();
     },
-    [emitAgentSlideFocus, schedulePendingSlideFocus]
+    [emitAgentSlideFocus, isFollowAgentEnabled, schedulePendingSlideFocus]
   );
 
   const buildBackendMessage = (message: string) => {
@@ -808,10 +821,7 @@ const Chat = ({
   }, [onPresentationChanged]);
 
   const refreshPresentationIfNeeded = async (toolCalls: string[]) => {
-    const hasSlideMutation =
-      toolCalls.includes("saveSlide") ||
-      toolCalls.includes("deleteSlide") ||
-      toolCalls.includes("setPresentationTheme");
+    const hasSlideMutation = toolCalls.some(isPresentationMutationTool);
     if (
       !hasSlideMutation ||
       !onPresentationChanged ||
@@ -991,7 +1001,7 @@ const Chat = ({
             if (
               trace.status === "success" &&
               trace.tool &&
-              MUTATING_TOOLS.has(trace.tool)
+              isPresentationMutationTool(trace.tool)
             ) {
               void refreshPresentationIncrementally();
             }
@@ -1016,7 +1026,9 @@ const Chat = ({
             ? {
                 ...message,
                 content: response.response,
-                toolCalls: [],
+                toolCalls: Array.isArray(response.tool_calls)
+                  ? response.tool_calls
+                  : [],
                 activity: [],
               }
             : message
@@ -1092,6 +1104,16 @@ const Chat = ({
       ]);
       notify.error("대화 오류", message);
     } finally {
+      // A stream may finish before the dwell window for a later mutation
+      // expires. Dispatch that final target now rather than leaving the canvas
+      // focused on a stale earlier slide.
+      if (pendingFocusTraceRef.current) {
+        if (focusDispatchTimerRef.current !== null) {
+          window.clearTimeout(focusDispatchTimerRef.current);
+          focusDispatchTimerRef.current = null;
+        }
+        flushPendingSlideFocus();
+      }
       setActiveMutationToolCount(0);
       if (abortControllerRef.current === streamAbortController) {
         abortControllerRef.current = null;
@@ -1299,7 +1321,9 @@ const Chat = ({
                           {message.toolCalls &&
                             message.toolCalls.length > 0 && (
                               <div className="pt-0.5 text-[11px] text-[#98A2B3]">
-                                호출된 도구: {message.toolCalls.join(", ")}
+                                호출된 도구: {message.toolCalls
+                                  .map((tool) => getToolLabel(tool))
+                                  .join(", ")}
                               </div>
                             )}
                         </div>

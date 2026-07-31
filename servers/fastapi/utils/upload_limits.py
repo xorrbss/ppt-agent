@@ -105,7 +105,10 @@ def reject_if_declared_too_large(
     limit_bytes: int,
     label: str = "File",
 ) -> None:
-    declared_size = upload.size
+    # ``UploadFile.size`` is optional at the HTTP boundary and lightweight
+    # adapters used by internal callers may omit it entirely.  The streaming
+    # loop below remains the authoritative limit when no declaration exists.
+    declared_size = getattr(upload, "size", None)
     if declared_size is not None and declared_size > limit_bytes:
         raise HTTPException(
             status_code=413,

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "baseline": {
     "repository": "presenton/presenton",
-    "upstreamSha": "57b194b234b42c8b28f8a507a30322de200e3e83",
-    "committedAt": "2026-07-23T18:00:14+05:45",
-    "subject": "Refactor code structure for improved readability and maintainability"
+    "upstreamSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
+    "committedAt": "2026-07-29T16:21:43Z",
+    "subject": "Merge pull request #795 from presenton/saurav/convert-content-image-fills"
   },
   "versions": [
     {

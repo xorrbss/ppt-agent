@@ -9,15 +9,28 @@ from jsonschema import Draft202012Validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from api.v1.auth.context import get_current_owner_id, get_current_owner_is_admin
+from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from models.sql.template_v2 import TemplateV2
+from models.sql.template_v2_local_state import TemplateV2LocalState
+from services.chat.slide_ui_query import slide_ui_revision
+from services.chat.template_v2_hydration import (
+    apply_hydrated_template_v2_state,
+    hydrate_template_v2_slide,
+    resolve_template_v2_layout,
+)
 from services.icon_finder_service import ICON_FINDER_SERVICE
 from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
+from services.presentation_version_service import snapshot_slides
 from templates.presentation_layout import SlideLayoutModel
+from templates.v2.constants import TEMPLATE_V2_VERSION
+from templates.v2.policy import get_structured_template_policy
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_url,
     get_images_directory,
@@ -249,17 +262,23 @@ class PresentationChatMemoryLayer:
         self._sql_session = sql_session
         self._presentation_id = presentation_id
 
+    @property
+    def sql_session(self) -> AsyncSession:
+        return self._sql_session
+
+    @property
+    def presentation_id(self) -> uuid.UUID:
+        return self._presentation_id
+
     async def get(self, key: str) -> Any:
         if key != "presentation_outline":
             return None
 
         # Prefer live slides from SQL so slide count and slide indices are always current.
-        slides_result = await self._sql_session.scalars(
-            select(SlideModel)
-            .where(SlideModel.presentation == self._presentation_id)
-            .order_by(SlideModel.index)
-        )
-        slides = list(slides_result)
+        presentation = await self._owned_presentation()
+        if presentation is None:
+            return None
+        slides = await self._owned_slides()
         if slides:
             LOGGER.info(
                 "Chat outline loaded from slides table (presentation_id=%s, slides=%d)",
@@ -281,7 +300,6 @@ class PresentationChatMemoryLayer:
                 ],
             }
 
-        presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
         if not presentation or not presentation.outlines:
             LOGGER.info(
                 "Chat memory miss for outline (presentation_id=%s)",
@@ -307,10 +325,9 @@ class PresentationChatMemoryLayer:
         if not trimmed_query:
             return []
 
-        slides_result = await self._sql_session.scalars(
-            select(SlideModel).where(SlideModel.presentation == self._presentation_id)
-        )
-        slides = sorted(list(slides_result), key=lambda slide: slide.index)
+        if await self._owned_presentation() is None:
+            return []
+        slides = await self._owned_slides()
         if not slides:
             LOGGER.info(
                 "Chat memory miss for slide search (presentation_id=%s, reason=no_slides)",
@@ -360,11 +377,11 @@ class PresentationChatMemoryLayer:
     async def get_slide_at_index(
         self, index: int, *, include_full_content: bool = False
     ) -> dict[str, Any] | None:
-        slide = await self._sql_session.scalar(
-            select(SlideModel).where(
-                SlideModel.presentation == self._presentation_id,
-                SlideModel.index == index,
-            )
+        if await self._owned_presentation() is None:
+            return None
+        slide = next(
+            (item for item in await self._owned_slides() if item.index == index),
+            None,
         )
         if not slide:
             LOGGER.info(
@@ -391,8 +408,26 @@ class PresentationChatMemoryLayer:
         return response
 
     async def get_available_layouts(self) -> list[dict[str, Any]]:
-        presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
-        if not presentation or not isinstance(presentation.layout, dict):
+        presentation = await self._owned_presentation()
+        if not presentation:
+            return []
+        if presentation.version == TEMPLATE_V2_VERSION:
+            template = await self._template_v2_for_presentation()
+            payload = (template.layouts or {}) if template else {}
+            layouts = payload.get("layouts") if isinstance(payload, dict) else None
+            if not isinstance(layouts, list):
+                return []
+            return [
+                {
+                    "id": str(item.get("id") or ""),
+                    "name": str(item.get("name") or item.get("id") or ""),
+                    "description": str(item.get("description") or ""),
+                    "format": "template-v2",
+                }
+                for item in layouts
+                if isinstance(item, dict) and item.get("id")
+            ]
+        if not isinstance(presentation.layout, dict):
             return []
 
         try:
@@ -414,6 +449,23 @@ class PresentationChatMemoryLayer:
         ]
 
     async def get_content_schema_from_layout_id(self, layout_id: str) -> dict[str, Any] | None:
+        presentation = await self._owned_presentation()
+        if presentation and presentation.version == TEMPLATE_V2_VERSION:
+            template = await self._template_v2_for_presentation()
+            if template is None:
+                return None
+            layout = resolve_template_v2_layout(template.layouts or {}, layout_id)
+            declared = layout.get("content_schema")
+            if isinstance(declared, dict):
+                return copy.deepcopy(declared)
+            return {
+                "type": "object",
+                "description": (
+                    "Template V2 content keyed by component id, then editable "
+                    "element name. The server hydrates and canonicalizes fail-closed."
+                ),
+                "additionalProperties": {"type": "object"},
+            }
         layout = await self._get_layout_by_id(layout_id)
         if not layout:
             return None
@@ -423,9 +475,7 @@ class PresentationChatMemoryLayer:
         self, presentation: PresentationModel | None = None
     ) -> str:
         if presentation is None:
-            presentation = await self._sql_session.get(
-                PresentationModel, self._presentation_id
-            )
+            presentation = await self._owned_presentation()
         if not presentation or not isinstance(presentation.layout, dict):
             return DEFAULT_ICON_WEIGHT
         try:
@@ -465,8 +515,9 @@ class PresentationChatMemoryLayer:
         layout_id: str,
         index: int,
         replace_old_slide_at_index: bool,
+        expected_revision: str | None = None,
     ) -> dict[str, Any]:
-        presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
+        presentation = await self._owned_presentation()
         if not presentation:
             return {
                 "saved": False,
@@ -474,18 +525,37 @@ class PresentationChatMemoryLayer:
                 "validation_errors": [],
             }
 
-        layout = await self._get_layout_by_id(layout_id, presentation=presentation)
-        if not layout:
-            return {
-                "saved": False,
-                "message": f"Layout '{layout_id}' was not found in this presentation.",
-                "validation_errors": [f"Unknown layout_id '{layout_id}'."],
-            }
+        is_template_v2 = presentation.version == TEMPLATE_V2_VERSION
+        hydrated_state = None
+        layout = None
+        template = None
+        source_layout = None
+        if is_template_v2:
+            template = await self._template_v2_for_presentation()
+            if template is None:
+                return {
+                    "saved": False,
+                    "message": "Template V2 source is not associated with this presentation.",
+                    "validation_errors": ["template_v2_source_not_found"],
+                }
+            get_structured_template_policy().require_write_enabled(template.id)
+            source_layout = resolve_template_v2_layout(
+                template.layouts or {}, layout_id
+            )
+            # Validate the detached candidate before any asset or database side effect.
+            hydrated_state = hydrate_template_v2_slide(source_layout, content)
+        else:
+            layout = await self._get_layout_by_id(layout_id, presentation=presentation)
+            if not layout:
+                return {
+                    "saved": False,
+                    "message": f"Layout '{layout_id}' was not found in this presentation.",
+                    "validation_errors": [f"Unknown layout_id '{layout_id}'."],
+                }
         icon_weight = await self._get_presentation_icon_weight(presentation)
 
-        validation_errors = self._validate_slide_content(
-            content=content,
-            schema=layout.json_schema,
+        validation_errors = [] if is_template_v2 else self._validate_slide_content(
+            content=content, schema=layout.json_schema
         )
         if validation_errors:
             return {
@@ -510,6 +580,30 @@ class PresentationChatMemoryLayer:
                     "message": f"No existing slide found at index {target_index} to replace.",
                     "validation_errors": [],
                 }
+            if is_template_v2:
+                if not expected_revision:
+                    return {
+                        "saved": False,
+                        "message": "expectedRevision is required for Template V2 replacement.",
+                        "validation_errors": ["expected_revision_required"],
+                    }
+                if existing_slide.ui is None:
+                    return {
+                        "saved": False,
+                        "message": "Target slide has no native UI.",
+                        "validation_errors": ["slide_has_no_native_ui"],
+                    }
+                current_revision = slide_ui_revision(existing_slide.ui)
+                if expected_revision != current_revision:
+                    return {
+                        "saved": False,
+                        "message": "Slide UI revision conflict.",
+                        "validation_errors": ["revision_conflict"],
+                        "revision": current_revision,
+                    }
+            pre_mutation_dumps = [
+                item.model_dump(mode="json") for item in await self._owned_slides()
+            ]
 
             updated_content = copy.deepcopy(content)
             new_assets = await process_old_and_new_slides_and_fetch_assets(
@@ -519,24 +613,44 @@ class PresentationChatMemoryLayer:
                 icon_weight=icon_weight,
             )
 
-            existing_slide.id = uuid.uuid4()
             existing_slide.layout = layout_id
             existing_slide.layout_group = self._resolve_layout_group(
                 presentation=presentation,
                 fallback=existing_slide.layout_group,
             )
-            existing_slide.content = updated_content
-            existing_slide.speaker_note = self._extract_speaker_note(updated_content)
-            self._sql_session.add(existing_slide)
-            self._sql_session.add_all(new_assets)
-            await self._sql_session.commit()
+            if is_template_v2:
+                hydrated_state = hydrate_template_v2_slide(
+                    source_layout, updated_content
+                )
+                apply_hydrated_template_v2_state(existing_slide, hydrated_state)
+            else:
+                existing_slide.id = uuid.uuid4()
+                existing_slide.content = updated_content
+                existing_slide.speaker_note = self._extract_speaker_note(updated_content)
+            try:
+                await snapshot_slides(
+                    self._sql_session,
+                    self._presentation_id,
+                    pre_mutation_dumps,
+                    label="chat:saveSlide:replace",
+                    force=True,
+                )
+                self._sql_session.add(existing_slide)
+                self._sql_session.add_all(new_assets)
+                await self._sql_session.commit()
+            except Exception:
+                await self._sql_session.rollback()
+                raise
 
-            await MEM0_PRESENTATION_MEMORY_SERVICE.store_slide_edit(
-                presentation_id=self._presentation_id,
-                slide_index=target_index,
-                edit_prompt=f"[chat_tool_save_slide_replace] layout_id={layout_id}",
-                edited_slide_content=updated_content,
-            )
+            try:
+                await MEM0_PRESENTATION_MEMORY_SERVICE.store_slide_edit(
+                    presentation_id=self._presentation_id,
+                    slide_index=target_index,
+                    edit_prompt=f"[chat_tool_save_slide_replace] layout_id={layout_id}",
+                    edited_slide_content=updated_content,
+                )
+            except Exception:
+                LOGGER.exception("Slide saved but memory indexing failed")
 
             return {
                 "saved": True,
@@ -544,14 +658,21 @@ class PresentationChatMemoryLayer:
                 "message": f"Slide at index {target_index} was replaced successfully.",
                 "slide_id": str(existing_slide.id),
                 "index": target_index,
+                **(
+                    {"revision": slide_ui_revision(existing_slide.ui)}
+                    if existing_slide.ui is not None
+                    else {}
+                ),
             }
 
-        slides_result = await self._sql_session.scalars(
-            select(SlideModel)
-            .where(SlideModel.presentation == self._presentation_id)
-            .order_by(SlideModel.index)
-        )
-        slides = list(slides_result)
+        slides = await self._owned_slides()
+        pre_mutation_dumps = [item.model_dump(mode="json") for item in slides]
+        if len(slides) >= MAX_NUMBER_OF_SLIDES:
+            return {
+                "saved": False,
+                "message": "Maximum slide count reached.",
+                "validation_errors": ["max_slides_reached"],
+            }
 
         if slides:
             max_index = max(slide.index for slide in slides)
@@ -574,23 +695,47 @@ class PresentationChatMemoryLayer:
             content=new_slide_content,
             speaker_note=self._extract_speaker_note(new_slide_content),
         )
+        if is_template_v2:
+            apply_hydrated_template_v2_state(new_slide, hydrated_state)
         new_assets = await process_slide_and_fetch_assets(
             image_generation_service=image_generation_service,
             slide=new_slide,
             icon_weight=icon_weight,
         )
+        if is_template_v2:
+            apply_hydrated_template_v2_state(
+                new_slide,
+                hydrate_template_v2_slide(source_layout, new_slide.content),
+            )
 
-        self._sql_session.add(new_slide)
-        self._sql_session.add_all(new_assets)
-        await self._sql_session.commit()
+        try:
+            if slides:
+                await snapshot_slides(
+                    self._sql_session,
+                    self._presentation_id,
+                    pre_mutation_dumps,
+                    label="chat:saveSlide:create",
+                    force=True,
+                )
+            presentation.n_slides = len(slides) + 1
+            self._sql_session.add(presentation)
+            self._sql_session.add(new_slide)
+            self._sql_session.add_all(new_assets)
+            await self._sql_session.commit()
+        except Exception:
+            await self._sql_session.rollback()
+            raise
         await self._sql_session.refresh(new_slide)
 
-        await MEM0_PRESENTATION_MEMORY_SERVICE.store_slide_edit(
-            presentation_id=self._presentation_id,
-            slide_index=insert_index,
-            edit_prompt=f"[chat_tool_save_slide_new] layout_id={layout_id}",
-            edited_slide_content=new_slide.content,
-        )
+        try:
+            await MEM0_PRESENTATION_MEMORY_SERVICE.store_slide_edit(
+                presentation_id=self._presentation_id,
+                slide_index=insert_index,
+                edit_prompt=f"[chat_tool_save_slide_new] layout_id={layout_id}",
+                edited_slide_content=new_slide.content,
+            )
+        except Exception:
+            LOGGER.exception("Slide saved but memory indexing failed")
 
         return {
             "saved": True,
@@ -599,15 +744,25 @@ class PresentationChatMemoryLayer:
             "slide_id": str(new_slide.id),
             "index": insert_index,
             "shifted_slide_count": len(slides_to_shift),
+            **(
+                {"revision": slide_ui_revision(new_slide.ui)}
+                if new_slide.ui is not None
+                else {}
+            ),
         }
 
     async def delete_slide(self, *, index: int) -> dict[str, Any]:
+        presentation = await self._owned_presentation()
+        if presentation is None:
+            return {
+                "deleted": False,
+                "message": "Presentation not found or forbidden.",
+                "index": max(0, index),
+            }
         target_index = max(0, index)
-        slide = await self._sql_session.scalar(
-            select(SlideModel).where(
-                SlideModel.presentation == self._presentation_id,
-                SlideModel.index == target_index,
-            )
+        slide = next(
+            (item for item in await self._owned_slides() if item.index == target_index),
+            None,
         )
         if not slide:
             return {
@@ -616,21 +771,29 @@ class PresentationChatMemoryLayer:
                 "index": target_index,
             }
 
-        await self._sql_session.delete(slide)
-
-        slides_result = await self._sql_session.scalars(
-            select(SlideModel).where(SlideModel.presentation == self._presentation_id)
-        )
-        slides = sorted(list(slides_result), key=lambda each: each.index)
+        slides = await self._owned_slides()
         shifted_count = 0
-        for each_slide in slides:
-            if each_slide.index <= target_index:
-                continue
-            each_slide.index -= 1
-            self._sql_session.add(each_slide)
-            shifted_count += 1
-
-        await self._sql_session.commit()
+        try:
+            await snapshot_slides(
+                self._sql_session,
+                self._presentation_id,
+                [item.model_dump(mode="json") for item in slides],
+                label="chat:deleteSlide",
+                force=True,
+            )
+            await self._sql_session.delete(slide)
+            for each_slide in slides:
+                if each_slide.index <= target_index:
+                    continue
+                each_slide.index -= 1
+                self._sql_session.add(each_slide)
+                shifted_count += 1
+            presentation.n_slides = max(0, len(slides) - 1)
+            self._sql_session.add(presentation)
+            await self._sql_session.commit()
+        except Exception:
+            await self._sql_session.rollback()
+            raise
 
         return {
             "deleted": True,
@@ -655,7 +818,7 @@ class PresentationChatMemoryLayer:
                 "message": "Theme query or custom theme payload is required.",
             }
 
-        presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
+        presentation = await self._owned_presentation()
         if not presentation:
             return {
                 "applied": False,
@@ -735,7 +898,7 @@ class PresentationChatMemoryLayer:
         }
 
     async def get_presentation_theme_catalog(self) -> dict[str, Any]:
-        presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
+        presentation = await self._owned_presentation()
         if not presentation:
             return {
                 "found": False,
@@ -820,13 +983,75 @@ class PresentationChatMemoryLayer:
             )
         return context
 
+    async def _owned_presentation(self) -> PresentationModel | None:
+        statement = select(PresentationModel).where(
+            PresentationModel.id == self._presentation_id
+        )
+        if not get_current_owner_is_admin():
+            owner_id = get_current_owner_id()
+            statement = statement.where(
+                PresentationModel.owner_id.is_(None)
+                if owner_id is None
+                else PresentationModel.owner_id == owner_id
+            )
+        return await self._sql_session.scalar(statement)
+
+    async def _owned_slides(self) -> list[SlideModel]:
+        statement = (
+            select(SlideModel)
+            .where(SlideModel.presentation == self._presentation_id)
+            .order_by(SlideModel.index)
+        )
+        if not get_current_owner_is_admin():
+            owner_id = get_current_owner_id()
+            statement = statement.where(
+                SlideModel.owner_id.is_(None)
+                if owner_id is None
+                else SlideModel.owner_id == owner_id
+            )
+        return list(await self._sql_session.scalars(statement))
+
+    async def _template_v2_for_presentation(self) -> TemplateV2 | None:
+        statement = (
+            select(TemplateV2)
+            .join(
+                TemplateV2LocalState,
+                TemplateV2LocalState.template_id == TemplateV2.id,
+            )
+            .where(
+                TemplateV2LocalState.presentation_id == self._presentation_id
+            )
+        )
+        if not get_current_owner_is_admin():
+            owner_id = get_current_owner_id()
+            statement = statement.where(
+                TemplateV2.owner_id.is_(None)
+                if owner_id is None
+                else TemplateV2.owner_id == owner_id
+            )
+        template = await self._sql_session.scalar(statement)
+        if template is not None:
+            return template
+        # Transitional rows predate the sidecar migration.
+        fallback = select(TemplateV2).where(
+            TemplateV2.presentation_id == self._presentation_id
+        )
+        if not get_current_owner_is_admin():
+            owner_id = get_current_owner_id()
+            fallback = fallback.where(
+                TemplateV2.owner_id.is_(None)
+                if owner_id is None
+                else TemplateV2.owner_id == owner_id
+            )
+        return await self._sql_session.scalar(fallback)
+
     async def _get_layout_by_id(
         self,
         layout_id: str,
         presentation: PresentationModel | None = None,
     ) -> SlideLayoutModel | None:
         if not presentation:
-            presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
+            presentation = await self._owned_presentation()
         if not presentation or not isinstance(presentation.layout, dict):
             return None
 

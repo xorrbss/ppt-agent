@@ -55,9 +55,9 @@ What makes Presenton different?
 
 #
 
-### 🎨 Free AI Presentation Templates for PowerPoint
+### 🎨 In-Built AI Presentation Templates for PowerPoint
 
-Browse free AI presentation templates for pitch decks, business reports, executive updates, educational presentations, and more. Preview each editable slide layout, choose a design, and use Presenton to generate fully editable PowerPoint (`.pptx`) or PDF presentations from a prompt or document.
+Browse in-built AI presentation templates for pitch decks, business reports, executive updates, educational presentations, and more. Preview each editable slide layout, choose a design, and use Presenton to generate fully editable PowerPoint (`.pptx`) or PDF presentations from a prompt or document.
 
 <table border="1" cellpadding="16" cellspacing="0" width="100%">
 <tr>

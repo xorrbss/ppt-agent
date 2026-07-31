@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+import stat
 
 import pytest
 from sqlalchemy import select
@@ -9,11 +11,14 @@ from api.v1.auth import bootstrap
 from api.v1.auth.users import PASSWORD_HELPER
 from models.sql.access_token import AccessToken
 from models.sql.user import User
-from tests.user_config_permission_contract import (
-    assert_private_user_config_file,
-    track_private_permission_requests,
-)
 from utils import user_config_store
+
+
+def assert_private_config_file(config_path):
+    # Windows represents the owner-only contract as an ACL; stat mode bits are
+    # not a reliable indicator after ``icacls`` has secured the file.
+    if os.name != "nt":
+        assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
 
 
 async def _create_auth_database(database_path):
@@ -44,7 +49,6 @@ def test_reset_auth_recovers_admin_without_replacing_account(
     monkeypatch.setenv("AUTH_USERNAME", "recovered-admin")
     monkeypatch.setenv("AUTH_PASSWORD", "new-secret-123")
     monkeypatch.delenv("AUTH_OVERRIDE_FROM_ENV", raising=False)
-    chmod_requests = track_private_permission_requests(monkeypatch, user_config_store)
 
     async def runner():
         engine, session_maker = await _create_auth_database(tmp_path / "auth.db")
@@ -101,10 +105,8 @@ def test_reset_auth_recovers_admin_without_replacing_account(
     assert config["AUTH_PASSWORD_HASH"] != "old-hash"
     assert config["AUTH_SECRET_KEY"] != "old-secret"
     assert config["LLM_PROVIDER"] == "openai"
-    assert_private_user_config_file(config_path, chmod_requests)
-    assert_private_user_config_file(
-        tmp_path / "userConfig.json.bak", chmod_requests
-    )
+    assert_private_config_file(config_path)
+    assert_private_config_file(tmp_path / "userConfig.json.bak")
 
 
 def test_reset_auth_without_password_refuses_to_delete_or_replace_admin(

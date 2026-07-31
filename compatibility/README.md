@@ -16,6 +16,12 @@ because prose is not covered by that check and would go stale silently.
 - `upstream-test-contracts.json` records each reviewed upstream default-template
   and generic async-task test, including machine-readable exclusion reasons and
   the non-conflicting local regression contracts retained in its place.
+- `../docs/template-v2-chat-parity-matrix-20260731.md` is the behavior-level
+  Template V2 Chat parity audit. It distinguishes tested local support from
+  pending integration and schema/product decisions. Text-run ranges and table
+  merge/split are classified as implemented only with their schema, mutation,
+  renderer/export, import, hydration, and round-trip regression evidence, so an
+  exclusion is never relabeled as ported on prose alone.
 - `upstream-intake-policy.json` controls the separate, read-only observation of
   official `presenton/presenton:main`, including the pinned commit metadata,
   review categories, and contract-risk escalation rules.
@@ -111,12 +117,12 @@ git replace --graft fe35a083bceaf19514562884eb441b7813ccbc5a \
     c11f34ba24f4e7064234d632a832ed29dbc0a625 e43420e059cb490f7ef3f9692db09e108ee9ce29
 ```
 
-Verify (upstream counts hold while the baseline is pinned at `57b194b2`):
+Verify the graft point and inspect the current divergence:
 
 ```bash
 git merge-base origin/main upstream/main            # c11f34ba24f4e7064234d632a832ed29dbc0a625
-git rev-list --count origin/main..upstream/main     # 850  (upstream delta to review)
-git rev-list --count upstream/main..origin/main     # fork-only commits; grows with local work
+git rev-list --count origin/main..upstream/main     # upstream delta to review
+git rev-list --count upstream/main..origin/main     # fork-only commits
 git remote -v                                       # upstream push URL must read DISABLED
 ```
 

@@ -284,7 +284,14 @@ function renderTextList(element, path, layout, plan) {
 
 function renderTableCell(cell, path, header) {
   if (!isRecord(cell)) throw new Error(`template_v2_renderer_invalid_table_cell:${path}`);
+  if (isRecord(cell.covered_by)) return "";
   const tag = header ? "th" : "td";
+  const rowspan = Number.isInteger(cell.rowspan) && cell.rowspan > 1
+    ? ` rowspan="${cell.rowspan}"`
+    : "";
+  const colspan = Number.isInteger(cell.colspan) && cell.colspan > 1
+    ? ` colspan="${cell.colspan}"`
+    : "";
   const style = [
     `background:${cssColor(cell.color)}`,
     ...fontStyle(cell.font),
@@ -294,13 +301,103 @@ function renderTableCell(cell, path, header) {
     "overflow:hidden",
     "vertical-align:middle",
   ];
-  return `<${tag} style="${style.join(";")}">${renderRuns(cell.runs, path, cell.font)}</${tag}>`;
+  return `<${tag}${rowspan}${colspan} style="${style.join(";")}">${renderRuns(cell.runs, path, cell.font)}</${tag}>`;
+}
+
+function validateTableGrid(element, path) {
+  const grid = [element.columns, ...element.rows];
+  const columnCount = element.columns.length;
+  const occupied = new Map();
+  const cellAt = (row, column) => grid[row][column];
+  const spanAt = (cell, key, cellPath) => {
+    if (!(key in cell)) return 1;
+    const value = cell[key];
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(`template_v2_renderer_invalid_table_span:${cellPath}.${key}`);
+    }
+    return value;
+  };
+  const coveredByAt = (cell, cellPath) => {
+    if (!("covered_by" in cell) || cell.covered_by == null) return null;
+    if (
+      !isRecord(cell.covered_by) ||
+      !Number.isInteger(cell.covered_by.row) ||
+      cell.covered_by.row < 0 ||
+      !Number.isInteger(cell.covered_by.column) ||
+      cell.covered_by.column < 0
+    ) {
+      throw new Error(`template_v2_renderer_invalid_table_covered_by:${cellPath}`);
+    }
+    return cell.covered_by;
+  };
+
+  grid.forEach((row, rowIndex) => {
+    if (!Array.isArray(row) || row.length !== columnCount) {
+      throw new Error(`template_v2_renderer_invalid_table_row:${path}.${rowIndex}`);
+    }
+    row.forEach((cell, columnIndex) => {
+      const cellPath = `${path}.${rowIndex}.${columnIndex}`;
+      if (!isRecord(cell)) {
+        throw new Error(`template_v2_renderer_invalid_table_cell:${cellPath}`);
+      }
+      const rowspan = spanAt(cell, "rowspan", cellPath);
+      const colspan = spanAt(cell, "colspan", cellPath);
+      const coveredBy = coveredByAt(cell, cellPath);
+      if (coveredBy && (rowspan !== 1 || colspan !== 1)) {
+        throw new Error(`template_v2_renderer_covered_table_cell_has_span:${cellPath}`);
+      }
+    });
+  });
+
+  grid.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      const cellPath = `${path}.${rowIndex}.${columnIndex}`;
+      if (coveredByAt(cell, cellPath)) return;
+      const rowspan = spanAt(cell, "rowspan", cellPath);
+      const colspan = spanAt(cell, "colspan", cellPath);
+      const endRow = rowIndex + rowspan;
+      const endColumn = columnIndex + colspan;
+      if (endRow > grid.length || endColumn > columnCount) {
+        throw new Error(`template_v2_renderer_table_span_out_of_bounds:${cellPath}`);
+      }
+      const anchor = `${rowIndex}:${columnIndex}`;
+      for (let coveredRow = rowIndex; coveredRow < endRow; coveredRow += 1) {
+        for (let coveredColumn = columnIndex; coveredColumn < endColumn; coveredColumn += 1) {
+          const coordinate = `${coveredRow}:${coveredColumn}`;
+          const prior = occupied.get(coordinate);
+          if (prior && prior !== anchor) {
+            throw new Error(`template_v2_renderer_table_spans_overlap:${cellPath}`);
+          }
+          occupied.set(coordinate, anchor);
+          if (coordinate === anchor) continue;
+          const marker = coveredByAt(
+            cellAt(coveredRow, coveredColumn),
+            `${path}.${coveredRow}.${coveredColumn}`,
+          );
+          if (!marker || marker.row !== rowIndex || marker.column !== columnIndex) {
+            throw new Error(`template_v2_renderer_table_covered_cell_mismatch:${cellPath}`);
+          }
+        }
+      }
+    });
+  });
+
+  grid.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      const marker = coveredByAt(cell, `${path}.${rowIndex}.${columnIndex}`);
+      if (!marker) return;
+      if (occupied.get(`${rowIndex}:${columnIndex}`) !== `${marker.row}:${marker.column}`) {
+        throw new Error(`template_v2_renderer_table_covered_cell_orphan:${path}.${rowIndex}.${columnIndex}`);
+      }
+    });
+  });
 }
 
 function renderTable(element, path, layout, plan) {
   if (!Array.isArray(element.columns) || !Array.isArray(element.rows)) {
     throw new Error(`template_v2_renderer_table_data_required:${path}`);
   }
+  validateTableGrid(element, path);
   const head = element.columns.length
     ? `<thead><tr>${element.columns.map((cell, index) => renderTableCell(cell, `${path}.columns.${index}`, true)).join("")}</tr></thead>`
     : "";

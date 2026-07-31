@@ -123,6 +123,43 @@ test("layoutTemplateV2Table lays a fixed grid with header and body rows", () => 
   assert.equal(body00?.align, "center");
 });
 
+test("layoutTemplateV2Table renders only anchors and expands merged cells", () => {
+  const covered = { covered_by: { row: 0, column: 0 }, runs: [{ text: "hidden" }] };
+  const layout = layoutTemplateV2Table(
+    {
+      type: "table",
+      columns: [
+        { rowspan: 2, colspan: 2, runs: [{ text: "merged" }] },
+        covered,
+        { runs: [{ text: "H3" }] },
+      ],
+      rows: [
+        [
+          covered,
+          covered,
+          { runs: [{ text: "c" }] },
+        ],
+      ],
+    },
+    300,
+    100
+  );
+
+  assert.equal(layout.cells.length, 3);
+  assert.deepEqual(
+    layout.cells.map((cell) => cell.key),
+    ["head-0", "head-2", "0-2"]
+  );
+  assert.deepEqual(
+    {
+      width: layout.cells[0].width,
+      height: layout.cells[0].height,
+      text: layout.cells[0].text,
+    },
+    { width: 200, height: 100, text: "merged" }
+  );
+});
+
 test("templateV2InfographicView clamps ratio and rejects unknown types", () => {
   const progress = templateV2InfographicView({
     type: "infographic",

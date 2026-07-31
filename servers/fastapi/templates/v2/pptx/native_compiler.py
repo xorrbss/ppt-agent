@@ -33,6 +33,7 @@ from templates.v2.models.elements import (
     Font,
     Group,
     SlideElement,
+    Table,
     Text,
     TextList,
 )
@@ -72,7 +73,7 @@ def compile_template_v2_pptx(
 ) -> NativePptxCompilation:
     """Compile validated Template V2 slides into deterministic native OOXML.
 
-    Version 1 supports containers, text, text lists and groups.  Unsupported
+    Version 1 supports containers, text, text lists, tables and groups.  Unsupported
     nodes or style capabilities raise a stable error rather than degrading to
     an image or silently dropping presentation semantics.
     """
@@ -182,8 +183,28 @@ def inspect_native_pptx_structure(
                     }
                     for paragraph in shape.text_frame.paragraphs
                 ]
-            entry["fill"] = _inspect_fill(shape.fill)
-            entry["line"] = _inspect_line(shape.line)
+            if shape.has_table:
+                table = shape.table
+                entry["table"] = {
+                    "row_count": len(table.rows),
+                    "column_count": len(table.columns),
+                    "rows": [
+                        [
+                            {
+                                "text": cell.text,
+                                "is_merge_origin": cell.is_merge_origin,
+                                "is_spanned": cell.is_spanned,
+                                "span_width": cell.span_width,
+                                "span_height": cell.span_height,
+                            }
+                            for cell in row.cells
+                        ]
+                        for row in table.rows
+                    ],
+                }
+            else:
+                entry["fill"] = _inspect_fill(shape.fill)
+                entry["line"] = _inspect_line(shape.line)
             shapes.append(entry)
         slides.append(
             {
@@ -253,6 +274,17 @@ def _compile_element(
             shape_name=shape_name,
         )
         return
+    if isinstance(element, Table):
+        _compile_table(
+            slide,
+            element,
+            content=content,
+            offset_x=offset_x,
+            offset_y=offset_y,
+            path=path,
+            shape_name=shape_name,
+        )
+        return
     if isinstance(element, Group):
         nested_content = content.get(element.name, content)
         if not isinstance(nested_content, Mapping):
@@ -277,6 +309,126 @@ def _compile_element(
         "template_v2_native_pptx_element_unsupported",
         path=f"{path}.type={element.type}",
     )
+
+
+def _compile_table(
+    slide: Slide,
+    element: Table,
+    *,
+    content: Mapping[str, Any],
+    offset_x: float,
+    offset_y: float,
+    path: str,
+    shape_name: str,
+) -> None:
+    _require_box(element, path=path)
+    source_rows = [element.columns, *element.rows]
+    values = [
+        ["".join(run.text for run in cell.runs) for cell in row]
+        for row in source_rows
+    ]
+    if not element.decorative:
+        value = content.get(element.name)
+        if not isinstance(value, Mapping):
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_pptx_content_value_invalid",
+                path=f"{path}.content.{element.name}",
+            )
+        columns = value.get("columns")
+        rows = value.get("rows")
+        if (
+            not isinstance(columns, list)
+            or not all(isinstance(cell, str) for cell in columns)
+            or not isinstance(rows, list)
+            or not all(
+                isinstance(row, list)
+                and all(isinstance(cell, str) for cell in row)
+                for row in rows
+            )
+        ):
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_pptx_content_value_invalid",
+                path=f"{path}.content.{element.name}",
+            )
+        values = [columns, *rows]
+        if len(values) != len(source_rows) or any(
+            len(value_row) != len(source_rows[row_index])
+            for row_index, value_row in enumerate(values)
+        ):
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_pptx_table_shape_change_unsupported",
+                path=f"{path}.content.{element.name}",
+            )
+
+    row_count = len(source_rows)
+    column_count = len(element.columns)
+    graphic_frame = slide.shapes.add_table(
+        row_count,
+        column_count,
+        _emu(offset_x + element.position.x),
+        _emu(offset_y + element.position.y),
+        _emu(element.size.width),
+        _emu(element.size.height),
+    )
+    graphic_frame.name = shape_name
+    graphic_frame.rotation = element.rotation or 0
+    table = graphic_frame.table
+
+    for row_index, row in enumerate(source_rows):
+        for column_index, source_cell in enumerate(row):
+            if source_cell.covered_by is not None:
+                continue
+            if source_cell.rowspan > 1 or source_cell.colspan > 1:
+                table.cell(row_index, column_index).merge(
+                    table.cell(
+                        row_index + source_cell.rowspan - 1,
+                        column_index + source_cell.colspan - 1,
+                    )
+                )
+
+    for row_index, row in enumerate(source_rows):
+        for column_index, source_cell in enumerate(row):
+            target_cell = table.cell(row_index, column_index)
+            if source_cell.color is None:
+                target_cell.fill.background()
+            else:
+                _reject_opacity(
+                    source_cell.color.opacity,
+                    path=f"{path}.cells.{row_index}.{column_index}.color.opacity",
+                )
+                target_cell.fill.solid()
+                target_cell.fill.fore_color.rgb = _rgb(
+                    source_cell.color.color,
+                    path=f"{path}.cells.{row_index}.{column_index}.color",
+                )
+            _apply_text_frame_box(target_cell.text_frame, None, None)
+            paragraph = target_cell.text_frame.paragraphs[0]
+            if source_cell.alignment is not None:
+                paragraph.alignment = {
+                    "left": PP_ALIGN.LEFT,
+                    "center": PP_ALIGN.CENTER,
+                    "right": PP_ALIGN.RIGHT,
+                }[source_cell.alignment.value]
+            run_specs = (
+                [(run.text, run.font) for run in source_cell.runs]
+                if element.decorative
+                else [
+                    (
+                        values[row_index][column_index],
+                        source_cell.runs[0].font
+                        if source_cell.runs
+                        else source_cell.font,
+                    )
+                ]
+            )
+            for text, run_font in run_specs:
+                run = paragraph.add_run()
+                run.text = text
+                _apply_font(
+                    run.font,
+                    _merge_font(source_cell.font, run_font),
+                    path=f"{path}.cells.{row_index}.{column_index}",
+                )
 
 
 def _compile_text(

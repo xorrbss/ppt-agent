@@ -103,9 +103,8 @@ jobs:
       run: npm run build
     
     # Gate on the component tests that run under the framework:react+webpack
-    # config: AdaptiveBlockControls (P4b click->store round-trip) and UploadPage
-    # (fork upload surface: controls, slides select, file attach + toasts,
-    # validation). Both avoid cypress 14's next-adapter, which is broken on Next 16.
+    # config. The manual webpack adapter remains necessary with Next 16; Cypress
+    # 15 itself is supported by this job's Node 22 runtime.
     # The official action handles Xvfb + Linux Electron deps; npm ci already
     # installed the binary, so install: false.
     - name: Cypress component tests (gate — adaptive editor + theme + upload)
@@ -113,6 +112,6 @@ jobs:
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2Studio.matrix.cy.tsx,**/TemplateV2SelectionToolbar.cy.tsx,**/VectorToolbar.vector-geometry.cy.tsx,**/ChartTableToolbar.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/Chat.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2Studio.matrix.cy.tsx,**/TemplateV2SelectionToolbar.cy.tsx,**/VectorToolbar.vector-geometry.cy.tsx,**/ChartTableToolbar.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx"
         install: false
 
