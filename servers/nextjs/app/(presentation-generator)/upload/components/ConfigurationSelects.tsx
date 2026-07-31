@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import {
+    clampSlideCountValue,
+    MAX_NUMBER_OF_SLIDES,
+} from "@/utils/presentationLimits";
 import AdvanceSettings from "./AdvanceSettings";
 
 // Types
@@ -22,10 +26,15 @@ interface ConfigurationSelectsProps {
     onConfigChange: (key: keyof PresentationConfig, value: any) => void;
 }
 
-type SlideOption = "5" | "8" | "9" | "10" | "11" | "12" | "13" | "14" | "15" | "16" | "17" | "18" | "19" | "20";
-
 // Constants
-const SLIDE_OPTIONS: SlideOption[] = ["5", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"];
+const SLIDE_OPTIONS = [
+    "5",
+    ...Array.from({ length: 13 }, (_, index) => String(index + 8)),
+    ...Array.from(
+        { length: Math.floor((MAX_NUMBER_OF_SLIDES - 25) / 5) + 1 },
+        (_, index) => String(25 + index * 5),
+    ),
+];
 
 /**
  * Renders a select component for slide count
@@ -37,26 +46,19 @@ const SlideCountSelect: React.FC<{
     onOpenChange: (open: boolean) => void;
 }> = ({ value, onValueChange, open, onOpenChange }) => {
     const [customInput, setCustomInput] = useState(
-        value && !SLIDE_OPTIONS.includes(value as SlideOption) ? value : ""
+        value && !SLIDE_OPTIONS.includes(value) ? value : ""
     );
 
     useEffect(() => {
-        if (value && !SLIDE_OPTIONS.includes(value as SlideOption)) {
+        if (value && !SLIDE_OPTIONS.includes(value)) {
             setCustomInput(value);
         } else {
             setCustomInput("");
         }
     }, [value]);
 
-    const sanitizeToPositiveInteger = (raw: string): string => {
-        const digitsOnly = raw.replace(/\D+/g, "");
-        if (!digitsOnly) return "";
-        const noLeadingZeros = digitsOnly.replace(/^0+/, "");
-        return noLeadingZeros;
-    };
-
     const applyCustomValue = () => {
-        const sanitized = sanitizeToPositiveInteger(customInput);
+        const sanitized = clampSlideCountValue(customInput);
         if (sanitized && Number(sanitized) > 0) {
             onValueChange(sanitized);
             onOpenChange(false);
@@ -102,7 +104,7 @@ const SlideCountSelect: React.FC<{
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => {
-                                const next = sanitizeToPositiveInteger(e.target.value);
+                                const next = clampSlideCountValue(e.target.value);
                                 setCustomInput(next);
                                 if (next && Number(next) > 0) {
                                     onValueChange(next);
@@ -116,6 +118,7 @@ const SlideCountSelect: React.FC<{
                             }}
                             onBlur={applyCustomValue}
                             placeholder="--"
+                            aria-label={`Slide count (maximum ${MAX_NUMBER_OF_SLIDES})`}
                             className="h-8 w-16 px-2 text-sm"
                         />
                         <span className="text-sm font-medium">슬라이드</span>

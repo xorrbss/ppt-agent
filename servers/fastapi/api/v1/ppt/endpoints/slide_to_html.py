@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.template import TemplateModel
 from services.database import get_async_session
@@ -103,9 +104,13 @@ async def save_layouts(
         if not request.layouts:
             raise HTTPException(status_code=400, detail="Layouts array cannot be empty")
 
-        if len(request.layouts) > 50:
+        if len(request.layouts) > MAX_NUMBER_OF_SLIDES:
             raise HTTPException(
-                status_code=400, detail="Cannot save more than 50 layouts at once"
+                status_code=400,
+                detail=(
+                    "Cannot save more than "
+                    f"{MAX_NUMBER_OF_SLIDES} layouts at once"
+                ),
             )
 
         saved_count = 0

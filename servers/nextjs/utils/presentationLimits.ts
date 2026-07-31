@@ -1,4 +1,4 @@
-export const MAX_NUMBER_OF_SLIDES = 50;
+export const MAX_NUMBER_OF_SLIDES = 100;
 export const MAX_OUTLINE_CONTENT_WORDS = 500;
 
 const WORD_PATTERN = /\S+/g;
