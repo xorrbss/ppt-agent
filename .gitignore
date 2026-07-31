@@ -61,6 +61,10 @@ electron/servers/
 servers/nextjs/cypress/screenshots/
 servers/nextjs/cypress/videos/
 
+# Scratch runtime for local end-to-end runs (browser profiles, dev-server logs,
+# temp exports). Regenerated on demand and hundreds of MB when populated.
+.test-runtime/
+
 # Release candidates are generated and quarantined by CI. Only signed release
 # manifests deliberately added through the release process belong in Git.
 electron/dist/
