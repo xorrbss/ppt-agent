@@ -428,6 +428,95 @@ def test_upgrade_from_template_stamp_skips_existing_chat_history_table(tmp_path)
         engine.dispose()
 
 
+def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_path):
+    database_url = f"sqlite:///{tmp_path / 'chat-template-scope-repair.db'}"
+    engine = create_engine(database_url)
+    config = _alembic_config(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TABLE template_v2 (id VARCHAR PRIMARY KEY)")
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE chat_history_messages (
+                        id CHAR(32) PRIMARY KEY,
+                        conversation_id CHAR(32) NOT NULL,
+                        position INTEGER NOT NULL,
+                        role VARCHAR NOT NULL,
+                        content TEXT NOT NULL,
+                        created_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO chat_history_messages (
+                        id, conversation_id, position, role, content, created_at
+                    ) VALUES (
+                        'message-1', 'conversation-1', 1, 'user', 'keep me',
+                        '2026-07-31 00:00:00'
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+            )
+            connection.execute(
+                text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+                {"revision": migrations.REVISION_PRIMARY_ADMIN},
+            )
+
+        command.upgrade(config, "head")
+
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert "template_v2_id" in {
+                column["name"]
+                for column in inspector.get_columns("chat_history_messages")
+            }
+            assert "ix_chat_history_messages_template_v2_id" in {
+                index["name"]
+                for index in inspector.get_indexes("chat_history_messages")
+            }
+            assert any(
+                foreign_key["constrained_columns"] == ["template_v2_id"]
+                and foreign_key["referred_table"] == "template_v2"
+                and foreign_key["referred_columns"] == ["id"]
+                for foreign_key in inspector.get_foreign_keys(
+                    "chat_history_messages"
+                )
+            )
+            assert connection.execute(
+                text(
+                    "SELECT content FROM chat_history_messages WHERE id = 'message-1'"
+                )
+            ).scalar_one() == "keep me"
+            assert connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one() == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+
+        command.downgrade(config, migrations.REVISION_PRIMARY_ADMIN)
+        command.upgrade(config, "head")
+
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one() == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+            assert "template_v2_id" in {
+                column["name"]
+                for column in inspect(connection).get_columns(
+                    "chat_history_messages"
+                )
+            }
+    finally:
+        engine.dispose()
+
+
 def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
     tmp_path,
 ):
@@ -497,7 +586,7 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
             )
             template_indexes = db_inspector.get_indexes("template_v2")
 
-        assert revision == migrations.REVISION_PRIMARY_ADMIN
+        assert revision == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
@@ -1603,7 +1692,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_PRIMARY_ADMIN
+                == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
             )
             assert "presentation_generation_jobs" in inspector.get_table_names()
             assert "lifecycle_status" in {
@@ -1647,7 +1736,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_PRIMARY_ADMIN
+                == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
             )
             assert "template_v2" in inspector.get_table_names()
             assert "presentation_generation_jobs" in inspector.get_table_names()

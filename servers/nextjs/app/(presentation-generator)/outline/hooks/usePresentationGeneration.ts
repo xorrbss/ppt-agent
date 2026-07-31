@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { usePathname, useRouter } from "next/navigation";
@@ -17,12 +18,20 @@ import {
   TEMPLATE_V2_SELECTION_PREFIX,
 } from "@/app/hooks/useStructuredTemplates";
 import {
-  ApiError,
   apiErrorFromPayload,
   getApiErrorDisplayMessage,
   getRetryablePresentationGenerationMessage,
   isRetryablePresentationGenerationError,
 } from "../../services/api/api-error-handler";
+import {
+  clearDurableGenerationTask,
+  createDurableGenerationTask,
+  DurableGenerationTask,
+  findDurableGenerationTask,
+  saveDurableGenerationTask,
+  subscribeToDurableGenerationTasks,
+  updateDurableGenerationTask,
+} from "./durableGenerationTask";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -73,10 +82,17 @@ export const usePresentationGeneration = (
   );
   const generationRunRef = useRef(0);
   const retrySubmitRef = useRef<(() => void) | null>(null);
+  const activeDurableTaskRef = useRef<string | null>(null);
+  // Keep the pre-response task identity in memory as well as localStorage. Two
+  // retries can be clicked in adjacent turns before React/storage reconciliation
+  // settles; both POSTs must still carry the exact same idempotency key.
+  const startingDurableTaskRef = useRef<DurableGenerationTask | null>(null);
+  const submittingDurableTaskRef = useRef<string | null>(null);
 
   useEffect(
     () => () => {
       generationRunRef.current += 1;
+      activeDurableTaskRef.current = null;
     },
     []
   );
@@ -101,7 +117,7 @@ export const usePresentationGeneration = (
     return true;
   }, [outlines, selectedTemplate]);
 
-  const clearTheme = () => {
+  const clearTheme = useCallback(() => {
     const element = document.getElementById("presentation-page");
     if (!element) return;
     element.style.removeProperty("--primary-color");
@@ -120,7 +136,229 @@ export const usePresentationGeneration = (
     element.style.removeProperty("--graph-7");
     element.style.removeProperty("--graph-8");
     element.style.removeProperty("--graph-9");
-  };
+  }, []);
+
+  const getDurableLoadingState = useCallback(
+    (task: DurableGenerationTask): LoadingState => ({
+      message:
+        task.mode === "authored"
+          ? "AI가 슬라이드를 저작하는 중입니다. 완료되면 자동으로 이동합니다."
+          : "구조화 템플릿으로 프레젠테이션을 생성하는 중입니다.",
+      isLoading: task.status !== "background",
+      showProgress: task.status !== "background",
+      duration: task.progressDurationSeconds,
+    }),
+    []
+  );
+
+  const finishDurableGeneration = useCallback(
+    async (
+      durableTask: DurableGenerationTask,
+      statusTask: any,
+      isActiveRun: () => boolean
+    ) => {
+      const newId = statusTask?.data?.presentation_id;
+      if (!newId) {
+        throw new Error("생성된 프레젠테이션을 찾을 수 없습니다.");
+      }
+
+      clearDurableGenerationTask(durableTask.idempotencyKey);
+      startingDurableTaskRef.current = null;
+      if (!isActiveRun()) return;
+      // Completion is user-visible before best-effort cleanup. Waiting for the
+      // outline-shell DELETE can otherwise strand a completed deck behind the
+      // loading overlay when that request is slow or unavailable.
+      flushSync(() => setLoadingState(DEFAULT_LOADING_STATE));
+      dispatch(clearPresentationData());
+      clearTheme();
+      router.replace(
+        statusTask?.data?.edit_path || `/presentation?id=${newId}`
+      );
+
+      if (
+        durableTask.sourcePresentationId &&
+        durableTask.sourcePresentationId !== newId
+      ) {
+        void DashboardApi.deletePresentation(
+          durableTask.sourcePresentationId
+        ).catch((error) => {
+          console.warn("Failed to clean up outline shell presentation", error);
+        });
+      }
+    },
+    [clearTheme, dispatch, router]
+  );
+
+  const reportDurableGenerationFailure = useCallback(
+    (error: any, mode: DurableGenerationTask["mode"]) => {
+      console.warn(
+        mode === "authored"
+          ? "Authored presentation generation did not complete."
+          : "Structured-template presentation generation did not complete.",
+        error
+      );
+      if (isRetryablePresentationGenerationError(error)) {
+        notify.error(
+          "생성이 일시 중단되었습니다",
+          getRetryablePresentationGenerationMessage(error),
+          {
+            duration: 12_000,
+            action: {
+              label: "다시 시도",
+              onClick: () => retrySubmitRef.current?.(),
+            },
+          }
+        );
+      } else {
+        notify.error(
+          "생성 오류",
+          getApiErrorDisplayMessage(
+            error,
+            "프레젠테이션 생성 중 오류가 발생했습니다."
+          )
+        );
+      }
+    },
+    []
+  );
+
+  const runDurableGeneration = useCallback(
+    async (
+      initialTask: DurableGenerationTask,
+      minimumLoadingMs = 0
+    ) => {
+      if (
+        activeDurableTaskRef.current === initialTask.idempotencyKey &&
+        initialTask.taskId
+      ) {
+        return;
+      }
+
+      const runId = ++generationRunRef.current;
+      const isActiveRun = () => generationRunRef.current === runId;
+      activeDurableTaskRef.current = initialTask.idempotencyKey;
+      setLoadingState(getDurableLoadingState(initialTask));
+
+      let durableTask = initialTask;
+      let pollErrors = 0;
+      let backgroundNoticeShown = initialTask.status === "background";
+      const showLoadingUntil = Date.now() + minimumLoadingMs;
+
+      try {
+        if (!durableTask.taskId) {
+          throw new Error("생성 작업 식별자가 없습니다.");
+        }
+        const taskId = durableTask.taskId;
+
+        while (isActiveRun()) {
+          let statusTask;
+          try {
+            statusTask = await PresentationGenerationApi.getGenerationStatus(
+              taskId
+            );
+            if (!isActiveRun()) return;
+            pollErrors = 0;
+          } catch (pollError) {
+            pollErrors += 1;
+            if (pollErrors >= AUTHORED_MAX_POLL_ERRORS) throw pollError;
+            await new Promise((resolve) =>
+              setTimeout(resolve, AUTHORED_POLL_MS)
+            );
+            continue;
+          }
+
+          if (statusTask?.status === "completed") {
+            const remainingLoadingMs = showLoadingUntil - Date.now();
+            if (remainingLoadingMs > 0) {
+              // Avoid an imperceptible loading flash when a newly-created task
+              // is completed from an idempotency replay/cache immediately.
+              await new Promise((resolve) =>
+                setTimeout(resolve, remainingLoadingMs)
+              );
+              if (!isActiveRun()) return;
+            }
+            await finishDurableGeneration(
+              durableTask,
+              statusTask,
+              isActiveRun
+            );
+            return;
+          }
+          if (statusTask?.status === "error") {
+            clearDurableGenerationTask(durableTask.idempotencyKey);
+            throw apiErrorFromPayload(
+              statusTask?.error,
+              statusTask?.message || "Presentation generation failed.",
+              500,
+              statusTask?.request_id
+            );
+          }
+
+          const isPastForegroundDeadline = Date.now() >= durableTask.deadlineAt;
+          durableTask = updateDurableGenerationTask(durableTask, {
+            status: isPastForegroundDeadline
+              ? "background"
+              : statusTask?.status === "running"
+                ? "running"
+                : "pending",
+            requestId: statusTask?.request_id || durableTask.requestId,
+          });
+
+          // The 30-minute deadline limits the blocking overlay, not the server job.
+          // Keep polling in the background so a late completion still opens the deck.
+          if (isPastForegroundDeadline && !backgroundNoticeShown) {
+            backgroundNoticeShown = true;
+            setLoadingState(DEFAULT_LOADING_STATE);
+            notify.info(
+              "생성이 백그라운드에서 계속됩니다",
+              "완료되면 생성된 프레젠테이션으로 자동 이동합니다."
+            );
+          }
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, AUTHORED_POLL_MS)
+          );
+        }
+      } catch (error: any) {
+        if (!isActiveRun()) return;
+        if (!isRetryablePresentationGenerationError(error)) {
+          clearDurableGenerationTask(durableTask.idempotencyKey);
+          startingDurableTaskRef.current = null;
+        }
+        reportDurableGenerationFailure(error, durableTask.mode);
+      } finally {
+        if (isActiveRun()) {
+          activeDurableTaskRef.current = null;
+          setLoadingState(DEFAULT_LOADING_STATE);
+        }
+      }
+    },
+    [
+      finishDurableGeneration,
+      getDurableLoadingState,
+      reportDurableGenerationFailure,
+    ]
+  );
+
+  useEffect(() => {
+    const reconcile = () => {
+      const durableTask = findDurableGenerationTask(presentationId);
+      if (!durableTask?.taskId) {
+        // Fast Refresh may preserve React state after invalidating its poller. If
+        // there is no durable task to resume, never leave that stale overlay up.
+        setLoadingState(DEFAULT_LOADING_STATE);
+        return;
+      }
+      void runDurableGeneration(
+        durableTask,
+        submittingDurableTaskRef.current === durableTask.idempotencyKey
+          ? 100
+          : 0
+      );
+    };
+    reconcile();
+    return subscribeToDurableGenerationTasks(reconcile);
+  }, [presentationId, runDurableGeneration]);
 
   const handleSubmit = useCallback(async () => {
     if (!selectedTemplate) {
@@ -131,9 +369,8 @@ export const usePresentationGeneration = (
     const runId = ++generationRunRef.current;
     const isActiveRun = () => generationRunRef.current === runId;
 
-    // Authored mode: bypass the layout prepare/stream path. Generate via the async
-    // endpoint (minutes-long), passing the reviewed outline as slides_markdown so the
-    // user's edits are honoured, then poll to completion and open the viewer.
+    // Persist the idempotency key before POSTing so a lost response can be retried
+    // without creating a second authored deck.
     if (selectedTemplate === AUTHORED_TEMPLATE_ID) {
       const slides_markdown = (outlines || [])
         .map((o) => o.content)
@@ -142,26 +379,33 @@ export const usePresentationGeneration = (
         notify.warning("개요가 비어 있습니다", "먼저 개요를 생성하세요.");
         return;
       }
-      // Progress estimate that PACES the bar. Authored slides are generated concurrently
-      // (≈ one round) so wall-time grows slowly with count; vision-QA adds a second
-      // authoring round (~2x). Clamped to the poll deadline so we never pace longer than
-      // we will wait. This does NOT prevent the bar finishing early — ProgressBar parks
-      // at 95% until generation actually completes, so an under-estimate just stalls there.
       const base = Math.max(120, slides_markdown.length * 25);
       const estSeconds = authoredVisionQa
         ? Math.min(AUTHORED_TIMEOUT_MS / 1000, base * 2)
         : Math.min(600, base);
-      // Derive the headline from the same estimate so it can't contradict the bar's pacing
-      // (no fixed "1~3분" that lies for larger decks).
-      const estMinutes = Math.max(1, Math.round(estSeconds / 60));
-      setLoadingState({
-        message: authoredVisionQa
-          ? `AI가 슬라이드를 저작·검수하는 중입니다… (약 ${estMinutes}분 소요)`
-          : `AI가 슬라이드를 저작하는 중입니다… (약 ${estMinutes}분 소요)`,
-        isLoading: true,
-        showProgress: true,
-        duration: estSeconds,
-      });
+      let durableTask =
+        startingDurableTaskRef.current?.sourcePresentationId === presentationId
+          ? startingDurableTaskRef.current
+          : findDurableGenerationTask(presentationId);
+      if (durableTask?.taskId) {
+        await runDurableGeneration(durableTask);
+        return;
+      }
+      // A "starting" record can survive a lost POST response. Reusing it here
+      // resubmits with the same idempotency key instead of creating a second job.
+      if (!durableTask || durableTask.mode !== "authored") {
+        durableTask = saveDurableGenerationTask(
+          createDurableGenerationTask({
+            mode: "authored",
+            sourcePresentationId: presentationId,
+            timeoutMs: AUTHORED_TIMEOUT_MS,
+            progressDurationSeconds: estSeconds,
+          })
+        );
+      }
+      startingDurableTaskRef.current = durableTask;
+      submittingDurableTaskRef.current = durableTask.idempotencyKey;
+      setLoadingState(getDurableLoadingState(durableTask));
       try {
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           content: slides_markdown[0].slice(0, 200),
@@ -171,92 +415,27 @@ export const usePresentationGeneration = (
           language: language && language !== LanguageType.Auto ? language : null,
           vision_qa: authoredVisionQa,
           authored_style: authoredStyle,
+          idempotency_key: durableTask.idempotencyKey,
         });
-        if (!isActiveRun()) return;
         const taskId = started?.id;
         if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
-
-        const deadlineMs = Date.now() + AUTHORED_TIMEOUT_MS;
-        let pollErrors = 0;
-        while (true) {
-          if (Date.now() > deadlineMs) {
-            throw new ApiError("Presentation generation timed out.", {
-              status: 504,
-              code: "generation_timeout",
-              requestId: started?.request_id,
-            });
-          }
-          await new Promise((r) => setTimeout(r, AUTHORED_POLL_MS));
-          if (!isActiveRun()) return;
-          let task;
-          try {
-            task = await PresentationGenerationApi.getGenerationStatus(taskId);
-            if (!isActiveRun()) return;
-            pollErrors = 0;
-          } catch (pollErr) {
-            // A single transient blip must not abort a generation still running on the
-            // backend. Tolerate a few consecutive failures, then surface the error.
-            pollErrors += 1;
-            if (pollErrors >= AUTHORED_MAX_POLL_ERRORS) throw pollErr;
-            console.warn(
-              `authored status poll failed (${pollErrors}/${AUTHORED_MAX_POLL_ERRORS}); retrying`,
-              pollErr
-            );
-            continue;
-          }
-          if (task?.status === "completed") {
-            const newId = task?.data?.presentation_id;
-            if (!newId) throw new Error("생성 결과를 찾을 수 없습니다.");
-            // The authored deck is a fresh presentation; delete the upload-created
-            // outline shell so it doesn't linger as an orphan (best-effort).
-            if (presentationId && presentationId !== newId) {
-              try {
-                await DashboardApi.deletePresentation(presentationId);
-              } catch (e) {
-                console.warn("Failed to clean up outline shell presentation", e);
-              }
-            }
-            if (!isActiveRun()) return;
-            dispatch(clearPresentationData());
-            clearTheme();
-            router.replace(`/presentation?id=${newId}`);
-            return;
-          }
-          if (task?.status === "error") {
-            throw apiErrorFromPayload(
-              task?.error,
-              task?.message || "Presentation generation failed.",
-              500,
-              task?.request_id
-            );
-          }
-        }
-      } catch (error: any) {
+        durableTask = updateDurableGenerationTask(durableTask, {
+          taskId,
+          status: started?.status === "running" ? "running" : "pending",
+          requestId: started?.request_id,
+        });
+        submittingDurableTaskRef.current = null;
+        startingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        // This is an expected failure path handled by the in-app notification.
-        // console.error(Error) is rendered as a blocking Next.js dev overlay.
-        console.warn("Authored presentation generation did not complete.", error);
-        if (isRetryablePresentationGenerationError(error)) {
-          notify.error(
-            "생성이 일시 중단되었습니다",
-            getRetryablePresentationGenerationMessage(error),
-            {
-              duration: 12_000,
-              action: {
-                label: "다시 시도",
-                onClick: () => retrySubmitRef.current?.(),
-              },
-            }
-          );
-        } else {
-          notify.error(
-            "생성 오류",
-            getApiErrorDisplayMessage(
-              error,
-              "An error occurred while generating the presentation."
-            )
-          );
+        await runDurableGeneration(durableTask);
+      } catch (error: any) {
+        submittingDurableTaskRef.current = null;
+        if (!isActiveRun()) return;
+        if (!isRetryablePresentationGenerationError(error)) {
+          clearDurableGenerationTask(durableTask.idempotencyKey);
+          startingDurableTaskRef.current = null;
         }
+        reportDurableGenerationFailure(error, "authored");
       } finally {
         if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
@@ -287,12 +466,33 @@ export const usePresentationGeneration = (
         return;
       }
 
-      setLoadingState({
-        message: "구조화 템플릿으로 프레젠테이션을 생성하는 중입니다.",
-        isLoading: true,
-        showProgress: true,
-        duration: Math.max(30, slides_markdown.length * 12),
-      });
+      const progressDurationSeconds = Math.max(
+        30,
+        slides_markdown.length * 12
+      );
+      let durableTask =
+        startingDurableTaskRef.current?.sourcePresentationId === presentationId
+          ? startingDurableTaskRef.current
+          : findDurableGenerationTask(presentationId);
+      if (durableTask?.taskId) {
+        await runDurableGeneration(durableTask);
+        return;
+      }
+      // See the authored branch: a retry of a response-lost POST must keep the
+      // original key so the backend can return the existing task.
+      if (!durableTask || durableTask.mode !== "template-v2") {
+        durableTask = saveDurableGenerationTask(
+          createDurableGenerationTask({
+            mode: "template-v2",
+            sourcePresentationId: presentationId,
+            timeoutMs: AUTHORED_TIMEOUT_MS,
+            progressDurationSeconds,
+          })
+        );
+      }
+      startingDurableTaskRef.current = durableTask;
+      submittingDurableTaskRef.current = durableTask.idempotencyKey;
+      setLoadingState(getDurableLoadingState(durableTask));
 
       try {
         const started =
@@ -303,97 +503,29 @@ export const usePresentationGeneration = (
               language && language !== LanguageType.Auto ? language : null,
             template_v2_id: templateV2Selection.templateId,
             template_v2_revision: templateV2Selection.revision,
+            idempotency_key: durableTask.idempotencyKey,
           });
-        if (!isActiveRun()) return;
         const taskId = started?.id;
         if (!taskId) {
           throw new Error("구조화 템플릿 생성 작업을 시작하지 못했습니다.");
         }
-
-        const deadlineMs = Date.now() + AUTHORED_TIMEOUT_MS;
-        let pollErrors = 0;
-        while (true) {
-          if (Date.now() > deadlineMs) {
-            throw new ApiError("Presentation generation timed out.", {
-              status: 504,
-              code: "generation_timeout",
-              requestId: started?.request_id,
-            });
-          }
-          await new Promise((resolve) =>
-            setTimeout(resolve, AUTHORED_POLL_MS)
-          );
-          if (!isActiveRun()) return;
-          let task;
-          try {
-            task = await PresentationGenerationApi.getGenerationStatus(taskId);
-            if (!isActiveRun()) return;
-            pollErrors = 0;
-          } catch (pollError) {
-            pollErrors += 1;
-            if (pollErrors >= AUTHORED_MAX_POLL_ERRORS) throw pollError;
-            continue;
-          }
-
-          if (task?.status === "completed") {
-            const newId = task?.data?.presentation_id;
-            if (!newId) {
-              throw new Error("생성된 프레젠테이션을 찾을 수 없습니다.");
-            }
-            if (presentationId && presentationId !== newId) {
-              try {
-                await DashboardApi.deletePresentation(presentationId);
-              } catch (cleanupError) {
-                console.warn(
-                  "Failed to clean up outline shell presentation",
-                  cleanupError
-                );
-              }
-            }
-            if (!isActiveRun()) return;
-            dispatch(clearPresentationData());
-            clearTheme();
-            router.replace(
-              task?.data?.edit_path || `/presentation?id=${newId}`
-            );
-            return;
-          }
-          if (task?.status === "error") {
-            throw apiErrorFromPayload(
-              task?.error,
-              task?.message || "Structured-template generation failed.",
-              500,
-              task?.request_id
-            );
-          }
-        }
-      } catch (error: any) {
+        durableTask = updateDurableGenerationTask(durableTask, {
+          taskId,
+          status: started?.status === "running" ? "running" : "pending",
+          requestId: started?.request_id,
+        });
+        submittingDurableTaskRef.current = null;
+        startingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        console.warn(
-          "Structured-template presentation generation did not complete.",
-          error
-        );
-        if (isRetryablePresentationGenerationError(error)) {
-          notify.error(
-            "생성이 일시 중단되었습니다",
-            getRetryablePresentationGenerationMessage(error),
-            {
-              duration: 12_000,
-              action: {
-                label: "다시 시도",
-                onClick: () => retrySubmitRef.current?.(),
-              },
-            }
-          );
-        } else {
-          notify.error(
-            "생성 오류",
-            getApiErrorDisplayMessage(
-              error,
-              "An error occurred during structured-template generation."
-            )
-          );
+        await runDurableGeneration(durableTask);
+      } catch (error: any) {
+        submittingDurableTaskRef.current = null;
+        if (!isActiveRun()) return;
+        if (!isRetryablePresentationGenerationError(error)) {
+          clearDurableGenerationTask(durableTask.idempotencyKey);
+          startingDurableTaskRef.current = null;
         }
+        reportDurableGenerationFailure(error, "template-v2");
       } finally {
         if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
@@ -569,7 +701,23 @@ export const usePresentationGeneration = (
     } finally {
       if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
     }
-  }, [selectedTemplate, validateInputs, pathname, presentationId, outlines, setActiveTab, authoredVisionQa, language, authoredStyle, dispatch, router]);
+  }, [
+    selectedTemplate,
+    validateInputs,
+    pathname,
+    presentationId,
+    outlines,
+    setActiveTab,
+    authoredVisionQa,
+    language,
+    authoredStyle,
+    dispatch,
+    router,
+    clearTheme,
+    getDurableLoadingState,
+    reportDurableGenerationFailure,
+    runDurableGeneration,
+  ]);
 
   useEffect(() => {
     retrySubmitRef.current = () => {
@@ -585,12 +733,19 @@ export const usePresentationGeneration = (
   // an already-started server job may still finish in the background.
   const cancelGeneration = useCallback(() => {
     generationRunRef.current += 1;
+    activeDurableTaskRef.current = null;
+    startingDurableTaskRef.current = null;
+    submittingDurableTaskRef.current = null;
+    const durableTask = findDurableGenerationTask(presentationId);
+    if (durableTask) {
+      clearDurableGenerationTask(durableTask.idempotencyKey);
+    }
     setLoadingState(DEFAULT_LOADING_STATE);
     notify.info(
       "생성을 취소했습니다",
       "이미 시작된 서버 작업은 백그라운드에서 계속 완료될 수 있습니다."
     );
-  }, []);
+  }, [presentationId]);
 
   return { loadingState, handleSubmit, cancelGeneration };
 };

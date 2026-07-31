@@ -24,7 +24,10 @@ from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services import presentation_version_service as version_service
 from services.database import async_session_maker
-from utils.asset_directory_utils import get_images_directory
+from utils.asset_directory_utils import (
+    filesystem_image_path_to_app_data_reference,
+    get_images_directory,
+)
 from utils.authored_styles import resolve_authored_style
 from utils.datetime_utils import get_current_utc_datetime
 from utils.llm_calls.author_deck import prepare_authored_deck
@@ -123,9 +126,10 @@ def _write_reviewed_png(
     absolute_directory = os.path.join(get_images_directory(), relative_directory)
     os.makedirs(absolute_directory, exist_ok=True)
     filename = f"slide_{slide_position}.png"
-    with open(os.path.join(absolute_directory, filename), "wb") as image_file:
+    absolute_path = os.path.join(absolute_directory, filename)
+    with open(absolute_path, "wb") as image_file:
         image_file.write(png)
-    return f"{relative_directory.replace(os.sep, '/')}/{filename}"
+    return filesystem_image_path_to_app_data_reference(absolute_path)
 
 
 async def run_authored_quality_review(

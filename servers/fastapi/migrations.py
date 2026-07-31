@@ -47,6 +47,7 @@ REVISION_DURABLE_GENERATION_JOBS = "3d4e5f6a7b8c"
 REVISION_MULTI_USER_AUTH = "c9f1a2b3d4e5"
 REVISION_PROVIDER_SETTINGS = "d0a2b4c6e8f1"
 REVISION_PRIMARY_ADMIN = "e1b3c5d7f9a2"
+REVISION_CHAT_TEMPLATE_SCOPE_REPAIR = "f2c4d6e8a0b1"
 PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -426,7 +427,13 @@ def _infer_revision_from_schema(
             }
             if "admin_slot" not in user_columns:
                 return REVISION_PROVIDER_SETTINGS
-            return REVISION_PRIMARY_ADMIN
+            chat_columns = {
+                column["name"]
+                for column in inspector.get_columns("chat_history_messages")
+            }
+            if "template_v2_id" not in chat_columns:
+                return REVISION_PRIMARY_ADMIN
+            return REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
         raise RuntimeError(
             "Template V2 presentation ownership FKs have unsupported or "
             "mixed delete actions: "

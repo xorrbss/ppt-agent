@@ -277,13 +277,19 @@ export class PresentationGenerationApi {
     language?: string | null;
     vision_qa?: boolean;
     authored_style?: string;
+    idempotency_key?: string;
   }) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
         {
           method: "POST",
-          headers: getHeader(),
+          headers: {
+            ...getHeader(),
+            ...(body.idempotency_key
+              ? { "Idempotency-Key": body.idempotency_key }
+              : {}),
+          },
           body: JSON.stringify({
             content: body.content,
             slides_markdown: body.slides_markdown,
@@ -322,13 +328,19 @@ export class PresentationGenerationApi {
     template_v2_id: string;
     template_v2_revision: number;
     language?: string | null;
+    idempotency_key?: string;
   }) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
         {
           method: "POST",
-          headers: getHeader(),
+          headers: {
+            ...getHeader(),
+            ...(body.idempotency_key
+              ? { "Idempotency-Key": body.idempotency_key }
+              : {}),
+          },
           body: JSON.stringify({
             content: body.content,
             slides_markdown: body.slides_markdown,

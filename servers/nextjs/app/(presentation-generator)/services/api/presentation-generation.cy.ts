@@ -14,12 +14,15 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         language: "Korean",
         vision_qa: true,
         authored_style: "strategic-navy",
+        idempotency_key: "authored-generation-key",
       })
     );
 
-    cy.wait("@startAuthoredGeneration")
-      .its("request.body")
-      .should("deep.equal", {
+    cy.wait("@startAuthoredGeneration").then(({ request }) => {
+      expect(request.headers).to.include({
+        "idempotency-key": "authored-generation-key",
+      });
+      expect(request.body).to.deep.equal({
         content: "Outline title",
         slides_markdown: ["# Outline title"],
         language: "Korean",
@@ -28,6 +31,7 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         vision_qa: true,
         authored_style: "strategic-navy",
       });
+    });
   });
 
   it("uses the default authored style when a caller omits it", () => {
@@ -63,12 +67,15 @@ describe("PresentationGenerationApi.generateTemplateV2Async", () => {
         language: "Korean",
         template_v2_id: "brand-template",
         template_v2_revision: 4,
+        idempotency_key: "template-v2-generation-key",
       })
     );
 
-    cy.wait("@startTemplateV2Generation")
-      .its("request.body")
-      .should("deep.equal", {
+    cy.wait("@startTemplateV2Generation").then(({ request }) => {
+      expect(request.headers).to.include({
+        "idempotency-key": "template-v2-generation-key",
+      });
+      expect(request.body).to.deep.equal({
         content: "Outline title",
         slides_markdown: ["# Outline title"],
         language: "Korean",
@@ -77,5 +84,6 @@ describe("PresentationGenerationApi.generateTemplateV2Async", () => {
         template_v2_revision: 4,
         export_as: "pptx",
       });
+    });
   });
 });

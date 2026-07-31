@@ -11,7 +11,10 @@ import { store } from "@/store/store";
 import { AUTHORED_TEMPLATE_ID } from "../components/TemplateSelection";
 import { ApiError } from "../../services/api/api-error-handler";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import { DashboardApi } from "../../services/api/dashboard";
 import { usePresentationGeneration } from "./usePresentationGeneration";
+
+const DURABLE_TASK_STORAGE_KEY = "presenton:durable-generation-tasks:v1";
 
 const router = {
   push: () => undefined,
@@ -24,28 +27,43 @@ const router = {
 
 function GenerationHarness({
   selectedTemplate = AUTHORED_TEMPLATE_ID,
+  presentationId = null,
 }: {
   selectedTemplate?: string;
+  presentationId?: string | null;
 }) {
-  const { handleSubmit } = usePresentationGeneration(
-    null,
+  const { handleSubmit, loadingState } = usePresentationGeneration(
+    presentationId,
     [{ content: "# Selected outline" }],
     selectedTemplate,
     () => undefined
   );
 
   return (
-    <button type="button" onClick={() => void handleSubmit()}>
-      Generate
-    </button>
+    <>
+      <button type="button" onClick={() => void handleSubmit()}>
+        Generate
+      </button>
+      <output data-cy="generation-loading">
+        {loadingState.isLoading ? "loading" : "idle"}
+      </output>
+    </>
   );
 }
 
-function mountHarness(selectedTemplate?: string) {
+function mountHarness(
+  selectedTemplate?: string,
+  presentationId?: string | null,
+  generationKey = "initial"
+) {
   return mount(
     <AppRouterContext.Provider value={router as any}>
       <Provider store={store}>
-        <GenerationHarness selectedTemplate={selectedTemplate} />
+        <GenerationHarness
+          key={generationKey}
+          selectedTemplate={selectedTemplate}
+          presentationId={presentationId}
+        />
       </Provider>
     </AppRouterContext.Provider>
   );
@@ -53,6 +71,8 @@ function mountHarness(selectedTemplate?: string) {
 
 describe("usePresentationGeneration async generation", () => {
   beforeEach(() => {
+    cy.stub(router, "replace").as("replace");
+    cy.window().then((window) => window.localStorage.clear());
     store.dispatch(
       setPptGenUploadState({
         authoredStyle: "strategic-navy",
@@ -76,6 +96,214 @@ describe("usePresentationGeneration async generation", () => {
       language: null,
       vision_qa: true,
       authored_style: "strategic-navy",
+      idempotency_key: Cypress.sinon.match.string,
+    });
+  });
+
+  it("opens the generated authored presentation and clears loading on completion", () => {
+    const sourcePresentationId = "outline-shell-authored-completion";
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync").resolves({
+      id: "authored-completed-task",
+      request_id: "completed-request-1",
+    } as any);
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").resolves({
+      status: "completed",
+      data: { presentation_id: "finished-authored-presentation" },
+    } as any);
+    cy.stub(DashboardApi, "deletePresentation").resolves(undefined as any);
+
+    mountHarness(AUTHORED_TEMPLATE_ID, sourcePresentationId);
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      "/presentation?id=finished-authored-presentation"
+    );
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
+  });
+
+  it("opens the structured-template edit path on completion", () => {
+    cy.clock();
+    cy.stub(PresentationGenerationApi, "generateTemplateV2Async").resolves({
+      id: "template-v2-completed-task",
+      request_id: "completed-request-2",
+    } as any);
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").resolves({
+      status: "completed",
+      data: {
+        presentation_id: "finished-template-v2-presentation",
+        edit_path: "/presentation?id=finished-template-v2-presentation&mode=edit",
+      },
+    } as any);
+
+    mountHarness(makeTemplateV2SelectionId("brand-template", 4));
+    cy.contains("button", "Generate").click();
+    cy.tick(4000);
+
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      "/presentation?id=finished-template-v2-presentation&mode=edit"
+    );
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
+  });
+
+  it("uses one stable idempotency key when an authored generation is retried", () => {
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
+      .rejects(
+        new ApiError("Presentation generation failed", {
+          status: 503,
+          code: "upstream_overloaded",
+        })
+      )
+      .as("generateAuthored");
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(undefined, "outline-shell-idempotency");
+    cy.contains("button", "Generate").click();
+    cy.contains("button", "Generate").click();
+
+    cy.get("@generateAuthored").should("have.been.calledTwice").then((stub) => {
+      const first = (stub as any).getCall(0).args[0].idempotency_key;
+      const second = (stub as any).getCall(1).args[0].idempotency_key;
+      expect(first).to.be.a("string").and.not.be.empty;
+      expect(second).to.equal(first);
+    });
+  });
+
+  it("performs a final durable-status read at the foreground deadline before navigation", () => {
+    const sourcePresentationId = "outline-shell-deadline";
+    const idempotencyKey = "ppt-generation-deadline";
+    cy.window().then((window) => {
+      window.localStorage.setItem(
+        DURABLE_TASK_STORAGE_KEY,
+        JSON.stringify({
+          [idempotencyKey]: {
+            version: 1,
+            idempotencyKey,
+            taskId: "deadline-task-id",
+            mode: "template-v2",
+            sourcePresentationId,
+            status: "running",
+            createdAt: Date.now() - 30 * 60 * 1000,
+            deadlineAt: Date.now() - 1,
+            progressDurationSeconds: 60,
+          },
+        })
+      );
+    });
+    cy.stub(DashboardApi, "deletePresentation").resolves(undefined as any);
+    cy.stub(PresentationGenerationApi, "getGenerationStatus")
+      .resolves({
+        status: "completed",
+        data: { presentation_id: "deadline-completed-presentation" },
+      } as any)
+      .as("getStatus");
+
+    mountHarness(makeTemplateV2SelectionId("brand-template", 4), sourcePresentationId);
+
+    cy.get("@getStatus").should("have.been.calledOnceWith", "deadline-task-id");
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      "/presentation?id=deadline-completed-presentation"
+    );
+  });
+
+  it("clears a persisted task and loading state when recovery finds an error", () => {
+    const sourcePresentationId = "outline-shell-error";
+    const idempotencyKey = "ppt-generation-error";
+    cy.window().then((window) => {
+      window.localStorage.setItem(
+        DURABLE_TASK_STORAGE_KEY,
+        JSON.stringify({
+          [idempotencyKey]: {
+            version: 1,
+            idempotencyKey,
+            taskId: "failed-task-id",
+            mode: "authored",
+            sourcePresentationId,
+            status: "running",
+            createdAt: Date.now(),
+            deadlineAt: Date.now() + 30 * 60 * 1000,
+            progressDurationSeconds: 120,
+          },
+        })
+      );
+    });
+    cy.stub(notify, "error").as("notifyError");
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").resolves({
+      status: "error",
+      request_id: "recovered-error-request",
+      message: "Presentation generation failed",
+      error: { status_code: 422, code: "invalid_outline" },
+    } as any);
+
+    mountHarness(AUTHORED_TEMPLATE_ID, sourcePresentationId);
+
+    cy.get("@notifyError").should("have.been.calledOnce");
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
+    cy.window().then((window) => {
+      expect(window.localStorage.getItem(DURABLE_TASK_STORAGE_KEY)).to.equal("{}");
+    });
+  });
+
+  it("resumes a persisted task after remount and opens its completed deck", () => {
+    const sourcePresentationId = "outline-shell-recovery";
+    const idempotencyKey = "ppt-generation-recovery";
+    cy.window().then((window) => {
+      window.localStorage.setItem(
+        DURABLE_TASK_STORAGE_KEY,
+        JSON.stringify({
+          [idempotencyKey]: {
+            version: 1,
+            idempotencyKey,
+            taskId: "persisted-task-id",
+            mode: "authored",
+            sourcePresentationId,
+            status: "running",
+            createdAt: Date.now(),
+            deadlineAt: Date.now() + 30 * 60 * 1000,
+            progressDurationSeconds: 120,
+          },
+        })
+      );
+    });
+    cy.stub(DashboardApi, "deletePresentation").resolves(undefined as any);
+    cy.stub(PresentationGenerationApi, "getGenerationStatus")
+      .onFirstCall()
+      .resolves({ status: "running" } as any)
+      .onSecondCall()
+      .resolves({
+        status: "completed",
+        data: { presentation_id: "recovered-presentation" },
+      } as any)
+      .as("getStatus");
+
+    mountHarness(AUTHORED_TEMPLATE_ID, sourcePresentationId).then(
+      ({ rerender }) => {
+        cy.get("@getStatus").should("have.been.calledOnce");
+        rerender(<></>);
+        cy.then(() => {
+          rerender(
+            <AppRouterContext.Provider value={router as any}>
+              <Provider store={store}>
+                <GenerationHarness
+                  selectedTemplate={AUTHORED_TEMPLATE_ID}
+                  presentationId={sourcePresentationId}
+                />
+              </Provider>
+            </AppRouterContext.Provider>
+          );
+        });
+      }
+    );
+
+    cy.get("@getStatus").should("have.been.calledTwice");
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      "/presentation?id=recovered-presentation"
+    );
+    cy.window().then((window) => {
+      expect(window.localStorage.getItem(DURABLE_TASK_STORAGE_KEY)).to.equal("{}");
     });
   });
 
@@ -155,11 +383,12 @@ describe("usePresentationGeneration async generation", () => {
       "생성 오류",
       Cypress.sinon.match("Request ID: status-request-8")
     );
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
   });
 
-  it("includes the start request ID when client polling times out", () => {
+  it("keeps a pending task recoverable in the background at the foreground deadline", () => {
     cy.clock();
-    cy.stub(notify, "error").as("notifyError");
+    cy.stub(notify, "info").as("notifyInfo");
     cy.stub(PresentationGenerationApi, "generateTemplateV2Async")
       .resolves({
         id: "template-v2-task",
@@ -170,17 +399,25 @@ describe("usePresentationGeneration async generation", () => {
       .resolves({ status: "pending" } as any)
       .as("getStatus");
 
-    mountHarness(makeTemplateV2SelectionId("brand-template", 4));
+    mountHarness(
+      makeTemplateV2SelectionId("brand-template", 4),
+      "outline-shell-timeout"
+    );
     cy.contains("button", "Generate").click();
     cy.get("@startGeneration").should("have.been.calledOnce");
-    cy.tick(30 * 60 * 1000 + 1);
+    cy.tick(30 * 60 * 1000);
 
-    cy.get("@getStatus").should("have.been.calledOnce");
-    cy.get("@notifyError").should(
-      "have.been.calledWithMatch",
-      "생성이 일시 중단되었습니다",
-      Cypress.sinon.match("요청 ID: timeout-request-9")
-    );
+    cy.get("@getStatus").should("have.been.called");
+    cy.get("@startGeneration").should("have.been.calledOnce");
+    cy.get("@notifyInfo").should("have.been.calledOnce");
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
+    cy.window().then((window) => {
+      const tasks = JSON.parse(
+        window.localStorage.getItem(DURABLE_TASK_STORAGE_KEY) || "{}"
+      );
+      expect(Object.values(tasks)).to.have.length(1);
+      expect((Object.values(tasks)[0] as any).status).to.equal("background");
+    });
   });
 
   it("stops polling and suppresses errors after unmount", () => {
@@ -206,7 +443,7 @@ describe("usePresentationGeneration async generation", () => {
       }
     );
 
-    cy.get("@getStatus").should("not.have.been.called");
+    cy.get("@getStatus").should("have.been.calledOnce");
     cy.get("@notifyError").should("not.have.been.called");
   });
 });

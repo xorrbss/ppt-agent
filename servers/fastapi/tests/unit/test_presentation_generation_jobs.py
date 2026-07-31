@@ -11,6 +11,14 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import presentation_generation_job_service as jobs
+from utils.owner_context import (
+    reset_current_owner_id,
+    set_current_owner_id,
+)
+
+
+OWNER_A = uuid.UUID("11111111-1111-4111-8111-111111111111")
+OWNER_B = uuid.UUID("22222222-2222-4222-8222-222222222222")
 
 
 async def _job_database(tmp_path, monkeypatch):
@@ -41,6 +49,22 @@ def test_request_and_idempotency_hashes_are_canonical_and_bounded():
         jobs.idempotency_key_hash(" ")
     with pytest.raises(ValueError, match="invalid_idempotency_key"):
         jobs.idempotency_key_hash("x" * 256)
+
+
+def test_idempotency_key_hash_is_scoped_to_the_current_owner():
+    owner_a_token = set_current_owner_id(OWNER_A)
+    try:
+        owner_a_hash = jobs.idempotency_key_hash("retry-key")
+    finally:
+        reset_current_owner_id(owner_a_token)
+
+    owner_b_token = set_current_owner_id(OWNER_B)
+    try:
+        owner_b_hash = jobs.idempotency_key_hash("retry-key")
+    finally:
+        reset_current_owner_id(owner_b_token)
+
+    assert owner_a_hash != owner_b_hash
 
 
 def test_job_claim_is_atomic_and_success_finalization_is_token_guarded(

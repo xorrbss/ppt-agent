@@ -95,6 +95,31 @@ def filesystem_image_path_to_app_data_url(path_or_url: str) -> str:
     return absolute_fastapi_asset_url("/app_data/images/" + rel.replace(os.sep, "/"))
 
 
+def filesystem_image_path_to_app_data_reference(path: str) -> str:
+    """Return an image path relative to the global app-data images mount.
+
+    ``get_images_directory`` is owner-scoped when authentication is enabled, so a
+    path relative to that directory omits the required ``users/<owner>`` segment.
+    Slide JSON stores references that the frontend appends to
+    ``/app_data/images/``; calculate those references from the global images root.
+    """
+    images_root = os.path.realpath(
+        os.path.join(get_app_data_directory_env(), "images")
+    )
+    image_path = os.path.realpath(path)
+    try:
+        if os.path.commonpath([images_root, image_path]) != images_root:
+            raise ValueError("Image path is outside the app-data images directory")
+    except ValueError as error:
+        raise ValueError(
+            "Image path is outside the app-data images directory"
+        ) from error
+    relative = os.path.relpath(image_path, images_root)
+    if relative == "." or relative.startswith(".."):
+        raise ValueError("Image path is outside the app-data images directory")
+    return relative.replace(os.sep, "/")
+
+
 def resolve_app_path_to_filesystem(path_or_url: str) -> Optional[str]:
     """
     Resolve an app-served path or URL to an actual filesystem path.

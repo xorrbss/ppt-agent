@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -61,6 +62,25 @@ def _outline(n):
 
 def _brand():
     return Brand(topic="주제", language="Korean", primary="#2563EB", fonts="Noto Sans KR")
+
+
+def test_save_slide_pngs_keeps_owner_namespace_in_browser_reference(
+    monkeypatch, tmp_path
+):
+    owner_id = uuid.uuid4()
+    presentation_id = uuid.uuid4()
+    app_data = tmp_path / "app_data"
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+
+    owner_token = set_current_owner_id(owner_id)
+    try:
+        refs = authored_service._save_slide_pngs(presentation_id, [b"png"])
+    finally:
+        reset_current_owner_id(owner_token)
+
+    expected = f"users/{owner_id}/authored/{presentation_id}/slide_0.png"
+    assert refs == [expected]
+    assert (app_data / "images" / expected).read_bytes() == b"png"
 
 
 # --- HTML validity + fallback ------------------------------------------------

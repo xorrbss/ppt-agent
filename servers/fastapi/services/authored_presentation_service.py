@@ -26,10 +26,14 @@ from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.image_generation_service import ImageGenerationService
-from utils.asset_directory_utils import get_exports_directory, get_images_directory
-from utils.filename_utils import safe_export_basename
+from utils.asset_directory_utils import (
+    filesystem_image_path_to_app_data_reference,
+    get_exports_directory,
+    get_images_directory,
+)
 from utils.authored_illustrations import apply_authored_illustration
 from utils.authored_styles import resolve_authored_style
+from utils.filename_utils import safe_export_basename
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     author_planned_slide,
@@ -106,17 +110,17 @@ def resolve_brand(
 
 
 def _save_slide_pngs(presentation_id: uuid.UUID, pngs: List[bytes]) -> List[str]:
-    """Persist slide PNGs under the images dir; return paths relative to it (the form
-    resolve_app_path_to_filesystem / the /app_data static mount understand)."""
+    """Persist slide PNGs and return references relative to /app_data/images."""
     rel_dir = os.path.join("authored", str(presentation_id))
     abs_dir = os.path.join(get_images_directory(), rel_dir)
     os.makedirs(abs_dir, exist_ok=True)
     refs: List[str] = []
     for i, png in enumerate(pngs):
         fname = f"slide_{i}.png"
-        with open(os.path.join(abs_dir, fname), "wb") as f:
+        absolute_path = os.path.join(abs_dir, fname)
+        with open(absolute_path, "wb") as f:
             f.write(png)
-        refs.append(f"{rel_dir.replace(os.sep, '/')}/{fname}")
+        refs.append(filesystem_image_path_to_app_data_reference(absolute_path))
     return refs
 
 

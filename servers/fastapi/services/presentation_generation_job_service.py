@@ -16,6 +16,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.database import async_session_maker
+from utils.owner_context import get_current_owner_id
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +46,24 @@ def request_sha256(payload: dict[str, Any]) -> str:
 
 
 def idempotency_key_hash(key: str) -> str:
+    """Hash a caller-supplied key inside the current owner's namespace.
+
+    Idempotency keys are client-chosen values, so treating them as global lets
+    one user accidentally (or deliberately) collide with another user's
+    request.  The hash is persisted behind a globally unique index; including
+    the owner in its input keeps that index while making retries owner-local.
+    """
+
     normalized = key.strip()
     if not normalized or len(normalized) > 255:
         raise ValueError("invalid_idempotency_key")
+    owner_id = get_current_owner_id()
+    owner_scope = str(owner_id) if owner_id is not None else "anonymous"
     return sha256(
-        f"presenton.presentation-generation/v1:{normalized}".encode("utf-8")
+        (
+            "presenton.presentation-generation/v1:"
+            f"{owner_scope}:{normalized}"
+        ).encode("utf-8")
     ).hexdigest()
 
 
