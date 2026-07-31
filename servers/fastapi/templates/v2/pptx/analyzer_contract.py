@@ -37,6 +37,17 @@ class ValidatedChartSeriesCandidate(AnalyzerContractModel):
     values: list[FiniteFloat]
 
 
+class ValidatedTableCellReferenceCandidate(AnalyzerContractModel):
+    row: Annotated[StrictInt, Field(ge=0)]
+    column: Annotated[StrictInt, Field(ge=0)]
+
+
+class ValidatedTableCellSpanCandidate(AnalyzerContractModel):
+    rowspan: Annotated[StrictInt, Field(ge=1)] = 1
+    colspan: Annotated[StrictInt, Field(ge=1)] = 1
+    covered_by: ValidatedTableCellReferenceCandidate | None = None
+
+
 class ValidatedShapeCandidate(AnalyzerContractModel):
     source_id: NonEmptyString
     name: NonEmptyString
@@ -48,6 +59,7 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
     rotation: FiniteFloat = 0
     text: StrictStr | None = None
     table_rows: list[list[StrictStr]] | None = None
+    table_spans: list[list[ValidatedTableCellSpanCandidate]] | None = None
     chart_type: StrictStr | None = None
     chart_categories: list[StrictStr] | None = None
     chart_series: list[ValidatedChartSeriesCandidate] | None = None
@@ -68,8 +80,56 @@ class ValidatedShapeCandidate(AnalyzerContractModel):
             column_count = len(self.table_rows[0])
             if any(len(row) != column_count for row in self.table_rows):
                 raise ValueError("table_candidate_rows_must_be_rectangular")
-        elif self.table_rows is not None:
-            raise ValueError("non_table_candidate_cannot_contain_table_rows")
+            if self.table_spans is not None:
+                if len(self.table_spans) != len(self.table_rows) or any(
+                    len(row) != column_count for row in self.table_spans
+                ):
+                    raise ValueError("table_candidate_spans_must_match_cells")
+                occupied: dict[tuple[int, int], tuple[int, int]] = {}
+                for row_index, row in enumerate(self.table_spans):
+                    for column_index, cell in enumerate(row):
+                        if cell.covered_by is not None:
+                            continue
+                        end_row = row_index + cell.rowspan
+                        end_column = column_index + cell.colspan
+                        if (
+                            end_row > len(self.table_spans)
+                            or end_column > column_count
+                        ):
+                            raise ValueError("table_candidate_span_out_of_bounds")
+                        anchor = (row_index, column_index)
+                        for covered_row in range(row_index, end_row):
+                            for covered_column in range(column_index, end_column):
+                                coordinate = (covered_row, covered_column)
+                                prior = occupied.get(coordinate)
+                                if prior is not None and prior != anchor:
+                                    raise ValueError("table_candidate_spans_overlap")
+                                occupied[coordinate] = anchor
+                                if coordinate == anchor:
+                                    continue
+                                marker = self.table_spans[covered_row][
+                                    covered_column
+                                ].covered_by
+                                if marker is None or (
+                                    marker.row,
+                                    marker.column,
+                                ) != anchor:
+                                    raise ValueError(
+                                        "table_candidate_covered_cell_mismatch"
+                                    )
+                for row_index, row in enumerate(self.table_spans):
+                    for column_index, cell in enumerate(row):
+                        if cell.covered_by is not None and occupied.get(
+                            (row_index, column_index)
+                        ) != (
+                            cell.covered_by.row,
+                            cell.covered_by.column,
+                        ):
+                            raise ValueError(
+                                "table_candidate_orphan_covered_cell"
+                            )
+        elif self.table_rows is not None or self.table_spans is not None:
+            raise ValueError("non_table_candidate_cannot_contain_table_data")
         if self.kind == "chart":
             if not self.chart_type or self.chart_categories is None:
                 raise ValueError("chart_candidate_requires_type_and_categories")

@@ -562,13 +562,24 @@ function renderTable(item: JsonRecord, mode: RenderMode): string {
   const cells = rows
     .flatMap((row, rowIndex) =>
       Array.from({ length: colCount }, (_, colIndex) => {
-        const cell = row[colIndex] ?? {};
+        const cell = readRecord(row[colIndex]);
+        if (readRecordOrNull(cell.covered_by)) return "";
         const isHeader = rowIndex === 0;
+        const rowspan =
+          Number.isInteger(cell.rowspan) && Number(cell.rowspan) > 0
+            ? Number(cell.rowspan)
+            : 1;
+        const colspan =
+          Number.isInteger(cell.colspan) && Number(cell.colspan) > 0
+            ? Number(cell.colspan)
+            : 1;
         return `<div style="${tableCellStyle(
           cell,
           isHeader,
           tableFont
-        )}">${cellText(cell, tableFont, isHeader)}</div>`;
+        )}grid-column:${colIndex + 1} / span ${colspan};grid-row:${
+          rowIndex + 1
+        } / span ${rowspan};">${cellText(cell, tableFont, isHeader)}</div>`;
       })
     )
     .join("");

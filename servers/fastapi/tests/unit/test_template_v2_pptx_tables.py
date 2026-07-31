@@ -16,13 +16,32 @@ OFFICE_REL = (
 )
 
 
-def _pptx() -> bytes:
+def _pptx(*, merged: bool = False) -> bytes:
     presentation_rels = (
         f'<Relationships xmlns="{REL_NS}">'
         f'<Relationship Id="rId1" Type="{OFFICE_REL}/slide" '
         'Target="slides/slide1.xml"/></Relationships>'
     )
-    slide = b"""
+    table_rows = (
+        """
+          <a:tr>
+           <a:tc rowSpan="2" gridSpan="2"><a:txBody><a:p><a:r><a:t>Combined</a:t></a:r></a:p></a:txBody></a:tc>
+           <a:tc rowSpan="2" hMerge="1"><a:txBody><a:p><a:r><a:t>Covered H</a:t></a:r></a:p></a:txBody></a:tc>
+          </a:tr>
+          <a:tr>
+           <a:tc gridSpan="2" vMerge="1"><a:txBody><a:p><a:r><a:t>Covered V</a:t></a:r></a:p></a:txBody></a:tc>
+           <a:tc hMerge="1" vMerge="1"><a:txBody><a:p><a:r><a:t>Covered HV</a:t></a:r></a:p></a:txBody></a:tc>
+          </a:tr>
+        """
+        if merged
+        else """
+          <a:tr><a:tc><a:txBody><a:p><a:r><a:t>Quarter</a:t></a:r></a:p></a:txBody></a:tc>
+           <a:tc><a:txBody><a:p><a:r><a:t>Revenue</a:t></a:r></a:p></a:txBody></a:tc></a:tr>
+          <a:tr><a:tc><a:txBody><a:p><a:r><a:t>Q1</a:t></a:r></a:p></a:txBody></a:tc>
+           <a:tc><a:txBody><a:p><a:r><a:t>42</a:t></a:r></a:p></a:txBody></a:tc></a:tr>
+        """
+    )
+    slide = f"""
       <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
        <p:cSld><p:spTree><p:nvGrpSpPr/><p:grpSpPr/>
@@ -30,15 +49,12 @@ def _pptx() -> bytes:
          <p:nvGraphicFramePr><p:cNvPr id="8" name="Revenue Table"/></p:nvGraphicFramePr>
          <p:xfrm><a:off x="914400" y="914400"/><a:ext cx="4572000" cy="1828800"/></p:xfrm>
          <a:graphic><a:graphicData><a:tbl>
-          <a:tr><a:tc><a:txBody><a:p><a:r><a:t>Quarter</a:t></a:r></a:p></a:txBody></a:tc>
-           <a:tc><a:txBody><a:p><a:r><a:t>Revenue</a:t></a:r></a:p></a:txBody></a:tc></a:tr>
-          <a:tr><a:tc><a:txBody><a:p><a:r><a:t>Q1</a:t></a:r></a:p></a:txBody></a:tc>
-           <a:tc><a:txBody><a:p><a:r><a:t>42</a:t></a:r></a:p></a:txBody></a:tc></a:tr>
+          {table_rows}
          </a:tbl></a:graphicData></a:graphic>
         </p:graphicFrame>
        </p:spTree></p:cSld>
       </p:sld>
-    """
+    """.encode()
     parts = {
         "[Content_Types].xml": b"<Types/>",
         "ppt/presentation.xml": b"""
@@ -82,3 +98,42 @@ def test_ooxml_table_becomes_editable_template_v2_table(tmp_path: Path) -> None:
         "columns": ["Quarter", "Revenue"],
         "rows": [["Q1", "42"]],
     }
+
+
+def test_ooxml_merged_table_round_trips_span_and_covered_cell_content(
+    tmp_path: Path,
+) -> None:
+    payload = _pptx(merged=True)
+    source = tmp_path / "merged-table.pptx"
+    source.write_bytes(payload)
+    candidates = parse_presentation_candidates(
+        PptxPackageReader(source),
+        source_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+
+    table = candidates.slides[0].shapes[0]
+    assert table.kind == "table"
+    assert table.table_rows == [
+        ["Combined", "Covered H"],
+        ["Covered V", "Covered HV"],
+    ]
+    assert table.table_spans is not None
+    assert table.table_spans[0][0].model_dump(mode="json") == {
+        "rowspan": 2,
+        "colspan": 2,
+        "covered_by": None,
+    }
+    for row_index, column_index in ((0, 1), (1, 0), (1, 1)):
+        assert table.table_spans[row_index][column_index].covered_by.model_dump(
+            mode="json"
+        ) == {"row": 0, "column": 0}
+
+    draft = assemble_template_v2_draft(candidates)
+    element = draft.raw_layouts.layouts[0].elements[0]
+    assert element.columns[0].rowspan == 2
+    assert element.columns[0].colspan == 2
+    assert element.rows[0][1].covered_by.model_dump(mode="json") == {
+        "row": 0,
+        "column": 0,
+    }
+    assert [run.text for run in element.rows[0][1].runs] == ["Covered HV"]

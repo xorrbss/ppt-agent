@@ -4,7 +4,13 @@ import posixpath
 from pathlib import PurePosixPath
 
 from .chart_parser import parse_cached_chart
-from .models import PresentationCandidates, ShapeCandidate, SlideCandidate
+from .models import (
+    PresentationCandidates,
+    ShapeCandidate,
+    SlideCandidate,
+    TableCellReferenceCandidate,
+    TableCellSpanCandidate,
+)
 from .package_reader import PptxPackageReader, UnsafePptxPackage
 from .relationship_graph import build_relationship_graph_evidence
 from .style_graph import build_style_graph_evidence
@@ -228,20 +234,27 @@ def _parse_graphic_frame(
             unsupported_reason="unsupported_ooxml:graphicFrame",
             **transform,
         )
-    rows = [
-        [_text(cell) for cell in row.findall("./a:tc", NS)]
+    cell_rows = [
+        row.findall("./a:tc", NS)
         for row in table.findall("./a:tr", NS)
     ]
-    has_merges = any(
-        table.find(f".//a:{tag}", NS) is not None
-        for tag in ("gridSpan", "vMerge", "hMerge")
-    )
+    rows = [[_text(cell) for cell in row] for row in cell_rows]
     if (
         not rows
         or not rows[0]
         or any(len(row) != len(rows[0]) for row in rows)
-        or has_merges
     ):
+        return ShapeCandidate(
+            source_id=source_id,
+            name=name,
+            kind="unsupported",
+            confidence=0,
+            unsupported_reason="unsupported_table_structure",
+            **transform,
+        )
+    try:
+        table_spans = _parse_table_spans(cell_rows)
+    except ValueError:
         return ShapeCandidate(
             source_id=source_id,
             name=name,
@@ -255,9 +268,131 @@ def _parse_graphic_frame(
         name=name,
         kind="table",
         table_rows=rows,
+        table_spans=table_spans,
         confidence=0.9,
         **transform,
     )
+
+
+def _parse_table_spans(
+    rows: list[list],
+) -> list[list[TableCellSpanCandidate]] | None:
+    """Decode DrawingML merge markers into the lossless native grid contract."""
+
+    row_count = len(rows)
+    column_count = len(rows[0])
+    result: list[list[TableCellSpanCandidate]] = []
+    has_spans = False
+
+    def positive_span(value: str | None) -> int:
+        if value is None:
+            return 1
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise ValueError("invalid_table_span") from exc
+        if parsed < 1:
+            raise ValueError("invalid_table_span")
+        return parsed
+
+    def merge_flag(value: str | None) -> bool:
+        if value is None or value in {"0", "false", "off"}:
+            return False
+        if value in {"1", "true", "on"}:
+            return True
+        raise ValueError("invalid_table_merge_flag")
+
+    def anchor_of(
+        cell: TableCellSpanCandidate,
+        row: int,
+        column: int,
+    ) -> tuple[int, int]:
+        if cell.covered_by is None:
+            return row, column
+        return cell.covered_by.row, cell.covered_by.column
+
+    for row_index, row in enumerate(rows):
+        parsed_row: list[TableCellSpanCandidate] = []
+        for column_index, cell in enumerate(row):
+            horizontal = merge_flag(cell.get("hMerge"))
+            vertical = merge_flag(cell.get("vMerge"))
+            if horizontal or vertical:
+                anchors: list[tuple[int, int]] = []
+                if horizontal:
+                    if column_index == 0:
+                        raise ValueError("table_hmerge_without_left_cell")
+                    anchors.append(
+                        anchor_of(
+                            parsed_row[column_index - 1],
+                            row_index,
+                            column_index - 1,
+                        )
+                    )
+                if vertical:
+                    if row_index == 0:
+                        raise ValueError("table_vmerge_without_upper_cell")
+                    anchors.append(
+                        anchor_of(
+                            result[row_index - 1][column_index],
+                            row_index - 1,
+                            column_index,
+                        )
+                    )
+                if any(anchor != anchors[0] for anchor in anchors[1:]):
+                    raise ValueError("table_merge_markers_disagree")
+                parsed_row.append(
+                    TableCellSpanCandidate(
+                        covered_by=TableCellReferenceCandidate(
+                            row=anchors[0][0],
+                            column=anchors[0][1],
+                        )
+                    )
+                )
+                has_spans = True
+                continue
+            rowspan = positive_span(cell.get("rowSpan"))
+            colspan = positive_span(cell.get("gridSpan"))
+            parsed_row.append(
+                TableCellSpanCandidate(rowspan=rowspan, colspan=colspan)
+            )
+            has_spans = has_spans or rowspan > 1 or colspan > 1
+        result.append(parsed_row)
+
+    occupied: dict[tuple[int, int], tuple[int, int]] = {}
+    for row_index, row in enumerate(result):
+        for column_index, cell in enumerate(row):
+            if cell.covered_by is not None:
+                continue
+            end_row = row_index + cell.rowspan
+            end_column = column_index + cell.colspan
+            if end_row > row_count or end_column > column_count:
+                raise ValueError("table_span_out_of_bounds")
+            anchor = (row_index, column_index)
+            for covered_row in range(row_index, end_row):
+                for covered_column in range(column_index, end_column):
+                    coordinate = (covered_row, covered_column)
+                    prior = occupied.get(coordinate)
+                    if prior is not None and prior != anchor:
+                        raise ValueError("table_spans_overlap")
+                    occupied[coordinate] = anchor
+                    if coordinate == anchor:
+                        continue
+                    marker = result[covered_row][covered_column].covered_by
+                    if marker is None or (
+                        marker.row,
+                        marker.column,
+                    ) != anchor:
+                        raise ValueError("table_merge_marker_mismatch")
+    for row_index, row in enumerate(result):
+        for column_index, cell in enumerate(row):
+            if cell.covered_by is not None and occupied.get(
+                (row_index, column_index)
+            ) != (
+                cell.covered_by.row,
+                cell.covered_by.column,
+            ):
+                raise ValueError("table_orphan_merge_marker")
+    return result if has_spans else None
 
 
 def _parse_group(

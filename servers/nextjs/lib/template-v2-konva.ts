@@ -355,6 +355,14 @@ function tableCellAlign(cell: JsonRecord): "left" | "center" | "right" {
     : "left";
 }
 
+function tableCellSpan(value: unknown): number {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value > 0
+    ? value
+    : 1;
+}
+
 // Read-only preview layout for a `table` element. Columns share the element
 // width evenly (matching the export renderer's fixed table layout) and the
 // header plus body rows share the element height evenly.
@@ -383,6 +391,7 @@ export function layoutTemplateV2Table(
     header: boolean,
     key: string
   ) => {
+    if (isJsonRecord(cell.covered_by)) return;
     const color = isJsonRecord(cell.color)
       ? stringValue(cell.color.color, "")
       : stringValue(cell.color, "");
@@ -390,8 +399,8 @@ export function layoutTemplateV2Table(
       key,
       x: column * columnWidth,
       y: row * rowHeight,
-      width: columnWidth,
-      height: rowHeight,
+      width: columnWidth * tableCellSpan(cell.colspan),
+      height: rowHeight * tableCellSpan(cell.rowspan),
       background: color || null,
       text: tableCellText(cell),
       align: tableCellAlign(cell),
@@ -405,9 +414,11 @@ export function layoutTemplateV2Table(
   const bodyOffset = columns.length > 0 ? 1 : 0;
   rows.forEach((row, rowIndex) => {
     if (!Array.isArray(row)) return;
-    row.filter(isJsonRecord).forEach((cell, column) =>
-      pushCell(cell, column, rowIndex + bodyOffset, false, `${rowIndex}-${column}`)
-    );
+    row.forEach((cell, column) => {
+      if (isJsonRecord(cell)) {
+        pushCell(cell, column, rowIndex + bodyOffset, false, `${rowIndex}-${column}`);
+      }
+    });
   });
   return { cells };
 }

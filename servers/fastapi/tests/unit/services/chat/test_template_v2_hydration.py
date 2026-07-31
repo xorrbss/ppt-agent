@@ -95,6 +95,92 @@ def test_hydration_is_fail_closed_for_malformed_native_ui():
         hydrate_template_v2_slide(source, {"visuals": {}})
 
 
+def _merged_table_layout():
+    covered = {"covered_by": {"row": 0, "column": 0}}
+    return {
+        "id": "merged-table",
+        "description": "A valid merged table hydration layout",
+        "components": [
+            {
+                "id": "content",
+                "description": "Merged table content",
+                "position": {"x": 0, "y": 0},
+                "elements": [
+                    {
+                        "type": "table",
+                        "name": "summary",
+                        "decorative": False,
+                        "position": {"x": 0, "y": 0},
+                        "size": {"width": 600, "height": 200},
+                        "max_columns": 8,
+                        "min_columns": 1,
+                        "max_rows": 8,
+                        "min_rows": 1,
+                        "columns": [
+                            {
+                                "runs": [{"text": "Header"}],
+                                "rowspan": 2,
+                                "colspan": 2,
+                            },
+                            {"runs": [{"text": "Hidden header"}], **covered},
+                        ],
+                        "rows": [
+                            [
+                                {"runs": [{"text": "Hidden body 1"}], **covered},
+                                {"runs": [{"text": "Hidden body 2"}], **covered},
+                            ]
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_table_hydration_preserves_spans_and_covered_objects_for_same_grid():
+    state = hydrate_template_v2_slide(
+        _merged_table_layout(),
+        {
+            "content": {
+                "summary": {
+                    "columns": ["Updated header", "Updated hidden header"],
+                    "rows": [["Updated hidden body 1", "Updated hidden body 2"]],
+                }
+            }
+        },
+    )
+
+    table = state.ui["components"][0]["elements"][0]
+    assert table["columns"][0]["rowspan"] == 2
+    assert table["columns"][0]["colspan"] == 2
+    assert table["columns"][1]["covered_by"] == {"row": 0, "column": 0}
+    assert table["rows"][0][0]["covered_by"] == {"row": 0, "column": 0}
+    assert table["rows"][0][1]["covered_by"] == {"row": 0, "column": 0}
+    assert table["rows"][0][1]["runs"][0]["text"] == "Updated hidden body 2"
+
+
+def test_table_hydration_strips_all_spans_when_grid_shape_changes():
+    state = hydrate_template_v2_slide(
+        _merged_table_layout(),
+        {
+            "content": {
+                "summary": {
+                    "columns": ["H1", "H2", "H3"],
+                    "rows": [["B1", "B2", "B3"]],
+                }
+            }
+        },
+    )
+
+    table = state.ui["components"][0]["elements"][0]
+    assert len(table["columns"]) == 3
+    for row in [table["columns"], *table["rows"]]:
+        for cell in row:
+            assert cell.get("rowspan", 1) == 1
+            assert cell.get("colspan", 1) == 1
+            assert cell.get("covered_by") is None
+
+
 def test_resolve_layout_returns_detached_copy():
     payload = {"layouts": [_layout()]}
     resolved = resolve_template_v2_layout(payload, "hero")

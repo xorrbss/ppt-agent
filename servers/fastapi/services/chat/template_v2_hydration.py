@@ -306,6 +306,19 @@ def _set_table(element: dict[str, Any], value: Any) -> None:
         value = {"rows": value}
     if not isinstance(value, dict):
         return
+    old_columns = element.get("columns")
+    old_rows = element.get("rows")
+    old_shape = (
+        (
+            len(old_columns),
+            tuple(
+                len(row) if isinstance(row, list) else -1
+                for row in old_rows
+            ),
+        )
+        if isinstance(old_columns, list) and isinstance(old_rows, list)
+        else None
+    )
     for key in ("columns", "rows"):
         rows = value.get(key)
         if not isinstance(rows, list):
@@ -324,6 +337,28 @@ def _set_table(element: dict[str, Any], value: Any) -> None:
                 for i, row in enumerate(rows)
                 if isinstance(row, list)
             ]
+    new_columns = element.get("columns")
+    new_rows = element.get("rows")
+    new_shape = (
+        (
+            len(new_columns),
+            tuple(
+                len(row) if isinstance(row, list) else -1
+                for row in new_rows
+            ),
+        )
+        if isinstance(new_columns, list) and isinstance(new_rows, list)
+        else None
+    )
+    if old_shape != new_shape:
+        for row in [new_columns, *(new_rows or [])]:
+            if not isinstance(row, list):
+                continue
+            for cell in row:
+                if isinstance(cell, dict):
+                    cell.pop("rowspan", None)
+                    cell.pop("colspan", None)
+                    cell.pop("covered_by", None)
 
 
 def _cells(old: list[Any], values: list[Any]) -> list[dict[str, Any]]:

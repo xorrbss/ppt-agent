@@ -69,7 +69,9 @@ function tableRuns(element: JsonRecord): EditableRun[] {
   if (element.type !== "table") return [];
   const columns = Array.isArray(element.columns) ? element.columns : [];
   const headers = columns.flatMap((column, columnIndex) =>
-    isJsonRecord(column) && Array.isArray(column.runs)
+    isJsonRecord(column) &&
+    !isJsonRecord(column.covered_by) &&
+    Array.isArray(column.runs)
       ? column.runs.flatMap((run, runIndex) =>
           isJsonRecord(run)
             ? [
@@ -92,7 +94,9 @@ function tableRuns(element: JsonRecord): EditableRun[] {
   const cells = rows.flatMap((row, rowIndex) =>
     Array.isArray(row)
       ? row.flatMap((cell, columnIndex) =>
-          isJsonRecord(cell) && Array.isArray(cell.runs)
+          isJsonRecord(cell) &&
+          !isJsonRecord(cell.covered_by) &&
+          Array.isArray(cell.runs)
             ? cell.runs.flatMap((run, runIndex) =>
                 isJsonRecord(run)
                   ? [

@@ -14,6 +14,17 @@ class ChartSeriesCandidate(PptxCandidateModel):
     values: list[float]
 
 
+class TableCellReferenceCandidate(PptxCandidateModel):
+    row: int = Field(ge=0)
+    column: int = Field(ge=0)
+
+
+class TableCellSpanCandidate(PptxCandidateModel):
+    rowspan: int = Field(default=1, ge=1)
+    colspan: int = Field(default=1, ge=1)
+    covered_by: TableCellReferenceCandidate | None = None
+
+
 class ShapeCandidate(PptxCandidateModel):
     source_id: str
     name: str
@@ -25,6 +36,7 @@ class ShapeCandidate(PptxCandidateModel):
     rotation: float = 0
     text: str | None = None
     table_rows: list[list[str]] | None = None
+    table_spans: list[list[TableCellSpanCandidate]] | None = None
     chart_type: str | None = None
     chart_categories: list[str] | None = None
     chart_series: list[ChartSeriesCandidate] | None = None

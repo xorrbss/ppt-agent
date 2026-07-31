@@ -16,6 +16,7 @@ from templates.v2.models.elements import (
     Size,
     Table,
     TableCell,
+    TableCellReference,
     Text,
     TextRun,
 )
@@ -84,10 +85,31 @@ def _element(
         )
     if candidate.kind == "table":
         rows = candidate.table_rows or []
-        cells = [
-            [TableCell(runs=[TextRun(text=value)]) for value in row]
-            for row in rows
-        ]
+        cells: list[list[TableCell]] = []
+        for row_index, row in enumerate(rows):
+            cell_row: list[TableCell] = []
+            for column_index, value in enumerate(row):
+                span = (
+                    candidate.table_spans[row_index][column_index]
+                    if candidate.table_spans is not None
+                    else None
+                )
+                cell_row.append(
+                    TableCell(
+                        runs=[TextRun(text=value)],
+                        rowspan=span.rowspan if span is not None else 1,
+                        colspan=span.colspan if span is not None else 1,
+                        covered_by=(
+                            TableCellReference(
+                                row=span.covered_by.row,
+                                column=span.covered_by.column,
+                            )
+                            if span is not None and span.covered_by is not None
+                            else None
+                        ),
+                    )
+                )
+            cells.append(cell_row)
         column_count = len(cells[0])
         return Table(
             type="table",

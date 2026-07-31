@@ -1,9 +1,4 @@
-"""Characterization tests for deliberately bounded Template V2 editor parity.
-
-These tests make two safety boundaries explicit: chart metadata is a first-class,
-round-trippable native field, while merged table cells are not silently accepted
-until every renderer and exporter has a lossless span contract.
-"""
+"""Characterization tests for advanced Template V2 editor contracts."""
 
 from __future__ import annotations
 
@@ -62,11 +57,54 @@ def test_chart_metadata_is_editable_and_preserved_by_the_native_contract() -> No
     assert payload["series"] == [{"name": "Actual", "values": [42.0, 51.5]}]
 
 
-def test_table_spans_fail_closed_until_merge_split_has_a_lossless_contract() -> None:
+def test_table_spans_round_trip_with_preserved_covered_cells() -> None:
     payload = _table_payload()
     payload["columns"][0]["rowspan"] = 2  # type: ignore[index]
+    payload["rows"][0][0]["covered_by"] = {"row": 0, "column": 0}  # type: ignore[index]
 
-    with pytest.raises(ValidationError, match="rowspan"):
+    table = Table.model_validate(payload)
+    canonical = table.model_dump(mode="json")
+
+    assert canonical["columns"][0]["rowspan"] == 2
+    assert canonical["rows"][0][0]["runs"] == [{"text": "Q1", "font": None}]
+    assert canonical["rows"][0][0]["covered_by"] == {"row": 0, "column": 0}
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (
+            lambda payload: payload["columns"][0].update({"rowspan": 3}),  # type: ignore[index,union-attr]
+            "outside the table grid",
+        ),
+        (
+            lambda payload: payload["columns"][0].update({"colspan": 2}),  # type: ignore[index,union-attr]
+            "must reference its span anchor",
+        ),
+        (
+            lambda payload: payload["rows"][0][1].update(  # type: ignore[index,union-attr]
+                {"covered_by": {"row": 0, "column": 0}}
+            ),
+            "missing span anchor",
+        ),
+        (
+            lambda payload: payload["columns"][0].update({"rowspan": True}),  # type: ignore[index,union-attr]
+            "valid integer",
+        ),
+        (
+            lambda payload: payload["columns"][0].update({"colspan": "2"}),  # type: ignore[index,union-attr]
+            "valid integer",
+        ),
+    ],
+)
+def test_table_spans_fail_closed_for_invalid_grid_contracts(
+    mutate,
+    message: str,
+) -> None:
+    payload = _table_payload()
+    mutate(payload)
+
+    with pytest.raises(ValidationError, match=message):
         Table.model_validate(payload)
 
 
@@ -95,4 +133,3 @@ def test_slide_snapshot_rejects_mixed_native_ui_and_authored_html() -> None:
 
     with pytest.raises(ValueError, match="slide_ui_and_authored_html_cannot_coexist"):
         canonicalize_slide_dump({"ui": ui, "html_content": "<p>legacy</p>"})
-

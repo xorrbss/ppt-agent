@@ -104,6 +104,78 @@ test("renderer covers every strict Template V2 element discriminator", () => {
   assert.match(html, /position:relative/);
 });
 
+test("table renderer emits native span attributes and omits covered cells", () => {
+  const covered = {
+    covered_by: { row: 0, column: 0 },
+    runs: [run("covered-cell-content")],
+  };
+  const html = renderTemplateV2GeneralSlideCanvasHtml(
+    slideWith([
+      {
+        type: "table",
+        ...frame,
+        columns: [
+          { rowspan: 2, colspan: 2, runs: [run("merged-anchor")] },
+          covered,
+          { runs: [run("heading-three")] },
+        ],
+        rows: [[covered, covered, { runs: [run("value-three")] }]],
+        name: "merged-table",
+      },
+    ])
+  );
+
+  assert.match(html, /<th rowspan="2" colspan="2"/);
+  assert.match(html, /merged-anchor/);
+  assert.doesNotMatch(html, /covered-cell-content/);
+  assert.equal((html.match(/<(?:th|td)(?:\s|>)/g) ?? []).length, 3);
+});
+
+test("table renderer fails closed for malformed or inconsistent span grids", () => {
+  const table = (columns, rows) => ({
+    type: "table",
+    ...frame,
+    columns,
+    rows,
+    name: "invalid-table",
+  });
+  const covered = (row, column) => ({
+    covered_by: { row, column },
+    runs: [run("preserved")],
+  });
+
+  assert.throws(
+    () => renderTemplateV2GeneralSlideCanvasHtml(
+      slideWith([table([{ rowspan: 0, runs: [run("bad")] }], [[{ runs: [run("body")] }]])])
+    ),
+    /template_v2_renderer_invalid_table_span/,
+  );
+  assert.throws(
+    () => renderTemplateV2GeneralSlideCanvasHtml(
+      slideWith([table(
+        [{ colspan: 2, runs: [run("anchor")] }, { runs: [run("missing marker")] }],
+        [[{ runs: [run("left")] }, { runs: [run("right")] }]],
+      )])
+    ),
+    /template_v2_renderer_table_covered_cell_mismatch/,
+  );
+  assert.throws(
+    () => renderTemplateV2GeneralSlideCanvasHtml(
+      slideWith([table(
+        [{ runs: [run("one")] }, { runs: [run("two")] }],
+        [[covered(0, 0), { runs: [run("body")] }]],
+      )])
+    ),
+    /template_v2_renderer_table_covered_cell_orphan/,
+  );
+  assert.throws(
+    () => renderTemplateV2GeneralSlideCanvasHtml(
+      slideWith([table([{ runs: [run("one")] }], [[{ runs: [run("wide")] }, { runs: [run("extra")] }]])])
+    ),
+    /template_v2_renderer_invalid_table_row/,
+  );
+});
+
 test("renderer escapes authored values and still fails closed for unknown types", () => {
   const html = renderTemplateV2GeneralPresentationHtml({
     version: "v2-standard",

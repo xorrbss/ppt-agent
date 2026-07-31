@@ -291,20 +291,100 @@ def test_table_row_and_column_operations_preserve_cell_objects() -> None:
     assert canonicalize_slide_ui(ui) is not None
 
 
-@pytest.mark.parametrize("action", ["merge", "split"])
-def test_table_merge_and_split_are_explicitly_unsupported_and_non_mutating(
-    action: str,
+def test_table_merge_and_split_preserve_every_covered_cell_object() -> None:
+    table = deepcopy(_native_ui()["components"][0]["elements"][2])
+    original = deepcopy(table)
+
+    apply_content_update(
+        table,
+        {
+            "action": "merge",
+            "row": -1,
+            "column": 0,
+            "rowspan": 2,
+            "colspan": 2,
+        },
+    )
+
+    assert table["columns"][0]["rowspan"] == 2
+    assert table["columns"][0]["colspan"] == 2
+    assert table["columns"][1]["covered_by"] == {"row": 0, "column": 0}
+    assert table["rows"][0][0]["covered_by"] == {"row": 0, "column": 0}
+    assert table["rows"][0][1]["covered_by"] == {"row": 0, "column": 0}
+    assert table["rows"][0][1]["runs"] == original["rows"][0][1]["runs"]
+    assert table["rows"][0][1]["alignment"] == "right"
+
+    # A covered coordinate resolves back to the anchor for a convenient split.
+    apply_content_update(table, {"action": "split", "row": 0, "column": 1})
+
+    for row in [table["columns"], *table["rows"]]:
+        for cell in row:
+            assert cell.get("rowspan", 1) == 1
+            assert cell.get("colspan", 1) == 1
+            assert cell.get("covered_by") is None
+    for row_index, row in enumerate(table["rows"]):
+        for column_index, cell in enumerate(row):
+            assert cell["runs"] == original["rows"][row_index][column_index]["runs"]
+
+
+@pytest.mark.parametrize(
+    ("update", "message"),
+    [
+        (
+            {
+                "action": "merge",
+                "row": -1,
+                "column": 1,
+                "rowspan": 2,
+                "colspan": 2,
+            },
+            "table_merge_rectangle_out_of_range",
+        ),
+        (
+            {"action": "split", "row": 0, "column": 0},
+            "table_cell_is_not_merged",
+        ),
+    ],
+)
+def test_invalid_table_merge_and_split_are_non_mutating(
+    update: dict[str, Any],
+    message: str,
 ) -> None:
     table = deepcopy(_native_ui()["components"][0]["elements"][2])
     before = deepcopy(table)
 
-    with pytest.raises(
-        ValueError,
-        match="table_merge_split_not_supported_by_current_schema",
-    ):
-        apply_content_update(table, {"action": action})
+    with pytest.raises(ValueError, match=message):
+        apply_content_update(table, update)
 
     assert table == before
+
+
+def test_covered_cells_and_structural_changes_fail_closed_until_split() -> None:
+    table = deepcopy(_native_ui()["components"][0]["elements"][2])
+    apply_content_update(
+        table,
+        {
+            "action": "merge",
+            "row": -1,
+            "column": 0,
+            "rowspan": 2,
+            "colspan": 2,
+        },
+    )
+    merged = deepcopy(table)
+
+    with pytest.raises(ValueError, match="table_cell_is_covered"):
+        apply_content_update(
+            table,
+            {"action": "set-cell", "row": 0, "column": 1, "value": "lost"},
+        )
+    with pytest.raises(ValueError, match="table_structure_change_requires_split"):
+        apply_content_update(
+            table,
+            {"action": "add-row", "values": ["Q2", "51"]},
+        )
+
+    assert table == merged
 
 
 def test_owner_mismatch_is_reported_as_not_found_or_forbidden(tmp_path) -> None:
@@ -436,6 +516,85 @@ def test_successful_mutation_commits_snapshot_of_previous_slide(tmp_path) -> Non
     asyncio.run(runner())
 
 
+def test_table_merge_commits_snapshot_and_stale_split_is_non_mutating(
+    tmp_path,
+) -> None:
+    async def runner() -> None:
+        owner_id = uuid.uuid4()
+        engine, maker, presentation_id, slide_id = await _database(
+            tmp_path / "table-snapshot.db",
+            owner_id=owner_id,
+        )
+        before = canonicalize_slide_ui(_native_ui())
+        initial_revision = slide_ui_revision(before)
+        token = set_current_owner_id(owner_id)
+        try:
+            async with maker() as session:
+                result = await SlideUIMutationService(
+                    session,
+                    presentation_id,
+                ).update_element(
+                    index=0,
+                    path=TABLE_PATH,
+                    expected_revision=initial_revision,
+                    content={
+                        "action": "merge",
+                        "row": -1,
+                        "column": 0,
+                        "rowspan": 2,
+                        "colspan": 2,
+                    },
+                )
+                assert result["updated"] is True
+                merged_revision = result["revision"]
+
+            async with maker() as session:
+                with pytest.raises(
+                    SlideUIRevisionConflict,
+                    match="slide_ui_revision_conflict",
+                ):
+                    await SlideUIMutationService(
+                        session,
+                        presentation_id,
+                    ).update_element(
+                        index=0,
+                        path=TABLE_PATH,
+                        expected_revision=initial_revision,
+                        content={"action": "split", "row": 0, "column": 1},
+                    )
+
+            async with maker() as session:
+                reopened = await session.get(SlideModel, slide_id)
+                versions = list(
+                    await session.scalars(
+                        select(PresentationVersionModel).where(
+                            PresentationVersionModel.presentation_id
+                            == presentation_id
+                        )
+                    )
+                )
+                assert reopened is not None
+                assert slide_ui_revision(reopened.ui) == merged_revision
+                table = reopened.ui["components"][0]["elements"][2]
+                assert (
+                    table["columns"][0]["rowspan"],
+                    table["columns"][0]["colspan"],
+                ) == (2, 2)
+                assert table["rows"][0][1]["runs"][0]["text"] == "42"
+                assert table["rows"][0][1]["covered_by"] == {
+                    "row": 0,
+                    "column": 0,
+                }
+                assert len(versions) == 1
+                assert versions[0].label == "chat:updateElement"
+                assert versions[0].slides[0]["ui"] == before
+        finally:
+            reset_current_owner_id(token)
+            await engine.dispose()
+
+    asyncio.run(runner())
+
+
 def test_commit_failure_rolls_back_slide_and_snapshot(tmp_path) -> None:
     class CommitFailingSession:
         def __init__(self, inner: Any) -> None:
@@ -467,9 +626,15 @@ def test_commit_failure_rolls_back_slide_and_snapshot(tmp_path) -> None:
                 with pytest.raises(RuntimeError, match="injected commit failure"):
                     await service.update_element(
                         index=0,
-                        path=TEXT_PATH,
+                        path=TABLE_PATH,
                         expected_revision=slide_ui_revision(before),
-                        content={"text": "Must roll back"},
+                        content={
+                            "action": "merge",
+                            "row": -1,
+                            "column": 0,
+                            "rowspan": 2,
+                            "colspan": 2,
+                        },
                     )
                 assert failing.rollback_count == 1
 
