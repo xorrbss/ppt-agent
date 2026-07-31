@@ -108,15 +108,15 @@ describe("Template V2 source-backed E2E matrix", () => {
     // Character-level text updates share a continuous history entry: one undo
     // restores the original title, and redo restores the complete replacement.
     cy.contains("button[aria-pressed]", /^title\s*\(0\)$/).click();
-    cy.get("textarea")
+    cy.get('textarea[aria-label$=" content"]')
       .first()
       .type("{selectall}Matrix continuous edit", { waitForAnimations: false });
     cy.get('button[aria-label="Undo (Ctrl or Command plus Z)"]').click({ force: true });
     cy.contains("button[aria-pressed]", /^title\s*\(0\)$/).click();
-    cy.get("textarea").first().should("have.value", "Renderer contract");
+    cy.get('textarea[aria-label$=" content"]').first().should("have.value", "Renderer contract");
     cy.get('button[aria-label="Redo (Ctrl or Command plus Shift plus Z, or Ctrl plus Y)"]').click({ force: true });
     cy.contains("button[aria-pressed]", /^title\s*\(0\)$/).click();
-    cy.get("textarea").first().should("have.value", "Matrix continuous edit");
+    cy.get('textarea[aria-label$=" content"]').first().should("have.value", "Matrix continuous edit");
 
     // Two edits on either side of the first in-flight save must become two
     // ordered, optimistic PATCHes rather than clobbering the later snapshot.
@@ -132,7 +132,7 @@ describe("Template V2 source-backed E2E matrix", () => {
     cy.wait("@loadMatrix");
     cy.contains("button", "Add rectangle").should("be.enabled");
     cy.contains("button[aria-pressed]", /^title\s*\(0\)$/).click();
-    cy.get("textarea").first().should("have.value", "Matrix continuous edit");
+    cy.get('textarea[aria-label$=" content"]').first().should("have.value", "Matrix continuous edit");
     cy.contains("Saved automatically").should("not.exist");
   });
 });
