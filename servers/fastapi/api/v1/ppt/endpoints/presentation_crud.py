@@ -5,6 +5,7 @@ operations on a PresentationModel (no generation or export pipeline).
 """
 
 import uuid
+from pathlib import PurePosixPath
 from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -15,6 +16,10 @@ from sqlmodel import select
 from constants.presentation import MAX_NUMBER_OF_SLIDES
 from enums.tone import Tone
 from enums.verbosity import Verbosity
+from models.presentation_generation_info import (
+    PresentationGenerationInfo,
+    PresentationGenerationSettings,
+)
 from models.presentation_with_slides import PresentationWithSlides
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
@@ -32,6 +37,11 @@ from services.presentation_deletion_service import (
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 
 PRESENTATION_CRUD_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
+
+
+def _attachment_file_name(file_path: str) -> str:
+    """Return only the final path component, regardless of source OS."""
+    return PurePosixPath(file_path.replace("\\", "/")).name
 
 
 @PRESENTATION_CRUD_ROUTER.get("/all", response_model=List[PresentationWithSlides])
@@ -83,6 +93,40 @@ async def get_presentation(
         **presentation.model_dump(),
         slides=slides,
         fonts=fonts,
+    )
+
+
+@PRESENTATION_CRUD_ROUTER.get(
+    "/{id}/generation-info",
+    response_model=PresentationGenerationInfo,
+)
+async def get_presentation_generation_info(
+    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
+):
+    presentation = await sql_session.get(PresentationModel, id)
+    if not presentation:
+        raise HTTPException(404, "Presentation not found")
+
+    attachment_file_names = [
+        file_name
+        for file_path in presentation.file_paths or []
+        if (file_name := _attachment_file_name(file_path))
+    ]
+    return PresentationGenerationInfo(
+        prompt=presentation.content,
+        attachment_file_names=attachment_file_names,
+        settings=PresentationGenerationSettings(
+            n_slides=presentation.n_slides,
+            language=presentation.language,
+            tone=presentation.tone,
+            verbosity=presentation.verbosity,
+            instructions=presentation.instructions,
+            include_table_of_contents=presentation.include_table_of_contents,
+            include_title_slide=presentation.include_title_slide,
+            web_search=presentation.web_search,
+            mode=presentation.mode,
+            version=presentation.version,
+        ),
     )
 
 

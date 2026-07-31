@@ -46,6 +46,7 @@ import {
 import ThemeSelector from "./ThemeSelector";
 import VersionHistoryPopover from "./VersionHistoryPopover";
 import SharePopover from "./SharePopover";
+import GenerationInfoDialog from "./GenerationInfoDialog";
 import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "../../services/api/theme";
 import { Theme } from "../../services/api/types";
@@ -53,6 +54,10 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
 import AuthoredQualityReview from "./AuthoredQualityReview";
+import {
+  formatAuthoredHybridExportSummary,
+  type AuthoredHybridExportMetadata,
+} from "@/lib/authored-hybrid/export-metadata";
 
 const MAX_EXPORT_TITLE_LENGTH = 40;
 type PptxExportMode = "fidelity" | "hybrid";
@@ -240,6 +245,7 @@ const PresentationHeader = ({
     if (isStreaming || isExporting) return;
 
     let exportToastId: string | number | undefined;
+    let exportSummary: string | undefined;
     try {
       trackEvent(MixpanelEvent.Presentation_Export_Started, {
         pathname,
@@ -281,16 +287,25 @@ const PresentationHeader = ({
           throw new Error("PPTX 내보내기에 실패했습니다.");
         }
 
-        const { path: pptxPath } = await response.json();
+        const {
+          path: pptxPath,
+          exportMetadata,
+        } = (await response.json()) as {
+          path?: string;
+          exportMetadata?: AuthoredHybridExportMetadata;
+        };
         if (!pptxPath) {
           throw new Error("내보내기 경로를 받지 못했습니다.");
         }
 
+        if (exportMetadata?.strategy === "authored-hybrid") {
+          exportSummary = formatAuthoredHybridExportSummary(exportMetadata);
+        }
         downloadLink(pptxPath, safePptxFileName);
       }
       notify.success(
         "내보내기 완료",
-        "PPTX 파일이 다운로드되었습니다.",
+        exportSummary ?? "PPTX 파일이 다운로드되었습니다.",
         { id: exportToastId }
       );
     } catch (error) {
@@ -686,6 +701,13 @@ const PresentationHeader = ({
             presentationId={presentation_id}
             disabled={isStreaming === true}
           />
+
+          {presentationData && (
+            <GenerationInfoDialog
+              presentationId={presentation_id}
+              disabled={isStreaming === true}
+            />
+          )}
 
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>

@@ -23,6 +23,25 @@ export interface PresentationResponse {
   slides: any[];
 }
 
+export interface PresentationGenerationSettings {
+  n_slides: number;
+  language: string;
+  tone: string | null;
+  verbosity: string | null;
+  instructions: string | null;
+  include_table_of_contents: boolean;
+  include_title_slide: boolean;
+  web_search: boolean;
+  mode: string | null;
+  version: string;
+}
+
+export interface PresentationGenerationInfo {
+  prompt: string;
+  attachment_file_names: string[];
+  settings: PresentationGenerationSettings;
+}
+
 export class DashboardApi {
 
   static async getPresentations(): Promise<PresentationResponse[]> {
@@ -60,6 +79,28 @@ export class DashboardApi {
       return await ApiResponseHandler.handleResponse(response, "Presentation not found");
     } catch (error) {
       console.error("Error fetching presentation:", error);
+      throw error;
+    }
+  }
+
+  static async getPresentationGenerationInfo(
+    id: string
+  ): Promise<PresentationGenerationInfo> {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/${id}/generation-info`),
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to fetch presentation generation info"
+      );
+    } catch (error) {
+      console.error("Error fetching presentation generation info:", error);
       throw error;
     }
   }
