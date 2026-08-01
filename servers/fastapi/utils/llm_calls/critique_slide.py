@@ -54,11 +54,99 @@ _SYSTEM = (
     "navigation badge that may appear in a corner of the capture."
 )
 
+_EXACT_SYSTEM = (
+    "You are a meticulous visual-fidelity reviewer. Compare the SOURCE IMAGE with "
+    "the RENDERED IMAGE and report only defects introduced by the reconstruction. "
+    "Check source text character-for-character, including numbers, spaces, and line "
+    "breaks, plus visible font appearance, color, position, size, spacing, alignment, "
+    "visual hierarchy, overlap, and cropping. Compare the two images directly: an "
+    "overlap, crop, occlusion, edge bleed, or other unusual treatment that already "
+    "exists in the source is intentional and is not a defect. For photos, logos, and "
+    "complex raster artwork, judge presence, visible silhouette, scale, placement, "
+    "crop, and dominant colors; report a missing or clearly substituted asset, but do "
+    "not invent unreadable logo text or flag harmless compression, color-profile, or "
+    "subpixel antialiasing differences. You do not need to identify the font by name: "
+    "judge visible glyph shape, width, weight, spacing, and line breaks. A clearly "
+    "different fallback font is a defect. If source resolution, blur, occlusion, or "
+    "complex raster content makes a material comparison genuinely impossible, do not "
+    "guess: return needs_fix=true with one high-severity other issue whose detail starts "
+    "with 'INDETERMINATE:'. Do not request redesign, summarization, added content, or "
+    "discretionary improvement. "
+    "If the render faithfully matches the source, return needs_fix=false with an "
+    "empty issues list. Be specific and concise."
+)
+
+STYLE_REFERENCE = "style_reference"
+EXACT_RECONSTRUCTION = "exact_reconstruction"
+CRITIQUE_PROMPT_VERSION = "slide-critique-v3"
+
+
+def _image_mime_type(image: bytes) -> str:
+    """Infer the supported source MIME type without trusting a file extension."""
+    if image.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if image.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if len(image) >= 12 and image[:4] == b"RIFF" and image[8:12] == b"WEBP":
+        return "image/webp"
+    raise ValueError("Unsupported source image bytes; expected PNG, JPEG, or WebP")
+
+
+def _build_critique_messages(
+    image: bytes,
+    *,
+    slide_context: Optional[str] = None,
+    mime_type: str = "image/png",
+    source_image: Optional[bytes] = None,
+    reference_mode: str = STYLE_REFERENCE,
+):
+    """Assemble render-only or source-vs-render messages for direct regression tests."""
+    if reference_mode == STYLE_REFERENCE:
+        prompt = "Review this slide image."
+        if slide_context:
+            prompt += f" Intended content: {slide_context}"
+        return [
+            SystemMessage(content=_SYSTEM),
+            UserMessage(
+                content=[
+                    TextContentPart(text=prompt),
+                    ImageContentPart(data=image, mime_type=mime_type),
+                ]
+            ),
+        ]
+    if reference_mode != EXACT_RECONSTRUCTION:
+        raise ValueError(f"Unsupported reference mode {reference_mode!r}")
+    if not source_image:
+        raise ValueError("Exact reconstruction critique requires a source image")
+
+    prompt = (
+        "Compare the following source and rendered slide. Judge only differences "
+        "introduced by the reconstruction."
+    )
+    if slide_context:
+        prompt += f" Slide context: {slide_context}"
+    return [
+        SystemMessage(content=_EXACT_SYSTEM),
+        UserMessage(
+            content=[
+                TextContentPart(text="SOURCE IMAGE (ground truth):"),
+                ImageContentPart(
+                    data=source_image, mime_type=_image_mime_type(source_image)
+                ),
+                TextContentPart(text=f"RENDERED IMAGE (candidate): {prompt}"),
+                ImageContentPart(data=image, mime_type=mime_type),
+            ]
+        ),
+    ]
+
 
 async def critique_slide_image(
     image: bytes,
     slide_context: Optional[str] = None,
     mime_type: str = "image/png",
+    *,
+    source_image: Optional[bytes] = None,
+    reference_mode: str = STYLE_REFERENCE,
 ) -> SlideCritique:
     """Review a rendered slide image and return a structured critique."""
     client = get_client(config=get_llm_config())
@@ -67,16 +155,13 @@ async def critique_slide_image(
         SlideCritique.model_json_schema(), strict=False
     )
     response_format = JSONSchemaResponse(name="critique", json_schema=schema, strict=False)
-    prompt = "Review this slide image."
-    if slide_context:
-        prompt += f" Intended content: {slide_context}"
-    messages = [
-        SystemMessage(content=_SYSTEM),
-        UserMessage(content=[
-            TextContentPart(text=prompt),
-            ImageContentPart(data=image, mime_type=mime_type),
-        ]),
-    ]
+    messages = _build_critique_messages(
+        image,
+        slide_context=slide_context,
+        mime_type=mime_type,
+        source_image=source_image,
+        reference_mode=reference_mode,
+    )
     try:
         content = await generate_structured_with_schema_retries(
             client,

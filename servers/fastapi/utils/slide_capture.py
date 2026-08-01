@@ -20,45 +20,6 @@ SLIDE_W = 1280
 SLIDE_H = 720
 LOGGER = logging.getLogger(__name__)
 
-_MINIMUM_AUTHORED_FONT_SCRIPT = r"""<script data-presenton-minimum-font-size>
-(() => {
-  const minimumPx = 12; // 12 CSS px = 9 PowerPoint points.
-  const rules = [];
-  [document.body, ...document.body.querySelectorAll("*")].forEach((element, index) => {
-    if (["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT", "TEMPLATE"].includes(element.tagName)) return;
-    const hasOwnText = [...element.childNodes].some(
-      (node) => node.nodeType === Node.TEXT_NODE && Boolean((node.textContent || "").trim())
-    );
-    if (hasOwnText && parseFloat(getComputedStyle(element).fontSize) < minimumPx) {
-      element.style.setProperty("font-size", `${minimumPx}px`, "important");
-    }
-    ["::before", "::after"].forEach((pseudo) => {
-      const style = getComputedStyle(element, pseudo);
-      if (style.content && style.content !== "none" && style.content !== "normal" &&
-          parseFloat(style.fontSize) < minimumPx) {
-        const attribute = `data-presenton-min-font-${index}-${pseudo === "::before" ? "before" : "after"}`;
-        element.setAttribute(attribute, "true");
-        rules.push(`[${attribute}]${pseudo}{font-size:${minimumPx}px!important}`);
-      }
-    });
-  });
-  if (rules.length) {
-    const sheet = document.createElement("style");
-    sheet.textContent = rules.join("\n");
-    document.head.appendChild(sheet);
-  }
-})();
-</script>"""
-
-
-def _with_minimum_authored_font_size(html: str) -> str:
-    """Instrument only the temporary render document; persisted authored HTML stays clean."""
-    closing_body = html.lower().rfind("</body>")
-    if closing_body < 0:
-        return html + _MINIMUM_AUTHORED_FONT_SCRIPT
-    return html[:closing_body] + _MINIMUM_AUTHORED_FONT_SCRIPT + html[closing_body:]
-
-
 def _kill_process_tree(proc: "subprocess.Popen") -> None:
     """Kill a chrome process AND its renderer/gpu children. `subprocess` timeout only
     kills the direct child, orphaning chrome's helper processes — and leaked chromes
@@ -271,7 +232,7 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
             html_path = os.path.join(td, "slide.html")
             out = os.path.join(td, "slide.png")
             with open(html_path, "w", encoding="utf-8") as f:
-                f.write(_with_minimum_authored_font_size(html))
+                f.write(html)
             args = [
                 chrome,
                 "--headless=new",
@@ -310,7 +271,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
         return await _render_html_to_png_uncached(html, timeout=timeout)
 
     key = hashlib.sha256(
-        f"authored-render-v2-minimum-9pt\0{timeout}\0{html}".encode("utf-8")
+        f"{RENDER_CACHE_VERSION}\0{timeout}\0{html}".encode("utf-8")
     ).hexdigest()
     cached = _render_cache.get(key)
     if cached is not None:
@@ -357,6 +318,9 @@ def _env_nonnegative_int(name: str, default: int) -> int:
 
 
 RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
+# This changes whenever rendering semantics change. In particular, v3 prevents
+# Reuse of PNGs created under the former minimum-font rendering policy is unsafe.
+RENDER_CACHE_VERSION = "authored-render-v3-preserve-authored-font-size"
 _render_cache: "OrderedDict[str, bytes]" = OrderedDict()
 _render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
 RENDER_CONCURRENCY = _env_int("AUTHORED_RENDER_CONCURRENCY", 4)

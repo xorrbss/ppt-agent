@@ -80,10 +80,16 @@ _MIME_BY_SUFFIX = {
 class _StyleLike(Protocol):
     id: str
     illustration_prompt: Optional[str]
+    reference_mode: str
 
 
 class _ImageServiceLike(Protocol):
     async def generate_image(self, prompt: ImagePrompt) -> object: ...
+
+
+def _is_exact_reconstruction(style: _StyleLike) -> bool:
+    mode = getattr(style, "reference_mode", "style_reference")
+    return isinstance(mode, str) and mode.strip().lower() == "exact_reconstruction"
 
 
 def _clean_scene_prompt(raw: str) -> str:
@@ -134,6 +140,10 @@ async def apply_authored_illustration(
     raise_on_failure: bool = False,
 ) -> str:
     """Generate and inline one slide's illustration slot, without ever raising."""
+    # Exact reconstruction must keep the model-authored source recreation untouched:
+    # an illustration-provider call would invent pixels that are absent from the source.
+    if _is_exact_reconstruction(style):
+        return html
     style_prompt = (getattr(style, "illustration_prompt", None) or "").strip()
     if not style_prompt:
         return html
@@ -190,6 +200,8 @@ async def apply_authored_illustrations(
     placeholders, or unreadable output the slot is removed so the HTML layout —
     which reserves the area explicitly — still renders. Never raises.
     """
+    if _is_exact_reconstruction(style):
+        return htmls
     style_prompt = (getattr(style, "illustration_prompt", None) or "").strip()
     if not style_prompt:
         return htmls

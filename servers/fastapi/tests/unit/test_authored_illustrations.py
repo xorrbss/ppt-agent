@@ -56,6 +56,29 @@ def test_no_illustration_style_returns_htmls_unchanged():
     assert service.prompts == []
 
 
+def test_exact_reconstruction_skips_illustration_generation_but_style_mode_keeps_it(
+    tmp_path: Path,
+):
+    image = tmp_path / "illust.png"
+    image.write_bytes(_PNG_BYTES)
+    exact_service = _Service(SimpleNamespace(path=str(image)))
+    exact_style = SimpleNamespace(
+        id="exact-source",
+        illustration_prompt="isometric source must not be regenerated",
+        reference_mode="exact_reconstruction",
+    )
+
+    exact = _run(apply_authored_illustrations([_SLOT_HTML], exact_style, exact_service))
+
+    assert exact == [_SLOT_HTML]
+    assert exact_service.prompts == []
+
+    style_service = _Service(SimpleNamespace(path=str(image)))
+    styled = _run(apply_authored_illustrations([_SLOT_HTML], _style(), style_service))
+    assert "data:image/png;base64," in styled[0]
+    assert len(style_service.prompts) == 1
+
+
 def test_slot_is_inlined_as_data_uri_with_style_theme_prompt(tmp_path: Path):
     image = tmp_path / "illust.png"
     image.write_bytes(_PNG_BYTES)

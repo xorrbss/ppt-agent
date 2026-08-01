@@ -8,11 +8,15 @@ brief as an editable prompt contract.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass, field
+from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from PIL import Image, UnidentifiedImageError
 import yaml
 
 
@@ -33,6 +37,32 @@ _REFERENCE_ROLES = frozenset(
 )
 _REFERENCE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _MAX_REFERENCES_PER_ROLE = 2
+_STYLE_REFERENCE = "style_reference"
+_EXACT_RECONSTRUCTION = "exact_reconstruction"
+_REFERENCE_MODES = frozenset({_STYLE_REFERENCE, _EXACT_RECONSTRUCTION})
+_EXACT_ENABLED_ENV = "AUTHORED_EXACT_RECONSTRUCTION_ENABLED"
+_EXACT_STYLE_IDS_ENV = "AUTHORED_EXACT_STYLE_IDS"
+_EXACT_SOURCE_SIZE = (1280, 720)
+_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+class AuthoredExactReconstructionUnavailableError(ValueError):
+    """An exact preset was requested but is not safe to expose or execute."""
+
+
+def _configured_exact_style_ids() -> frozenset[str]:
+    raw = os.getenv(_EXACT_STYLE_IDS_ENV, "")
+    return frozenset(
+        item
+        for item in (part.strip() for part in raw.split(","))
+        if item and _ENGLISH_IDENTIFIER_PATTERN.fullmatch(item)
+    )
+
+
+def exact_reconstruction_is_allowed(style_id: str) -> bool:
+    """Return whether a private exact preset passes both rollout controls."""
+    enabled = os.getenv(_EXACT_ENABLED_ENV, "").strip().lower()
+    return enabled in _TRUTHY_ENV_VALUES and style_id in _configured_exact_style_ids()
 
 
 @dataclass(frozen=True)
@@ -56,6 +86,17 @@ class AuthoredStyle:
     mono_font: Optional[str] = None
     illustration_prompt: Optional[str] = None
     reference_images: Mapping[str, tuple[Path, ...]] = field(default_factory=dict)
+    # Ordered, private source-slide mapping for exact reconstruction.  Unlike the
+    # role references above, these are zipped to deck positions one-to-one and are
+    # intentionally omitted from ``public_dict``.
+    slide_reference_images: tuple[Path, ...] = ()
+    # Private preset opt-in: omitted/legacy YAML remains art-direction-only, and
+    # public style-selection response shapes remain unchanged.
+    reference_mode: str = _STYLE_REFERENCE
+    # Private provenance used to re-check path containment at generation time.
+    assets_root: Optional[Path] = None
+    # Positional mapping is explicit even when scalar entries use list position.
+    slide_reference_indices: tuple[int, ...] = ()
 
     def public_dict(self) -> dict[str, Any]:
         """Return only the fields safe and useful for style selection clients."""
@@ -154,6 +195,17 @@ def _optional_string(data: Mapping[str, Any], key: str, source: Path) -> Optiona
     return _required_string(data, key, source)
 
 
+def _reference_mode(data: Mapping[str, Any], source: Path) -> str:
+    value = data.get("reference_mode", _STYLE_REFERENCE)
+    normalized = value.strip().lower() if isinstance(value, str) else value
+    if not isinstance(normalized, str) or normalized not in _REFERENCE_MODES:
+        supported = ", ".join(sorted(_REFERENCE_MODES))
+        raise ValueError(
+            f"{source.name}: 'reference_mode' must be one of: {supported}"
+        )
+    return normalized
+
+
 def _optional_color(data: Mapping[str, Any], key: str, source: Path) -> Optional[str]:
     if key not in data:
         return None
@@ -212,6 +264,127 @@ def _reference_images(
     return result
 
 
+def _slide_reference_images(
+    data: Mapping[str, Any],
+    source: Path,
+    assets_directory: Path,
+    *,
+    strict: bool,
+) -> tuple[tuple[Path, ...], tuple[int, ...]]:
+    raw = data.get("slide_reference_images", [])
+    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+        raise ValueError(f"{source.name}: 'slide_reference_images' must be a list")
+    resolved: list[Path] = []
+    indices: list[int] = []
+    for index, value in enumerate(raw):
+        if isinstance(value, Mapping):
+            unknown = set(value) - {"slide_index", "source"}
+            if unknown:
+                raise ValueError(
+                    f"{source.name}: slide_reference_images[{index}] has unsupported "
+                    f"fields: {', '.join(sorted(str(item) for item in unknown))}"
+                )
+            declared_index = value.get("slide_index")
+            if not isinstance(declared_index, int) or isinstance(declared_index, bool):
+                raise ValueError(
+                    f"{source.name}: slide_reference_images[{index}].slide_index "
+                    "must be an integer"
+                )
+            asset_value = value.get("source")
+        else:
+            # Scalar entries remain compatible; their stable key is the zero-based
+            # list position and is rechecked against the outline before generation.
+            declared_index = index
+            asset_value = value
+        if declared_index != index:
+            raise ValueError(
+                f"{source.name}: slide_reference_images must use contiguous stable "
+                f"slide_index values; expected {index}, got {declared_index}"
+            )
+        path = _asset_path(asset_value, source, assets_directory)
+        if path is None:
+            if strict:
+                raise ValueError(
+                    f"{source.name}: slide_reference_images[{index}] is missing or "
+                    "unreadable; exact source positions cannot be compacted"
+                )
+            continue
+        resolved.append(path)
+        indices.append(declared_index)
+    return tuple(resolved), tuple(indices)
+
+
+def _image_format_from_magic(payload: bytes) -> Optional[str]:
+    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if payload.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if len(payload) >= 12 and payload.startswith(b"RIFF") and payload[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def _validate_exact_source_image(path: Path, source: Path) -> str:
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"{source.name}: exact source image is not readable") from exc
+    detected = _image_format_from_magic(payload)
+    if detected is None:
+        raise ValueError(
+            f"{source.name}: exact source must contain PNG, JPEG, or WebP magic bytes"
+        )
+    suffix_format = (
+        "jpeg"
+        if path.suffix.lower() in {".jpg", ".jpeg"}
+        else path.suffix.lower()[1:]
+    )
+    if suffix_format != detected:
+        raise ValueError(
+            f"{source.name}: exact source extension does not match its image bytes"
+        )
+    try:
+        with Image.open(BytesIO(payload)) as image:
+            size = image.size
+            image.verify()
+    except (OSError, UnidentifiedImageError) as exc:
+        raise ValueError(f"{source.name}: exact source image is corrupt") from exc
+    if size != _EXACT_SOURCE_SIZE:
+        raise ValueError(
+            f"{source.name}: exact source must be 1280x720 pixels, got "
+            f"{size[0]}x{size[1]}"
+        )
+    return sha256(payload).hexdigest()
+
+
+def _validate_exact_sources(
+    paths: Sequence[Path], source: Path, assets_directory: Path
+) -> tuple[str, ...]:
+    root = assets_directory.resolve()
+    resolved_paths: list[Path] = []
+    digests: list[str] = []
+    for path in paths:
+        resolved = path.resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(
+                f"{source.name}: exact source must stay inside "
+                f"{assets_directory.name}"
+            ) from exc
+        resolved_paths.append(resolved)
+        digests.append(_validate_exact_source_image(resolved, source))
+    if (
+        len(set(resolved_paths)) != len(resolved_paths)
+        or len(set(digests)) != len(digests)
+    ):
+        raise ValueError(
+            f"{source.name}: exact reconstruction requires a unique source image "
+            "per slide, including slides with the same role"
+        )
+    return tuple(digests)
+
+
 def reference_images_for_role(style: Optional[AuthoredStyle], role: str) -> tuple[Path, ...]:
     """Return the small, role-appropriate reference set for one authored slide."""
     if style is None:
@@ -233,11 +406,30 @@ def reference_images_for_role(style: Optional[AuthoredStyle], role: str) -> tupl
     return tuple(references.get(key, ()))
 
 
-def _parse_style(source: Path, assets_directory: Path) -> AuthoredStyle:
+def _read_style_mapping(source: Path) -> Mapping[str, Any]:
     with source.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle)
     if not isinstance(data, Mapping):
         raise ValueError(f"{source.name}: style must be a mapping")
+    return data
+
+
+def _declared_exact_style_id(data: Mapping[str, Any]) -> Optional[str]:
+    style_id = data.get("id")
+    reference_mode = data.get("reference_mode", _STYLE_REFERENCE)
+    if not isinstance(style_id, str) or not isinstance(reference_mode, str):
+        return None
+    if reference_mode.strip().lower() != _EXACT_RECONSTRUCTION:
+        return None
+    return style_id.strip() or None
+
+
+def _parse_style(
+    source: Path,
+    assets_directory: Path,
+    data: Optional[Mapping[str, Any]] = None,
+) -> AuthoredStyle:
+    data = data if data is not None else _read_style_mapping(source)
 
     preview = data.get("preview")
     if not isinstance(preview, Mapping):
@@ -262,6 +454,22 @@ def _parse_style(source: Path, assets_directory: Path) -> AuthoredStyle:
     if "image" in preview:
         preview_image = _asset_path(preview["image"], source, assets_directory)
 
+    reference_images = _reference_images(data, source, assets_directory)
+    reference_mode = _reference_mode(data, source)
+    slide_reference_images, slide_reference_indices = _slide_reference_images(
+        data,
+        source,
+        assets_directory,
+        strict=reference_mode == "exact_reconstruction",
+    )
+    if reference_mode == "exact_reconstruction" and not slide_reference_images:
+        raise ValueError(
+            f"{source.name}: exact_reconstruction requires readable "
+            "slide_reference_images"
+        )
+    if reference_mode == _EXACT_RECONSTRUCTION:
+        _validate_exact_sources(slide_reference_images, source, assets_directory)
+
     return AuthoredStyle(
         id=_required_string(data, "id", source),
         name=_required_string(data, "name", source),
@@ -281,8 +489,65 @@ def _parse_style(source: Path, assets_directory: Path) -> AuthoredStyle:
         body_font=_optional_string(tokens, "body_font", source),
         mono_font=_optional_string(tokens, "mono_font", source),
         illustration_prompt=_optional_string(illustration, "style_prompt", source),
-        reference_images=_reference_images(data, source, assets_directory),
+        reference_images=reference_images,
+        slide_reference_images=slide_reference_images,
+        reference_mode=reference_mode,
+        assets_root=assets_directory.resolve(),
+        slide_reference_indices=slide_reference_indices,
     )
+
+
+def validate_exact_reconstruction_style(
+    style: AuthoredStyle,
+    *,
+    slide_count: int,
+    roles: Sequence[str],
+) -> None:
+    """Fail closed before generation unless an exact preset is fully mapped.
+
+    The authored outline has no persistent slide identifier, so the stable mapping
+    contract is the zero-based outline position recorded by
+    ``slide_reference_indices``.  Loaded presets retain their private assets root
+    so containment and image bytes can be rechecked immediately before authoring.
+    """
+    if getattr(style, "reference_mode", _STYLE_REFERENCE) != _EXACT_RECONSTRUCTION:
+        return
+    if not exact_reconstruction_is_allowed(style.id):
+        raise AuthoredExactReconstructionUnavailableError(
+            f"Exact reconstruction style '{style.id}' is disabled or not allow-listed"
+        )
+    if slide_count < 1 or len(roles) != slide_count:
+        raise ValueError(
+            f"Exact reconstruction style '{style.id}' requires one role per slide"
+        )
+
+    paths = tuple(getattr(style, "slide_reference_images", ()))
+    indices = tuple(getattr(style, "slide_reference_indices", ()))
+    expected_indices = tuple(range(slide_count))
+    if len(paths) != slide_count or indices != expected_indices:
+        raise ValueError(
+            f"Exact reconstruction style '{style.id}' requires exactly {slide_count} "
+            "source images mapped to contiguous zero-based slide indices"
+        )
+
+    assets_root = getattr(style, "assets_root", None)
+    if not isinstance(assets_root, Path):
+        raise ValueError(
+            f"Exact reconstruction style '{style.id}' has no validated assets root"
+        )
+    source = Path(f"{style.id}.yaml")
+    digests = _validate_exact_sources(paths, source, assets_root)
+
+    seen_by_role: dict[str, set[tuple[Path, str]]] = {}
+    for role, path, digest in zip(roles, paths, digests):
+        normalized_role = (role or "CONTENT").strip().upper()
+        identity = (path.resolve(), digest)
+        if identity in seen_by_role.setdefault(normalized_role, set()):
+            raise ValueError(
+                f"Exact reconstruction style '{style.id}' reuses a source for "
+                f"multiple {normalized_role} slides"
+            )
+        seen_by_role[normalized_role].add(identity)
 
 
 def load_authored_styles(
@@ -310,7 +575,20 @@ def load_authored_styles(
 
     for source in sources:
         try:
-            style = _parse_style(source, assets_directory)
+            data = _read_style_mapping(source)
+            declared_exact_id = _declared_exact_style_id(data)
+            if declared_exact_id is not None and not exact_reconstruction_is_allowed(
+                declared_exact_id
+            ):
+                # Exact presets are private rollout artefacts.  Gate-disabled or
+                # non-allow-listed entries must not enter the public catalogue.
+                continue
+            style = _parse_style(source, assets_directory, data)
+            if (
+                style.reference_mode == _EXACT_RECONSTRUCTION
+                and not exact_reconstruction_is_allowed(style.id)
+            ):
+                continue
             if style.id in known_ids:
                 raise ValueError(f"{source.name}: duplicate style id '{style.id}'")
         except (OSError, ValueError, yaml.YAMLError) as exc:
@@ -322,6 +600,22 @@ def load_authored_styles(
     return sorted(styles, key=lambda style: style.id)
 
 
+def _declared_exact_style_ids(directory: Path) -> frozenset[str]:
+    result: set[str] = set()
+    try:
+        sources = sorted(directory.glob("*.yaml"), key=lambda path: path.name)
+    except OSError:
+        return frozenset()
+    for source in sources:
+        try:
+            style_id = _declared_exact_style_id(_read_style_mapping(source))
+        except (OSError, ValueError, yaml.YAMLError):
+            continue
+        if style_id is not None:
+            result.add(style_id)
+    return frozenset(result)
+
+
 def resolve_authored_style(
     style_id: Optional[str],
     styles_directory: Optional[Path] = None,
@@ -331,6 +625,20 @@ def resolve_authored_style(
     by_id = {style.id: style for style in styles}
     requested_id = (style_id or "").strip() or DEFAULT_AUTHORED_STYLE_ID
     resolved = by_id.get(requested_id)
+    if resolved is not None:
+        return resolved
+    if requested_id != DEFAULT_AUTHORED_STYLE_ID:
+        directory = styles_directory or AUTHORED_STYLES_DIRECTORY
+        if requested_id in _declared_exact_style_ids(directory):
+            if not exact_reconstruction_is_allowed(requested_id):
+                raise AuthoredExactReconstructionUnavailableError(
+                    f"Exact reconstruction style '{requested_id}' is disabled or "
+                    "not allow-listed"
+                )
+            raise AuthoredExactReconstructionUnavailableError(
+                f"Exact reconstruction style '{requested_id}' failed preset "
+                "validation"
+            )
     if resolved is None and requested_id != DEFAULT_AUTHORED_STYLE_ID:
         # A specific style was asked for but doesn't exist (e.g. a CLI/API typo);
         # surface it instead of silently shipping a default-styled deck.
@@ -338,8 +646,4 @@ def resolve_authored_style(
             "Unknown authored style %r; falling back to the default style",
             requested_id,
         )
-    return (
-        resolved
-        or by_id.get(DEFAULT_AUTHORED_STYLE_ID)
-        or _BUILTIN_DEFAULT_STYLE
-    )
+    return by_id.get(DEFAULT_AUTHORED_STYLE_ID) or _BUILTIN_DEFAULT_STYLE
