@@ -228,7 +228,12 @@ def _asset_path(value: Any, source: Path, assets_directory: Path) -> Optional[Pa
             f"{source.name}: unsupported reference asset type '{candidate.suffix}'"
         )
     if not candidate.is_file():
-        LOGGER.warning("Missing authored style reference asset %s", candidate)
+        # Reference assets can belong to private exact-reconstruction presets.
+        # Keep the local asset root/path out of process logs; the preset filename
+        # is sufficient for an operator to locate and validate its manifest.
+        LOGGER.warning(
+            "Missing authored style reference asset declared by %s", source.name
+        )
         return None
     return candidate
 
@@ -327,8 +332,13 @@ def _image_format_from_magic(payload: bytes) -> Optional[str]:
 def _validate_exact_source_image(path: Path, source: Path) -> str:
     try:
         payload = path.read_bytes()
-    except OSError as exc:
-        raise ValueError(f"{source.name}: exact source image is not readable") from exc
+    except OSError:
+        # This validation can run inside a background worker whose traceback is
+        # logged. Suppress the filesystem exception chain so private asset paths
+        # cannot escape through that traceback.
+        raise ValueError(
+            f"{source.name}: exact source image is not readable"
+        ) from None
     detected = _image_format_from_magic(payload)
     if detected is None:
         raise ValueError(
@@ -347,8 +357,8 @@ def _validate_exact_source_image(path: Path, source: Path) -> str:
         with Image.open(BytesIO(payload)) as image:
             size = image.size
             image.verify()
-    except (OSError, UnidentifiedImageError) as exc:
-        raise ValueError(f"{source.name}: exact source image is corrupt") from exc
+    except (OSError, UnidentifiedImageError):
+        raise ValueError(f"{source.name}: exact source image is corrupt") from None
     if size != _EXACT_SOURCE_SIZE:
         raise ValueError(
             f"{source.name}: exact source must be 1280x720 pixels, got "
@@ -367,11 +377,11 @@ def _validate_exact_sources(
         resolved = path.resolve()
         try:
             resolved.relative_to(root)
-        except ValueError as exc:
+        except ValueError:
             raise ValueError(
                 f"{source.name}: exact source must stay inside "
                 f"{assets_directory.name}"
-            ) from exc
+            ) from None
         resolved_paths.append(resolved)
         digests.append(_validate_exact_source_image(resolved, source))
     if (
@@ -570,7 +580,10 @@ def load_authored_styles(
     try:
         sources = sorted(directory.glob("*.yaml"), key=lambda path: path.name)
     except OSError as exc:
-        LOGGER.warning("Unable to enumerate authored styles in %s: %s", directory, exc)
+        LOGGER.warning(
+            "Unable to enumerate authored style presets (%s)",
+            type(exc).__name__,
+        )
         return styles
 
     for source in sources:
@@ -591,8 +604,22 @@ def load_authored_styles(
                 continue
             if style.id in known_ids:
                 raise ValueError(f"{source.name}: duplicate style id '{style.id}'")
-        except (OSError, ValueError, yaml.YAMLError) as exc:
-            LOGGER.warning("Skipping invalid authored style %s: %s", source, exc)
+        except ValueError as exc:
+            # Validation errors are authored below and deliberately describe
+            # only preset-relative metadata (never resolved local paths or
+            # source bytes). Keep them actionable for operators.
+            LOGGER.warning(
+                "Skipping invalid authored style %s: %s",
+                source.name,
+                exc,
+            )
+            continue
+        except (OSError, yaml.YAMLError) as exc:
+            LOGGER.warning(
+                "Skipping invalid authored style %s (%s)",
+                source.name,
+                type(exc).__name__,
+            )
             continue
         known_ids.add(style.id)
         styles.append(style)
@@ -629,7 +656,10 @@ def resolve_authored_style(
         return resolved
     if requested_id != DEFAULT_AUTHORED_STYLE_ID:
         directory = styles_directory or AUTHORED_STYLES_DIRECTORY
-        if requested_id in _declared_exact_style_ids(directory):
+        known_exact_ids = (
+            _declared_exact_style_ids(directory) | _configured_exact_style_ids()
+        )
+        if requested_id in known_exact_ids:
             if not exact_reconstruction_is_allowed(requested_id):
                 raise AuthoredExactReconstructionUnavailableError(
                     f"Exact reconstruction style '{requested_id}' is disabled or "

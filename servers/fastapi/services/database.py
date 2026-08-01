@@ -14,6 +14,7 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
@@ -135,6 +136,7 @@ async def create_db_and_tables():
                     sync_conn,
                     tables=[
                         PresentationModel.__table__,
+                        AuthoredExactProvenance.__table__,
                         PresentationGenerationJob.__table__,
                         AuthoredSlideCheckpoint.__table__,
                         PresentationVersionModel.__table__,

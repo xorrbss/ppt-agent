@@ -50,6 +50,7 @@ REVISION_PRIMARY_ADMIN = "e1b3c5d7f9a2"
 REVISION_CHAT_TEMPLATE_SCOPE_REPAIR = "f2c4d6e8a0b1"
 REVISION_AUTHORED_SLIDE_CHECKPOINTS = "a3c5e7f9b1d2"
 REVISION_AUTHORED_RESUME_COUNT = "b4d6f8a1c3e5"
+REVISION_AUTHORED_EXACT_PROVENANCE = "c5e7f9a1b3d4"
 DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -636,7 +637,11 @@ def _infer_revision_from_schema(
                     )
                 return REVISION_PRIMARY_ADMIN
             if has_authored_resume_count:
-                return REVISION_AUTHORED_RESUME_COUNT
+                return (
+                    REVISION_AUTHORED_EXACT_PROVENANCE
+                    if "authored_exact_provenance" in tables
+                    else REVISION_AUTHORED_RESUME_COUNT
+                )
             return (
                 REVISION_AUTHORED_SLIDE_CHECKPOINTS
                 if has_authored_checkpoints
@@ -742,7 +747,11 @@ def _infer_revision_from_schema(
         if _authored_resume_count_applied(
             job_columns, has_authored_checkpoints
         ):
-            return REVISION_AUTHORED_RESUME_COUNT
+            return (
+                REVISION_AUTHORED_EXACT_PROVENANCE
+                if "authored_exact_provenance" in tables
+                else REVISION_AUTHORED_RESUME_COUNT
+            )
         return (
             REVISION_AUTHORED_SLIDE_CHECKPOINTS
             if has_authored_checkpoints
@@ -800,6 +809,7 @@ def _is_unversioned_populated_database(database_url: str) -> bool:
         "presentation_versions",
         "presentation_generation_jobs",
         "authored_slide_checkpoints",
+        "authored_exact_provenance",
         "template_v2",
         "template_v2_local_state",
         "template_v2_pptx_imports",

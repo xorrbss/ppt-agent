@@ -103,6 +103,10 @@ from templates.v2.strategies import (
     resolve_presentation_strategies,
 )
 from utils.asset_directory_utils import get_images_directory
+from utils.authored_styles import (
+    AuthoredExactReconstructionUnavailableError,
+    resolve_authored_style,
+)
 from utils.export_utils import export_presentation
 from utils.get_env import (
     get_authored_resume_max_attempts_env,
@@ -151,6 +155,44 @@ class AsyncPresentationGenerationTaskResponse(BaseModel):
     data: Optional[dict] = None
     progress: Optional[dict] = None
     failure: Optional[dict] = None
+
+
+def _authored_exact_admission_exception(
+    error: AuthoredExactReconstructionUnavailableError,
+) -> HTTPException:
+    """Map private exact-preset failures to stable, non-sensitive API errors."""
+    # ``resolve_authored_style`` deliberately includes useful server-side context
+    # (style id and validation reason).  That context can identify a private
+    # preset and must not cross the API or durable task-status boundary.
+    if "failed preset validation" in str(error):
+        return HTTPException(
+            status_code=422,
+            detail="authored_exact_reconstruction_invalid",
+        )
+    return HTTPException(
+        status_code=403,
+        detail="authored_exact_reconstruction_unavailable",
+    )
+
+
+def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> None:
+    """Reject unavailable exact presets before sync work or durable queueing.
+
+    An unknown ordinary authored style intentionally retains the historical
+    default-style fallback.  Only a style *declared* as exact is fail-closed by
+    ``resolve_authored_style``; this keeps the rollout private without silently
+    downgrading an exact request to style-reference generation.
+    """
+    template = (request.template or "").strip().lower()
+    authored_requested = template == AUTHORED_TEMPLATE or (
+        request.strategy == "authored" and template in {"adaptive", AUTHORED_TEMPLATE}
+    )
+    if not authored_requested:
+        return
+    try:
+        resolve_authored_style(request.authored_style)
+    except AuthoredExactReconstructionUnavailableError as error:
+        raise _authored_exact_admission_exception(error) from error
 
 
 def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPException:
@@ -265,6 +307,7 @@ async def check_if_api_request_is_valid(
     # MODE selector (not a real layout template), so it bypasses layout validation.
     if request.template.lower() == AUTHORED_TEMPLATE:
         request.template = AUTHORED_TEMPLATE
+        _validate_authored_exact_admission(request)
     elif request.template not in DEFAULT_TEMPLATES:
         request.template = request.template.lower()
         if not request.template.startswith("custom-"):
@@ -1178,6 +1221,10 @@ async def run_generation_job(
                 raise RuntimeError("presentation_generation_job_missing")
             request = GeneratePresentationRequest.model_validate(job.request_payload)
             request._request_id = job.request_id
+            # Recheck rollout and source validity on the worker too. A private
+            # exact preset may have changed after admission; it must become a
+            # safe, explicit task error instead of falling back during authoring.
+            _validate_authored_exact_admission(request)
             if job.template_v2_target is not None:
                 from services.template_v2_generation_service import (
                     TemplateV2GenerationTarget,
@@ -1319,6 +1366,9 @@ async def queue_presentation_generation(
     idempotency_key: Optional[str] = None,
 ) -> AsyncPresentationGenerationTaskModel:
     """Validate and atomically enqueue one durable, idempotent generation job."""
+    # Do this before fingerprint/idempotency lookup or any row/task is created.
+    # A rejected exact request must never appear as a pending generation job.
+    _validate_authored_exact_admission(request)
     submitted_payload = request.model_dump(mode="json")
     fingerprint = request_sha256(submitted_payload)
     try:

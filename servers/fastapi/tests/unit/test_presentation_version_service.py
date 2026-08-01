@@ -3,6 +3,7 @@
 Uses a real async SQLite session (the service issues ordered SELECT / COUNT /
 DELETE queries the FakeAsyncSession stub can't model)."""
 import asyncio
+from pathlib import Path
 import uuid
 
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -13,6 +14,7 @@ from models.sql.presentation import PresentationModel  # noqa: F401 (metadata)
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
 from services import presentation_version_service as vs
+from services.authored_review_asset_store import publish_reviewed_png
 
 
 def _run(coro):
@@ -149,6 +151,81 @@ def test_restore_rejects_version_from_other_presentation(tmp_path):
             await session.commit()
             # Restoring A's version under B must be rejected.
             assert await vs.restore_version(session, pid_b, version_a.id) is None
+        await engine.dispose()
+
+    _run(runner())
+
+
+def test_authored_restore_and_restore_undo_preserve_image_bytes(monkeypatch, tmp_path):
+    app_data = tmp_path / "app-data"
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+
+    async def runner():
+        engine = await _make_session(tmp_path / "authored-restore.db")
+        pid = uuid.uuid4()
+        old_reference = publish_reviewed_png(pid, 0, b"old-reviewed-png")
+        new_reference = publish_reviewed_png(pid, 0, b"new-reviewed-png")
+
+        def authored_slide(html: str, reference: str) -> SlideModel:
+            return SlideModel(
+                presentation=pid,
+                layout_group="authored",
+                layout="authored:content",
+                index=0,
+                content={"__authored__": True, "image": reference},
+                html_content=html,
+                properties={"image": reference},
+            )
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            original = authored_slide("<div>old</div>", old_reference)
+            session.add(original)
+            await session.commit()
+            old_version = await vs.snapshot_slides(
+                session,
+                pid,
+                [original.model_dump(mode="json")],
+                label="before review",
+                force=True,
+            )
+            await session.commit()
+            assert old_version is not None
+
+            original.html_content = "<div>new</div>"
+            original.content = {"__authored__": True, "image": new_reference}
+            original.properties = {"image": new_reference}
+            session.add(original)
+            await session.commit()
+
+            restored = await vs.restore_version(session, pid, old_version.id)
+            await session.commit()
+            assert restored is not None
+            assert restored[0].html_content == "<div>old</div>"
+            assert restored[0].content["image"] == old_reference
+            assert restored[0].properties["image"] == old_reference
+            assert (
+                app_data / "images" / Path(old_reference)
+            ).read_bytes() == b"old-reviewed-png"
+
+            versions = await vs.list_versions(session, pid)
+            undo_version = next(
+                version
+                for version in versions
+                if version.slides[0].get("html_content") == "<div>new</div>"
+            )
+            undone = await vs.restore_version(session, pid, undo_version.id)
+            await session.commit()
+            assert undone is not None
+            assert undone[0].html_content == "<div>new</div>"
+            assert undone[0].content["image"] == new_reference
+            assert undone[0].properties["image"] == new_reference
+            assert (
+                app_data / "images" / Path(new_reference)
+            ).read_bytes() == b"new-reviewed-png"
+
+            # Conservative retention: both live and historical immutable assets remain.
+            assert (app_data / "images" / Path(old_reference)).is_file()
+            assert (app_data / "images" / Path(new_reference)).is_file()
         await engine.dispose()
 
     _run(runner())

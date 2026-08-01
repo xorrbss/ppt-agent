@@ -18,6 +18,9 @@ from models.sql.async_presentation_generation_status import (  # noqa: F401, E40
 from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
     AuthoredSlideCheckpoint,
 )
+from models.sql.authored_exact_provenance import (  # noqa: F401, E402
+    AuthoredExactProvenance,
+)
 from models.sql.chat_history_message import ChatHistoryMessageModel  # noqa: F401, E402
 from models.sql.image_asset import ImageAsset  # noqa: F401, E402
 from models.sql.key_value import KeyValueSqlModel  # noqa: F401, E402
