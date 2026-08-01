@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from utils import slide_capture
+
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "evaluate_exact_reconstruction.py"
 SPEC = importlib.util.spec_from_file_location("exact_reconstruction_evaluator", SCRIPT)
@@ -236,6 +238,32 @@ def test_live_cost_gate_fails_before_pipeline(
         asyncio.run(evaluator._main(args))
     assert called is False
     assert not (tmp_path / "must-not-run.json").exists()
+
+
+def test_local_render_benchmark_coalesces_ninety_logical_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The evaluator's 90-slide load check is local-only and starts one render."""
+    calls = 0
+
+    async def fake_uncached(html: str, timeout: int = 60) -> bytes:
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0)
+        return f"png:{html}:{timeout}".encode()
+
+    slide_capture._render_cache.clear()
+    slide_capture._render_inflight.clear()
+    monkeypatch.setattr(slide_capture, "find_chrome", lambda: "fake-chrome")
+    monkeypatch.setattr(slide_capture, "_render_html_to_png_uncached", fake_uncached)
+
+    result = asyncio.run(evaluator._run_render_benchmark(90))
+
+    assert calls == 1
+    assert result["logical_requests"] == 90
+    assert result["uncached_chrome_renders"] == 1
+    assert result["unique_pngs"] == 1
+    assert result["model_calls"] == result["ocr_calls"] == 0
 
 
 def test_unavailable_ocr_writes_explicit_report_and_nonzero_status(tmp_path: Path) -> None:

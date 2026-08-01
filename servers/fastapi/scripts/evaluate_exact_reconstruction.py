@@ -987,6 +987,63 @@ async def _run_live(
     return slides, configuration
 
 
+async def _run_render_benchmark(logical_requests: int) -> dict[str, Any]:
+    """Measure local renderer coalescing without invoking an LLM or OCR.
+
+    A 90-slide authored deck can contain repeated HTML (for example, an unchanged
+    retry or a quality-review re-render).  This benchmark deliberately submits one
+    deterministic document many times concurrently: it proves that the normal
+    render-cache/in-flight path starts exactly one headless-browser render for the
+    logical requests.  It does not represent a 90-slide VQA cost estimate.
+    """
+    if logical_requests < 1:
+        raise ValueError("--render-benchmark-slides must be at least 1")
+    from utils import slide_capture
+
+    html = """<!doctype html><html><head><meta charset=\"utf-8\"><style>
+html,body { margin:0; width:1280px; height:720px; background:#fff; overflow:hidden; }
+.caption { position:absolute; left:64px; top:64px; font:11px/14px Arial, \"Malgun Gothic\", sans-serif; color:#111; }
+</style></head><body><div class=\"caption\">8px · 10px · 11px · 한글 English 123 +#</div></body></html>"""
+    if slide_capture.find_chrome() is None:
+        raise RuntimeError("no Chrome/Chromium available for local render benchmark")
+
+    original = slide_capture._render_html_to_png_uncached
+    uncached_renders = 0
+
+    async def counted_uncached(document: str, timeout: int = 60) -> bytes:
+        nonlocal uncached_renders
+        uncached_renders += 1
+        return await original(document, timeout=timeout)
+
+    # The benchmark owns this process-local cache only for its short duration and
+    # restores an empty state so it cannot warm a following generation request.
+    slide_capture._render_cache.clear()
+    slide_capture._render_inflight.clear()
+    slide_capture._render_html_to_png_uncached = counted_uncached
+    started = time.perf_counter()
+    try:
+        rendered = await asyncio.gather(
+            *(slide_capture.render_html_to_png(html) for _ in range(logical_requests))
+        )
+    finally:
+        slide_capture._render_html_to_png_uncached = original
+        slide_capture._render_cache.clear()
+        slide_capture._render_inflight.clear()
+    elapsed = time.perf_counter() - started
+    if uncached_renders != 1 or len(set(rendered)) != 1:
+        raise RuntimeError("renderer cache coalescing benchmark did not produce one stable PNG")
+    return {
+        "logical_requests": logical_requests,
+        "uncached_chrome_renders": uncached_renders,
+        "unique_pngs": len(set(rendered)),
+        "elapsed_seconds": elapsed,
+        "logical_requests_per_second": logical_requests / elapsed if elapsed else None,
+        "render_cache_version": slide_capture.RENDER_CACHE_VERSION,
+        "model_calls": 0,
+        "ocr_calls": 0,
+    }
+
+
 def _write_report(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -1014,6 +1071,25 @@ def _exclusive_output(path: Path) -> Iterable[None]:
 async def _main(args: argparse.Namespace) -> int:
     if args.ocr_timeout_seconds <= 0:
         raise ValueError("--ocr-timeout-seconds must be greater than zero")
+    if args.render_benchmark_slides is not None:
+        if args.live or args.self_test or args.manifest:
+            raise ValueError("--render-benchmark-slides cannot be combined with slide evaluation modes")
+        output = args.output.resolve()
+        with _exclusive_output(output):
+            benchmark = await _run_render_benchmark(args.render_benchmark_slides)
+            report = {
+                "schema_version": 1,
+                "mode": "render_benchmark",
+                "generated_at_epoch": int(time.time()),
+                "configuration": {"platform": sys.platform},
+                "ocr_available": None,
+                "ocr": {"status": "not_requested"},
+                "aggregate": benchmark,
+                "slides": [],
+            }
+            _write_report(output, report)
+        print(json.dumps({"mode": report["mode"], "output": str(output), "aggregate": benchmark}))
+        return 0
     if args.live and (not args.acknowledge_model_cost or os.getenv(LIVE_GATE) != "1"):
         raise RuntimeError(
             f"live evaluation requires --acknowledge-model-cost and {LIVE_GATE}=1"
@@ -1111,6 +1187,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--live", action="store_true", help="run the real authored model/render/review pipeline")
     parser.add_argument("--acknowledge-model-cost", action="store_true", help="explicitly acknowledge billable model calls")
     parser.add_argument("--synthetic-slides", type=int, default=1, help="live synthetic slide count (1..5)")
+    parser.add_argument(
+        "--render-benchmark-slides",
+        type=int,
+        help="local concurrent identical-render requests; no model/OCR calls (for example 90)",
+    )
     parser.add_argument("--user-config", type=Path, help="existing userConfig.json; its contents are never reported")
     parser.add_argument(
         "--provider",

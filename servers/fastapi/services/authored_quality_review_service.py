@@ -10,16 +10,16 @@ import asyncio
 import hashlib
 import json
 import logging
-import os
 import re
 import time
 import traceback
 import uuid
+import weakref
 from collections import Counter
-from pathlib import Path
 from typing import Iterable, List, Mapping
 
 from fastapi import BackgroundTasks, HTTPException
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -27,15 +27,20 @@ from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services import presentation_version_service as version_service
-from services.database import async_session_maker
-from utils.asset_directory_utils import (
-    filesystem_image_path_to_app_data_reference,
-    get_images_directory,
+from services.authored_exact_provenance import (
+    ExactProvenanceError,
+    verify_exact_provenance,
 )
-from utils.authored_styles import resolve_authored_style
+from services.authored_review_asset_store import publish_reviewed_png
+from services.database import async_session_maker
+from utils.authored_styles import (
+    AuthoredExactReconstructionUnavailableError,
+    resolve_authored_style,
+)
 from utils.datetime_utils import get_current_utc_datetime
 from utils.llm_calls.author_deck import prepare_authored_deck
 from utils.llm_calls.author_slide import (
@@ -64,6 +69,9 @@ _SAFE_REJECTION_REASONS = {
     "final_inconsistent",
     "final_indeterminate",
 }
+_ANALYZE_AND_FIX_LOCKS: weakref.WeakValueDictionary[uuid.UUID, asyncio.Lock] = (
+    weakref.WeakValueDictionary()
+)
 
 
 def _is_authored_slide(slide: SlideModel) -> bool:
@@ -147,25 +155,6 @@ def _serialize_critiques(positions: Iterable[int], critiques: list) -> List[dict
             }
         )
     return results
-
-
-def _read_exact_sources(reference_images: Iterable[tuple[Path, ...]]) -> List[bytes]:
-    sources: List[bytes] = []
-    for references in reference_images:
-        if len(references) != 1:
-            raise ValueError(
-                "Exact reconstruction review requires exactly one source per slide"
-            )
-        try:
-            source = references[0].read_bytes()
-        except OSError as exc:
-            raise ValueError(
-                "Exact reconstruction source image is unreadable"
-            ) from exc
-        if not source:
-            raise ValueError("Exact reconstruction source image is empty")
-        sources.append(source)
-    return sources
 
 
 def _critique_unusable_reason(critique: SlideCritique | None) -> str | None:
@@ -317,7 +306,6 @@ def _log_review_event(
     model: str | None = None,
     prompt_version: str | None = None,
     cache_version: str | None = None,
-    source_batch_sha256: str | None = None,
     render_batch_sha256: str | None = None,
     critique_batch_count: int = 0,
     critique_slide_request_count: int = 0,
@@ -348,7 +336,6 @@ def _log_review_event(
         "model": model or "unknown",
         "prompt_version": prompt_version or "unknown",
         "cache_version": cache_version or "unknown",
-        "source_batch_sha256": source_batch_sha256,
         "render_batch_sha256": render_batch_sha256,
         # One batch fans out to one cached critique per slide. A miss means there was
         # no completed cache result; an in-flight coalesced request can lower the
@@ -373,17 +360,10 @@ def _log_review_event(
 def _write_reviewed_png(
     presentation_id: uuid.UUID, slide_position: int, png: bytes
 ) -> str:
-    relative_directory = os.path.join("authored", str(presentation_id))
-    absolute_directory = os.path.join(get_images_directory(), relative_directory)
-    os.makedirs(absolute_directory, exist_ok=True)
-    filename = f"slide_{slide_position}.png"
-    absolute_path = os.path.join(absolute_directory, filename)
-    with open(absolute_path, "wb") as image_file:
-        image_file.write(png)
-    return filesystem_image_path_to_app_data_reference(absolute_path)
+    return publish_reviewed_png(presentation_id, slide_position, png)
 
 
-async def run_authored_quality_review(
+async def _run_authored_quality_review_unlocked(
     presentation_id: uuid.UUID,
     request: AuthoredQualityReviewRequest,
     task: AsyncPresentationGenerationTaskModel,
@@ -425,28 +405,52 @@ async def run_authored_quality_review(
     )
 
     theme = presentation.theme if isinstance(presentation.theme, dict) else {}
-    style = resolve_authored_style(str(theme.get("style") or "default"))
-    saved_reference_mode = normalize_reference_mode(
-        theme.get("reference_mode")
-        or getattr(style, "reference_mode", STYLE_REFERENCE)
-    )
-    style_reference_mode = normalize_reference_mode(
-        getattr(style, "reference_mode", STYLE_REFERENCE)
-    )
-    if (
-        saved_reference_mode == EXACT_RECONSTRUCTION
-        and style_reference_mode != EXACT_RECONSTRUCTION
-    ):
-        raise ValueError(
-            "The exact-reconstruction source style is unavailable; review cannot "
-            "fall back to a style-only comparison"
+    saved_style_id = str(theme.get("style") or "default")
+    provenance_row = await session.get(AuthoredExactProvenance, presentation_id)
+    exact_source_images: tuple[bytes, ...] | None = None
+    if provenance_row is not None:
+        private_style_id = (
+            provenance_row.provenance.get("style_id")
+            if isinstance(provenance_row.provenance, dict)
+            else None
         )
+        if not isinstance(private_style_id, str) or private_style_id != saved_style_id:
+            raise ExactProvenanceError(
+                "Saved exact reconstruction style identity changed"
+            )
+        style = resolve_authored_style(private_style_id)
+        exact_source_images = verify_exact_provenance(
+            provenance_row.provenance,
+            style,
+            expected_slide_count=len(slides),
+        )
+        saved_reference_mode = EXACT_RECONSTRUCTION
+    else:
+        legacy_reference_mode = theme.get("reference_mode")
+        if (
+            isinstance(legacy_reference_mode, str)
+            and normalize_reference_mode(legacy_reference_mode)
+            == EXACT_RECONSTRUCTION
+        ):
+            raise ExactProvenanceError(
+                "Saved exact reconstruction provenance is missing"
+            )
+        style = resolve_authored_style(saved_style_id)
+        if normalize_reference_mode(
+            getattr(style, "reference_mode", STYLE_REFERENCE)
+        ) == EXACT_RECONSTRUCTION:
+            raise ExactProvenanceError(
+                "Saved exact reconstruction provenance is missing"
+            )
+        saved_reference_mode = STYLE_REFERENCE
     plan = prepare_authored_deck(outline, _saved_brand(presentation), style)
     plan_reference_mode = normalize_reference_mode(
         getattr(plan, "reference_mode", saved_reference_mode)
     )
     if plan_reference_mode != saved_reference_mode:
-        raise ValueError("Saved authored reference mode does not match its source style")
+        raise ValueError(
+            "Saved authored reference mode does not match its source style"
+        )
     contents = [outline.slides[position].content for position in positions]
     roles = [
         _saved_role(target, plan.roles[position])
@@ -460,14 +464,17 @@ async def run_authored_quality_review(
             raise ValueError(
                 "Exact reconstruction review requires a complete source mapping"
             )
+        if any(len(references) != 1 for references in planned_references):
+            raise ValueError(
+                "Exact reconstruction review requires exactly one source per slide"
+            )
         target_references = [planned_references[position] for position in positions]
-    else:
-        target_references = [() for _ in positions]
     source_images = (
-        _read_exact_sources(target_references) if exact_reconstruction else None
+        [exact_source_images[position] for position in positions]
+        if exact_reconstruction and exact_source_images is not None
+        else None
     )
     review_metadata = _review_observation_metadata()
-    source_batch_sha256 = _ordered_image_batch_sha256(source_images)
 
     await _set_status(
         session,
@@ -517,7 +524,6 @@ async def run_authored_quality_review(
         model=review_metadata["model"],
         prompt_version=review_metadata["prompt_version"],
         cache_version=review_metadata["cache_version"],
-        source_batch_sha256=source_batch_sha256,
         render_batch_sha256=render_batch_sha256,
         critique_batch_count=1,
         critique_slide_request_count=initial_cache_misses,
@@ -605,7 +611,6 @@ async def run_authored_quality_review(
         model=review_metadata["model"],
         prompt_version=review_metadata["prompt_version"],
         cache_version=review_metadata["cache_version"],
-        source_batch_sha256=source_batch_sha256,
         render_batch_sha256=render_batch_sha256,
         render_ms=render_ms,
         revision_ms=revision_ms,
@@ -653,7 +658,6 @@ async def run_authored_quality_review(
                 model=review_metadata["model"],
                 prompt_version=review_metadata["prompt_version"],
                 cache_version=review_metadata["cache_version"],
-                source_batch_sha256=_ordered_image_batch_sha256(candidate_sources),
                 render_batch_sha256=_ordered_image_batch_sha256(candidate_pngs),
                 critique_batch_count=1,
                 critique_slide_request_count=final_cache_misses,
@@ -690,7 +694,6 @@ async def run_authored_quality_review(
             model=review_metadata["model"],
             prompt_version=review_metadata["prompt_version"],
             cache_version=review_metadata["cache_version"],
-            source_batch_sha256=source_batch_sha256,
             render_batch_sha256=render_batch_sha256,
             render_ms=render_ms,
             revision_ms=revision_ms,
@@ -746,6 +749,36 @@ async def run_authored_quality_review(
 
     fixed_positions = [positions[index] for index in fixed_local_indices]
     if fixed_local_indices:
+        # Publish every immutable candidate before staging any database change.
+        # A failed asset write therefore leaves both the live deck and its snapshot
+        # history untouched (an unreferenced immutable file is safe to retain).
+        pending_updates: list[tuple[int, str, dict, dict]] = []
+        for local_index in fixed_local_indices:
+            position = positions[local_index]
+            slide = targets[local_index]
+            image_reference = _write_reviewed_png(
+                presentation_id, position, revised_pngs[local_index]
+            )
+            pending_updates.append(
+                (
+                    local_index,
+                    revised_htmls[local_index],
+                    {
+                        **(slide.content if isinstance(slide.content, dict) else {}),
+                        "__authored__": True,
+                        "image": image_reference,
+                        "role": roles[local_index],
+                    },
+                    {
+                        **(
+                            slide.properties
+                            if isinstance(slide.properties, dict)
+                            else {}
+                        ),
+                        "image": image_reference,
+                    },
+                )
+            )
         await version_service.snapshot_slides(
             session,
             presentation_id,
@@ -753,24 +786,33 @@ async def run_authored_quality_review(
             label="고품질 검수 전",
             force=True,
         )
-        for local_index in fixed_local_indices:
-            position = positions[local_index]
+        for (
+            local_index,
+            revised_html,
+            revised_content,
+            revised_properties,
+        ) in pending_updates:
             slide = targets[local_index]
-            image_reference = _write_reviewed_png(
-                presentation_id, position, revised_pngs[local_index]
+            result = await session.execute(
+                update(SlideModel)
+                .where(
+                    SlideModel.id == slide.id,
+                    SlideModel.html_content == htmls[local_index],
+                    SlideModel.content == slide.content,
+                    SlideModel.properties == slide.properties,
+                )
+                .values(
+                    html_content=revised_html,
+                    content=revised_content,
+                    properties=revised_properties,
+                )
+                .execution_options(synchronize_session=False)
             )
-            slide.html_content = revised_htmls[local_index]
-            slide.content = {
-                **(slide.content if isinstance(slide.content, dict) else {}),
-                "__authored__": True,
-                "image": image_reference,
-                "role": roles[local_index],
-            }
-            slide.properties = {
-                **(slide.properties if isinstance(slide.properties, dict) else {}),
-                "image": image_reference,
-            }
-            session.add(slide)
+            if result.rowcount != 1:
+                await session.rollback()
+                raise RuntimeError(
+                    "Presentation changed during quality review; no fixes were applied"
+                )
         await session.commit()
 
     await _set_status(
@@ -801,6 +843,35 @@ async def run_authored_quality_review(
     )
 
 
+async def run_authored_quality_review(
+    presentation_id: uuid.UUID,
+    request: AuthoredQualityReviewRequest,
+    task: AsyncPresentationGenerationTaskModel,
+    session: AsyncSession,
+) -> None:
+    """Serialize mutating reviews per deck and CAS each accepted slide at publish."""
+    if request.mode != "analyze_and_fix":
+        await _run_authored_quality_review_unlocked(
+            presentation_id, request, task, session
+        )
+        return
+
+    lock = _ANALYZE_AND_FIX_LOCKS.setdefault(presentation_id, asyncio.Lock())
+    async with lock:
+        await _run_authored_quality_review_unlocked(
+            presentation_id, request, task, session
+        )
+
+
+def _public_review_error_detail(exc: Exception) -> str:
+    """Return a stable task error without exposing private exact metadata."""
+    if isinstance(exc, AuthoredExactReconstructionUnavailableError):
+        return "authored_exact_reconstruction_unavailable"
+    if isinstance(exc, ExactProvenanceError):
+        return "authored_exact_reconstruction_provenance_mismatch"
+    return str(exc)
+
+
 async def _run_quality_review(
     presentation_id: uuid.UUID,
     request: AuthoredQualityReviewRequest,
@@ -815,14 +886,27 @@ async def _run_quality_review(
                 presentation_id, request, task, session
             )
         except Exception as exc:  # noqa: BLE001 - background task boundary
-            traceback.print_exc()
+            private_exact_failure = isinstance(
+                exc,
+                (
+                    AuthoredExactReconstructionUnavailableError,
+                    ExactProvenanceError,
+                ),
+            )
+            if private_exact_failure:
+                LOGGER.warning(
+                    "Exact reconstruction quality review failed closed (%s)",
+                    type(exc).__name__,
+                )
+            else:
+                traceback.print_exc()
             await session.rollback()
             await _set_status(
                 session,
                 task,
                 status="error",
                 message="고품질 검수 중 오류가 발생했습니다.",
-                error={"detail": str(exc)},
+                error={"detail": _public_review_error_detail(exc)},
             )
 
 

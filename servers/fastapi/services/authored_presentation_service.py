@@ -30,6 +30,7 @@ from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.presentation import PresentationModel
 from models.sql.presentation import PRESENTATION_LIFECYCLE_PUBLISHED
 from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -50,6 +51,7 @@ from services.authored_checkpoint_service import (
     should_inject_failure,
     start_stage,
 )
+from services.authored_exact_provenance import build_exact_provenance
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_reference,
@@ -611,6 +613,11 @@ async def _generate_authored_presentation(
         slide_count=len(outline.slides),
         roles=roles,
     )
+    exact_provenance = None
+    if normalize_reference_mode(
+        getattr(style, "reference_mode", STYLE_REFERENCE)
+    ) == EXACT_RECONSTRUCTION:
+        exact_provenance, _ = build_exact_provenance(style)
     brand = apply_style_defaults(resolve_brand(request, outline, language), style)
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a
@@ -794,6 +801,13 @@ async def _generate_authored_presentation(
         ]
         sql_session.add(presentation)
         sql_session.add_all(slides)
+        if exact_provenance is not None:
+            sql_session.add(
+                AuthoredExactProvenance(
+                    presentation_id=presentation_id,
+                    provenance=exact_provenance,
+                )
+            )
         if generation_job is not None and attempt_token:
             response = PresentationPathAndEditPath(
                 presentation_id=presentation_id,

@@ -91,6 +91,20 @@ def test_exact_requires_both_global_gate_and_style_allow_list(tmp_path, monkeypa
         resolve_authored_style("exact", styles_dir)
 
 
+def test_allowlisted_missing_exact_preset_never_falls_back_to_default(
+    tmp_path, monkeypatch
+):
+    _enable_exact(monkeypatch, "missing-exact")
+    styles_dir, _ = _preset_dirs(tmp_path)
+    _write_style(styles_dir, "default", mode="style_reference", entries=None)
+
+    with pytest.raises(
+        AuthoredExactReconstructionUnavailableError,
+        match="failed preset validation",
+    ):
+        resolve_authored_style("missing-exact", styles_dir)
+
+
 @pytest.mark.parametrize(
     ("suffix", "image_format"),
     [("png", "PNG"), ("jpg", "JPEG"), ("webp", "WEBP")],

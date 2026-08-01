@@ -8,10 +8,17 @@ Live evaluation requires both `PRESENTON_EXACT_EVAL_LIVE=1` and `--acknowledge-m
 
 The repository has no checked-in exact-reconstruction source deck. The built-in synthetic fixture therefore supplies five unique 1280×720 source images with Korean, English, numbers, symbols, repeated spaces, line breaks, shapes, colors, and stable object boxes. A real sample can be supplied with `manifest.example.json` as the schema guide.
 
+`--render-benchmark-slides 90` is a separate, local-only renderer/cache load
+check. It submits one deterministic Korean/English HTML document 90 times
+concurrently and reports logical requests versus uncached Chrome renders. It
+makes zero model and OCR calls; it proves cache coalescing, not VQA quality or
+the cost of 90 distinct live slides.
+
 Run commands from `servers/fastapi`:
 
 ```powershell
 uv run python scripts/evaluate_exact_reconstruction.py --self-test
+uv run python scripts/evaluate_exact_reconstruction.py --render-benchmark-slides 90
 uv run python scripts/evaluate_exact_reconstruction.py --manifest evaluation/exact_reconstruction/manifest.json
 $env:PRESENTON_EXACT_EVAL_LIVE="1"
 uv run python scripts/evaluate_exact_reconstruction.py --live --acknowledge-model-cost --synthetic-slides 1 --provider openai

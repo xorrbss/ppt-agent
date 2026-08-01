@@ -471,13 +471,15 @@ def _reference_parts(reference_images: Sequence[Path]) -> list[ImageContentPart]
     for path in reference_images:
         try:
             if path.stat().st_size > REFERENCE_IMAGE_MAX_BYTES:
-                logger.warning("Skipping oversized authored reference image %s", path)
+                # References may come from a private exact preset. Never expose
+                # their local filesystem identity in operational logs.
+                logger.warning("Skipping oversized authored reference image")
                 continue
             mime = mime_by_suffix.get(path.suffix.lower())
             if mime:
                 parts.append(ImageContentPart(data=path.read_bytes(), mime_type=mime))
-        except OSError as exc:
-            logger.warning("Unable to read authored reference image %s: %s", path, exc)
+        except OSError:
+            logger.warning("Unable to read authored reference image")
     return parts
 
 
