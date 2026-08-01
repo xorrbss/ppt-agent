@@ -33,6 +33,7 @@ import {
 import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
+  resolveHybridExportConcurrencyDefault,
 } from "./export-performance.ts";
 import { getGoogleFontsCollector } from "./google-fonts-runtime.ts";
 import { summarizeAuthoredHybridExport } from "./export-metadata.ts";
@@ -71,7 +72,7 @@ const HYBRID_BROWSER_PASS_TIMEOUT_MS = 45_000;
 const HYBRID_RESULT_CACHE_LIMIT = 24;
 const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
-  4,
+  resolveHybridExportConcurrencyDefault(),
   1,
   8
 );

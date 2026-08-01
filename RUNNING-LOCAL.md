@@ -164,6 +164,7 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
 - **Concurrency knobs (per deploy):** `AUTHORED_RENDER_CONCURRENCY` (default 4) bounds
   total concurrent headless-chrome processes process-wide; `AUTHORED_AUTHOR_CONCURRENCY`
   (default 5) bounds concurrent authoring calls. Lower them (e.g. 2) on low-RAM hosts.
+- `AUTHORED_HYBRID_CONCURRENCY` overrides hybrid PPTX slide concurrency; its default is `clamp(4, os.cpus().length - 2, 8)`.
 
 ## Editable (byte) PPTX/PDF export on Windows
 
