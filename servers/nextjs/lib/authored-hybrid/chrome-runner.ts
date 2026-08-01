@@ -255,23 +255,67 @@ async function terminateChrome(
   profilePath?: string
 ): Promise<void> {
   if (process.platform === "win32") {
+    let launcherTerminationError: unknown;
     if (child.pid && child.exitCode === null && child.signalCode === null) {
       try {
         await taskkillProcessTree(child.pid);
       } catch (error) {
-        // A launcher can exit in the small race between the state check and
-        // taskkill. That is only benign when it has demonstrably exited; a
-        // still-running launcher is a failed cleanup, never a success.
-        await waitForChildExit(child);
-        if (child.exitCode === null && child.signalCode === null) {
-          throw new Error("Windows Chrome launcher could not be terminated.", {
-            cause: error,
-          });
-        }
+        // chrome.exe can hand off to another process or exit between the state
+        // check and taskkill. Keep the error until the unique-profile cleanup
+        // below establishes whether a Chrome process actually survived.
+        launcherTerminationError = error;
       }
     }
-    if (profilePath) await terminateWindowsProfileProcesses(profilePath);
+
+    let profileTerminationError: unknown;
+    if (profilePath) {
+      try {
+        await terminateWindowsProfileProcesses(profilePath);
+      } catch (error) {
+        profileTerminationError = error;
+      }
+    }
+
     await waitForChildExit(child);
+
+    if (child.exitCode === null && child.signalCode === null) {
+      try {
+        child.kill();
+      } catch {
+        // The process may have exited after the state check. The final profile
+        // scan is authoritative for captures, because every Chrome process in
+        // this run receives the unique --user-data-dir argument.
+      }
+      await waitForChildExit(child);
+    }
+
+    if (profilePath) {
+      try {
+        await terminateWindowsProfileProcesses(profilePath);
+        profileTerminationError = undefined;
+      } catch (error) {
+        profileTerminationError = error;
+      }
+    }
+
+    const launcherStillRunning =
+      !profilePath && child.exitCode === null && child.signalCode === null;
+    if (profileTerminationError !== undefined || launcherStillRunning) {
+      const errors: unknown[] = [];
+      if (launcherTerminationError !== undefined) {
+        errors.push(launcherTerminationError);
+      }
+      if (profileTerminationError !== undefined) {
+        errors.push(profileTerminationError);
+      }
+      if (launcherStillRunning) {
+        errors.push(new Error("Windows Chrome launcher is still running."));
+      }
+      throw new AggregateError(
+        errors,
+        "Windows Chrome could not be fully terminated."
+      );
+    }
     return;
   }
   if (child.pid && child.exitCode === null && child.signalCode === null) {

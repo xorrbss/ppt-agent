@@ -188,6 +188,53 @@ test(
 );
 
 test(
+  "Windows concurrent captures retain completed artifacts while cleaning Chrome profiles",
+  { skip: process.platform === "win32" ? false : "Windows Chrome concurrency regression" },
+  async (t) => {
+    const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
+    if (!chromeExecutable) {
+      if (process.env.CI === "true") {
+        assert.fail("CI must provide Chrome/Chromium for authored cleanup coverage");
+      }
+      t.skip("Chrome/Chromium is unavailable");
+      return;
+    }
+
+    const originalTemp = process.env.TEMP_DIRECTORY;
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "presenton-hybrid-concurrent-"));
+    process.env.TEMP_DIRECTORY = root;
+    try {
+      const captures = await Promise.all(
+        Array.from({ length: 8 }, (_, index) => {
+          const completionToken = `windows-concurrent-${process.pid}-${index}`;
+          return runAuthoredHybridChrome({
+            chromeExecutable,
+            timeoutMs: 30_000,
+            dumpDom: true,
+            screenshot: true,
+            domCompletionToken: completionToken,
+            html: instrumentAuthoredHtml(
+              `<!doctype html><body>concurrent capture ${index}</body>`,
+              { completionToken }
+            ),
+          });
+        })
+      );
+
+      captures.forEach((capture, index) => {
+        assert.match(capture.serializedDom ?? "", new RegExp(`concurrent capture ${index}`));
+        assert.ok(capture.screenshotPng?.length);
+      });
+      assert.deepEqual(await fs.readdir(root), []);
+    } finally {
+      if (originalTemp === undefined) delete process.env.TEMP_DIRECTORY;
+      else process.env.TEMP_DIRECTORY = originalTemp;
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
   "Windows cleanup helpers fail closed for timeout, nonzero exit, and residual profile processes",
   { skip: process.platform === "win32" ? false : "Windows cleanup helper regression" },
   async () => {

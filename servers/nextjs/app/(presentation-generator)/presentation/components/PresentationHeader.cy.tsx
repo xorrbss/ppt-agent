@@ -4,6 +4,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 
 import PresentationHeader from "./PresentationHeader";
+import { notify } from "@/components/ui/sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import ThemeApi from "../../services/api/theme";
 import { store } from "@/store/store";
@@ -64,7 +65,9 @@ const expectExportBody = (expected: Record<string, string>) =>
 describe("PresentationHeader authored export", () => {
   beforeEach(() => {
     cy.stub(ThemeApi, "getThemes").as("getThemes").resolves([]);
-    cy.stub(PresentationGenerationApi, "updatePresentationContent").resolves({});
+    cy.stub(PresentationGenerationApi, "updatePresentationContent")
+      .as("updatePresentationContent")
+      .resolves({});
     cy.intercept("POST", "**/api/export-presentation", (request) => {
       request.reply({
         statusCode: 200,
@@ -110,6 +113,22 @@ describe("PresentationHeader authored export", () => {
       pptxMode: "hybrid",
       fontEmbedding: false,
     });
+    cy.get("@updatePresentationContent").should("have.been.calledOnce");
+  });
+
+  it("allows wrapped export cards to grow with their content", () => {
+    mountHeader(true);
+
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid"], [data-testid="authored-export-hybrid-embedded"]')
+      .each(($button) => {
+        expect($button).to.have.class("h-auto");
+        expect($button).to.have.class("whitespace-normal");
+        expect($button).to.have.class("items-start");
+      });
+    cy.get('[data-testid="export-pdf"]')
+      .should("have.class", "h-auto")
+      .and("have.class", "justify-between");
   });
 
   it("preserves the PDF request shape after a separated-elements export", () => {
@@ -133,6 +152,26 @@ describe("PresentationHeader authored export", () => {
       id: "deck-1",
       title: "deck",
     });
+    cy.get("@updatePresentationContent").should("have.been.calledTwice");
+  });
+
+  it("shows an actionable message for an expired export session", () => {
+    cy.intercept("POST", "**/api/export-presentation", {
+      statusCode: 401,
+      body: { error: "Authentication required" },
+    }).as("expiredExport");
+    cy.stub(notify, "error").as("notifyError");
+    mountHeader(true);
+
+    openExportOptions();
+    cy.get('[data-testid="export-pdf"]').click({ force: true });
+    cy.wait("@expiredExport");
+    cy.get("@notifyError").should(
+      "have.been.calledWith",
+      "로그인이 필요합니다",
+      "로그인 세션이 만료되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요."
+    );
+    cy.get("@updatePresentationContent").should("have.been.calledOnce");
   });
 
   it("keeps embedding off by default and sends an explicit opt-in with a warning", () => {
@@ -246,6 +285,7 @@ describe("PresentationHeader authored export", () => {
       id: "deck-1",
       title: "deck",
     });
+    cy.get("@updatePresentationContent").should("have.been.calledOnce");
   });
 
   it("keeps the authored export trigger focusable and restores focus after export", () => {

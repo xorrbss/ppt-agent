@@ -7,6 +7,7 @@ import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 import { normalizeBackendAssetUrls } from "@/utils/api";
 import { useFontLoader } from "../../hooks/useFontLoad";
+import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
 
 
 export const usePresentationData = (
@@ -37,6 +38,10 @@ export const usePresentationData = (
         applyPresentationThemeToElement(el, normalizedData.theme);
       }
     } catch (error) {
+      if (isUnauthorizedApiError(error)) {
+        setLoading(false);
+        return;
+      }
       setError(true);
       notify.error("프레젠테이션을 불러오지 못했습니다", "프레젠테이션을 불러올 수 없습니다. 다시 시도해 주세요.");
       console.error("Error fetching user slides:", error);

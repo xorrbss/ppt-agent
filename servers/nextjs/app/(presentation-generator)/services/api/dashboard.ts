@@ -67,20 +67,15 @@ export class DashboardApi {
   }
 
   static async getPresentation(id: string) {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/${id}`),
-        {
-          method: "GET",
-          credentials: "include",
-        }
-      );
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${id}`),
+      {
+        method: "GET",
+        credentials: "include",
+      }
+    );
 
-      return await ApiResponseHandler.handleResponse(response, "Presentation not found");
-    } catch (error) {
-      console.error("Error fetching presentation:", error);
-      throw error;
-    }
+    return await ApiResponseHandler.handleResponse(response, "Presentation not found");
   }
 
   static async getPresentationGenerationInfo(

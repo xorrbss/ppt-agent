@@ -50,6 +50,7 @@ import SharePopover from "./SharePopover";
 import GenerationInfoDialog from "./GenerationInfoDialog";
 import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "../../services/api/theme";
+import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
 import { Theme } from "../../services/api/types";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,26 @@ import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import { buildSafeExportFileName } from "../utils/buildSafeExportFileName";
 
 type PptxExportMode = "fidelity" | "hybrid";
+
+class ExportRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ExportRequestError";
+  }
+}
+
+function isUnauthorizedError(error: unknown): boolean {
+  if (error instanceof ExportRequestError) return error.status === 401;
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status?: unknown }).status === 401
+  );
+}
 
 function getAuthoredStyleId(theme: unknown): string | null {
   if (!theme || typeof theme !== "object") return null;
@@ -116,6 +137,7 @@ const PresentationHeader = ({
         const [customThemes] = await Promise.all([ThemeApi.getThemes()]);
         if (!cancelled) setThemes([...customThemes, ...DEFAULT_THEMES]);
       } catch (e: any) {
+        if (isUnauthorizedApiError(e)) return;
         if (!cancelled) {
           notify.error("테마를 불러올 수 없습니다", e?.message || "테마를 불러오지 못했습니다.");
         }
@@ -234,7 +256,9 @@ const PresentationHeader = ({
         "발표자료를 내보내고 있습니다. 잠시 시간이 걸릴 수 있습니다."
       );
       setIsExporting(true);
-      // Save the presentation data before exporting
+      // The export endpoint reads the persisted server snapshot. Flush the
+      // current client state first so a pending/debounced autosave cannot make
+      // an authored export use stale slide HTML and misplaced elements.
       await PresentationGenerationApi.updatePresentationContent(
         presentationData
       );
@@ -260,7 +284,10 @@ const PresentationHeader = ({
         });
 
         if (!response.ok) {
-          throw new Error("PPTX 내보내기에 실패했습니다.");
+          throw new ExportRequestError(
+            "PPTX 내보내기에 실패했습니다.",
+            response.status
+          );
         }
 
         const payload = (await response.json()) as {
@@ -292,6 +319,14 @@ const PresentationHeader = ({
         { id: exportToastId }
       );
     } catch (error) {
+      if (isUnauthorizedError(error)) {
+        notify.error(
+          "로그인이 필요합니다",
+          "로그인 세션이 만료되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요.",
+          exportToastId !== undefined ? { id: exportToastId } : undefined
+        );
+        return;
+      }
       console.error("Export failed:", error);
       notify.error(
         "내보내기 실패",
@@ -319,7 +354,8 @@ const PresentationHeader = ({
         "발표자료를 내보내고 있습니다. 잠시 시간이 걸릴 수 있습니다."
       );
       setIsExporting(true);
-      // Save the presentation data before exporting
+      // PDF also reads the persisted snapshot, so it must observe the same
+      // save-before-export ordering as PPTX.
       await PresentationGenerationApi.updatePresentationContent(
         presentationData
       );
@@ -344,7 +380,10 @@ const PresentationHeader = ({
           const { path: pdfPath } = await response.json();
           downloadLink(pdfPath, safePdfFileName);
         } else {
-          throw new Error("PDF 내보내기에 실패했습니다.");
+          throw new ExportRequestError(
+            "PDF 내보내기에 실패했습니다.",
+            response.status
+          );
         }
       }
       notify.success(
@@ -353,6 +392,14 @@ const PresentationHeader = ({
         { id: exportToastId }
       );
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        notify.error(
+          "로그인이 필요합니다",
+          "로그인 세션이 만료되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요.",
+          exportToastId !== undefined ? { id: exportToastId } : undefined
+        );
+        return;
+      }
       console.error(err);
       notify.error(
         "내보내기 실패",
@@ -399,7 +446,7 @@ const PresentationHeader = ({
     >
       <p className="text-sm font-medium text-[#19001F]">다음 형식으로 내보내기</p>
       <div className="my-[18px] h-[1px] bg-[#E8E8E8]" />
-      <div className="space-y-3">
+      <div className="space-y-2">
         {isAuthoredDeck && (
           <>
             <Button
@@ -411,12 +458,12 @@ const PresentationHeader = ({
               disabled={isExporting || isStreaming === true}
               data-testid="authored-export-hybrid"
               variant="ghost"
-              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg px-2 py-2 text-left text-xs text-black hover:bg-[#F6F6F9] disabled:cursor-not-allowed"
+              className="h-auto min-h-[72px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl px-3 py-3 text-left text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed"
               aria-label="PPTX로 내보내기, 배경과 요소 분리"
             >
-              <span className="min-w-0">
-                <span className="block font-medium">PPTX · 배경과 요소 분리</span>
-                <span className="mt-1 block text-[11px] font-normal leading-snug text-[#5F5B66]">
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold leading-5">PPTX · 배경과 요소 분리</span>
+                <span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-[#5F5B66]">
                   배경, 텍스트, 이미지와 도형을 가능한 범위에서 각각 분리합니다.
                 </span>
               </span>
@@ -431,15 +478,15 @@ const PresentationHeader = ({
               disabled={isExporting || isStreaming === true}
               data-testid="authored-export-hybrid-embedded"
               variant="ghost"
-              className="min-h-11 w-full items-start justify-between whitespace-normal rounded-lg border border-amber-200 bg-amber-50/60 px-2 py-2 text-left text-xs text-black hover:bg-amber-50 disabled:cursor-not-allowed"
+              className="h-auto min-h-[88px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-3 text-left text-xs text-black hover:bg-amber-50 focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed"
               aria-label="PPTX로 내보내기, 편집 가능 및 글꼴 포함"
             >
-              <span className="min-w-0">
-                <span className="block font-medium">
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold leading-5">
                   PPTX · 편집 가능 + 글꼴 포함
                 </span>
                 <span
-                  className="mt-1 block text-[11px] font-normal leading-snug text-amber-900"
+                  className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-amber-900"
                   role="note"
                 >
                   명시적 opt-in입니다. 서버에서 허용된 글꼴만 포함하며 파일
@@ -458,12 +505,12 @@ const PresentationHeader = ({
           disabled={isExporting || isStreaming === true}
           data-testid="export-pdf"
           variant="ghost"
-          className={`  rounded-none px-0 w-full text-xs flex justify-start text-black hover:bg-transparent ${
-            mobile ? "bg-white py-6 border-none rounded-lg" : ""
+          className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${
+            mobile ? "border-none bg-white" : ""
           }`}
         >
           PDF
-          <ArrowUpRight className="w-3.5 h-3.5" />
+          <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>
         {!isAuthoredDeck && <Button
           onClick={() => {
@@ -473,12 +520,12 @@ const PresentationHeader = ({
           disabled={isExporting || isStreaming === true}
           data-testid="export-pptx"
           variant="ghost"
-          className={`w-full flex px-0 justify-start text-xs text-black hover:bg-transparent  ${
-            mobile ? "bg-white py-6" : ""
+          className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${
+            mobile ? "bg-white" : ""
           }`}
         >
           PPTX
-          <ArrowUpRight className="w-3.5 h-3.5" />
+          <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>}
       </div>
     </div>

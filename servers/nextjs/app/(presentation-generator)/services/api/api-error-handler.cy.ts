@@ -3,8 +3,42 @@ import {
   apiErrorFromPayload,
   getApiErrorDisplayMessage,
   getRetryablePresentationGenerationMessage,
+  AUTH_SESSION_EXPIRED_EVENT,
+  ApiResponseHandler,
+  isUnauthorizedApiError,
   isRetryablePresentationGenerationError,
 } from "./api-error-handler";
+
+describe("expired authentication sessions", () => {
+  it("signals the application shell and returns a classified 401 error", async () => {
+    const onExpiredSession = cy.stub();
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, onExpiredSession);
+
+    const response = new Response(JSON.stringify({ detail: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+
+    let caught: unknown;
+    try {
+      await ApiResponseHandler.handleResponse(response, "Request failed");
+    } catch (error) {
+      caught = error;
+    } finally {
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, onExpiredSession);
+    }
+
+    expect(onExpiredSession).to.have.been.calledOnce;
+    expect(isUnauthorizedApiError(caught)).to.equal(true);
+    expect(caught).to.include({ status: 401, message: "Unauthorized" });
+  });
+
+  it("does not classify unrelated API failures as authentication failures", () => {
+    expect(
+      isUnauthorizedApiError(new ApiError("Forbidden", { status: 403 }))
+    ).to.equal(false);
+  });
+});
 
 describe("retryable presentation generation errors", () => {
   it("identifies a retryable 503 and keeps its request ID in Korean guidance", () => {

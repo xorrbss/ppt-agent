@@ -10,6 +10,7 @@ import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
 import Image from 'next/image';
 import { notify } from '@/components/ui/sonner';
+import { AUTH_SESSION_EXPIRED_EVENT } from '@/app/(presentation-generator)/services/api/api-error-handler';
 
 const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
   try {
@@ -39,6 +40,20 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     () => !route?.startsWith("/pdf-maker")
   );
   const router = useRouter();
+
+  useEffect(() => {
+    let redirectStarted = false;
+    const handleExpiredSession = () => {
+      if (redirectStarted) return;
+      redirectStarted = true;
+      window.location.replace('/?reason=unauthorized');
+    };
+
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpiredSession);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpiredSession);
+    };
+  }, []);
 
   const setLoadingToFalseAfterNavigatingTo = useCallback((pathname: string) => {
     const interval = setInterval(() => {

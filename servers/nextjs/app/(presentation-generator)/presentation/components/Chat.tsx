@@ -24,6 +24,7 @@ import React, {
 import { notify } from "@/components/ui/sonner";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { PresentationChatApi } from "../../services/api/chat";
+import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
 import type { ChatStreamTrace, ChatAttachmentPayload } from "../../services/api/chat";
 import { filesToChatAttachments } from "../utils/chatAttachments";
 import {
@@ -615,6 +616,7 @@ const Chat = ({
           }))
         );
       } catch (error) {
+        if (isUnauthorizedApiError(error)) return;
         console.error("Failed to load chat history:", error);
         const detail =
           error instanceof Error

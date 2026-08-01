@@ -318,6 +318,30 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     if (!["left", "center", "right", "justify"].includes(alignment)) {
       alignment = "left";
     }
+    // A direct text node in a flex/grid container is laid out as an anonymous
+    // item. Generated badges and shape labels commonly center that item with
+    // justify-content/place-items while leaving text-align at its default
+    // value. DrawingML has no anonymous flex/grid item, so retaining left
+    // here pins the text to the shape's left edge. Map the centered horizontal
+    // layout axis to the equivalent paragraph alignment. Preserve any authored
+    // non-default paragraph alignment.
+    var display = style.display || "";
+    if (alignment === "left") {
+      var horizontalLayoutAlignment = "";
+      if (display === "flex" || display === "inline-flex") {
+        var horizontalFlexDirection = style.flexDirection || "row";
+        var horizontalFlexIsColumn =
+          horizontalFlexDirection === "column" ||
+          horizontalFlexDirection === "column-reverse";
+        horizontalLayoutAlignment = horizontalFlexIsColumn
+          ? style.alignItems
+          : style.justifyContent;
+      } else if (display === "grid" || display === "inline-grid") {
+        horizontalLayoutAlignment =
+          style.justifyItems === "center" ? style.justifyItems : style.justifyContent;
+      }
+      if (horizontalLayoutAlignment === "center") alignment = "center";
+    }
     var fontSizePt = Math.max(9, round(fontSizePx * 0.75));
     var lineHeightMultiple = round(lineHeightPx / Math.max(fontSizePx, 0.01));
     // Which alignment property maps to the vertical (block) axis depends on the
@@ -326,7 +350,6 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
     // grid maps align-items to the vertical axis. Treating a row's justify-content
     // as a vertical anchor (the old bug) shifted centered text within its box.
     var vertical = "top";
-    var display = style.display || "";
     if (display === "flex" || display === "inline-flex") {
       var flexDirection = style.flexDirection || "row";
       var isColumn =
