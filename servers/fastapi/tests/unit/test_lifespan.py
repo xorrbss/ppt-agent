@@ -42,9 +42,11 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
         "create_db_and_tables",
         "log_template_v2_operational_health",
         "start_template_v2_private_source_cleanup",
+        "start_export_retention_sweeper",
         "start_presentation_generation_dispatcher",
         "check_llm_and_image_provider_api_or_model_availability",
         "stop_presentation_generation_dispatcher",
+        "stop_export_retention_sweeper",
         "stop_template_v2_private_source_cleanup",
         "dispose_engines",
     )
@@ -68,3 +70,5 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     asyncio.run(enter_lifespan())
 
     bootstrap_admin.assert_awaited_once_with()
+    lifespan.start_export_retention_sweeper.assert_awaited_once_with()
+    lifespan.stop_export_retention_sweeper.assert_awaited_once_with()

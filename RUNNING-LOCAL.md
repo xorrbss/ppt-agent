@@ -165,6 +165,7 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
   total concurrent headless-chrome processes process-wide; `AUTHORED_AUTHOR_CONCURRENCY`
   (default 5) bounds concurrent authoring calls. Lower them (e.g. 2) on low-RAM hosts.
 - `AUTHORED_HYBRID_CONCURRENCY` overrides hybrid PPTX slide concurrency; its default is `clamp(4, os.cpus().length - 2, 8)`.
+- `EXPORT_RETENTION_DAYS` controls export retention by last access (default 7 days); `EXPORT_SWEEP_INTERVAL_SECONDS` controls the startup/background sweep interval (default 3600 seconds), and files modified within the last hour are always retained.
 
 ## Editable (byte) PPTX/PDF export on Windows
 
