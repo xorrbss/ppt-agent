@@ -15,6 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from models.sql.async_presentation_generation_status import (  # noqa: F401, E402
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
+    AuthoredSlideCheckpoint,
+)
 from models.sql.chat_history_message import ChatHistoryMessageModel  # noqa: F401, E402
 from models.sql.image_asset import ImageAsset  # noqa: F401, E402
 from models.sql.key_value import KeyValueSqlModel  # noqa: F401, E402

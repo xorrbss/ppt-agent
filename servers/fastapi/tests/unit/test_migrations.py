@@ -498,7 +498,7 @@ def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_pa
             ).scalar_one() == "keep me"
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+            ).scalar_one() == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
 
         command.downgrade(config, migrations.REVISION_PRIMARY_ADMIN)
         command.upgrade(config, "head")
@@ -506,7 +506,7 @@ def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_pa
         with engine.connect() as connection:
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+            ).scalar_one() == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
             assert "template_v2_id" in {
                 column["name"]
                 for column in inspect(connection).get_columns(
@@ -586,7 +586,7 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
             )
             template_indexes = db_inspector.get_indexes("template_v2")
 
-        assert revision == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+        assert revision == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
@@ -1692,7 +1692,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+                == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
             )
             assert "presentation_generation_jobs" in inspector.get_table_names()
             assert "lifecycle_status" in {
@@ -1736,7 +1736,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+                == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
             )
             assert "template_v2" in inspector.get_table_names()
             assert "presentation_generation_jobs" in inspector.get_table_names()

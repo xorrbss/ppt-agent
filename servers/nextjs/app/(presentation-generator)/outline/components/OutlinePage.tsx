@@ -49,6 +49,32 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     generationTemplate,
     setActiveTab
   );
+  const slideProgress = useMemo(() => {
+    const progress = loadingState.progress;
+    if (
+      !progress ||
+      !Number.isFinite(progress.completed_slides) ||
+      !Number.isFinite(progress.total_slides) ||
+      progress.total_slides <= 0
+    ) {
+      return null;
+    }
+    const completed = Math.min(
+      progress.total_slides,
+      Math.max(0, progress.completed_slides)
+    );
+    return {
+      // A deck with every slide persisted is still incomplete while the server
+      // is assembling/publishing the PPTX. The completed response navigates away.
+      value: Math.min(
+        99,
+        Math.floor((completed / progress.total_slides) * 100)
+      ),
+      label: progress.finalizing
+        ? `슬라이드 ${completed}/${progress.total_slides} 완료 · 최종 파일 생성 중`
+        : `슬라이드 ${completed}/${progress.total_slides} 완료`,
+    };
+  }, [loadingState.progress]);
 
   // Auto-bridge: once the outline stream completes, submit exactly once.
   const autoSubmittedRef = useRef(false);
@@ -102,6 +128,8 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
           }
           showProgress={true}
           duration={generating ? loadingState.duration : 60}
+          progress={generating ? slideProgress?.value : undefined}
+          progressLabel={generating ? slideProgress?.label : undefined}
           // While generating: invalidate the run and fall back to the outline UI
           // so the user can review/edit and regenerate. While the outline is still
           // streaming: go back to compose (unmount closes the SSE stream).
@@ -129,6 +157,8 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
         text={loadingState.message}
         showProgress={loadingState.showProgress}
         duration={loadingState.duration}
+        progress={slideProgress?.value}
+        progressLabel={slideProgress?.label}
         onCancel={cancelGeneration}
         cancelText="생성 취소"
       />

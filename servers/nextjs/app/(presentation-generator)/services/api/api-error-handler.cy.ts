@@ -1,5 +1,6 @@
 import {
   ApiError,
+  apiErrorFromPayload,
   getRetryablePresentationGenerationMessage,
   isRetryablePresentationGenerationError,
 } from "./api-error-handler";
@@ -24,5 +25,54 @@ describe("retryable presentation generation errors", () => {
         new ApiError("Invalid outline", { status: 422 }),
       ),
     ).to.equal(false);
+  });
+
+  it("preserves slide failure metadata and honors an explicit retryable flag", () => {
+    const error = apiErrorFromPayload(
+      {
+        status_code: 500,
+        code: "slide_render_failed",
+        message: "Browser render failed",
+        stage: "render",
+        slide_number: 47,
+        retryable: false,
+        exception_type: "PlaywrightError",
+        fingerprint: "failure-fingerprint",
+      },
+      "Generation failed"
+    );
+
+    expect(error).to.include({
+      status: 500,
+      code: "slide_render_failed",
+      stage: "render",
+      slideNumber: 47,
+      retryable: false,
+      exceptionType: "PlaywrightError",
+      fingerprint: "failure-fingerprint",
+    });
+    expect(isRetryablePresentationGenerationError(error)).to.equal(false);
+  });
+
+  it("shows safe slide and stage metadata for a retryable checkpoint failure", () => {
+    const error = apiErrorFromPayload(
+      {
+        status_code: 500,
+        code: "slide_render_failed",
+        message: "Browser render failed",
+        stage: "render",
+        slide_number: 47,
+        retryable: true,
+        exception_type: "PlaywrightError",
+        fingerprint: "internal-fingerprint",
+      },
+      "Generation failed"
+    );
+
+    const message = getRetryablePresentationGenerationMessage(error);
+    expect(message).to.include("47번 슬라이드");
+    expect(message).to.include("렌더링 단계");
+    expect(message).not.to.include("PlaywrightError");
+    expect(message).not.to.include("internal-fingerprint");
   });
 });

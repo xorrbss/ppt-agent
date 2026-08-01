@@ -6,6 +6,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import type {
+  GenerationFailure,
+  GenerationStatusResponse,
+} from "../../services/api/presentation-generation";
 import { DashboardApi } from "../../services/api/dashboard";
 import { LoadingState, TABS } from "../types/index";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
@@ -147,6 +151,8 @@ export const usePresentationGeneration = (
       isLoading: task.status !== "background",
       showProgress: task.status !== "background",
       duration: task.progressDurationSeconds,
+      progress: task.lastProgress,
+      failure: task.lastFailure,
     }),
     []
   );
@@ -154,7 +160,7 @@ export const usePresentationGeneration = (
   const finishDurableGeneration = useCallback(
     async (
       durableTask: DurableGenerationTask,
-      statusTask: any,
+      statusTask: GenerationStatusResponse,
       isActiveRun: () => boolean
     ) => {
       const newId = statusTask?.data?.presentation_id;
@@ -251,7 +257,7 @@ export const usePresentationGeneration = (
         const taskId = durableTask.taskId;
 
         while (isActiveRun()) {
-          let statusTask;
+          let statusTask: GenerationStatusResponse;
           try {
             statusTask = await PresentationGenerationApi.getGenerationStatus(
               taskId
@@ -285,13 +291,30 @@ export const usePresentationGeneration = (
             return;
           }
           if (statusTask?.status === "error") {
-            clearDurableGenerationTask(durableTask.idempotencyKey);
-            throw apiErrorFromPayload(
-              statusTask?.error,
+            const failure = (statusTask.failure || statusTask.error) as
+              | GenerationFailure
+              | Record<string, unknown>
+              | undefined;
+            const generationError = apiErrorFromPayload(
+              failure,
               statusTask?.message || "Presentation generation failed.",
               500,
               statusTask?.request_id
             );
+            if (
+              durableTask.mode === "authored" &&
+              isRetryablePresentationGenerationError(generationError)
+            ) {
+              durableTask = updateDurableGenerationTask(durableTask, {
+                status: "retryable-error",
+                requestId: statusTask.request_id || durableTask.requestId,
+                lastProgress: statusTask.progress || durableTask.lastProgress,
+                lastFailure: failure as GenerationFailure | undefined,
+              });
+            } else {
+              clearDurableGenerationTask(durableTask.idempotencyKey);
+            }
+            throw generationError;
           }
 
           const isPastForegroundDeadline = Date.now() >= durableTask.deadlineAt;
@@ -302,7 +325,12 @@ export const usePresentationGeneration = (
                 ? "running"
                 : "pending",
             requestId: statusTask?.request_id || durableTask.requestId,
+            lastProgress: statusTask?.progress || durableTask.lastProgress,
+            lastFailure: undefined,
           });
+          if (!isPastForegroundDeadline) {
+            setLoadingState(getDurableLoadingState(durableTask));
+          }
 
           // The 30-minute deadline limits the blocking overlay, not the server job.
           // Keep polling in the background so a late completion still opens the deck.
@@ -321,7 +349,14 @@ export const usePresentationGeneration = (
         }
       } catch (error: any) {
         if (!isActiveRun()) return;
-        if (!isRetryablePresentationGenerationError(error)) {
+        const isRetryable = isRetryablePresentationGenerationError(error);
+        if (durableTask.mode === "authored" && isRetryable) {
+          if (durableTask.status !== "retryable-error") {
+            durableTask = updateDurableGenerationTask(durableTask, {
+              status: "retryable-error",
+            });
+          }
+        } else if (!isRetryable) {
           clearDurableGenerationTask(durableTask.idempotencyKey);
           startingDurableTaskRef.current = null;
         }
@@ -343,7 +378,7 @@ export const usePresentationGeneration = (
   useEffect(() => {
     const reconcile = () => {
       const durableTask = findDurableGenerationTask(presentationId);
-      if (!durableTask?.taskId) {
+      if (!durableTask?.taskId || durableTask.status === "retryable-error") {
         // Fast Refresh may preserve React state after invalidating its poller. If
         // there is no durable task to resume, never leave that stale overlay up.
         setLoadingState(DEFAULT_LOADING_STATE);
@@ -387,7 +422,7 @@ export const usePresentationGeneration = (
         startingDurableTaskRef.current?.sourcePresentationId === presentationId
           ? startingDurableTaskRef.current
           : findDurableGenerationTask(presentationId);
-      if (durableTask?.taskId) {
+      if (durableTask?.taskId && durableTask.status !== "retryable-error") {
         await runDurableGeneration(durableTask);
         return;
       }
@@ -423,6 +458,7 @@ export const usePresentationGeneration = (
           taskId,
           status: started?.status === "running" ? "running" : "pending",
           requestId: started?.request_id,
+          lastFailure: undefined,
         });
         submittingDurableTaskRef.current = null;
         startingDurableTaskRef.current = null;

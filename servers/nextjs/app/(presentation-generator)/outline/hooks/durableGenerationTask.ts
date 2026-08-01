@@ -1,10 +1,16 @@
+import type {
+  GenerationFailure,
+  GenerationProgress,
+} from "../../services/api/presentation-generation";
+
 export type DurableGenerationMode = "authored" | "template-v2";
 
 export type DurableGenerationStatus =
   | "starting"
   | "pending"
   | "running"
-  | "background";
+  | "background"
+  | "retryable-error";
 
 export interface DurableGenerationTask {
   version: 1;
@@ -17,6 +23,8 @@ export interface DurableGenerationTask {
   createdAt: number;
   deadlineAt: number;
   progressDurationSeconds: number;
+  lastProgress?: GenerationProgress;
+  lastFailure?: GenerationFailure;
 }
 
 const STORAGE_KEY = "presenton:durable-generation-tasks:v1";

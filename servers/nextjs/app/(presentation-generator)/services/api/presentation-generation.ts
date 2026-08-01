@@ -14,6 +14,54 @@ export type BlankPresentationResponse = {
   slides: Array<Record<string, unknown>>;
 };
 
+export type GenerationStage =
+  | "author"
+  | "illustrate"
+  | "render"
+  | "persist"
+  | "finalize"
+  | "completed";
+
+export type GenerationProgress = {
+  completed_slides: number;
+  total_slides: number;
+  percent?: number;
+  current_slide?: number | null;
+  current_stage?: GenerationStage | null;
+  stage_counts?: Partial<Record<GenerationStage, number>>;
+  finalizing?: boolean;
+};
+
+export type GenerationFailure = {
+  code?: string;
+  message?: string;
+  stage?: GenerationStage;
+  slide_number?: number;
+  exception_type?: string;
+  fingerprint?: string;
+  retryable?: boolean;
+  request_id?: string | null;
+  status_code?: number;
+  detail?: unknown;
+};
+
+export type GenerationStatusResponse = {
+  id?: string;
+  status: string;
+  message?: string | null;
+  error?: GenerationFailure | Record<string, unknown> | null;
+  data?: Record<string, any> | null;
+  request_id?: string;
+  progress?: GenerationProgress | null;
+  failure?: GenerationFailure | null;
+};
+
+export type StartGenerationResponse = {
+  id?: string;
+  status?: string;
+  request_id?: string;
+};
+
 export class PresentationGenerationApi {
   static async uploadDoc(documents: File[]) {
     const formData = new FormData();
@@ -278,7 +326,7 @@ export class PresentationGenerationApi {
     vision_qa?: boolean;
     authored_style?: string;
     idempotency_key?: string;
-  }) {
+  }): Promise<StartGenerationResponse> {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
@@ -329,7 +377,7 @@ export class PresentationGenerationApi {
     template_v2_revision: number;
     language?: string | null;
     idempotency_key?: string;
-  }) {
+  }): Promise<StartGenerationResponse> {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
@@ -369,7 +417,9 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async getGenerationStatus(taskId: string) {
+  static async getGenerationStatus(
+    taskId: string
+  ): Promise<GenerationStatusResponse> {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/status/${taskId}`),

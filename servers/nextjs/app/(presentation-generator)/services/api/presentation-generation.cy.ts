@@ -87,3 +87,69 @@ describe("PresentationGenerationApi.generateTemplateV2Async", () => {
     });
   });
 });
+
+describe("PresentationGenerationApi.getGenerationStatus", () => {
+  it("returns authored checkpoint progress and sanitized slide failure fields", () => {
+    cy.intercept("GET", "**/api/v1/ppt/presentation/status/task-47", {
+      statusCode: 200,
+      body: {
+        status: "error",
+        progress: {
+          completed_slides: 46,
+          total_slides: 90,
+          current_slide: 47,
+          current_stage: "render",
+          finalizing: false,
+        },
+        failure: {
+          code: "slide_render_failed",
+          message: "Browser render failed",
+          stage: "render",
+          slide_number: 47,
+          retryable: true,
+        },
+      },
+    }).as("getGenerationStatus");
+
+    cy.then(() => PresentationGenerationApi.getGenerationStatus("task-47"))
+      .should("deep.include", { status: "error" })
+      .and((status) => {
+        expect(status.progress).to.include({
+          completed_slides: 46,
+          total_slides: 90,
+          current_slide: 47,
+          current_stage: "render",
+        });
+        expect(status.failure).to.include({
+          stage: "render",
+          slide_number: 47,
+          retryable: true,
+        });
+      });
+  });
+
+  it("accepts the completed current stage returned after publish", () => {
+    cy.intercept("GET", "**/api/v1/ppt/presentation/status/task-completed", {
+      statusCode: 200,
+      body: {
+        status: "completed",
+        progress: {
+          completed_slides: 90,
+          total_slides: 90,
+          percent: 100,
+          current_stage: "completed",
+          finalizing: false,
+        },
+        data: { presentation_id: "published-presentation" },
+      },
+    });
+
+    cy.then(() =>
+      PresentationGenerationApi.getGenerationStatus("task-completed")
+    ).then((status) => {
+      expect(status.status).to.equal("completed");
+      expect(status.progress?.current_stage).to.equal("completed");
+      expect(status.progress?.percent).to.equal(100);
+    });
+  });
+});

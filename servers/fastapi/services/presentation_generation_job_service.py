@@ -5,16 +5,20 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 import logging
+import os
 import secrets
 from typing import Any
 import uuid
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select, text, update
 
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from services.authored_generation_observability import (
+    log_authored_generation_observation,
+)
 from services.database import async_session_maker
 from utils.owner_context import get_current_owner_id
 
@@ -23,6 +27,27 @@ logger = logging.getLogger(__name__)
 GENERATION_JOB_LEASE_SECONDS = 300
 GENERATION_JOB_HEARTBEAT_SECONDS = 30
 GENERATION_JOB_DISPATCH_SECONDS = 1
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+# The in-process authored semaphore defaults to one job. Apply the same default
+# to the database-backed admission gate so adding FastAPI workers does not
+# silently multiply provider concurrency and spend. Operators can raise this
+# independently after validating provider quotas.
+AUTHORED_CLUSTER_JOB_CONCURRENCY = _positive_int_env(
+    "AUTHORED_CLUSTER_JOB_CONCURRENCY",
+    _positive_int_env("AUTHORED_JOB_CONCURRENCY", 1),
+)
+GENERATION_JOB_CAPACITY_POLL_SECONDS = 1.0
+# Stable, application-specific PostgreSQL advisory-lock namespace. The lock is
+# transaction-scoped, so it is always released on commit, rollback or disconnect.
+_AUTHORED_CLAIM_LOCK_ID = 0x505054415554484F
 NONTERMINAL_STATES = frozenset({"queued", "running", "staging", "awaiting_resume"})
 TERMINAL_STATES = frozenset({"published", "failed"})
 
@@ -30,6 +55,82 @@ _dispatcher_task: asyncio.Task[None] | None = None
 # Keyed by job id so a user-initiated cancel can interrupt the in-process
 # attempt this worker is running (best-effort; other workers keep no handle).
 _active_jobs: dict[uuid.UUID, asyncio.Task[None]] = {}
+
+
+class GenerationCapacityUnavailable(RuntimeError):
+    """The job remains queued until cluster-wide authored capacity is free."""
+
+
+def _is_authored_payload(payload: dict[str, Any] | None) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return payload.get("strategy") == "authored" or str(
+        payload.get("template", "")
+    ).lower() == "authored"
+
+
+async def _serialize_cluster_claims(session) -> bool:
+    """Serialize quota check + claim on supported databases.
+
+    PostgreSQL advisory transaction locks avoid a new table/migration. SQLite's
+    BEGIN IMMEDIATE provides the equivalent writer serialization for local and
+    multi-process desktop deployments. Unknown dialects retain the existing CAS
+    claim but deliberately skip a quota count that could otherwise race.
+    """
+
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": _AUTHORED_CLAIM_LOCK_ID},
+        )
+        return True
+    if dialect == "sqlite":
+        await session.execute(text("BEGIN IMMEDIATE"))
+        return True
+    logger.warning(
+        "Authored cluster quota is unsupported for database dialect %s; "
+        "retaining atomic per-job claims and process-local limits",
+        dialect,
+    )
+    return False
+
+
+def _job_is_claimable(
+    job: PresentationGenerationJob,
+    *,
+    now: datetime,
+    allow_auth_resume: bool,
+) -> bool:
+    if job.state == "queued":
+        return True
+    if job.state == "awaiting_resume":
+        return allow_auth_resume
+    if job.state not in {"running", "staging"} or job.lease_expires_at is None:
+        return False
+    expires_at = job.lease_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at < now
+
+
+async def _authored_capacity_available(
+    session,
+    *,
+    target_job_id: uuid.UUID,
+    now: datetime,
+) -> bool:
+    active_payloads = await session.scalars(
+        select(PresentationGenerationJob.request_payload)
+        .where(PresentationGenerationJob.id != target_job_id)
+        .where(PresentationGenerationJob.state.in_(("running", "staging")))
+        .where(PresentationGenerationJob.attempt_token.is_not(None))
+        .where(PresentationGenerationJob.lease_expires_at >= now)
+    )
+    active_authored = sum(
+        1 for payload in active_payloads if _is_authored_payload(payload)
+    )
+    return active_authored < AUTHORED_CLUSTER_JOB_CONCURRENCY
 
 
 def utc_now() -> datetime:
@@ -88,6 +189,38 @@ async def claim_generation_job(
         )
     )
     async with async_session_maker() as session:
+        target = await session.get(PresentationGenerationJob, job_id)
+        authored_target = target is not None and _is_authored_payload(
+            target.request_payload
+        )
+        quota_is_serialized = False
+        if authored_target:
+            # The lookup above opens an implicit read transaction. End it before
+            # SQLite's BEGIN IMMEDIATE (and before taking the PostgreSQL advisory
+            # xact lock), then re-read all claimability state under the lock.
+            await session.rollback()
+            quota_is_serialized = await _serialize_cluster_claims(session)
+            target = await session.get(PresentationGenerationJob, job_id)
+        if target is None or not _job_is_claimable(
+            target,
+            now=now,
+            allow_auth_resume=allow_auth_resume,
+        ):
+            await session.rollback()
+            return None
+        if (
+            quota_is_serialized
+            and authored_target
+            and not await _authored_capacity_available(
+                session,
+                target_job_id=job_id,
+                now=now,
+            )
+        ):
+            await session.rollback()
+            raise GenerationCapacityUnavailable(
+                "authored_cluster_capacity_unavailable"
+            )
         result = await session.execute(
             update(PresentationGenerationJob)
             .where(PresentationGenerationJob.id == job_id)
@@ -124,7 +257,19 @@ async def claim_generation_job(
         task.message = "Generating presentation"
         task.updated_at = now
         session.add(task)
+        resume_counts = (
+            (job.attempt_number, job.completed_slides, job.total_slides)
+            if authored_target and job.attempt_number > 1
+            else None
+        )
         await session.commit()
+        if resume_counts is not None:
+            log_authored_generation_observation(
+                name="resume",
+                attempt_number=resume_counts[0],
+                completed_slides=resume_counts[1],
+                total_slides=resume_counts[2],
+            )
         return job.task_id, token
 
 
@@ -174,6 +319,12 @@ async def finalize_generation_job(
         "heartbeat_at": now,
         "updated_at": now,
     }
+    if succeeded:
+        values.update(
+            current_stage="completed",
+            last_error=None,
+            resume_allowed=False,
+        )
     values["published_at" if succeeded else "failed_at"] = now
     async with async_session_maker() as session:
         result = await session.execute(
@@ -226,29 +377,35 @@ async def release_generation_job(job_id: uuid.UUID, token: str) -> bool:
         return True
 
 
-async def recover_generation_jobs() -> int:
+async def recover_generation_jobs(*, include_queued: bool = True) -> int:
     """Recover abandoned attempts without persisting reusable auth credentials."""
 
     now = utc_now()
     async with async_session_maker() as session:
+        reclaimable = (
+            PresentationGenerationJob.state.in_(("running", "staging"))
+            & or_(
+                PresentationGenerationJob.lease_expires_at.is_(None),
+                PresentationGenerationJob.lease_expires_at < now,
+            )
+        )
+        if include_queued:
+            reclaimable = or_(
+                PresentationGenerationJob.state == "queued", reclaimable
+            )
         rows = (
             await session.execute(
-                select(PresentationGenerationJob).where(
-                    or_(
-                        PresentationGenerationJob.state == "queued",
-                        (
-                            PresentationGenerationJob.state.in_(("running", "staging"))
-                            & (
-                                or_(
-                                    PresentationGenerationJob.lease_expires_at.is_(None),
-                                    PresentationGenerationJob.lease_expires_at < now,
-                                )
-                            )
-                        ),
-                    )
-                )
+                select(PresentationGenerationJob).where(reclaimable)
             )
         ).scalars().all()
+        stalled_counts = {
+            state: sum(
+                1
+                for job in rows
+                if job.state == state and _is_authored_payload(job.request_payload)
+            )
+            for state in ("running", "staging")
+        }
         for job in rows:
             job.state = (
                 "awaiting_resume" if job.export_cookie_required else "queued"
@@ -271,6 +428,13 @@ async def recover_generation_jobs() -> int:
                 session.add(task)
             session.add(job)
         await session.commit()
+        for prior_state, count in stalled_counts.items():
+            if count:
+                log_authored_generation_observation(
+                    name="stalled_recovery",
+                    prior_state=prior_state,
+                    recovered_jobs=count,
+                )
         return len(rows)
 
 
@@ -282,6 +446,9 @@ async def launch_generation_job(
 
     from api.v1.ppt.endpoints.presentation_generate import run_generation_job
 
+    existing = _active_jobs.get(job_id)
+    if existing is not None and not existing.done():
+        return
     task = asyncio.create_task(run_generation_job(job_id, export_cookie_header))
     _active_jobs[job_id] = task
 
@@ -330,13 +497,26 @@ async def cancel_generation_job(
                 )
             )
         ).scalar_one_or_none()
-        if job is not None and job.state in NONTERMINAL_STATES:
-            job.state = "failed"
-            job.failed_at = now
-            job.attempt_token = None
-            job.lease_expires_at = None
-            job.updated_at = now
-            session.add(job)
+        if job is not None:
+            if job.state not in NONTERMINAL_STATES:
+                return task
+            result = await session.execute(
+                update(PresentationGenerationJob)
+                .where(PresentationGenerationJob.id == job.id)
+                .where(PresentationGenerationJob.state.in_(NONTERMINAL_STATES))
+                .values(
+                    state="failed",
+                    resume_allowed=False,
+                    failed_at=now,
+                    attempt_token=None,
+                    lease_expires_at=None,
+                    updated_at=now,
+                )
+            )
+            if result.rowcount != 1:
+                await session.rollback()
+                await session.refresh(task)
+                return task
             job_id = job.id
         task.status = "error"
         task.message = "Generation cancelled by user"
@@ -357,6 +537,26 @@ async def cancel_generation_job(
 
 
 async def _dispatch_ready_jobs() -> None:
+    # Startup reconciliation cannot reclaim a still-valid lease because another
+    # process may genuinely own it. Re-running reconciliation here ensures a
+    # crashed worker is picked up as soon as that lease later expires.
+    await recover_generation_jobs(include_queued=False)
+    try:
+        # Lazy import avoids coupling generic durable-job model initialization
+        # to authored checkpoint storage. The sweeper is interval-gated and
+        # deletes only old terminal/orphan UUID directories in bounded batches.
+        from services.authored_checkpoint_service import (
+            maybe_sweep_expired_checkpoint_artifacts,
+        )
+
+        await maybe_sweep_expired_checkpoint_artifacts()
+    except Exception:
+        # Artifact maintenance must never stop durable job dispatch.
+        log_authored_generation_observation(
+            name="artifact_sweep",
+            outcome="failure",
+        )
+        logger.exception("Authored checkpoint artifact sweep failed")
     async with async_session_maker() as session:
         job_ids = list(
             await session.scalars(

@@ -128,6 +128,8 @@ async def _author_one_resilient(
     index: int,
     n: int,
     reference_images=(),
+    *,
+    raise_on_failure: bool = False,
 ) -> str:
     """Author one slide with bounded retries and a branded fallback.
 
@@ -190,6 +192,10 @@ async def _author_one_resilient(
         attempts_made,
         last_error,
     )
+    if raise_on_failure:
+        if isinstance(last_error, BaseException):
+            raise last_error
+        raise RuntimeError(str(last_error))
     return fallback_slide_html(content, brand, role, index, n)
 
 
@@ -213,7 +219,9 @@ def prepare_authored_deck(
     )
 
 
-async def author_planned_slide(plan: AuthoredDeckPlan, index: int) -> str:
+async def author_planned_slide(
+    plan: AuthoredDeckPlan, index: int, *, raise_on_failure: bool = False
+) -> str:
     """Author one planned slide; safe to compose with illustration/render stages."""
     return await _author_one_resilient(
         plan.contents[index],
@@ -223,6 +231,7 @@ async def author_planned_slide(plan: AuthoredDeckPlan, index: int) -> str:
         index,
         len(plan.contents),
         plan.reference_images[index],
+        raise_on_failure=raise_on_failure,
     )
 
 

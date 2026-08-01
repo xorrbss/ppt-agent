@@ -8,6 +8,8 @@ interface OverlayLoaderProps {
   show: boolean;
   showProgress?: boolean;
   duration?: number;
+  progress?: number;
+  progressLabel?: string;
   extra_info?: string;
   onProgressComplete?: () => void;
   onCancel?: () => void;
@@ -20,6 +22,8 @@ export const OverlayLoader = ({
   show,
   showProgress = false,
   duration = 10,
+  progress,
+  progressLabel,
   onProgressComplete,
   extra_info,
   onCancel,
@@ -62,7 +66,12 @@ export const OverlayLoader = ({
         />
         {showProgress ? (
           <div className="w-full space-y-6 pt-4">
-            <ProgressBar duration={duration} onComplete={onProgressComplete} />
+            <ProgressBar
+              duration={duration}
+              onComplete={onProgressComplete}
+              value={progress}
+              label={progressLabel}
+            />
             {text && (
               <div className="space-y-1">
                 <p className="text-[#191919] text-base text-center font-medium font-inter">

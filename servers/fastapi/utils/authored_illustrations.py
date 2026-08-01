@@ -130,6 +130,8 @@ async def apply_authored_illustration(
     style: _StyleLike,
     image_service: _ImageServiceLike,
     slide_index: int = 0,
+    *,
+    raise_on_failure: bool = False,
 ) -> str:
     """Generate and inline one slide's illustration slot, without ever raising."""
     style_prompt = (getattr(style, "illustration_prompt", None) or "").strip()
@@ -158,6 +160,10 @@ async def apply_authored_illustration(
                 slide_index + 1,
                 exc,
             )
+            if raise_on_failure:
+                raise
+    if scene and data_uri is None and raise_on_failure:
+        raise RuntimeError("illustration provider returned no durable local image")
     if data_uri is None:
         LOGGER.warning(
             "[authored] dropping illustration slot on slide %d (style=%s)",

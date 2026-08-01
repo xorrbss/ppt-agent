@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Optional, Protocol, Sequence
+from weakref import WeakKeyDictionary
 
 from llmai import get_client
 from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
@@ -41,6 +42,15 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_nonnegative_float(name: str, default: float) -> float:
+    """Non-negative float override; zero deliberately disables an optional gate."""
+    try:
+        value = float(os.getenv(name, "").strip())
+        return value if value >= 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
 # Per-slide authoring makes a blocking provider call (~75s of model reasoning). Run it
 # in a DEDICATED thread pool — NOT asyncio's shared default executor — so a deck's
 # concurrent authoring threads can't starve unrelated blocking work (other LLM calls,
@@ -52,6 +62,101 @@ AUTHOR_CONCURRENCY = _env_int("AUTHORED_AUTHOR_CONCURRENCY", 5)
 _AUTHOR_EXECUTOR = ThreadPoolExecutor(
     max_workers=AUTHOR_CONCURRENCY, thread_name_prefix="author-slide"
 )
+
+# Concurrency bounds in-flight calls; this optional gate also bounds how quickly
+# calls begin. It is useful for providers that publish an RPM quota lower than
+# AUTHOR_CONCURRENCY. Zero keeps the existing behavior until an operator opts in.
+AUTHOR_REQUESTS_PER_MINUTE = _env_nonnegative_float(
+    "AUTHORED_AUTHOR_REQUESTS_PER_MINUTE", 0.0
+)
+AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS = _env_nonnegative_float(
+    "AUTHORED_AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS", 10.0
+)
+AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS = _env_nonnegative_float(
+    "AUTHORED_AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS", 60.0
+)
+
+
+@dataclass
+class _AuthorRateState:
+    lock: asyncio.Lock
+    next_allowed: float = 0.0
+
+
+_AUTHOR_RATE_STATES: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, _AuthorRateState
+] = WeakKeyDictionary()
+
+
+def _author_rate_state() -> _AuthorRateState:
+    loop = asyncio.get_running_loop()
+    state = _AUTHOR_RATE_STATES.get(loop)
+    if state is None:
+        state = _AuthorRateState(lock=asyncio.Lock())
+        _AUTHOR_RATE_STATES[loop] = state
+    return state
+
+
+async def _wait_for_author_rate_slot() -> None:
+    """Space provider call starts and honor a process-wide 429 cooldown."""
+    state = _author_rate_state()
+    interval = (
+        60.0 / AUTHOR_REQUESTS_PER_MINUTE
+        if AUTHOR_REQUESTS_PER_MINUTE > 0
+        else 0.0
+    )
+    async with state.lock:
+        loop = asyncio.get_running_loop()
+        now = loop.time()
+        delay = max(0.0, state.next_allowed - now)
+        if delay:
+            await asyncio.sleep(delay)
+            now = max(loop.time(), state.next_allowed)
+        state.next_allowed = max(now, state.next_allowed) + interval
+
+
+def _retry_after_seconds(error: BaseException) -> float | None:
+    headers = getattr(error, "headers", None)
+    response = getattr(error, "response", None)
+    if headers is None and response is not None:
+        headers = getattr(response, "headers", None)
+    if headers is not None:
+        try:
+            raw = headers.get("retry-after") or headers.get("Retry-After")
+            if raw is not None:
+                return max(0.0, float(raw))
+        except (AttributeError, TypeError, ValueError):
+            pass
+    match = re.search(
+        r"(?:retry|try)\s+again\s+(?:in|after)\s+([\d.]+)\s*s",
+        str(error),
+        re.IGNORECASE,
+    )
+    if match:
+        try:
+            return max(0.0, float(match.group(1)))
+        except ValueError:
+            return None
+    return None
+
+
+def _register_author_rate_limit(error: BaseException) -> None:
+    status_code = getattr(error, "status_code", None)
+    response = getattr(error, "response", None)
+    if status_code is None and response is not None:
+        status_code = getattr(response, "status_code", None)
+    if status_code != 429 and "429" not in str(error):
+        return
+    retry_after = _retry_after_seconds(error)
+    cooldown = (
+        retry_after
+        if retry_after is not None
+        else AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS
+    )
+    cooldown = min(cooldown, AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS)
+    loop = asyncio.get_running_loop()
+    state = _author_rate_state()
+    state.next_allowed = max(state.next_allowed, loop.time() + cooldown)
 
 # Appendix A — design-system brief (the crux IP). The non-negotiable rendering,
 # fit, language and output constraints stay in this common template. The visual
@@ -452,10 +557,17 @@ async def author_slide_html(
         # Run the blocking call on the dedicated authoring pool (bounds concurrency to
         # AUTHOR_CONCURRENCY and keeps long authoring threads off the shared default
         # executor used by other LLM calls / exports).
+        await _wait_for_author_rate_slot()
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            _AUTHOR_EXECUTOR, functools.partial(client.generate, **generate_kwargs)
-        )
+        try:
+            return await loop.run_in_executor(
+                _AUTHOR_EXECUTOR, functools.partial(client.generate, **generate_kwargs)
+            )
+        except Exception as error:
+            # A provider-declared cooldown is shared by all subsequent authored
+            # calls in this process, including multimodal -> text-only fallback.
+            _register_author_rate_limit(error)
+            raise
 
     try:
         response = await generate(kwargs)

@@ -48,7 +48,8 @@ REVISION_MULTI_USER_AUTH = "c9f1a2b3d4e5"
 REVISION_PROVIDER_SETTINGS = "d0a2b4c6e8f1"
 REVISION_PRIMARY_ADMIN = "e1b3c5d7f9a2"
 REVISION_CHAT_TEMPLATE_SCOPE_REPAIR = "f2c4d6e8a0b1"
-PRESENTATION_GENERATION_JOB_COLUMNS = {
+REVISION_AUTHORED_SLIDE_CHECKPOINTS = "a3c5e7f9b1d2"
+DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
     "presentation_id",
@@ -69,6 +70,59 @@ PRESENTATION_GENERATION_JOB_COLUMNS = {
     "created_at",
     "updated_at",
 }
+AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS = {
+    "total_slides",
+    "completed_slides",
+    "current_stage",
+    "last_error",
+    "resume_allowed",
+    "authored_outline",
+}
+PRESENTATION_GENERATION_JOB_COLUMNS = (
+    DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS
+    | AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS
+)
+AUTHORED_SLIDE_CHECKPOINT_COLUMNS = {
+    "id",
+    "job_id",
+    "slide_index",
+    "role",
+    "author_status",
+    "illustrate_status",
+    "render_status",
+    "persist_status",
+    "author_html",
+    "illustrated_html",
+    "render_path",
+    "render_sha256",
+    "failed_stage",
+    "error",
+    "attempt_token",
+    "author_started_at",
+    "author_completed_at",
+    "illustrate_started_at",
+    "illustrate_completed_at",
+    "render_started_at",
+    "render_completed_at",
+    "persist_started_at",
+    "persist_completed_at",
+    "failed_at",
+    "created_at",
+    "updated_at",
+}
+AUTHORED_SLIDE_CHECKPOINT_CONSTRAINTS = {
+    "ck_authored_slide_checkpoints_slide_index_nonnegative",
+    "ck_authored_slide_checkpoints_author_status",
+    "ck_authored_slide_checkpoints_illustrate_status",
+    "ck_authored_slide_checkpoints_render_status",
+    "ck_authored_slide_checkpoints_persist_status",
+}
+AUTHORED_SLIDE_CHECKPOINT_INDEX = (
+    "ix_authored_slide_checkpoints_job_persist"
+)
+AUTHORED_SLIDE_CHECKPOINT_UNIQUE = (
+    "uq_authored_slide_checkpoints_job_slide"
+)
 TEMPLATE_V2_IMPORT_LEASE_COLUMNS = {
     "attempt_number",
     "attempt_token",
@@ -99,6 +153,98 @@ TEMPLATE_V2_EXPECTED_COLUMNS = set(PHASE_ONE_EXPECTED_COLUMNS)
 MIGRATION_ADVISORY_LOCK_ID = 0x5050544147454E54
 MIGRATION_ADVISORY_LOCK_TIMEOUT_SECONDS = 30.0
 MIGRATION_ADVISORY_LOCK_POLL_SECONDS = 0.25
+
+
+def _validate_authored_checkpoint_schema(
+    inspector,
+    tables: set[str],
+    job_columns: set[str],
+    *,
+    validate_constraints: bool,
+) -> bool:
+    """Return whether the authored checkpoint revision is fully present.
+
+    No marker means the schema is the previous cumulative revision. Any marker
+    requires the complete additive contract so a partially applied migration is
+    never stamped past its missing DDL.
+    """
+
+    present_job_columns = (
+        AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS & job_columns
+    )
+    has_checkpoint_table = "authored_slide_checkpoints" in tables
+    if not present_job_columns and not has_checkpoint_table:
+        return False
+    if (
+        present_job_columns != AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS
+        or not has_checkpoint_table
+    ):
+        raise RuntimeError(
+            "Authored slide checkpoint schema is only partially applied"
+        )
+
+    checkpoint_columns = {
+        column["name"]
+        for column in inspector.get_columns("authored_slide_checkpoints")
+    }
+    if not AUTHORED_SLIDE_CHECKPOINT_COLUMNS.issubset(checkpoint_columns):
+        raise RuntimeError(
+            "Authored slide checkpoint table is only partially applied"
+        )
+    if not validate_constraints:
+        return True
+
+    indexes = {
+        index.get("name")
+        for index in inspector.get_indexes("authored_slide_checkpoints")
+    }
+    if AUTHORED_SLIDE_CHECKPOINT_INDEX not in indexes:
+        raise RuntimeError(
+            "Authored slide checkpoint progress index is missing"
+        )
+    unique_constraints = {
+        constraint.get("name")
+        for constraint in inspector.get_unique_constraints(
+            "authored_slide_checkpoints"
+        )
+    }
+    if AUTHORED_SLIDE_CHECKPOINT_UNIQUE not in unique_constraints:
+        raise RuntimeError(
+            "Authored slide checkpoint job/slide uniqueness is missing"
+        )
+    check_constraints = {
+        constraint.get("name")
+        for constraint in inspector.get_check_constraints(
+            "authored_slide_checkpoints"
+        )
+    }
+    if not AUTHORED_SLIDE_CHECKPOINT_CONSTRAINTS.issubset(
+        check_constraints
+    ):
+        raise RuntimeError(
+            "Authored slide checkpoint state constraints are incomplete"
+        )
+    job_foreign_keys = [
+        foreign_key
+        for foreign_key in inspector.get_foreign_keys(
+            "authored_slide_checkpoints"
+        )
+        if foreign_key.get("constrained_columns") == ["job_id"]
+        and foreign_key.get("referred_table") == "presentation_generation_jobs"
+        and foreign_key.get("referred_columns") == ["id"]
+    ]
+    if len(job_foreign_keys) != 1:
+        raise RuntimeError(
+            "Authored slide checkpoint job foreign key is missing"
+        )
+    ondelete = str(
+        (job_foreign_keys[0].get("options") or {}).get("ondelete") or ""
+    ).upper()
+    if ondelete != "CASCADE":
+        raise RuntimeError(
+            "Authored slide checkpoint job foreign key must cascade deletes"
+        )
+    return True
 
 
 async def migrate_database_on_startup() -> None:
@@ -402,6 +548,11 @@ def _infer_revision_from_schema(
             has_job_table = "presentation_generation_jobs" in tables
             has_lifecycle = "lifecycle_status" in presentation_columns
             if not has_job_table and not has_lifecycle:
+                if "authored_slide_checkpoints" in tables:
+                    raise RuntimeError(
+                        "Authored slide checkpoint schema exists without "
+                        "durable generation jobs"
+                    )
                 return REVISION_TEMPLATE_V2_REVISION_JOURNAL
             if has_job_table != has_lifecycle:
                 raise RuntimeError(
@@ -413,27 +564,59 @@ def _infer_revision_from_schema(
                     "presentation_generation_jobs"
                 )
             }
-            if not PRESENTATION_GENERATION_JOB_COLUMNS.issubset(job_columns):
+            if not DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS.issubset(
+                job_columns
+            ):
                 raise RuntimeError(
                     "Durable generation job schema is only partially applied"
                 )
+            has_authored_checkpoints = _validate_authored_checkpoint_schema(
+                inspector,
+                tables,
+                job_columns,
+                validate_constraints=True,
+            )
             if "user" not in tables:
+                if has_authored_checkpoints:
+                    raise RuntimeError(
+                        "Authored slide checkpoint schema exists without "
+                        "multi-user prerequisites"
+                    )
                 return REVISION_DURABLE_GENERATION_JOBS
             if "provider_settings" not in tables:
+                if has_authored_checkpoints:
+                    raise RuntimeError(
+                        "Authored slide checkpoint schema exists without "
+                        "provider settings prerequisites"
+                    )
                 return REVISION_MULTI_USER_AUTH
             user_columns = {
                 column["name"]
                 for column in inspector.get_columns("user")
             }
             if "admin_slot" not in user_columns:
+                if has_authored_checkpoints:
+                    raise RuntimeError(
+                        "Authored slide checkpoint schema exists without "
+                        "primary-admin prerequisites"
+                    )
                 return REVISION_PROVIDER_SETTINGS
             chat_columns = {
                 column["name"]
                 for column in inspector.get_columns("chat_history_messages")
             }
             if "template_v2_id" not in chat_columns:
+                if has_authored_checkpoints:
+                    raise RuntimeError(
+                        "Authored slide checkpoint schema exists without "
+                        "chat-scope prerequisites"
+                    )
                 return REVISION_PRIMARY_ADMIN
-            return REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+            return (
+                REVISION_AUTHORED_SLIDE_CHECKPOINTS
+                if has_authored_checkpoints
+                else REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+            )
         raise RuntimeError(
             "Template V2 presentation ownership FKs have unsupported or "
             "mixed delete actions: "
@@ -503,12 +686,39 @@ def _infer_revision_from_schema(
         has_job_table = "presentation_generation_jobs" in tables
         has_lifecycle = "lifecycle_status" in presentation_columns
         if not has_job_table and not has_lifecycle:
+            if "authored_slide_checkpoints" in tables:
+                raise RuntimeError(
+                    "Authored slide checkpoint schema exists without "
+                    "durable generation jobs"
+                )
             return REVISION_TEMPLATE_V2_REVISION_JOURNAL
         if has_job_table != has_lifecycle:
             raise RuntimeError(
                 "Durable generation schema is only partially applied"
             )
-        return REVISION_DURABLE_GENERATION_JOBS
+        job_columns = {
+            column["name"] if isinstance(column, dict) else column
+            for column in inspector.get_columns(
+                "presentation_generation_jobs"
+            )
+        }
+        if not DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS.issubset(
+            job_columns
+        ):
+            raise RuntimeError(
+                "Durable generation job schema is only partially applied"
+            )
+        has_authored_checkpoints = _validate_authored_checkpoint_schema(
+            inspector,
+            tables,
+            job_columns,
+            validate_constraints=False,
+        )
+        return (
+            REVISION_AUTHORED_SLIDE_CHECKPOINTS
+            if has_authored_checkpoints
+            else REVISION_DURABLE_GENERATION_JOBS
+        )
     if delete_action != sidecar_delete_action:
         raise RuntimeError(
             "Template V2 presentation ownership FKs have mixed delete actions"
@@ -560,6 +770,7 @@ def _is_unversioned_populated_database(database_url: str) -> bool:
         "chat_history_messages",
         "presentation_versions",
         "presentation_generation_jobs",
+        "authored_slide_checkpoints",
         "template_v2",
         "template_v2_local_state",
         "template_v2_pptx_imports",

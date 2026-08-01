@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta
 import uuid
 from unittest.mock import AsyncMock, patch
 
@@ -177,6 +178,138 @@ def test_interrupted_attempt_is_safely_requeued(
             assert stored_status.status == "pending"
             if cookie_required:
                 assert "Idempotency-Key" in (stored_status.message or "")
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_restart_reconciliation_recovers_only_abandoned_attempts(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _job_database(tmp_path, monkeypatch)
+        try:
+            now = jobs.utc_now()
+
+            def make_job(
+                *,
+                state: str,
+                cookie_required: bool = False,
+                lease_delta: timedelta | None = None,
+            ):
+                status = AsyncPresentationGenerationTaskModel(
+                    status="running" if state != "queued" else "pending",
+                    message="before restart",
+                )
+                job = PresentationGenerationJob(
+                    task_id=status.id,
+                    presentation_id=uuid.uuid4(),
+                    request_sha256=uuid.uuid4().hex * 2,
+                    request_payload={"content": state},
+                    export_cookie_required=cookie_required,
+                    state=state,
+                    attempt_token=f"token-{status.id}",
+                    lease_expires_at=(
+                        now + lease_delta if lease_delta is not None else None
+                    ),
+                )
+                return status, job
+
+            queued = make_job(state="queued")
+            stale_running = make_job(
+                state="running", lease_delta=timedelta(seconds=-1)
+            )
+            stale_auth_staging = make_job(
+                state="staging", cookie_required=True, lease_delta=None
+            )
+            healthy_running = make_job(
+                state="running", lease_delta=timedelta(minutes=10)
+            )
+            async with maker() as session:
+                for status, job in (
+                    queued,
+                    stale_running,
+                    stale_auth_staging,
+                    healthy_running,
+                ):
+                    session.add(status)
+                    session.add(job)
+                await session.commit()
+
+            assert await jobs.recover_generation_jobs() == 3
+
+            async with maker() as session:
+                recovered_queued = await session.get(
+                    PresentationGenerationJob, queued[1].id
+                )
+                recovered_running = await session.get(
+                    PresentationGenerationJob, stale_running[1].id
+                )
+                recovered_auth = await session.get(
+                    PresentationGenerationJob, stale_auth_staging[1].id
+                )
+                untouched_running = await session.get(
+                    PresentationGenerationJob, healthy_running[1].id
+                )
+                queued_status = await session.get(
+                    AsyncPresentationGenerationTaskModel, queued[0].id
+                )
+                running_status = await session.get(
+                    AsyncPresentationGenerationTaskModel, stale_running[0].id
+                )
+                auth_status = await session.get(
+                    AsyncPresentationGenerationTaskModel,
+                    stale_auth_staging[0].id,
+                )
+                healthy_status = await session.get(
+                    AsyncPresentationGenerationTaskModel, healthy_running[0].id
+                )
+
+            for recovered in (recovered_queued, recovered_running):
+                assert recovered is not None
+                assert recovered.state == "queued"
+                assert recovered.attempt_token is None
+                assert recovered.lease_expires_at is None
+            assert recovered_auth is not None
+            assert recovered_auth.state == "awaiting_resume"
+            assert recovered_auth.attempt_token is None
+            assert recovered_auth.lease_expires_at is None
+            assert untouched_running is not None
+            assert untouched_running.state == "running"
+            assert (
+                untouched_running.attempt_token
+                == healthy_running[1].attempt_token
+            )
+            assert untouched_running.lease_expires_at is not None
+
+            assert queued_status is not None
+            assert queued_status.status == "pending"
+            assert queued_status.message == "Recovered after worker restart"
+            assert running_status is not None
+            assert running_status.status == "pending"
+            assert running_status.message == "Recovered after worker restart"
+            assert auth_status is not None
+            assert auth_status.status == "pending"
+            assert "Idempotency-Key" in (auth_status.message or "")
+            assert healthy_status is not None
+            assert healthy_status.status == "running"
+            assert healthy_status.message == "before restart"
+
+            assert (
+                await jobs.claim_generation_job(
+                    stale_auth_staging[1].id,
+                    allow_auth_resume=False,
+                )
+                is None
+            )
+            assert (
+                await jobs.claim_generation_job(
+                    stale_auth_staging[1].id,
+                    allow_auth_resume=True,
+                )
+                is not None
+            )
         finally:
             await engine.dispose()
 

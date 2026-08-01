@@ -70,6 +70,10 @@ class PresentationGenerationJob(SQLModel, table=True):
         default=None,
         sa_column=Column(JSON, nullable=True),
     )
+    authored_outline: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
     export_cookie_required: bool = Field(
         sa_column=Column(
             Boolean,
@@ -90,6 +94,41 @@ class PresentationGenerationJob(SQLModel, table=True):
         default=0,
     )
     attempt_token: Optional[str] = Field(default=None, nullable=True)
+    total_slides: int = Field(
+        sa_column=Column(
+            Integer,
+            nullable=False,
+            default=0,
+            server_default=text("0"),
+        ),
+        default=0,
+    )
+    completed_slides: int = Field(
+        sa_column=Column(
+            Integer,
+            nullable=False,
+            default=0,
+            server_default=text("0"),
+        ),
+        default=0,
+    )
+    current_stage: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(32), nullable=True),
+    )
+    last_error: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
+    resume_allowed: bool = Field(
+        sa_column=Column(
+            Boolean,
+            nullable=False,
+            default=False,
+            server_default=text("false"),
+        ),
+        default=False,
+    )
     lease_expires_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),

@@ -5,6 +5,11 @@ interface StructuredApiError {
   code?: string;
   message?: string;
   request_id?: string | null;
+  stage?: string;
+  slide_number?: number;
+  retryable?: boolean;
+  exception_type?: string;
+  fingerprint?: string;
 }
 
 interface ApiErrorResponse {
@@ -19,6 +24,11 @@ export class ApiError extends Error {
   readonly code?: string;
   readonly requestId?: string;
   readonly detail?: unknown;
+  readonly stage?: string;
+  readonly slideNumber?: number;
+  readonly retryable?: boolean;
+  readonly exceptionType?: string;
+  readonly fingerprint?: string;
 
   constructor(
     message: string,
@@ -27,6 +37,11 @@ export class ApiError extends Error {
       code?: string;
       requestId?: string | null;
       detail?: unknown;
+      stage?: string;
+      slideNumber?: number;
+      retryable?: boolean;
+      exceptionType?: string;
+      fingerprint?: string;
     } = {}
   ) {
     super(message);
@@ -35,6 +50,11 @@ export class ApiError extends Error {
     this.code = options.code;
     this.requestId = options.requestId || undefined;
     this.detail = options.detail;
+    this.stage = options.stage;
+    this.slideNumber = options.slideNumber;
+    this.retryable = options.retryable;
+    this.exceptionType = options.exceptionType;
+    this.fingerprint = options.fingerprint;
   }
 }
 
@@ -50,6 +70,30 @@ const TEMPLATE_V2_ERROR_MESSAGES: Record<string, string> = {
   template_v2_generation_invalid:
     "생성된 콘텐츠가 구조화 템플릿 스키마와 일치하지 않습니다.",
 };
+
+const GENERATION_STAGE_LABELS: Record<string, string> = {
+  author: "작성",
+  illustrate: "이미지 생성",
+  render: "렌더링",
+  persist: "저장",
+  finalize: "최종 파일 생성",
+  completed: "완료",
+};
+
+function getGenerationFailureContext(error: ApiError): string | undefined {
+  const parts: string[] = [];
+  if (
+    Number.isInteger(error.slideNumber) &&
+    (error.slideNumber as number) > 0
+  ) {
+    parts.push(`${error.slideNumber}번 슬라이드`);
+  }
+  const stageLabel = error.stage
+    ? GENERATION_STAGE_LABELS[error.stage]
+    : undefined;
+  if (stageLabel) parts.push(`${stageLabel} 단계`);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
 
 export function apiErrorFromPayload(
   payload: unknown,
@@ -69,6 +113,11 @@ export function apiErrorFromPayload(
     code: error?.code || detailMessage,
     requestId: error?.request_id || fallbackRequestId,
     detail,
+    stage: error?.stage,
+    slideNumber: error?.slide_number,
+    retryable: error?.retryable,
+    exceptionType: error?.exception_type,
+    fingerprint: error?.fingerprint,
   });
 }
 
@@ -88,18 +137,23 @@ export function getApiErrorDisplayMessage(
     (apiError.code && TEMPLATE_V2_ERROR_MESSAGES[apiError.code]) ||
     apiError.message ||
     fallbackMessage;
-  return apiError.requestId
-    ? `${message} (Request ID: ${apiError.requestId})`
+  const failureContext = getGenerationFailureContext(apiError);
+  const contextualMessage = failureContext
+    ? `${failureContext}: ${message}`
     : message;
+  return apiError.requestId
+    ? `${contextualMessage} (Request ID: ${apiError.requestId})`
+    : contextualMessage;
 }
 
 /**
- * These errors normally come from an upstream model provider. Retrying the same
- * presentation is safe because the prepare endpoint persists slide structure
- * only after generation succeeds.
+ * These errors normally come from an upstream model provider. Retrying an
+ * authored presentation with the same idempotency key resumes its persisted
+ * slide checkpoints instead of starting a second billed generation.
  */
 export function isRetryablePresentationGenerationError(error: unknown): boolean {
   const apiError = error instanceof ApiError ? error : undefined;
+  if (typeof apiError?.retryable === "boolean") return apiError.retryable;
   const status = apiError?.status;
   const code = apiError?.code?.toLowerCase() || "";
   const message = apiError?.message?.toLowerCase() || "";
@@ -119,9 +173,18 @@ export function isRetryablePresentationGenerationError(error: unknown): boolean 
 
 /** A concise Korean message for the presentation-generation retry flow. */
 export function getRetryablePresentationGenerationMessage(error: unknown): string {
-  const requestId = error instanceof ApiError ? error.requestId : undefined;
+  const apiError = error instanceof ApiError ? error : undefined;
+  const requestId = apiError?.requestId;
   const message = "AI 생성 서비스가 일시적으로 혼잡합니다. 잠시 후 다시 시도해 주세요.";
-  return requestId ? `${message} (요청 ID: ${requestId})` : message;
+  const failureContext = apiError
+    ? getGenerationFailureContext(apiError)
+    : undefined;
+  const contextualMessage = failureContext
+    ? `${message} (실패 위치: ${failureContext})`
+    : message;
+  return requestId
+    ? `${contextualMessage} (요청 ID: ${requestId})`
+    : contextualMessage;
 }
 
 // API Response Handler Utility
@@ -212,6 +275,11 @@ export class ApiResponseHandler {
           response.headers.get("x-request-id") ||
           response.headers.get("x-correlation-id"),
         detail: structuredError?.detail ?? errorData.detail,
+        stage: structuredError?.stage,
+        slideNumber: structuredError?.slide_number,
+        retryable: structuredError?.retryable,
+        exceptionType: structuredError?.exception_type,
+        fingerprint: structuredError?.fingerprint,
       });
     } catch (error) {
       if (error instanceof ApiError) throw error;

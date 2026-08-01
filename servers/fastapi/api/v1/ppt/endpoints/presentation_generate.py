@@ -21,6 +21,7 @@ from time import perf_counter
 from typing import List, Optional, Tuple
 
 import dirtyjson
+from pydantic import BaseModel
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -55,6 +56,13 @@ from services.authored_presentation_service import (
     AUTHORED_TEMPLATE,
     generate_authored_presentation,
 )
+from services.authored_checkpoint_service import (
+    AuthoredStageError,
+    progress_for_task,
+)
+from services.authored_generation_observability import (
+    log_authored_generation_observation,
+)
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.database import async_session_maker, get_async_session
 from services.documents_loader import DocumentsLoader
@@ -64,6 +72,8 @@ from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
 from services.presentation_generation_job_service import (
+    GENERATION_JOB_CAPACITY_POLL_SECONDS,
+    GenerationCapacityUnavailable,
     cancel_generation_job,
     claim_generation_job,
     finalize_generation_job,
@@ -84,7 +94,7 @@ from services.template_v2_generation_observability import (
     log_template_v2_generation_observation,
 )
 from services.webhook_service import WebhookService
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from templates.v2.constants import TEMPLATE_V2_VERSION
@@ -124,6 +134,18 @@ logger = logging.getLogger(__name__)
 PRESENTATION_GENERATE_ROUTER = APIRouter(
     prefix="/presentation", tags=["Presentation"]
 )
+
+
+class AsyncPresentationGenerationTaskResponse(BaseModel):
+    id: str
+    status: str
+    message: Optional[str] = None
+    error: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+    data: Optional[dict] = None
+    progress: Optional[dict] = None
+    failure: Optional[dict] = None
 
 
 def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPException:
@@ -512,7 +534,20 @@ async def generate_presentation_handler(
             using_slides_markdown = True
             request.n_slides = len(request.slides_markdown)
 
-        if not using_slides_markdown:
+        if (
+            not using_slides_markdown
+            and request.template == AUTHORED_TEMPLATE
+            and generation_job is not None
+            and generation_job.authored_outline is not None
+        ):
+            # Checkpoints are indexed into this exact plan. Pin the first
+            # attempt's outline so resume cannot drift or bill outline calls
+            # again before it reaches the failed slide.
+            presentation_outlines = PresentationOutlineModel.model_validate(
+                generation_job.authored_outline
+            )
+            total_outlines = len(presentation_outlines.slides)
+        elif not using_slides_markdown:
             # Updating async status
             if async_status:
                 async_status.message = "Generating presentation outlines"
@@ -656,6 +691,18 @@ async def generate_presentation_handler(
                 instructions=request.instructions,
             )
 
+        if (
+            request.template == AUTHORED_TEMPLATE
+            and generation_job is not None
+            and generation_job.authored_outline is None
+        ):
+            generation_job.authored_outline = presentation_outlines.model_dump(
+                mode="json"
+            )
+            generation_job.updated_at = datetime.now(timezone.utc)
+            sql_session.add(generation_job)
+            await sql_session.commit()
+
         await MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines(
             presentation_id,
             presentation_outlines.model_dump(mode="json"),
@@ -690,6 +737,7 @@ async def generate_presentation_handler(
                 presentation_outlines,
                 language_to_use,
                 sql_session,
+                generation_job,
             )
             if async_status:
                 async_status.message = "Presentation generation completed"
@@ -991,17 +1039,44 @@ async def generate_presentation_handler(
         return response
 
     except Exception as e:
+        authored_attempt_number = (
+            generation_job.attempt_number
+            if isinstance(e, AuthoredStageError) and generation_job is not None
+            else None
+        )
         try:
             await sql_session.rollback()
         except Exception:
             logger.exception("Failed to roll back presentation generation session")
-        if not isinstance(e, HTTPException):
+        if (
+            isinstance(e, AuthoredStageError)
+            and e.code == "authored_attempt_lost"
+            and generation_job is not None
+        ):
+            # A newer attempt (or an explicit cancellation) owns the durable
+            # rows now. The stale worker must not overwrite its task status or
+            # emit a misleading failure webhook.
+            raise
+        if isinstance(e, AuthoredStageError):
+            safe_error = e.as_safe_dict(
+                request_id=request._request_id,
+                attempt_number=authored_attempt_number,
+            )
+            api_error_payload = safe_error
+            safe_exception = HTTPException(status_code=500, detail=safe_error)
+        elif not isinstance(e, HTTPException):
             traceback.print_exc()
-            e = HTTPException(status_code=500, detail="Presentation generation failed")
-
-        api_error_model = APIErrorModel.from_exception(
-            e, request_id=request._request_id
-        )
+            safe_exception = HTTPException(
+                status_code=500, detail="Presentation generation failed"
+            )
+            api_error_payload = APIErrorModel.from_exception(
+                safe_exception, request_id=request._request_id
+            ).model_dump(mode="json")
+        else:
+            safe_exception = e
+            api_error_payload = APIErrorModel.from_exception(
+                e, request_id=request._request_id
+            ).model_dump(mode="json")
 
         # Triggering webhook on failure (opt-in via request.trigger_webhook)
         if request.trigger_webhook:
@@ -1009,19 +1084,19 @@ async def generate_presentation_handler(
                 None,
                 WebhookService.send_webhook,
                 WebhookEvent.PRESENTATION_GENERATION_FAILED,
-                api_error_model.model_dump(mode="json"),
+                api_error_payload,
             )
 
         if async_status:
             async_status.status = "error"
             async_status.message = "Presentation generation failed"
             async_status.updated_at = datetime.now()
-            async_status.error = api_error_model.model_dump(mode="json")
+            async_status.error = api_error_payload
             sql_session.add(async_status)
             await sql_session.commit()
 
         else:
-            raise e
+            raise safe_exception
 
 
 @PRESENTATION_GENERATE_ROUTER.post(
@@ -1057,10 +1132,29 @@ async def run_generation_job(
 
     The worker uses persisted request state and never persists session cookies.
     """
-    claimed = await claim_generation_job(
-        job_id,
-        allow_auth_resume=export_cookie_header is not None,
-    )
+    capacity_wait_started: float | None = None
+    capacity_wait_polls = 0
+    while True:
+        try:
+            claimed = await claim_generation_job(
+                job_id,
+                allow_auth_resume=export_cookie_header is not None,
+            )
+            break
+        except GenerationCapacityUnavailable:
+            if capacity_wait_started is None:
+                capacity_wait_started = perf_counter()
+            capacity_wait_polls += 1
+            # Keep this in-process invocation (and its non-persisted export
+            # cookie, when required) alive while another authored job owns the
+            # cluster slot. Cancellation interrupts the sleep immediately.
+            await asyncio.sleep(GENERATION_JOB_CAPACITY_POLL_SECONDS)
+    if capacity_wait_started is not None:
+        log_authored_generation_observation(
+            name="quota_wait",
+            duration_ms=(perf_counter() - capacity_wait_started) * 1000,
+            polls=capacity_wait_polls,
+        )
     if claimed is None:
         return
     task_id, attempt_token = claimed
@@ -1103,12 +1197,26 @@ async def run_generation_job(
         cancelled = True
         raise
     except Exception as error:
-        logger.exception("Durable presentation generation job %s failed", job_id)
+        attempt_lost = (
+            isinstance(error, AuthoredStageError)
+            and error.code == "authored_attempt_lost"
+        )
+        if attempt_lost:
+            logger.warning(
+                "Durable presentation generation job %s lost its attempt lease",
+                job_id,
+            )
+        else:
+            logger.exception("Durable presentation generation job %s failed", job_id)
         async with async_session_maker() as failure_session:
             status = await failure_session.get(
                 AsyncPresentationGenerationTaskModel, task_id
             )
-            if status is not None and status.status not in {"completed", "error"}:
+            if (
+                not attempt_lost
+                and status is not None
+                and status.status not in {"completed", "error"}
+            ):
                 status.status = "error"
                 status.message = "Presentation generation failed"
                 status.error = APIErrorModel.from_exception(error).model_dump(
@@ -1128,6 +1236,50 @@ async def run_generation_job(
                 attempt_token,
                 succeeded=succeeded,
             )
+
+
+async def _resume_failed_authored_job(
+    job: PresentationGenerationJob,
+    status: AsyncPresentationGenerationTaskModel,
+    sql_session: AsyncSession,
+) -> bool:
+    """Atomically make one retryable authored job dispatchable again."""
+    if (
+        job.state != "failed"
+        or not job.resume_allowed
+        or (
+            job.request_payload.get("strategy") != "authored"
+            and str(job.request_payload.get("template", "")).lower()
+            != AUTHORED_TEMPLATE
+        )
+    ):
+        return False
+    result = await sql_session.execute(
+        update(PresentationGenerationJob)
+        .where(
+            PresentationGenerationJob.id == job.id,
+            PresentationGenerationJob.state == "failed",
+            PresentationGenerationJob.resume_allowed.is_(True),
+        )
+        .values(
+            state="queued",
+            resume_allowed=False,
+            attempt_token=None,
+            lease_expires_at=None,
+            heartbeat_at=None,
+            failed_at=None,
+        )
+    )
+    if result.rowcount != 1:
+        await sql_session.rollback()
+        return False
+    status.status = "pending"
+    status.message = "Queued to resume from the last completed slide"
+    status.error = None
+    status.updated_at = datetime.now(timezone.utc)
+    sql_session.add(status)
+    await sql_session.commit()
+    return True
 
 
 async def queue_presentation_generation(
@@ -1171,7 +1323,10 @@ async def queue_presentation_generation(
                     status_code=409,
                     detail="idempotency_record_incomplete",
                 )
-            if existing.state == "awaiting_resume":
+            resumed = await _resume_failed_authored_job(
+                existing, existing_status, sql_session
+            )
+            if existing.state == "awaiting_resume" or resumed:
                 background_tasks.add_task(
                     launch_generation_job,
                     existing.id,
@@ -1236,6 +1391,15 @@ async def queue_presentation_generation(
                 status_code=409,
                 detail="idempotency_record_incomplete",
             )
+        resumed = await _resume_failed_authored_job(
+            existing, existing_status, sql_session
+        )
+        if existing.state == "awaiting_resume" or resumed:
+            background_tasks.add_task(
+                launch_generation_job,
+                existing.id,
+                export_cookie_header,
+            )
         return existing_status
 
     background_tasks.add_task(
@@ -1278,7 +1442,7 @@ async def generate_presentation_async(
 
 
 @PRESENTATION_GENERATE_ROUTER.get(
-    "/status/{id}", response_model=AsyncPresentationGenerationTaskModel
+    "/status/{id}", response_model=AsyncPresentationGenerationTaskResponse
 )
 async def check_async_presentation_generation_status(
     id: str = Path(description="ID of the presentation generation task"),
@@ -1301,7 +1465,12 @@ async def check_async_presentation_generation_status(
         raise HTTPException(
             status_code=404, detail="No presentation generation task found"
         )
-    return status
+    progress, failure = await progress_for_task(id, sql_session)
+    return AsyncPresentationGenerationTaskResponse(
+        **status.model_dump(mode="json"),
+        progress=progress,
+        failure=failure,
+    )
 
 
 @PRESENTATION_GENERATE_ROUTER.post(

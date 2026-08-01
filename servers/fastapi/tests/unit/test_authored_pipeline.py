@@ -725,6 +725,60 @@ def test_slide_pipeline_rejects_fallback_instead_of_publishing_incomplete_deck(
         _run(scenario())
 
 
+def test_ninety_slide_pipeline_keeps_worker_concurrency_bounded(monkeypatch):
+    async def scenario():
+        plan = SimpleNamespace(
+            contents=tuple(f"slide {index}" for index in range(90)),
+            design_system="BOUNDED DESIGN SYSTEM",
+        )
+        active = 0
+        maximum_active = 0
+        authored_indexes: list[int] = []
+        rendered = 0
+
+        async def fake_author(selected_plan, index):
+            nonlocal active, maximum_active
+            assert selected_plan is plan
+            active += 1
+            maximum_active = max(maximum_active, active)
+            try:
+                await asyncio.sleep(0.001)
+                authored_indexes.append(index)
+                return (
+                    "<!DOCTYPE html><html><head></head><body>"
+                    f"<h1>slide-{index}</h1></body></html>"
+                )
+            finally:
+                active -= 1
+
+        async def fake_render(_html):
+            nonlocal rendered
+            rendered += 1
+            await asyncio.sleep(0)
+            return b"png"
+
+        monkeypatch.setattr(authored_service, "_AUTHORED_SLIDE_WORKERS", 8)
+        monkeypatch.setattr(
+            authored_service, "prepare_authored_deck", lambda *args: plan
+        )
+        monkeypatch.setattr(authored_service, "author_planned_slide", fake_author)
+        monkeypatch.setattr(authored_service, "render_html_to_png", fake_render)
+
+        result = await authored_service._author_illustrate_render_pipeline(
+            _outline(90),
+            _brand(),
+            SimpleNamespace(id="default", illustration_prompt=None),
+        )
+        return result, maximum_active, authored_indexes, rendered
+
+    result, maximum_active, authored_indexes, rendered = _run(scenario())
+
+    assert len(result.pngs) == 90
+    assert sorted(authored_indexes) == list(range(90))
+    assert rendered == 90
+    assert 1 < maximum_active <= 8
+
+
 # --- render resilience (mocked Chrome) ---------------------------------------
 
 

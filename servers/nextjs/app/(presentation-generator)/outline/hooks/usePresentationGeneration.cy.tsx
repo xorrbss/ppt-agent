@@ -47,6 +47,11 @@ function GenerationHarness({
       <output data-cy="generation-loading">
         {loadingState.isLoading ? "loading" : "idle"}
       </output>
+      <output data-cy="generation-progress">
+        {loadingState.progress
+          ? `${loadingState.progress.completed_slides}/${loadingState.progress.total_slides}`
+          : "none"}
+      </output>
     </>
   );
 }
@@ -167,6 +172,127 @@ describe("usePresentationGeneration async generation", () => {
       const second = (stub as any).getCall(1).args[0].idempotency_key;
       expect(first).to.be.a("string").and.not.be.empty;
       expect(second).to.equal(first);
+    });
+  });
+
+  it("stores actual completed-slide progress while polling", () => {
+    cy.clock();
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync").resolves({
+      id: "authored-progress-task",
+      request_id: "progress-request",
+    } as any);
+    cy.stub(PresentationGenerationApi, "getGenerationStatus")
+      .onFirstCall()
+      .resolves({
+        status: "running",
+        progress: {
+          completed_slides: 46,
+          total_slides: 90,
+          current_slide: 47,
+          current_stage: "render",
+          finalizing: false,
+        },
+      } as any)
+      .onSecondCall()
+      .resolves({
+        status: "completed",
+        data: { presentation_id: "progress-completed-presentation" },
+      } as any);
+    cy.stub(DashboardApi, "deletePresentation").resolves(undefined as any);
+
+    mountHarness(AUTHORED_TEMPLATE_ID, "outline-shell-progress");
+    cy.contains("button", "Generate").click();
+
+    cy.get('[data-cy="generation-progress"]').should("have.text", "46/90");
+    cy.window().then((window) => {
+      const tasks = JSON.parse(
+        window.localStorage.getItem(DURABLE_TASK_STORAGE_KEY) || "{}"
+      );
+      expect((Object.values(tasks)[0] as any).lastProgress).to.include({
+        completed_slides: 46,
+        total_slides: 90,
+      });
+    });
+    cy.tick(4000);
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      "/presentation?id=progress-completed-presentation"
+    );
+  });
+
+  it("reposts a retryable failed authored task with the same key and resumes it", () => {
+    const sourcePresentationId = "outline-shell-checkpoint-retry";
+    cy.stub(notify, "error").as("notifyError");
+    cy.stub(DashboardApi, "deletePresentation").resolves(undefined as any);
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
+      .onFirstCall()
+      .resolves({ id: "failed-authored-task" } as any)
+      .onSecondCall()
+      .resolves({ id: "resumed-authored-task" } as any)
+      .as("generateAuthored");
+    cy.stub(PresentationGenerationApi, "getGenerationStatus")
+      .onFirstCall()
+      .resolves({
+        status: "error",
+        progress: {
+          completed_slides: 46,
+          total_slides: 90,
+          current_slide: 47,
+          current_stage: "render",
+          finalizing: false,
+        },
+        failure: {
+          code: "slide_render_failed",
+          message: "Browser render failed",
+          stage: "render",
+          slide_number: 47,
+          retryable: true,
+        },
+      } as any)
+      .onSecondCall()
+      .resolves({
+        status: "completed",
+        data: { presentation_id: "resumed-authored-presentation" },
+      } as any);
+
+    mountHarness(AUTHORED_TEMPLATE_ID, sourcePresentationId);
+    cy.contains("button", "Generate").click();
+    cy.get("@notifyError")
+      .should("have.been.calledOnce")
+      .then((stub) => {
+        const message = (stub as any).getCall(0).args[1];
+        expect(message).to.include("47번 슬라이드");
+        expect(message).to.include("렌더링 단계");
+      });
+
+    cy.window().then((window) => {
+      const tasks = JSON.parse(
+        window.localStorage.getItem(DURABLE_TASK_STORAGE_KEY) || "{}"
+      );
+      const task = Object.values(tasks)[0] as any;
+      expect(task.status).to.equal("retryable-error");
+      expect(task.lastProgress).to.include({
+        completed_slides: 46,
+        total_slides: 90,
+      });
+      expect(task.lastFailure).to.include({
+        stage: "render",
+        slide_number: 47,
+      });
+    });
+
+    cy.contains("button", "Generate").click();
+    cy.get("@generateAuthored").should("have.been.calledTwice").then((stub) => {
+      const firstKey = (stub as any).getCall(0).args[0].idempotency_key;
+      const secondKey = (stub as any).getCall(1).args[0].idempotency_key;
+      expect(secondKey).to.equal(firstKey);
+    });
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      "/presentation?id=resumed-authored-presentation"
+    );
+    cy.window().then((window) => {
+      expect(window.localStorage.getItem(DURABLE_TASK_STORAGE_KEY)).to.equal("{}");
     });
   });
 
