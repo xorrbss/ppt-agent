@@ -12,17 +12,25 @@ import logging
 import os
 import time
 from collections import OrderedDict
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from utils.llm_calls.author_slide import (
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
     AUTHOR_CONCURRENCY,
     AuthoredStyleLike,
     Brand,
     author_slide_html,
     is_valid_slide_html,
+    normalize_reference_mode,
 )
 from utils.authored_styles import reference_images_for_role
-from utils.llm_calls.critique_slide import SlideCritique, critique_slide_image
+from utils.llm_calls.critique_slide import (
+    CRITIQUE_PROMPT_VERSION,
+    SlideCritique,
+    critique_slide_image,
+)
 from utils.llm_provider import get_model
 from utils.slide_capture import render_html_to_png
 
@@ -58,7 +66,7 @@ _vqa_sem: Optional[asyncio.Semaphore] = None
 # do not pay for the same multimodal request again. Include the model and a prompt-version
 # token in the fingerprint so configuration or reviewer-policy changes invalidate safely.
 VQA_CACHE_SIZE = _env_nonnegative_int("AUTHORED_VQA_CACHE_SIZE", 64)
-_VQA_PROMPT_VERSION = "authored-vqa-v1"
+_VQA_PROMPT_VERSION = f"authored-vqa-v2:{CRITIQUE_PROMPT_VERSION}"
 _vqa_cache: "OrderedDict[str, SlideCritique]" = OrderedDict()
 _vqa_inflight: Dict[str, "asyncio.Task[SlideCritique]"] = {}
 
@@ -70,7 +78,14 @@ def _get_vqa_sem() -> asyncio.Semaphore:
     return _vqa_sem
 
 
-def _critique_cache_key(image: bytes, context: Optional[str]) -> str:
+def _critique_cache_key(
+    image: bytes,
+    context: Optional[str],
+    *,
+    source_image: Optional[bytes] = None,
+    reference_mode: str = STYLE_REFERENCE,
+) -> str:
+    mode = normalize_reference_mode(reference_mode)
     digest = hashlib.sha256()
     digest.update(_VQA_PROMPT_VERSION.encode("utf-8"))
     digest.update(b"\0")
@@ -82,24 +97,52 @@ def _critique_cache_key(image: bytes, context: Optional[str]) -> str:
         model = ""
     digest.update(model.encode("utf-8"))
     digest.update(b"\0")
+    digest.update(mode.encode("utf-8"))
+    digest.update(b"\0")
     digest.update((context or "").encode("utf-8"))
     digest.update(b"\0")
-    digest.update(image)
+    digest.update(hashlib.sha256(source_image or b"").digest())
+    digest.update(hashlib.sha256(image).digest())
     return digest.hexdigest()
 
 
 async def _critique_cached(
-    image: bytes, context: Optional[str]
+    image: bytes,
+    context: Optional[str],
+    *,
+    source_image: Optional[bytes] = None,
+    reference_mode: str = STYLE_REFERENCE,
 ) -> Optional[SlideCritique]:
     """Return one best-effort critique, caching only successful model responses."""
+    mode = normalize_reference_mode(reference_mode)
+    if mode == EXACT_RECONSTRUCTION and source_image is None:
+        raise ValueError("Exact reconstruction critique requires a source image")
+
+    async def invoke() -> SlideCritique:
+        async with _get_vqa_sem():
+            if mode == EXACT_RECONSTRUCTION:
+                return await critique_slide_image(
+                    image,
+                    slide_context=context,
+                    source_image=source_image,
+                    reference_mode=mode,
+                )
+            # Keep the style-reference/default call byte-for-byte compatible with the
+            # established render-only reviewer contract.
+            return await critique_slide_image(image, slide_context=context)
+
     if VQA_CACHE_SIZE <= 0:
         try:
-            async with _get_vqa_sem():
-                return await critique_slide_image(image, slide_context=context)
+            return await invoke()
         except Exception:
             return None
 
-    key = _critique_cache_key(image, context)
+    key = _critique_cache_key(
+        image,
+        context,
+        source_image=source_image,
+        reference_mode=mode,
+    )
     cached = _vqa_cache.get(key)
     if cached is not None:
         _vqa_cache.move_to_end(key)
@@ -107,11 +150,6 @@ async def _critique_cached(
 
     task = _vqa_inflight.get(key)
     if task is None:
-
-        async def invoke() -> SlideCritique:
-            async with _get_vqa_sem():
-                return await critique_slide_image(image, slide_context=context)
-
         task = asyncio.create_task(invoke())
         _vqa_inflight[key] = task
 
@@ -130,29 +168,62 @@ async def _critique_cached(
     return critique
 
 
-def _feedback(critique: SlideCritique) -> str:
+def _feedback(critique: SlideCritique, *, exact_reconstruction: bool = False) -> str:
     issues = (
         "; ".join(f"{x.type} — {x.detail}" for x in critique.issues) or "visual problems"
     )
+    if exact_reconstruction:
+        return (
+            "A rendered preview of THIS exact reconstruction had these visual problems: "
+            f"{issues}. Re-author it against the attached source image and fix only "
+            "unintended implementation defects. Preserve source text character-for-"
+            "character, including line breaks; preserve exact typography and geometry; "
+            "and do not remove intentional overlap/cropping, restructure the layout, "
+            "shorten content, or make discretionary design improvements."
+        )
     return (
         "A rendered preview of THIS slide had these visual problems: "
         f"{issues}. Re-author the slide to fix them: keep ALL content within the "
         "1280x720 frame (no overflow or clipping), remove any element overlap, ensure "
-        "strong contrast, delete any placeholder text, never reduce visible text below "
-        "12px (9pt; shorten or restructure it instead), and rebalance the layout — while "
+        "strong contrast, delete any placeholder text, avoid unnecessarily shrinking text "
+        "until it becomes difficult to read, and rebalance the layout — while "
         "keeping the same role, language and shared design system."
     )
 
 
 async def critique_authored(
-    pngs: List[bytes], contexts: Optional[List[Optional[str]]] = None
+    pngs: List[bytes],
+    contexts: Optional[List[Optional[str]]] = None,
+    *,
+    source_images: Optional[List[bytes]] = None,
+    reference_mode: str = STYLE_REFERENCE,
 ) -> List[Optional[SlideCritique]]:
     """Critique each rendered authored slide. None where a review failed (so one bad
     call does not sink the pass)."""
+    mode = normalize_reference_mode(reference_mode)
     ctx = contexts or []
+    exact_sources: Optional[List[bytes]] = None
+    if mode == EXACT_RECONSTRUCTION:
+        if source_images is None or len(source_images) != len(pngs):
+            raise ValueError(
+                "Exact reconstruction critique requires one source image per render"
+            )
+        if any(not isinstance(source, bytes) or not source for source in source_images):
+            raise ValueError(
+                "Exact reconstruction critique source images must be non-empty bytes"
+            )
+        exact_sources = source_images
 
     async def review(i: int, img: bytes) -> Optional[SlideCritique]:
-        return await _critique_cached(img, ctx[i] if i < len(ctx) else None)
+        context = ctx[i] if i < len(ctx) else None
+        if mode == STYLE_REFERENCE:
+            return await _critique_cached(img, context)
+        return await _critique_cached(
+            img,
+            context,
+            source_image=exact_sources[i] if exact_sources is not None else None,
+            reference_mode=mode,
+        )
 
     return list(await asyncio.gather(*[review(i, p) for i, p in enumerate(pngs)]))
 
@@ -168,6 +239,9 @@ async def revise_authored_deck(
     style: Optional[AuthoredStyleLike] = None,
     slide_indices: Optional[List[int]] = None,
     total_slides: Optional[int] = None,
+    *,
+    initial_critiques: Optional[List[Optional[SlideCritique]]] = None,
+    reference_images_by_slide: Optional[List[Tuple[Path, ...]]] = None,
 ) -> Tuple[List[str], List[bytes], List[int]]:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
@@ -185,6 +259,33 @@ async def revise_authored_deck(
     deck_size = total_slides if total_slides is not None else n
     if deck_size < n:
         raise ValueError("total_slides cannot be smaller than the reviewed slide count")
+    if initial_critiques is not None and len(initial_critiques) != n:
+        raise ValueError("initial_critiques must match the reviewed slide count")
+
+    reference_mode = normalize_reference_mode(
+        getattr(style, "reference_mode", STYLE_REFERENCE)
+    )
+    exact_source_images: Optional[List[bytes]] = None
+    if reference_mode == EXACT_RECONSTRUCTION:
+        if reference_images_by_slide is None or len(reference_images_by_slide) != n:
+            raise ValueError(
+                "Exact reconstruction QA requires one per-slide reference mapping"
+            )
+        exact_source_images = []
+        for refs in reference_images_by_slide:
+            if len(refs) != 1:
+                raise ValueError(
+                    "Exact reconstruction QA requires exactly one source per slide"
+                )
+            try:
+                source = Path(refs[0]).read_bytes()
+            except OSError as error:
+                raise ValueError(
+                    "Exact reconstruction QA source image is unreadable"
+                ) from error
+            if not source:
+                raise ValueError("Exact reconstruction QA source image is empty")
+            exact_source_images.append(source)
 
     htmls = list(htmls)
     pngs = list(pngs)
@@ -207,24 +308,50 @@ async def revise_authored_deck(
         slide_critique_work = 0.0
         slide_correction_work = 0.0
 
-        for _ in range(max(1, max_cycles)):
-            review_started = time.monotonic()
-            critiques = await critique_authored(
-                [current_png], contexts=[contents[i][:240]]
-            )
-            slide_critique_work += time.monotonic() - review_started
-            critique = critiques[0] if critiques else None
+        for cycle in range(max(1, max_cycles)):
+            if cycle == 0 and initial_critiques is not None:
+                critique = initial_critiques[i]
+            else:
+                review_started = time.monotonic()
+                if reference_mode == EXACT_RECONSTRUCTION:
+                    critiques = await critique_authored(
+                        [current_png],
+                        contexts=[contents[i][:240]],
+                        source_images=[exact_source_images[i]],
+                        reference_mode=reference_mode,
+                    )
+                else:
+                    # Preserve the established STYLE_REFERENCE call shape so callers
+                    # and test doubles that implement the original two-argument
+                    # contract continue to work unchanged.
+                    critiques = await critique_authored(
+                        [current_png],
+                        contexts=[contents[i][:240]],
+                    )
+                slide_critique_work += time.monotonic() - review_started
+                critique = critiques[0] if critiques else None
             if critique is None or not critique.needs_fix:
                 break
 
             correction_started = time.monotonic()
             try:
-                content = f"{contents[i]}\n\n{_feedback(critique)}"
+                content = (
+                    f"{contents[i]}\n\n"
+                    f"{_feedback(critique, exact_reconstruction=reference_mode == EXACT_RECONSTRUCTION)}"
+                )
                 # Correction-under-critique is the quality-critical step: re-author at
                 # HIGH reasoning effort (the max) so the fix gets MORE reasoning than the
                 # fast 'low' first pass, regardless of the provider's default effort.
-                refs = reference_images_for_role(style, roles[i])
+                refs = (
+                    reference_images_by_slide[i]
+                    if reference_mode == EXACT_RECONSTRUCTION
+                    and reference_images_by_slide is not None
+                    else reference_images_for_role(style, roles[i])
+                )
                 if refs:
+                    reference_kwargs = {"reference_images": refs}
+                    if reference_mode == EXACT_RECONSTRUCTION:
+                        reference_kwargs["reference_mode"] = reference_mode
                     new_html = await author_slide_html(
                         content,
                         design_system,
@@ -233,9 +360,12 @@ async def revise_authored_deck(
                         absolute_indices[i],
                         deck_size,
                         reasoning_effort="high",
-                        reference_images=refs,
+                        **reference_kwargs,
                     )
                 else:
+                    reference_kwargs = {}
+                    if reference_mode == EXACT_RECONSTRUCTION:
+                        reference_kwargs["reference_mode"] = reference_mode
                     new_html = await author_slide_html(
                         content,
                         design_system,
@@ -244,6 +374,7 @@ async def revise_authored_deck(
                         absolute_indices[i],
                         deck_size,
                         reasoning_effort="high",
+                        **reference_kwargs,
                     )
 
                 # Reject truncated/garbage model output BEFORE launching Chrome. The old

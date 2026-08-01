@@ -57,7 +57,10 @@ from utils.asset_directory_utils import (
     get_images_directory,
 )
 from utils.authored_illustrations import apply_authored_illustration
-from utils.authored_styles import resolve_authored_style
+from utils.authored_styles import (
+    resolve_authored_style,
+    validate_exact_reconstruction_style,
+)
 from utils.filename_utils import safe_export_basename
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
@@ -67,9 +70,12 @@ from utils.llm_calls.author_deck import (
     prepare_authored_deck,
 )
 from utils.llm_calls.author_slide import (
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
     Brand,
     apply_style_defaults,
     is_fallback_slide_html,
+    normalize_reference_mode,
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.outline_utils import get_presentation_title_from_presentation_outline
@@ -275,10 +281,18 @@ async def _author_illustrate_render_pipeline(
     """Pipeline slides through durable, fenced checkpoints with bounded workers."""
     started = time.monotonic()
     plan = prepare_authored_deck(outline, brand, style)
+    plan_reference_mode = normalize_reference_mode(
+        getattr(
+            plan,
+            "reference_mode",
+            getattr(style, "reference_mode", STYLE_REFERENCE),
+        )
+    )
     roles = plan_deck_roles(outline)
     image_service = (
         ImageGenerationService(get_images_directory())
-        if getattr(style, "illustration_prompt", None)
+        if plan_reference_mode != EXACT_RECONSTRUCTION
+        and getattr(style, "illustration_prompt", None)
         else None
     )
     attempt_token = generation_job.attempt_token if generation_job else None
@@ -591,8 +605,13 @@ async def _generate_authored_presentation(
     started = time.monotonic()
     title = authored_title(request, outline)
     style = resolve_authored_style(request.authored_style)
-    brand = apply_style_defaults(resolve_brand(request, outline, language), style)
     roles = plan_deck_roles(outline)
+    validate_exact_reconstruction_style(
+        style,
+        slide_count=len(outline.slides),
+        roles=roles,
+    )
+    brand = apply_style_defaults(resolve_brand(request, outline, language), style)
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a
     # blank placeholder (resilience by design) — so warn loudly to surface deploy
@@ -652,6 +671,14 @@ async def _generate_authored_presentation(
         vision_started = time.monotonic()
         try:
             contents = [s.content for s in outline.slides]
+            vision_qa_kwargs = {}
+            if normalize_reference_mode(
+                getattr(style, "reference_mode", STYLE_REFERENCE)
+            ) == EXACT_RECONSTRUCTION:
+                exact_plan = prepare_authored_deck(outline, brand, style)
+                vision_qa_kwargs["reference_images_by_slide"] = (
+                    exact_plan.reference_images
+                )
             htmls, pngs, fixed = await revise_authored_deck(
                 htmls,
                 pngs,
@@ -661,6 +688,7 @@ async def _generate_authored_presentation(
                 authored_deck.design_system,
                 max_cycles=1,
                 style=style,
+                **vision_qa_kwargs,
             )
             fixed_count = len(fixed)
             if generation_job is not None and generation_job.attempt_token:

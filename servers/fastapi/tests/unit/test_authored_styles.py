@@ -4,9 +4,11 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from PIL import Image
 import yaml
 
 from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
+from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
 from utils.authored_styles import (
     AUTHORED_STYLE_CATEGORIES,
     AUTHORED_STYLES_DIRECTORY,
@@ -87,6 +89,10 @@ BRIEF_SECTION_PATTERN = re.compile(
 
 def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
+
+
+def _write_exact_image(path: Path) -> None:
+    Image.new("RGB", (1280, 720), "#123456").save(path, format="PNG")
 
 
 def test_load_authored_styles_keeps_legacy_yaml_compatible(tmp_path):
@@ -311,6 +317,112 @@ brief: private
     assert style.primary_color == "#35F2C2"
     assert style.body_font == "Noto Sans KR"
     assert style.public_dict()["preview"]["image"].endswith("/pilot/preview")
+
+
+def test_authored_style_reference_mode_defaults_to_style_reference(tmp_path):
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "legacy.yaml",
+        """id: legacy
+name: Legacy
+description: Legacy reference style
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+brief: legacy brief
+""",
+    )
+
+    style = load_authored_styles(styles_dir)[0]
+
+    assert style.reference_mode == STYLE_REFERENCE
+
+
+def test_authored_style_reference_mode_allows_exact_reconstruction_opt_in(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AUTHORED_EXACT_RECONSTRUCTION_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_EXACT_STYLE_IDS", "exact")
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    assets_dir = tmp_path / "authored_style_assets" / "exact"
+    assets_dir.mkdir(parents=True)
+    _write_exact_image(assets_dir / "source.png")
+    _write(
+        styles_dir / "exact.yaml",
+        """id: exact
+name: Exact
+description: Faithful reconstruction reference style
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+reference_mode: exact_reconstruction
+slide_reference_images:
+  - slide_index: 0
+    source: exact/source.png
+brief: exact brief
+""",
+    )
+
+    style = load_authored_styles(styles_dir)[0]
+
+    assert style.reference_mode == EXACT_RECONSTRUCTION
+    assert style.slide_reference_indices == (0,)
+    assert "reference_mode" not in style.public_dict()
+    assert "slide_reference_images" not in style.public_dict()
+    assert "assets_root" not in style.public_dict()
+
+
+def test_authored_style_rejects_exact_reconstruction_without_reference(
+    tmp_path, caplog, monkeypatch
+):
+    monkeypatch.setenv("AUTHORED_EXACT_RECONSTRUCTION_ENABLED", "true")
+    monkeypatch.setenv(
+        "AUTHORED_EXACT_STYLE_IDS",
+        "exact-without-source",
+    )
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "exact-without-source.yaml",
+        """id: exact-without-source
+name: Exact without source
+description: Invalid exact reconstruction preset
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+reference_mode: exact_reconstruction
+brief: exact brief
+""",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        assert load_authored_styles(styles_dir) == []
+
+    assert "requires readable slide_reference_images" in caplog.text
+
+
+def test_authored_style_rejects_unknown_reference_mode(tmp_path, caplog):
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "invalid-mode.yaml",
+        """id: invalid-mode
+name: Invalid mode
+description: Invalid mode style
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+reference_mode: REINTERPRET_IT
+brief: invalid mode brief
+""",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        assert load_authored_styles(styles_dir) == []
+
+    assert "reference_mode" in caplog.text
 
 
 def test_load_authored_style_rejects_reference_path_traversal(tmp_path, caplog):

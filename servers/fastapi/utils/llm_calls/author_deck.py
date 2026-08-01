@@ -13,6 +13,8 @@ from typing import List, Optional, Tuple
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.author_slide import (
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
     AuthoredStyleLike,
     Brand,
     author_slide_html,
@@ -20,6 +22,7 @@ from utils.llm_calls.author_slide import (
     build_design_system,
     fallback_slide_html,
     is_valid_slide_html,
+    normalize_reference_mode,
 )
 from utils.authored_styles import reference_images_for_role
 
@@ -68,6 +71,7 @@ class AuthoredDeckPlan:
     contents: Tuple[str, ...]
     roles: Tuple[str, ...]
     reference_images: Tuple[Tuple[Path, ...], ...]
+    reference_mode: str
     brand: Brand
     design_system: str
 
@@ -129,14 +133,21 @@ async def _author_one_resilient(
     n: int,
     reference_images=(),
     *,
+    reference_mode: str = STYLE_REFERENCE,
     raise_on_failure: bool = False,
 ) -> str:
-    """Author one slide with bounded retries and a branded fallback.
+    """Author one slide with bounded retries and a style-mode branded fallback.
 
     Ordinary invalid/permanent failures retain the original two-attempt behavior.
     Provider overloads and broken streamed responses get two additional attempts with
     exponential backoff so a brief upstream incident does not invalidate the whole deck.
+    Exact reconstruction instead fails closed rather than replacing the source slide.
     """
+    reference_mode = normalize_reference_mode(reference_mode)
+    if reference_mode == EXACT_RECONSTRUCTION and len(reference_images) != 1:
+        raise ValueError(
+            "Exact reconstruction requires exactly one reference image per slide"
+        )
     last_error: object = "invalid HTML"
     attempt_limit = _DEFAULT_AUTHOR_ATTEMPTS
     attempts_made = 0
@@ -144,23 +155,25 @@ async def _author_one_resilient(
         attempts_made = attempt + 1
         try:
             if reference_images:
+                kwargs = {"reference_images": reference_images}
+                if reference_mode == EXACT_RECONSTRUCTION:
+                    kwargs["reference_mode"] = reference_mode
                 html = await author_slide_html(
-                    content,
-                    design_system,
-                    brand,
-                    role,
-                    index,
-                    n,
-                    reference_images=reference_images,
+                    content, design_system, brand, role, index, n, **kwargs
                 )
             else:
+                kwargs = {}
+                if reference_mode == EXACT_RECONSTRUCTION:
+                    kwargs["reference_mode"] = reference_mode
                 html = await author_slide_html(
-                    content, design_system, brand, role, index, n
+                    content, design_system, brand, role, index, n, **kwargs
                 )
             if is_valid_slide_html(html):
                 return html
         except Exception as e:  # noqa: BLE001 — resilience boundary, recorded below
             last_error = e
+            if reference_mode == EXACT_RECONSTRUCTION and isinstance(e, ValueError):
+                raise
             if _is_transient_author_error(e):
                 attempt_limit = _TRANSIENT_AUTHOR_ATTEMPTS
 
@@ -184,6 +197,18 @@ async def _author_one_resilient(
             )
             await asyncio.sleep(delay)
 
+    if raise_on_failure or reference_mode == EXACT_RECONSTRUCTION:
+        logger.warning(
+            "[authored] slide %d/%d failed after %d attempts; refusing a placeholder "
+            "for exact/strict authoring (last error: %s)",
+            index + 1,
+            n,
+            attempts_made,
+            last_error,
+        )
+        if isinstance(last_error, BaseException):
+            raise last_error
+        raise RuntimeError(str(last_error))
     logger.warning(
         "[authored] slide %d/%d fell back to a branded placeholder after %d attempts "
         "(last error: %s)",
@@ -192,10 +217,6 @@ async def _author_one_resilient(
         attempts_made,
         last_error,
     )
-    if raise_on_failure:
-        if isinstance(last_error, BaseException):
-            raise last_error
-        raise RuntimeError(str(last_error))
     return fallback_slide_html(content, brand, role, index, n)
 
 
@@ -208,12 +229,36 @@ def prepare_authored_deck(
     slides = list(outline.slides)
     effective_brand = apply_style_defaults(brand, style)
     roles = tuple(plan_deck_roles(outline))
+    reference_mode = normalize_reference_mode(
+        getattr(style, "reference_mode", STYLE_REFERENCE)
+    )
+    if reference_mode == EXACT_RECONSTRUCTION:
+        sources = tuple(getattr(style, "slide_reference_images", ()) or ())
+        if len(sources) != len(slides):
+            raise ValueError(
+                "Exact reconstruction source count must match the slide count "
+                f"({len(sources)} != {len(slides)})"
+            )
+        resolved_sources = tuple(path.resolve() for path in sources)
+        if len(set(resolved_sources)) != len(resolved_sources):
+            raise ValueError(
+                "Exact reconstruction requires a unique source image per slide"
+            )
+        missing = [str(path) for path in resolved_sources if not path.is_file()]
+        if missing:
+            raise ValueError(
+                "Exact reconstruction source image is missing: " + ", ".join(missing)
+            )
+        references = tuple((path,) for path in resolved_sources)
+    else:
+        references = tuple(
+            tuple(reference_images_for_role(style, role)) for role in roles
+        )
     return AuthoredDeckPlan(
         contents=tuple(slide.content for slide in slides),
         roles=roles,
-        reference_images=tuple(
-            tuple(reference_images_for_role(style, role)) for role in roles
-        ),
+        reference_images=references,
+        reference_mode=reference_mode,
         brand=effective_brand,
         design_system=build_design_system(effective_brand, style),
     )
@@ -231,6 +276,7 @@ async def author_planned_slide(
         index,
         len(plan.contents),
         plan.reference_images[index],
+        reference_mode=plan.reference_mode,
         raise_on_failure=raise_on_failure,
     )
 
@@ -242,8 +288,8 @@ async def author_deck(
 ) -> AuthoredDeckResult:
     """Author every outline slide against the shared design system, with bounded
     concurrency and per-slide resilience. Returns the valid HTML documents (order
-    preserved) plus the exact prompt shared with vision-QA; failed slides fall back
-    to a clean branded placeholder."""
+    preserved) plus the exact prompt shared with vision-QA. Failed style-reference
+    slides fall back to a branded placeholder; exact reconstruction fails closed."""
     plan = prepare_authored_deck(outline, brand, style)
     htmls = await asyncio.gather(
         *[author_planned_slide(plan, i) for i in range(len(plan.contents))]

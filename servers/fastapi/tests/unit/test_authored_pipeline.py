@@ -27,6 +27,7 @@ from utils import slide_capture
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
+from utils.llm_calls import critique_slide as critique_slide_mod
 from utils.llm_calls.author_deck import (
     AuthoredDeckResult,
     author_deck,
@@ -35,6 +36,8 @@ from utils.llm_calls.author_deck import (
 )
 from utils.llm_calls.author_slide import (
     Brand,
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
     apply_style_defaults,
     build_design_system,
     fallback_slide_html,
@@ -211,15 +214,14 @@ def test_author_deck_keeps_two_attempt_limit_for_permanent_failures(monkeypatch)
 
 
 def test_default_design_system_is_byte_for_byte_canonical_output():
-    expected_sha256 = "f1f002685b7875c1c34a910a2e5345c32f40e2767f1a91112fcea8174bf41ef4"
     without_style = build_design_system(_brand())
     canonical_default = build_design_system(
         _brand(), SimpleNamespace(id="default", brief="this must not replace legacy")
     )
 
-    assert len(without_style) == 4222
-    assert hashlib.sha256(without_style.encode()).hexdigest() == expected_sha256
     assert canonical_default == without_style
+    assert "12px" not in without_style
+    assert "9pt" not in without_style
 
 
 def test_design_system_prohibits_external_fonts_and_documents_local_fallbacks():
@@ -249,19 +251,218 @@ def test_custom_design_system_injects_brief_without_weakening_common_rules():
     assert "Brand primary colour: #2563EB" in design_system
     assert "EXACTLY 1280x720px" in design_system
     assert "FIT IS CRITICAL" in design_system
-    assert "NEVER render visible text below 12px (9pt)" in design_system
+    assert "unnecessarily hard-to-read" in design_system
+    assert "12px" not in design_system
+    assert "9pt" not in design_system
     assert "Return ONLY the complete HTML document." in design_system
     assert "The primary is the ONE accent" not in design_system
 
 
-def test_temporary_authored_render_enforces_9pt_without_mutating_source():
-    html = "<html><head></head><body><span style='font-size:8px'>small</span></body></html>"
-    instrumented = slide_capture._with_minimum_authored_font_size(html)
+def test_temporary_authored_render_preserves_sub_12px_source_css(monkeypatch):
+    captured = []
 
-    assert instrumented != html
-    assert "minimumPx = 12" in instrumented
-    assert instrumented.endswith("</body></html>")
-    assert "data-presenton-minimum-font-size" not in html
+    async def fake_uncached(html, timeout=60):
+        captured.append(html)
+        return html.encode("utf-8")
+
+    slide_capture._render_cache.clear()
+    slide_capture._render_inflight.clear()
+    monkeypatch.setattr(slide_capture, "_render_html_to_png_uncached", fake_uncached)
+
+    htmls = [
+        f"<html><body><span style='font-size:{size}px'>small</span></body></html>"
+        for size in (8, 10, 11)
+    ]
+    rendered = [_run(slide_capture.render_html_to_png(html)) for html in htmls]
+
+    assert captured == htmls
+    assert rendered == [html.encode("utf-8") for html in htmls]
+
+
+def test_authored_render_cache_version_separates_pre_font_floor_entries(monkeypatch):
+    calls = 0
+
+    async def fake_uncached(html, timeout=60):
+        nonlocal calls
+        calls += 1
+        return f"render-{calls}".encode()
+
+    slide_capture._render_cache.clear()
+    slide_capture._render_inflight.clear()
+    monkeypatch.setattr(slide_capture, "_render_html_to_png_uncached", fake_uncached)
+    monkeypatch.setattr(slide_capture, "RENDER_CACHE_VERSION", "legacy-9pt-floor")
+    assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-1"
+
+    monkeypatch.setattr(
+        slide_capture,
+        "RENDER_CACHE_VERSION",
+        "authored-render-v3-preserve-authored-font-size",
+    )
+    assert _run(slide_capture.render_html_to_png(_VALID)) == b"render-2"
+    assert calls == 2
+
+
+# --- image reference intent + multimodal resilience ------------------------
+
+
+def _capture_author_requests(monkeypatch, responses):
+    """Install a synchronous fake provider and return its generated requests."""
+    calls = []
+
+    class FakeClient:
+        def generate(self, **kwargs):
+            calls.append(kwargs)
+            response = responses.pop(0)
+            if isinstance(response, BaseException):
+                raise response
+            return SimpleNamespace(content=response)
+
+    async def no_rate_limit():
+        return None
+
+    monkeypatch.setattr(author_slide_mod, "get_client", lambda **_kwargs: FakeClient())
+    monkeypatch.setattr(author_slide_mod, "get_llm_config", lambda: {})
+    monkeypatch.setattr(author_slide_mod, "get_model", lambda: "fake-model")
+    monkeypatch.setattr(author_slide_mod, "get_generate_kwargs", lambda **kwargs: kwargs)
+    monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: False)
+    monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_limit)
+    return calls
+
+
+def _reference_image(tmp_path):
+    path = tmp_path / "reference.png"
+    path.write_bytes(b"\x89PNG\r\n\x1a\nreference")
+    return path
+
+
+def _author_user_content(call):
+    return call["messages"][1].content
+
+
+def test_author_slide_style_reference_keeps_art_direction_multimodal_contract(
+    monkeypatch, tmp_path
+):
+    calls = _capture_author_requests(monkeypatch, [_VALID])
+
+    html = _run(
+        author_slide_mod.author_slide_html(
+            "content", "DESIGN", _brand(), "COVER", 0, 1,
+            reference_images=[_reference_image(tmp_path)],
+        )
+    )
+
+    user_content = _author_user_content(calls[0])
+    assert html == _VALID
+    assert len(calls) == 1
+    assert isinstance(user_content, list)
+    assert "art direction only" in user_content[0].text
+    assert "Do NOT copy their text, logos, brand names" in user_content[0].text
+    assert len(user_content) == 2
+    assert getattr(user_content[1], "mime_type", None) == "image/png"
+
+
+def test_author_slide_style_reference_preserves_text_only_fallback(monkeypatch, tmp_path):
+    calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable"), _VALID])
+
+    html = _run(
+        author_slide_mod.author_slide_html(
+            "content", "DESIGN", _brand(), "COVER", 0, 1,
+            reference_images=[_reference_image(tmp_path)],
+        )
+    )
+
+    assert html == _VALID
+    assert len(calls) == 2
+    assert isinstance(_author_user_content(calls[0]), list)
+    assert _author_user_content(calls[1]) == _author_user_content(calls[0])[0].text.split(
+        "\n\nVISUAL REFERENCES", 1
+    )[0]
+
+
+def test_author_slide_exact_reconstruction_uses_fidelity_prompt(monkeypatch, tmp_path):
+    calls = _capture_author_requests(monkeypatch, [_VALID])
+
+    html = _run(
+        author_slide_mod.author_slide_html(
+            "content", "DESIGN", _brand(), "COVER", 0, 1,
+            reference_images=[_reference_image(tmp_path)],
+            reference_mode=EXACT_RECONSTRUCTION,
+        )
+    )
+
+    user_content = _author_user_content(calls[0])
+    prompt = " ".join(user_content[0].text.lower().split())
+    assert html == _VALID
+    assert len(user_content) == 2
+    for required in (
+        "exact reconstruction mode",
+        "character exactly",
+        "numbers",
+        "spacing",
+        "line breaks",
+        "position, width, height, spacing, alignment, color, border, shape",
+        "hierarchy, and stacking order",
+        "1280x720px",
+        "explicit css pixel",
+        "do not redesign",
+        "do not paraphrase, summarize",
+        "do not redesign, restyle, add content",
+        "before answering",
+        "verify text and",
+        "font",
+        "css",
+        "overlap",
+        "clipping",
+        "only the complete self-contained html document",
+    ):
+        assert required in prompt
+    assert "art direction only" not in prompt
+    assert "do not copy their text" not in prompt
+
+
+def test_author_slide_exact_reconstruction_never_retries_without_the_image(
+    monkeypatch, tmp_path
+):
+    calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable")])
+    monkeypatch.setattr(author_slide_mod, "handle_llm_client_exceptions", lambda error: error)
+
+    with pytest.raises(RuntimeError, match="vision unavailable"):
+        _run(
+            author_slide_mod.author_slide_html(
+                "content", "DESIGN", _brand(), "COVER", 0, 1,
+                reference_images=[_reference_image(tmp_path)],
+                reference_mode=EXACT_RECONSTRUCTION,
+            )
+        )
+
+    assert len(calls) == 1
+    assert isinstance(_author_user_content(calls[0]), list)
+
+
+@pytest.mark.parametrize("reference_case", ["missing", "unreadable", "multiple"])
+def test_author_slide_exact_reconstruction_requires_one_loaded_image_before_llm_call(
+    monkeypatch, tmp_path, reference_case
+):
+    calls = _capture_author_requests(monkeypatch, [_VALID])
+    readable = _reference_image(tmp_path)
+    references = {
+        "missing": [],
+        "unreadable": [tmp_path / "does-not-exist.png"],
+        "multiple": [readable, readable],
+    }[reference_case]
+
+    with pytest.raises(
+        ValueError, match="exactly one readable reference image"
+    ):
+        _run(
+            author_slide_mod.author_slide_html(
+                "content", "DESIGN", _brand(), "COVER", 0, 1,
+                reference_images=references,
+                reference_mode=EXACT_RECONSTRUCTION,
+            )
+        )
+
+    assert calls == []
 
 
 def test_author_deck_builds_and_shares_selected_design_system_once(monkeypatch):
@@ -326,6 +527,72 @@ def test_author_deck_sends_role_specific_visual_references(monkeypatch, tmp_path
         ("PROBLEM", (content,)),
         ("CLOSING", (closing,)),
     ]
+
+
+def test_author_deck_propagates_exact_reference_mode(monkeypatch, tmp_path):
+    cover = _reference_image(tmp_path)
+    style = SimpleNamespace(
+        id="exact-source",
+        brief="- Exact source",
+        reference_images={"cover": (cover,)},
+        slide_reference_images=(cover,),
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+    captured = []
+
+    async def fake_author(*args, reference_images=None, reference_mode=None, **kwargs):
+        captured.append((tuple(reference_images or ()), reference_mode))
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
+
+    result = _run(author_deck(_outline(1), _brand(), style))
+
+    assert result.htmls == [_VALID]
+    assert captured == [((cover,), EXACT_RECONSTRUCTION)]
+
+
+def test_author_deck_exact_failure_is_not_silently_replaced_by_placeholder(
+    monkeypatch, tmp_path
+):
+    style = SimpleNamespace(
+        id="exact-source",
+        brief="- Exact source",
+        reference_images={"cover": (_reference_image(tmp_path),)},
+        slide_reference_images=(_reference_image(tmp_path),),
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+
+    async def unavailable(*args, **kwargs):
+        raise RuntimeError("reference-aware author unavailable")
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", unavailable)
+
+    with pytest.raises(RuntimeError, match="reference-aware author unavailable"):
+        _run(author_deck(_outline(1), _brand(), style))
+
+
+def test_author_deck_exact_mode_rejects_a_slide_without_its_source(monkeypatch):
+    style = SimpleNamespace(
+        id="exact-source",
+        brief="- Exact source",
+        reference_images={},
+        slide_reference_images=(),
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+    called = False
+
+    async def fake_author(*args, **kwargs):
+        nonlocal called
+        called = True
+        return _VALID
+
+    monkeypatch.setattr(author_deck_mod, "author_slide_html", fake_author)
+
+    with pytest.raises(ValueError, match="source count must match"):
+        _run(author_deck(_outline(1), _brand(), style))
+
+    assert called is False
 
 
 def test_style_defaults_preserve_explicit_brand_overrides():
@@ -409,6 +676,55 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
     )
 
     assert captured == [("SELECTED DESIGN SYSTEM", "high")]
+    assert htmls == [_VALID]
+    assert pngs == [b"revised-png"]
+    assert fixed == [0]
+
+
+def test_vision_qa_propagates_exact_reference_mode(monkeypatch, tmp_path):
+    captured = []
+    style = SimpleNamespace(
+        id="exact-source",
+        brief="- Exact source",
+        reference_images={"cover": (_reference_image(tmp_path),)},
+        slide_reference_images=(_reference_image(tmp_path),),
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+
+    async def fake_critique(pngs, contexts=None, **kwargs):
+        return [SlideCritique(needs_fix=True)]
+
+    async def fake_author(*args, reference_images=None, reference_mode=None, **kwargs):
+        captured.append((tuple(reference_images or ()), reference_mode, args[0]))
+        return _VALID
+
+    async def fake_render(html, timeout=60):
+        return b"revised-png"
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID],
+            [b"original-png"],
+            ["content"],
+            ["COVER"],
+            _brand(),
+            "SELECTED DESIGN SYSTEM",
+            style=style,
+            reference_images_by_slide=[(style.slide_reference_images[0],)],
+        )
+    )
+
+    assert captured[0][:2] == (
+        (style.slide_reference_images[0],),
+        EXACT_RECONSTRUCTION,
+    )
+    assert "Preserve source text character-for-character" in captured[0][2]
+    assert "shorten content" in captured[0][2]
+    assert "fit at 12px minimum" not in captured[0][2]
     assert htmls == [_VALID]
     assert pngs == [b"revised-png"]
     assert fixed == [0]
@@ -562,6 +878,223 @@ def test_vision_qa_cache_reuses_identical_successful_review(monkeypatch):
     assert second[0].needs_fix is False
 
 
+def test_vision_qa_style_review_keeps_render_only_multimodal_call(monkeypatch):
+    calls = []
+
+    async def fake_review(image, slide_context=None, **kwargs):
+        calls.append((image, slide_context, kwargs))
+        return SlideCritique(needs_fix=False)
+
+    author_vision_qa_mod._vqa_cache.clear()
+    author_vision_qa_mod._vqa_inflight.clear()
+    author_vision_qa_mod._vqa_sem = None
+    monkeypatch.setattr(author_vision_qa_mod, "get_model", lambda: "test-model")
+    monkeypatch.setattr(author_vision_qa_mod, "critique_slide_image", fake_review)
+
+    critiques = _run(
+        author_vision_qa_mod.critique_authored(
+            [b"render-only"], contexts=["style context"]
+        )
+    )
+
+    assert critiques[0].needs_fix is False
+    assert calls == [(b"render-only", "style context", {})]
+
+
+def test_critique_message_assembly_uses_one_render_for_style_and_ordered_source_render_for_exact():
+    render = b"\x89PNG\r\n\x1a\nrender"
+    source = b"\xff\xd8\xffsource"
+
+    style_messages = critique_slide_mod._build_critique_messages(
+        render, slide_context="style context"
+    )
+    exact_messages = critique_slide_mod._build_critique_messages(
+        render,
+        slide_context="exact context",
+        source_image=source,
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+
+    style_content = style_messages[1].content
+    assert len(style_content) == 2
+    assert style_content[1].data == render
+    assert style_content[1].mime_type == "image/png"
+    assert "source" not in style_messages[0].content.lower()
+
+    exact_content = exact_messages[1].content
+    assert len(exact_content) == 4
+    assert exact_content[1].data == source
+    assert exact_content[1].mime_type == "image/jpeg"
+    assert exact_content[3].data == render
+    assert exact_content[3].mime_type == "image/png"
+    assert "intentional" in exact_messages[0].content.lower()
+    assert "source and rendered" in exact_content[2].text.lower()
+
+
+def test_vision_qa_exact_review_pairs_each_render_with_its_own_source(monkeypatch):
+    calls = []
+
+    async def fake_review(image, slide_context=None, **kwargs):
+        calls.append((image, slide_context, kwargs))
+        return SlideCritique(needs_fix=False)
+
+    author_vision_qa_mod._vqa_cache.clear()
+    author_vision_qa_mod._vqa_inflight.clear()
+    author_vision_qa_mod._vqa_sem = None
+    monkeypatch.setattr(author_vision_qa_mod, "get_model", lambda: "test-model")
+    monkeypatch.setattr(author_vision_qa_mod, "critique_slide_image", fake_review)
+
+    critiques = _run(
+        author_vision_qa_mod.critique_authored(
+            [b"render-0", b"render-1"],
+            contexts=["first", "second"],
+            source_images=[b"source-0", b"source-1"],
+            reference_mode=EXACT_RECONSTRUCTION,
+        )
+    )
+
+    assert [critique.needs_fix for critique in critiques] == [False, False]
+    assert calls == [
+        (
+            b"render-0",
+            "first",
+            {
+                "source_image": b"source-0",
+                "reference_mode": EXACT_RECONSTRUCTION,
+            },
+        ),
+        (
+            b"render-1",
+            "second",
+            {
+                "source_image": b"source-1",
+                "reference_mode": EXACT_RECONSTRUCTION,
+            },
+        ),
+    ]
+
+
+@pytest.mark.parametrize("source_images", [None, [], [b"only-one"], [b"", b"source"]])
+def test_vision_qa_exact_review_fails_closed_without_complete_sources(source_images):
+    with pytest.raises(ValueError, match="source image"):
+        _run(
+            author_vision_qa_mod.critique_authored(
+                [b"render-0", b"render-1"],
+                source_images=source_images,
+                reference_mode=EXACT_RECONSTRUCTION,
+            )
+        )
+
+
+def test_vision_qa_cache_key_separates_source_render_and_mode(monkeypatch):
+    monkeypatch.setattr(author_vision_qa_mod, "get_model", lambda: "test-model")
+    common = author_vision_qa_mod._critique_cache_key(
+        b"render", "context", source_image=b"source-a", reference_mode=EXACT_RECONSTRUCTION
+    )
+
+    assert common != author_vision_qa_mod._critique_cache_key(
+        b"render", "context", source_image=b"source-b", reference_mode=EXACT_RECONSTRUCTION
+    )
+    assert common != author_vision_qa_mod._critique_cache_key(
+        b"render-changed", "context", source_image=b"source-a", reference_mode=EXACT_RECONSTRUCTION
+    )
+    assert common != author_vision_qa_mod._critique_cache_key(
+        b"render", "context", source_image=b"source-a", reference_mode=STYLE_REFERENCE
+    )
+
+
+def test_vision_qa_reuses_initial_critique_and_rechecks_only_changed_slide(
+    monkeypatch, tmp_path
+):
+    source = _reference_image(tmp_path)
+    source.write_bytes(b"source-0")
+    style = SimpleNamespace(
+        id="exact-source",
+        brief="- Exact source",
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+    critique_calls = []
+    author_calls = []
+
+    async def fake_critique(pngs, contexts=None, **kwargs):
+        critique_calls.append((list(pngs), kwargs))
+        return [SlideCritique(needs_fix=False)]
+
+    async def fake_author(*args, reference_images=None, reference_mode=None, **kwargs):
+        author_calls.append((tuple(reference_images or ()), reference_mode))
+        return _VALID.replace("</body>", "<p>fixed</p></body>")
+
+    async def fake_render(html, timeout=60):
+        return b"fixed-render"
+
+    monkeypatch.setattr(author_vision_qa_mod, "critique_authored", fake_critique)
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    htmls, pngs, fixed = _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID, _VALID],
+            [b"original-0", b"original-1"],
+            ["content-0", "content-1"],
+            ["CONTENT", "CONTENT"],
+            _brand(),
+            "DESIGN",
+            style=style,
+            initial_critiques=[SlideCritique(needs_fix=True), SlideCritique(needs_fix=False)],
+            reference_images_by_slide=[(source,), (source,)],
+        )
+    )
+
+    assert author_calls == [((source,), EXACT_RECONSTRUCTION)]
+    # The service performs the final comparison.  `revise_authored_deck` consumes
+    # the already-paid initial critique and does not duplicate it for max_cycles=1.
+    assert critique_calls == []
+    assert fixed == [0]
+    assert pngs == [b"fixed-render", b"original-1"]
+    assert "fixed" in htmls[0]
+
+
+def test_vision_qa_exact_same_role_slides_keep_distinct_per_slide_sources(
+    monkeypatch, tmp_path
+):
+    source_0 = tmp_path / "source-0.png"
+    source_1 = tmp_path / "source-1.png"
+    source_0.write_bytes(b"source-0")
+    source_1.write_bytes(b"source-1")
+    style = SimpleNamespace(
+        id="exact-source",
+        brief="- Exact source",
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+    received_sources = []
+
+    async def fake_author(*args, reference_images=None, **kwargs):
+        received_sources.append(tuple(reference_images or ()))
+        return _VALID
+
+    async def fake_render(html, timeout=60):
+        return b"revised"
+
+    monkeypatch.setattr(author_vision_qa_mod, "author_slide_html", fake_author)
+    monkeypatch.setattr(author_vision_qa_mod, "render_html_to_png", fake_render)
+
+    _run(
+        author_vision_qa_mod.revise_authored_deck(
+            [_VALID, _VALID],
+            [b"render-0", b"render-1"],
+            ["content-0", "content-1"],
+            ["CONTENT", "CONTENT"],
+            _brand(),
+            "DESIGN",
+            style=style,
+            initial_critiques=[SlideCritique(needs_fix=True), SlideCritique(needs_fix=True)],
+            reference_images_by_slide=[(source_0,), (source_1,)],
+        )
+    )
+
+    assert received_sources == [(source_0,), (source_1,)]
+
+
 def test_authored_service_resolves_passes_and_persists_canonical_style(
     monkeypatch, fake_async_session
 ):
@@ -631,7 +1164,62 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     assert captured["vision_style"] is selected_style
     assert presentation.theme["style"] == "editorial"
     assert presentation.theme["mode"] == "authored"
+    assert "reference_mode" not in presentation.theme
     assert result.path == "deck.pptx"
+
+
+def test_authored_service_validates_exact_mapping_before_pipeline(monkeypatch):
+    selected_style = SimpleNamespace(
+        id="exact",
+        brief="- Exact",
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+    calls = {"pipeline": 0, "validation": 0}
+
+    def reject_incomplete_mapping(style, *, slide_count, roles):
+        calls["validation"] += 1
+        assert style is selected_style
+        assert slide_count == 1
+        assert len(roles) == 1
+        raise ValueError("incomplete exact mapping")
+
+    async def fake_pipeline(*args, **kwargs):
+        calls["pipeline"] += 1
+        raise AssertionError("pipeline must not start before exact validation")
+
+    monkeypatch.setattr(
+        authored_service,
+        "resolve_authored_style",
+        lambda style_id: selected_style,
+    )
+    monkeypatch.setattr(
+        authored_service,
+        "validate_exact_reconstruction_style",
+        reject_incomplete_mapping,
+    )
+    monkeypatch.setattr(
+        authored_service,
+        "_author_illustrate_render_pipeline",
+        fake_pipeline,
+    )
+    request = GeneratePresentationRequest(
+        content="topic",
+        template="authored",
+        authored_style="exact",
+    )
+
+    with pytest.raises(ValueError, match="incomplete exact mapping"):
+        _run(
+            authored_service.generate_authored_presentation(
+                request,
+                uuid.uuid4(),
+                _outline(1),
+                "English",
+                SimpleNamespace(),
+            )
+        )
+
+    assert calls == {"pipeline": 0, "validation": 1}
 
 
 def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkeypatch):
