@@ -211,13 +211,13 @@ def test_author_deck_keeps_two_attempt_limit_for_permanent_failures(monkeypatch)
 
 
 def test_default_design_system_is_byte_for_byte_canonical_output():
-    expected_sha256 = "ab70a7bf5ecb84e9895c08071e297cbf4acd7b3b7edfdcc2ff9a9849b1727e4c"
+    expected_sha256 = "f1f002685b7875c1c34a910a2e5345c32f40e2767f1a91112fcea8174bf41ef4"
     without_style = build_design_system(_brand())
     canonical_default = build_design_system(
         _brand(), SimpleNamespace(id="default", brief="this must not replace legacy")
     )
 
-    assert len(without_style) == 3493
+    assert len(without_style) == 4222
     assert hashlib.sha256(without_style.encode()).hexdigest() == expected_sha256
     assert canonical_default == without_style
 
@@ -231,6 +231,11 @@ def test_design_system_prohibits_external_fonts_and_documents_local_fallbacks():
     assert '"IBM Plex Mono" -> "Consolas"' in design_system
     assert "Load from Google Fonts" not in design_system
     assert "fonts are embedded in the PPTX" in design_system
+    assert "never ::before/::after pseudo-elements" in design_system
+    assert "Do not use inline SVG for simple decoration" in design_system
+    assert "text-shadow, filter, backdrop-filter, or mix-blend-mode" in design_system
+    assert "no asymmetric or percentage radii" in design_system
+    assert "linear-gradient backgrounds, layered box-shadow, and raster images" in design_system
 
 
 def test_custom_design_system_injects_brief_without_weakening_common_rules():

@@ -23,6 +23,7 @@ import {
   usePresentationData,
   usePresentationNavigation,
   useAutoSave,
+  useHybridExportWarmup,
 } from "../hooks";
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
@@ -64,10 +65,19 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       ? presentationData?.slides?.[slidesLength - 1]?.index
       : undefined;
 
+  const scheduleHybridExportWarmup = useHybridExportWarmup({
+    presentationId: presentation_id,
+    title: presentationData?.title,
+    presentationData,
+    isAuthoredDeck,
+    isStreaming,
+  });
+
   // Auto-save functionality
   const { isSaving, saveFailed } = useAutoSave({
     debounceMs: 2000,
     enabled: !!presentationData && !isStreaming,
+    onSaveSuccess: scheduleHybridExportWarmup,
   });
 
   // Custom hooks

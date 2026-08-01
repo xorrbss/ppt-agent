@@ -7,6 +7,10 @@ from fastapi import FastAPI
 from api.v1.auth.bootstrap import bootstrap_database_admin
 from migrations import migrate_database_on_startup
 from services.database import create_db_and_tables, dispose_engines
+from services.export_retention_service import (
+    start_export_retention_sweeper,
+    stop_export_retention_sweeper,
+)
 from services.presentation_generation_job_service import (
     start_presentation_generation_dispatcher,
     stop_presentation_generation_dispatcher,
@@ -64,6 +68,7 @@ async def app_lifespan(_: FastAPI):
     await create_db_and_tables()
     template_v2_dispatcher_started = False
     template_v2_cleanup_started = False
+    export_retention_started = False
     presentation_generation_dispatcher_started = False
     try:
         try:
@@ -72,6 +77,8 @@ async def app_lifespan(_: FastAPI):
             logger.exception("Template V2 operational health check failed")
         await start_template_v2_private_source_cleanup()
         template_v2_cleanup_started = True
+        await start_export_retention_sweeper()
+        export_retention_started = True
         await start_presentation_generation_dispatcher()
         presentation_generation_dispatcher_started = True
         if (
@@ -94,8 +101,12 @@ async def app_lifespan(_: FastAPI):
                     await stop_presentation_generation_dispatcher()
             finally:
                 try:
-                    if template_v2_cleanup_started:
-                        await stop_template_v2_private_source_cleanup()
+                    if export_retention_started:
+                        await stop_export_retention_sweeper()
                 finally:
-                    # Release all database connections to prevent stale/leaked pools.
-                    await dispose_engines()
+                    try:
+                        if template_v2_cleanup_started:
+                            await stop_template_v2_private_source_cleanup()
+                    finally:
+                        # Release all database connections to prevent stale/leaked pools.
+                        await dispose_engines()

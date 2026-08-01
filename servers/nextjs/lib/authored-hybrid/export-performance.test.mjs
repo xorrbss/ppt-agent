@@ -4,7 +4,15 @@ import test from "node:test";
 import {
   mapWithConcurrency,
   parseBoundedPositiveInt,
+  resolveHybridExportConcurrencyDefault,
 } from "./export-performance.ts";
+
+test("resolveHybridExportConcurrencyDefault reserves two cores within bounds", () => {
+  assert.equal(resolveHybridExportConcurrencyDefault(2), 4);
+  assert.equal(resolveHybridExportConcurrencyDefault(4), 4);
+  assert.equal(resolveHybridExportConcurrencyDefault(8), 6);
+  assert.equal(resolveHybridExportConcurrencyDefault(16), 8);
+});
 
 test("parseBoundedPositiveInt applies fallback and bounds", () => {
   assert.equal(parseBoundedPositiveInt(undefined, 4, 1, 8), 4);

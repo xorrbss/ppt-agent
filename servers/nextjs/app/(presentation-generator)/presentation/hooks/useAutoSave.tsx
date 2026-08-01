@@ -11,11 +11,13 @@ const AUTOSAVE_ERROR_TOAST_ID = 'presentation-autosave-failed';
 interface UseAutoSaveOptions {
     debounceMs?: number;
     enabled?: boolean;
+    onSaveSuccess?: (savedData: unknown) => void;
 }
 
 export const useAutoSave = ({
     debounceMs = 1000,
     enabled = true,
+    onSaveSuccess,
 }: UseAutoSaveOptions = {}) => {
 
     const dispatch = useDispatch();
@@ -27,8 +29,13 @@ export const useAutoSave = ({
     const lastSavedDataRef = useRef<string>('');
     const pendingDataRef = useRef<unknown>(null);
     const isSavingRef = useRef<boolean>(false);
+    const onSaveSuccessRef = useRef(onSaveSuccess);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [saveFailed, setSaveFailed] = useState<boolean>(false);
+
+    useEffect(() => {
+        onSaveSuccessRef.current = onSaveSuccess;
+    }, [onSaveSuccess]);
 
     const saveNow = useCallback(async () => {
         const data = pendingDataRef.current;
@@ -51,6 +58,7 @@ export const useAutoSave = ({
             lastSavedDataRef.current = currentDataString;
             setSaveFailed(false);
             notify.dismiss(AUTOSAVE_ERROR_TOAST_ID);
+            onSaveSuccessRef.current?.(data);
         } catch (error) {
             console.error('Auto-save failed:', error);
             setSaveFailed(true);

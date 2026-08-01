@@ -1,3 +1,11 @@
+import { cpus } from "node:os";
+
+export function resolveHybridExportConcurrencyDefault(
+  cpuCount: number = cpus().length
+): number {
+  return Math.min(8, Math.max(4, cpuCount - 2));
+}
+
 export function parseBoundedPositiveInt(
   value: string | undefined,
   fallback: number,

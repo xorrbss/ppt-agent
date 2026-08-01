@@ -176,6 +176,14 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   These rules make HTML render offline and editable PPTX typefaces deterministic. They do NOT
   mean that fonts are embedded in the PPTX; font embedding is outside this authoring workflow.
 {style_brief}
+- PPTX-NATIVE SAFETY (keeps exported objects editable):
+  - Draw decorative ticks, underlines, badges, and divider lines as real <span>/<div> DOM
+    elements, never ::before/::after pseudo-elements; painted pseudo-elements rasterize that subtree.
+  - Do not use inline SVG for simple decoration; use HTML+CSS. Reserve SVG only for charts or
+    diagrams that cannot be expressed in HTML.
+  - Do not use text-shadow, filter, backdrop-filter, or mix-blend-mode.
+  - Use only one uniform pixel value for border-radius; no asymmetric or percentage radii.
+  - Freely allowed: linear-gradient backgrounds, layered box-shadow, and raster images; the converter maps these natively.
 - FORBIDDEN: default round bullet dots; identical heavy-shadow boxed cards on every item;
   clutter; lorem/placeholder; text overflowing/clipping the frame; low contrast; off-palette hues.
 - FIT IS CRITICAL — the frame is EXACTLY 1280x720 and CLIPS (overflow:hidden): EVERY element
@@ -208,7 +216,8 @@ _DEFAULT_STYLE_BRIEF = """\
 - Consistent footer on content slides: small muted slide marker left + a small wordmark right.
 - Strong, confident type hierarchy; make the single most important element dominant.
 - Allowed (vary per slide): full-bleed/partial colour-blocked zones, asymmetric grids, a left
-  sidebar, oversized numerals, thin rules, subtle tints of the primary, inline-SVG icons/charts."""
+  sidebar, oversized numerals, thin rules, subtle tints of the primary, and SVG only for essential
+  charts/diagrams that cannot be expressed in HTML."""
 
 
 @dataclass
