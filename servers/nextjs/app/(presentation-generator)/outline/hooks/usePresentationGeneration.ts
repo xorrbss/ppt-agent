@@ -84,6 +84,11 @@ export const usePresentationGeneration = (
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
   );
+  // A stored retryable-error task whose same-key re-POST resumes the server-side
+  // slide checkpoints. Surfaced so the page can offer an explicit resume instead
+  // of silently dropping the interrupted job after a reload.
+  const [resumableTask, setResumableTask] =
+    useState<DurableGenerationTask | null>(null);
   const generationRunRef = useRef(0);
   const retrySubmitRef = useRef<(() => void) | null>(null);
   const activeDurableTaskRef = useRef<string | null>(null);
@@ -196,17 +201,28 @@ export const usePresentationGeneration = (
   );
 
   const reportDurableGenerationFailure = useCallback(
-    (error: any, mode: DurableGenerationTask["mode"]) => {
+    (error: any, task: DurableGenerationTask) => {
       console.warn(
-        mode === "authored"
+        task.mode === "authored"
           ? "Authored presentation generation did not complete."
           : "Structured-template presentation generation did not complete.",
         error
       );
       if (isRetryablePresentationGenerationError(error)) {
+        // Only authored jobs resume from server-side checkpoints on a same-key
+        // re-POST, so only they can truthfully promise saved progress.
+        const progress =
+          task.mode === "authored" ? task.lastProgress : undefined;
+        const resumeNote =
+          progress &&
+          Number.isFinite(progress.completed_slides) &&
+          Number.isFinite(progress.total_slides) &&
+          progress.total_slides > 0
+            ? ` 슬라이드 ${progress.completed_slides}/${progress.total_slides}까지 저장되었습니다. 다시 시도하면 이어서 생성됩니다.`
+            : "";
         notify.error(
           "생성이 일시 중단되었습니다",
-          getRetryablePresentationGenerationMessage(error),
+          `${getRetryablePresentationGenerationMessage(error)}${resumeNote}`,
           {
             duration: 12_000,
             action: {
@@ -360,7 +376,7 @@ export const usePresentationGeneration = (
           clearDurableGenerationTask(durableTask.idempotencyKey);
           startingDurableTaskRef.current = null;
         }
-        reportDurableGenerationFailure(error, durableTask.mode);
+        reportDurableGenerationFailure(error, durableTask);
       } finally {
         if (isActiveRun()) {
           activeDurableTaskRef.current = null;
@@ -378,6 +394,11 @@ export const usePresentationGeneration = (
   useEffect(() => {
     const reconcile = () => {
       const durableTask = findDurableGenerationTask(presentationId);
+      setResumableTask(
+        durableTask?.taskId && durableTask.status === "retryable-error"
+          ? durableTask
+          : null
+      );
       if (!durableTask?.taskId || durableTask.status === "retryable-error") {
         // Fast Refresh may preserve React state after invalidating its poller. If
         // there is no durable task to resume, never leave that stale overlay up.
@@ -418,6 +439,13 @@ export const usePresentationGeneration = (
       const estSeconds = authoredVisionQa
         ? Math.min(AUTHORED_TIMEOUT_MS / 1000, base * 2)
         : Math.min(600, base);
+      // "Auto" is a sentinel, not a real language: send null so the backend applies
+      // its language-aware fallback instead of authoring with a literal "Auto".
+      const reduxAuthoredRequest = {
+        language: language && language !== LanguageType.Auto ? language : null,
+        visionQa: authoredVisionQa,
+        authoredStyle,
+      };
       let durableTask =
         startingDurableTaskRef.current?.sourcePresentationId === presentationId
           ? startingDurableTaskRef.current
@@ -429,15 +457,19 @@ export const usePresentationGeneration = (
       // A "starting" record can survive a lost POST response. Reusing it here
       // resubmits with the same idempotency key instead of creating a second job.
       if (!durableTask || durableTask.mode !== "authored") {
-        durableTask = saveDurableGenerationTask(
-          createDurableGenerationTask({
+        durableTask = saveDurableGenerationTask({
+          ...createDurableGenerationTask({
             mode: "authored",
             sourcePresentationId: presentationId,
             timeoutMs: AUTHORED_TIMEOUT_MS,
             progressDurationSeconds: estSeconds,
-          })
-        );
+          }),
+          authoredRequest: reduxAuthoredRequest,
+        });
       }
+      // A resume must resend the captured settings verbatim: a reload wipes the
+      // Redux copies, and the server 409s a same-key re-POST whose payload drifts.
+      const authoredRequest = durableTask.authoredRequest ?? reduxAuthoredRequest;
       startingDurableTaskRef.current = durableTask;
       submittingDurableTaskRef.current = durableTask.idempotencyKey;
       setLoadingState(getDurableLoadingState(durableTask));
@@ -445,11 +477,9 @@ export const usePresentationGeneration = (
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           content: slides_markdown[0].slice(0, 200),
           slides_markdown,
-          // "Auto" is a sentinel, not a real language: send null so the backend applies
-          // its language-aware fallback instead of authoring with a literal "Auto".
-          language: language && language !== LanguageType.Auto ? language : null,
-          vision_qa: authoredVisionQa,
-          authored_style: authoredStyle,
+          language: authoredRequest.language,
+          vision_qa: authoredRequest.visionQa,
+          authored_style: authoredRequest.authoredStyle,
           idempotency_key: durableTask.idempotencyKey,
         });
         const taskId = started?.id;
@@ -471,7 +501,7 @@ export const usePresentationGeneration = (
           clearDurableGenerationTask(durableTask.idempotencyKey);
           startingDurableTaskRef.current = null;
         }
-        reportDurableGenerationFailure(error, "authored");
+        reportDurableGenerationFailure(error, durableTask);
       } finally {
         if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
@@ -561,7 +591,7 @@ export const usePresentationGeneration = (
           clearDurableGenerationTask(durableTask.idempotencyKey);
           startingDurableTaskRef.current = null;
         }
-        reportDurableGenerationFailure(error, "template-v2");
+        reportDurableGenerationFailure(error, durableTask);
       } finally {
         if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
       }
@@ -594,7 +624,7 @@ export const usePresentationGeneration = (
     });
 
     setLoadingState({
-      message: "Generating presentation data...",
+      message: "발표자료 생성 중…",
       isLoading: true,
       showProgress: true,
       duration: 30,
@@ -791,5 +821,5 @@ export const usePresentationGeneration = (
     );
   }, [presentationId]);
 
-  return { loadingState, handleSubmit, cancelGeneration };
+  return { loadingState, handleSubmit, cancelGeneration, resumableTask };
 };

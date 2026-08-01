@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from pathvalidate import sanitize_filename
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.generate_presentation_request import GeneratePresentationRequest
@@ -38,6 +39,7 @@ from services.authored_checkpoint_service import (
     atomic_write,
     begin_publish,
     cleanup_checkpoint_artifacts,
+    clear_checkpoint_html,
     complete_publish,
     complete_stage,
     fail_stage,
@@ -222,6 +224,29 @@ def _authored_export_path(
     stem = f"{base}-{presentation_id.hex[:8]}"
     extension = "pdf" if request.export_as == "pdf" else "pptx"
     return os.path.join(get_exports_directory(), f"{stem}.{extension}")
+
+
+async def _cleanup_published_checkpoints(job_id: uuid.UUID) -> None:
+    """Best-effort post-publish cleanup: render artifacts and stored slide HTML.
+
+    Failures never unwind an already-published deck; leftovers remain for the
+    TTL sweeper (files) or job CASCADE delete (rows)."""
+    try:
+        cleanup_checkpoint_artifacts(job_id)
+    except OSError:
+        LOGGER.warning(
+            "Unable to clean authored checkpoint artifacts for job %s",
+            job_id,
+            exc_info=True,
+        )
+    try:
+        await clear_checkpoint_html(job_id)
+    except SQLAlchemyError:
+        LOGGER.warning(
+            "Unable to clear authored checkpoint HTML for job %s",
+            job_id,
+            exc_info=True,
+        )
 
 
 async def _complete_stage_after_external_success(**kwargs):
@@ -583,11 +608,7 @@ async def _generate_authored_presentation(
             ),
         )
 
-    existing = (
-        await sql_session.get(PresentationModel, presentation_id)
-        if hasattr(sql_session, "get")
-        else None
-    )
+    existing = await sql_session.get(PresentationModel, presentation_id)
     if (
         existing is not None
         and existing.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
@@ -596,14 +617,7 @@ async def _generate_authored_presentation(
         )
     ):
         if generation_job is not None:
-            try:
-                cleanup_checkpoint_artifacts(generation_job.id)
-            except OSError:
-                LOGGER.warning(
-                    "Unable to clean recovered authored checkpoint artifacts for job %s",
-                    generation_job.id,
-                    exc_info=True,
-                )
+            await _cleanup_published_checkpoints(generation_job.id)
         return PresentationPathAndEditPath(
             presentation_id=presentation_id,
             path=existing_export,
@@ -814,14 +828,7 @@ async def _generate_authored_presentation(
         raise error from exc
     persist_elapsed = time.monotonic() - persist_started
     if generation_job is not None:
-        try:
-            cleanup_checkpoint_artifacts(generation_job.id)
-        except OSError:
-            LOGGER.warning(
-                "Unable to clean authored checkpoint artifacts for job %s",
-                generation_job.id,
-                exc_info=True,
-            )
+        await _cleanup_published_checkpoints(generation_job.id)
     LOGGER.info(
         "[authored] done id=%s slides=%d provider=%s model=%s vision_qa=%s "
         "vqa_fixed=%d blank_renders=%d total=%.1fs author=%.1fs "

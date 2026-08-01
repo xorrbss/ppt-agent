@@ -22,7 +22,7 @@
 - `failed`: 정제된 오류가 저장되었고 재개 가능 여부가 결정됨
 - `skipped`: 해당 style에서 illustration처럼 수행할 작업이 없음
 
-단계는 순서대로만 전이한다. 각 단계의 산출물은 job별 private checkpoint 디렉터리에 원자적 임시 파일 교체로 쓴 다음, 현재 job의 `attempt_token`과 일치할 때만 DB 상태를 commit한다. author/illustrate HTML, render PNG 경로는 DB에 통제된 상대 경로만 저장한다. `persist=completed`는 해당 slide의 HTML과 private render artifact가 hash 검증을 통과해 재개에 사용할 수 있다는 뜻이다. 공개 image 디렉터리 복사와 Presentation/Slide row 생성은 모든 slide가 persisted된 후의 final publish gate에서만 수행한다.
+단계는 순서대로만 전이한다. render PNG는 job별 private checkpoint 디렉터리에 원자적 임시 파일 교체로 쓰고, DB에는 통제된 상대 경로와 sha256만 저장한다. author/illustrate HTML은 checkpoint row의 Text column에 직접 저장하며, 성공 publish 후 두 HTML column을 null로 정리해 DB 증가를 막는다(단계 상태·타임스탬프는 이력으로 유지). 모든 단계 상태는 현재 job의 `attempt_token`과 일치할 때만 commit한다. `persist=completed`는 해당 slide의 HTML과 private render artifact가 hash 검증을 통과해 재개에 사용할 수 있다는 뜻이다. 공개 image 디렉터리 복사와 Presentation/Slide row 생성은 모든 slide가 persisted된 후의 final publish gate에서만 수행한다.
 
 job에는 `resume_allowed`, `last_error`, `completed_slides`, `total_slides`를 additive하게 추가한다. 기존 job은 기본값 `false/null/0/null`로 읽힌다. 진행 집계의 authoritative source는 checkpoint row이며, job counters는 polling 비용을 줄이기 위한 단조 증가 projection이다.
 
@@ -84,7 +84,7 @@ checkpoint artifact는 `app_data`의 공개 URL namespace가 아닌 job별 내�
 
 최종 publish는 job의 현재 `attempt_token`을 조건으로 `running -> staging` 전이시키는 DB fence를 먼저 잡는다. presentation/slides, async task `completed`, job `published` 전이는 같은 transaction에서 commit하며, token이 바뀌었거나 취소된 stale worker는 이 경계를 통과할 수 없다. process 종료로 transaction이 끊기면 DB row는 publish되지 않고, 만료 lease 재조정 후 기존 slide checkpoint에서 다시 시작한다.
 
-재시도 불가 실패와 user cancel은 DB의 정제 오류/단계 상태는 보존하되 artifact는 보존기간 후 정리한다. 초기 구현은 즉시 성공 정리를 제공하고, cancel·비정상 orphan·failed artifact의 TTL sweeper는 후속 운영 작업으로 분리한다.
+재시도 불가 실패와 user cancel은 DB의 정제 오류/단계 상태는 보존하되 artifact는 보존기간 후 정리한다. 성공 publish는 즉시 정리하며, cancel·비정상 orphan·failed artifact는 구현된 TTL sweeper(`sweep_expired_checkpoint_artifacts`, dispatcher 주기 실행)가 정리한다(13절 참고).
 
 불완전 presentation row는 discovery/share 대상이 되면 안 된다. export를 먼저 임시 파일로 완성하고, 최종 image 파일이 모두 존재하는 것을 확인한 뒤에만 presentation/slides transaction을 commit한다. 최종 task `completed`와 job `published`는 그 이후다.
 

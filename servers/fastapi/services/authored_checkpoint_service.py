@@ -22,6 +22,7 @@ from services.authored_generation_observability import (
 )
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
+from utils.get_env import get_app_data_directory_env
 
 
 STAGES = ("author", "illustrate", "render", "persist")
@@ -224,7 +225,15 @@ def is_retryable_exception(error: BaseException) -> bool:
 
 def checkpoint_root() -> Path:
     configured = os.getenv("AUTHORED_CHECKPOINT_DIRECTORY", "").strip()
-    root = Path(configured) if configured else Path(tempfile.gettempdir()) / "presenton-authored-checkpoints"
+    if configured:
+        root = Path(configured)
+    else:
+        # System temp is wiped by container/OS cleaning; resumable artifacts
+        # must survive under app data (same fallback chain as db_utils).
+        root = Path(
+            get_app_data_directory_env()
+            or os.path.join(tempfile.gettempdir(), "presenton")
+        ) / "authored-checkpoints"
     root.mkdir(parents=True, exist_ok=True)
     return root.resolve()
 
@@ -272,6 +281,22 @@ def cleanup_checkpoint_artifacts(job_id: uuid.UUID) -> None:
     directory = _safe_job_directory(job_id)
     if directory.is_dir():
         shutil.rmtree(directory)
+
+
+async def clear_checkpoint_html(job_id: uuid.UUID) -> None:
+    """Null multi-MB slide HTML once the deck is published.
+
+    Statuses and timestamps stay for history; resume never reads HTML after
+    publication (reconciliation uses the published row and the export file).
+    """
+
+    async with async_session_maker() as session:
+        await session.execute(
+            update(AuthoredSlideCheckpoint)
+            .where(AuthoredSlideCheckpoint.job_id == job_id)
+            .values(author_html=None, illustrated_html=None)
+        )
+        await session.commit()
 
 
 def _safe_job_directory(job_id: uuid.UUID) -> Path:

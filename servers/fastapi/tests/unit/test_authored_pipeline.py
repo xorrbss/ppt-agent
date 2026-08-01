@@ -557,7 +557,9 @@ def test_vision_qa_cache_reuses_identical_successful_review(monkeypatch):
     assert second[0].needs_fix is False
 
 
-def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypatch):
+def test_authored_service_resolves_passes_and_persists_canonical_style(
+    monkeypatch, fake_async_session
+):
     selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
     captured = {}
 
@@ -578,19 +580,6 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
         captured["vision_design_system"] = design_system
         captured["vision_style"] = style
         return htmls, pngs, []
-
-    class FakeSession:
-        def __init__(self):
-            self.added = []
-
-        def add(self, value):
-            self.added.append(value)
-
-        def add_all(self, values):
-            self.added.extend(values)
-
-        async def commit(self):
-            return None
 
     monkeypatch.setattr(
         authored_service,
@@ -618,7 +607,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(monkeypat
     )
     monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
 
-    session = FakeSession()
+    session = fake_async_session
     request = GeneratePresentationRequest(
         content="topic",
         template="authored",

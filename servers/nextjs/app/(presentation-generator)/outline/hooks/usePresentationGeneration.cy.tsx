@@ -263,6 +263,8 @@ describe("usePresentationGeneration async generation", () => {
         const message = (stub as any).getCall(0).args[1];
         expect(message).to.include("47번 슬라이드");
         expect(message).to.include("렌더링 단계");
+        expect(message).to.include("슬라이드 46/90까지 저장되었습니다");
+        expect(message).to.include("다시 시도하면 이어서 생성됩니다");
       });
 
     cy.window().then((window) => {

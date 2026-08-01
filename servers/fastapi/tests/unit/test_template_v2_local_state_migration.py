@@ -156,7 +156,7 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
+                == migrations.REVISION_AUTHORED_RESUME_COUNT
             )
             assert set(inspector.get_table_names()) >= {
                 "presentation_generation_jobs",
@@ -244,7 +244,7 @@ def test_complete_schema_inference_recognizes_local_state_head(tmp_path):
                     set(inspector.get_table_names()),
                     "ignored-future-head",
                 )
-                == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
+                == migrations.REVISION_AUTHORED_RESUME_COUNT
             )
     finally:
         engine.dispose()

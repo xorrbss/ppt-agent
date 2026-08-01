@@ -373,6 +373,64 @@ def test_failed_stage_is_durable_sanitized_and_injected_only_once(
     asyncio.run(scenario())
 
 
+def test_checkpoint_root_defaults_under_app_data_directory(tmp_path, monkeypatch):
+    monkeypatch.delenv("AUTHORED_CHECKPOINT_DIRECTORY", raising=False)
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
+
+    root = checkpoints.checkpoint_root()
+
+    assert root == (tmp_path / "app-data" / "authored-checkpoints").resolve()
+    assert root.is_dir()
+
+
+def test_clear_checkpoint_html_keeps_stage_history_and_render_pointer(
+    tmp_path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        try:
+            _, job = await _running_authored_job(maker)
+            await checkpoints.initialize_checkpoints(
+                job_id=job.id,
+                attempt_token="attempt-a",
+                roles=["title"],
+            )
+            for stage, kwargs in (
+                ("author", {"html": "<section>authored</section>"}),
+                ("illustrate", {"html": "<section>illustrated</section>"}),
+                ("render", {"png": b"png-0"}),
+                ("persist", {}),
+            ):
+                await checkpoints.start_stage(
+                    job_id=job.id,
+                    slide_index=0,
+                    stage=stage,
+                    attempt_token="attempt-a",
+                )
+                await checkpoints.complete_stage(
+                    job_id=job.id,
+                    slide_index=0,
+                    stage=stage,
+                    attempt_token="attempt-a",
+                    **kwargs,
+                )
+
+            await checkpoints.clear_checkpoint_html(job.id)
+
+            cleared = await checkpoints.get_checkpoint(job.id, 0)
+            assert cleared.author_html is None
+            assert cleared.illustrated_html is None
+            assert cleared.author_status == "completed"
+            assert cleared.persist_status == "completed"
+            assert cleared.author_completed_at is not None
+            assert cleared.render_path is not None
+            assert checkpoints.read_valid_render(cleared) == b"png-0"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_attempt_token_fences_stale_checkpoint_writes(tmp_path, monkeypatch):
     async def scenario():
         engine, maker = await _checkpoint_database(tmp_path, monkeypatch)

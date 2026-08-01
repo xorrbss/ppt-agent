@@ -100,7 +100,8 @@ def test_checkpoint_migration_preserves_old_jobs_and_enforces_slide_state(
                 text(
                     """
                     SELECT total_slides, completed_slides, current_stage,
-                           last_error, resume_allowed, authored_outline
+                           last_error, resume_allowed, authored_outline,
+                           resume_count
                     FROM presentation_generation_jobs
                     WHERE id = :job_id
                     """
@@ -114,6 +115,7 @@ def test_checkpoint_migration_preserves_old_jobs_and_enforces_slide_state(
                 "last_error": None,
                 "resume_allowed": 0,
                 "authored_outline": None,
+                "resume_count": 0,
             }
 
         with engine.begin() as connection:
@@ -179,7 +181,10 @@ def test_checkpoint_migration_preserves_old_jobs_and_enforces_slide_state(
             inspector = inspect(connection)
             assert "authored_slide_checkpoints" not in inspector.get_table_names()
             assert not (
-                migrations.AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS
+                (
+                    migrations.AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS
+                    | migrations.AUTHORED_RESUME_COUNT_COLUMNS
+                )
                 & _column_names(inspector, "presentation_generation_jobs")
             )
             assert connection.execute(
@@ -208,13 +213,21 @@ def test_schema_inference_distinguishes_previous_complete_and_partial_heads(
                 inspector, tables, "future-head"
             ) == migrations.REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
 
-        command.upgrade(config, "head")
+        command.upgrade(config, migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS)
         with engine.connect() as connection:
             inspector = inspect(connection)
             tables = set(inspector.get_table_names())
             assert migrations._infer_revision_from_schema(
                 inspector, tables, "future-head"
             ) == migrations.REVISION_AUTHORED_SLIDE_CHECKPOINTS
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            tables = set(inspector.get_table_names())
+            assert migrations._infer_revision_from_schema(
+                inspector, tables, "future-head"
+            ) == migrations.REVISION_AUTHORED_RESUME_COUNT
 
         with engine.begin() as connection:
             connection.execute(text("DROP TABLE authored_slide_checkpoints"))

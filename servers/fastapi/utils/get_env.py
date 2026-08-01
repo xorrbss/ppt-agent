@@ -262,6 +262,10 @@ def get_enable_mock_endpoints_env():
     return os.getenv("ENABLE_MOCK_ENDPOINTS")
 
 
+def get_authored_resume_max_attempts_env():
+    return os.getenv("AUTHORED_RESUME_MAX_ATTEMPTS")
+
+
 def is_parallel_image_generation_enabled() -> bool:
     """Whether image provider requests may run concurrently.
 

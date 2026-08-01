@@ -129,6 +129,17 @@ class PresentationGenerationJob(SQLModel, table=True):
         ),
         default=False,
     )
+    # Counts only explicit failed->queued resumes; process-restart re-claims
+    # increment attempt_number (fencing) and must stay free recoveries.
+    resume_count: int = Field(
+        sa_column=Column(
+            Integer,
+            nullable=False,
+            default=0,
+            server_default=text("0"),
+        ),
+        default=0,
+    )
     lease_expires_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),

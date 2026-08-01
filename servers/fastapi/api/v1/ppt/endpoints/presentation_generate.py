@@ -104,7 +104,10 @@ from templates.v2.strategies import (
 )
 from utils.asset_directory_utils import get_images_directory
 from utils.export_utils import export_presentation
-from utils.get_env import get_next_internal_base_url
+from utils.get_env import (
+    get_authored_resume_max_attempts_env,
+    get_next_internal_base_url,
+)
 from utils.get_layout_by_name import get_layout_by_name
 from utils.owner_context import get_current_owner_id
 from utils.llm_calls.compose_slides import compose_and_project
@@ -129,6 +132,8 @@ from utils.document_path_security import validate_document_paths
 from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
 
 logger = logging.getLogger(__name__)
+
+AUTHORED_RESUME_MAX_ATTEMPTS_DEFAULT = 5
 
 
 PRESENTATION_GENERATE_ROUTER = APIRouter(
@@ -1238,6 +1243,14 @@ async def run_generation_job(
             )
 
 
+def _authored_resume_max_attempts() -> int:
+    try:
+        value = int((get_authored_resume_max_attempts_env() or "").strip())
+    except ValueError:
+        value = 0
+    return value if value > 0 else AUTHORED_RESUME_MAX_ATTEMPTS_DEFAULT
+
+
 async def _resume_failed_authored_job(
     job: PresentationGenerationJob,
     status: AsyncPresentationGenerationTaskModel,
@@ -1254,6 +1267,21 @@ async def _resume_failed_authored_job(
         )
     ):
         return False
+    # Only explicit failed->queued resumes count toward the cap. Process
+    # restarts re-claim via attempt_number (fencing) and stay free recoveries.
+    if job.resume_count >= _authored_resume_max_attempts():
+        # A deterministic bug classified as retryable must not loop forever
+        # through same-key re-POSTs. The job stays terminal failed.
+        await sql_session.execute(
+            update(PresentationGenerationJob)
+            .where(
+                PresentationGenerationJob.id == job.id,
+                PresentationGenerationJob.state == "failed",
+            )
+            .values(resume_allowed=False)
+        )
+        await sql_session.commit()
+        raise HTTPException(status_code=409, detail="resume_attempts_exhausted")
     result = await sql_session.execute(
         update(PresentationGenerationJob)
         .where(
@@ -1264,6 +1292,7 @@ async def _resume_failed_authored_job(
         .values(
             state="queued",
             resume_allowed=False,
+            resume_count=PresentationGenerationJob.resume_count + 1,
             attempt_token=None,
             lease_expires_at=None,
             heartbeat_at=None,

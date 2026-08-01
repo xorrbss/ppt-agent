@@ -1,6 +1,7 @@
 import {
   ApiError,
   apiErrorFromPayload,
+  getApiErrorDisplayMessage,
   getRetryablePresentationGenerationMessage,
   isRetryablePresentationGenerationError,
 } from "./api-error-handler";
@@ -74,5 +75,43 @@ describe("retryable presentation generation errors", () => {
     expect(message).to.include("렌더링 단계");
     expect(message).not.to.include("PlaywrightError");
     expect(message).not.to.include("internal-fingerprint");
+  });
+});
+
+describe("idempotency conflict errors", () => {
+  it("maps a payload-conflict 409 to Korean guidance with its request ID", () => {
+    const error = new ApiError("idempotency_key_payload_conflict", {
+      status: 409,
+      code: "idempotency_key_payload_conflict",
+      requestId: "conflict-409",
+    });
+
+    expect(isRetryablePresentationGenerationError(error)).to.equal(false);
+    expect(getApiErrorDisplayMessage(error, "Generation failed")).to.equal(
+      "이전에 중단된 생성과 요청 내용이 달라 이어서 생성할 수 없습니다. 생성을 다시 실행하면 새 작업으로 처음부터 생성됩니다. (Request ID: conflict-409)",
+    );
+  });
+
+  it("maps an incomplete idempotency record 409 to Korean guidance", () => {
+    const error = new ApiError("idempotency_record_incomplete", {
+      status: 409,
+      code: "idempotency_record_incomplete",
+    });
+
+    expect(getApiErrorDisplayMessage(error, "Generation failed")).to.equal(
+      "이전 생성 기록이 불완전하여 이어서 생성할 수 없습니다. 생성을 다시 실행하면 새 작업으로 처음부터 생성됩니다.",
+    );
+  });
+
+  it("maps an exhausted resume-attempts 409 to Korean guidance", () => {
+    const error = new ApiError("resume_attempts_exhausted", {
+      status: 409,
+      code: "resume_attempts_exhausted",
+    });
+
+    expect(isRetryablePresentationGenerationError(error)).to.equal(false);
+    expect(getApiErrorDisplayMessage(error, "Generation failed")).to.equal(
+      "재개 시도 횟수를 초과하여 이어서 생성할 수 없습니다. 생성을 다시 실행하면 새 작업으로 처음부터 생성됩니다.",
+    );
   });
 });

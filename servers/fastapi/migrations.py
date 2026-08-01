@@ -49,6 +49,7 @@ REVISION_PROVIDER_SETTINGS = "d0a2b4c6e8f1"
 REVISION_PRIMARY_ADMIN = "e1b3c5d7f9a2"
 REVISION_CHAT_TEMPLATE_SCOPE_REPAIR = "f2c4d6e8a0b1"
 REVISION_AUTHORED_SLIDE_CHECKPOINTS = "a3c5e7f9b1d2"
+REVISION_AUTHORED_RESUME_COUNT = "b4d6f8a1c3e5"
 DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -78,9 +79,11 @@ AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "resume_allowed",
     "authored_outline",
 }
+AUTHORED_RESUME_COUNT_COLUMNS = {"resume_count"}
 PRESENTATION_GENERATION_JOB_COLUMNS = (
     DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS
     | AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS
+    | AUTHORED_RESUME_COUNT_COLUMNS
 )
 AUTHORED_SLIDE_CHECKPOINT_COLUMNS = {
     "id",
@@ -245,6 +248,23 @@ def _validate_authored_checkpoint_schema(
             "Authored slide checkpoint job foreign key must cascade deletes"
         )
     return True
+
+
+def _authored_resume_count_applied(
+    job_columns: set[str], has_authored_checkpoints: bool
+) -> bool:
+    """Return whether the resume-count revision is present.
+
+    The column is additive on top of the checkpoint revision; its presence
+    without that base marks a partially applied or hand-edited schema.
+    """
+
+    has_resume_count = bool(AUTHORED_RESUME_COUNT_COLUMNS & job_columns)
+    if has_resume_count and not has_authored_checkpoints:
+        raise RuntimeError(
+            "Authored resume count column exists without checkpoint schema"
+        )
+    return has_resume_count
 
 
 async def migrate_database_on_startup() -> None:
@@ -576,6 +596,9 @@ def _infer_revision_from_schema(
                 job_columns,
                 validate_constraints=True,
             )
+            has_authored_resume_count = _authored_resume_count_applied(
+                job_columns, has_authored_checkpoints
+            )
             if "user" not in tables:
                 if has_authored_checkpoints:
                     raise RuntimeError(
@@ -612,6 +635,8 @@ def _infer_revision_from_schema(
                         "chat-scope prerequisites"
                     )
                 return REVISION_PRIMARY_ADMIN
+            if has_authored_resume_count:
+                return REVISION_AUTHORED_RESUME_COUNT
             return (
                 REVISION_AUTHORED_SLIDE_CHECKPOINTS
                 if has_authored_checkpoints
@@ -714,6 +739,10 @@ def _infer_revision_from_schema(
             job_columns,
             validate_constraints=False,
         )
+        if _authored_resume_count_applied(
+            job_columns, has_authored_checkpoints
+        ):
+            return REVISION_AUTHORED_RESUME_COUNT
         return (
             REVISION_AUTHORED_SLIDE_CHECKPOINTS
             if has_authored_checkpoints

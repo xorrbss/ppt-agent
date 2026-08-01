@@ -71,6 +71,18 @@ const TEMPLATE_V2_ERROR_MESSAGES: Record<string, string> = {
     "생성된 콘텐츠가 구조화 템플릿 스키마와 일치하지 않습니다.",
 };
 
+// Non-retryable 409s from re-POSTing a durable generation with a stored
+// idempotency key. The client clears the stored task on these errors, so the
+// next generate click starts a fresh job with a new key.
+const IDEMPOTENCY_ERROR_MESSAGES: Record<string, string> = {
+  idempotency_key_payload_conflict:
+    "이전에 중단된 생성과 요청 내용이 달라 이어서 생성할 수 없습니다. 생성을 다시 실행하면 새 작업으로 처음부터 생성됩니다.",
+  idempotency_record_incomplete:
+    "이전 생성 기록이 불완전하여 이어서 생성할 수 없습니다. 생성을 다시 실행하면 새 작업으로 처음부터 생성됩니다.",
+  resume_attempts_exhausted:
+    "재개 시도 횟수를 초과하여 이어서 생성할 수 없습니다. 생성을 다시 실행하면 새 작업으로 처음부터 생성됩니다.",
+};
+
 const GENERATION_STAGE_LABELS: Record<string, string> = {
   author: "작성",
   illustrate: "이미지 생성",
@@ -134,7 +146,9 @@ export function getApiErrorDisplayMessage(
             : fallbackMessage
         );
   const message =
-    (apiError.code && TEMPLATE_V2_ERROR_MESSAGES[apiError.code]) ||
+    (apiError.code &&
+      (TEMPLATE_V2_ERROR_MESSAGES[apiError.code] ||
+        IDEMPOTENCY_ERROR_MESSAGES[apiError.code])) ||
     apiError.message ||
     fallbackMessage;
   const failureContext = getGenerationFailureContext(apiError);

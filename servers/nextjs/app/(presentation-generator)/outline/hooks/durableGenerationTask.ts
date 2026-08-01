@@ -25,6 +25,14 @@ export interface DurableGenerationTask {
   progressDurationSeconds: number;
   lastProgress?: GenerationProgress;
   lastFailure?: GenerationFailure;
+  // Compose-time authored settings captured at POST time. A reload wipes their
+  // Redux copies, and the server 409s a same-key re-POST whose payload drifts
+  // (idempotency_key_payload_conflict), so a resume must resend these exactly.
+  authoredRequest?: {
+    language: string | null;
+    visionQa: boolean;
+    authoredStyle: string;
+  };
 }
 
 const STORAGE_KEY = "presenton:durable-generation-tasks:v1";
@@ -113,6 +121,24 @@ export const findDurableGenerationTask = (
   );
   return tasks.sort((left, right) => right.createdAt - left.createdAt)[0] || null;
 };
+
+// Newest interrupted-but-resumable task regardless of presentation id. Lets
+// /outline rehydrate its outline shell after a reload rebuilds Redux from
+// scratch (the route carries no presentation id).
+export const findResumableGenerationTask =
+  (): DurableGenerationTask | null => {
+    const tasks = Object.values(readStore()).filter(
+      (task) =>
+        task?.version === 1 &&
+        typeof task.idempotencyKey === "string" &&
+        typeof task.taskId === "string" &&
+        typeof task.sourcePresentationId === "string" &&
+        task.status === "retryable-error"
+    );
+    return (
+      tasks.sort((left, right) => right.createdAt - left.createdAt)[0] || null
+    );
+  };
 
 export const clearDurableGenerationTask = (idempotencyKey: string) => {
   const store = readStore();

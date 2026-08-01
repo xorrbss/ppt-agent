@@ -4,7 +4,9 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RootState } from "@/store/store";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { setPresentationId } from "@/store/slices/presentationGeneration";
+import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import OutlineContent from "./OutlineContent";
@@ -15,10 +17,12 @@ import { TABS } from "../types/index";
 import { useOutlineStreaming } from "../hooks/useOutlineStreaming";
 import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
-import TemplateSelection from "./TemplateSelection";
+import TemplateSelection, { AUTHORED_TEMPLATE_ID } from "./TemplateSelection";
+import { findResumableGenerationTask } from "../hooks/durableGenerationTask";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { resolveTemplateSelection } from "@/app/presentation-templates/select";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
 const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   const { presentation_id, outlines } = useSelector(
@@ -40,15 +44,17 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   const generationTemplate = auto ? autoTemplate : selectedTemplate;
 
   // Custom hooks
+  const dispatch = useDispatch();
   const router = useRouter();
   const streamState = useOutlineStreaming(presentation_id);
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
-  const { loadingState, handleSubmit, cancelGeneration } = usePresentationGeneration(
-    presentation_id,
-    outlines,
-    generationTemplate,
-    setActiveTab
-  );
+  const { loadingState, handleSubmit, cancelGeneration, resumableTask } =
+    usePresentationGeneration(
+      presentation_id,
+      outlines,
+      generationTemplate,
+      setActiveTab
+    );
   const slideProgress = useMemo(() => {
     const progress = loadingState.progress;
     if (
@@ -101,6 +107,27 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     handleSubmit,
   ]);
 
+  // A reload rebuilds Redux from scratch (nothing is persisted and /outline
+  // carries no id), which would strand an interrupted-but-resumable generation
+  // behind the EmptyStateView. Rehydrate the outline shell from the stored
+  // durable task; storage is client-only, so read it in an effect to keep the
+  // server and hydration renders identical.
+  useEffect(() => {
+    if (presentation_id) return;
+    const storedTask = findResumableGenerationTask();
+    if (!storedTask?.sourcePresentationId) return;
+    // The auto-bridge submit is only for an outline stream run by a fresh
+    // compose flow; a rehydrated interrupted task must be resumed explicitly
+    // through the banner, never auto-fired.
+    autoSubmittedRef.current = true;
+    // Resumable tasks are always authored-mode (see usePresentationGeneration),
+    // so restore that selection or handleSubmit would route to the default
+    // template and start a fresh, fully re-billed generation.
+    setSelectedTemplate(AUTHORED_TEMPLATE_ID);
+    dispatch(setPptGenUploadState({ selectedTemplate: AUTHORED_TEMPLATE_ID }));
+    dispatch(setPresentationId(storedTask.sourcePresentationId));
+  }, [presentation_id, dispatch]);
+
   if (!presentation_id) {
     return <EmptyStateView />;
   }
@@ -148,6 +175,18 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
 
   };
 
+  // Interrupted-but-resumable generation: a same-key re-submit resumes the
+  // server-side slide checkpoints, so the banner reuses handleSubmit as-is.
+  const resumeProgress = resumableTask?.lastProgress;
+  const resumeBannerText = resumableTask
+    ? resumeProgress &&
+      Number.isFinite(resumeProgress.completed_slides) &&
+      Number.isFinite(resumeProgress.total_slides) &&
+      resumeProgress.total_slides > 0
+      ? `이전 생성이 슬라이드 ${resumeProgress.completed_slides}/${resumeProgress.total_slides}에서 중단되었습니다. 이어서 생성할 수 있습니다.`
+      : "이전 생성이 중단되었습니다. 이어서 생성할 수 있습니다."
+    : null;
+
 
   return (
     <div className=" font-syne  pb-9">
@@ -187,6 +226,23 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
                 </TabsList>
               </div>
             </div>
+
+            {resumeBannerText && !loadingState.isLoading && (
+              <div
+                data-cy="resume-generation-banner"
+                className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#EDEEEF] bg-[#F4F3FF] px-5 py-3"
+              >
+                <p className="text-sm font-medium text-[#2D2D2D]">
+                  {resumeBannerText}
+                </p>
+                <Button
+                  onClick={() => void handleSubmit()}
+                  className="h-9 rounded-full bg-[#7E3AF2] px-5 text-xs font-medium text-white shadow-none hover:bg-[#7E3AF2] hover:opacity-90"
+                >
+                  이어서 생성
+                </Button>
+              </div>
+            )}
 
             <div className="w-full mx-auto">
               <TabsContent value={TABS.OUTLINE} className="mt-0">
