@@ -29,6 +29,10 @@ export const useAutoSave = ({
     const lastSavedDataRef = useRef<string>('');
     const pendingDataRef = useRef<unknown>(null);
     const isSavingRef = useRef<boolean>(false);
+    const saveRequestedRef = useRef<boolean>(false);
+    const hasBaselineRef = useRef<boolean>(false);
+    const baselinePresentationIdRef = useRef<string | null>(null);
+    const wasStreamingRef = useRef<boolean>(false);
     const onSaveSuccessRef = useRef(onSaveSuccess);
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [saveFailed, setSaveFailed] = useState<boolean>(false);
@@ -39,7 +43,11 @@ export const useAutoSave = ({
 
     const saveNow = useCallback(async () => {
         const data = pendingDataRef.current;
-        if (!data || isSavingRef.current) return;
+        if (!data) return;
+        if (isSavingRef.current) {
+            saveRequestedRef.current = true;
+            return;
+        }
 
         const currentDataString = JSON.stringify(data);
 
@@ -77,6 +85,14 @@ export const useAutoSave = ({
         } finally {
             isSavingRef.current = false;
             setIsSaving(false);
+
+            if (saveRequestedRef.current) {
+                saveRequestedRef.current = false;
+                const latestData = pendingDataRef.current;
+                if (latestData && JSON.stringify(latestData) !== currentDataString) {
+                    void saveNow();
+                }
+            }
         }
     }, []);
 
@@ -91,13 +107,51 @@ export const useAutoSave = ({
 
         // Set new timeout
         saveTimeoutRef.current = setTimeout(() => {
+            saveTimeoutRef.current = null;
             void saveNow();
         }, debounceMs);
     }, [debounceMs, saveNow]);
 
     // Effect to trigger auto-save when presentation data changes
     useEffect(() => {
-        if (!enabled || !presentationData || isStreaming || isLoading || isLayoutLoading ) return;
+        if (!presentationData) {
+            hasBaselineRef.current = false;
+            baselinePresentationIdRef.current = null;
+            lastSavedDataRef.current = '';
+            pendingDataRef.current = null;
+            wasStreamingRef.current = false;
+            return;
+        }
+
+        const currentDataString = JSON.stringify(presentationData);
+        const presentationId = presentationData.id ?? null;
+
+        // Streaming data is already persisted by the generation API. Keep it as
+        // the saved baseline instead of PATCHing the whole deck again when the
+        // presentation view becomes ready.
+        if (isStreaming) {
+            hasBaselineRef.current = true;
+            baselinePresentationIdRef.current = presentationId;
+            lastSavedDataRef.current = currentDataString;
+            pendingDataRef.current = null;
+            wasStreamingRef.current = true;
+            return;
+        }
+
+        if (!enabled || isLoading || isLayoutLoading) return;
+
+        const presentationChanged =
+            baselinePresentationIdRef.current !== presentationId;
+        if (!hasBaselineRef.current || presentationChanged || wasStreamingRef.current) {
+            hasBaselineRef.current = true;
+            baselinePresentationIdRef.current = presentationId;
+            lastSavedDataRef.current = currentDataString;
+            pendingDataRef.current = null;
+            wasStreamingRef.current = false;
+            setSaveFailed(false);
+            notify.dismiss(AUTOSAVE_ERROR_TOAST_ID);
+            return;
+        }
 
         dispatch(addToHistory({
             slides: presentationData.slides,

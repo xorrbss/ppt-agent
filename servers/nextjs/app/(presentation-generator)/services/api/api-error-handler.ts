@@ -58,6 +58,16 @@ export class ApiError extends Error {
   }
 }
 
+export const AUTH_SESSION_EXPIRED_EVENT = "presenton:auth-session-expired";
+
+export const isUnauthorizedApiError = (error: unknown): error is ApiError =>
+  error instanceof ApiError && error.status === 401;
+
+const signalExpiredAuthSession = (status: number) => {
+  if (status !== 401 || typeof window === "undefined") return;
+  window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+};
+
 const TEMPLATE_V2_ERROR_MESSAGES: Record<string, string> = {
   template_v2_revision_invalid:
     "선택한 템플릿 리비전이 유효하지 않습니다. 템플릿을 다시 선택해 주세요.",
@@ -258,6 +268,10 @@ export class ApiResponseHandler {
       }
     }
 
+    // Let the application shell replace the stale authenticated page with the
+    // login screen. Callers still receive ApiError so their pending work stops.
+    signalExpiredAuthSession(response.status);
+
     // Handle error responses
     let errorMessage = defaultErrorMessage;
     
@@ -320,6 +334,8 @@ export class ApiResponseHandler {
       if (response.ok) {
         return { success: true };
       }
+
+      signalExpiredAuthSession(response.status);
 
       // Handle error responses
       let errorMessage = defaultErrorMessage;

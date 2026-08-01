@@ -786,9 +786,17 @@ test("Chrome preserves computed text box geometry, alignment provenance, and lin
     .flex{position:absolute;left:500px;top:80px;width:260px;height:100px;
       display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
       row-gap:9px;column-gap:13px;font:16px/22px Arial;text-align:center;white-space:nowrap}
+    .flex-badge{position:absolute;left:820px;top:80px;width:44px;height:44px;
+      display:flex;align-items:center;justify-content:center;border:1px solid #2457d6;
+      border-radius:50%;font:700 16px/20px Arial;white-space:nowrap}
+    .grid-badge{position:absolute;left:900px;top:80px;width:44px;height:44px;
+      display:grid;place-items:center;border:1px solid #2457d6;
+      border-radius:50%;font:700 16px/20px Arial;white-space:nowrap}
   </style></head><body>
     <div class="outer"><p class="contract">Alpha <strong>bold words</strong> plus enough words to wrap in this narrow content box.<br>Hard line.</p></div>
     <div class="flex">Centered flex label</div>
+    <div class="flex-badge">01</div>
+    <div class="grid-badge">02</div>
   </body></html>`;
   const slide = await extractAuthoredSlideDom(html, {
     chromeExecutable,
@@ -796,7 +804,9 @@ test("Chrome preserves computed text box geometry, alignment provenance, and lin
   });
   const contract = textElement(slide, "Alpha");
   const flex = textElement(slide, "Centered flex label");
-  assert.ok(contract && flex);
+  const flexBadge = textElement(slide, "01");
+  const gridBadge = textElement(slide, "02");
+  assert.ok(contract && flex && flexBadge && gridBadge);
 
   assert.equal(contract.text.style.horizontalAlignment, "right");
   assert.equal(contract.text.style.lineHeight.points, 20.25);
@@ -859,6 +869,13 @@ test("Chrome preserves computed text box geometry, alignment provenance, and lin
   assert.equal(flex.text.layout?.textAlignSource, "self");
   assert.equal(flex.text.layout?.lineCount, 1);
   assert.equal(flex.text.layout?.singleLine, true);
+
+  assert.equal(flexBadge.text.style.horizontalAlignment, "center");
+  assert.equal(flexBadge.text.style.verticalAlignment, "middle");
+  assert.equal(flexBadge.text.layout?.textAlignSource, "inherited");
+  assert.equal(gridBadge.text.style.horizontalAlignment, "center");
+  assert.equal(gridBadge.text.style.verticalAlignment, "middle");
+  assert.equal(gridBadge.text.layout?.textAlignSource, "inherited");
 });
 
 test("pretty-printed inline HTML does not create phantom PowerPoint lines", async (t) => {

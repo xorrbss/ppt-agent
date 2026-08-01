@@ -141,7 +141,7 @@ describe("useHybridExportWarmup", () => {
     }).as("warmHybridExport");
   });
 
-  it("warms an authored deck exactly once when streaming and its initial save complete", () => {
+  it("warms an authored deck exactly once when streaming completes without resaving the baseline", () => {
     cy.clock();
     cy.stub(PresentationGenerationApi, "updatePresentationContent")
       .resolves({})
@@ -161,8 +161,8 @@ describe("useHybridExportWarmup", () => {
         });
       });
     cy.tick(2_000);
-    cy.get("@savePresentation").should("have.been.calledOnce");
-    cy.get("[data-cy=successful-saves]").should("have.text", "1");
+    cy.get("@savePresentation").should("not.have.been.called");
+    cy.get("[data-cy=successful-saves]").should("have.text", "0");
     cy.tick(20_000);
     cy.get("@warmHybridExport.all").should("have.length", 1);
   });
@@ -174,7 +174,7 @@ describe("useHybridExportWarmup", () => {
     cy.get("@warmHybridExport.all").should("have.length", 0);
   });
 
-  it("does not warm an existing deck for its initial auto-save", () => {
+  it("does not autosave or warm an existing deck when it is first loaded", () => {
     cy.clock();
     cy.stub(PresentationGenerationApi, "updatePresentationContent")
       .resolves({})
@@ -183,8 +183,8 @@ describe("useHybridExportWarmup", () => {
     cy.contains("button", "Load presentation").click();
 
     cy.tick(2_000);
-    cy.get("@savePresentation").should("have.been.calledOnce");
-    cy.get("[data-cy=successful-saves]").should("have.text", "1");
+    cy.get("@savePresentation").should("not.have.been.called");
+    cy.get("[data-cy=successful-saves]").should("have.text", "0");
     cy.tick(20_000);
     cy.get("@warmHybridExport.all").should("have.length", 0);
   });
@@ -233,6 +233,40 @@ describe("useHybridExportWarmup", () => {
     cy.tick(1);
     cy.wait("@warmHybridExport");
     cy.get("@warmHybridExport.all").should("have.length", 1);
+  });
+
+  it("saves a newer edit queued while another save is in flight", () => {
+    cy.clock();
+    let resolveFirstSave: ((value: unknown) => void) | undefined;
+    cy.stub(PresentationGenerationApi, "updatePresentationContent")
+      .onFirstCall()
+      .callsFake(
+        () =>
+          new Cypress.Promise((resolve) => {
+            resolveFirstSave = resolve;
+          })
+      )
+      .onSecondCall()
+      .resolves({})
+      .as("savePresentation");
+    mountIntegratedHarness(false);
+    cy.tick(0);
+
+    cy.contains("button", "Edit presentation").click();
+    cy.tick(2_000);
+    cy.get("@savePresentation").should("have.been.calledOnce");
+
+    cy.contains("button", "Edit presentation").click();
+    cy.tick(2_000);
+    cy.get("@savePresentation").should("have.been.calledOnce");
+    cy.then(() => resolveFirstSave?.({}));
+
+    cy.get("@savePresentation").should("have.been.calledTwice");
+    cy.get("@savePresentation").then((savePresentation) => {
+      expect(savePresentation.getCall(1).args[0].title).to.equal(
+        "Edited Edited Quarterly results.pptx"
+      );
+    });
   });
 
   it("quietly ignores a failed background warmup", () => {

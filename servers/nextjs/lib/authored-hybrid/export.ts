@@ -65,7 +65,7 @@ const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // spent the remaining slides simply keep their fidelity (image) render.
 const HYBRID_DECK_BUDGET_MS = 8 * 60_000;
 const HYBRID_CACHE_VERSION =
-  "authored-hybrid-v5-powerpoint-font-layout-verified-collection";
+  "authored-hybrid-v6-windows-profile-cleanup-race";
 // The collector adds a bounded network step ahead of each browser pass, so
 // the per-pass ceiling is higher than the pre-collection 20s.
 const HYBRID_BROWSER_PASS_TIMEOUT_MS = 45_000;
