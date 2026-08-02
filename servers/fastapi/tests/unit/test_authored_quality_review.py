@@ -236,9 +236,9 @@ def test_existing_authored_deck_repairs_only_flagged_slide_and_saves_version(
                 )
             )
 
-            assert "<html><body>fixed cover" in live_slides[0].html_content
-            assert "data-presenton-page-number" in live_slides[0].html_content
-            assert ">01</div>" in live_slides[0].html_content
+            assert live_slides[0].html_content == (
+                "<html><body>fixed cover</body></html>"
+            )
             assert live_slides[1].html_content == (
                 "<html><body>old detail</body></html>"
             )

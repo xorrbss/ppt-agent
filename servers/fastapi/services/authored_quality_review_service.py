@@ -41,7 +41,6 @@ from services.authored_exact_source_snapshot import (
 )
 from services.authored_review_asset_store import publish_reviewed_png
 from services.database import async_session_maker
-from utils.authored_page_number import normalize_authored_page_number
 from utils.authored_styles import (
     AuthoredExactReconstructionUnavailableError,
     resolve_authored_style,
@@ -477,21 +476,8 @@ async def _run_authored_quality_review_unlocked(
         _saved_role(target, plan.roles[position])
         for position, target in zip(positions, targets)
     ]
-    stored_htmls = [str(target.html_content) for target in targets]
+    htmls = [str(target.html_content) for target in targets]
     exact_reconstruction = plan_reference_mode == EXACT_RECONSTRUCTION
-    htmls = (
-        stored_htmls
-        if exact_reconstruction
-        else [
-            normalize_authored_page_number(
-                html,
-                slide_index=position,
-                primary=plan.brand.primary,
-                reference_mode=plan_reference_mode,
-            )
-            for html, position in zip(stored_htmls, positions)
-        ]
-    )
     if exact_reconstruction:
         planned_references = getattr(plan, "reference_images", None)
         if planned_references is None or len(planned_references) != len(slides):
@@ -630,27 +616,6 @@ async def _run_authored_quality_review_unlocked(
         total_slides=len(slides),
         **revise_kwargs,
     )
-    if not exact_reconstruction:
-        renumbered_local_indices: list[int] = []
-        for local_index, position in enumerate(positions):
-            normalized_html = normalize_authored_page_number(
-                revised_htmls[local_index],
-                slide_index=position,
-                primary=plan.brand.primary,
-                reference_mode=plan_reference_mode,
-            )
-            if normalized_html != revised_htmls[local_index]:
-                revised_htmls[local_index] = normalized_html
-                renumbered_local_indices.append(local_index)
-        if renumbered_local_indices:
-            rerendered = await asyncio.gather(
-                *(
-                    render_html_to_png(revised_htmls[local_index])
-                    for local_index in renumbered_local_indices
-                )
-            )
-            for local_index, png in zip(renumbered_local_indices, rerendered):
-                revised_pngs[local_index] = png
     revision_ms = (time.perf_counter() - revision_started_at) * 1000
     _log_review_event(
         reference_mode=plan_reference_mode,
@@ -852,7 +817,7 @@ async def _run_authored_quality_review_unlocked(
                 update(SlideModel)
                 .where(
                     SlideModel.id == slide.id,
-                    SlideModel.html_content == stored_htmls[local_index],
+                    SlideModel.html_content == htmls[local_index],
                     SlideModel.content == slide.content,
                     SlideModel.properties == slide.properties,
                 )
