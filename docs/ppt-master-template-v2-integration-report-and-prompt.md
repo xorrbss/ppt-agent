@@ -62,6 +62,9 @@ PPT Master의 핵심 가치는 화면 스타일을 복사하는 데 있지 않�
 
 ## 2026-08-02 구현·검증 상태
 
+- Data Journalism 후보의 네이티브 프레임에 Stanford HAI, IEA, NVIDIA, Alphabet, OpenAI, Anthropic 공식 데이터를 채운 20장 제안 덱을 `docs/artifacts/ppt-master-data-journalism/ai-capital-2026-data-journalism.pptx`로 추가했다. 3개 래스터 이미지와 로고·직접 인용은 제거했고, 슬라이드별 발표자 노트에 URL·확인일·계산 정의를 기록했다.
+- 제안 덱은 마스터 1개, 레이아웃 11개와 편집 가능한 도형을 유지한다. 20/20 렌더 및 몽타주 육안 검수, 템플릿 프레임 매핑과 충실도 검사를 통과했고 `ppt/media` 항목은 0개다.
+- 이 산출물은 운영 검토용이며 권리 승인이나 신뢰된 HMAC attestation을 대신하지 않는다. 따라서 정적 카탈로그와 신규 UI의 공개 상태는 계속 `blocked`다.
 - 신규 템플릿 선택 화면과 대시보드는 Template V2 목록만 표시하며 AI 저작 모드는 별도 섹션으로 유지한다.
 - Redux 신규 기본값은 `null`이고, 공개 목록에 정확히 하나의 `is_default`가 있을 때만 자동 선택한다. 기존 저장 선택값은 덮어쓰지 않는다.
 - PPTX import 확인 시 원본을 template ID/revision 범위의 내구 저장소로 승격하고 digest·크기·source slide part를 기록한다.
