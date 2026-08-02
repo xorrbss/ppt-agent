@@ -46,3 +46,16 @@
 7. 목록 API와 TemplateSelection 화면에서 노출·선택·생성을 확인한다.
 
 권리 승인이나 운영 attestation을 임의로 만들지 않는 한 1~4단계는 자동 완료할 수 없다. 콘텐츠 제작, 템플릿 충실도 검사와 전 슬라이드 렌더 검수는 완료했다.
+
+## 승인 진행 상태
+
+정확한 공개 대상은 기존 upstream 샘플이 아니라 외부 미디어를 제거한 SHA-256
+`5ea1bd7f13ebaa324be3b60167bb259c7049d13c33865c0abaa2306a17d67e37`의
+20장 덱이다. 독립 검토자가 해시, 라이선스 연결, 신규 작성 콘텐츠에 대한 권한을
+검증할 수 있도록 다음 요청 패킷을 준비했다.
+
+- `servers/fastapi/templates/v2/evidence/ppt-master-data-journalism/approval-request.v1.md`
+- `servers/fastapi/templates/v2/evidence/ppt-master-data-journalism/review-packet.v1.json`
+
+요청 패킷은 승인 증거 자체가 아니며, 독립 승인자 식별자와 배포 환경 HMAC 서명이
+없는 상태에서는 catalog를 `published`로 전환하지 않는다.
