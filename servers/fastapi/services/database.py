@@ -31,6 +31,17 @@ from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
 from models.sql.webhook_subscription import WebhookSubscription
+from models.sql.workspace import (
+    WorkspaceActionReceipt,
+    WorkspaceArtifact,
+    WorkspaceAsset,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceMessageAttachment,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
 from models.sql.user import User
 from models.sql.access_token import AccessToken
 from models.sql.provider_settings import ProviderSettings
@@ -75,6 +86,15 @@ _STRICT_OWNER_MODELS = (
     AsyncTaskModel,
     AsyncPresentationGenerationTaskModel,
     WebhookSubscription,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceAsset,
+    WorkspaceMessageAttachment,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+    WorkspaceActionReceipt,
+    WorkspaceArtifact,
 )
 
 
@@ -142,6 +162,15 @@ async def create_db_and_tables():
                     sync_conn,
                     tables=[
                         PresentationModel.__table__,
+                        WorkspaceConversation.__table__,
+                        WorkspaceMessage.__table__,
+                        WorkspaceAsset.__table__,
+                        WorkspaceMessageAttachment.__table__,
+                        WorkspaceOperation.__table__,
+                        WorkspaceOperationEvent.__table__,
+                        WorkspaceOutbox.__table__,
+                        WorkspaceActionReceipt.__table__,
+                        WorkspaceArtifact.__table__,
                         AuthoredExactProvenance.__table__,
                         PresentationGenerationJob.__table__,
                         AuthoredSlideCheckpoint.__table__,

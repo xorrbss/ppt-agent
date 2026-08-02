@@ -55,6 +55,9 @@ from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.workspace_legacy_write_gate import (
+    require_legacy_presentation_write_path,
+)
 from utils.asset_directory_utils import get_images_directory
 from utils.dict_utils import deep_update
 from utils.export_utils import export_presentation
@@ -131,6 +134,7 @@ async def prepare_presentation(
     title: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    require_legacy_presentation_write_path()
     if not outlines:
         raise HTTPException(status_code=400, detail="Outlines are required")
 
@@ -217,6 +221,7 @@ async def quality_review_authored_presentation(
     only slides with visible problems are re-authored, and the pre-review deck is
     saved to version history before any live slide is replaced.
     """
+    require_legacy_presentation_write_path()
     return await queue_authored_quality_review(
         id, request, background_tasks, sql_session
     )
@@ -241,6 +246,7 @@ async def retemplate_authored_presentation(
     LLM-authored outline remains the authoritative source, and the original
     presentation is never modified.
     """
+    require_legacy_presentation_write_path()
     source = await sql_session.get(PresentationModel, id)
     if not source:
         raise HTTPException(status_code=404, detail="Presentation not found")
@@ -352,6 +358,8 @@ async def stream_presentation(
     regenerate: bool = False,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    # Despite being a legacy GET route, the stream replaces persisted slides.
+    require_legacy_presentation_write_path()
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
@@ -577,6 +585,7 @@ async def update_presentation(
     slides: Annotated[Optional[List[SlideModel]], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    require_legacy_presentation_write_path()
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
@@ -667,6 +676,7 @@ async def edit_presentation_with_new_content(
     data: Annotated[EditPresentationRequest, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    require_legacy_presentation_write_path()
     presentation = await sql_session.get(PresentationModel, data.presentation_id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
@@ -718,6 +728,7 @@ async def derive_presentation_from_existing_one(
     data: Annotated[EditPresentationRequest, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    require_legacy_presentation_write_path()
     presentation = await sql_session.get(PresentationModel, data.presentation_id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")

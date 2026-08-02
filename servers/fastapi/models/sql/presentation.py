@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 import uuid
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Uuid
+from sqlalchemy import BigInteger, CheckConstraint, JSON, Column, DateTime, ForeignKey, String, Uuid, text
 from sqlmodel import Boolean, Field, SQLModel
 
 from models.presentation_outline_model import PresentationOutlineModel
@@ -24,6 +24,9 @@ class PresentationVersion(str, Enum):
 
 class PresentationModel(SQLModel, table=True):
     __tablename__ = "presentations"
+    __table_args__ = (
+        CheckConstraint("revision >= 0", name="ck_presentations_revision_nonnegative"),
+    )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
     owner_id: Optional[uuid.UUID] = Field(
@@ -92,6 +95,17 @@ class PresentationModel(SQLModel, table=True):
             server_default=PRESENTATION_LIFECYCLE_PUBLISHED,
         ),
         default=PRESENTATION_LIFECYCLE_PUBLISHED,
+    )
+    # Publication commit token. Intermediate checkpoints never change this;
+    # the final database pointer commit increments it once using compare-and-swap.
+    revision: int = Field(
+        default=0,
+        sa_column=Column(
+            BigInteger,
+            nullable=False,
+            default=0,
+            server_default=text("0"),
+        ),
     )
     # Read-only public share link. NULL = not shared. When set, the unguessable
     # token serves this deck (only) via GET /presentation/public/{share_token}

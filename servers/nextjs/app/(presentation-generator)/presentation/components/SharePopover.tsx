@@ -8,14 +8,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { notify } from "@/components/ui/sonner";
+import { isChatFirstWorkbenchEnabled } from "@/lib/chat-first-workbench";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 
 const SharePopover = ({
   presentationId,
   disabled,
+  chatFirstEnabled: forceChatFirstEnabled = false,
 }: {
   presentationId: string;
   disabled?: boolean;
+  /** Test/integration seam that can only force the fail-closed state. */
+  chatFirstEnabled?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -23,6 +27,10 @@ const SharePopover = ({
   const [shared, setShared] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const chatFirstEnabled =
+    isChatFirstWorkbenchEnabled() || forceChatFirstEnabled;
+
+  if (chatFirstEnabled) return null;
 
   const shareUrl =
     shared && token && typeof window !== "undefined"
@@ -32,7 +40,8 @@ const SharePopover = ({
   const loadStatus = async () => {
     setLoading(true);
     try {
-      const info = await PresentationGenerationApi.getShareStatus(presentationId);
+      const info =
+        await PresentationGenerationApi.getShareStatus(presentationId);
       setShared(Boolean(info?.shared));
       setToken(info?.share_token ?? null);
     } catch {
@@ -53,13 +62,13 @@ const SharePopover = ({
     try {
       const info = await PresentationGenerationApi.enableShare(
         presentationId,
-        regenerate
+        regenerate,
       );
       setShared(true);
       setToken(info?.share_token ?? null);
       notify.success(
         regenerate ? "링크를 재발급했습니다" : "공유를 켰습니다",
-        regenerate ? "이전 링크는 더 이상 열리지 않습니다." : undefined
+        regenerate ? "이전 링크는 더 이상 열리지 않습니다." : undefined,
       );
     } catch {
       notify.error("공유를 켜지 못했습니다", "다시 시도해 주세요.");
@@ -98,6 +107,7 @@ const SharePopover = ({
       <PopoverTrigger asChild>
         <button
           type="button"
+          data-testid="share-popover-trigger"
           disabled={disabled}
           className="flex items-center gap-1.5 rounded-full border border-[#EDECEC] bg-white px-3.5 py-2 text-sm font-medium text-[#101323] duration-300 hover:border-[#5141e5] hover:text-[#5141e5] disabled:cursor-not-allowed disabled:opacity-50"
         >

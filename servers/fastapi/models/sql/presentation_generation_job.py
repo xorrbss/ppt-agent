@@ -56,6 +56,20 @@ class PresentationGenerationJob(SQLModel, table=True):
     presentation_id: uuid.UUID = Field(
         sa_column=Column(Uuid, nullable=False, unique=True, index=True)
     )
+    workspace_operation_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            Uuid,
+            ForeignKey(
+                "workspace_operations.id",
+                name="fk_presentation_generation_jobs_workspace_operation_id",
+                ondelete="SET NULL",
+            ),
+            nullable=True,
+            unique=True,
+            index=True,
+        ),
+    )
     idempotency_key_hash: Optional[str] = Field(
         default=None,
         sa_column=Column(String(64), nullable=True),

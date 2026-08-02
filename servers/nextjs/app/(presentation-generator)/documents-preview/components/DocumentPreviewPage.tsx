@@ -151,8 +151,11 @@ const DocumentsPreviewPage: React.FC = () => {
         (fileItem: FileItem) => fileItem.file_path
       );
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
+      const presentationId = crypto.randomUUID();
       const createResponse = await PresentationGenerationApi.createPresentation(
         {
+          presentation_id: presentationId,
+          idempotency_key: `presentation-create:${presentationId}`,
           content: config?.prompt ?? "",
           n_slides: config?.slides ? parseInt(config.slides) : null,
           file_paths: documentPaths,

@@ -27,16 +27,19 @@ const router = {
 
 function GenerationHarness({
   selectedTemplate = AUTHORED_TEMPLATE_ID,
-  presentationId = null,
+  presentationId = "outline-shell-test",
+  chatFirstEnabled = false,
 }: {
   selectedTemplate?: string;
   presentationId?: string | null;
+  chatFirstEnabled?: boolean;
 }) {
   const { handleSubmit, loadingState } = usePresentationGeneration(
     presentationId,
     [{ content: "# Selected outline" }],
     selectedTemplate,
-    () => undefined
+    () => undefined,
+    { chatFirstEnabled }
   );
 
   return (
@@ -59,7 +62,8 @@ function GenerationHarness({
 function mountHarness(
   selectedTemplate?: string,
   presentationId?: string | null,
-  generationKey = "initial"
+  generationKey = "initial",
+  chatFirstEnabled = false
 ) {
   return mount(
     <AppRouterContext.Provider value={router as any}>
@@ -68,6 +72,7 @@ function mountHarness(
           key={generationKey}
           selectedTemplate={selectedTemplate}
           presentationId={presentationId}
+          chatFirstEnabled={chatFirstEnabled}
         />
       </Provider>
     </AppRouterContext.Provider>
@@ -96,6 +101,7 @@ describe("usePresentationGeneration async generation", () => {
 
     cy.contains("button", "Generate").click();
     cy.get("@generateAuthored").should("have.been.calledOnceWith", {
+      presentation_id: "outline-shell-test",
       content: "# Selected outline",
       slides_markdown: ["# Selected outline"],
       language: null,
@@ -103,6 +109,283 @@ describe("usePresentationGeneration async generation", () => {
       authored_style: "strategic-navy",
       idempotency_key: Cypress.sinon.match.string,
     });
+  });
+
+  it("opens the staging workspace immediately after chat-first authored admission", () => {
+    const sourcePresentationId = "chat-first-authored-shell";
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync").resolves({
+      id: "workspace-operation-authored",
+      status: "queued",
+    } as any);
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").as("getStatus");
+
+    mountHarness(
+      AUTHORED_TEMPLATE_ID,
+      sourcePresentationId,
+      "chat-first-authored",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      `/presentation?id=${sourcePresentationId}`
+    );
+    cy.get("@getStatus").should("not.have.been.called");
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
+  });
+
+  it("opens the staging workspace immediately after chat-first template-v2 admission", () => {
+    const sourcePresentationId = "chat-first-template-v2-shell";
+    cy.stub(PresentationGenerationApi, "generateTemplateV2Async").resolves({
+      id: "workspace-operation-template-v2",
+      status: "queued",
+    } as any);
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").as("getStatus");
+
+    mountHarness(
+      makeTemplateV2SelectionId("brand-template", 4),
+      sourcePresentationId,
+      "chat-first-template-v2",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      `/presentation?id=${sourcePresentationId}`
+    );
+    cy.get("@getStatus").should("not.have.been.called");
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
+  });
+
+  it("uses async generation and canonical custom template ids in chat-first mode", () => {
+    const sourcePresentationId = "chat-first-standard-shell";
+    cy.stub(PresentationGenerationApi, "generateStandardAsync")
+      .resolves({ id: "workspace-operation-standard", status: "queued" } as any)
+      .as("generateStandard");
+    cy.stub(PresentationGenerationApi, "presentationPrepare").as("prepare");
+
+    mountHarness(
+      "c5f6f44a-9d2e-4eef-a44b-8f6389b43dac",
+      sourcePresentationId,
+      "chat-first-standard",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@generateStandard").should("have.been.calledOnceWith", {
+      presentation_id: sourcePresentationId,
+      content: "# Selected outline",
+      slides_markdown: ["# Selected outline"],
+      language: null,
+      template: "custom-c5f6f44a-9d2e-4eef-a44b-8f6389b43dac",
+      idempotency_key: Cypress.sinon.match.string,
+    });
+    cy.get("@prepare").should("not.have.been.called");
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      `/presentation?id=${sourcePresentationId}`
+    );
+    cy.get('[data-cy="generation-loading"]').should("have.text", "idle");
+  });
+
+  it("opens the chat-first workspace after authored admission fails", () => {
+    const sourcePresentationId = "chat-first-authored-admission-error";
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync").rejects(
+      new ApiError("Generation admission timed out", {
+        status: 503,
+        code: "generation_admission_timeout",
+        workspaceProjected: true,
+      })
+    );
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(
+      AUTHORED_TEMPLATE_ID,
+      sourcePresentationId,
+      "chat-first-authored-admission-error",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      `/presentation?id=${sourcePresentationId}`
+    );
+    cy.get("@notifyError").should("not.have.been.called");
+  });
+
+  it("opens the chat-first workspace after template-v2 admission fails", () => {
+    const sourcePresentationId = "chat-first-template-v2-admission-error";
+    cy.stub(PresentationGenerationApi, "generateTemplateV2Async").rejects(
+      new ApiError("Generation admission was rejected", {
+        status: 422,
+        code: "template_v2_generation_invalid",
+        workspaceProjected: true,
+      })
+    );
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(
+      makeTemplateV2SelectionId("brand-template", 4),
+      sourcePresentationId,
+      "chat-first-template-v2-admission-error",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      `/presentation?id=${sourcePresentationId}`
+    );
+    cy.get("@notifyError").should("not.have.been.called");
+  });
+
+  it("stays put after an ambiguous standard admission and retries with the same key", () => {
+    const sourcePresentationId = "chat-first-standard-admission-error";
+    const generateStandard = cy
+      .stub(PresentationGenerationApi, "generateStandardAsync")
+      .as("generateStandard");
+    generateStandard.onFirstCall().rejects(new TypeError("Failed to fetch"));
+    generateStandard.onSecondCall().resolves({
+      id: "workspace-operation-standard-replayed",
+      status: "queued",
+    } as any);
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(
+      "c5f6f44a-9d2e-4eef-a44b-8f6389b43dac",
+      sourcePresentationId,
+      "chat-first-standard-admission-error",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should("not.have.been.called");
+    cy.get("@notifyError")
+      .should("have.been.calledOnce")
+      .then((notifyError: any) => {
+        const action = notifyError.firstCall.args[2]?.action;
+        expect(action?.label).to.equal("Retry");
+        action?.onClick();
+      });
+
+    cy.get("@generateStandard")
+      .should("have.been.calledTwice")
+      .then((generate: any) => {
+        expect(generate.firstCall.args[0].idempotency_key).to.equal(
+          generate.secondCall.args[0].idempotency_key
+        );
+      });
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      `/presentation?id=${sourcePresentationId}`
+    );
+  });
+
+  it("keeps the inline admission error when chat-first bootstrap is missing", () => {
+    cy.stub(PresentationGenerationApi, "generateStandardAsync").rejects(
+      new ApiError("chat_first_bootstrap_operation_not_found", {
+        status: 409,
+        detail: "chat_first_bootstrap_operation_not_found",
+      })
+    );
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(
+      "c5f6f44a-9d2e-4eef-a44b-8f6389b43dac",
+      "chat-first-missing-bootstrap",
+      "chat-first-missing-bootstrap",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should("not.have.been.called");
+    cy.get("@notifyError").should("have.been.calledOnce");
+  });
+
+  it("clears an unmarked definitive 409 so the next click uses a fresh key", () => {
+    const generateAuthored = cy
+      .stub(PresentationGenerationApi, "generateAuthoredAsync")
+      .as("generateAuthored");
+    generateAuthored.onFirstCall().rejects(
+      new ApiError("idempotency_key_payload_conflict", {
+        status: 409,
+        code: "idempotency_key_payload_conflict",
+      })
+    );
+    generateAuthored.onSecondCall().resolves({
+      id: "workspace-operation-authored-fresh-key",
+      status: "queued",
+    } as any);
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(
+      AUTHORED_TEMPLATE_ID,
+      "chat-first-idempotency-conflict",
+      "chat-first-idempotency-conflict",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should("not.have.been.called");
+    cy.get("@notifyError").should("have.been.calledOnce");
+    cy.contains("button", "Generate").click();
+
+    cy.get("@generateAuthored")
+      .should("have.been.calledTwice")
+      .then((generate: any) => {
+        expect(generate.firstCall.args[0].idempotency_key).not.to.equal(
+          generate.secondCall.args[0].idempotency_key
+        );
+      });
+    cy.get("@replace").should(
+      "have.been.calledOnceWith",
+      "/presentation?id=chat-first-idempotency-conflict"
+    );
+  });
+
+  it("does not open a workspace for an unmarked incomplete idempotency record", () => {
+    cy.stub(PresentationGenerationApi, "generateTemplateV2Async").rejects(
+      new ApiError("idempotency_record_incomplete", {
+        status: 409,
+        code: "idempotency_record_incomplete",
+      })
+    );
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(
+      makeTemplateV2SelectionId("brand-template", 4),
+      "chat-first-incomplete-idempotency",
+      "chat-first-incomplete-idempotency",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should("not.have.been.called");
+    cy.get("@notifyError").should("have.been.calledOnce");
+  });
+
+  it("does not open a workspace for an unmarked 503", () => {
+    cy.stub(PresentationGenerationApi, "generateAuthoredAsync").rejects(
+      new ApiError("Generation admission unavailable", {
+        status: 503,
+        code: "generation_admission_unavailable",
+      })
+    );
+    cy.stub(notify, "error").as("notifyError");
+
+    mountHarness(
+      AUTHORED_TEMPLATE_ID,
+      "chat-first-unmarked-503",
+      "chat-first-unmarked-503",
+      true
+    );
+    cy.contains("button", "Generate").click();
+
+    cy.get("@replace").should("not.have.been.called");
+    cy.get("@notifyError").should("have.been.calledOnce");
   });
 
   it("opens the generated authored presentation and clears loading on completion", () => {

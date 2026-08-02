@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "conversation_id": "conv-demo-0001",
+  "pagination": {
+    "next_message_cursor": "message-position:3",
+    "direction": "forward"
+  },
+  "event_replay": {
+    "high_watermark_cursor": "event-sequence:op-demo-generate-0001:3",
+    "stream_cursor": "event-sequence:op-demo-generate-0001:3"
+  },
+  "top_level_items": [
+    {
+      "kind": "message",
+      "message_id": "msg-demo-0001",
+      "position": 1,
+      "role": "user",
+      "content": "Create a concise quarterly planning deck."
+    },
+    {
+      "kind": "operation_anchor",
+      "message_id": "msg-demo-0002",
+      "position": 2,
+      "role": "assistant",
+      "operation_id": "op-demo-generate-0001"
+    },
+    {
+      "kind": "message",
+      "message_id": "msg-demo-0003",
+      "position": 3,
+      "role": "assistant",
+      "content": "The deck is ready."
+    }
+  ],
+  "operation_card": {
+    "operation_id": "op-demo-generate-0001",
+    "anchor_message_id": "msg-demo-0002",
+    "events": [
+      {"sequence": 1, "type": "queued", "payload": {"status": "queued"}},
+      {"sequence": 2, "type": "progress", "payload": {"percent": 45}},
+      {"sequence": 3, "type": "completed", "payload": {"revision": 4}}
+    ]
+  },
+  "projection_invariants": {
+    "top_level_order": "position_only",
+    "event_projection": "update_anchor_card_only",
+    "message_pagination_and_event_replay_are_independent": true
+  }
+}

@@ -22,6 +22,7 @@ import {
   TEMPLATE_V2_SELECTION_PREFIX,
 } from "@/app/hooks/useStructuredTemplates";
 import {
+  ApiError,
   apiErrorFromPayload,
   getApiErrorDisplayMessage,
   getRetryablePresentationGenerationMessage,
@@ -36,6 +37,7 @@ import {
   subscribeToDurableGenerationTasks,
   updateDurableGenerationTask,
 } from "./durableGenerationTask";
+import { useChatFirstWorkbenchRollout } from "@/lib/use-chat-first-workbench-rollout";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -56,15 +58,47 @@ const AUTHORED_MAX_POLL_ERRORS = 3;
 const PREPARE_RECOVERY_ATTEMPTS = 4;
 const PREPARE_RECOVERY_POLL_MS = 1000;
 
+const isAmbiguousGenerationTransportError = (error: unknown): boolean => {
+  if (error instanceof TypeError) return true;
+  if (
+    typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    (error.name === "AbortError" || error.name === "NetworkError")
+  ) {
+    return true;
+  }
+  if (error instanceof ApiError) return error.status === 0;
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      (error as { status?: unknown }).status === 0
+  );
+};
+
+const isRetryableGenerationStartError = (error: unknown): boolean =>
+  isAmbiguousGenerationTransportError(error) ||
+  isRetryablePresentationGenerationError(error);
+
+const hasRecoverableChatFirstWorkspace = (error: unknown): boolean =>
+  error instanceof ApiError && error.workspaceProjected;
+
 const hasPreparedStructure = (presentation: any): boolean =>
   Array.isArray(presentation?.structure?.slides) &&
   presentation.structure.slides.length > 0;
+
+export const normalizeCustomTemplateId = (templateId: string): string =>
+  templateId.startsWith("custom-") ? templateId : `custom-${templateId}`;
+
+type PresentationGenerationOptions = {
+  chatFirstEnabled?: boolean;
+};
 
 export const usePresentationGeneration = (
   presentationId: string | null,
   outlines: { content: string }[] | null,
   selectedTemplate: TemplateLayoutsWithSettings | string | null,
-  setActiveTab: (tab: string) => void
+  setActiveTab: (tab: string) => void,
+  options: PresentationGenerationOptions = {}
 ) => {
   const dispatch = useDispatch();
   const router = useRouter();
@@ -78,9 +112,23 @@ export const usePresentationGeneration = (
   // The deck language chosen in the upload flow; threaded into the authored request
   // so the backend picks language-aware fonts (e.g. Noto Sans KR) instead of falling
   // back to its non-Korean default.
-  const language = useSelector(
-    (s: RootState) => s.pptGenUpload.config?.language ?? null
+  const generationConfig = useSelector(
+    (s: RootState) => s.pptGenUpload.config
   );
+  const language = generationConfig?.language ?? null;
+  const hasRolloutOverride = typeof options.chatFirstEnabled === "boolean";
+  const chatFirstRollout = useChatFirstWorkbenchRollout(
+    hasRolloutOverride ? false : undefined
+  );
+  // The explicit option is retained for isolated hook tests. Product callers
+  // always use the authenticated shared runtime decision.
+  const rolloutMode = hasRolloutOverride
+    ? options.chatFirstEnabled
+      ? "chat"
+      : "legacy"
+    : chatFirstRollout.mode;
+  const chatFirstEnabled = rolloutMode === "chat";
+  const generationEnabled = rolloutMode === "chat" || rolloutMode === "legacy";
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
   );
@@ -97,11 +145,13 @@ export const usePresentationGeneration = (
   // settles; both POSTs must still carry the exact same idempotency key.
   const startingDurableTaskRef = useRef<DurableGenerationTask | null>(null);
   const submittingDurableTaskRef = useRef<string | null>(null);
+  const standardIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(
     () => () => {
       generationRunRef.current += 1;
       activeDurableTaskRef.current = null;
+      standardIdempotencyKeyRef.current = null;
     },
     []
   );
@@ -146,6 +196,36 @@ export const usePresentationGeneration = (
     element.style.removeProperty("--graph-8");
     element.style.removeProperty("--graph-9");
   }, []);
+
+  const openChatFirstWorkspace = useCallback(
+    (idempotencyKey?: string) => {
+      if (idempotencyKey) clearDurableGenerationTask(idempotencyKey);
+      startingDurableTaskRef.current = null;
+      submittingDurableTaskRef.current = null;
+      standardIdempotencyKeyRef.current = null;
+      activeDurableTaskRef.current = null;
+      setLoadingState(DEFAULT_LOADING_STATE);
+      dispatch(clearPresentationData());
+      clearTheme();
+      router.replace(`/presentation?id=${presentationId}`);
+    },
+    [clearTheme, dispatch, presentationId, router]
+  );
+
+  const openRecoverableChatFirstWorkspace = useCallback(
+    (error: unknown, idempotencyKey?: string): boolean => {
+      if (!chatFirstEnabled || !hasRecoverableChatFirstWorkspace(error)) {
+        return false;
+      }
+      // The bootstrap endpoint has already durably attached the conversation,
+      // first user message, settings, assets, and operation to this staging
+      // presentation. Admission errors do not currently echo those IDs, so the
+      // presentation ID is the stable recovery key for opening the timeline.
+      openChatFirstWorkspace(idempotencyKey);
+      return true;
+    },
+    [chatFirstEnabled, openChatFirstWorkspace]
+  );
 
   const getDurableLoadingState = useCallback(
     (task: DurableGenerationTask): LoadingState => ({
@@ -208,7 +288,7 @@ export const usePresentationGeneration = (
           : "Structured-template presentation generation did not complete.",
         error
       );
-      if (isRetryablePresentationGenerationError(error)) {
+      if (isRetryableGenerationStartError(error)) {
         // Only authored jobs resume from server-side checkpoints on a same-key
         // re-POST, so only they can truthfully promise saved progress.
         const progress =
@@ -392,6 +472,16 @@ export const usePresentationGeneration = (
   );
 
   useEffect(() => {
+    if (!generationEnabled) {
+      setResumableTask(null);
+      setLoadingState(DEFAULT_LOADING_STATE);
+      return;
+    }
+    if (chatFirstEnabled) {
+      setResumableTask(null);
+      setLoadingState(DEFAULT_LOADING_STATE);
+      return;
+    }
     const reconcile = () => {
       const durableTask = findDurableGenerationTask(presentationId);
       setResumableTask(
@@ -414,16 +504,44 @@ export const usePresentationGeneration = (
     };
     reconcile();
     return subscribeToDurableGenerationTasks(reconcile);
-  }, [presentationId, runDurableGeneration]);
+  }, [chatFirstEnabled, generationEnabled, presentationId, runDurableGeneration]);
 
   const handleSubmit = useCallback(async () => {
+    if (!generationEnabled) return;
     if (!selectedTemplate) {
       setActiveTab(TABS.LAYOUTS);
       return;
     }
     if (!validateInputs()) return;
+    if (!presentationId) {
+      notify.error(
+        "Presentation unavailable",
+        "Reload the presentation and try again."
+      );
+      return;
+    }
     const runId = ++generationRunRef.current;
     const isActiveRun = () => generationRunRef.current === runId;
+    const generationPreferences = {
+      language: language && language !== LanguageType.Auto ? language : null,
+      ...(generationConfig
+        ? {
+            tone: generationConfig.tone,
+            verbosity: generationConfig.verbosity,
+            instructions: generationConfig.instructions || null,
+            include_table_of_contents:
+              generationConfig.includeTableOfContents,
+            include_title_slide: generationConfig.includeTitleSlide,
+            web_search: generationConfig.webSearch,
+          }
+        : {}),
+    };
+    // Keep flag-off requests byte-for-byte compatible with the legacy durable
+    // retry snapshot. Chat-first persists the complete generation settings in
+    // the first workspace message, so its admission request can include them.
+    const asyncGenerationPreferences = chatFirstEnabled
+      ? generationPreferences
+      : { language: generationPreferences.language };
 
     // Persist the idempotency key before POSTing so a lost response can be retried
     // without creating a second authored deck.
@@ -451,6 +569,10 @@ export const usePresentationGeneration = (
           ? startingDurableTaskRef.current
           : findDurableGenerationTask(presentationId);
       if (durableTask?.taskId && durableTask.status !== "retryable-error") {
+        if (chatFirstEnabled) {
+          openChatFirstWorkspace(durableTask.idempotencyKey);
+          return;
+        }
         await runDurableGeneration(durableTask);
         return;
       }
@@ -472,11 +594,15 @@ export const usePresentationGeneration = (
       const authoredRequest = durableTask.authoredRequest ?? reduxAuthoredRequest;
       startingDurableTaskRef.current = durableTask;
       submittingDurableTaskRef.current = durableTask.idempotencyKey;
-      setLoadingState(getDurableLoadingState(durableTask));
+      if (!chatFirstEnabled) {
+        setLoadingState(getDurableLoadingState(durableTask));
+      }
       try {
         const started = await PresentationGenerationApi.generateAuthoredAsync({
+          presentation_id: presentationId,
           content: slides_markdown[0].slice(0, 200),
           slides_markdown,
+          ...asyncGenerationPreferences,
           language: authoredRequest.language,
           vision_qa: authoredRequest.visionQa,
           authored_style: authoredRequest.authoredStyle,
@@ -493,17 +619,28 @@ export const usePresentationGeneration = (
         submittingDurableTaskRef.current = null;
         startingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
+        if (chatFirstEnabled) {
+          openChatFirstWorkspace(durableTask.idempotencyKey);
+          return;
+        }
         await runDurableGeneration(durableTask);
       } catch (error: any) {
         submittingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        if (!isRetryablePresentationGenerationError(error)) {
+        if (
+          openRecoverableChatFirstWorkspace(error, durableTask.idempotencyKey)
+        ) {
+          return;
+        }
+        if (!isRetryableGenerationStartError(error)) {
           clearDurableGenerationTask(durableTask.idempotencyKey);
           startingDurableTaskRef.current = null;
         }
         reportDurableGenerationFailure(error, durableTask);
       } finally {
-        if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
+        if (isActiveRun() && !chatFirstEnabled) {
+          setLoadingState(DEFAULT_LOADING_STATE);
+        }
       }
       return;
     }
@@ -541,6 +678,10 @@ export const usePresentationGeneration = (
           ? startingDurableTaskRef.current
           : findDurableGenerationTask(presentationId);
       if (durableTask?.taskId) {
+        if (chatFirstEnabled) {
+          openChatFirstWorkspace(durableTask.idempotencyKey);
+          return;
+        }
         await runDurableGeneration(durableTask);
         return;
       }
@@ -558,15 +699,17 @@ export const usePresentationGeneration = (
       }
       startingDurableTaskRef.current = durableTask;
       submittingDurableTaskRef.current = durableTask.idempotencyKey;
-      setLoadingState(getDurableLoadingState(durableTask));
+      if (!chatFirstEnabled) {
+        setLoadingState(getDurableLoadingState(durableTask));
+      }
 
       try {
         const started =
           await PresentationGenerationApi.generateTemplateV2Async({
+            presentation_id: presentationId,
             content: slides_markdown[0].slice(0, 200),
             slides_markdown,
-            language:
-              language && language !== LanguageType.Auto ? language : null,
+            ...asyncGenerationPreferences,
             template_v2_id: templateV2Selection.templateId,
             template_v2_revision: templateV2Selection.revision,
             idempotency_key: durableTask.idempotencyKey,
@@ -583,17 +726,28 @@ export const usePresentationGeneration = (
         submittingDurableTaskRef.current = null;
         startingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
+        if (chatFirstEnabled) {
+          openChatFirstWorkspace(durableTask.idempotencyKey);
+          return;
+        }
         await runDurableGeneration(durableTask);
       } catch (error: any) {
         submittingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        if (!isRetryablePresentationGenerationError(error)) {
+        if (
+          openRecoverableChatFirstWorkspace(error, durableTask.idempotencyKey)
+        ) {
+          return;
+        }
+        if (!isRetryableGenerationStartError(error)) {
           clearDurableGenerationTask(durableTask.idempotencyKey);
           startingDurableTaskRef.current = null;
         }
         reportDurableGenerationFailure(error, durableTask);
       } finally {
-        if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
+        if (isActiveRun() && !chatFirstEnabled) {
+          setLoadingState(DEFAULT_LOADING_STATE);
+        }
       }
       return;
     }
@@ -622,6 +776,75 @@ export const usePresentationGeneration = (
       template_name: selectedTemplateName,
       template_layout_count: selectedTemplateLayoutCount,
     });
+
+    if (chatFirstEnabled) {
+      const slides_markdown = (outlines || [])
+        .map((outline) => outline.content)
+        .filter((content) => content && content.trim().length > 0);
+      if (slides_markdown.length === 0) {
+        notify.warning(
+          "Outline is empty",
+          "Add outline content before generating the presentation."
+        );
+        return;
+      }
+      const template =
+        typeof selectedTemplate === "string"
+          ? normalizeCustomTemplateId(selectedTemplate)
+          : selectedTemplate.id;
+      if (!standardIdempotencyKeyRef.current) {
+        const randomId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random()
+                .toString(36)
+                .slice(2)}`;
+        standardIdempotencyKeyRef.current = `ppt-generation-${randomId}`;
+      }
+      const idempotencyKey = standardIdempotencyKeyRef.current;
+
+      try {
+        const started = await PresentationGenerationApi.generateStandardAsync({
+          presentation_id: presentationId,
+          content: slides_markdown[0].slice(0, 200),
+          slides_markdown,
+          ...generationPreferences,
+          template,
+          idempotency_key: idempotencyKey,
+        });
+        if (!started?.id) {
+          throw new Error("Presentation generation was not accepted.");
+        }
+        if (!isActiveRun()) return;
+        openChatFirstWorkspace();
+      } catch (error: any) {
+        if (!isActiveRun()) return;
+        console.warn("Presentation generation was not accepted.", error);
+        if (openRecoverableChatFirstWorkspace(error)) return;
+        if (isRetryableGenerationStartError(error)) {
+          notify.error(
+            "Presentation generation was interrupted",
+            getRetryablePresentationGenerationMessage(error),
+            {
+              duration: 12_000,
+              action: {
+                label: "Retry",
+                onClick: () => retrySubmitRef.current?.(),
+              },
+            }
+          );
+        } else {
+          notify.error(
+            "Generation error",
+            getApiErrorDisplayMessage(
+              error,
+              "A problem occurred while starting presentation generation."
+            )
+          );
+        }
+      }
+      return;
+    }
 
     setLoadingState({
       message: "발표자료 생성 중…",
@@ -769,6 +992,7 @@ export const usePresentationGeneration = (
     }
   }, [
     selectedTemplate,
+    generationEnabled,
     validateInputs,
     pathname,
     presentationId,
@@ -776,10 +1000,14 @@ export const usePresentationGeneration = (
     setActiveTab,
     authoredVisionQa,
     language,
+    generationConfig,
     authoredStyle,
+    chatFirstEnabled,
     dispatch,
     router,
     clearTheme,
+    openChatFirstWorkspace,
+    openRecoverableChatFirstWorkspace,
     getDurableLoadingState,
     reportDurableGenerationFailure,
     runDurableGeneration,
@@ -803,6 +1031,7 @@ export const usePresentationGeneration = (
     activeDurableTaskRef.current = null;
     startingDurableTaskRef.current = null;
     submittingDurableTaskRef.current = null;
+    standardIdempotencyKeyRef.current = null;
     const durableTask = findDurableGenerationTask(presentationId);
     if (durableTask) {
       if (durableTask.taskId) {
@@ -821,5 +1050,13 @@ export const usePresentationGeneration = (
     );
   }, [presentationId]);
 
-  return { loadingState, handleSubmit, cancelGeneration, resumableTask };
+  return {
+    loadingState,
+    handleSubmit,
+    cancelGeneration,
+    resumableTask,
+    rolloutMode,
+    generationEnabled,
+    refreshRollout: chatFirstRollout.refresh,
+  };
 };

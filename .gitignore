@@ -21,6 +21,8 @@ nltk
 chroma
 container.db
 .next-build
+servers/nextjs/.next-workspace-e2e/
+/.codex-tmp/
 .cursor
 .vscode
 .agents

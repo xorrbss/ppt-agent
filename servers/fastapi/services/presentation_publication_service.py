@@ -1,0 +1,124 @@
+from __future__ import annotations
+
+from typing import Optional
+import uuid
+
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.sql.presentation import PresentationModel
+from models.sql.workspace import WorkspaceOperation
+from services.workspace_operation_runner import append_operation_event
+from utils.datetime_utils import get_current_utc_datetime
+from utils.owner_context import get_current_owner_id
+
+
+class PresentationPublicationConflict(RuntimeError):
+    code = "stale_presentation_revision"
+
+
+async def publish_presentation_revision(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    expected_revision: int,
+    operation_id: Optional[uuid.UUID] = None,
+    attempt_token: Optional[str] = None,
+    result: Optional[dict] = None,
+) -> int:
+    """Increment the publication token exactly once using a fenced CAS.
+
+    Checkpoint writers must not call this function. The caller commits only
+    after immutable external artifacts and their hashes are durable.
+    """
+
+    if expected_revision < 0:
+        raise ValueError("expected_revision must be nonnegative")
+    new_revision = expected_revision + 1
+    now = get_current_utc_datetime()
+    published_operation_version: int | None = None
+
+    owner_id = get_current_owner_id()
+    async with session.begin_nested():
+        # Validate the attempt fence first. The savepoint guarantees that a
+        # caller cannot accidentally commit half of this publication after
+        # catching a conflict exception.
+        if operation_id is not None:
+            if not attempt_token:
+                raise ValueError("attempt_token is required with operation_id")
+            operation_statement = (
+                update(WorkspaceOperation)
+                .where(
+                    WorkspaceOperation.id == operation_id,
+                    WorkspaceOperation.presentation_id == presentation_id,
+                    WorkspaceOperation.state == "running",
+                    WorkspaceOperation.attempt_token == attempt_token,
+                    WorkspaceOperation.expected_revision == expected_revision,
+                )
+                .values(
+                    state="succeeded",
+                    result_revision=new_revision,
+                    result=result,
+                    completed_at=now,
+                    lease_expires_at=None,
+                    heartbeat_at=now,
+                    attempt_token=None,
+                    version=WorkspaceOperation.version + 1,
+                    updated_at=now,
+                )
+                .returning(
+                    WorkspaceOperation.id,
+                    WorkspaceOperation.version,
+                )
+            )
+            if owner_id is not None:
+                operation_statement = operation_statement.where(
+                    WorkspaceOperation.owner_id == owner_id
+                )
+            completed_operation = (
+                await session.execute(operation_statement)
+            ).mappings().one_or_none()
+            if completed_operation is None:
+                raise PresentationPublicationConflict("stale_operation_fence")
+            published_operation_version = int(completed_operation["version"])
+
+        presentation_statement = (
+            update(PresentationModel)
+            .where(
+                PresentationModel.id == presentation_id,
+                PresentationModel.revision == expected_revision,
+            )
+            .values(revision=new_revision, updated_at=now)
+            .returning(PresentationModel.revision)
+        )
+        if owner_id is not None:
+            presentation_statement = presentation_statement.where(
+                PresentationModel.owner_id == owner_id
+            )
+        published_revision = (
+            await session.execute(presentation_statement)
+        ).scalar_one_or_none()
+        if published_revision is None:
+            raise PresentationPublicationConflict(
+                PresentationPublicationConflict.code
+            )
+
+        if operation_id is not None:
+            terminal_payload = dict(result or {})
+            terminal_payload.update(
+                state="succeeded",
+                result_revision=new_revision,
+            )
+            terminal_event = await append_operation_event(
+                session,
+                operation_id=operation_id,
+                event_type="operation.result",
+                payload=terminal_payload,
+                allowed_states=("succeeded",),
+                expected_version=published_operation_version,
+                increment_version=True,
+            )
+            if terminal_event is None:
+                raise PresentationPublicationConflict("stale_operation_event_fence")
+
+    return int(published_revision)

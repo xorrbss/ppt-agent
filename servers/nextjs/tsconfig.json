@@ -36,7 +36,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next-build/types/**/*.ts",
-    ".next-build/dev/types/**/*.ts"
+    ".next-build/dev/types/**/*.ts",
+    ".next-workspace-e2e/types/**/*.ts",
+    ".next-workspace-e2e/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

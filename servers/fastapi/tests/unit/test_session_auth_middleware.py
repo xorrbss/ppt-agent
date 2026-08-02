@@ -1,10 +1,4 @@
-"""Regression tests for SessionAuthMiddleware path handling.
-
-Guards the /app_data/images/ auth exemption against dot-segment traversal: a
-request like /app_data/images/../userConfig.json is decoded by uvicorn to a path
-that would ride the image exemption while StaticFiles normalizes it back to the
-secret file. The middleware must decide auth on the NORMALIZED path.
-"""
+"""Regression tests for SessionAuthMiddleware path handling."""
 from api.middlewares import SessionAuthMiddleware
 
 
@@ -29,11 +23,11 @@ def test_traversal_out_of_images_requires_auth():
     assert _requires_auth("/app_data/images/authored/../../userConfig.json") is True
 
 
-def test_legit_images_stay_public():
-    assert _requires_auth("/app_data/images/0e9c8226.png") is False
-    assert _requires_auth("/app_data/images/photo.JPEG") is False
-    # authored slide images live in subfolders and must stay publicly fetchable
-    assert _requires_auth("/app_data/images/authored/deck-id/slide_0.png") is False
+def test_all_direct_image_paths_require_auth():
+    assert _requires_auth("/app_data/images/0e9c8226.png") is True
+    assert _requires_auth("/app_data/images/photo.JPEG") is True
+    assert _requires_auth("/app_data/images/authored/deck-id/slide_0.png") is True
+    assert _requires_auth("/app_data/images/users/owner-id/slide.png") is True
 
 
 def test_non_image_under_images_requires_auth():
@@ -51,7 +45,10 @@ def test_direct_secrets_and_api_require_auth():
 def test_normalize_keeps_leading_slash():
     mw = _mw()
     assert mw._normalize("/app_data/images/x.png") == "/app_data/images/x.png"
-    assert mw._normalize("/app_data/images/../userConfig.json") == "/app_data/userConfig.json"
+    assert (
+        mw._normalize("/app_data/images/../userConfig.json")
+        == "/app_data/userConfig.json"
+    )
 
 
 def test_public_share_link_is_exempt():

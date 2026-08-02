@@ -194,6 +194,12 @@ class RecordingSession:
     def add_all(self, values):
         self.added_many.extend(values)
 
+    async def get(self, model, key):
+        for value in reversed([*self.added, *self.added_many]):
+            if isinstance(value, model) and getattr(value, "id", None) == key:
+                return value
+        return None
+
     async def commit(self):
         self.commits += 1
 
@@ -202,6 +208,11 @@ class RecordingSession:
 
     async def execute(self, statement):
         self.executed.append(statement)
+
+        class _Result:
+            rowcount = 1
+
+        return _Result()
 
 
 def test_template_v2_generation_is_default_off(monkeypatch):

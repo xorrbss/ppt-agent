@@ -11,6 +11,12 @@ export default defineConfig({
   // Cypress 15 deprecates exposing Cypress.env() to browser code. Component
   // specs use network fixtures rather than browser-visible secrets.
   allowCypressEnv: false,
+  e2e: {
+    // `npm run test:workspace-e2e` supplies CYPRESS_BASE_URL for the disposable
+    // Next app it starts. Browser API traffic stays inside explicit route-spec
+    // fixtures, so this suite needs neither port 5000 nor a FastAPI process.
+    supportFile: false,
+  },
   component: {
     devServer: {
       framework: "react",

@@ -107,6 +107,25 @@ def postgres_canary_database(tmp_path):
 def _seed_template(engine: Engine) -> uuid.UUID:
     presentation_id = uuid.uuid4()
     now = datetime.now(UTC)
+    publication_assets = {
+        "native_pptx": {
+            "schema_version": "presenton.template-v2-publication/v1",
+            "preservation_mode": "reconstructed",
+            "publication_status": "publishable",
+            "publishable": True,
+            "native_pptx_preflight": {
+                "schema_version": "presenton.template-v2-native-pptx/v1",
+                "compiler_name": "presenton-template-v2-native-ooxml",
+                "compiler_version": "1",
+                "preservation_mode": "reconstructed",
+                "status": "compiled",
+                "selected_for_export": False,
+                "structural_sha256": f"sha256:{'a' * 64}",
+                "package_sha256": f"sha256:{'b' * 64}",
+                "unsupported": None,
+            },
+        }
+    }
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -135,12 +154,19 @@ def _seed_template(engine: Engine) -> uuid.UUID:
             text(
                 """
                 INSERT INTO template_v2
-                    (id, presentation_id, name, revision)
+                    (id, presentation_id, name, assets, revision)
                 VALUES
-                    (:id, :presentation_id, 'PostgreSQL canary', 1)
+                    (
+                        :id, :presentation_id, 'PostgreSQL canary',
+                        CAST(:assets AS JSON), 1
+                    )
                 """
             ),
-            {"id": TEMPLATE_ID, "presentation_id": presentation_id},
+            {
+                "id": TEMPLATE_ID,
+                "presentation_id": presentation_id,
+                "assets": json.dumps(publication_assets),
+            },
         )
     return presentation_id
 
@@ -254,8 +280,8 @@ async def _seed_import_jobs(session_maker, *, count: int):
                 id=task_id,
                 status="pending",
                 message="Queued Template V2 PPTX import",
-                created_at=now.replace(tzinfo=None),
-                updated_at=now.replace(tzinfo=None),
+                created_at=now,
+                updated_at=now,
                 data={
                     "kind": ingestion.IMPORT_TASK_KIND,
                     "import_id": str(import_id),

@@ -9,6 +9,7 @@ interface GenerateButtonProps {
   streamState: { isStreaming: boolean; isLoading: boolean };
   selectedTemplate: TemplateLayoutsWithSettings | string | null;
   onSubmit: () => void;
+  generationEnabled?: boolean;
 }
 
 const GenerateButton: React.FC<GenerateButtonProps> = ({
@@ -16,9 +17,10 @@ const GenerateButton: React.FC<GenerateButtonProps> = ({
   streamState,
   selectedTemplate,
   onSubmit,
+  generationEnabled = true,
 }) => {
   const isDisabled =
-    loadingState.isLoading || streamState.isLoading || streamState.isStreaming;
+    !generationEnabled || loadingState.isLoading || streamState.isLoading || streamState.isStreaming;
 
   const getButtonText = () => {
     if (loadingState.isLoading) return loadingState.message;

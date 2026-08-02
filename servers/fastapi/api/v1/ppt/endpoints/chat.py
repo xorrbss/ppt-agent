@@ -22,8 +22,21 @@ from models.sse_response import (
 from services.chat import ChatTurnResult, PresentationChatService
 from services.chat import sql_chat_history
 from services.database import get_async_session
+from services.workspace_legacy_write_gate import require_legacy_presentation_write_path
 
 CHAT_ROUTER = APIRouter(prefix="/chat", tags=["Chat"])
+
+
+def _require_legacy_chat_write_path() -> None:
+    """Fail closed once workspace commands own presentation mutations.
+
+    Keeping the legacy POST routes writable while the operation runner is
+    enabled would bypass per-presentation serialization, revision fencing, and
+    the durable timeline.  Read-only legacy history remains available during
+    rollout and rollback.
+    """
+
+    require_legacy_presentation_write_path()
 
 
 @CHAT_ROUTER.get("/conversations", response_model=list[ChatConversationListItem])
@@ -76,6 +89,7 @@ async def chat_message(
     payload: ChatMessageRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    _require_legacy_chat_write_path()
     service = PresentationChatService(
         sql_session=sql_session,
         presentation_id=payload.presentation_id,
@@ -96,6 +110,7 @@ async def chat_message_stream(
     payload: ChatMessageRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    _require_legacy_chat_write_path()
     service = PresentationChatService(
         sql_session=sql_session,
         presentation_id=payload.presentation_id,

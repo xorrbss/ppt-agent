@@ -10,6 +10,9 @@ from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.workspace_legacy_write_gate import (
+    require_legacy_presentation_write_path,
+)
 from utils.asset_directory_utils import get_images_directory
 from utils.llm_calls.edit_slide import get_edited_slide_content
 from utils.llm_calls.edit_slide_html import get_edited_slide_html
@@ -33,6 +36,7 @@ async def edit_slide(
     prompt: Annotated[str, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    require_legacy_presentation_write_path()
     slide = await sql_session.get(SlideModel, id)
     if not slide:
         raise HTTPException(status_code=404, detail="Slide not found")
@@ -106,6 +110,7 @@ async def edit_slide_html(
     html: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    require_legacy_presentation_write_path()
     slide = await sql_session.get(SlideModel, id)
     if not slide:
         raise HTTPException(status_code=404, detail="Slide not found")

@@ -62,6 +62,45 @@ export type StartGenerationResponse = {
   request_id?: string;
 };
 
+export type PresentationThemePayload = {
+  id: string;
+  name: string;
+  description: string;
+  user: string;
+  logo: string | null;
+  logo_url: string | null;
+  company_name: string | null;
+  data: Record<string, unknown>;
+};
+
+type GenerationPreferences = {
+  language?: string | null;
+  tone?: string;
+  verbosity?: string;
+  instructions?: string | null;
+  include_table_of_contents?: boolean;
+  include_title_slide?: boolean;
+  web_search?: boolean;
+};
+
+const generationPreferencesPayload = (body: GenerationPreferences) => ({
+  language: body.language ?? null,
+  ...(body.tone ? { tone: body.tone } : {}),
+  ...(body.verbosity ? { verbosity: body.verbosity } : {}),
+  ...(body.instructions !== undefined
+    ? { instructions: body.instructions }
+    : {}),
+  ...(body.include_table_of_contents !== undefined
+    ? { include_table_of_contents: body.include_table_of_contents }
+    : {}),
+  ...(body.include_title_slide !== undefined
+    ? { include_title_slide: body.include_title_slide }
+    : {}),
+  ...(body.web_search !== undefined
+    ? { web_search: body.web_search }
+    : {}),
+});
+
 export class PresentationGenerationApi {
   static async uploadDoc(documents: File[]) {
     const formData = new FormData();
@@ -111,8 +150,9 @@ export class PresentationGenerationApi {
       throw error;
     }
   }
- 
-   static async createPresentation({
+  static async createPresentation({
+    presentation_id,
+    idempotency_key,
     content,
     n_slides,
     file_paths,
@@ -123,8 +163,10 @@ export class PresentationGenerationApi {
     include_table_of_contents,
     include_title_slide,
     web_search,
-    
+    theme,
   }: {
+    presentation_id: string;
+    idempotency_key: string;
     content: string;
     n_slides: number | null;
     file_paths?: string[];
@@ -135,14 +177,19 @@ export class PresentationGenerationApi {
     include_table_of_contents?: boolean;
     include_title_slide?: boolean;
     web_search?: boolean;
+    theme?: PresentationThemePayload | null;
   }) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/create`),
         {
           method: "POST",
-          headers: getHeader(),
+          headers: {
+            ...getHeader(),
+            "Idempotency-Key": idempotency_key,
+          },
           body: JSON.stringify({
+            presentation_id,
             content,
             n_slides,
             file_paths,
@@ -153,12 +200,16 @@ export class PresentationGenerationApi {
             include_table_of_contents,
             include_title_slide,
             web_search,
+            theme,
           }),
           cache: "no-cache",
         }
       );
-      
-      return await ApiResponseHandler.handleResponse(response, "Failed to create presentation");
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to create presentation"
+      );
     } catch (error) {
       console.error("error in presentation creation", error);
       throw error;
@@ -319,10 +370,10 @@ export class PresentationGenerationApi {
   // it runs through the async generate endpoint (minutes-long) and is polled to
   // completion. The reviewed outline is passed as slides_markdown so the user's edits
   // are honoured. Returns the async task ({ id, status, ... }).
-  static async generateAuthoredAsync(body: {
+  static async generateAuthoredAsync(body: GenerationPreferences & {
+    presentation_id: string;
     content: string;
     slides_markdown: string[];
-    language?: string | null;
     vision_qa?: boolean;
     authored_style?: string;
     idempotency_key?: string;
@@ -339,9 +390,10 @@ export class PresentationGenerationApi {
               : {}),
           },
           body: JSON.stringify({
+            presentation_id: body.presentation_id,
             content: body.content,
             slides_markdown: body.slides_markdown,
-            language: body.language ?? null,
+            ...generationPreferencesPayload(body),
             template: "authored",
             export_as: "pptx",
             // Optional self-correction pass (render + vision-critique + re-author flagged).
@@ -370,12 +422,12 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async generateTemplateV2Async(body: {
+  static async generateTemplateV2Async(body: GenerationPreferences & {
+    presentation_id: string;
     content: string;
     slides_markdown: string[];
     template_v2_id: string;
     template_v2_revision: number;
-    language?: string | null;
     idempotency_key?: string;
   }): Promise<StartGenerationResponse> {
     try {
@@ -390,9 +442,10 @@ export class PresentationGenerationApi {
               : {}),
           },
           body: JSON.stringify({
+            presentation_id: body.presentation_id,
             content: body.content,
             slides_markdown: body.slides_markdown,
-            language: body.language ?? null,
+            ...generationPreferencesPayload(body),
             strategy: "template_v2",
             template_v2_id: body.template_v2_id,
             template_v2_revision: body.template_v2_revision,
@@ -413,6 +466,52 @@ export class PresentationGenerationApi {
       };
     } catch (error) {
       console.warn("error starting structured-template generation", error);
+      throw error;
+    }
+  }
+
+  static async generateStandardAsync(body: GenerationPreferences & {
+    presentation_id: string;
+    content: string;
+    slides_markdown: string[];
+    template: string;
+    idempotency_key?: string;
+  }): Promise<StartGenerationResponse> {
+    try {
+      const response = await fetch(
+        getApiUrl(`/api/v1/ppt/presentation/generate/async`),
+        {
+          method: "POST",
+          headers: {
+            ...getHeader(),
+            ...(body.idempotency_key
+              ? { "Idempotency-Key": body.idempotency_key }
+              : {}),
+          },
+          body: JSON.stringify({
+            presentation_id: body.presentation_id,
+            content: body.content,
+            slides_markdown: body.slides_markdown,
+            ...generationPreferencesPayload(body),
+            template: body.template,
+            strategy: body.template === "adaptive" ? "adaptive" : "legacy",
+            export_as: "pptx",
+          }),
+          cache: "no-cache",
+        }
+      );
+
+      const result = await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to start presentation generation"
+      );
+      return {
+        ...result,
+        request_id:
+          result?.request_id || response.headers.get("x-request-id") || undefined,
+      };
+    } catch (error) {
+      console.warn("error starting presentation generation", error);
       throw error;
     }
   }

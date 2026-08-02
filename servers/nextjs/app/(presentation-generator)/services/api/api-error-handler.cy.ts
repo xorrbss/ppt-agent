@@ -40,6 +40,102 @@ describe("expired authentication sessions", () => {
   });
 });
 
+describe("chat-first workspace projection marker", () => {
+  it("preserves an explicit projected marker on an API error", async () => {
+    const response = new Response(
+      JSON.stringify({ detail: "generation_admission_unavailable" }),
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Chat-First-Workspace-Projected": " true ",
+        },
+      }
+    );
+
+    let caught: unknown;
+    try {
+      await ApiResponseHandler.handleResponse(response, "Request failed");
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).to.be.instanceOf(ApiError);
+    expect(caught).to.include({
+      status: 503,
+      workspaceProjected: true,
+    });
+  });
+
+  it("defaults to unprojected when the response marker is absent", async () => {
+    const response = new Response(
+      JSON.stringify({ detail: "generation_admission_unavailable" }),
+      {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    let caught: unknown;
+    try {
+      await ApiResponseHandler.handleResponse(response, "Request failed");
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).to.be.instanceOf(ApiError);
+    expect(caught).to.include({
+      status: 503,
+      workspaceProjected: false,
+    });
+  });
+
+  it("preserves the projected marker when an error body is not JSON", async () => {
+    const response = new Response("upstream unavailable", {
+      status: 503,
+      headers: {
+        "Content-Type": "text/plain",
+        "X-Chat-First-Workspace-Projected": "TRUE",
+      },
+    });
+
+    let caught: unknown;
+    try {
+      await ApiResponseHandler.handleResponse(response, "Request failed");
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).to.be.instanceOf(ApiError);
+    expect(caught).to.include({
+      status: 503,
+      workspaceProjected: true,
+    });
+  });
+
+  ["false", "1", "yes", "true-ish"].forEach((marker) => {
+    it(`rejects a non-true projected marker value: ${marker}`, async () => {
+      const response = new Response(JSON.stringify({ detail: "rejected" }), {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Chat-First-Workspace-Projected": marker,
+        },
+      });
+
+      let caught: unknown;
+      try {
+        await ApiResponseHandler.handleResponse(response, "Request failed");
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).to.be.instanceOf(ApiError);
+      expect(caught).to.have.property("workspaceProjected", false);
+    });
+  });
+});
+
 describe("retryable presentation generation errors", () => {
   it("identifies a retryable 503 and keeps its request ID in Korean guidance", () => {
     const error = new ApiError("Our servers are currently overloaded.", {

@@ -10,6 +10,9 @@ from models.presentation_with_slides import PresentationWithSlides
 from models.sql.presentation import PresentationModel
 from services import presentation_version_service as version_service
 from services.database import get_async_session
+from services.workspace_legacy_write_gate import (
+    require_legacy_presentation_write_path,
+)
 
 PRESENTATION_VERSION_ROUTER = APIRouter(
     prefix="/presentation", tags=["Presentation Versions"]
@@ -54,6 +57,7 @@ async def restore_presentation_version(
     version_id: uuid.UUID,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    require_legacy_presentation_write_path()
     presentation = await sql_session.get(PresentationModel, id)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "runtime_capabilities": {
+    "sqlite": {"chat_first_workspace": true, "mode": "local"},
+    "postgresql": {"chat_first_workspace": true, "mode": "cluster"},
+    "mysql": {
+      "chat_first_workspace": false,
+      "mode": "blocked",
+      "error_code": "chat_first_runtime_unsupported"
+    }
+  },
+  "errors": [
+    {"code": "chat_first_feature_disabled", "retryable": false, "safe_message": "Workspace operations are not enabled."},
+    {"code": "chat_first_runtime_unsupported", "retryable": false, "safe_message": "This database runtime does not support workspace operations."},
+    {"code": "asset_processing_timeout", "retryable": true, "safe_message": "An attachment did not finish processing in time."},
+    {"code": "operation_state_conflict", "retryable": false, "safe_message": "This action is no longer available."},
+    {"code": "revision_conflict", "retryable": true, "safe_message": "The presentation changed in another session. Reload and try again."},
+    {"code": "event_cursor_expired", "retryable": true, "safe_message": "Updates expired; reload the workspace timeline."},
+    {"code": "operation_recovery_required", "retryable": true, "safe_message": "The operation is being recovered after an interruption."},
+    {"code": "operation_dead_lettered", "retryable": true, "safe_message": "The operation could not complete. Retry it from this conversation."}
+  ],
+  "privacy": {
+    "telemetry_forbidden_fields": ["prompt", "message_content", "attachment_file_name", "attachment_url", "trace", "stack_trace"],
+    "public_share_forbidden_fields": ["prompt", "attachments", "conversation", "operation", "operation_events", "error", "trace", "revision"]
+  }
+}

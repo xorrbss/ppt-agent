@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/popover";
 import { notify } from "@/components/ui/sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import type { WorkspaceCommandDispatcher } from "../workspace";
 
 interface VersionSummary {
   id: string;
@@ -32,15 +33,27 @@ const VersionHistoryPopover = ({
   presentationId,
   disabled,
   onRestored,
+  allowRestore = true,
+  chatFirstEnabled = false,
+  workspaceCommandsEnabled = false,
+  onWorkspaceCommand,
 }: {
   presentationId: string;
   disabled?: boolean;
-  onRestored: () => void;
+  onRestored?: () => void;
+  allowRestore?: boolean;
+  chatFirstEnabled?: boolean;
+  workspaceCommandsEnabled?: boolean;
+  onWorkspaceCommand?: WorkspaceCommandDispatcher;
 }) => {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const chatFirstRestoreEnabled =
+    chatFirstEnabled && workspaceCommandsEnabled && Boolean(onWorkspaceCommand);
+  const restoreAllowed =
+    allowRestore && (!chatFirstEnabled || chatFirstRestoreEnabled);
 
   const loadVersions = async () => {
     setLoading(true);
@@ -61,18 +74,33 @@ const VersionHistoryPopover = ({
     if (next) loadVersions();
   };
 
-  const handleRestore = async (versionId: string) => {
-    setRestoringId(versionId);
+  const handleRestore = async (version: VersionSummary) => {
+    if (!restoreAllowed) return;
+    setRestoringId(version.id);
     try {
+      if (chatFirstRestoreEnabled && onWorkspaceCommand) {
+        await onWorkspaceCommand(
+          `${formatWhen(version.created_at)} 버전으로 복원해 줘`,
+          {
+            commandType: "version.restore",
+            context: { version_id: version.id, source: "version_history" },
+          }
+        );
+        // The workspace card now owns approval, progress, result, and errors.
+        setOpen(false);
+        return;
+      }
       await PresentationGenerationApi.restorePresentationVersion(
         presentationId,
-        versionId
+        version.id
       );
       notify.success("복원했습니다", "선택한 버전으로 슬라이드를 되돌렸습니다.");
       setOpen(false);
-      onRestored();
+      onRestored?.();
     } catch {
-      notify.error("복원하지 못했습니다", "다시 시도해 주세요.");
+      if (!chatFirstRestoreEnabled) {
+        notify.error("복원하지 못했습니다", "다시 시도해 주세요.");
+      }
     } finally {
       setRestoringId(null);
     }
@@ -83,6 +111,7 @@ const VersionHistoryPopover = ({
       <PopoverTrigger asChild>
         <button
           type="button"
+          data-testid="version-history-trigger"
           title="버전 기록"
           disabled={disabled}
           className="group cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
@@ -124,9 +153,12 @@ const VersionHistoryPopover = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleRestore(version.id)}
-                  disabled={restoringId !== null}
-                  className="flex shrink-0 items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-[#101323] duration-300 hover:border-[#5141e5] hover:text-[#5141e5] disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="version-restore"
+                  onClick={() => handleRestore(version)}
+                  disabled={!restoreAllowed || restoringId !== null}
+                  className={`flex shrink-0 items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-[#101323] duration-300 hover:border-[#5141e5] hover:text-[#5141e5] disabled:cursor-not-allowed disabled:opacity-50 ${
+                    restoreAllowed ? "" : "hidden"
+                  }`}
                 >
                   {restoringId === version.id ? (
                     <Loader2 className="h-3 w-3 animate-spin" />

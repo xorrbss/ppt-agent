@@ -1,0 +1,103 @@
+# Opt-in Chat-first canary overlay.  It is deliberately not part of the stock
+# compose profile: the stock image has no clamscan executable or managed virus
+# definition feed.  Build a scanner-equipped, definition-managed derivative
+# image before setting CHAT_FIRST_CANARY_ENABLED=true. The source Dockerfile
+# deliberately does not install ClamAV or download virus definitions.
+#
+# Example (after building/pulling that image with the frontend flag baked in
+# and supplying it through CHAT_FIRST_CANARY_IMAGE):
+# docker compose -f docker-compose.yml -f docker-compose.chat-first-canary.yml \
+#   --profile chat-first-canary up chat-first-canary
+#
+# Immediate rollback (no schema rollback): set CHAT_FIRST_CANARY_ENABLED=false
+# and recreate the service.  A workbench-enabled bundle observes the backend
+# capability and returns to the legacy flow.  Switch back to the stock image
+# only when the client bundle itself must also be removed.
+x-chat-first-canary-env: &chat-first-canary-env
+  PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+  MIGRATE_DATABASE_ON_STARTUP: "true"
+  # Populated PostgreSQL upgrades fail closed until this legacy timezone is set.
+  PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE: ${PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE:-}
+  CAN_CHANGE_KEYS: ${CAN_CHANGE_KEYS:-false}
+  LLM: ${LLM:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-}
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+  GOOGLE_MODEL: ${GOOGLE_MODEL:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+  OLLAMA_URL: ${OLLAMA_URL:-}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+  IMAGE_PROVIDER: ${IMAGE_PROVIDER:-}
+  DISABLE_IMAGE_GENERATION: ${DISABLE_IMAGE_GENERATION:-}
+  AUTH_USERNAME: ${AUTH_USERNAME:-}
+  AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+
+services:
+  chat-first-canary:
+    profiles: ["chat-first-canary"]
+    image: ${CHAT_FIRST_CANARY_IMAGE:-presenton-chat-first-canary:local}
+    # Intentionally image-only: `--build` against the stock Dockerfile would
+    # silently replace a scanner-equipped derivative with an unsafe image.
+    ports:
+      - "${CHAT_FIRST_CANARY_PORT:-5050}:80"
+    volumes:
+      - ./app_data:/app_data
+      - presenton_template_v2_private_sources:/app_data-private
+      - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
+    environment:
+      <<: *chat-first-canary-env
+      TEMPLATE_V2_DEPLOYMENT_TIER: production
+      # The backend remains OFF until a scanner-equipped image is explicitly
+      # selected. With true, startup fails closed if clamscan is unavailable
+      # or its definitions are not prepared by that image.
+      CHAT_FIRST_WORKSPACE_ENABLED: ${CHAT_FIRST_CANARY_ENABLED:-false}
+      CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: ${CHAT_FIRST_CANARY_RUNTIME_PROFILE:-sqlite-local}
+      WORKSPACE_ASSET_MALWARE_SCAN_MODE: ${CHAT_FIRST_CANARY_SCAN_MODE:-required}
+      WORKSPACE_ASSET_MALWARE_SCANNER: ${CHAT_FIRST_CANARY_SCANNER:-clamscan}
+
+  # PostgreSQL is the only clustered chat-first profile.  Its deployment must
+  # supply a PostgreSQL URL; MySQL is intentionally not a chat-first runtime.
+  chat-first-postgresql-canary:
+    profiles: ["chat-first-postgresql-canary"]
+    image: ${CHAT_FIRST_POSTGRES_CANARY_IMAGE:-presenton-chat-first-postgres-canary:local}
+    # The supplied image must contain the scanner and a Next bundle built with
+    # the matching frontend flag.  The stock Dockerfile remains fail-closed.
+    ports:
+      - "${CHAT_FIRST_POSTGRES_CANARY_PORT:-5051}:80"
+    volumes:
+      - ./app_data:/app_data
+      - presenton_template_v2_private_sources:/app_data-private
+      - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
+    environment:
+      <<: *chat-first-canary-env
+      TEMPLATE_V2_DEPLOYMENT_TIER: production
+      DATABASE_URL: ${CHAT_FIRST_POSTGRES_DATABASE_URL:-}
+      CHAT_FIRST_WORKSPACE_ENABLED: ${CHAT_FIRST_POSTGRES_ENABLED:-false}
+      CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: postgresql-cluster
+      WORKSPACE_ASSET_MALWARE_SCAN_MODE: ${CHAT_FIRST_POSTGRES_SCAN_MODE:-required}
+      WORKSPACE_ASSET_MALWARE_SCANNER: ${CHAT_FIRST_POSTGRES_SCANNER:-clamscan}
+
+  # Explicit compatibility fence: Chat-first v1 does not support MySQL.  This
+  # service is a safe rollback/reference profile, never an enablement path.
+  chat-first-mysql-disabled:
+    profiles: ["chat-first-mysql-disabled"]
+    image: ${CHAT_FIRST_MYSQL_DISABLED_IMAGE:-presenton-chat-first-mysql-disabled:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: "false"
+    ports:
+      - "${CHAT_FIRST_MYSQL_DISABLED_PORT:-5052}:80"
+    volumes:
+      - ./app_data:/app_data
+      - presenton_template_v2_private_sources:/app_data-private
+      - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
+    environment:
+      <<: *chat-first-canary-env
+      TEMPLATE_V2_DEPLOYMENT_TIER: production
+      DATABASE_URL: ${CHAT_FIRST_MYSQL_DATABASE_URL:-}
+      CHAT_FIRST_WORKSPACE_ENABLED: "false"
+      CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: ""
+      NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: "false"

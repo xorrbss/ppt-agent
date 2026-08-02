@@ -37,6 +37,10 @@ class FakeAsyncSession:
 
     async def execute(self, *_args: Any, **_kwargs: Any):
         class _EmptyResult:
+            # Default fake UPDATE/DELETE execution models one successful row.
+            # Tests that need a conflict should provide a purpose-built result.
+            rowcount = 1
+
             def scalars(self):
                 return self
 

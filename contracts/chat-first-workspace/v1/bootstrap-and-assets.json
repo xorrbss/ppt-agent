@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "bootstrap": {
+    "idempotency_key": "bootstrap-demo-0001",
+    "conversation_id": "conv-demo-0001",
+    "operation_id": "op-demo-generate-0001",
+    "first_user_message": {
+      "id": "msg-demo-0001",
+      "position": 1,
+      "role": "user",
+      "content": "Create a concise quarterly planning deck.",
+      "attachments": [
+        {
+          "id": "asset-demo-0001",
+          "file_name": "planning-notes.pdf",
+          "media_type": "application/pdf",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "status": "processing"
+        }
+      ],
+      "generation_settings": {
+        "language": "en",
+        "n_slides": 8,
+        "tone": "professional"
+      }
+    },
+    "operation_anchor": {
+      "message_id": "msg-demo-0002",
+      "position": 2,
+      "role": "assistant",
+      "operation_id": "op-demo-generate-0001"
+    },
+    "operation_state": "waiting_for_assets",
+    "duplicate_bootstrap_result": {
+      "conversation_id": "conv-demo-0001",
+      "first_user_message_id": "msg-demo-0001",
+      "operation_id": "op-demo-generate-0001"
+    }
+  },
+  "asset_policy": {
+    "bootstrap_allowed": ["uploaded", "scanning", "processing", "ready"],
+    "wait_states": ["uploaded", "scanning", "processing"],
+    "block_states": ["failed", "quarantined", "expired", "deleted"],
+    "terminal_states": ["ready", "failed", "quarantined", "expired", "deleted"],
+    "processing_timeout_error_code": "asset_processing_timeout"
+  }
+}

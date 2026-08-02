@@ -112,6 +112,32 @@ class TestChatConversationStore:
             assistant_message="Yes, I will tighten the bullet points.",
         )
 
+    def test_append_turn_defers_mem0_for_workspace_transaction(self):
+        sql_session = MagicMock()
+        sql_session.defer_external_chat_memory = True
+        store = ChatConversationStore(sql_session)
+        presentation_id = uuid.uuid4()
+        conversation_id = uuid.uuid4()
+
+        with patch(
+            "services.chat.conversation_store.sql_chat_history.append_turn",
+            new=AsyncMock(),
+        ) as append_sql, patch(
+            "services.chat.conversation_store.CHAT_MEMORY_STORE.store_chat_turn",
+            new=AsyncMock(),
+        ) as store_mem0:
+            asyncio.run(
+                store.append_turn(
+                    presentation_id=presentation_id,
+                    conversation_id=conversation_id,
+                    user_message="Make slide 2 shorter",
+                    assistant_message="Slide 2 is shorter.",
+                )
+            )
+
+        append_sql.assert_awaited_once()
+        store_mem0.assert_not_awaited()
+
     def test_retrieve_semantic_context_delegates_to_chat_memory_store(self):
         store = ChatConversationStore(MagicMock())
         presentation_id = uuid.uuid4()

@@ -135,7 +135,7 @@ def _analysis_result() -> dict:
     return analyze_ooxml_candidates(candidates).model_dump(mode="json")
 
 
-def test_task_timestamp_normalizes_aware_values_for_legacy_task_columns() -> None:
+def test_task_timestamp_normalizes_values_to_aware_utc() -> None:
     source = datetime.fromisoformat("2026-07-25T08:30:00+09:00")
 
     assert ingestion._task_timestamp(source) == datetime(
@@ -144,9 +144,10 @@ def test_task_timestamp_normalizes_aware_values_for_legacy_task_columns() -> Non
         24,
         23,
         30,
+        tzinfo=timezone.utc,
     )
     naive = datetime(2026, 7, 24, 23, 30)
-    assert ingestion._task_timestamp(naive) is naive
+    assert ingestion._task_timestamp(naive) == naive.replace(tzinfo=timezone.utc)
 
 
 async def _mark_review_required(maker, import_id: uuid.UUID, task_id: str) -> None:

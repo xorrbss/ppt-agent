@@ -13,8 +13,16 @@ import {
   setStreaming,
 } from "@/store/slices/presentationGeneration";
 import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
+import type { WorkspaceCommandDispatcher } from "../workspace";
 
-const mountHeader = (isAuthoredDeck: boolean) => {
+const mountHeader = (
+  isAuthoredDeck: boolean,
+  mutationsEnabled = true,
+  workspace?: {
+    enabled: boolean;
+    command: WorkspaceCommandDispatcher;
+  },
+) => {
   store.dispatch(
     setPresentationData({
       id: "deck-1",
@@ -47,6 +55,10 @@ const mountHeader = (isAuthoredDeck: boolean) => {
             presentation_id="deck-1"
             isPresentationSaving={false}
             isAuthoredDeck={isAuthoredDeck}
+            mutationsEnabled={mutationsEnabled}
+            chatFirstEnabled={workspace !== undefined}
+            workspaceCommandsEnabled={workspace?.enabled ?? false}
+            onWorkspaceCommand={workspace?.command}
           />
         </Provider>
       </PathnameContext.Provider>
@@ -335,6 +347,112 @@ describe("PresentationHeader authored export", () => {
     cy.get('[data-testid="authored-export-hybrid"]').click();
     cy.wait("@failedExport");
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
+  });
+
+  it("dispatches quality and export through chat-first operations without invoking legacy export", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    mountHeader(true, false, { enabled: true, command: workspaceCommand });
+
+    cy.get('[data-testid="workspace-quality-review"]').click();
+    cy.wrap(null).then(() => {
+      expect(workspaceCommand.getCall(0).args).to.deep.equal([
+        "현재 발표자료를 읽기 전용으로 품질 검토해 줘",
+        {
+          commandType: "quality.review",
+          context: { mode: "analyze_only" },
+        },
+      ]);
+    });
+
+    openExportOptions();
+    cy.get('[data-testid="export-pdf"]').click({ force: true });
+    openExportOptions();
+    cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
+
+    cy.wrap(null).then(() => {
+      expect(workspaceCommand.getCall(1).args).to.deep.equal([
+        "PDF로 내보내기",
+        { commandType: "export.pdf", context: { format: "pdf" } },
+      ]);
+      expect(workspaceCommand.getCall(2).args).to.deep.equal([
+        "편집 가능한 요소를 분리해 PPTX로 내보내기",
+        {
+          commandType: "export.pptx",
+          context: { format: "pptx", pptx_mode: "hybrid", font_embedding: false },
+        },
+      ]);
+    });
+    cy.get("@updatePresentationContent").should("not.have.been.called");
+  });
+
+  it("dispatches durable version restore commands for chat-first undo and redo", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    mountHeader(false, false, { enabled: true, command: workspaceCommand });
+
+    cy.get('[data-testid="presentation-undo"]')
+      .should("be.visible")
+      .and("not.be.disabled")
+      .click();
+    cy.get('[data-testid="presentation-redo"]')
+      .should("be.visible")
+      .and("not.be.disabled")
+      .click();
+
+    cy.wrap(null).then(() => {
+      expect(workspaceCommand.getCall(0).args).to.deep.equal([
+        "이전 서버 버전으로 복원해 줘",
+        {
+          commandType: "version.restore",
+          context: { strategy: "previous", source: "undo" },
+        },
+      ]);
+      expect(workspaceCommand.getCall(1).args).to.deep.equal([
+        "복원 직전 서버 버전으로 다시 실행해 줘",
+        {
+          commandType: "version.restore",
+          context: { strategy: "previous", source: "redo" },
+        },
+      ]);
+    });
+    cy.get("@updatePresentationContent").should("not.have.been.called");
+  });
+
+  it("makes the header read-only and skips snapshot writes when chat-first mutations are disabled", () => {
+    cy.stub(PresentationGenerationApi, "getPresentationVersions")
+      .as("getPresentationVersions")
+      .resolves([
+        {
+          id: "version-1",
+          created_at: "2026-08-03T00:00:00Z",
+          slide_count: 1,
+        },
+      ]);
+    mountHeader(false, false);
+
+    cy.get('[data-testid="presentation-title-edit"]').should("be.disabled");
+    cy.get('[data-testid="presentation-regenerate"]').should("have.class", "hidden");
+    cy.get('[data-testid="presentation-undo"]').should("have.class", "hidden");
+    cy.get('[data-testid="presentation-redo"]').should("have.class", "hidden");
+    cy.get("@getThemes").should("not.have.been.called");
+    cy.get('[data-testid="version-history-trigger"]').click();
+    cy.get("@getPresentationVersions").should("have.been.calledOnce");
+    cy.get('[data-testid="version-restore"]').should("have.class", "hidden");
+
+    openExportOptions();
+    cy.get('[data-testid="export-pdf"]').click({ force: true });
+    cy.wait("@exportPresentation");
+    cy.get("@updatePresentationContent").should("not.have.been.called");
+  });
+
+  it("restores legacy header controls when the chat-first flag rolls back", () => {
+    mountHeader(false, false);
+    cy.get('[data-testid="presentation-title-edit"]').should("be.disabled");
+    cy.get("@getThemes").should("not.have.been.called");
+
+    mountHeader(false, true);
+    cy.get('[data-testid="presentation-title-edit"]').should("not.be.disabled");
+    cy.get('[data-testid="presentation-regenerate"]').should("not.have.class", "hidden");
+    cy.get("@getThemes").should("have.been.calledOnce");
   });
 });
 

@@ -27,7 +27,10 @@ from sqlmodel import SQLModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.user import User
+from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from services import presentation_generation_job_service as jobs
 from utils.db_utils import to_sync_sqlalchemy_url
 
@@ -173,6 +176,10 @@ def test_postgresql_multiprocess_authored_quota_cancel_and_lease_recovery(
                 await connection.run_sync(
                     SQLModel.metadata.create_all,
                     tables=[
+                        User.__table__,
+                        PresentationModel.__table__,
+                        WorkspaceConversation.__table__,
+                        WorkspaceOperation.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,
                         PresentationGenerationJob.__table__,
                     ],

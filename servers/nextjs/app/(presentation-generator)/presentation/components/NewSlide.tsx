@@ -1,11 +1,5 @@
 "use client";
-import React, {
-  useEffect,
-  useState,
-  memo,
-  useCallback,
-  useRef,
-} from "react";
+import React, { useEffect, useState, memo, useCallback, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { addNewSlide } from "@/store/slices/presentationGeneration";
 import { Loader2, X } from "lucide-react";
@@ -19,73 +13,82 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 interface LayoutItemProps {
   layout: any;
   onSelect: (sampleData: any, layoutId: string) => void;
+  disabled?: boolean;
 }
 
 const PREVIEW_WIDTH = 1280;
 const PREVIEW_HEIGHT = 720;
 
-const LayoutItem = memo(({ layout, onSelect }: LayoutItemProps) => {
-  const previewRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(0.2);
-  const {
-    component: LayoutComponent,
-    sampleData,
-    layoutId,
-    layoutName,
-  } = layout;
+const LayoutItem = memo(
+  ({ layout, onSelect, disabled = false }: LayoutItemProps) => {
+    const previewRef = useRef<HTMLDivElement | null>(null);
+    const [scale, setScale] = useState(0.2);
+    const {
+      component: LayoutComponent,
+      sampleData,
+      layoutId,
+      layoutName,
+    } = layout;
 
-  useEffect(() => {
-    if (!previewRef.current) return;
+    useEffect(() => {
+      if (!previewRef.current) return;
 
-    const previewElement = previewRef.current;
-    const updateScale = () => {
-      const nextScale = Math.min(
-        previewElement.clientWidth / PREVIEW_WIDTH,
-        previewElement.clientHeight / PREVIEW_HEIGHT
-      );
-      setScale(nextScale || 0.2);
+      const previewElement = previewRef.current;
+      const updateScale = () => {
+        const nextScale = Math.min(
+          previewElement.clientWidth / PREVIEW_WIDTH,
+          previewElement.clientHeight / PREVIEW_HEIGHT,
+        );
+        setScale(nextScale || 0.2);
+      };
+
+      const resizeObserver = new ResizeObserver(updateScale);
+      resizeObserver.observe(previewElement);
+      updateScale();
+
+      return () => resizeObserver.disconnect();
+    }, []);
+
+    const selectLayout = () => {
+      if (!disabled) onSelect(sampleData, layoutId);
     };
 
-    const resizeObserver = new ResizeObserver(updateScale);
-    resizeObserver.observe(previewElement);
-    updateScale();
-
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  const selectLayout = () => onSelect(sampleData, layoutId);
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${layoutName || "슬라이드"} 레이아웃 추가`}
-      title={layoutName || "슬라이드 레이아웃"}
-      onClick={selectLayout}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        selectLayout();
-      }}
-      className="relative aspect-video cursor-pointer overflow-hidden rounded-md border border-[#E4E4EA] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition duration-200 hover:border-[#7C51F8] hover:shadow-[0_0_0_2px_rgba(124,81,248,0.18)] focus-visible:ring-2 focus-visible:ring-[#7C51F8]"
-    >
-      <div className="absolute inset-0 z-40 bg-transparent" />
-      <div ref={previewRef} className="relative h-full w-full overflow-hidden">
+    return (
+      <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        aria-label={`${layoutName || "슬라이드"} 레이아웃 추가`}
+        title={layoutName || "슬라이드 레이아웃"}
+        onClick={selectLayout}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          selectLayout();
+        }}
+        className="relative aspect-video cursor-pointer overflow-hidden rounded-md border border-[#E4E4EA] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition duration-200 hover:border-[#7C51F8] hover:shadow-[0_0_0_2px_rgba(124,81,248,0.18)] focus-visible:ring-2 focus-visible:ring-[#7C51F8]"
+      >
+        <div className="absolute inset-0 z-40 bg-transparent" />
         <div
-          className="absolute left-0 top-0"
-          style={{
-            width: PREVIEW_WIDTH,
-            height: PREVIEW_HEIGHT,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-          }}
+          ref={previewRef}
+          className="relative h-full w-full overflow-hidden"
         >
-          <LayoutComponent data={sampleData} />
+          <div
+            className="absolute left-0 top-0"
+            style={{
+              width: PREVIEW_WIDTH,
+              height: PREVIEW_HEIGHT,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+            }}
+          >
+            <LayoutComponent data={sampleData} />
+          </div>
         </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
 LayoutItem.displayName = "LayoutItem";
 interface NewSlideV1Props {
@@ -93,12 +96,14 @@ interface NewSlideV1Props {
   templateID: string;
   index: number;
   presentationId: string;
+  mutationsEnabled?: boolean;
 }
 const NewSlideV1 = ({
   setShowNewSlideSelection,
   templateID,
   index,
   presentationId,
+  mutationsEnabled = true,
 }: NewSlideV1Props) => {
   const dispatch = useDispatch();
   const pathname = usePathname();
@@ -118,6 +123,7 @@ const NewSlideV1 = ({
 
   const handleNewSlide = useCallback(
     (sampleData: any, id: string) => {
+      if (!mutationsEnabled) return;
       try {
         const newSlide = {
           id: uuidv4(),
@@ -139,7 +145,10 @@ const NewSlideV1 = ({
         setShowNewSlideSelection(false);
       } catch (error: any) {
         console.error(error);
-        notify.error("슬라이드를 추가할 수 없습니다", "새 슬라이드를 추가하는 중 문제가 발생했습니다.");
+        notify.error(
+          "슬라이드를 추가할 수 없습니다",
+          "새 슬라이드를 추가하는 중 문제가 발생했습니다.",
+        );
       }
     },
     [
@@ -150,7 +159,8 @@ const NewSlideV1 = ({
       setShowNewSlideSelection,
       isCustomTemplate,
       pathname,
-    ]
+      mutationsEnabled,
+    ],
   );
 
   useEffect(() => {
@@ -164,7 +174,7 @@ const NewSlideV1 = ({
           const templateDetails = await getCustomTemplateDetails(
             customTemplateId,
             "Custom Template",
-            "User-created template"
+            "User-created template",
           );
           if (isMounted) setLayouts(templateDetails?.layouts || []);
         } else {
@@ -187,7 +197,6 @@ const NewSlideV1 = ({
   }, [isCustomTemplate, templateID]);
 
   const layoutCountText = `레이아웃 ${layouts.length}개`;
-
 
   return (
     <div
@@ -217,9 +226,7 @@ const NewSlideV1 = ({
             {loading ? "레이아웃 불러오는 중" : layoutCountText}
           </p>
         </div>
-        {loading && (
-          <Loader2 className="h-5 w-5 animate-spin text-[#7C51F8]" />
-        )}
+        {loading && <Loader2 className="h-5 w-5 animate-spin text-[#7C51F8]" />}
       </div>
 
       <div className="max-h-[min(70vh,640px)] overflow-y-auto px-4 py-4 md:px-5">
@@ -234,6 +241,7 @@ const NewSlideV1 = ({
                 key={layout.layoutId}
                 layout={layout}
                 onSelect={handleNewSlide}
+                disabled={!mutationsEnabled}
               />
             ))}
           </div>
