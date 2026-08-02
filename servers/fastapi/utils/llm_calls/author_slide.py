@@ -204,6 +204,19 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   words are never split mid-word across lines.
 - Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
   touch or clip an edge. Size the box to its content (or shrink the content to the box).
+- PAGE-NUMBER SYSTEM (ordinary authored generation and style-reference mode):
+  - The COVER slide has no page number and no footer text.
+  - Every slide after the cover has exactly one page-number text element in the precise bottom
+    horizontal center. Use the per-slide PAGE MARKER instruction below as its only visible text.
+  - Numbering starts at `01` on the slide immediately after the cover, increases by one on every
+    following slide, and always uses two digits (`01`, `02`, `03`, ...).
+  - Give that element a full-width fixed box (`position:absolute;left:0;right:0;bottom:27px`),
+    centered text, 12px type (9pt equivalent), 500 weight, line-height 1, and #7B8794 color.
+  - Reserve the bottom 56px as a footer safe zone. Content, images, charts, tables, and decorative
+    shapes must not overlap that zone or obscure the marker.
+  - The footer contains the number only: never add `Page`, `페이지`, a slash/total, title,
+    section name, wordmark, logo, or any other footer copy. Never place a page number at the top,
+    in a corner, or anywhere else. Do not create a duplicate marker.
 - All visible text in {language}.
 Return ONLY the complete HTML document."""
 
@@ -214,7 +227,6 @@ _DEFAULT_STYLE_BRIEF = """\
   #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues.
 - Margins ~64px (except intentional full-bleed colour zones).
 - Consistent eyebrow: UPPERCASE, letter-spaced 0.15em, ~13px, primary, with a short tick/line.
-- Consistent footer on content slides: small muted slide marker left + a small wordmark right.
 - Strong, confident type hierarchy; make the single most important element dominant.
 - Allowed (vary per slide): full-bleed/partial colour-blocked zones, asymmetric grids, a left
   sidebar, oversized numerals, thin rules, subtle tints of the primary, and SVG only for essential
@@ -389,10 +401,24 @@ _SYSTEM = (
 def _author_prompt(
     content: str, design_system: str, brand: Brand, role: str, index: int, n: int
 ) -> str:
-    wordmark = f" Wordmark for the footer: {brand.wordmark}." if brand.wordmark else ""
+    if role == "COVER":
+        page_marker = (
+            "PAGE MARKER FOR THIS SLIDE: OMIT IT. This is the cover; render no page number "
+            "and no footer text."
+        )
+    else:
+        page_marker = (
+            f'PAGE MARKER FOR THIS SLIDE: render exactly "{index:02d}" once, as the only '
+            "footer text, using the fixed bottom-center page-number system."
+        )
+    wordmark = (
+        f" Brand wordmark: {brand.wordmark}. If used, keep it outside the reserved footer zone."
+        if brand.wordmark
+        else ""
+    )
     return (
         f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
-        f"{role}. CONTENT: {content}.{wordmark}\n\n{design_system}\n\n"
+        f"{role}. CONTENT: {content}.{wordmark}\n\n{page_marker}\n\n{design_system}\n\n"
         "Design THIS slide bespoke and premium within the shared system, vary the layout to "
         "suit the role, output ONLY the complete self-contained HTML document."
     )
@@ -526,21 +552,23 @@ def fallback_slide_html(
     if len(text) > 420:
         text = text[:420].rstrip() + "…"
     eyebrow = _html.escape(role or "")
-    marker = f"{index + 1:02d} / {n:02d}"
+    marker = "" if role == "COVER" else f"{index:02d}"
+    footer = f'<div class="foot">{marker}</div>' if marker else ""
     return (
         f"<!DOCTYPE html><html lang=\"ko\" {_FALLBACK_SLIDE_MARKER}>"
         "<head><meta charset=\"utf-8\"><style>"
         f"body{{margin:0;width:1280px;height:720px;overflow:hidden;background:#F8FAFC;"
         f"font-family:{font_stack};"
-        "box-sizing:border-box;padding:64px;display:flex;flex-direction:column;}"
+        "box-sizing:border-box;padding:64px 64px 72px;display:flex;flex-direction:column;position:relative;}"
         f".bar{{width:56px;height:6px;background:{primary};margin-bottom:24px;}}"
         f".eyebrow{{font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:{primary};"
         "font-weight:700;margin-bottom:18px;}"
         ".body{font-size:30px;line-height:1.5;color:#0F172A;font-weight:500;max-width:1000px;}"
-        ".foot{margin-top:auto;font-size:13px;color:#64748B;}"
+        ".foot{position:absolute;left:0;right:0;bottom:27px;text-align:center;"
+        "font-size:12px;line-height:1;font-weight:500;color:#7B8794;}"
         "</style></head><body>"
         f"<div class=\"bar\"></div><div class=\"eyebrow\">{eyebrow}</div>"
-        f"<div class=\"body\">{text}</div><div class=\"foot\">{marker}</div>"
+        f"<div class=\"body\">{text}</div>{footer}"
         "</body></html>"
     )
 

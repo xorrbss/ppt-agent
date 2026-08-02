@@ -115,6 +115,20 @@ def test_fallback_slide_html_escapes_angle_brackets():
     assert "&lt;script&gt;" in html
 
 
+def test_fallback_cover_omits_page_number():
+    html = fallback_slide_html("cover", _brand(), "COVER", 0, 5)
+
+    assert 'class="foot"' not in html
+
+
+def test_fallback_slide_html_uses_bottom_center_number_after_cover():
+    html = fallback_slide_html("content", _brand(), "PROBLEM", 1, 5)
+
+    assert '<div class="foot">01</div>' in html
+    assert "left:0;right:0;bottom:27px;text-align:center" in html
+    assert "01 / 05" not in html
+
+
 def test_fallback_slide_html_uses_offline_safe_logical_font_stack():
     html = fallback_slide_html("본문", _brand(), "PROBLEM", 1, 3)
 
@@ -220,8 +234,10 @@ def test_default_design_system_is_byte_for_byte_canonical_output():
     )
 
     assert canonical_default == without_style
-    assert "12px" not in without_style
-    assert "9pt" not in without_style
+    assert "precise bottom" in without_style
+    assert "bottom:27px" in without_style
+    assert "12px type (9pt equivalent)" in without_style
+    assert "number only" in without_style
 
 
 def test_design_system_prohibits_external_fonts_and_documents_local_fallbacks():
@@ -252,10 +268,26 @@ def test_custom_design_system_injects_brief_without_weakening_common_rules():
     assert "EXACTLY 1280x720px" in design_system
     assert "FIT IS CRITICAL" in design_system
     assert "unnecessarily hard-to-read" in design_system
-    assert "12px" not in design_system
-    assert "9pt" not in design_system
+    assert "precise bottom" in design_system
+    assert "bottom:27px" in design_system
+    assert "12px type (9pt equivalent)" in design_system
+    assert "number only" in design_system
     assert "Return ONLY the complete HTML document." in design_system
     assert "The primary is the ONE accent" not in design_system
+
+
+def test_author_prompt_uses_cover_exception_and_sequential_bottom_center_marker():
+    cover = author_slide_mod._author_prompt(
+        "cover", "DESIGN", _brand(), "COVER", 0, 4
+    )
+    content = author_slide_mod._author_prompt(
+        "content", "DESIGN", _brand(), "PROBLEM", 1, 4
+    )
+
+    assert "PAGE MARKER FOR THIS SLIDE: OMIT IT" in cover
+    assert "render no page number and no footer text" in cover
+    assert 'render exactly "01" once' in content
+    assert "as the only footer text" in content
 
 
 def test_temporary_authored_render_preserves_sub_12px_source_css(monkeypatch):
