@@ -34,6 +34,7 @@ from models.sql.webhook_subscription import WebhookSubscription
 from models.sql.user import User
 from models.sql.access_token import AccessToken
 from models.sql.provider_settings import ProviderSettings
+from templates.v2.catalog import get_template_v2_default_template_id
 from utils.owner_context import get_current_owner_id
 from utils.get_env import get_migrate_database_on_startup_env
 from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
@@ -89,6 +90,7 @@ def _scope_owned_selects(execute_state) -> None:
         return
 
     statement = execute_state.statement
+    catalog_default_id = get_template_v2_default_template_id()
     for model in _STRICT_OWNER_MODELS:
         statement = statement.options(
             with_loader_criteria(
@@ -103,6 +105,10 @@ def _scope_owned_selects(execute_state) -> None:
             lambda row: or_(
                 row.owner_id == owner_id,
                 (row.owner_id.is_(None) & row.is_default.is_(True)),
+                (
+                    row.owner_id.is_(None)
+                    & (row.id == catalog_default_id)
+                ),
             ),
             include_aliases=True,
         )

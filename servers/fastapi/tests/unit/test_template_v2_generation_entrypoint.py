@@ -8,6 +8,7 @@ from fastapi import HTTPException
 import pytest
 
 from api.v1.ppt.endpoints.presentation_generate import (
+    _template_v2_http_exception,
     check_if_api_request_is_valid,
     generate_presentation_handler,
 )
@@ -74,12 +75,33 @@ def _layouts_payload(*layouts: SlideLayout) -> dict:
 
 
 def _revision_entry(*layouts: SlideLayout) -> SimpleNamespace:
+    layout_source_parts = {
+        layout.id: f"ppt/slides/slide{index}.xml"
+        for index, layout in enumerate(layouts, start=1)
+    }
     return SimpleNamespace(
         name="Native Template",
         description="Revision snapshot",
         merged_components=None,
         layouts=_layouts_payload(*layouts),
-        assets=None,
+        assets={
+            "native_pptx": {
+                "schema_version": "presenton.template-v2-native-source/v1",
+                "storage_key": "template-v2/native-template/source.pptx",
+                "source_sha256": "a" * 64,
+                "source_size_bytes": 2048,
+                "layout_source_parts": layout_source_parts,
+                "capabilities": {
+                    "native_clone": True,
+                    "text_patch": True,
+                    "table_patch": True,
+                    "master_layout_theme": True,
+                    "relationships_media": True,
+                },
+                "preservation_mode": "native_clone",
+                "publication_status": "publishable",
+            }
+        },
         is_default=False,
     )
 
@@ -329,6 +351,77 @@ def test_target_loader_fails_closed_when_no_layout_is_fillable(monkeypatch):
             )
 
     assert exc.value.code == "template_v2_fillable_layout_required"
+
+
+def test_target_loader_rejects_catalog_template_without_release_admission(monkeypatch):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv(
+        "TEMPLATE_V2_TEMPLATE_ALLOWLIST",
+        "ppt-master-swiss-grid-systems",
+    )
+    record = SimpleNamespace(
+        revision=7,
+        name="Swiss",
+        layouts=_layouts_payload(_layout()),
+    )
+
+    with patch(
+        "services.template_v2_generation_service.TemplateV2Service.get",
+        new=AsyncMock(return_value=record),
+    ), patch(
+        "services.template_v2_generation_service.get_revision",
+        new=AsyncMock(return_value=_revision_entry(_layout())),
+    ), patch(
+        "services.template_v2_generation_service.is_template_v2_release_ready",
+        return_value=False,
+    ):
+        with pytest.raises(TemplateV2GenerationError) as exc:
+            asyncio.run(
+                load_template_v2_generation_target(
+                    RecordingSession(),
+                    template_id="ppt-master-swiss-grid-systems",
+                    revision=7,
+                )
+            )
+
+    assert exc.value.code == "template_v2_template_not_published"
+    response = _template_v2_http_exception(exc.value)
+    assert response.status_code == 403
+    assert response.detail == "template_v2_template_not_published"
+
+
+def test_target_loader_preserves_private_non_catalog_generation(monkeypatch):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
+    record = SimpleNamespace(
+        revision=7,
+        name="Private Template",
+        layouts=_layouts_payload(_layout()),
+    )
+    private_revision = _revision_entry(_layout())
+    private_revision.assets = None
+
+    with patch(
+        "services.template_v2_generation_service.TemplateV2Service.get",
+        new=AsyncMock(return_value=record),
+    ), patch(
+        "services.template_v2_generation_service.get_revision",
+        new=AsyncMock(return_value=private_revision),
+    ), patch(
+        "services.template_v2_generation_service.is_template_v2_release_ready",
+        side_effect=AssertionError("private templates must not use the catalog gate"),
+    ):
+        target = asyncio.run(
+            load_template_v2_generation_target(
+                RecordingSession(),
+                template_id="native-template",
+                revision=7,
+            )
+        )
+
+    assert target.template_id == "native-template"
+    assert target.revision == 7
+    assert target.preservation_mode == "reconstructed"
 
 
 def test_target_loader_rejects_a_non_current_revision(monkeypatch):

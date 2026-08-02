@@ -1,5 +1,6 @@
 {
   "schema_version": "presenton.template-v2-design-catalog/v1",
+  "default_template_id": null,
   "entries": [
     {
       "id": "ppt-master-swiss-grid-systems",

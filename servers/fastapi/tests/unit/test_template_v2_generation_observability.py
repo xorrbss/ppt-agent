@@ -55,6 +55,7 @@ def test_export_failure_observation_uses_stable_code_without_exception_text():
     [
         "template_v2_native_source_invalid",
         "template_v2_native_pptx_unsupported",
+        "template_v2_template_not_published",
     ],
 )
 def test_native_generation_failures_are_safe_observation_dimensions(code):

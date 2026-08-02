@@ -28,11 +28,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sql.template_v2 import TemplateV2
 from services.database import get_async_session
 from services.template_v2_service import (
+    TemplateV2CatalogMutationError,
+    TemplateV2DefaultMutationError,
     TemplateV2NotFoundError,
     TemplateV2PersistenceConflictError,
     TemplateV2RevisionConflictError,
     TemplateV2Service,
     TemplateV2ServiceError,
+)
+from templates.v2.catalog import (
+    get_template_v2_catalog_entry,
+    is_template_v2_default_release,
+    is_template_v2_release_ready,
 )
 from templates.v2.generation import generate_prompted_slide_layout
 from templates.v2.models.layouts import (
@@ -165,7 +172,7 @@ def _response(template: TemplateV2) -> TemplateResponse:
         description=template.description,
         layout_count=_count_layouts(template.layouts),
         thumbnail=_template_thumbnail(template),
-        is_default=template.is_default,
+        is_default=is_template_v2_default_release(template.id, template.assets),
         created_at=template.created_at,
         updated_at=template.updated_at,
         merged_components=deepcopy(template.merged_components),
@@ -185,6 +192,16 @@ def _require_write(template_id: str) -> None:
 
 
 def _service_http_error(error: TemplateV2ServiceError) -> HTTPException:
+    if isinstance(error, TemplateV2CatalogMutationError):
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_catalog_is_read_only",
+        )
+    if isinstance(error, TemplateV2DefaultMutationError):
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_default_is_catalog_managed",
+        )
     if isinstance(error, TemplateV2NotFoundError):
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -226,6 +243,17 @@ async def generate_template_layout_from_prompt(
         template = await service.get(request.template_id)
     except TemplateV2ServiceError as error:
         raise _service_http_error(error) from error
+
+    # Keep private/custom draft authoring available. Curated PPT Master catalog
+    # identities, however, may not bypass their publication and rights gate.
+    if (
+        get_template_v2_catalog_entry(template.id) is not None
+        and not is_template_v2_release_ready(template.id, template.assets)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_template_not_published",
+        )
 
     if template.layouts is None:
         raise HTTPException(
@@ -298,6 +326,11 @@ async def update_template_metadata(
     request: UpdateTemplateMetadataRequest = Body(...),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    if "is_default" in request.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_default_is_catalog_managed",
+        )
     if request.id is not None and request.id != template_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

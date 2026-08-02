@@ -12,10 +12,12 @@ from __future__ import annotations
 from datetime import datetime
 from functools import lru_cache
 import hashlib
+import hmac
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
-from typing import Any, Literal
+from typing import Any, Collection, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -32,6 +34,10 @@ DEFAULT_RIGHTS_PATH = (
     / "manifests"
     / "ppt_master_rights.v1.json"
 )
+TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST = (
+    "TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST"
+)
+TEMPLATE_V2_RIGHTS_ATTESTATION_KEY = "TEMPLATE_V2_RIGHTS_ATTESTATION_KEY"
 
 TemplateKind = Literal["brand", "layout", "deck"]
 PreservationMode = Literal["native_clone", "reconstructed"]
@@ -235,13 +241,31 @@ class TemplateV2CatalogManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal[CATALOG_SCHEMA_VERSION]
+    default_template_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+    )
     entries: tuple[TemplateV2CatalogEntry, ...]
 
     @model_validator(mode="after")
-    def require_unique_ids(self) -> "TemplateV2CatalogManifest":
+    def require_valid_default(self) -> "TemplateV2CatalogManifest":
         identifiers = [entry.id for entry in self.entries]
         if len(identifiers) != len(set(identifiers)):
             raise ValueError("catalog template ids must be unique")
+        if self.default_template_id is not None:
+            default_entry = next(
+                (
+                    entry
+                    for entry in self.entries
+                    if entry.id == self.default_template_id
+                ),
+                None,
+            )
+            if default_entry is None:
+                raise ValueError("catalog default_template_id must reference an entry")
+            if default_entry.publication_status != "published":
+                raise ValueError("catalog default template must be published")
         return self
 
 
@@ -324,9 +348,10 @@ class RightsApproval(BaseModel):
     reviewer: str | None = Field(default=None, min_length=1, max_length=300)
     reviewed_at: datetime | None = None
     evidence_set_sha256: str | None = None
+    attestation_hmac_sha256: str | None = None
     decision: str | None = Field(default=None, min_length=1, max_length=1000)
 
-    @field_validator("evidence_set_sha256")
+    @field_validator("evidence_set_sha256", "attestation_hmac_sha256")
     @classmethod
     def validate_evidence_set_sha256(cls, value: str | None) -> str | None:
         if value is not None and not _SHA256_RE.fullmatch(value):
@@ -339,6 +364,7 @@ class RightsApproval(BaseModel):
             self.reviewer,
             self.reviewed_at,
             self.evidence_set_sha256,
+            self.attestation_hmac_sha256,
             self.decision,
         )
         if self.status == "pending" and any(value is not None for value in review_fields):
@@ -424,11 +450,68 @@ def rights_evidence_set_sha256(record: TemplateRightsRecord) -> str:
     )
 
 
+def get_trusted_rights_approvers(
+    environ: Mapping[str, str] | None = None,
+) -> frozenset[str]:
+    """Load operator-controlled approvers without trusting repository data alone."""
+
+    values = os.environ if environ is None else environ
+    raw_value = values.get(TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST, "")
+    entries = [item.strip() for item in raw_value.split(",") if item.strip()]
+    if len(entries) != len(set(entries)):
+        return frozenset()
+    return frozenset(entries)
+
+
+def get_rights_attestation_key(
+    environ: Mapping[str, str] | None = None,
+) -> bytes | None:
+    """Load the deployment secret that keeps approval outside repository control."""
+
+    values = os.environ if environ is None else environ
+    raw_value = values.get(TEMPLATE_V2_RIGHTS_ATTESTATION_KEY)
+    if raw_value is None:
+        return None
+    encoded = raw_value.encode("utf-8")
+    return encoded if len(encoded) >= 32 else None
+
+
+def rights_approval_attestation_hmac(
+    *,
+    template_id: str,
+    status: Literal["approved", "rejected"],
+    reviewer: str,
+    reviewed_at: datetime,
+    evidence_set_sha256: str,
+    decision: str,
+    key: bytes,
+) -> str:
+    """Sign the immutable approval coordinates with an operator-held secret."""
+
+    payload = json.dumps(
+        {
+            "schema_version": "presenton.template-v2-rights-approval/v2",
+            "template_id": template_id,
+            "status": status,
+            "reviewer": reviewer,
+            "reviewed_at": reviewed_at.isoformat(),
+            "evidence_set_sha256": evidence_set_sha256,
+            "decision": decision,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hmac.new(key, payload, hashlib.sha256).hexdigest()
+
+
 def evaluate_rights_readiness(
     entry: TemplateV2CatalogEntry,
     record: TemplateRightsRecord,
     *,
     evidence_root: Path | None = None,
+    trusted_approvers: Collection[str] = (),
+    attestation_key: bytes | None = None,
 ) -> RightsReadinessReport:
     """Fail closed unless source, rights evidence, and human approval all agree."""
 
@@ -503,6 +586,25 @@ def evaluate_rights_readiness(
         blockers.append("rights approval is not approved")
     elif approval.evidence_set_sha256 != evidence_digest:
         blockers.append("rights approval digest does not match the evidence set")
+    elif approval.reviewer not in frozenset(trusted_approvers):
+        blockers.append("rights approval reviewer is not operator-trusted")
+    elif attestation_key is None:
+        blockers.append("rights approval attestation key is unavailable")
+    else:
+        expected_attestation = rights_approval_attestation_hmac(
+            template_id=record.template_id,
+            status="approved",
+            reviewer=approval.reviewer,
+            reviewed_at=approval.reviewed_at,
+            evidence_set_sha256=approval.evidence_set_sha256,
+            decision=approval.decision,
+            key=attestation_key,
+        )
+        if not hmac.compare_digest(
+            approval.attestation_hmac_sha256,
+            expected_attestation,
+        ):
+            blockers.append("rights approval attestation is invalid")
 
     return RightsReadinessReport(
         template_id=entry.id,
@@ -551,6 +653,12 @@ def get_template_v2_catalog_entry(
     )
 
 
+def get_template_v2_default_template_id() -> str | None:
+    """Return the single catalog-owned default identifier, if configured."""
+
+    return _default_catalog().default_template_id
+
+
 def get_template_rights_record(template_id: str) -> TemplateRightsRecord | None:
     return next(
         (
@@ -571,9 +679,66 @@ def is_template_v2_catalog_entry_rights_ready(
         record = get_template_rights_record(entry.id)
         if record is None:
             return False
-        return evaluate_rights_readiness(entry, record).ready_for_publication_review
+        return evaluate_rights_readiness(
+            entry,
+            record,
+            trusted_approvers=get_trusted_rights_approvers(),
+            attestation_key=get_rights_attestation_key(),
+        ).ready_for_publication_review
     except (OSError, ValueError):
         return False
+
+
+def is_template_v2_catalog_source_bound(
+    entry: TemplateV2CatalogEntry,
+    assets: Any,
+) -> bool:
+    """Bind a published catalog identity to its exact reviewed PPTX receipt."""
+
+    record = get_template_rights_record(entry.id)
+    candidate_files = [
+        item for item in entry.source.files if item.role == "candidate_pptx"
+    ]
+    if record is None or len(candidate_files) != 1 or not isinstance(assets, dict):
+        return False
+    native_source = assets.get("native_pptx")
+    if not isinstance(native_source, dict):
+        return False
+    candidate = candidate_files[0]
+    return (
+        native_source.get("preservation_mode") == entry.preservation_mode
+        and native_source.get("source_sha256") == candidate.sha256
+        and native_source.get("source_size_bytes")
+        == record.source.candidate_pptx_size_bytes
+        and record.source.candidate_pptx_sha256 == candidate.sha256
+        and record.source.candidate_pptx_path == candidate.path
+    )
+
+
+def is_template_v2_release_ready(template_id: str, assets: Any) -> bool:
+    """Apply the shared discovery/generation release gate fail-closed."""
+
+    from templates.v2.publication import evaluate_template_v2_publication
+
+    if not evaluate_template_v2_publication(assets).publishable:
+        return False
+    entry = get_template_v2_catalog_entry(template_id)
+    if entry is None:
+        return True
+    return (
+        entry.publication_status == "published"
+        and is_template_v2_catalog_entry_rights_ready(entry)
+        and is_template_v2_catalog_source_bound(entry, assets)
+    )
+
+
+def is_template_v2_default_release(template_id: str, assets: Any) -> bool:
+    """Derive default authority from the catalog and the full release gate."""
+
+    return (
+        get_template_v2_default_template_id() == template_id
+        and is_template_v2_release_ready(template_id, assets)
+    )
 
 
 def list_template_v2_catalog_entries(
@@ -609,11 +774,18 @@ __all__ = [
     "RightsReadinessReport",
     "catalog_entry_sha256",
     "evaluate_rights_readiness",
+    "get_rights_attestation_key",
+    "get_trusted_rights_approvers",
     "get_template_rights_record",
     "get_template_v2_catalog_entry",
+    "get_template_v2_default_template_id",
     "is_template_v2_catalog_entry_rights_ready",
+    "is_template_v2_catalog_source_bound",
+    "is_template_v2_default_release",
+    "is_template_v2_release_ready",
     "list_template_v2_catalog_entries",
     "load_template_rights_manifest",
     "load_template_v2_catalog",
     "rights_evidence_set_sha256",
+    "rights_approval_attestation_hmac",
 ]

@@ -11,7 +11,9 @@ from models.sql.user import User
 from services import database as _database_events  # noqa: F401
 
 
-def test_owned_queries_are_isolated_and_only_default_templates_are_shared():
+def test_owned_queries_include_catalog_default_even_when_database_flag_is_false(
+    monkeypatch,
+):
     async def run():
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         session_maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -67,6 +69,18 @@ def test_owned_queries_are_isolated_and_only_default_templates_are_shared():
                         is_default=False,
                     ),
                     TemplateV2(
+                        id="catalog-default",
+                        owner_id=None,
+                        name="Catalog default",
+                        is_default=False,
+                    ),
+                    TemplateV2(
+                        id="first-private",
+                        owner_id=first_id,
+                        name="First private",
+                        is_default=False,
+                    ),
+                    TemplateV2(
                         id="second-private",
                         owner_id=second_id,
                         name="Second private",
@@ -76,6 +90,11 @@ def test_owned_queries_are_isolated_and_only_default_templates_are_shared():
             )
             await session.commit()
 
+        monkeypatch.setattr(
+            _database_events,
+            "get_template_v2_default_template_id",
+            lambda: "catalog-default",
+        )
         context_token = set_current_owner_id(first_id)
         try:
             async with session_maker() as session:
@@ -88,6 +107,10 @@ def test_owned_queries_are_isolated_and_only_default_templates_are_shared():
             await engine.dispose()
 
         assert [item.content for item in presentations] == ["first"]
-        assert [item.id for item in templates] == ["shared"]
+        assert {item.id for item in templates} == {
+            "shared",
+            "catalog-default",
+            "first-private",
+        }
 
     asyncio.run(run())

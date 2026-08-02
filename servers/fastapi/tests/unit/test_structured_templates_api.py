@@ -134,6 +134,23 @@ def test_create_schema_requires_explicit_id():
     assert error.value.errors()[0]["type"] == "missing"
 
 
+@pytest.mark.parametrize("value", [True, False])
+def test_create_rejects_explicit_user_managed_default(value):
+    payload = StructuredTemplateCreate(
+        presentation_id=SOURCE_PRESENTATION_ID,
+        id="user-default",
+        name="User default",
+        layouts=_layouts(),
+        is_default=value,
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(create_structured_template(payload, object()))
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "template_v2_default_is_catalog_managed"
+
+
 def test_create_persists_validated_native_layout_without_projection(
     fake_async_session,
     monkeypatch,
@@ -179,6 +196,42 @@ def test_existing_template_read_remains_available_when_flag_is_off(
 
     assert response.id == "existing"
     assert response.layouts == template.layouts
+
+
+def test_direct_read_ignores_stale_database_default(
+    monkeypatch,
+    fake_async_session,
+):
+    monkeypatch.delenv("ENABLE_TEMPLATE_V2", raising=False)
+    template = _template()
+    template.is_default = True
+    fake_async_session._get_results["existing"] = template
+
+    response = asyncio.run(
+        get_structured_template("existing", fake_async_session)
+    )
+
+    assert response.is_default is False
+
+
+def test_response_derives_default_from_catalog_release_gate(
+    monkeypatch,
+    fake_async_session,
+):
+    template = _template()
+    template.is_default = False
+    fake_async_session._get_results["existing"] = template
+    monkeypatch.setattr(
+        "api.v1.ppt.endpoints.structured_templates."
+        "is_template_v2_default_release",
+        lambda template_id, assets: template_id == "existing",
+    )
+
+    response = asyncio.run(
+        get_structured_template("existing", fake_async_session)
+    )
+
+    assert response.is_default is True
 
 
 def test_draft_template_with_null_layouts_remains_readable_but_undiscoverable(
@@ -363,12 +416,25 @@ def test_mutation_integrity_error_rolls_back_and_returns_stable_conflict(
     assert fake_async_session.rollback_count == 1
 
 
-@pytest.mark.parametrize("field", ["name", "layouts", "is_default"])
+@pytest.mark.parametrize("field", ["name", "layouts"])
 def test_update_rejects_null_for_required_persisted_fields(field):
     with pytest.raises(ValidationError, match=f"{field} cannot be null"):
         StructuredTemplateUpdate.model_validate(
             {field: None, "expected_revision": 1}
         )
+
+
+@pytest.mark.parametrize("value", [True, False, None])
+def test_update_rejects_user_managed_default(value):
+    payload = StructuredTemplateUpdate.model_validate(
+        {"is_default": value, "expected_revision": 1}
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(update_structured_template("existing", payload, object()))
+
+    assert error.value.status_code == 403
+    assert error.value.detail == "template_v2_default_is_catalog_managed"
 
 
 def test_expected_revision_without_a_mutation_is_rejected():
