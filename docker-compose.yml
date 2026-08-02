@@ -2,7 +2,8 @@
 # read through servers/fastapi/utils/get_env.py — keep that file, start.js,
 # this anchor, and the README env table consistent when adding knobs.
 # Production-only keys (TEMPLATE_V2_DEPLOYMENT_TIER, ENABLE_TEMPLATE_V2,
-# TEMPLATE_V2_TEMPLATE_ALLOWLIST) are set per-service below, not here.
+# TEMPLATE_V2_TEMPLATE_ALLOWLIST, and the two TEMPLATE_V2_RIGHTS_* verifier
+# inputs) are set per-service below, not here.
 x-presenton-env: &presenton-env
   # Bundled PPTX/PDF export (Puppeteer); matches CI and production image.
   PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
@@ -114,6 +115,8 @@ services:
       TEMPLATE_V2_DEPLOYMENT_TIER: production
       ENABLE_TEMPLATE_V2: ${ENABLE_TEMPLATE_V2:-false}
       TEMPLATE_V2_TEMPLATE_ALLOWLIST: ${TEMPLATE_V2_TEMPLATE_ALLOWLIST:-}
+      TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST: ${TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST:-}
+      TEMPLATE_V2_RIGHTS_ATTESTATION_KEY: ${TEMPLATE_V2_RIGHTS_ATTESTATION_KEY:-}
 
   production-gpu:
     # image: ghcr.io/presenton/presenton:latest
@@ -140,6 +143,8 @@ services:
       TEMPLATE_V2_DEPLOYMENT_TIER: production
       ENABLE_TEMPLATE_V2: ${ENABLE_TEMPLATE_V2:-false}
       TEMPLATE_V2_TEMPLATE_ALLOWLIST: ${TEMPLATE_V2_TEMPLATE_ALLOWLIST:-}
+      TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST: ${TEMPLATE_V2_RIGHTS_APPROVER_ALLOWLIST:-}
+      TEMPLATE_V2_RIGHTS_ATTESTATION_KEY: ${TEMPLATE_V2_RIGHTS_ATTESTATION_KEY:-}
 
   development:
     build:
