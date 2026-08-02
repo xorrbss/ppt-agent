@@ -13,8 +13,15 @@ import os
 import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from utils.authored_dom_quality import (
+    build_compact_dom_map,
+    ensure_authored_qids,
+    has_dom_quality_regression,
+    inspect_authored_dom,
+)
+from utils.authored_patch_engine import apply_authored_patch
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
@@ -25,6 +32,7 @@ from utils.llm_calls.author_slide import (
     is_valid_slide_html,
     normalize_reference_mode,
 )
+from utils.llm_calls.author_slide_patch import propose_authored_slide_patch
 from utils.authored_styles import reference_images_for_role
 from utils.llm_calls.critique_slide import (
     CRITIQUE_PROMPT_VERSION,
@@ -35,10 +43,23 @@ from utils.llm_calls.critique_slide import (
     critique_slide_style_comparison,
 )
 from utils.llm_provider import get_model
-from utils.slide_capture import render_html_to_png
+from utils.slide_capture import (
+    get_cached_browser_metrics,
+    render_html_to_png,
+    render_html_to_png_with_metrics,
+)
 
 
 LOGGER = logging.getLogger(__name__)
+_ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
+
+
+async def _render_correction_html(html: str) -> bytes:
+    """Render and retain browser metrics for the subsequent deterministic gate."""
+    if render_html_to_png is not _ORIGINAL_RENDER_HTML_TO_PNG:
+        return await render_html_to_png(html)
+    png, _metrics = await render_html_to_png_with_metrics(html)
+    return png
 
 
 def _env_int(name: str, default: int) -> int:
@@ -374,7 +395,9 @@ async def revise_authored_deck(
     *,
     initial_critiques: Optional[List[Optional[SlideCritique]]] = None,
     reference_images_by_slide: Optional[List[Tuple[Path, ...]]] = None,
-) -> Tuple[List[str], List[bytes], List[int]]:
+    return_details: bool = False,
+    force_full_reauthor_indices: Optional[Iterable[int]] = None,
+) -> Any:
     """Bounded critique -> re-author -> re-render loop over an authored deck. Returns
     the (possibly revised) htmls + pngs and the local indices that changed.
 
@@ -393,6 +416,9 @@ async def revise_authored_deck(
         raise ValueError("total_slides cannot be smaller than the reviewed slide count")
     if initial_critiques is not None and len(initial_critiques) != n:
         raise ValueError("initial_critiques must match the reviewed slide count")
+    forced_full_reauthor = set(force_full_reauthor_indices or ())
+    if any(type(index) is not int or index < 0 or index >= n for index in forced_full_reauthor):
+        raise ValueError("force_full_reauthor_indices contains an invalid local index")
 
     reference_mode = normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
@@ -425,22 +451,84 @@ async def revise_authored_deck(
     started = time.monotonic()
     critique_work = 0.0
     correction_work = 0.0
+    repair_details: list[dict[str, Any]] = []
+
+    def local_report(html: str):
+        return inspect_authored_dom(
+            html,
+            get_cached_browser_metrics(html),
+            reference_mode=reference_mode,
+        )
+
+    async def full_reauthor(
+        i: int, current_html: str, critique: SlideCritique
+    ) -> tuple[str, bytes]:
+        content = (
+            f"{contents[i]}\n\n"
+            f"{_feedback(critique, exact_reconstruction=reference_mode == EXACT_RECONSTRUCTION)}"
+        )
+        refs = (
+            reference_images_by_slide[i]
+            if reference_mode == EXACT_RECONSTRUCTION
+            and reference_images_by_slide is not None
+            else reference_images_for_role(style, roles[i])
+        )
+        reference_kwargs: dict[str, Any] = {}
+        if refs:
+            reference_kwargs["reference_images"] = refs
+        if reference_mode == EXACT_RECONSTRUCTION:
+            reference_kwargs["reference_mode"] = reference_mode
+        new_html = await author_slide_html(
+            content,
+            design_system,
+            brand,
+            roles[i],
+            absolute_indices[i],
+            deck_size,
+            reasoning_effort="high",
+            **reference_kwargs,
+        )
+        if not is_valid_slide_html(new_html):
+            raise ValueError("full re-author returned invalid slide HTML")
+        # Fallback may replace structure, but every resulting edit target still gets
+        # a deterministic id. The normal local-patch path preserves every existing id.
+        if return_details:
+            new_html = ensure_authored_qids(new_html)
+        return new_html, await _render_correction_html(new_html)
 
     async def review_and_fix(
         i: int,
-    ) -> Tuple[int, str, bytes, bool, float, float]:
+    ) -> Tuple[int, str, bytes, bool, float, float, dict[str, Any] | None]:
         """Pipeline one slide through review -> correction -> render immediately.
 
         This intentionally avoids the former deck-wide review barrier: a fast review can
         begin its expensive correction while slower reviews are still in flight.
         """
-        current_html = htmls[i]
+        current_html = ensure_authored_qids(htmls[i]) if return_details else htmls[i]
         current_png = pngs[i]
         changed = False
         slide_critique_work = 0.0
         slide_correction_work = 0.0
+        repair_detail: dict[str, Any] | None = None
+
+        def failure_detail(stage: str, error: Exception) -> dict[str, str]:
+            return {
+                "stage": stage,
+                "code": f"{stage}_failed",
+                "error_type": type(error).__name__,
+            }
+
+        def log_failure(stage: str, error: Exception) -> None:
+            LOGGER.error(
+                "[authored-vqa] correction failed slide_index=%d stage=%s error_type=%s",
+                absolute_indices[i],
+                stage,
+                type(error).__name__,
+                exc_info=(type(error), error, error.__traceback__),
+            )
 
         for cycle in range(max(1, max_cycles)):
+            patch_ms = 0.0
             if cycle == 0 and initial_critiques is not None:
                 critique = initial_critiques[i]
             else:
@@ -466,60 +554,214 @@ async def revise_authored_deck(
                 break
 
             correction_started = time.monotonic()
+            fallback_reason = (
+                "forced_after_local_rejection"
+                if i in forced_full_reauthor
+                else "local_patch_not_enabled"
+            )
+            new_html: str | None = None
+            new_png: bytes | None = None
+            patch_attempted = False
+            patch_succeeded = False
+            patch_failure: dict[str, str] | None = None
+            fallback_attempted = False
+            fallback_succeeded = False
+            fallback_failure: dict[str, str] | None = None
+            element_changes: list[dict[str, Any]] = []
             try:
-                content = (
-                    f"{contents[i]}\n\n"
-                    f"{_feedback(critique, exact_reconstruction=reference_mode == EXACT_RECONSTRUCTION)}"
-                )
-                # Correction-under-critique is the quality-critical step: re-author at
-                # HIGH reasoning effort (the max) so the fix gets MORE reasoning than the
-                # fast 'low' first pass, regardless of the provider's default effort.
-                refs = (
-                    reference_images_by_slide[i]
-                    if reference_mode == EXACT_RECONSTRUCTION
-                    and reference_images_by_slide is not None
-                    else reference_images_for_role(style, roles[i])
-                )
-                if refs:
-                    reference_kwargs = {"reference_images": refs}
-                    if reference_mode == EXACT_RECONSTRUCTION:
-                        reference_kwargs["reference_mode"] = reference_mode
-                    new_html = await author_slide_html(
-                        content,
-                        design_system,
-                        brand,
-                        roles[i],
-                        absolute_indices[i],
-                        deck_size,
-                        reasoning_effort="high",
-                        **reference_kwargs,
-                    )
+                if return_details and i not in forced_full_reauthor:
+                    patch_attempted = True
+                    compact_dom = [
+                        node.to_dict()
+                        for node in build_compact_dom_map(
+                            current_html,
+                            get_cached_browser_metrics(current_html),
+                        )
+                    ]
+                    patch_started = time.monotonic()
+                    try:
+                        proposal = await propose_authored_slide_patch(
+                            current_png,
+                            compact_dom,
+                            critique,
+                            reference_mode=reference_mode,
+                        )
+                    except Exception as error:
+                        log_failure("patch_proposal", error)
+                        patch_failure = failure_detail("patch_proposal", error)
+                        proposal = None
+                    patch_ms = (time.monotonic() - patch_started) * 1000
+                    if proposal is not None:
+                        fallback_reason = (
+                            proposal.fallback_reason
+                            or proposal.failure_reason
+                            or "local_patch_unavailable"
+                        )
+                    elif patch_failure is not None:
+                        fallback_reason = patch_failure["code"]
+                    if proposal is not None and proposal.ok and proposal.plan is not None:
+                        try:
+                            applied = apply_authored_patch(
+                                current_html,
+                                proposal.plan,
+                                reference_mode=reference_mode,
+                            )
+                        except Exception as error:
+                            log_failure("patch_application", error)
+                            patch_failure = failure_detail("patch_application", error)
+                            applied = None
+                        if applied is None:
+                            fallback_reason = patch_failure["code"]
+                        elif applied.ok and is_valid_slide_html(applied.html):
+                            try:
+                                candidate_png = await _render_correction_html(
+                                    applied.html
+                                )
+                            except Exception as error:
+                                log_failure("patch_render", error)
+                                patch_failure = failure_detail("patch_render", error)
+                                fallback_reason = patch_failure["code"]
+                            else:
+                                if not has_dom_quality_regression(
+                                    local_report(current_html), local_report(applied.html)
+                                ):
+                                    new_html, new_png = applied.html, candidate_png
+                                    patch_succeeded = True
+                                    element_changes = [
+                                        {
+                                            "element_id": change.qid,
+                                            "action": change.action,
+                                            "before": change.before,
+                                            "after": change.after,
+                                            "path": "local_patch",
+                                        }
+                                        for change in applied.changes
+                                    ]
+                                else:
+                                    fallback_reason = "deterministic_local_regression"
+                                    patch_failure = {
+                                        "stage": "patch_deterministic_check",
+                                        "code": fallback_reason,
+                                        "error_type": "DomQualityRegression",
+                                    }
+                        else:
+                            fallback_reason = (
+                                applied.fallback_reason
+                                or applied.failure_reason
+                                or "patch_application_failed"
+                            )
+                            patch_failure = {
+                                "stage": "patch_application",
+                                "code": fallback_reason,
+                                "error_type": "PatchApplicationFailure",
+                            }
+                    elif proposal is not None:
+                        patch_failure = {
+                            "stage": "patch_proposal",
+                            "code": fallback_reason,
+                            "error_type": "PatchProposalFailure",
+                        }
+                if new_html is None or new_png is None:
+                    fallback_started = time.monotonic()
+                    fallback_attempted = True
+                    try:
+                        new_html, new_png = await full_reauthor(i, current_html, critique)
+                    except Exception as error:
+                        log_failure("full_reauthor", error)
+                        fallback_failure = failure_detail("full_reauthor", error)
+                        new_html = new_png = None
+                    fallback_ms = (time.monotonic() - fallback_started) * 1000
+                    fallback_succeeded = new_html is not None and new_png is not None
+                    repair_detail = {
+                        "local_index": i,
+                        "slide_index": absolute_indices[i],
+                        "path": "full_fallback",
+                        "fallback_reason": fallback_reason,
+                        "patch_ms": round(patch_ms, 3),
+                        "fallback_ms": round(fallback_ms, 3),
+                        "attempted": True,
+                        "succeeded": fallback_succeeded,
+                        "failure_detail": fallback_failure,
+                        "patch": {
+                            "attempted": patch_attempted,
+                            "succeeded": patch_succeeded,
+                            "failure_detail": patch_failure,
+                        },
+                        "fallback": {
+                            "attempted": True,
+                            "succeeded": fallback_succeeded,
+                            "failure_detail": fallback_failure,
+                        },
+                        "element_changes": (
+                            [
+                                {
+                                    "element_id": "slide-root",
+                                    "action": "full_reauthor",
+                                    "before": {"summary": "original authored slide"},
+                                    "after": {"summary": "structurally re-authored slide"},
+                                    "path": "full_fallback",
+                                }
+                            ]
+                            if fallback_succeeded
+                            else []
+                        ),
+                    }
                 else:
-                    reference_kwargs = {}
-                    if reference_mode == EXACT_RECONSTRUCTION:
-                        reference_kwargs["reference_mode"] = reference_mode
-                    new_html = await author_slide_html(
-                        content,
-                        design_system,
-                        brand,
-                        roles[i],
-                        absolute_indices[i],
-                        deck_size,
-                        reasoning_effort="high",
-                        **reference_kwargs,
-                    )
-
-                # Reject truncated/garbage model output BEFORE launching Chrome. The old
-                # order rendered it first and discarded it afterwards, wasting the most
-                # expensive local stage while providing no quality benefit.
-                if not is_valid_slide_html(new_html):
-                    break
-                new_png = await render_html_to_png(new_html)
-                current_html = new_html
-                current_png = new_png
-                changed = True
-            except Exception:
-                break
+                    repair_detail = {
+                        "local_index": i,
+                        "slide_index": absolute_indices[i],
+                        "path": "local_patch",
+                        "fallback_reason": None,
+                        "patch_model": getattr(proposal, "model", None),
+                        "patch_prompt_version": getattr(proposal, "prompt_version", None),
+                        "patch_ms": round(patch_ms, 3),
+                        "fallback_ms": 0.0,
+                        "attempted": True,
+                        "succeeded": True,
+                        "failure_detail": None,
+                        "patch": {
+                            "attempted": patch_attempted,
+                            "succeeded": patch_succeeded,
+                            "failure_detail": patch_failure,
+                        },
+                        "fallback": {
+                            "attempted": False,
+                            "succeeded": False,
+                            "failure_detail": None,
+                        },
+                        "element_changes": element_changes,
+                    }
+                if new_html is not None and new_png is not None:
+                    current_html = new_html
+                    current_png = new_png
+                    changed = True
+            except Exception as error:
+                log_failure("correction", error)
+                unexpected_failure = failure_detail("correction", error)
+                repair_detail = {
+                    "local_index": i,
+                    "slide_index": absolute_indices[i],
+                    "path": (
+                        "full_fallback" if fallback_attempted else "local_patch"
+                    ),
+                    "fallback_reason": fallback_reason,
+                    "patch_ms": round(patch_ms, 3),
+                    "fallback_ms": 0.0,
+                    "attempted": True,
+                    "succeeded": False,
+                    "failure_detail": unexpected_failure,
+                    "patch": {
+                        "attempted": patch_attempted,
+                        "succeeded": patch_succeeded,
+                        "failure_detail": patch_failure,
+                    },
+                    "fallback": {
+                        "attempted": fallback_attempted,
+                        "succeeded": fallback_succeeded,
+                        "failure_detail": fallback_failure,
+                    },
+                    "element_changes": [],
+                }
             finally:
                 slide_correction_work += time.monotonic() - correction_started
 
@@ -530,17 +772,20 @@ async def revise_authored_deck(
             changed,
             slide_critique_work,
             slide_correction_work,
+            repair_detail,
         )
 
     # gather starts every per-slide pipeline concurrently while preserving input order.
     results = await asyncio.gather(*(review_and_fix(i) for i in range(n)))
-    for i, new_html, new_png, changed, review_time, correction_time in results:
+    for i, new_html, new_png, changed, review_time, correction_time, detail in results:
         critique_work += review_time
         correction_work += correction_time
         if changed:
             htmls[i] = new_html
             pngs[i] = new_png
             fixed.append(i)
+        if detail is not None:
+            repair_details.append(detail)
 
     LOGGER.info(
         "[authored-vqa] slides=%d fixed=%d total=%.1fs critique_work=%.1fs "
@@ -554,4 +799,6 @@ async def revise_authored_deck(
         VQA_CACHE_SIZE,
     )
 
+    if return_details:
+        return htmls, pngs, fixed, repair_details
     return htmls, pngs, fixed

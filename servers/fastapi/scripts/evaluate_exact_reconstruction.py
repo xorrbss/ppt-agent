@@ -39,6 +39,8 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
+from utils import authored_ocr_quality as authored_ocr
+
 
 FASTAPI_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = FASTAPI_ROOT.parents[1]
@@ -99,17 +101,25 @@ class VisibleTextParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.hidden_depth = 0
+        self._suppressed_tags: list[tuple[str, bool]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
-        if tag in {"style", "script", "svg"}:
+        values = {key.lower(): (value or "").lower() for key, value in attrs}
+        style = values.get("style", "")
+        suppressed = tag in {"style", "script", "svg", "template", "noscript", "head"} or "hidden" in values or values.get("aria-hidden") == "true" or bool(re.search(r"(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse)|content-visibility\s*:\s*hidden)", style))
+        self._suppressed_tags.append((tag, suppressed))
+        if suppressed:
             self.hidden_depth += 1
         elif tag == "br" and not self.hidden_depth:
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
-        if tag in {"style", "script", "svg"} and self.hidden_depth:
+        suppressed = False
+        if self._suppressed_tags and self._suppressed_tags[-1][0] == tag:
+            _, suppressed = self._suppressed_tags.pop()
+        if suppressed and self.hidden_depth:
             self.hidden_depth -= 1
         elif tag in BLOCK_TAGS and not self.hidden_depth:
             self.parts.append("\n")
@@ -156,10 +166,7 @@ def _levenshtein(left: str, right: str) -> int:
 
 def _normalize_ocr_text(value: str) -> str:
     """Normalize presentation text without erasing line-break differences."""
-    value = unicodedata.normalize("NFKC", value)
-    value = value.replace("\r\n", "\n").replace("\r", "\n").replace("\u00a0", " ")
-    lines = [re.sub(r"[\t \u2000-\u200a]+", " ", line).strip() for line in value.split("\n")]
-    return "\n".join(lines).strip("\n")
+    return authored_ocr.normalize_ocr_text(value)
 
 
 def _character_class(char: str) -> str | None:
@@ -237,32 +244,7 @@ def _edit_alignment(source: str, candidate: str) -> dict[str, Any]:
 
 
 def _comparison_metrics(source: str, candidate: str) -> dict[str, Any]:
-    alignment = _edit_alignment(source, candidate)
-    source_breaks = {i for i, char in enumerate(source) if char == "\n"}
-    candidate_breaks = {i for i, char in enumerate(candidate) if char == "\n"}
-    if not source_breaks and not candidate_breaks:
-        break_f1 = 1.0
-    else:
-        overlap = len(source_breaks & candidate_breaks)
-        precision = overlap / len(candidate_breaks) if candidate_breaks else 0.0
-        recall = overlap / len(source_breaks) if source_breaks else 0.0
-        break_f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    return {
-        "source_characters": len(source),
-        "candidate_characters": len(candidate),
-        **alignment,
-        "cer": alignment["edit_distance"] / max(1, len(source)),
-        "missing_rate": alignment["deletions"] / max(1, len(source)),
-        "source_character_error_rate": (
-            alignment["deletions"] + alignment["substitutions"]
-        ) / max(1, len(source)),
-        "line_break_exact": source.split("\n") == candidate.split("\n"),
-        "line_break_f1": break_f1,
-        "source_line_breaks": len(source_breaks),
-        "candidate_line_breaks": len(candidate_breaks),
-        "missing_line_breaks": max(0, len(source_breaks) - len(candidate_breaks)),
-        "extra_line_breaks": max(0, len(candidate_breaks) - len(source_breaks)),
-    }
+    return authored_ocr.comparison_metrics(source, candidate)
 
 
 def _capture_report(capture: TextCapture) -> dict[str, Any]:

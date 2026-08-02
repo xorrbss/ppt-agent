@@ -10,9 +10,6 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -20,13 +17,26 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
 from services import authored_quality_review_service as quality_service
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+from tests.unit.authored_quality_test_metrics import complete_browser_metrics
 from tests.unit.test_authored_quality_review import (
     _make_engine,
     _presentation,
     _slides,
 )
+from utils.authored_ocr_quality import OcrQualityResult
 from utils.llm_calls.author_slide import STYLE_REFERENCE, Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+
+
+@pytest.fixture(autouse=True)
+def _complete_browser_telemetry(monkeypatch):
+    monkeypatch.setattr(
+        quality_service,
+        "get_cached_browser_metrics",
+        complete_browser_metrics,
+    )
 
 
 def _run(coro):
@@ -74,6 +84,22 @@ def _patch_style_reference_review(monkeypatch, final_critiques, write_png):
             [0, 1],
         )
 
+    async def fake_ocr(
+        _image, *, expected_text=None, language="eng", cache=None, **_kwargs
+    ):
+        cache.calls += 1
+        return OcrQualityResult(
+            available=True,
+            status="success",
+            failure_reason=None,
+            text="preserved slide text",
+            text_digest="preserved-slide-text",
+            metrics={},
+            calls=cache.calls,
+            cache_hits=cache.cache_hits,
+            elapsed_ms=0.0,
+        )
+
     style = SimpleNamespace(id="default", reference_mode=STYLE_REFERENCE)
     plan = SimpleNamespace(
         roles=("COVER", "CLOSING"),
@@ -92,20 +118,21 @@ def _patch_style_reference_review(monkeypatch, final_critiques, write_png):
         fake_style_comparison,
     )
     monkeypatch.setattr(quality_service, "revise_authored_deck", fake_revise)
+    monkeypatch.setattr(quality_service, "inspect_authored_ocr", fake_ocr)
     monkeypatch.setattr(quality_service, "_write_reviewed_png", write_png)
 
 
 async def _live_slides_and_versions(session, presentation_id):
     session.expire_all()
     slides = list(
-        await session.scalars(
+        await session.exec(
             select(SlideModel)
             .where(SlideModel.presentation == presentation_id)
             .order_by(SlideModel.index)
         )
     )
     versions = list(
-        await session.scalars(
+        await session.exec(
             select(PresentationVersionModel).where(
                 PresentationVersionModel.presentation_id == presentation_id
             )

@@ -9,11 +9,11 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from utils import slide_capture
 
-
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "evaluate_exact_reconstruction.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[2] / "scripts" / "evaluate_exact_reconstruction.py"
+)
 SPEC = importlib.util.spec_from_file_location("exact_reconstruction_evaluator", SCRIPT)
 assert SPEC and SPEC.loader
 evaluator = importlib.util.module_from_spec(SPEC)
@@ -33,7 +33,9 @@ def test_raw_and_normalized_cer_preserve_character_classes_and_line_breaks() -> 
 
     assert metrics["raw"]["cer"] > 0
     assert metrics["normalized"]["cer"] == 0
-    assert metrics["raw"]["line_break_exact"] is False
+    # Newline alignment is sequence-based: earlier width/full-width edits must
+    # not turn an otherwise preserved line boundary into a false OCR alert.
+    assert metrics["raw"]["line_break_exact"] is True
     assert metrics["normalized"]["line_break_exact"] is True
     classes = metrics["raw"]["character_classes"]
     assert classes["korean"]["source_count"] == 5
@@ -53,8 +55,12 @@ def test_missing_rate_is_based_on_deletions_not_substitutions() -> None:
     assert raw["deletions"] == 3
     assert raw["substitutions"] == 0
     assert raw["missing_rate"] == pytest.approx(3 / 10)
-    assert raw["character_classes"]["english"]["preservation_rate"] == pytest.approx(2 / 3)
-    assert raw["character_classes"]["symbols"]["preservation_rate"] == pytest.approx(1 / 2)
+    assert raw["character_classes"]["english"]["preservation_rate"] == pytest.approx(
+        2 / 3
+    )
+    assert raw["character_classes"]["symbols"]["preservation_rate"] == pytest.approx(
+        1 / 2
+    )
 
 
 def test_runtime_distinguishes_unavailable_and_missing_language(
@@ -69,14 +75,20 @@ def test_runtime_distinguishes_unavailable_and_missing_language(
     assert unavailable.status == "unavailable"
     assert unavailable.failure_reason == "tesseract_executable_not_found"
 
-    monkeypatch.setattr(evaluator, "_find_tesseract", lambda _explicit: ("fake-tesseract",))
+    monkeypatch.setattr(
+        evaluator, "_find_tesseract", lambda _explicit: ("fake-tesseract",)
+    )
     results = iter(
         [
             evaluator.ProcessResult("success", 0, b"tesseract 5.4.0\n", b"", 0.01),
-            evaluator.ProcessResult("success", 0, b"List of languages (1):\neng\n", b"", 0.01),
+            evaluator.ProcessResult(
+                "success", 0, b"List of languages (1):\neng\n", b"", 0.01
+            ),
         ]
     )
-    monkeypatch.setattr(evaluator, "_run_process", lambda *_args, **_kwargs: next(results))
+    monkeypatch.setattr(
+        evaluator, "_run_process", lambda *_args, **_kwargs: next(results)
+    )
     missing = evaluator._inspect_tesseract(
         explicit_command=None,
         tessdata_dir=tmp_path,
@@ -187,7 +199,9 @@ def test_timed_out_child_is_reaped(tmp_path: Path) -> None:
         "time.sleep(30)"
     )
 
-    result = evaluator._run_process((sys.executable, "-c", child), timeout_seconds=0.1)
+    # Give Windows process startup enough time to create the PID rendezvous file;
+    # this makes the reaping assertion deterministic rather than scheduler-racy.
+    result = evaluator._run_process((sys.executable, "-c", child), timeout_seconds=1)
 
     assert result.status == "timeout"
     assert result.returncode is not None
@@ -207,15 +221,16 @@ def test_timed_out_child_is_reaped(tmp_path: Path) -> None:
 
 def test_lock_is_exclusive_and_removed_after_failure(tmp_path: Path) -> None:
     report = tmp_path / "report.json"
-    with pytest.raises(RuntimeError, match="already locked"):
-        with evaluator._exclusive_output(report):
-            with evaluator._exclusive_output(report):
-                pass
+    with (
+        pytest.raises(RuntimeError, match="already locked"),
+        evaluator._exclusive_output(report),
+        evaluator._exclusive_output(report),
+    ):
+        pass
     assert not report.with_suffix(".json.lock").exists()
 
-    with pytest.raises(ValueError):
-        with evaluator._exclusive_output(report):
-            raise ValueError("fixture")
+    with pytest.raises(ValueError), evaluator._exclusive_output(report):
+        raise ValueError("fixture")
     assert not report.with_suffix(".json.lock").exists()
 
 
@@ -266,7 +281,9 @@ def test_local_render_benchmark_coalesces_ninety_logical_requests(
     assert result["model_calls"] == result["ocr_calls"] == 0
 
 
-def test_unavailable_ocr_writes_explicit_report_and_nonzero_status(tmp_path: Path) -> None:
+def test_unavailable_ocr_writes_explicit_report_and_nonzero_status(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "unavailable.json"
     args = evaluator._parser().parse_args(
         [

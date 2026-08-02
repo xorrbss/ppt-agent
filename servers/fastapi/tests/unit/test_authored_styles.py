@@ -1,9 +1,12 @@
+import asyncio
 import logging
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from PIL import Image
 import yaml
 
@@ -93,6 +96,43 @@ def _write(path: Path, content: str) -> None:
 
 def _write_exact_image(path: Path) -> None:
     Image.new("RGB", (1280, 720), "#123456").save(path, format="PNG")
+
+
+def _tracked_authored_style_sources() -> list[Path]:
+    """Return the repository catalogue, not machine-local ignored style drafts.
+
+    `load_authored_styles()` deliberately discovers every YAML file on disk so a
+    developer can preview a local style.  The catalogue contract, however,
+    describes the versioned product surface.  Resolving that surface via Git
+    keeps this test hermetic when a developer has an ignored draft next to the
+    36 shipped styles, while still failing if a tracked file is added, removed,
+    or renamed without updating the contract.
+    """
+
+    repository_root = AUTHORED_STYLES_DIRECTORY.parents[2]
+    relative_glob = (
+        AUTHORED_STYLES_DIRECTORY.relative_to(repository_root).as_posix()
+        + "/*.yaml"
+    )
+    completed = subprocess.run(
+        ["git", "ls-files", "-z", "--", relative_glob],
+        cwd=repository_root,
+        check=False,
+        capture_output=True,
+        text=False,
+    )
+    assert completed.returncode == 0, completed.stderr.decode(
+        "utf-8", errors="replace"
+    )
+    sources = [
+        repository_root / relative_path
+        for relative_path in completed.stdout.decode("utf-8").split("\0")
+        if relative_path
+    ]
+    assert sources, "Git did not report any tracked authored styles"
+    assert all(source.parent == AUTHORED_STYLES_DIRECTORY for source in sources)
+    assert all(source.is_file() for source in sources)
+    return sorted(sources)
 
 
 def test_load_authored_styles_keeps_legacy_yaml_compatible(tmp_path):
@@ -445,11 +485,19 @@ brief: private
     assert "must stay inside authored_style_assets" in caplog.text
 
 
-def test_authored_catalogue_has_complete_contracts(caplog):
-    sources = sorted(AUTHORED_STYLES_DIRECTORY.glob("*.yaml"))
+def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
+    sources = _tracked_authored_style_sources()
+    tracked_catalogue = tmp_path / "authored_styles"
+    tracked_catalogue.mkdir()
+    for source in sources:
+        shutil.copy2(source, tracked_catalogue / source.name)
+    shutil.copytree(
+        AUTHORED_STYLES_DIRECTORY.parent / "authored_style_assets",
+        tmp_path / "authored_style_assets",
+    )
 
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
-        styles = load_authored_styles()
+        styles = load_authored_styles(tracked_catalogue)
 
     assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 36
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
@@ -516,9 +564,15 @@ def test_authored_catalogue_has_complete_contracts(caplog):
 def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     app = FastAPI()
     app.include_router(AUTHORED_ROUTER, prefix="/api/v1/ppt")
-    client = TestClient(app)
 
-    response = client.get("/api/v1/ppt/authored/styles")
+    async def fetch(path: str) -> httpx.Response:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            return await client.get(path)
+
+    response = asyncio.run(fetch("/api/v1/ppt/authored/styles"))
 
     assert response.status_code == 200
     body = response.json()
@@ -583,8 +637,8 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
     }
 
     for style_id in ("cyber-ai", "osb-smart-banking", "tech-blueprint"):
-        preview_response = client.get(
-            f"/api/v1/ppt/authored/styles/{style_id}/preview"
+        preview_response = asyncio.run(
+            fetch(f"/api/v1/ppt/authored/styles/{style_id}/preview")
         )
         assert preview_response.status_code == 200
         assert preview_response.headers["content-type"] == "image/png"

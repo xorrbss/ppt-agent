@@ -7,22 +7,22 @@ private, preset-backed capability.
 
 import asyncio
 import uuid
-from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import SQLModel, select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from api.v1.ppt.endpoints import authored as authored_endpoint
-from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+from models.presentation_outline_model import (
+    PresentationOutlineModel,
+    SlideOutlineModel,
+)
 from models.sql.presentation import PresentationModel  # noqa: F401 - SQL metadata
 from models.sql.slide import SlideModel
 from services import presentation_version_service as version_service
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import SQLModel, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 from utils.authored_styles import AuthoredStyle, load_authored_styles
 from utils.llm_calls.author_deck import prepare_authored_deck
-from utils.llm_calls.author_slide import Brand, EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE, Brand
 from utils.llm_calls.critique_slide import _image_mime_type
 
 
@@ -53,7 +53,9 @@ def _style(**overrides) -> AuthoredStyle:
     return AuthoredStyle(**values)
 
 
-def test_public_style_listing_keeps_exact_mapping_and_mode_private(monkeypatch, tmp_path):
+def test_public_style_listing_keeps_exact_mapping_and_mode_private(
+    monkeypatch, tmp_path
+):
     source = tmp_path / "source.png"
     source.write_bytes(b"source")
     exact = _style(
@@ -136,7 +138,11 @@ def test_restoring_authored_review_snapshot_preserves_html_and_image_metadata(tm
             layout_group="authored",
             layout="authored:CONTENT",
             index=0,
-            content={"__authored__": True, "image": "authored/old.png", "role": "CONTENT"},
+            content={
+                "__authored__": True,
+                "image": "authored/old.png",
+                "role": "CONTENT",
+            },
             html_content="<html><body>faithful source</body></html>",
             properties={"image": "authored/old.png"},
         )
@@ -145,7 +151,11 @@ def test_restoring_authored_review_snapshot_preserves_html_and_image_metadata(tm
             layout_group="authored",
             layout="authored:CONTENT",
             index=0,
-            content={"__authored__": True, "image": "authored/new.png", "role": "CONTENT"},
+            content={
+                "__authored__": True,
+                "image": "authored/new.png",
+                "role": "CONTENT",
+            },
             html_content="<html><body>candidate</body></html>",
             properties={"image": "authored/new.png"},
         )
@@ -165,7 +175,7 @@ def test_restoring_authored_review_snapshot_preserves_html_and_image_metadata(tm
             )
             await session.commit()
             live = list(
-                await session.scalars(
+                await session.exec(
                     select(SlideModel)
                     .where(SlideModel.presentation == presentation_id)
                     .order_by(SlideModel.index)
