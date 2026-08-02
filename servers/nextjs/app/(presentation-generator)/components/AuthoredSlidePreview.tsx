@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 
 interface AuthoredSlidePreviewProps {
   slideIndex: number;
@@ -13,9 +13,11 @@ interface AuthoredSlidePreviewProps {
  * Read-only authored slide preview.
  *
  * Authored HTML is the persisted source of truth. The generated PNG is a cache
- * used by thumbnails and as a fallback. Rendering the HTML in the main canvas
- * avoids showing stale mutable PNGs after a version restore while the empty
- * sandbox keeps model-authored markup isolated from the editor application.
+ * used by thumbnails and as a fallback. A main-canvas preview chooses one
+ * render kind until its persisted source changes: HTML when available,
+ * otherwise the PNG. This prevents an asset-cache refresh or viewport
+ * activation from replacing the visible slide with a differently scaled
+ * representation.
  */
 export function AuthoredSlidePreview({
   slideIndex,
@@ -25,35 +27,13 @@ export function AuthoredSlidePreview({
 }: AuthoredSlidePreviewProps) {
   const htmlSource = typeof html === "string" ? html.trim() : "";
   const canRenderHtml = preferHtml && htmlSource.length > 0;
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [htmlActivated, setHtmlActivated] = useState(false);
-
-  useEffect(() => {
-    if (!canRenderHtml || htmlActivated) return;
-
-    const container = containerRef.current;
-    if (!container || typeof IntersectionObserver === "undefined") {
-      setHtmlActivated(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        setHtmlActivated(true);
-        observer.disconnect();
-      },
-      { rootMargin: "720px 0px" }
-    );
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [canRenderHtml, htmlActivated]);
-
-  const renderHtml = canRenderHtml && htmlActivated;
 
   return (
-    <div ref={containerRef} className="aspect-video h-full w-full overflow-hidden bg-white">
-      {renderHtml ? (
+    <div
+      data-testid={`authored-slide-preview-${slideIndex}`}
+      className="aspect-video h-full w-full overflow-hidden bg-white"
+    >
+      {canRenderHtml ? (
         <iframe
           data-testid={`authored-html-preview-${slideIndex}`}
           srcDoc={htmlSource}
@@ -62,7 +42,7 @@ export function AuthoredSlidePreview({
           loading="lazy"
           referrerPolicy="no-referrer"
           tabIndex={-1}
-          className="pointer-events-none block h-[720px] w-[1280px] border-0 bg-white"
+          className="pointer-events-none block h-full w-full border-0 bg-white"
         />
       ) : imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element -- Authored slide images may be backend, data, or blob URLs and must render unchanged.

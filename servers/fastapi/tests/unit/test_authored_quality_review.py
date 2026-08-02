@@ -65,6 +65,17 @@ def test_exact_review_error_detail_hides_private_metadata(error, expected):
     assert quality_service._public_review_error_detail(error) == expected
 
 
+def test_style_review_error_detail_hides_private_metadata():
+    error = RuntimeError(
+        "write failed for C:/private/review/slide.png digest=0123456789abcdef"
+    )
+
+    assert (
+        quality_service._public_review_error_detail(error)
+        == "authored_quality_review_failed"
+    )
+
+
 async def _make_engine(db_path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
     async with engine.begin() as connection:
@@ -150,21 +161,26 @@ def test_existing_authored_deck_repairs_only_flagged_slide_and_saves_version(
             async def fake_critique(pngs, contexts=None):
                 nonlocal review_calls
                 review_calls += 1
-                if review_calls == 1:
-                    return [
-                        SlideCritique(
-                            needs_fix=True,
-                            issues=[
-                                CritiqueIssue(
-                                    type="overflow",
-                                    severity="high",
-                                    detail="Title is clipped",
-                                )
-                            ],
-                        ),
-                        SlideCritique(needs_fix=False),
-                    ]
-                return [SlideCritique(needs_fix=False) for _ in pngs]
+                return [
+                    SlideCritique(
+                        needs_fix=True,
+                        issues=[
+                            CritiqueIssue(
+                                type="overflow",
+                                severity="high",
+                                detail="Title is clipped",
+                            )
+                        ],
+                    ),
+                    SlideCritique(needs_fix=False),
+                ]
+
+            async def fake_compare(
+                baselines, candidates, contexts=None, **kwargs
+            ):
+                assert baselines == [b"<html><body>old cover</body></html>"]
+                assert candidates == [b"fixed-cover"]
+                return [SlideCritique(needs_fix=False)]
 
             async def fake_revise(
                 htmls,
@@ -199,6 +215,11 @@ def test_existing_authored_deck_repairs_only_flagged_slide_and_saves_version(
             )
             monkeypatch.setattr(
                 quality_service, "critique_authored", fake_critique
+            )
+            monkeypatch.setattr(
+                quality_service,
+                "critique_authored_style_comparison",
+                fake_compare,
             )
             monkeypatch.setattr(
                 quality_service, "revise_authored_deck", fake_revise
@@ -772,21 +793,24 @@ def test_analyze_and_fix_cas_rejects_stale_slide_and_rolls_back_snapshot(
             async def fake_critique(pngs, contexts=None, **kwargs):
                 nonlocal critique_count
                 critique_count += 1
-                if critique_count == 1:
-                    return [
-                        SlideCritique(
-                            needs_fix=True,
-                            issues=[
-                                CritiqueIssue(
-                                    type="overflow",
-                                    severity="high",
-                                    detail="clipped",
-                                )
-                            ],
-                        ),
-                        SlideCritique(needs_fix=False),
-                    ]
-                return [SlideCritique(needs_fix=False) for _ in pngs]
+                return [
+                    SlideCritique(
+                        needs_fix=True,
+                        issues=[
+                            CritiqueIssue(
+                                type="overflow",
+                                severity="high",
+                                detail="clipped",
+                            )
+                        ],
+                    ),
+                    SlideCritique(needs_fix=False),
+                ]
+
+            async def fake_compare(
+                baselines, candidates, contexts=None, **kwargs
+            ):
+                return [SlideCritique(needs_fix=False)]
 
             async def fake_revise(htmls, pngs, *args, **kwargs):
                 async with AsyncSession(engine) as competing_session:
@@ -833,6 +857,11 @@ def test_analyze_and_fix_cas_rejects_stale_slide_and_rolls_back_snapshot(
             )
             monkeypatch.setattr(
                 quality_service, "critique_authored", fake_critique
+            )
+            monkeypatch.setattr(
+                quality_service,
+                "critique_authored_style_comparison",
+                fake_compare,
             )
             monkeypatch.setattr(
                 quality_service, "revise_authored_deck", fake_revise

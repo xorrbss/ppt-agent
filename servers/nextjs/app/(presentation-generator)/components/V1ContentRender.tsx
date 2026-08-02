@@ -97,9 +97,9 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
     }, [isCustomTemplate, customTemplate, slide.layout, slide.layout_group]);
 
     // Authored HTML is the source of truth; the generated PNG is a preview cache.
-    // Main-canvas previews use an isolated HTML frame. Thumbnails and export surfaces
-    // retain the PNG cache to avoid loading an iframe for every slide at once.
-    // PowerPoint export remains the editable surface; this browser preview is read-only.
+    // Main-canvas previews use an isolated HTML frame when requested; thumbnail and
+    // export surfaces retain the PNG cache. PowerPoint export remains the editable
+    // surface; this browser preview is read-only.
     const isAuthored =
         slide?.content?.__authored__ === true || slide.layout_group === "authored";
     if (isAuthored) {
@@ -107,7 +107,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
         const src = imageRef
             ? resolveBackendAssetUrl(`/app_data/images/${imageRef}`)
             : "";
-        if (preferAuthoredHtml && typeof slide.html_content === "string" && slide.html_content.trim()) {
+        if (preferAuthoredHtml) {
             return (
                 <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
                     <div ref={containerRef} className="h-full w-full">
