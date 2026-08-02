@@ -47,6 +47,25 @@ def test_exact_provenance_round_trips_without_paths_or_bytes(tmp_path):
     assert [item["slide_index"] for item in provenance["sources"]] == [0, 1]
 
 
+def test_exact_provenance_binds_private_snapshot_identity(tmp_path):
+    style = _style(tmp_path)
+    snapshot_id = "a" * 32
+    provenance, sources = build_exact_provenance(
+        style,
+        source_snapshot_id=snapshot_id,
+    )
+
+    assert provenance["source_snapshot_id"] == snapshot_id
+    assert verify_exact_provenance(
+        provenance, style, expected_slide_count=2
+    ) == sources
+
+    changed = deepcopy(provenance)
+    changed["source_snapshot_id"] = "b" * 32
+    with pytest.raises(ExactProvenanceError, match="manifest changed"):
+        verify_exact_provenance(changed, style, expected_slide_count=2)
+
+
 @pytest.mark.parametrize(
     "mutation, expected_message",
     [

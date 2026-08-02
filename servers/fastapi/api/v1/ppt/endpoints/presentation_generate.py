@@ -138,11 +138,32 @@ from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
 logger = logging.getLogger(__name__)
 
 AUTHORED_RESUME_MAX_ATTEMPTS_DEFAULT = 5
+_INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
 
 
 PRESENTATION_GENERATE_ROUTER = APIRouter(
     prefix="/presentation", tags=["Presentation"]
 )
+
+
+def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
+    """Persist private worker state without adding it to the public model schema."""
+
+    payload = request.model_dump(mode="json")
+    if request._authored_exact_snapshot_id is not None:
+        payload[_INTERNAL_EXACT_SNAPSHOT_KEY] = request._authored_exact_snapshot_id
+    return payload
+
+
+def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
+    """Restore private worker state from an internal durable-job payload."""
+
+    values = dict(payload)
+    snapshot_id = values.pop(_INTERNAL_EXACT_SNAPSHOT_KEY, None)
+    request = GeneratePresentationRequest.model_validate(values)
+    if snapshot_id is not None:
+        request._authored_exact_snapshot_id = str(snapshot_id)
+    return request
 
 
 class AsyncPresentationGenerationTaskResponse(BaseModel):
@@ -1219,7 +1240,7 @@ async def run_generation_job(
             )
             if job is None or async_status is None:
                 raise RuntimeError("presentation_generation_job_missing")
-            request = GeneratePresentationRequest.model_validate(job.request_payload)
+            request = _request_from_durable_payload(job.request_payload)
             request._request_id = job.request_id
             # Recheck rollout and source validity on the worker too. A private
             # exact preset may have changed after admission; it must become a
@@ -1369,7 +1390,7 @@ async def queue_presentation_generation(
     # Do this before fingerprint/idempotency lookup or any row/task is created.
     # A rejected exact request must never appear as a pending generation job.
     _validate_authored_exact_admission(request)
-    submitted_payload = request.model_dump(mode="json")
+    submitted_payload = _durable_request_payload(request)
     fingerprint = request_sha256(submitted_payload)
     try:
         key_hash = (
@@ -1421,7 +1442,7 @@ async def queue_presentation_generation(
     # Validation may normalize legacy template identifiers. Persist the exact
     # admitted request that the worker will execute. The fingerprint remains
     # tied to the caller's canonical submitted payload for stable replay.
-    payload = request.model_dump(mode="json")
+    payload = _durable_request_payload(request)
 
     async_status = AsyncPresentationGenerationTaskModel(
         status="pending",

@@ -52,6 +52,10 @@ from services.authored_checkpoint_service import (
     start_stage,
 )
 from services.authored_exact_provenance import build_exact_provenance
+from services.authored_exact_source_snapshot import (
+    ExactSourceSnapshotError,
+    materialize_exact_source_style,
+)
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_reference,
@@ -608,6 +612,31 @@ async def _generate_authored_presentation(
     title = authored_title(request, outline)
     style = resolve_authored_style(request.authored_style)
     roles = plan_deck_roles(outline)
+    exact_snapshot_id = request._authored_exact_snapshot_id
+    if exact_snapshot_id is not None:
+        if normalize_reference_mode(style.reference_mode) != EXACT_RECONSTRUCTION:
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="author",
+                code="authored_exact_source_snapshot_invalid",
+                retryable=False,
+                message="Exact reconstruction source snapshot is invalid",
+            )
+        try:
+            style = await materialize_exact_source_style(
+                style,
+                exact_snapshot_id,
+                expected_slide_count=len(outline.slides),
+            )
+        except ExactSourceSnapshotError as error:
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="author",
+                code="authored_exact_source_snapshot_invalid",
+                cause=error,
+                retryable=False,
+                message="Exact reconstruction source snapshot is unavailable",
+            ) from error
     validate_exact_reconstruction_style(
         style,
         slide_count=len(outline.slides),
@@ -617,7 +646,10 @@ async def _generate_authored_presentation(
     if normalize_reference_mode(
         getattr(style, "reference_mode", STYLE_REFERENCE)
     ) == EXACT_RECONSTRUCTION:
-        exact_provenance, _ = build_exact_provenance(style)
+        exact_provenance, _ = build_exact_provenance(
+            style,
+            source_snapshot_id=exact_snapshot_id,
+        )
     brand = apply_style_defaults(resolve_brand(request, outline, language), style)
 
     # Render needs a headless Chrome. Without it every slide silently degrades to a

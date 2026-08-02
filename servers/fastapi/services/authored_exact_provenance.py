@@ -85,6 +85,7 @@ def build_exact_provenance(
     style: AuthoredStyle,
     *,
     source_images: Sequence[bytes] | None = None,
+    source_snapshot_id: str | None = None,
 ) -> tuple[dict[str, Any], tuple[bytes, ...]]:
     """Build a path-free manifest and return the exact bytes it describes."""
     if normalize_reference_mode(style.reference_mode) != EXACT_RECONSTRUCTION:
@@ -120,6 +121,14 @@ def build_exact_provenance(
         "preset_revision": preset_revision,
         "sources": ordered_sources,
     }
+    if source_snapshot_id is not None:
+        if len(source_snapshot_id) != 32 or any(
+            character not in string.hexdigits for character in source_snapshot_id
+        ):
+            raise ExactProvenanceError(
+                "Exact reconstruction source snapshot identity is invalid"
+            )
+        manifest_body["source_snapshot_id"] = source_snapshot_id.lower()
     return (
         {
             **manifest_body,
@@ -173,6 +182,15 @@ def _validate_saved_shape(
             raise ExactProvenanceError(
                 "Saved exact reconstruction source digest is invalid"
             )
+    snapshot_id = provenance.get("source_snapshot_id")
+    if snapshot_id is not None and (
+        not isinstance(snapshot_id, str)
+        or len(snapshot_id) != 32
+        or any(character not in string.hexdigits for character in snapshot_id)
+    ):
+        raise ExactProvenanceError(
+            "Saved exact reconstruction source snapshot identity is invalid"
+        )
     return style_id, sources
 
 
@@ -189,7 +207,11 @@ def verify_exact_provenance(
     )
     if style.id != saved_style_id:
         raise ExactProvenanceError("Saved exact reconstruction style changed")
-    current, source_images = build_exact_provenance(style)
+    snapshot_id = provenance.get("source_snapshot_id")
+    current, source_images = build_exact_provenance(
+        style,
+        source_snapshot_id=snapshot_id if isinstance(snapshot_id, str) else None,
+    )
     if len(current["sources"]) != expected_slide_count:
         raise ExactProvenanceError("Exact reconstruction source count changed")
     if [item["slide_index"] for item in current["sources"]] != [
