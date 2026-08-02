@@ -1026,8 +1026,11 @@ def test_exact_quality_review_compares_ordered_source_render_pairs_once_analyze_
             event["critique_slide_request_count"],
         )
         for event in review_events
-        if event["critique_batch_count"]
+        if event["critique_batch_count"] and event["stage"] != "completed"
     ] == [("initial_review", 1, 2)]
+    completed = next(event for event in review_events if event["stage"] == "completed")
+    assert completed["vqa_calls"] == 2
+    assert completed["vqa_cost_status"] == "provider_usage_unavailable"
 
 
 def test_exact_quality_review_reuses_initial_critique_rechecks_only_candidates_and_accepts_improvement(
@@ -1122,8 +1125,13 @@ def test_exact_quality_review_reuses_initial_critique_rechecks_only_candidates_a
             event["critique_slide_request_count"],
         )
         for event in review_events
-        if event["critique_batch_count"]
+        if event["critique_batch_count"] and event["stage"] != "completed"
     ] == [("initial_review", 1, 2), ("final_review", 1, 1)]
+    completed = next(event for event in review_events if event["stage"] == "completed")
+    assert completed["critique_batch_count"] == 2
+    assert completed["vqa_calls"] == 3
+    assert completed["patch_attempted"] == 0
+    assert completed["fallback_attempted"] == 0
 
 
 @pytest.mark.parametrize(

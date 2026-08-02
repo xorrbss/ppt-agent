@@ -41,12 +41,13 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 from services import presentation_version_service as version_service
-from services.authored_quality_review_service import (
-    queue_authored_quality_review,
-)
 from services.authored_exact_source_snapshot import (
     ExactSourceSnapshotError,
     create_exact_source_snapshot,
+)
+from services.authored_quality_ocr import get_ocr_readiness
+from services.authored_quality_review_service import (
+    queue_authored_quality_review,
 )
 from services.database import get_async_session
 from services.generation_pipeline import build_template_structure
@@ -188,6 +189,15 @@ async def prepare_presentation(
     )
 
     return presentation
+
+
+@PRESENTATION_ROUTER.get(
+    "/quality-review/readiness",
+    summary="Check the OCR dependency used by authored quality review",
+)
+async def authored_quality_review_readiness():
+    """Return a content-free OCR readiness probe suitable for operations."""
+    return await get_ocr_readiness()
 
 
 @PRESENTATION_ROUTER.post(

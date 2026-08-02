@@ -5,6 +5,68 @@ import { PresentationGenerationApi } from "../../services/api/presentation-gener
 import { normalizeAuthoredQualityReviewResult } from "../../services/api/authored";
 
 describe("AuthoredQualityReview result details", () => {
+  it("restores a completed review from the durable task API after refresh", () => {
+    const getGenerationStatus = cy
+      .stub(PresentationGenerationApi, "getGenerationStatus")
+      .resolves({
+        status: "completed",
+        message: "저장된 검수 결과입니다.",
+        data: {
+          reviewed_count: 2,
+          issue_slide_count: 1,
+          fixed_count: 1,
+          fixed_slide_indices: [1],
+          remaining_issue_count: 0,
+          remaining_slide_indices: [],
+          slide_results: [
+            {
+              slide_index: 1,
+              attempted: true,
+              applied: true,
+              path: "local_patch",
+              resolved_issues: ["text overflow"],
+              remaining_issues: [],
+              element_changes: [
+                {
+                  element_id: "qid-restored-title",
+                  before: "font-size: 42px",
+                  after: "font-size: 38px",
+                  applied: true,
+                  path: "local_patch",
+                  resolved_issues: ["text overflow"],
+                  remaining_issues: [],
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+    cy.window().then((window) => {
+      window.sessionStorage.setItem(
+        "presenton:authored-quality-review:task:deck-refresh",
+        "quality-refresh-task"
+      );
+    });
+    cy.mount(
+      <AuthoredQualityReview
+        presentationId="deck-refresh"
+        slideCount={2}
+        currentSlide={1}
+      />
+    );
+
+    cy.get('[data-testid="quality-review-trigger"]').click();
+    cy.get('[data-testid="quality-review-details"]')
+      .should("contain.text", "2번 슬라이드")
+      .and("contain.text", "qid-restored-title")
+      .and("contain.text", "font-size: 42px")
+      .and("contain.text", "text overflow");
+    cy.then(() => {
+      expect(getGenerationStatus).to.have.been.calledWith("quality-refresh-task");
+    });
+  });
+
   it("shows repair truth and OCR execution outcomes without exposing OCR source text", () => {
     cy.clock();
     cy.stub(PresentationGenerationApi, "reviewAuthoredPresentation")
@@ -132,6 +194,14 @@ describe("AuthoredQualityReview result details", () => {
     cy.get('[data-testid="quality-review-trigger"]').click();
     cy.get('[data-testid="quality-review-confirm"]').click();
     cy.tick(2_000);
+
+    cy.window().then((window) => {
+      expect(
+        window.sessionStorage.getItem(
+          "presenton:authored-quality-review:task:deck-1"
+        )
+      ).to.equal("quality-task");
+    });
 
     cy.get('[data-testid="quality-review-metrics"]')
       .should("contain.text", "VQA 호출 1")

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -34,6 +34,7 @@ import {
 const POLL_INTERVAL_MS = 2_000;
 const REVIEW_TIMEOUT_MS = 30 * 60 * 1_000;
 const MAX_POLL_ERRORS = 4;
+const REVIEW_TASK_STORAGE_PREFIX = "presenton:authored-quality-review:task:";
 
 type ReviewScope = "all" | "current";
 type ReviewMode = "analyze_only" | "analyze_and_fix";
@@ -74,6 +75,10 @@ function formatDuration(milliseconds?: number) {
     : `${Math.round(milliseconds)}ms`;
 }
 
+function reviewTaskStorageKey(presentationId: string) {
+  return `${REVIEW_TASK_STORAGE_PREFIX}${presentationId}`;
+}
+
 export default function AuthoredQualityReview({
   presentationId,
   currentSlide = 0,
@@ -94,6 +99,38 @@ export default function AuthoredQualityReview({
   const [statusMessage, setStatusMessage] = useState("");
   const [result, setResult] = useState<AuthoredQualityReviewResult | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    const storageKey = reviewTaskStorageKey(presentationId);
+    const taskId = window.sessionStorage.getItem(storageKey);
+
+    setResult(null);
+    setStatusMessage("");
+    if (!taskId) return;
+
+    const restoreCompletedReview = async () => {
+      try {
+        const task = await PresentationGenerationApi.getGenerationStatus(taskId);
+        if (cancelled) return;
+
+        if (task?.status === "completed") {
+          setResult(normalizeAuthoredQualityReviewResult(task.data));
+          setStatusMessage(task.message || "");
+        } else if (task?.status === "error") {
+          window.sessionStorage.removeItem(storageKey);
+        }
+      } catch {
+        // Keep the task ID for a later refresh. A transient API failure must not
+        // discard an otherwise durable backend review result.
+      }
+    };
+
+    void restoreCompletedReview();
+    return () => {
+      cancelled = true;
+    };
+  }, [presentationId]);
+
   const startReview = async () => {
     if (isReviewing) return;
     setIsReviewing(true);
@@ -112,6 +149,7 @@ export default function AuthoredQualityReview({
         );
       const taskId = started?.id;
       if (!taskId) throw new Error("검수 작업을 시작하지 못했습니다.");
+      window.sessionStorage.setItem(reviewTaskStorageKey(presentationId), taskId);
 
       const deadline = Date.now() + REVIEW_TIMEOUT_MS;
       let pollErrors = 0;
