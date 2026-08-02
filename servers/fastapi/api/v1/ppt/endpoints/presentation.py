@@ -44,6 +44,10 @@ from services import presentation_version_service as version_service
 from services.authored_quality_review_service import (
     queue_authored_quality_review,
 )
+from services.authored_exact_source_snapshot import (
+    ExactSourceSnapshotError,
+    create_exact_source_snapshot,
+)
 from services.database import get_async_session
 from services.generation_pipeline import build_template_structure
 from services.image_generation_service import ImageGenerationService
@@ -62,7 +66,12 @@ from utils.process_slides import (
     process_slide_add_placeholder_assets,
     process_slide_and_fetch_assets,
 )
-from utils.authored_styles import load_authored_styles
+from utils.authored_styles import (
+    load_authored_styles,
+    validate_exact_reconstruction_style,
+)
+from utils.llm_calls.author_deck import plan_deck_roles
+from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
 
 from utils.owner_context import get_current_owner_id
 from api.v1.ppt.endpoints.presentation_helpers import (
@@ -244,8 +253,9 @@ async def retemplate_authored_presentation(
         )
 
     authored_style = request.authored_style.strip()
-    valid_style_ids = {style.id for style in load_authored_styles()}
-    if not authored_style or authored_style not in valid_style_ids:
+    styles_by_id = {style.id: style for style in load_authored_styles()}
+    selected_style = styles_by_id.get(authored_style)
+    if not authored_style or selected_style is None:
         raise HTTPException(status_code=400, detail="AI-authored template not found")
 
     source_outline = source.get_presentation_outline()
@@ -259,6 +269,39 @@ async def retemplate_authored_presentation(
             status_code=400,
             detail="Every source slide must have semantic content",
         )
+
+    exact_snapshot_id = None
+    if (
+        normalize_reference_mode(selected_style.reference_mode)
+        == EXACT_RECONSTRUCTION
+    ):
+        try:
+            validate_exact_reconstruction_style(
+                selected_style,
+                slide_count=len(source_outline.slides),
+                roles=plan_deck_roles(source_outline),
+            )
+            source_slides = (
+                await sql_session.execute(
+                    select(SlideModel)
+                    .where(SlideModel.presentation == id)
+                    .order_by(SlideModel.index)
+                )
+            ).scalars().all()
+            exact_snapshot_id = await create_exact_source_snapshot(
+                selected_style.id,
+                source_slides,
+                expected_slide_count=len(source_outline.slides),
+            )
+        except (ExactSourceSnapshotError, ValueError) as error:
+            logger.warning(
+                "Exact authored retemplate admission rejected (%s)",
+                type(error).__name__,
+            )
+            raise HTTPException(
+                status_code=422,
+                detail="authored_exact_source_snapshot_invalid",
+            ) from error
 
     generation_payload = {
         "content": (
@@ -283,6 +326,7 @@ async def retemplate_authored_presentation(
         generation_payload["verbosity"] = source.verbosity
 
     generation_request = GeneratePresentationRequest(**generation_payload)
+    generation_request._authored_exact_snapshot_id = exact_snapshot_id
     return await queue_presentation_generation(
         generation_request,
         background_tasks,

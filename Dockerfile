@@ -104,9 +104,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /app/scripts /app/servers/fastapi /app/servers/nextjs
-RUN mkdir -p /app_data/exports /app_data/images /app_data/uploads /app_data/fonts /app_data/pptx-to-html /app_data-private/template-v2-imports \
+RUN mkdir -p /app_data/exports /app_data/images /app_data/uploads /app_data/fonts /app_data/pptx-to-html /app_data-private/template-v2-imports /app_data-private/authored-exact-sources \
     && chmod -R a+rX /app_data \
-    && chmod 0700 /app_data-private /app_data-private/template-v2-imports
+    && chmod 0700 /app_data-private /app_data-private/template-v2-imports /app_data-private/authored-exact-sources
 
 COPY --from=fastapi-builder /opt/venv /opt/venv
 COPY --from=fastapi-builder /app/servers/fastapi /app/servers/fastapi

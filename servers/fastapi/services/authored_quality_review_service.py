@@ -35,6 +35,10 @@ from services.authored_exact_provenance import (
     ExactProvenanceError,
     verify_exact_provenance,
 )
+from services.authored_exact_source_snapshot import (
+    ExactSourceSnapshotError,
+    materialize_exact_source_style,
+)
 from services.authored_review_asset_store import publish_reviewed_png
 from services.database import async_session_maker
 from utils.authored_styles import (
@@ -419,6 +423,22 @@ async def _run_authored_quality_review_unlocked(
                 "Saved exact reconstruction style identity changed"
             )
         style = resolve_authored_style(private_style_id)
+        snapshot_id = provenance_row.provenance.get("source_snapshot_id")
+        if snapshot_id is not None:
+            if not isinstance(snapshot_id, str):
+                raise ExactProvenanceError(
+                    "Saved exact reconstruction source snapshot is invalid"
+                )
+            try:
+                style = await materialize_exact_source_style(
+                    style,
+                    snapshot_id,
+                    expected_slide_count=len(slides),
+                )
+            except ExactSourceSnapshotError as error:
+                raise ExactProvenanceError(
+                    "Saved exact reconstruction source snapshot is unavailable"
+                ) from error
         exact_source_images = verify_exact_provenance(
             provenance_row.provenance,
             style,

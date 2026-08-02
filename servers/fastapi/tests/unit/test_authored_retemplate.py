@@ -16,6 +16,8 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from utils.authored_styles import AuthoredStyle
+from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
 
 
 def _source_presentation() -> PresentationModel:
@@ -97,6 +99,187 @@ def test_retemplate_queues_new_authored_deck_from_saved_llm_manuscript(
     assert generation_request.n_slides is None
     assert queue.await_args.args[1].tasks == []
     assert queue.await_args.args[2] is fake_async_session
+
+
+def test_retemplate_exact_snapshots_fresh_html_before_queue(fake_async_session):
+    source = _source_presentation()
+    fake_async_session._get_results[source.id] = source
+    slides = [
+        SlideModel(
+            presentation=source.id,
+            layout_group="authored",
+            layout="authored:content",
+            index=index,
+            content={"__authored__": True, "image": "images/stale.png"},
+            properties={"image": "images/stale.png"},
+            html_content=f"<section>latest web HTML {index}</section>",
+        )
+        for index in range(2)
+    ]
+
+    class _SlideResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return slides
+
+    fake_async_session.execute = AsyncMock(return_value=_SlideResult())
+    exact_style = AuthoredStyle(
+        id="exact-private",
+        name="Exact",
+        description="Private exact test style",
+        preview_bg="#FFFFFF",
+        preview_accent="#111111",
+        brief="Preserve source pixels.",
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+    queued = AsyncPresentationGenerationTaskModel(
+        id="task-exact-retemplate",
+        status="pending",
+    )
+    snapshot = AsyncMock(return_value="a" * 32)
+    queue = AsyncMock(return_value=queued)
+
+    with (
+        patch(
+            "api.v1.ppt.endpoints.presentation.load_authored_styles",
+            return_value=[exact_style],
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation.validate_exact_reconstruction_style"
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
+            new=snapshot,
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
+            new=queue,
+        ),
+    ):
+        result = asyncio.run(
+            retemplate_authored_presentation(
+                id=source.id,
+                request=_request("exact-private"),
+                request_http=_http_request(),
+                background_tasks=BackgroundTasks(),
+                sql_session=fake_async_session,
+            )
+        )
+
+    assert result is queued
+    snapshot.assert_awaited_once_with(
+        "exact-private",
+        slides,
+        expected_slide_count=2,
+    )
+    generation_request = queue.await_args.args[0]
+    assert generation_request._authored_exact_snapshot_id == "a" * 32
+    assert generation_request.slides_markdown == [
+        slide.content for slide in source.get_presentation_outline().slides
+    ]
+    assert all("latest web HTML" in slide.html_content for slide in slides)
+    assert all(slide.properties["image"] == "images/stale.png" for slide in slides)
+
+
+def test_retemplate_style_reference_does_not_snapshot_current_html(
+    fake_async_session,
+):
+    source = _source_presentation()
+    fake_async_session._get_results[source.id] = source
+    queued = AsyncPresentationGenerationTaskModel(id="task-style", status="pending")
+    snapshot = AsyncMock()
+
+    with (
+        patch(
+            "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
+            new=snapshot,
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
+            new=AsyncMock(return_value=queued),
+        ),
+    ):
+        result = asyncio.run(
+            retemplate_authored_presentation(
+                id=source.id,
+                request=_request(),
+                request_http=_http_request(),
+                background_tasks=BackgroundTasks(),
+                sql_session=fake_async_session,
+            )
+        )
+
+    assert result is queued
+    snapshot.assert_not_awaited()
+
+
+def test_retemplate_exact_snapshot_failure_is_422_before_queue(fake_async_session):
+    source = _source_presentation()
+    fake_async_session._get_results[source.id] = source
+    slides = [
+        SlideModel(
+            presentation=source.id,
+            layout_group="authored",
+            layout="authored:content",
+            index=index,
+            content={"__authored__": True},
+            html_content=f"<section>slide {index}</section>",
+        )
+        for index in range(2)
+    ]
+
+    class _SlideResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return slides
+
+    fake_async_session.execute = AsyncMock(return_value=_SlideResult())
+    exact_style = AuthoredStyle(
+        id="exact-private",
+        name="Exact",
+        description="Private exact test style",
+        preview_bg="#FFFFFF",
+        preview_accent="#111111",
+        brief="Preserve source pixels.",
+        reference_mode=EXACT_RECONSTRUCTION,
+    )
+    queue = AsyncMock()
+
+    with (
+        patch(
+            "api.v1.ppt.endpoints.presentation.load_authored_styles",
+            return_value=[exact_style],
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation.validate_exact_reconstruction_style"
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
+            new=AsyncMock(side_effect=ValueError("private source failure")),
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
+            new=queue,
+        ),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        asyncio.run(
+            retemplate_authored_presentation(
+                id=source.id,
+                request=_request("exact-private"),
+                request_http=_http_request(),
+                background_tasks=BackgroundTasks(),
+                sql_session=fake_async_session,
+            )
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "authored_exact_source_snapshot_invalid"
+    queue.assert_not_awaited()
 
 
 def test_retemplate_rejects_non_authored_deck(fake_async_session):

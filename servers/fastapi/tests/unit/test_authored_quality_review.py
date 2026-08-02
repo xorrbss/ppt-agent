@@ -527,14 +527,38 @@ def test_exact_generation_persists_private_provenance_then_reviews_current_nonze
         )
         monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
 
+        snapshot_id = "a" * 32
+        materialize_calls = []
+
+        async def materialize_snapshot(
+            resolved_style, saved_snapshot_id, *, expected_slide_count
+        ):
+            materialize_calls.append(
+                (resolved_style.id, saved_snapshot_id, expected_slide_count)
+            )
+            return style
+
+        monkeypatch.setattr(
+            authored_service,
+            "materialize_exact_source_style",
+            materialize_snapshot,
+        )
+        monkeypatch.setattr(
+            quality_service,
+            "materialize_exact_source_style",
+            materialize_snapshot,
+        )
+
         presentation_id = uuid.uuid4()
         async with AsyncSession(engine, expire_on_commit=False) as session:
+            generation_request = GeneratePresentationRequest(
+                content="Exact topic",
+                template="authored",
+                authored_style="exact-source",
+            )
+            generation_request._authored_exact_snapshot_id = snapshot_id
             await authored_service.generate_authored_presentation(
-                GeneratePresentationRequest(
-                    content="Exact topic",
-                    template="authored",
-                    authored_style="exact-source",
-                ),
+                generation_request,
                 presentation_id,
                 outline,
                 "English",
@@ -550,6 +574,7 @@ def test_exact_generation_persists_private_provenance_then_reviews_current_nonze
             assert str(tmp_path) not in str(saved.theme)
             assert provenance is not None
             assert str(tmp_path) not in str(provenance.provenance)
+            assert provenance.provenance["source_snapshot_id"] == snapshot_id
 
             task = AsyncPresentationGenerationTaskModel(
                 status="pending", message="queued"
@@ -609,6 +634,10 @@ def test_exact_generation_persists_private_provenance_then_reviews_current_nonze
                 )
             ]
             assert task.data["reviewed_count"] == 1
+            assert materialize_calls == [
+                ("exact-source", snapshot_id, 2),
+                ("exact-source", snapshot_id, 2),
+            ]
 
         await engine.dispose()
 
