@@ -3,20 +3,64 @@ import path from "node:path";
 
 const ARTIFACT_DIRECTORY = path.resolve(
   process.cwd(),
-  "../../docs/artifacts/ppt-master-data-journalism"
+  "../../docs/artifacts/ppt-master-catalog"
 );
 
 const ASSETS = {
-  "montage.png": {
+  "ppt-master-executive-report-montage.png": {
     contentType: "image/png",
-    disposition: "inline; filename=ai-capital-2026-data-journalism-montage.png",
-    filename: "ai-capital-2026-data-journalism-montage.png",
+    disposition: "inline; filename=ppt-master-executive-report-montage.png",
+    filename: "ppt-master-executive-report-montage.png",
   },
-  "template.pptx": {
+  "ppt-master-executive-report.pptx": {
     contentType:
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    disposition: "attachment; filename=ai-capital-2026-data-journalism.pptx",
-    filename: "ai-capital-2026-data-journalism.pptx",
+    disposition: "attachment; filename=ppt-master-executive-report.pptx",
+    filename: "ppt-master-executive-report.pptx",
+  },
+  "ppt-master-business-proposal-montage.png": {
+    contentType: "image/png",
+    disposition: "inline; filename=ppt-master-business-proposal-montage.png",
+    filename: "ppt-master-business-proposal-montage.png",
+  },
+  "ppt-master-business-proposal.pptx": {
+    contentType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    disposition: "attachment; filename=ppt-master-business-proposal.pptx",
+    filename: "ppt-master-business-proposal.pptx",
+  },
+  "ppt-master-data-analysis-report-montage.png": {
+    contentType: "image/png",
+    disposition: "inline; filename=ppt-master-data-analysis-report-montage.png",
+    filename: "ppt-master-data-analysis-report-montage.png",
+  },
+  "ppt-master-data-analysis-report.pptx": {
+    contentType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    disposition: "attachment; filename=ppt-master-data-analysis-report.pptx",
+    filename: "ppt-master-data-analysis-report.pptx",
+  },
+  "ppt-master-ai-technology-proposal-montage.png": {
+    contentType: "image/png",
+    disposition: "inline; filename=ppt-master-ai-technology-proposal-montage.png",
+    filename: "ppt-master-ai-technology-proposal-montage.png",
+  },
+  "ppt-master-ai-technology-proposal.pptx": {
+    contentType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    disposition: "attachment; filename=ppt-master-ai-technology-proposal.pptx",
+    filename: "ppt-master-ai-technology-proposal.pptx",
+  },
+  "ppt-master-project-performance-report-montage.png": {
+    contentType: "image/png",
+    disposition: "inline; filename=ppt-master-project-performance-report-montage.png",
+    filename: "ppt-master-project-performance-report-montage.png",
+  },
+  "ppt-master-project-performance-report.pptx": {
+    contentType:
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    disposition: "attachment; filename=ppt-master-project-performance-report.pptx",
+    filename: "ppt-master-project-performance-report.pptx",
   },
 } as const;
 

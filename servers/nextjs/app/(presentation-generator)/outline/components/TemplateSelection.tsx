@@ -10,7 +10,10 @@ import {
 } from "@/app/hooks/useStructuredTemplates";
 
 import AuthoredStylePicker from "./AuthoredStylePicker";
-import { LocalPptMasterPreviewCard } from "./LocalPptMasterPreviewCard";
+import {
+  LOCAL_PPT_MASTER_TEMPLATES,
+  LocalPptMasterPreviewCard,
+} from "./LocalPptMasterPreviewCard";
 import { StructuredTemplateCard } from "./StructuredTemplateCard";
 
 // Sentinel id for the authored (high-quality) mode; this is not a layout template.
@@ -153,9 +156,25 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
         )}
 
         {process.env.NODE_ENV === "development" ? (
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <LocalPptMasterPreviewCard />
-          </div>
+          <aside className="mt-6" data-testid="local-ppt-master-catalog">
+            <div className="mb-3">
+              <h3 className="font-syne text-sm font-bold text-gray-900">
+                PPT Master 추가 템플릿
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-gray-600">
+                15개 핵심 레이아웃을 목적별 샘플 데이터로 채웠습니다. 필요한 장수만큼
+                슬라이드를 복제하거나 삭제해 사용할 수 있습니다.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {LOCAL_PPT_MASTER_TEMPLATES.map((template) => (
+                <LocalPptMasterPreviewCard
+                  key={template.filename}
+                  template={template}
+                />
+              ))}
+            </div>
+          </aside>
         ) : null}
       </section>
     </div>
