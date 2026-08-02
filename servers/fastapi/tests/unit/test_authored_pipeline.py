@@ -357,8 +357,6 @@ def test_author_slide_style_reference_keeps_art_direction_multimodal_contract(
     assert isinstance(user_content, list)
     assert "art direction only" in user_content[0].text
     assert "Do NOT copy their text, logos, brand names" in user_content[0].text
-    assert "FOOTER PAGE NUMBER CONTRACT" in user_content[0].text
-    assert "`01`" in user_content[0].text
     assert len(user_content) == 2
     assert getattr(user_content[1], "mime_type", None) == "image/png"
 
@@ -376,11 +374,9 @@ def test_author_slide_style_reference_preserves_text_only_fallback(monkeypatch, 
     assert html == _VALID
     assert len(calls) == 2
     assert isinstance(_author_user_content(calls[0]), list)
-    fallback_prompt = _author_user_content(calls[1])
-    assert fallback_prompt == _author_user_content(calls[0])[0].text.split(
+    assert _author_user_content(calls[1]) == _author_user_content(calls[0])[0].text.split(
         "\n\nVISUAL REFERENCES", 1
     )[0]
-    assert "FOOTER PAGE NUMBER CONTRACT" in fallback_prompt
 
 
 def test_author_slide_exact_reconstruction_uses_fidelity_prompt(monkeypatch, tmp_path):
@@ -422,7 +418,6 @@ def test_author_slide_exact_reconstruction_uses_fidelity_prompt(monkeypatch, tmp
         assert required in prompt
     assert "art direction only" not in prompt
     assert "do not copy their text" not in prompt
-    assert "footer page number contract" not in prompt
 
 
 def test_author_slide_exact_reconstruction_never_retries_without_the_image(
@@ -1270,7 +1265,6 @@ def test_slide_pipeline_renders_fast_slide_before_slowest_author_finishes(monkey
 
     assert ["slide-0" in html for html in result.deck.htmls] == [True, False]
     assert ["slide-1" in html for html in result.deck.htmls] == [False, True]
-    assert all("data-presenton-page-number" in html for html in result.deck.htmls)
     assert result.pngs == [b"png-0", b"png-1"]
     assert result.deck.design_system == "PIPELINED DESIGN SYSTEM"
 

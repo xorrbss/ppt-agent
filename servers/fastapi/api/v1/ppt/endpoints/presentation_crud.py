@@ -26,9 +26,6 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.slide import SlideModel
-from services.authored_page_number_service import (
-    authored_slides_with_standard_page_numbers,
-)
 from services.database import get_async_session
 from services.presentation_deletion_service import (
     PresentationDeleteConflictError,
@@ -92,9 +89,6 @@ async def get_presentation(
         .order_by(SlideModel.index)
     )
     slides = list(slides_result)
-    slides = await authored_slides_with_standard_page_numbers(
-        sql_session, presentation, slides
-    )
     fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
     return PresentationWithSlides(
         **presentation.model_dump(),

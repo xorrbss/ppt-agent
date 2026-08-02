@@ -214,9 +214,7 @@ _DEFAULT_STYLE_BRIEF = """\
   #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues.
 - Margins ~64px (except intentional full-bleed colour zones).
 - Consistent eyebrow: UPPERCASE, letter-spaced 0.15em, ~13px, primary, with a short tick/line.
-- Consistent footer on content slides: small muted wordmark/context left + exactly one bold
-  primary-colour page number right. Use a zero-padded two-digit number only (for example 08),
-  never `/ total`, a section label, or a second page marker.
+- Consistent footer on content slides: small muted slide marker left + a small wordmark right.
 - Strong, confident type hierarchy; make the single most important element dominant.
 - Allowed (vary per slide): full-bleed/partial colour-blocked zones, asymmetric grids, a left
   sidebar, oversized numerals, thin rules, subtle tints of the primary, and SVG only for essential
@@ -406,13 +404,6 @@ _STYLE_REFERENCE_GUIDANCE = (
     "their text, logos, brand names, exact illustrations, or factual content. Rebuild "
     "an original slide from this slide's CONTENT and the shared design system. Avoid "
     "unnecessarily shrinking text until it becomes difficult to read."
-)
-
-_STYLE_REFERENCE_PAGE_NUMBER_GUIDANCE = (
-    "\n\nFOOTER PAGE NUMBER CONTRACT: Render exactly one bottom-right page number "
-    "`{page_number}` in the brand primary colour, bold, at about 12px. The number "
-    "must be zero-padded to two digits and contain no `/ total`, section name, or "
-    "other page marker. Keep any footer wordmark/context small and muted on the left."
 )
 
 _EXACT_RECONSTRUCTION_GUIDANCE = """\
@@ -630,20 +621,15 @@ async def author_slide_html(
         )
     client = get_client(config=get_llm_config())
     model = get_model()
-    prompt_with_contract = prompt
-    if mode == STYLE_REFERENCE:
-        prompt_with_contract += _STYLE_REFERENCE_PAGE_NUMBER_GUIDANCE.format(
-            page_number=f"{index + 1:02d}"
-        )
     reference_guidance = (
         _EXACT_RECONSTRUCTION_GUIDANCE
         if mode == EXACT_RECONSTRUCTION
         else _STYLE_REFERENCE_GUIDANCE
     )
     user_content = (
-        [TextContentPart(text=prompt_with_contract + reference_guidance), *image_parts]
+        [TextContentPart(text=prompt + reference_guidance), *image_parts]
         if image_parts
-        else prompt_with_contract
+        else prompt
     )
     messages = [SystemMessage(content=_SYSTEM), UserMessage(content=user_content)]
     kwargs = get_generate_kwargs(
@@ -682,7 +668,7 @@ async def author_slide_html(
         )
         fallback_messages = [
             SystemMessage(content=_SYSTEM),
-            UserMessage(content=prompt_with_contract),
+            UserMessage(content=prompt),
         ]
         fallback_kwargs = get_generate_kwargs(
             model=model, messages=fallback_messages, max_tokens=AUTHOR_MAX_TOKENS
