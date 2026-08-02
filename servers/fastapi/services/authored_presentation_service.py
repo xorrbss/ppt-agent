@@ -63,6 +63,7 @@ from utils.asset_directory_utils import (
     get_images_directory,
 )
 from utils.authored_illustrations import apply_authored_illustration
+from utils.authored_page_number import normalize_authored_page_number
 from utils.authored_styles import (
     resolve_authored_style,
     validate_exact_reconstruction_style,
@@ -431,6 +432,13 @@ async def _author_illustrate_render_pipeline(
                             retryable=is_retryable_exception(exc),
                         ) from exc
                     illustration_work = time.monotonic() - illustration_started
+                if plan_reference_mode != EXACT_RECONSTRUCTION:
+                    illustrated_html = normalize_authored_page_number(
+                        illustrated_html,
+                        slide_index=index,
+                        primary=brand.primary,
+                        reference_mode=plan_reference_mode,
+                    )
                 if generation_job is not None:
                     checkpoint = await _complete_stage_after_external_success(
                         job_id=generation_job.id,
@@ -440,6 +448,33 @@ async def _author_illustrate_render_pipeline(
                         html=illustrated_html,
                         skipped=skipped,
                     )
+
+            if plan_reference_mode != EXACT_RECONSTRUCTION:
+                normalized_html = normalize_authored_page_number(
+                    illustrated_html,
+                    slide_index=index,
+                    primary=brand.primary,
+                    reference_mode=plan_reference_mode,
+                )
+                if normalized_html != illustrated_html:
+                    illustrated_html = normalized_html
+                    # A checkpoint created before page-number normalization must
+                    # invalidate its old render before it can be reused.
+                    if generation_job is not None:
+                        await start_stage(
+                            job_id=generation_job.id,
+                            slide_index=index,
+                            stage="illustrate",
+                            attempt_token=attempt_token,
+                        )
+                        checkpoint = await _complete_stage_after_external_success(
+                            job_id=generation_job.id,
+                            slide_index=index,
+                            stage="illustrate",
+                            attempt_token=attempt_token,
+                            html=illustrated_html,
+                            skipped=image_service is None,
+                        )
 
             png = read_valid_render(checkpoint) if checkpoint else None
             if png is None or checkpoint.render_status != "completed":
@@ -743,6 +778,36 @@ async def _generate_authored_presentation(
             traceback.print_exc()
         finally:
             vision_elapsed = time.monotonic() - vision_started
+
+    reference_mode = normalize_reference_mode(
+        getattr(style, "reference_mode", STYLE_REFERENCE)
+    )
+    if reference_mode != EXACT_RECONSTRUCTION:
+        renumbered_indices: list[int] = []
+        for index, html in enumerate(htmls):
+            normalized_html = normalize_authored_page_number(
+                html,
+                slide_index=index,
+                primary=brand.primary,
+                reference_mode=reference_mode,
+            )
+            if normalized_html != html:
+                htmls[index] = normalized_html
+                renumbered_indices.append(index)
+        if renumbered_indices:
+            renumbered_pngs = await asyncio.gather(
+                *(render_html_to_png(htmls[index]) for index in renumbered_indices)
+            )
+            for index, png in zip(renumbered_indices, renumbered_pngs):
+                pngs[index] = png
+                if generation_job is not None and generation_job.attempt_token:
+                    await _complete_stage_after_external_success(
+                        job_id=generation_job.id,
+                        slide_index=index,
+                        stage="render",
+                        attempt_token=generation_job.attempt_token,
+                        png=png,
+                    )
 
     # Observability: one structured summary (counts/timing/model only — no secrets).
     placeholder = _placeholder_png()
