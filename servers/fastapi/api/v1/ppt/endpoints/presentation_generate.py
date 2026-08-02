@@ -222,6 +222,7 @@ def _template_v2_http_exception(error: TemplateV2GenerationError) -> HTTPExcepti
         "template_v2_creation_disabled": 403,
         "template_v2_allowlist_required": 403,
         "template_v2_template_not_allowed": 403,
+        "template_v2_template_not_published": 403,
         "template_v2_template_id_required": 400,
         "template_v2_rollout_config_invalid": 503,
         "template_v2_template_not_found": 404,

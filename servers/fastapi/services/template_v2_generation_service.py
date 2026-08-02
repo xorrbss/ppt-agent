@@ -35,6 +35,10 @@ from services.template_v2_native_storage import (
     read_native_source,
 )
 from templates.v2.generation import build_generated_slide
+from templates.v2.catalog import (
+    get_template_v2_catalog_entry,
+    is_template_v2_release_ready,
+)
 from templates.v2.models.layouts import SlideLayout
 from templates.v2.pptx.native_compiler import (
     TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME,
@@ -415,6 +419,11 @@ async def load_template_v2_generation_target(
         field: deepcopy(getattr(revision_entry, field))
         for field in SNAPSHOT_FIELDS
     }
+    if (
+        get_template_v2_catalog_entry(template_id) is not None
+        and not is_template_v2_release_ready(template_id, snapshot.get("assets"))
+    ):
+        raise TemplateV2GenerationError("template_v2_template_not_published")
     name = snapshot["name"]
     layouts_value = snapshot["layouts"]
 

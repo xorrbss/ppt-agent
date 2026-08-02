@@ -3,7 +3,8 @@ from collections import Counter
 import re
 import uuid
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -186,6 +187,41 @@ def test_compat_patch_uses_fetched_revision_as_cas(monkeypatch):
         )
     )
     assert conflict.status_code == 409
+
+
+@pytest.mark.parametrize("value", [True, False, None])
+def test_compat_patch_rejects_user_managed_default(value):
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            template_v2_compat.update_template_metadata(
+                template_id="compat-template",
+                request=UpdateTemplateMetadataRequest(is_default=value),
+                sql_session=object(),
+            )
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "template_v2_default_is_catalog_managed"
+
+
+def test_compat_response_derives_default_from_catalog_release_gate(monkeypatch):
+    template = TemplateV2(
+        id="catalog-default",
+        presentation_id=SOURCE_ID,
+        name="Catalog default",
+        is_default=False,
+    )
+    monkeypatch.setattr(
+        template_v2_compat,
+        "is_template_v2_default_release",
+        lambda template_id, assets: template_id == "catalog-default",
+    )
+
+    assert template_v2_compat._response(template).is_default is True
+
+    template.is_default = True
+    template.id = "stale-database-default"
+    assert template_v2_compat._response(template).is_default is False
 
 
 def test_structured_and_compat_routes_share_sidecar_facade(

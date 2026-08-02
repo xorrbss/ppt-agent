@@ -21,6 +21,7 @@ from models.sql.presentation import PresentationModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
 from services.template_v2_revision_service import append_revision
+from templates.v2.catalog import get_template_v2_catalog_entry
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.wire_codec import decode_wire_layouts
 
@@ -47,6 +48,14 @@ class TemplateV2SourceIdentityError(TemplateV2ServiceError):
 
 class TemplateV2PersistenceConflictError(TemplateV2ServiceError):
     pass
+
+
+class TemplateV2DefaultMutationError(TemplateV2ServiceError):
+    """Raised when an unprivileged CRUD path attempts to manage the default."""
+
+
+class TemplateV2CatalogMutationError(TemplateV2ServiceError):
+    """Raised when general CRUD attempts to mutate a catalog-owned identity."""
 
 
 class TemplateV2RevisionConflictError(TemplateV2ServiceError):
@@ -311,6 +320,10 @@ class TemplateV2Service:
         assets: dict[str, Any] | None,
         is_default: bool,
     ) -> TemplateV2Record:
+        if get_template_v2_catalog_entry(template_id) is not None:
+            raise TemplateV2CatalogMutationError(template_id)
+        if is_default:
+            raise TemplateV2DefaultMutationError(template_id)
         source_presentation = await self._sql_session.get(
             PresentationModel,
             presentation_id,
@@ -372,6 +385,10 @@ class TemplateV2Service:
         expected_revision: int | None = None,
         journal_reason: str = "autosave",
     ) -> TemplateV2Record:
+        if get_template_v2_catalog_entry(template_id) is not None:
+            raise TemplateV2CatalogMutationError(template_id)
+        if "is_default" in changes:
+            raise TemplateV2DefaultMutationError(template_id)
         unsupported = set(changes) - _MUTABLE_FIELDS
         if unsupported:
             raise ValueError(
@@ -380,6 +397,8 @@ class TemplateV2Service:
             )
 
         template = await self._get_template(template_id)
+        if template.owner_id is None and template.is_default:
+            raise TemplateV2DefaultMutationError(template_id)
         current_state = await self._local_state.get(template)
         if not changes:
             return self._combine(template, current_state)
@@ -432,7 +451,11 @@ class TemplateV2Service:
         return self._combine(template, refreshed_state)
 
     async def delete(self, template_id: str) -> TemplateV2Record:
+        if get_template_v2_catalog_entry(template_id) is not None:
+            raise TemplateV2CatalogMutationError(template_id)
         template = await self._get_template(template_id)
+        if template.owner_id is None and template.is_default:
+            raise TemplateV2DefaultMutationError(template_id)
         record = await self._record(template)
         await self._sql_session.delete(template)
         try:

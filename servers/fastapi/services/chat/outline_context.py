@@ -28,6 +28,10 @@ from models.sql.template_v2_local_state import TemplateV2LocalState
 from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
 from services.temp_file_service import TEMP_FILE_SERVICE
+from templates.v2.catalog import (
+    get_template_v2_catalog_entry,
+    is_template_v2_default_release,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -592,12 +596,14 @@ class OutlineTemplateContext:
 
     @staticmethod
     def _is_template_scoped(template: TemplateV2) -> bool:
+        if (
+            get_template_v2_catalog_entry(template.id) is not None
+            or (template.owner_id is None and template.is_default)
+        ):
+            return is_template_v2_default_release(template.id, template.assets)
         if get_current_owner_is_admin():
             return True
-        owner_id = get_current_owner_id()
-        return template.owner_id == owner_id or (
-            template.owner_id is None and template.is_default
-        )
+        return template.owner_id == get_current_owner_id()
 
     @staticmethod
     def _not_found() -> dict[str, Any]:

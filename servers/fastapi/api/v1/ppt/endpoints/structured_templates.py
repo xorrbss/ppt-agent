@@ -28,6 +28,8 @@ from services.template_v2_revision_service import (
 )
 from services.template_v2_service import (
     TemplateV2AlreadyExistsError,
+    TemplateV2CatalogMutationError,
+    TemplateV2DefaultMutationError,
     TemplateV2NotFoundError,
     TemplateV2PersistenceConflictError,
     TemplateV2RevisionConflictError,
@@ -39,7 +41,8 @@ from services.template_v2_service import (
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.catalog import (
     get_template_v2_catalog_entry,
-    is_template_v2_catalog_entry_rights_ready,
+    is_template_v2_default_release,
+    is_template_v2_release_ready,
 )
 from templates.v2.policy import (
     StructuredTemplatePolicy,
@@ -75,7 +78,6 @@ class StructuredTemplateCreate(BaseModel):
     def validate_layouts(cls, value: Any) -> dict[str, Any]:
         return _validated_wire_layouts(value)
 
-
 class StructuredTemplateUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -98,7 +100,7 @@ class StructuredTemplateUpdate(BaseModel):
     def require_a_change(self) -> "StructuredTemplateUpdate":
         if not self.model_fields_set - {"id", "expected_revision"}:
             raise ValueError("at least one mutable field is required")
-        for required_field in ("name", "layouts", "is_default"):
+        for required_field in ("name", "layouts"):
             if (
                 required_field in self.model_fields_set
                 and getattr(self, required_field) is None
@@ -179,6 +181,10 @@ def _response(template: TemplateV2) -> StructuredTemplateResponse:
     return response.model_copy(
         update={
             "layouts": deepcopy(layouts),
+            "is_default": is_template_v2_default_release(
+                template.id,
+                template.assets,
+            ),
             **_catalog_metadata(template),
         }
     )
@@ -191,11 +197,7 @@ def _catalog_metadata(template: TemplateV2) -> dict[str, Any]:
     decision = evaluate_template_v2_publication(template.assets)
     if catalog_entry is not None:
         metadata = catalog_entry.api_metadata()
-        if not (
-            decision.publishable
-            and catalog_entry.publication_status == "published"
-            and is_template_v2_catalog_entry_rights_ready(catalog_entry)
-        ):
+        if not is_template_v2_release_ready(template.id, template.assets):
             metadata["publication_status"] = "blocked"
         return metadata
 
@@ -227,17 +229,20 @@ def _catalog_metadata(template: TemplateV2) -> dict[str, Any]:
 
 
 def _is_discoverable(template: TemplateV2) -> bool:
-    decision = evaluate_template_v2_publication(template.assets)
-    if not decision.publishable:
-        return False
-    catalog_entry = get_template_v2_catalog_entry(template.id)
-    return catalog_entry is None or (
-        catalog_entry.publication_status == "published"
-        and is_template_v2_catalog_entry_rights_ready(catalog_entry)
-    )
+    return is_template_v2_release_ready(template.id, template.assets)
 
 
 def _service_http_error(error: TemplateV2ServiceError) -> HTTPException:
+    if isinstance(error, TemplateV2CatalogMutationError):
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_catalog_is_read_only",
+        )
+    if isinstance(error, TemplateV2DefaultMutationError):
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_default_is_catalog_managed",
+        )
     if isinstance(error, TemplateV2AlreadyExistsError):
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -333,6 +338,11 @@ async def create_structured_template(
     payload: StructuredTemplateCreate,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    if "is_default" in payload.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_default_is_catalog_managed",
+        )
     policy = get_structured_template_policy()
     _require_write(policy, payload.id)
     try:
@@ -343,7 +353,7 @@ async def create_structured_template(
             description=payload.description,
             layouts=payload.layouts,
             assets=payload.assets,
-            is_default=payload.is_default,
+            is_default=False,
         )
     except TemplateV2ServiceError as error:
         raise _service_http_error(error) from error
@@ -384,6 +394,11 @@ async def update_structured_template(
     payload: StructuredTemplateUpdate,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    if "is_default" in payload.model_fields_set:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="template_v2_default_is_catalog_managed",
+        )
     if payload.id is not None and payload.id != template_id:
         raise HTTPException(status_code=400, detail="Template id mismatch")
     policy = get_structured_template_policy()

@@ -43,6 +43,7 @@ _FAILURE_CODES = {
     "template_v2_source_invalid",
     "template_v2_template_id_required",
     "template_v2_template_not_allowed",
+    "template_v2_template_not_published",
     "template_v2_template_not_found",
     "template_v2_unexpected_failure",
 }
