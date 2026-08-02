@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
+from api.v1.ppt.endpoints import presentation as presentation_endpoint
 from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -15,15 +16,79 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from services import authored_quality_ocr as ocr_service
 from services import authored_quality_review_service as quality_service
 from utils.authored_dom_quality import DomQualityIssue, DomQualityReport
-from utils.authored_ocr_quality import OcrQualityResult
+from utils.authored_ocr_quality import OcrQualityResult, OcrRuntime
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE, Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def test_ocr_readiness_is_fail_closed_and_does_not_expose_runtime_paths(monkeypatch):
+    private_path = r"C:\private\runtime\tesseract.exe"
+    monkeypatch.setattr(
+        ocr_service,
+        "inspect_tesseract",
+        lambda **_: OcrRuntime(
+            status="language_missing",
+            command=(private_path,),
+            version=f"secret at {private_path}",
+            requested_languages=("kor", "eng"),
+            available_languages=("eng",),
+            tessdata_dir=r"C:\private\tessdata",
+            inspection_seconds=0.01,
+            failure_reason="missing_languages:kor",
+        ),
+    )
+
+    readiness = ocr_service._build_ocr_readiness()
+
+    assert readiness == {
+        "schema_version": 1,
+        "component": "authored_quality_ocr",
+        "ready": False,
+        "code": "ocr_language_missing",
+        "requested_languages": ["eng", "kor"],
+        "available_languages": ["eng"],
+        "missing_languages": ["kor"],
+        "tessdata_configured": True,
+        "inspection_ms": readiness["inspection_ms"],
+    }
+    serialized = str(readiness)
+    assert private_path not in serialized
+    assert "tessdata_dir" not in readiness
+    assert "command" not in readiness
+    assert "version" not in readiness
+
+
+def test_ocr_language_accepts_korean_codes_and_plain_label():
+    for language in ("ko", "kor", "KR", "Korean", "한국어", "Korean (한국어)"):
+        assert ocr_service.ocr_language(language) == "kor+eng"
+
+
+def test_quality_review_readiness_route_precedes_dynamic_presentation_route(
+    monkeypatch,
+):
+    payload = {"component": "authored_quality_ocr", "ready": True}
+
+    async def fake_readiness():
+        return payload
+
+    monkeypatch.setattr(presentation_endpoint, "get_ocr_readiness", fake_readiness)
+    routes = list(presentation_endpoint.PRESENTATION_ROUTER.routes)
+    readiness_route = next(
+        route for route in routes if route.path == "/presentation/quality-review/readiness"
+    )
+    dynamic_route = next(
+        route for route in routes if route.path == "/presentation/{id}/quality-review"
+    )
+
+    assert routes.index(readiness_route) < routes.index(dynamic_route)
+    assert _run(readiness_route.endpoint()) == payload
 
 
 async def _engine(path: Path):

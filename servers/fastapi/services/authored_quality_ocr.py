@@ -4,8 +4,10 @@ Raw OCR text is intentionally retained only inside :class:`RequestOcrRuntime`.
 Every payload returned by this module is safe for persistence and UI delivery.
 """
 
+import asyncio
 import hashlib
 import logging
+import re
 import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from typing import Any
@@ -16,15 +18,76 @@ from utils.authored_ocr_quality import (
     compare_authored_ocr,
     compare_expected_candidate,
     expected_text_from_browser_metrics,
+    inspect_tesseract,
 )
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
 from utils.ocr_language import presentation_language_to_ocr_code
 
 InspectOcr = Callable[..., Awaitable[OcrQualityResult]]
+_SAFE_LANGUAGE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+
+
+def _safe_languages(values: Iterable[str]) -> list[str]:
+    return sorted({value for value in values if _SAFE_LANGUAGE.fullmatch(value)})
+
+
+def _build_ocr_readiness() -> dict[str, Any]:
+    """Inspect the production OCR contract without exposing commands or paths."""
+    started_at = time.perf_counter()
+    requested = "kor+eng"
+    try:
+        runtime = inspect_tesseract(
+            explicit_command=None,
+            tessdata_dir=None,
+            language=requested,
+            timeout_seconds=5.0,
+        )
+        requested_languages = _safe_languages(runtime.requested_languages)
+        available_languages = _safe_languages(runtime.available_languages)
+        missing_languages = sorted(set(requested_languages) - set(available_languages))
+        if runtime.status == "ready":
+            code = "ocr_ready"
+        elif runtime.status == "language_missing":
+            code = "ocr_language_missing"
+        elif runtime.failure_reason == "tesseract_executable_not_found":
+            code = "ocr_executable_missing"
+        else:
+            code = "ocr_runtime_check_failed"
+        ready = runtime.status == "ready" and not missing_languages
+        tessdata_configured = runtime.tessdata_dir is not None
+    except Exception:  # noqa: BLE001 - readiness must fail closed
+        requested_languages = _safe_languages(requested.split("+"))
+        available_languages = []
+        missing_languages = requested_languages
+        code = "ocr_runtime_check_failed"
+        ready = False
+        tessdata_configured = False
+    return {
+        "schema_version": 1,
+        "component": "authored_quality_ocr",
+        "ready": ready,
+        "code": code,
+        "requested_languages": requested_languages,
+        "available_languages": available_languages,
+        "missing_languages": missing_languages,
+        "tessdata_configured": tessdata_configured,
+        "inspection_ms": round((time.perf_counter() - started_at) * 1000, 3),
+    }
+
+
+async def get_ocr_readiness() -> dict[str, Any]:
+    """Run the bounded CLI probe off the event loop for readiness callers."""
+    return await asyncio.to_thread(_build_ocr_readiness)
 
 
 def ocr_language(language: str | None) -> str:
-    code = presentation_language_to_ocr_code(language)
+    normalized = str(language or "").strip().casefold()
+    if normalized in {"ko", "kor", "kr", "korean", "한국어"} or normalized.startswith(
+        "korean ("
+    ):
+        code = "kor"
+    else:
+        code = presentation_language_to_ocr_code(language)
     requested = [part for part in code.replace(",", "+").split("+") if part]
     if "eng" not in requested:
         requested.append("eng")

@@ -2,16 +2,47 @@
 
 ## Result
 
-The Docker packaging contract is correct by static inspection, and the same
-Tesseract binary/data contract passes a live Windows smoke test. This machine
-does **not** have Docker, Docker Desktop, Podman, nerdctl, or buildctl installed,
-so an image build, in-container execution, image size, and build duration could
-not be measured here. They are intentionally recorded as unmeasured rather than
-estimated.
+The production Docker contract was checked on a real Docker Engine, but an
+unmounted production-container OCR smoke is **blocked** on this workstation:
+the installed Docker CLI has no Buildx component and this Dockerfile requires
+BuildKit cache mounts. No image was produced, so image size, container startup,
+and in-container OCR results are deliberately unmeasured.
 
-## Packaging contract inspected
+This is not an OCR test failure. The build reached the first BuildKit-only
+instruction after sending a 282.5 MB context, then failed before dependency
+installation or the runtime stage.
 
-Both `Dockerfile` and `Dockerfile.dev` now provide the authored OCR runtime:
+## Actual environment and measurements
+
+| Check | Result |
+| --- | --- |
+| Docker Engine (WSL Ubuntu, root) | client 29.1.3; server 29.1.3 |
+| Normal production build | failed at Dockerfile step 6 because legacy builder does not support `RUN --mount` |
+| BuildKit-enabled build | failed immediately: BuildKit is enabled but the Buildx component is missing or broken |
+| Sent Docker context | 282.5 MB before the legacy-builder failure |
+| Compose syntax/config expansion | passed (`docker compose config --quiet`); only unset optional-provider variable warnings were emitted |
+| Live host OCR equivalent | `1 passed in 0.50s` (1.7 s shell wall time) |
+
+The normal command and exact failure are:
+
+```bash
+cd /mnt/c/project/PPT-agent/ppt-agent
+docker build -t ppt-agent-ocr-validate:20260802 .
+# ... Sending build context to Docker daemon 282.5MB
+# Step 6/51: RUN --mount=type=cache,target=/root/.cache/uv ...
+# the --mount option requires BuildKit
+
+DOCKER_BUILDKIT=1 docker build -t ppt-agent-ocr-validate:20260802 .
+# ERROR: BuildKit is enabled but the buildx component is missing or broken.
+```
+
+The host `ibiz` account is not in Docker's group; invoking the WSL engine as
+root was sufficient for these read/build checks. No credentials were displayed
+or passed to Docker.
+
+## Packaging contract checked
+
+Both `Dockerfile` and `Dockerfile.dev` contain all of the following:
 
 | Requirement | Production image | Development image |
 | --- | --- | --- |
@@ -19,67 +50,64 @@ Both `Dockerfile` and `Dockerfile.dev` now provide the authored OCR runtime:
 | English system language data | `tesseract-ocr-eng` | `tesseract-ocr-eng` |
 | Bundled offline data | `COPY tessdata /app/tessdata` | `COPY tessdata /app/tessdata` |
 | Korean bundled data | `/app/tessdata/kor.traineddata` | `/app/tessdata/kor.traineddata` |
-| Authored OCR lookup | `AUTHORED_OCR_TESSDATA_PATH=/app/tessdata` | same |
-| Korean render font for smoke and slides | `fonts-noto-cjk` | `fonts-noto-cjk` |
+| OCR data lookup | `AUTHORED_OCR_TESSDATA_PATH=/app/tessdata` | same |
+| Korean render font | `fonts-noto-cjk` | `fonts-noto-cjk` |
 
-The authored OCR runtime passes `--tessdata-dir` explicitly, so it uses the
-bundled data rather than relying on the OS default. `tessdata/eng.traineddata`
-and `tessdata/kor.traineddata` are tracked and not excluded by `.dockerignore`.
+`tessdata/eng.traineddata` and `tessdata/kor.traineddata` are tracked and not
+ignored. The review path supplies `--tessdata-dir` explicitly, so it uses the
+bundled files rather than a system-default data directory. `INSTALL_TESSERACT=false`
+remains an intentional minimal-image option, but disables native authored OCR;
+deployments that need it must retain the default `true`.
 
-`INSTALL_TESSERACT=false` is an intentional minimal-image option, but it makes
-the native authored OCR executable unavailable. Deployments that enable authored
-OCR must keep it `true` (the default); the review pipeline will fail closed for
-OCR-required decisions if it is disabled.
+The Docker context was also hardened to exclude local, user-owned test and
+Codex artifacts (`.test-runtime` and `.codex-tmp`) while retaining `tessdata`.
+This removed a 3,018,917,297-byte test-runtime directory from the candidate
+context and prevents local artifacts entering build layers.
 
 ## Live host equivalent
 
-The following was run from the repository root with the same environment paths
-the containers set, using Tesseract 5.4.0.20240606:
+The following was run from the repository root against the tracked bundled
+`eng` and `kor` data. It renders representative Korean/English/numeric/symbol
+content, invokes `kor+eng`, requires CER <= 0.10, and rejects missing Korean,
+numeric, or symbol content.
 
 ```powershell
-$env:AUTHORED_OCR_TESSDATA_PATH=(Resolve-Path tessdata)
-$env:TESSERACT_CMD='C:\Program Files\Tesseract-OCR\tesseract.exe'
+$env:AUTHORED_OCR_TESSDATA_PATH = (Resolve-Path tessdata).Path
+$env:TESSERACT_CMD = 'C:\Program Files\Tesseract-OCR\tesseract.exe'
 Push-Location servers/fastapi
 uv run pytest tests/integration/test_authored_ocr_live_smoke.py -q
 ```
 
-Result: `1 passed in 0.46s` (`1.316s` measured shell wall time). The test renders
-`가격 2026 +12%`, invokes `kor+eng`, checks the engine executes, requires CER
-`<= 0.10`, and requires no Korean, number, or symbol omissions. A direct language
-listing against the bundled directory reported exactly `eng` and `kor`.
+Result: `1 passed in 0.50s` (1.7 s measured shell wall time). This is evidence
+for the same executable/data contract only; it is not substituted for the
+blocked production-container smoke.
 
-## Required in-container verification
+## Required completion command
 
-Run this on a Docker-capable host. It builds the normal production target with
-the default native OCR option, records local image size, and runs the live smoke
-inside the image. The repository bind mount is deliberately avoided so the
-container's own `/app/tessdata`, language data, executable, and Noto CJK font
-are tested.
+Install or repair the Docker Buildx CLI plugin, then run this from a
+Docker-capable shell. The run intentionally has no repository bind mount, so it
+tests the image's own `/app/tessdata`, executable, language files, and Noto CJK
+font.
 
 ```bash
-docker build --progress=plain --build-arg INSTALL_TESSERACT=true \\
+docker buildx version
+docker build --build-arg INSTALL_TESSERACT=true \
   -t ppt-agent-ocr-validate:20260802 .
-docker image inspect ppt-agent-ocr-validate:20260802 \\
+docker image inspect ppt-agent-ocr-validate:20260802 \
   --format '{{.Size}} bytes'
-docker run --rm --entrypoint sh ppt-agent-ocr-validate:20260802 -lc '\
-  tesseract --version | head -n1 && \\
-  test -s /app/tessdata/eng.traineddata && \\
-  test -s /app/tessdata/kor.traineddata && \\
-  tesseract --tessdata-dir /app/tessdata --list-langs && \\
-  cd /app/servers/fastapi && \\
-  AUTHORED_OCR_TESSDATA_PATH=/app/tessdata \\
-  python evaluation/hybrid_review/DOCKER_OCR_SMOKE.py'
+docker run --rm --entrypoint /bin/sh ppt-agent-ocr-validate:20260802 -c '
+  set -eu
+  tesseract --version | head -n1
+  test -s /app/tessdata/eng.traineddata
+  test -s /app/tessdata/kor.traineddata
+  tesseract --tessdata-dir /app/tessdata --list-langs
+  fc-match "Noto Sans CJK KR"
+  cd /app/servers/fastapi
+  AUTHORED_OCR_TESSDATA_PATH=/app/tessdata PYTHONPATH=/app/servers/fastapi \
+    python evaluation/hybrid_review/DOCKER_OCR_SMOKE.py
+'
 ```
 
-`DOCKER_OCR_SMOKE.py` is copied with the FastAPI source and needs no dev-only
-pytest or `uv` executable in the runtime image. It renders `가격 2026 +12%` with
-the installed Noto CJK font, invokes the authored OCR utility with `kor+eng`,
-and fails if CER exceeds `0.10` or Korean, numeric, or symbol content is missing.
-The script prints only runtime metadata and aggregate metrics—not recognized OCR
-text.
-
-## Docker availability check
-
-On this workstation, `docker` was absent from `PATH`; standard Docker Desktop,
-Rancher Desktop, Podman, nerdctl, and buildctl locations/commands were also not
-present. No image was built and no container was created or removed.
+On success, also start the image without a bind mount and capture its health or
+HTTP readiness, image size, and startup wall time. Do not report those values
+as passing until this command completes successfully.

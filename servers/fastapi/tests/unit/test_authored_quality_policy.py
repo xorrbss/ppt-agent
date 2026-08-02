@@ -133,7 +133,7 @@ def test_quality_observation_log_contains_only_policy_metadata(caplog):
     assert message.startswith("authored_quality_review ")
     event = json.loads(message.partition(" ")[2])
     assert event == {
-        "schema_version": 1,
+        "schema_version": 2,
         "pipeline": "authored_quality_review",
         "reference_mode": EXACT_RECONSTRUCTION,
         "stage": "acceptance",
@@ -147,9 +147,16 @@ def test_quality_observation_log_contains_only_policy_metadata(caplog):
         "cache_version": "cache-v3",
         "critique_batch_count": 1,
         "critique_slide_request_count": 3,
+        "vqa_calls": 3,
+        "vqa_cost_usd": None,
+        "vqa_cost_status": "provider_usage_unavailable",
         "cache_hits": 1,
         "cache_misses": 3,
         "render_ms": 12.346,
+        "local_inspection_ms": 0.0,
+        "montage_ms": 0.0,
+        "persist_ms": 0.0,
+        "total_ms": 0.0,
         "ocr_ms": 0.0,
         "ocr_executed": False,
         "ocr_requests": 0,
@@ -158,6 +165,13 @@ def test_quality_observation_log_contains_only_policy_metadata(caplog):
         "ocr_total_ms": 0.0,
         "critique_ms": 67.891,
         "revision_ms": 4.568,
+        "patch_attempted": 0,
+        "patch_accepted": 0,
+        "patch_rejected": 0,
+        "fallback_attempted": 0,
+        "fallback_succeeded": 0,
+        "fallback_failed": 0,
+        "local_high_remaining": 0,
         "indeterminate_count": 2,
     }
     assert "raw html" not in message.lower()
@@ -214,3 +228,47 @@ def test_observation_collapses_unknown_rejection_reason_without_content_leak(cap
     event = json.loads(message.partition(" ")[2])
     assert event["rejection_reasons"] == {"other": 1}
     assert "user slide" not in message
+
+
+def test_observation_rejects_paths_and_free_form_configuration(caplog):
+    caplog.set_level(logging.INFO, logger=quality_service.__name__)
+    secret_path = r"C:\private\api-key.txt"
+
+    quality_service._log_review_event(
+        reference_mode=secret_path,
+        stage="operator token sk-secret",
+        slide_count=-1,
+        model="sk-secret-model-token",
+        prompt_version="prompt\nsecret",
+        cache_version="/private/cache",
+        critique_slide_request_count=1,
+    )
+
+    message = caplog.records[-1].getMessage()
+    event = json.loads(message.partition(" ")[2])
+    assert event["reference_mode"] == "unknown"
+    assert event["stage"] == "unknown"
+    assert event["model"] == "unknown"
+    assert event["prompt_version"] == "unknown"
+    assert event["cache_version"] == "unknown"
+    assert event["slides"] == 0
+    assert secret_path not in message
+    assert "sk-secret-model-token" not in message
+    assert "sk-secret" not in message
+
+
+def test_observation_rejects_nonfinite_numbers():
+    event = quality_service.build_review_event(
+        reference_mode=EXACT_RECONSTRUCTION,
+        stage="completed",
+        slide_count=1,
+        critique_slide_request_count=1,
+        render_ms=float("inf"),
+        total_ms=float("nan"),
+        vqa_cost_usd=float("inf"),
+    )
+
+    assert event["render_ms"] == 0.0
+    assert event["total_ms"] == 0.0
+    assert event["vqa_cost_usd"] is None
+    assert event["vqa_cost_status"] == "provider_usage_unavailable"

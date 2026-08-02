@@ -369,6 +369,17 @@ def _log_review_event(
     ocr_calls: int = 0,
     ocr_cache_hits: int = 0,
     ocr_total_ms: float = 0.0,
+    local_inspection_ms: float = 0.0,
+    montage_ms: float = 0.0,
+    persist_ms: float = 0.0,
+    total_ms: float = 0.0,
+    patch_attempted: int = 0,
+    patch_accepted: int = 0,
+    patch_rejected: int = 0,
+    fallback_attempted: int = 0,
+    fallback_succeeded: int = 0,
+    fallback_failed: int = 0,
+    local_high_remaining: int = 0,
 ) -> None:
     """Emit telemetry through this module's logger for compatibility."""
     event = build_review_event(
@@ -394,6 +405,17 @@ def _log_review_event(
         ocr_calls=ocr_calls,
         ocr_cache_hits=ocr_cache_hits,
         ocr_total_ms=ocr_total_ms,
+        local_inspection_ms=local_inspection_ms,
+        montage_ms=montage_ms,
+        persist_ms=persist_ms,
+        total_ms=total_ms,
+        patch_attempted=patch_attempted,
+        patch_accepted=patch_accepted,
+        patch_rejected=patch_rejected,
+        fallback_attempted=fallback_attempted,
+        fallback_succeeded=fallback_succeeded,
+        fallback_failed=fallback_failed,
+        local_high_remaining=local_high_remaining,
     )
     LOGGER.info(
         "authored_quality_review %s",
@@ -522,6 +544,7 @@ async def _run_authored_quality_review_unlocked(
     # The original values remain available for the compare-and-swap publish guard.
     htmls = [ensure_authored_qids(html) for html in persisted_htmls]
     exact_reconstruction = plan_reference_mode == EXACT_RECONSTRUCTION
+    final_review_batch_count = 0
     if exact_reconstruction:
         planned_references = getattr(plan, "reference_images", None)
         if planned_references is None or len(planned_references) != len(slides):
@@ -691,6 +714,30 @@ async def _run_authored_quality_review_unlocked(
             else f"검수가 완료되었습니다. {len(initial_issues)}개 슬라이드에서 문제를 확인했습니다."
         )
         total_ms = (time.perf_counter() - review_started_at) * 1000
+        local_high_remaining = sum(
+            any(issue.severity == "high" for issue in report.issues)
+            for report in local_reports
+        )
+        _log_review_event(
+            reference_mode=plan_reference_mode,
+            stage="completed",
+            slide_count=len(targets),
+            model=review_metadata["model"],
+            prompt_version=review_metadata["prompt_version"],
+            cache_version=review_metadata["cache_version"],
+            critique_batch_count=routing_metadata["vqa_batch_count"],
+            critique_slide_request_count=initial_cache_misses,
+            cache_hits=initial_cache_hits,
+            cache_misses=initial_cache_misses,
+            render_ms=render_ms,
+            local_inspection_ms=local_inspection_ms,
+            montage_ms=montage_ms,
+            critique_ms=initial_critique_ms,
+            total_ms=total_ms,
+            local_high_remaining=local_high_remaining,
+            indeterminate_count=initial_indeterminate_count,
+            **ocr_summary,
+        )
         await _set_status(
             session,
             task,
@@ -821,6 +868,7 @@ async def _run_authored_quality_review_unlocked(
         index: _local_acceptance_decision(local_reports[index], report)
         for index, report in candidate_local_reports.items()
     }
+    fallback_local_reports: dict[int, DomQualityReport] = {}
     _log_review_event(
         reference_mode=plan_reference_mode,
         stage="correction",
@@ -854,6 +902,7 @@ async def _run_authored_quality_review_unlocked(
         final_cache_misses = 0
         final_critique_ms = 0.0
         if candidate_local_indices:
+            final_review_batch_count = 1
             candidate_pngs = [revised_pngs[index] for index in candidate_local_indices]
             candidate_contexts = [
                 contents[index][:240] for index in candidate_local_indices
@@ -1295,6 +1344,9 @@ async def _run_authored_quality_review_unlocked(
         )
         fixed_local_indices = accepted_local_indices
         final_critiques = chosen_critiques
+        final_review_batch_count = (
+            (1 if candidate_local_indices else 0) + fallback_comparison_batch_count
+        )
         _log_review_event(
             reference_mode=plan_reference_mode,
             stage="final_review",
@@ -1450,6 +1502,53 @@ async def _run_authored_quality_review_unlocked(
     )
     ocr_summary = ocr_runtime.summary()
     total_ms = (time.perf_counter() - review_started_at) * 1000
+    final_local_reports = list(local_reports)
+    for local_index in fixed_local_indices:
+        accepted_report = fallback_local_reports.get(
+            local_index
+        ) or candidate_local_reports.get(local_index)
+        if accepted_report is not None:
+            final_local_reports[local_index] = accepted_report
+    local_high_remaining = sum(
+        any(issue.severity == "high" for issue in report.issues)
+        for report in final_local_reports
+    )
+    _log_review_event(
+        reference_mode=plan_reference_mode,
+        stage="completed",
+        slide_count=len(targets),
+        attempted=len(candidate_decisions),
+        accepted=len(fixed_local_indices),
+        rejection_reasons=task_rejection_reasons,
+        model=review_metadata["model"],
+        prompt_version=review_metadata["prompt_version"],
+        cache_version=review_metadata["cache_version"],
+        critique_batch_count=(
+            routing_metadata["vqa_batch_count"] + final_review_batch_count
+        ),
+        critique_slide_request_count=initial_cache_misses + final_cache_misses,
+        cache_hits=initial_cache_hits + final_cache_hits,
+        cache_misses=initial_cache_misses + final_cache_misses,
+        render_ms=render_ms,
+        local_inspection_ms=local_inspection_ms,
+        montage_ms=montage_ms,
+        critique_ms=initial_critique_ms + final_critique_ms,
+        revision_ms=revision_ms,
+        persist_ms=persist_ms,
+        total_ms=total_ms,
+        patch_attempted=patch_attempts,
+        patch_accepted=patch_successes,
+        patch_rejected=max(0, patch_attempts - patch_successes),
+        fallback_attempted=fallback_attempts,
+        fallback_succeeded=fallback_successes,
+        fallback_failed=max(0, fallback_attempts - fallback_successes),
+        local_high_remaining=local_high_remaining,
+        indeterminate_count=sum(
+            _critique_unusable_reason(critique) == "indeterminate"
+            for critique in final_critiques
+        ),
+        **ocr_summary,
+    )
     await _set_status(
         session,
         task,
