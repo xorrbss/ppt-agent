@@ -37,7 +37,10 @@ from services.template_v2_service import (
     TemplateV2SourceNotFoundError,
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
-from templates.v2.catalog import get_template_v2_catalog_entry
+from templates.v2.catalog import (
+    get_template_v2_catalog_entry,
+    is_template_v2_catalog_entry_rights_ready,
+)
 from templates.v2.policy import (
     StructuredTemplatePolicy,
     StructuredTemplatePolicyError,
@@ -188,7 +191,11 @@ def _catalog_metadata(template: TemplateV2) -> dict[str, Any]:
     decision = evaluate_template_v2_publication(template.assets)
     if catalog_entry is not None:
         metadata = catalog_entry.api_metadata()
-        if not decision.publishable:
+        if not (
+            decision.publishable
+            and catalog_entry.publication_status == "published"
+            and is_template_v2_catalog_entry_rights_ready(catalog_entry)
+        ):
             metadata["publication_status"] = "blocked"
         return metadata
 
@@ -224,7 +231,10 @@ def _is_discoverable(template: TemplateV2) -> bool:
     if not decision.publishable:
         return False
     catalog_entry = get_template_v2_catalog_entry(template.id)
-    return catalog_entry is None or catalog_entry.publication_status == "published"
+    return catalog_entry is None or (
+        catalog_entry.publication_status == "published"
+        and is_template_v2_catalog_entry_rights_ready(catalog_entry)
+    )
 
 
 def _service_http_error(error: TemplateV2ServiceError) -> HTTPException:

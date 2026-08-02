@@ -51,6 +51,27 @@ def test_export_failure_observation_uses_stable_code_without_exception_text():
 
 
 @pytest.mark.parametrize(
+    "code",
+    [
+        "template_v2_native_source_invalid",
+        "template_v2_native_pptx_unsupported",
+    ],
+)
+def test_native_generation_failures_are_safe_observation_dimensions(code):
+    event = build_template_v2_generation_observation(
+        operation="generate",
+        outcome="failure",
+        template_id="private-native-template",
+        template_revision=1,
+        duration_ms=12,
+        code=code,
+    )
+
+    assert event["code"] == code
+    assert "private-native-template" not in str(event)
+
+
+@pytest.mark.parametrize(
     ("kwargs", "message"),
     [
         (

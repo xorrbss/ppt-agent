@@ -36,6 +36,12 @@ const runtimeTailwindTrace = [
 const nextConfig = {
   reactStrictMode: false,
   distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
+  // The repository contains multiple package roots. Pin Turbopack to this
+  // Next.js app so a dev-server restart cannot infer `app/` (or the repository
+  // root) as the project root and silently lose every route except `/`.
+  turbopack: {
+    root: nextjsRoot,
+  },
   experimental: {
     // Fidelity tests isolate their distDir per run. Avoid duplicating Turbopack's
     // persistent dev cache on disk in that already-disposable Windows workspace.

@@ -33,6 +33,8 @@ _FAILURE_CODES = {
     "template_v2_fillable_layout_required",
     "template_v2_generation_invalid",
     "template_v2_layouts_invalid",
+    "template_v2_native_pptx_unsupported",
+    "template_v2_native_source_invalid",
     "template_v2_revision_conflict",
     "template_v2_snapshot_invalid",
     "template_v2_rollout_config_invalid",

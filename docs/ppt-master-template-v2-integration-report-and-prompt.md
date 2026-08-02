@@ -66,9 +66,14 @@ PPT Master의 핵심 가치는 화면 스타일을 복사하는 데 있지 않�
 - Redux 신규 기본값은 `null`이고, 공개 목록에 정확히 하나의 `is_default`가 있을 때만 자동 선택한다. 기존 저장 선택값은 덮어쓰지 않는다.
 - PPTX import 확인 시 원본을 template ID/revision 범위의 내구 저장소로 승격하고 digest·크기·source slide part를 기록한다.
 - `native_clone` 생성은 원본 OOXML을 바탕으로 텍스트·표 슬롯을 패치하고, PPTX 요청에는 사전 검증된 동일 바이트를 직접 내보낸다.
+- 비장식 TextList는 문단 수가 원본과 같은 고정 cardinality일 때만 편집하며 `bodyPr`, `lstStyle`, 문단·run 서식과 공백을 보존한다. 문단 수 변경, 필드, 줄바꿈, 하이퍼링크는 fail-closed한다.
+- 이미지와 차트 편집은 관계 교체가 구현되지 않았으므로 명시적인 unsupported 오류로 차단한다.
 - 공개 목록은 rollout allowlist, 정적 카탈로그 상태, publication evidence를 모두 적용한 뒤 페이지네이션한다. 차단 행 뒤의 공개 템플릿도 누락되지 않는다.
-- 백엔드 관련 회귀 테스트 181개, 프런트엔드 컴포넌트 테스트 7개와 TypeScript 검사가 통과했다. `git diff --check`도 통과했다.
-- 루트의 presentation-export 동기화 검사는 로컬 `sharp` 네이티브 애드온을 로드하지 못해 환경 단계에서 실행되지 않았다. 자동 복구 명령은 작업 범위를 넓히므로 실행하지 않았다.
+- 후보별 권리 증빙 계약과 운영 런북을 추가했다. 증빙 파일·승인자·권한 범위·후보/카탈로그 digest가 모두 일치해야 `ready_for_publication_review`가 되며, 목록 API와 응답 메타데이터도 이 검증을 필수로 적용한다. 카탈로그 상태만 바꿔서는 공개되지 않는다.
+- Template V2·structured-template 백엔드 회귀 테스트 572개, 프런트엔드 Template V2 Cypress 테스트 8개, 일반 렌더러 테스트 8개, export fidelity 테스트 13개와 TypeScript 검사가 통과했다.
+- 실제 Next API, presentation-export, LibreOffice, Poppler를 연결한 PPTX E2E 3개가 통과했다. 제목·본문, geometry, text-fit, rich-elements의 렌더 임계치를 확인했고 `sharp` 0.35.3 네이티브 로드와 PNG 인코딩도 통과했다.
+- 저장소의 고정 presentation-export 런타임에는 번들과 일치하는 `sharp` 0.34.4 네이티브 애드온을 복구했으며, 루트 `npm run check:presentation-export`가 버전 v0.4.2와 Windows x64 converter를 확인하고 통과했다.
+- 로컬 ignored `pnpm-workspace.yaml`의 placeholder `allowBuilds` 설정 때문에 pnpm 집계 명령만 사전 중단됐으나, 동일 구성요소의 분해 실행과 실제 E2E는 모두 통과했다. 사용자 로컬 파일은 변경하지 않았다.
 - 외부 후보 4종은 파일을 복사하거나 공개하지 않았다. 따라서 실제 후보 덱의 렌더 비교·육안 승인은 권리 확인 및 승인된 원본 반입 이후의 공개 전 작업으로 남는다.
 
 ## 재사용 실행 프롬프트
@@ -97,7 +102,7 @@ PPT Master의 핵심 가치는 화면 스타일을 복사하는 데 있지 않�
 - native_clone 원본은 <app-data>/template-v2/native/<template-id>/revision-<n>/source.pptx에 원자적으로 보관한다.
 - 경로 정규화, template/revision 소유 범위, symlink/path traversal, SHA-256, 파일 크기를 검증한다.
 - OOXML 출력은 원본 master/layout/theme/relationships/media를 유지하고 지정된 source slide part를 복제·정렬한다.
-- 텍스트와 표의 명시적 슬롯만 패치한다. 이미지, 차트, 애니메이션 등 미지원 변경은 조용히 재구성하거나 일반 exporter로 우회하지 말고 fail-closed한다.
+- 텍스트와 표의 명시적 슬롯만 패치한다. 비장식 TextList는 원본과 문단 수가 같은 경우에만 `bodyPr`, `lstStyle`, 문단·run 서식을 보존해 패치한다. 필드, 줄바꿈, 하이퍼링크, 이미지, 차트, 애니메이션 등 미지원 변경은 조용히 재구성하거나 일반 exporter로 우회하지 말고 fail-closed한다.
 - reconstructed 모드는 deterministic native compiler의 compiled 증거, structural/package digest, unsupported=null이 있어야 출판한다.
 - 목록 API는 rollout allowlist, static catalog status, publication evidence를 모두 통과한 항목만 반환한다. direct get은 기존 문서 호환을 유지한다.
 
@@ -105,6 +110,7 @@ PPT Master의 핵심 가치는 화면 스타일을 복사하는 데 있지 않�
 - 각 후보에 repository, commit, path, source-file SHA-256, template_kind(brand/layout/deck), preservation_mode, importer_version, attribution, license review, asset counts, capabilities를 기록한다.
 - 저장소 MIT와 임베디드 미디어 권리를 구분한다.
 - 개별 사진/이미지/파생 산출물의 재배포 권리가 확인되지 않으면 publication_status=blocked로 유지한다.
+- 로컬 권리 증빙 파일의 digest, 승인자, 승인 시각, 사용·수정·재배포·상업 이용 범위, 후보 PPTX와 카탈로그 entry digest를 검증한다. 검증 성공은 publication review 준비 상태일 뿐 자동 공개 승인으로 취급하지 않는다.
 - blocked 후보는 API direct get에서 근거를 확인할 수 있어도 신규 목록에는 나타나면 안 된다.
 
 프런트엔드
@@ -115,7 +121,8 @@ PPT Master의 핵심 가치는 화면 스타일을 복사하는 데 있지 않�
 
 검증
 - native clone 결과에서 master/layout/theme/relationships/media part가 바이트 단위로 보존되는지 검사한다.
-- source slide 중복·재정렬, text/table patch, unsupported gate, storage scope/integrity, 일반 exporter 우회 방지를 테스트한다.
+- source slide 중복·재정렬, text/table/TextList patch, unsupported gate, storage scope/integrity, 일반 exporter 우회 방지를 테스트한다.
+- 생성 PPTX를 PowerPoint 호환 편집·저장 경로로 다시 열어 TextList가 네이티브 편집 가능한지 검사한다.
 - 기존 reconstructed compiler, V1 직접 조회·render, AI 저작 경로가 영향받지 않는 좁은 회귀 테스트를 실행한다.
 - 프런트엔드 TypeScript와 컴포넌트 테스트에서 V2-only, 단일 default auto-select, empty/error fail-closed, legacy rehydrate 보존을 검증한다.
 - git diff --check를 통과시킨다.
@@ -135,8 +142,9 @@ PPT Master의 핵심 가치는 화면 스타일을 복사하는 데 있지 않�
 
 - 예제별 이미지 출처, 라이선스, attribution, 재배포 허용 여부를 문서화한다.
 - 승인된 원본 PPTX를 고정 revision 저장소로 가져오고 digest/size를 기록한다.
+- 권리 증빙 매니페스트와 승인 문서를 채우고 `ready_for_publication_review` 검증을 통과시킨다.
 - 레이아웃 ID별 source slide part와 편집 슬롯 이름을 검토한다.
-- native preflight와 렌더 비교를 통과시킨다.
+- native preflight를 통과시키고 실제 후보의 모든 슬라이드를 렌더링해 육안 검수한다.
 - 공개 가능한 V2 중 정확히 하나만 `is_default=true`로 지정한다.
 - 목록 API와 신규 UI에서 blocked/V1 항목이 보이지 않는지 확인한다.
 - 기존 문서를 샘플링해 direct read와 재생성 호환을 확인한다.
