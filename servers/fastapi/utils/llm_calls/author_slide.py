@@ -210,10 +210,11 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
     horizontal center. Use the per-slide PAGE MARKER instruction below as its only visible text.
   - Numbering starts at `01` on the slide immediately after the cover, increases by one on every
     following slide, and always uses two digits (`01`, `02`, `03`, ...).
-  - Give that element a full-width fixed box (`position:absolute;left:0;right:0;bottom:27px`),
-    centered text, 12px type (9pt equivalent), 500 weight, line-height 1, and #7B8794 color.
-  - Reserve the bottom 56px as a footer safe zone. Content, images, charts, tables, and decorative
-    shapes must not overlap that zone or obscure the marker.
+  - Give that element a full-width fixed box (`position:absolute;left:0;right:0;bottom:14px`),
+    centered text, 12px type (9pt equivalent), 500 weight, 16px line-height, and #A7ACB3 color.
+  - Reserve the bottom 72px as a footer safe zone (on a 1280x720 slide, all ordinary content must
+    end at or above y=648px). Content, images, charts, tables, and decorative shapes must not
+    overlap that zone or obscure the marker.
   - The footer contains the number only: never add `Page`, `페이지`, a slash/total, title,
     section name, wordmark, logo, or any other footer copy. Never place a page number at the top,
     in a corner, or anywhere else. Do not create a duplicate marker.
@@ -564,8 +565,8 @@ def fallback_slide_html(
         f".eyebrow{{font-size:13px;letter-spacing:.15em;text-transform:uppercase;color:{primary};"
         "font-weight:700;margin-bottom:18px;}"
         ".body{font-size:30px;line-height:1.5;color:#0F172A;font-weight:500;max-width:1000px;}"
-        ".foot{position:absolute;left:0;right:0;bottom:27px;text-align:center;"
-        "font-size:12px;line-height:1;font-weight:500;color:#7B8794;}"
+        ".foot{position:absolute;left:0;right:0;bottom:14px;text-align:center;"
+        "font-size:12px;line-height:16px;font-weight:500;color:#A7ACB3;}"
         "</style></head><body>"
         f"<div class=\"bar\"></div><div class=\"eyebrow\">{eyebrow}</div>"
         f"<div class=\"body\">{text}</div>{footer}"
