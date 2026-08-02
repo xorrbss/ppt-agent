@@ -10,6 +10,7 @@ import {
 } from "@/app/hooks/useStructuredTemplates";
 
 import AuthoredStylePicker from "./AuthoredStylePicker";
+import { LocalPptMasterPreviewCard } from "./LocalPptMasterPreviewCard";
 import { StructuredTemplateCard } from "./StructuredTemplateCard";
 
 // Sentinel id for the authored (high-quality) mode; this is not a layout template.
@@ -150,6 +151,12 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
             {structuredTemplateCards}
           </div>
         )}
+
+        {process.env.NODE_ENV === "development" ? (
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <LocalPptMasterPreviewCard />
+          </div>
+        ) : null}
       </section>
     </div>
   );
