@@ -20,6 +20,7 @@ from weakref import WeakKeyDictionary
 from llmai import get_client
 from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
 
+from utils.authored_font_policy import enforce_authored_font_floor
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model, is_codex_selected
@@ -193,8 +194,12 @@ DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
   must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
   the single most common failure — prioritise it over visual ambition. Use less/shorter text and
   generous spacing rather than cramming.
-- Typography: avoid making visible text unnecessarily hard-to-read. Balance type size,
-  available space, and hierarchy instead of shrinking text simply to force a layout to fit.
+- READABILITY FLOOR: in ordinary authored generation and style-reference mode, every visible
+  text element that communicates slide content (headings, body, bullets, tables, chart labels,
+  metrics, callouts, captions, and footnotes) must be at least 12px (9pt equivalent). Express
+  text sizes with `font-size` in px; do not use CSS `font` shorthand or relative units to evade
+  this floor. If content does not fit, shorten it or allocate more space instead of shrinking it
+  until it becomes unnecessarily hard-to-read.
 - Heading sizing: size headings to the ACTUAL text length so they stay within their area, and
   budget vertical space for the real number of wrapped lines.
 - No fragile positioning: do NOT hard-pin a block to a fixed top/absolute offset that a longer
@@ -708,4 +713,7 @@ async def author_slide_html(
             response = await generate(fallback_kwargs)
         except Exception as fallback_error:
             raise handle_llm_client_exceptions(fallback_error)
-    return extract_html_document(extract_text(response.content) or "")
+    authored_html = extract_html_document(extract_text(response.content) or "")
+    if mode == EXACT_RECONSTRUCTION:
+        return authored_html
+    return enforce_authored_font_floor(authored_html)
