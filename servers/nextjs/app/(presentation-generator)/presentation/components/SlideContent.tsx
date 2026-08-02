@@ -143,6 +143,7 @@ const SlideContent = ({
               slide={slide}
               theme={presentationData?.theme || null}
               showEditScan={isChatEditing}
+              preferAuthoredHtml
             />
           </div>
           {!showNewSlideSelection && (
