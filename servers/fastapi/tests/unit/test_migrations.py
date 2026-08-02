@@ -2,6 +2,7 @@ import ast
 import json
 import logging.config
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import sqlalchemy as sa
@@ -498,7 +499,7 @@ def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_pa
             ).scalar_one() == "keep me"
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_AUTHORED_EXACT_PROVENANCE
+            ).scalar_one() == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
 
         command.downgrade(config, migrations.REVISION_PRIMARY_ADMIN)
         command.upgrade(config, "head")
@@ -506,7 +507,7 @@ def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_pa
         with engine.connect() as connection:
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_AUTHORED_EXACT_PROVENANCE
+            ).scalar_one() == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
             assert "template_v2_id" in {
                 column["name"]
                 for column in inspect(connection).get_columns(
@@ -585,8 +586,33 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
                 "template_v2_local_state"
             )
             template_indexes = db_inspector.get_indexes("template_v2")
+            workspace_event_columns = {
+                column["name"]: column
+                for column in db_inspector.get_columns(
+                    "workspace_operation_events"
+                )
+            }
+            workspace_artifact_columns = {
+                column["name"]
+                for column in db_inspector.get_columns("workspace_artifacts")
+            }
+            workspace_operation_unique_columns = {
+                frozenset(constraint["column_names"])
+                for constraint in db_inspector.get_unique_constraints(
+                    "workspace_operations"
+                )
+            }
+            workspace_receipt_unique_columns = {
+                frozenset(constraint["column_names"])
+                for constraint in db_inspector.get_unique_constraints(
+                    "workspace_action_receipts"
+                )
+            }
+            workspace_receipt_foreign_keys = db_inspector.get_foreign_keys(
+                "workspace_action_receipts"
+            )
 
-        assert revision == migrations.REVISION_AUTHORED_EXACT_PROVENANCE
+        assert revision == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
@@ -616,6 +642,32 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
             index["name"] == "ix_template_v2_presentation_id"
             for index in template_indexes
         )
+        assert workspace_event_columns["operation_version"]["nullable"] is False
+        assert migrations.WORKSPACE_TABLE_COLUMNS[
+            "workspace_artifacts"
+        ].issubset(workspace_artifact_columns)
+        assert frozenset(
+            {
+                "owner_scope",
+                "presentation_id",
+                "kind",
+                "idempotency_key_hash",
+            }
+        ) in workspace_operation_unique_columns
+        assert frozenset(
+            {
+                "owner_scope",
+                "operation_id",
+                "action_type",
+                "idempotency_key_hash",
+            }
+        ) in workspace_receipt_unique_columns
+        assert any(
+            foreign_key["constrained_columns"] == ["result_operation_id"]
+            and foreign_key["referred_table"] == "workspace_operations"
+            and foreign_key["options"].get("ondelete") == "SET NULL"
+            for foreign_key in workspace_receipt_foreign_keys
+        )
     finally:
         engine.dispose()
 
@@ -627,10 +679,18 @@ class _SchemaInspector:
         *,
         primary_keys: dict[str, set[str]] | None = None,
         check_constraints: dict[str, set[str]] | None = None,
+        unique_constraints: dict[str, set[str]] | None = None,
+        indexes: dict[str, dict[str, bool]] | None = None,
+        foreign_keys: dict[
+            str, set[tuple[tuple[str, ...], str, str]]
+        ] | None = None,
     ):
         self._columns = columns
         self._primary_keys = primary_keys or {}
         self._check_constraints = check_constraints or {}
+        self._unique_constraints = unique_constraints or {}
+        self._indexes = indexes or {}
+        self._foreign_keys = foreign_keys or {}
 
     def get_columns(self, table_name: str):
         return [{"name": name} for name in self._columns.get(table_name, set())]
@@ -647,6 +707,332 @@ class _SchemaInspector:
             {"name": name}
             for name in self._check_constraints.get(table_name, set())
         ]
+
+    def get_unique_constraints(self, table_name: str):
+        return [
+            {"name": name}
+            for name in self._unique_constraints.get(table_name, set())
+        ]
+
+    def get_indexes(self, table_name: str):
+        return [
+            {"name": name, "unique": unique}
+            for name, unique in self._indexes.get(table_name, {}).items()
+        ]
+
+    def get_foreign_keys(self, table_name: str):
+        return [
+            {
+                "constrained_columns": list(columns),
+                "referred_table": referred_table,
+                "options": {"ondelete": ondelete},
+            }
+            for columns, referred_table, ondelete in self._foreign_keys.get(
+                table_name, set()
+            )
+        ]
+
+
+def _complete_workspace_schema_inspector(
+    columns: dict[str, set[str]] | None = None,
+) -> _SchemaInspector:
+    workspace_columns = columns or {
+        table: set(required_columns)
+        for table, required_columns in migrations.WORKSPACE_TABLE_COLUMNS.items()
+    }
+    checks = {
+        table: set(required)
+        for table, required in migrations.WORKSPACE_CHECK_CONSTRAINTS.items()
+    }
+    checks["presentations"] = {"ck_presentations_revision_nonnegative"}
+    indexes = {
+        table: {name: False for name in required}
+        for table, required in migrations.WORKSPACE_INDEXES.items()
+    }
+    indexes["presentation_generation_jobs"] = {
+        "ix_presentation_generation_jobs_workspace_operation_id": True
+    }
+    return _SchemaInspector(
+        workspace_columns,
+        check_constraints=checks,
+        unique_constraints={
+            table: set(required)
+            for table, required in migrations.WORKSPACE_UNIQUE_CONSTRAINTS.items()
+        },
+        indexes=indexes,
+        foreign_keys={
+            **{
+                table: set(required)
+                for table, required in migrations.WORKSPACE_FOREIGN_KEYS.items()
+            },
+            "presentation_generation_jobs": {
+                (
+                    ("workspace_operation_id",),
+                    "workspace_operations",
+                    "SET NULL",
+                )
+            },
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("table", "missing_column"),
+    (
+        ("workspace_operations", "lease_expires_at"),
+        ("workspace_operations", "retry_count"),
+        ("workspace_outbox", "available_at"),
+        ("workspace_outbox", "lease_expires_at"),
+        ("workspace_artifacts", "cleanup_lease_expires_at"),
+        ("workspace_artifacts", "cleanup_attempts"),
+        ("workspace_artifacts", "cleanup_error"),
+        ("workspace_artifacts", "deleted_at"),
+    ),
+)
+def test_workspace_schema_inference_rejects_missing_contract_column(
+    table,
+    missing_column,
+):
+    columns = {
+        table: set(required_columns)
+        for table, required_columns in migrations.WORKSPACE_TABLE_COLUMNS.items()
+    }
+    columns[table].remove(missing_column)
+    inspector = _complete_workspace_schema_inspector(columns)
+
+    with pytest.raises(
+        RuntimeError,
+        match=f"workspace table {table} is only partially applied",
+    ):
+        migrations._workspace_schema_applied(
+            inspector,
+            set(migrations.WORKSPACE_TABLE_COLUMNS),
+            {"revision"},
+            {"workspace_operation_id"},
+        )
+
+
+@pytest.mark.parametrize(
+    ("contract", "table", "missing_name", "error"),
+    (
+        (
+            "check",
+            "workspace_operations",
+            "ck_workspace_operations_state",
+            "missing check constraints",
+        ),
+        (
+            "unique",
+            "workspace_operations",
+            "uq_workspace_operations_command_idempotency",
+            "missing unique constraints",
+        ),
+        (
+            "index",
+            "workspace_operations",
+            "ix_workspace_operations_dispatch",
+            "missing indexes",
+        ),
+        (
+            "foreign_key",
+            "workspace_operations",
+            (("conversation_id",), "workspace_conversations", "CASCADE"),
+            "missing foreign keys",
+        ),
+        (
+            "check",
+            "workspace_outbox",
+            "ck_workspace_outbox_status",
+            "missing check constraints",
+        ),
+        (
+            "index",
+            "workspace_outbox",
+            "ix_workspace_outbox_delivery",
+            "missing indexes",
+        ),
+    ),
+)
+def test_workspace_schema_inference_rejects_missing_runner_contract(
+    contract,
+    table,
+    missing_name,
+    error,
+):
+    inspector = _complete_workspace_schema_inspector()
+    if contract == "check":
+        inspector._check_constraints[table].remove(missing_name)
+    elif contract == "unique":
+        inspector._unique_constraints[table].remove(missing_name)
+    elif contract == "index":
+        del inspector._indexes[table][missing_name]
+    else:
+        inspector._foreign_keys[table].remove(missing_name)
+
+    with pytest.raises(RuntimeError, match=error):
+        migrations._workspace_schema_applied(
+            inspector,
+            set(migrations.WORKSPACE_TABLE_COLUMNS),
+            {"revision"},
+            {"workspace_operation_id"},
+        )
+
+
+@pytest.mark.parametrize(
+    ("contract", "error"),
+    (
+        ("presentation_check", "presentations revision constraint"),
+        ("job_index", "generation job operation index"),
+        ("job_foreign_key", "generation job operation foreign key"),
+    ),
+)
+def test_workspace_schema_inference_rejects_missing_publication_bridge_contract(
+    contract,
+    error,
+):
+    inspector = _complete_workspace_schema_inspector()
+    if contract == "presentation_check":
+        inspector._check_constraints["presentations"].clear()
+    elif contract == "job_index":
+        inspector._indexes["presentation_generation_jobs"].clear()
+    else:
+        inspector._foreign_keys["presentation_generation_jobs"].clear()
+
+    with pytest.raises(RuntimeError, match=error):
+        migrations._workspace_schema_applied(
+            inspector,
+            set(migrations.WORKSPACE_TABLE_COLUMNS),
+            {"revision"},
+            {"workspace_operation_id"},
+        )
+
+
+@pytest.mark.parametrize(
+    ("timezone_flags", "expected_revision"),
+    (
+        (
+            (False, False),
+            migrations.REVISION_CHAT_FIRST_WORKSPACE,
+        ),
+        (
+            (True, True),
+            migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ,
+        ),
+    ),
+)
+def test_async_task_timestamp_revision_requires_uniform_postgresql_types(
+    timezone_flags,
+    expected_revision,
+):
+    class TimestampInspector:
+        bind = SimpleNamespace(
+            dialect=SimpleNamespace(name="postgresql")
+        )
+
+        def get_columns(self, table_name):
+            assert table_name == migrations.ASYNC_PRESENTATION_TASK_TABLE
+            return [
+                {
+                    "name": name,
+                    "type": sa.DateTime(timezone=timezone_enabled),
+                }
+                for name, timezone_enabled in zip(
+                    migrations.ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS,
+                    timezone_flags,
+                    strict=True,
+                )
+            ]
+
+    assert (
+        migrations._async_task_timestamp_revision(
+            TimestampInspector(),
+            {migrations.ASYNC_PRESENTATION_TASK_TABLE},
+        )
+        == expected_revision
+    )
+
+
+def test_async_task_timestamp_revision_rejects_mixed_postgresql_types():
+    class TimestampInspector:
+        bind = SimpleNamespace(
+            dialect=SimpleNamespace(name="postgresql")
+        )
+
+        def get_columns(self, _table_name):
+            return [
+                {"name": "created_at", "type": sa.DateTime(timezone=True)},
+                {"name": "updated_at", "type": sa.DateTime(timezone=False)},
+            ]
+
+    with pytest.raises(RuntimeError, match="only partially applied"):
+        migrations._async_task_timestamp_revision(
+            TimestampInspector(),
+            {migrations.ASYNC_PRESENTATION_TASK_TABLE},
+        )
+
+
+@pytest.mark.parametrize(
+    ("direction", "timestamp_state"),
+    (("upgrade", "naive"), ("downgrade", "aware")),
+)
+def test_async_task_timezone_migration_locks_before_preflight(
+    monkeypatch,
+    direction,
+    timestamp_state,
+):
+    revision_module = ScriptDirectory.from_config(
+        _alembic_config("sqlite://")
+    ).get_revision(migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ).module
+    events = []
+    bind = SimpleNamespace(
+        dialect=SimpleNamespace(name="postgresql")
+    )
+
+    monkeypatch.setattr(revision_module.op, "get_bind", lambda: bind)
+    monkeypatch.setattr(revision_module, "_table_exists", lambda: True)
+    monkeypatch.setattr(
+        revision_module,
+        "_lock_table",
+        lambda: events.append("lock"),
+    )
+    monkeypatch.setattr(
+        revision_module,
+        "_timestamp_state",
+        lambda: events.append("type") or timestamp_state,
+    )
+    monkeypatch.setattr(
+        revision_module,
+        "_legacy_timezone_literal",
+        lambda **_kwargs: events.append("timezone") or "'UTC'",
+    )
+    monkeypatch.setattr(
+        revision_module.op,
+        "alter_column",
+        lambda *_args, **_kwargs: events.append("alter"),
+    )
+
+    getattr(revision_module, direction)()
+
+    assert events[:3] == ["lock", "type", "timezone"]
+
+
+def test_async_task_timezone_migration_uses_access_exclusive_lock(monkeypatch):
+    revision_module = ScriptDirectory.from_config(
+        _alembic_config("sqlite://")
+    ).get_revision(migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ).module
+    statements = []
+    monkeypatch.setattr(
+        revision_module.op,
+        "execute",
+        lambda statement: statements.append(str(statement)),
+    )
+
+    revision_module._lock_table()
+
+    assert statements == [
+        "LOCK TABLE async_presentation_generation_tasks "
+        "IN ACCESS EXCLUSIVE MODE"
+    ]
 
 
 def test_schema_inference_never_stamps_future_head_from_old_share_token_marker():
@@ -1692,7 +2078,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_AUTHORED_EXACT_PROVENANCE
+                == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
             )
             assert "presentation_generation_jobs" in inspector.get_table_names()
             assert "lifecycle_status" in {
@@ -1736,7 +2122,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_AUTHORED_EXACT_PROVENANCE
+                == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
             )
             assert "template_v2" in inspector.get_table_names()
             assert "presentation_generation_jobs" in inspector.get_table_names()

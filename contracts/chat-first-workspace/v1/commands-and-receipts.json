@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "command": {
+    "command_id": "cmd-demo-edit-0001",
+    "command_type": "slide.edit",
+    "conversation_id": "conv-demo-0001",
+    "operation_id": "op-demo-edit-0001",
+    "idempotency_key": "command-demo-0001",
+    "expected_revision": 4,
+    "payload": {"slide_id": "slide-demo-0001", "instruction": "Shorten the title."}
+  },
+  "action": {
+    "action_id": "act-demo-approve-0001",
+    "operation_id": "op-demo-edit-0001",
+    "action_type": "approve",
+    "idempotency_key": "action-demo-0001",
+    "expected_operation_version": 3
+  },
+  "receipt": {
+    "owner_id": "owner-demo-0001",
+    "operation_id": "op-demo-edit-0001",
+    "action_id": "act-demo-approve-0001",
+    "idempotency_key": "action-demo-0001",
+    "result": "accepted",
+    "duplicate_result": "same_receipt"
+  },
+  "publication": {
+    "checkpoint_increments_revision": false,
+    "final_publish_increments_revision_once": true,
+    "published_revision": 5,
+    "immutable_artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}

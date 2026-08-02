@@ -4,16 +4,25 @@ import { RootState } from "@/store/store";
 import { redo, undo } from "@/store/slices/undoRedoSlice";
 import { useKeyboardShortcut } from "../../hooks/use-keyboard-shortcut";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
+import type { WorkspaceCommandDispatcher } from "../workspace";
 
-export const usePresentationUndoRedo = () => {
+export const usePresentationUndoRedo = (
+  enabled = true,
+  workspaceCommand?: WorkspaceCommandDispatcher
+) => {
   const dispatch = useDispatch();
   const undoRedoState = useSelector((state: RootState) => state.undoRedo);
   const { presentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
 
-  const canUndo = undoRedoState.past.length > 0;
-  const canRedo = undoRedoState.future.length > 0;
+  const workspaceHistoryEnabled = Boolean(workspaceCommand);
+  const historyEnabled = enabled || workspaceHistoryEnabled;
+  // The durable history is loaded by the server-side restore operation. Keep
+  // these controls actionable after reconnect even though Redux has no local
+  // snapshots; a missing server restore point becomes a durable failed card.
+  const canUndo = workspaceHistoryEnabled || undoRedoState.past.length > 0;
+  const canRedo = workspaceHistoryEnabled || undoRedoState.future.length > 0;
 
   const applySlidesSnapshot = useCallback(
     (slidesSnapshot: unknown) => {
@@ -33,7 +42,14 @@ export const usePresentationUndoRedo = () => {
   );
 
   const onUndo = useCallback(() => {
-    if (!canUndo) {
+    if (workspaceCommand) {
+      void workspaceCommand("이전 서버 버전으로 복원해 줘", {
+        commandType: "version.restore",
+        context: { strategy: "previous", source: "undo" },
+      }).catch(() => undefined);
+      return;
+    }
+    if (!enabled || !canUndo) {
       return;
     }
 
@@ -44,10 +60,19 @@ export const usePresentationUndoRedo = () => {
 
     dispatch(undo());
     applySlidesSnapshot(previousState.slides);
-  }, [applySlidesSnapshot, canUndo, dispatch, undoRedoState.past]);
+  }, [applySlidesSnapshot, canUndo, dispatch, enabled, undoRedoState.past, workspaceCommand]);
 
   const onRedo = useCallback(() => {
-    if (!canRedo) {
+    if (workspaceCommand) {
+      // A restore checkpoints the pre-restore deck as the newest server
+      // version, so restoring "previous" again is the durable redo path.
+      void workspaceCommand("복원 직전 서버 버전으로 다시 실행해 줘", {
+        commandType: "version.restore",
+        context: { strategy: "previous", source: "redo" },
+      }).catch(() => undefined);
+      return;
+    }
+    if (!enabled || !canRedo) {
       return;
     }
 
@@ -58,13 +83,13 @@ export const usePresentationUndoRedo = () => {
 
     dispatch(redo());
     applySlidesSnapshot(nextState.slides);
-  }, [applySlidesSnapshot, canRedo, dispatch, undoRedoState.future]);
+  }, [applySlidesSnapshot, canRedo, dispatch, enabled, undoRedoState.future, workspaceCommand]);
 
   // Handle undo (Ctrl + Z)
   useKeyboardShortcut(
     ["z"],
     (e) => {
-      if (e.ctrlKey && !e.shiftKey && canUndo) {
+      if (historyEnabled && e.ctrlKey && !e.shiftKey && canUndo) {
         e.preventDefault();
         onUndo();
       }
@@ -75,7 +100,7 @@ export const usePresentationUndoRedo = () => {
   useKeyboardShortcut(
     ["z"],
     (e) => {
-      if (e.ctrlKey && e.shiftKey && canRedo) {
+      if (historyEnabled && e.ctrlKey && e.shiftKey && canRedo) {
         e.preventDefault();
         onRedo();
       }
@@ -86,7 +111,7 @@ export const usePresentationUndoRedo = () => {
   useKeyboardShortcut(
     ["y"],
     (e) => {
-      if (e.ctrlKey && canRedo) {
+      if (historyEnabled && e.ctrlKey && canRedo) {
         e.preventDefault();
         onRedo();
       }

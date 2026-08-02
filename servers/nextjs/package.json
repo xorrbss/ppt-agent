@@ -12,7 +12,9 @@
     "lint": "eslint .",
     "test:ci-node": "node scripts/run-ci-node-tests.mjs",
     "test:template-v2-export-fidelity": "node --test lib/template-v2-general-renderer.test.mjs lib/export-fidelity/*.test.mjs",
-    "test:chat-cypress": "cypress run --component --spec \"app/**/Chat.cy.tsx\""
+    "test:chat-cypress": "cypress run --component --spec \"app/**/Chat.cy.tsx\"",
+    "test:workspace-cypress": "cypress run --component --spec \"app/**/workspace/WorkspaceChatPanel.cy.tsx\"",
+    "test:workspace-e2e": "node scripts/run-workspace-e2e.mjs"
   },
   "dependencies": {
     "@babel/generator": "^7.29.7",

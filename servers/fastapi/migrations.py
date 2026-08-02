@@ -7,7 +7,7 @@ import time
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import Integer, create_engine, inspect, text
+from sqlalchemy import DateTime, Integer, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from alembic import command
@@ -51,6 +51,231 @@ REVISION_CHAT_TEMPLATE_SCOPE_REPAIR = "f2c4d6e8a0b1"
 REVISION_AUTHORED_SLIDE_CHECKPOINTS = "a3c5e7f9b1d2"
 REVISION_AUTHORED_RESUME_COUNT = "b4d6f8a1c3e5"
 REVISION_AUTHORED_EXACT_PROVENANCE = "c5e7f9a1b3d4"
+REVISION_CHAT_FIRST_WORKSPACE = "d6f8a1c3e5b7"
+REVISION_ASYNC_PRESENTATION_TASK_TZ = "e7a9c2d4f6b8"
+ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
+ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
+WORKSPACE_TABLE_COLUMNS = {
+    "workspace_conversations": {
+        "id",
+        "owner_id",
+        "owner_scope",
+        "presentation_id",
+        "next_position",
+        "version",
+        "event_retention_floor_cursor",
+        "created_at",
+        "updated_at",
+    },
+    "workspace_messages": {
+        "id", "owner_id", "conversation_id", "position", "role", "content",
+        "schema_version", "metadata", "created_at",
+    },
+    "workspace_assets": {
+        "id", "owner_id", "conversation_id", "state", "original_name",
+        "media_type", "size_bytes", "storage_key", "sha256", "failure_code",
+        "failure_detail", "version", "expires_at", "deleted_at", "created_at",
+        "updated_at",
+    },
+    "workspace_message_attachments": {
+        "id", "owner_id", "message_id", "asset_id", "ordinal", "display_name",
+        "media_type", "size_bytes", "asset_state", "created_at",
+    },
+    "workspace_operations": {
+        "id", "owner_id", "owner_scope", "conversation_id", "presentation_id",
+        "retry_of_operation_id", "anchor_position", "kind", "state",
+        "idempotency_key_hash", "request_hash", "request_payload",
+        "expected_revision", "result_revision", "approval_expires_at",
+        "attempt_number", "attempt_token", "fencing_token", "lease_expires_at",
+        "heartbeat_at", "next_attempt_at", "retry_count", "max_attempts",
+        "backoff_seconds", "cancel_requested_at", "cancelled_at", "progress",
+        "result", "error_code", "error_detail", "version",
+        "next_event_sequence", "started_at", "completed_at", "created_at",
+        "updated_at",
+    },
+    "workspace_operation_events": {
+        "cursor", "owner_id", "operation_id", "sequence", "operation_version",
+        "event_type", "schema_version", "payload", "created_at",
+    },
+    "workspace_outbox": {
+        "id", "owner_id", "owner_scope", "operation_id", "event_cursor",
+        "topic", "status", "idempotency_key_hash", "payload_hash", "payload",
+        "delivery_attempts", "available_at", "lease_expires_at", "heartbeat_at",
+        "delivered_at", "last_error", "created_at", "updated_at",
+    },
+    "workspace_action_receipts": {
+        "id", "owner_id", "owner_scope", "operation_id", "result_operation_id",
+        "action_id", "action_type", "status", "idempotency_key_hash",
+        "request_hash", "result_hash", "request_payload", "result_payload",
+        "source_revision", "result_revision", "created_at", "updated_at",
+    },
+    "workspace_artifacts": {
+        "id",
+        "owner_id",
+        "operation_id",
+        "presentation_id",
+        "kind",
+        "status",
+        "storage_key",
+        "sha256",
+        "size_bytes",
+        "source_revision",
+        "expires_at",
+        "cleanup_token",
+        "cleanup_lease_expires_at",
+        "cleanup_attempts",
+        "cleanup_error",
+        "deleted_at",
+        "created_at",
+        "updated_at",
+    },
+}
+WORKSPACE_CHECK_CONSTRAINTS = {
+    "workspace_conversations": {
+        "ck_workspace_conversations_next_position",
+        "ck_workspace_conversations_version",
+        "ck_workspace_conversations_event_retention_floor_cursor",
+    },
+    "workspace_messages": {
+        "ck_workspace_messages_position",
+        "ck_workspace_messages_role",
+    },
+    "workspace_assets": {
+        "ck_workspace_assets_state",
+        "ck_workspace_assets_size",
+        "ck_workspace_assets_version",
+    },
+    "workspace_message_attachments": {
+        "ck_workspace_message_attachments_ordinal",
+        "ck_workspace_message_attachments_asset_state",
+    },
+    "workspace_operations": {
+        "ck_workspace_operations_state",
+        "ck_workspace_operations_anchor_position",
+        "ck_workspace_operations_attempt_number",
+        "ck_workspace_operations_fencing_token",
+        "ck_workspace_operations_retry_count",
+        "ck_workspace_operations_max_attempts",
+        "ck_workspace_operations_version",
+        "ck_workspace_operations_next_event_sequence",
+    },
+    "workspace_operation_events": {
+        "ck_workspace_operation_events_sequence",
+        "ck_workspace_operation_events_operation_version",
+    },
+    "workspace_outbox": {
+        "ck_workspace_outbox_status",
+        "ck_workspace_outbox_delivery_attempts",
+    },
+    "workspace_action_receipts": {"ck_workspace_action_receipts_status"},
+    "workspace_artifacts": {
+        "ck_workspace_artifacts_status",
+        "ck_workspace_artifacts_size",
+        "ck_workspace_artifacts_cleanup_attempts",
+    },
+}
+WORKSPACE_UNIQUE_CONSTRAINTS = {
+    "workspace_conversations": {"uq_workspace_conversations_scope_presentation"},
+    "workspace_messages": {"uq_workspace_messages_conversation_position"},
+    "workspace_assets": {"uq_workspace_assets_storage_key"},
+    "workspace_message_attachments": {
+        "uq_workspace_message_attachments_asset",
+        "uq_workspace_message_attachments_ordinal",
+    },
+    "workspace_operations": {
+        "uq_workspace_operations_conversation_position",
+        "uq_workspace_operations_command_idempotency",
+        "uq_workspace_operations_retry_of",
+    },
+    "workspace_operation_events": {
+        "uq_workspace_operation_events_operation_sequence"
+    },
+    "workspace_outbox": {"uq_workspace_outbox_scope_idempotency"},
+    "workspace_action_receipts": {
+        "uq_workspace_action_receipts_action_idempotency",
+        "uq_workspace_action_receipts_operation_action",
+    },
+    "workspace_artifacts": {"uq_workspace_artifacts_storage_key"},
+}
+WORKSPACE_INDEXES = {
+    "workspace_conversations": {
+        "ix_workspace_conversations_owner_presentation_updated"
+    },
+    "workspace_messages": {
+        "ix_workspace_messages_conversation_id",
+        "ix_workspace_messages_owner_created",
+    },
+    "workspace_assets": {
+        "ix_workspace_assets_owner_state_updated",
+        "ix_workspace_assets_expiry",
+    },
+    "workspace_message_attachments": {
+        "ix_workspace_message_attachments_asset"
+    },
+    "workspace_operations": {
+        "ix_workspace_operations_conversation_id",
+        "ix_workspace_operations_presentation_id",
+        "ix_workspace_operations_dispatch",
+        "ix_workspace_operations_owner_created",
+    },
+    "workspace_operation_events": {
+        "ix_workspace_operation_events_operation_cursor",
+        "ix_workspace_operation_events_owner_cursor",
+    },
+    "workspace_outbox": {"ix_workspace_outbox_delivery"},
+    "workspace_action_receipts": {
+        "ix_workspace_action_receipts_operation_created"
+    },
+    "workspace_artifacts": {
+        "ix_workspace_artifacts_cleanup",
+        "ix_workspace_artifacts_operation",
+    },
+}
+# constrained columns, referred table, ON DELETE action
+WORKSPACE_FOREIGN_KEYS = {
+    "workspace_conversations": {
+        (("owner_id",), "user", "CASCADE"),
+        (("presentation_id",), "presentations", "CASCADE"),
+    },
+    "workspace_messages": {
+        (("owner_id",), "user", "CASCADE"),
+        (("conversation_id",), "workspace_conversations", "CASCADE"),
+    },
+    "workspace_assets": {
+        (("owner_id",), "user", "CASCADE"),
+        (("conversation_id",), "workspace_conversations", "CASCADE"),
+    },
+    "workspace_message_attachments": {
+        (("owner_id",), "user", "CASCADE"),
+        (("message_id",), "workspace_messages", "CASCADE"),
+        (("asset_id",), "workspace_assets", "RESTRICT"),
+    },
+    "workspace_operations": {
+        (("owner_id",), "user", "CASCADE"),
+        (("conversation_id",), "workspace_conversations", "CASCADE"),
+        (("presentation_id",), "presentations", "CASCADE"),
+        (("retry_of_operation_id",), "workspace_operations", "SET NULL"),
+    },
+    "workspace_operation_events": {
+        (("owner_id",), "user", "CASCADE"),
+        (("operation_id",), "workspace_operations", "CASCADE"),
+    },
+    "workspace_outbox": {
+        (("owner_id",), "user", "CASCADE"),
+        (("operation_id",), "workspace_operations", "CASCADE"),
+        (("event_cursor",), "workspace_operation_events", "CASCADE"),
+    },
+    "workspace_action_receipts": {
+        (("owner_id",), "user", "CASCADE"),
+        (("operation_id",), "workspace_operations", "CASCADE"),
+        (("result_operation_id",), "workspace_operations", "SET NULL"),
+    },
+    "workspace_artifacts": {
+        (("owner_id",), "user", "CASCADE"),
+        (("operation_id",), "workspace_operations", "CASCADE"),
+        (("presentation_id",), "presentations", "CASCADE"),
+    },
+}
 DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -157,6 +382,192 @@ TEMPLATE_V2_EXPECTED_COLUMNS = set(PHASE_ONE_EXPECTED_COLUMNS)
 MIGRATION_ADVISORY_LOCK_ID = 0x5050544147454E54
 MIGRATION_ADVISORY_LOCK_TIMEOUT_SECONDS = 30.0
 MIGRATION_ADVISORY_LOCK_POLL_SECONDS = 0.25
+
+
+def _foreign_key_signatures(inspector, table: str) -> set[tuple]:
+    signatures = {
+        (
+            tuple(foreign_key.get("constrained_columns") or ()),
+            foreign_key.get("referred_table"),
+            str((foreign_key.get("options") or {}).get("ondelete") or "").upper(),
+        )
+        for foreign_key in inspector.get_foreign_keys(table)
+    }
+    bind = getattr(inspector, "bind", None)
+    dialect = getattr(getattr(bind, "dialect", None), "name", None)
+    if dialect != "sqlite":
+        return signatures
+
+    # SQLAlchemy's SQLite Inspector currently drops ON DELETE metadata for an
+    # inline FK added with ALTER TABLE, even though sqlite_master and PRAGMA
+    # retain and enforce it. Read the authoritative SQLite catalogue so legacy
+    # inference still distinguishes SET NULL from a partially applied NO ACTION
+    # bridge. ``table`` is selected only from the static contract above.
+    statement = f'PRAGMA foreign_key_list("{table}")'
+    if hasattr(bind, "exec_driver_sql"):
+        rows = bind.exec_driver_sql(statement).mappings().all()
+    else:
+        with bind.connect() as connection:
+            rows = connection.exec_driver_sql(statement).mappings().all()
+    signatures.update(
+        {
+            (
+                (row["from"],),
+                row["table"],
+                str(row["on_delete"] or "").upper(),
+            )
+            for row in rows
+        }
+    )
+    return signatures
+
+
+def _workspace_schema_applied(
+    inspector,
+    tables: set[str],
+    presentation_columns: set[str],
+    job_columns: set[str],
+) -> bool:
+    """Reject partial Gate-B schemas rather than stamping beyond missing DDL."""
+
+    table_markers = set(WORKSPACE_TABLE_COLUMNS) & tables
+    column_markers = {
+        marker
+        for marker, present in (
+            ("presentations.revision", "revision" in presentation_columns),
+            (
+                "presentation_generation_jobs.workspace_operation_id",
+                "workspace_operation_id" in job_columns,
+            ),
+        )
+        if present
+    }
+    if not table_markers and not column_markers:
+        return False
+    if table_markers != set(WORKSPACE_TABLE_COLUMNS) or len(column_markers) != 2:
+        raise RuntimeError("Chat-first workspace schema is only partially applied")
+    for table, expected_columns in WORKSPACE_TABLE_COLUMNS.items():
+        actual_columns = {
+            column["name"] if isinstance(column, dict) else column
+            for column in inspector.get_columns(table)
+        }
+        if not expected_columns.issubset(actual_columns):
+            raise RuntimeError(
+                f"Chat-first workspace table {table} is only partially applied"
+            )
+        check_names = {
+            constraint.get("name")
+            for constraint in inspector.get_check_constraints(table)
+        }
+        if not WORKSPACE_CHECK_CONSTRAINTS[table].issubset(check_names):
+            raise RuntimeError(
+                f"Chat-first workspace table {table} is missing check constraints"
+            )
+        unique_names = {
+            constraint.get("name")
+            for constraint in inspector.get_unique_constraints(table)
+        }
+        if not WORKSPACE_UNIQUE_CONSTRAINTS[table].issubset(unique_names):
+            raise RuntimeError(
+                f"Chat-first workspace table {table} is missing unique constraints"
+            )
+        index_names = {index.get("name") for index in inspector.get_indexes(table)}
+        if not WORKSPACE_INDEXES[table].issubset(index_names):
+            raise RuntimeError(
+                f"Chat-first workspace table {table} is missing indexes"
+            )
+        foreign_keys = _foreign_key_signatures(inspector, table)
+        if not WORKSPACE_FOREIGN_KEYS[table].issubset(foreign_keys):
+            raise RuntimeError(
+                f"Chat-first workspace table {table} is missing foreign keys"
+            )
+
+    presentation_checks = {
+        constraint.get("name")
+        for constraint in inspector.get_check_constraints("presentations")
+    }
+    if "ck_presentations_revision_nonnegative" not in presentation_checks:
+        raise RuntimeError(
+            "Chat-first presentations revision constraint is only partially applied"
+        )
+    job_indexes = {
+        index.get("name"): bool(index.get("unique"))
+        for index in inspector.get_indexes("presentation_generation_jobs")
+    }
+    if not job_indexes.get(
+        "ix_presentation_generation_jobs_workspace_operation_id"
+    ):
+        raise RuntimeError(
+            "Chat-first generation job operation index is only partially applied"
+        )
+    job_foreign_keys = _foreign_key_signatures(
+        inspector, "presentation_generation_jobs"
+    )
+    if (
+        ("workspace_operation_id",),
+        "workspace_operations",
+        "SET NULL",
+    ) not in job_foreign_keys:
+        raise RuntimeError(
+            "Chat-first generation job operation foreign key is only partially applied"
+        )
+    return True
+
+
+def _async_task_timestamp_revision(
+    inspector,
+    tables: set[str],
+) -> str:
+    """Infer e7 only from a complete, uniform PostgreSQL timestamp state.
+
+    SQLite has no physical e7 marker and inspectors without a live bind are
+    used only by lightweight unit fixtures, so both conservatively remain at
+    d6 and let Alembic execute the storage no-op revision.
+    """
+
+    bind = getattr(inspector, "bind", None)
+    dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
+    if dialect_name is None:
+        return REVISION_CHAT_FIRST_WORKSPACE
+    if dialect_name == "sqlite":
+        return REVISION_CHAT_FIRST_WORKSPACE
+    if dialect_name != "postgresql":
+        raise RuntimeError(
+            "Async presentation task timestamp inference supports only "
+            "SQLite and PostgreSQL"
+        )
+    if ASYNC_PRESENTATION_TASK_TABLE not in tables:
+        # e7 intentionally has no DDL when the optional legacy task table is
+        # absent, so there is no unapplied physical state to recover.
+        return REVISION_ASYNC_PRESENTATION_TASK_TZ
+
+    columns = {
+        column["name"]: column
+        for column in inspector.get_columns(ASYNC_PRESENTATION_TASK_TABLE)
+        if column["name"] in ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS
+    }
+    if set(columns) != set(ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS):
+        raise RuntimeError(
+            "Async presentation task timestamp schema is incomplete"
+        )
+
+    awareness: list[bool] = []
+    for name in ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS:
+        column_type = columns[name].get("type")
+        if not isinstance(column_type, DateTime):
+            raise RuntimeError(
+                f"{ASYNC_PRESENTATION_TASK_TABLE}.{name} is not a timestamp"
+            )
+        awareness.append(bool(column_type.timezone))
+
+    if all(awareness):
+        return REVISION_ASYNC_PRESENTATION_TASK_TZ
+    if not any(awareness):
+        return REVISION_CHAT_FIRST_WORKSPACE
+    raise RuntimeError(
+        "Async presentation task timestamp timezone schema is only "
+        "partially applied"
+    )
 
 
 def _validate_authored_checkpoint_schema(
@@ -373,7 +784,7 @@ def _repair_orphan_alembic_revision(config: Config, database_url: str) -> None:
 
     engine = create_engine(database_url)
     try:
-        with engine.connect() as connection:
+        with engine.begin() as connection:
             inspector = inspect(connection)
             tables = set(inspector.get_table_names())
             if "alembic_version" not in tables:
@@ -389,7 +800,17 @@ def _repair_orphan_alembic_revision(config: Config, database_url: str) -> None:
                 flush=True,
             )
             target = _infer_revision_from_schema(inspector, tables, head)
-            command.stamp(config, target)
+            repaired = connection.execute(
+                text(
+                    "UPDATE alembic_version SET version_num = :target "
+                    "WHERE version_num = :current"
+                ),
+                {"target": target, "current": version_num},
+            )
+            if repaired.rowcount != 1:
+                raise RuntimeError(
+                    "Alembic orphan revision changed during schema repair"
+                )
     finally:
         engine.dispose()
 
@@ -637,11 +1058,24 @@ def _infer_revision_from_schema(
                     )
                 return REVISION_PRIMARY_ADMIN
             if has_authored_resume_count:
-                return (
+                authored_revision = (
                     REVISION_AUTHORED_EXACT_PROVENANCE
                     if "authored_exact_provenance" in tables
                     else REVISION_AUTHORED_RESUME_COUNT
                 )
+                if authored_revision == REVISION_AUTHORED_EXACT_PROVENANCE:
+                    if _workspace_schema_applied(
+                        inspector,
+                        tables,
+                        presentation_columns,
+                        job_columns,
+                    ):
+                        return _async_task_timestamp_revision(
+                            inspector,
+                            tables,
+                        )
+                    return authored_revision
+                return authored_revision
             return (
                 REVISION_AUTHORED_SLIDE_CHECKPOINTS
                 if has_authored_checkpoints
@@ -747,11 +1181,24 @@ def _infer_revision_from_schema(
         if _authored_resume_count_applied(
             job_columns, has_authored_checkpoints
         ):
-            return (
+            authored_revision = (
                 REVISION_AUTHORED_EXACT_PROVENANCE
                 if "authored_exact_provenance" in tables
                 else REVISION_AUTHORED_RESUME_COUNT
             )
+            if authored_revision == REVISION_AUTHORED_EXACT_PROVENANCE:
+                if _workspace_schema_applied(
+                    inspector,
+                    tables,
+                    presentation_columns,
+                    job_columns,
+                ):
+                    return _async_task_timestamp_revision(
+                        inspector,
+                        tables,
+                    )
+                return authored_revision
+            return authored_revision
         return (
             REVISION_AUTHORED_SLIDE_CHECKPOINTS
             if has_authored_checkpoints

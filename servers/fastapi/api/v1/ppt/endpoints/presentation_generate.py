@@ -14,14 +14,15 @@ behavior-changing refactor and is tracked apart from this move-only split.
 import asyncio
 import logging
 import os
+import re
 import traceback
 import uuid
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import dirtyjson
-from pydantic import BaseModel
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -31,6 +32,12 @@ from fastapi import (
     Path,
     Request,
 )
+from pydantic import BaseModel
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
 from constants.presentation import DEFAULT_TEMPLATES, MAX_NUMBER_OF_SLIDES
 from enums.webhook_event import WebhookEvent
 from models.api_error_model import APIErrorModel
@@ -44,6 +51,7 @@ from models.slide_spec_model import archetype_to_layout_id, spec_to_blocks
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.image_asset import ImageAsset
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
@@ -52,10 +60,7 @@ from models.sql.presentation import (
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
 from models.sql.template import TemplateModel
-from services.authored_presentation_service import (
-    AUTHORED_TEMPLATE,
-    generate_authored_presentation,
-)
+from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     progress_for_task,
@@ -63,8 +68,12 @@ from services.authored_checkpoint_service import (
 from services.authored_generation_observability import (
     log_authored_generation_observation,
 )
+from services.authored_presentation_service import (
+    AUTHORED_TEMPLATE,
+    generate_authored_presentation,
+)
 from services.concurrent_service import CONCURRENT_SERVICE
-from services.database import async_session_maker, get_async_session
+from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
 from services.generation_pipeline import build_template_structure
 from services.image_generation_service import ImageGenerationService
@@ -83,6 +92,9 @@ from services.presentation_generation_job_service import (
     release_generation_job,
     request_sha256,
 )
+from services.template_v2_generation_observability import (
+    log_template_v2_generation_observation,
+)
 from services.template_v2_generation_service import (
     TemplateV2GenerationError,
     build_template_v2_slides,
@@ -91,13 +103,34 @@ from services.template_v2_generation_service import (
     preflight_template_v2_native_pptx,
     source_content_sha256,
 )
-from services.template_v2_generation_observability import (
-    log_template_v2_generation_observation,
-)
 from services.webhook_service import WebhookService
-from sqlalchemy import delete, select, update
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from services.workspace_artifact_publication_service import (
+    PreparedWorkspaceArtifact,
+    PreparedWorkspaceChatArtifactStaging,
+    PromotedWorkspaceChatArtifacts,
+    WorkspaceArtifactPublicationError,
+    compensate_workspace_artifact,
+    compensate_workspace_chat_artifact_staging,
+    prepare_workspace_chat_artifact_staging,
+    prepare_workspace_generation_artifact,
+    promote_workspace_chat_image_artifacts,
+    publish_workspace_generation_artifact,
+    stage_workspace_chat_artifacts_for_publication,
+    workspace_chat_artifacts_were_published,
+)
+from services.workspace_legacy_write_gate import (
+    require_legacy_presentation_write_path,
+)
+from services.workspace_operation_runner import (
+    append_operation_event,
+    wake_workspace_operation_runner,
+)
+from services.workspace_runtime_profile import resolve_chat_first_workspace_rollout
+from services.workspace_service import (
+    WorkspaceServiceError,
+    activate_workspace_operation,
+    workspace_commands_enabled,
+)
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.strategies import (
     TEMPLATE_V2_STRATEGIES,
@@ -108,18 +141,20 @@ from utils.authored_styles import (
     AuthoredExactReconstructionUnavailableError,
     resolve_authored_style,
 )
+from utils.document_context import build_document_context
+from utils.document_path_security import validate_document_paths
 from utils.export_utils import export_presentation
 from utils.get_env import (
     get_authored_resume_max_attempts_env,
     get_next_internal_base_url,
 )
 from utils.get_layout_by_name import get_layout_by_name
-from utils.owner_context import get_current_owner_id
 from utils.llm_calls.compose_slides import compose_and_project
 from utils.llm_calls.generate_content_brief import generate_content_brief
-from utils.document_context import build_document_context
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
+)
+from utils.llm_calls.generate_presentation_outlines import (
     get_messages as get_outline_messages,
 )
 from utils.llm_calls.generate_slide_content import (
@@ -131,15 +166,40 @@ from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
 )
+from utils.owner_context import get_current_owner_id
 from utils.process_slides import process_slide_and_fetch_assets
-from utils.document_path_security import validate_document_paths
-
-from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
 
 logger = logging.getLogger(__name__)
 
 AUTHORED_RESUME_MAX_ATTEMPTS_DEFAULT = 5
 _INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
+_INTERNAL_ADMISSION_RETRY_KEY = "_internal_admission_retry_required"
+_STABLE_ADMISSION_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{1,127}$")
+CHAT_FIRST_WORKSPACE_PROJECTED_HEADER = "X-Chat-First-Workspace-Projected"
+
+# Only these authored/template/adaptive fields are promoted from an isolated
+# render snapshot.  Identity, ownership, share state and the publication token
+# belong to the durable target row and must never be copied from staging.
+_PRESENTATION_RENDER_FIELDS = (
+    "content",
+    "n_slides",
+    "language",
+    "title",
+    "file_paths",
+    "outlines",
+    "layout",
+    "structure",
+    "instructions",
+    "tone",
+    "verbosity",
+    "include_table_of_contents",
+    "include_title_slide",
+    "web_search",
+    "theme",
+    "deck_plan",
+    "mode",
+    "version",
+)
 
 
 PRESENTATION_GENERATE_ROUTER = APIRouter(
@@ -156,11 +216,273 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
     return payload
 
 
+def _chat_first_generation_enabled() -> bool:
+    """Resolve rollout intent before fingerprint lookup or durable job writes."""
+
+    rollout = resolve_chat_first_workspace_rollout(
+        workspace_commands_enabled(),
+        sql_engine.url,
+    )
+    if not rollout.requested:
+        return False
+    if not rollout.enabled:
+        raise HTTPException(
+            status_code=(
+                501
+                if rollout.reason == "chat_first_runtime_unsupported"
+                else 503
+            ),
+            detail=rollout.reason,
+        )
+    return True
+
+
+def _uses_isolated_render_staging(
+    generation_job: PresentationGenerationJob | None,
+) -> bool:
+    """Keep exporter checkpoints away from the durable/public deck row."""
+
+    return bool(
+        generation_job is not None
+        and generation_job.workspace_operation_id is not None
+        and generation_job.attempt_token
+    )
+
+
+def _render_staging_id(generation_job: PresentationGenerationJob) -> uuid.UUID:
+    """Return an attempt-fenced, unguessable-enough internal render identity."""
+
+    if generation_job.workspace_operation_id is None or not generation_job.attempt_token:
+        raise RuntimeError("workspace_render_staging_requires_attempt")
+    return uuid.uuid5(
+        generation_job.workspace_operation_id,
+        f"adaptive-template-render:{generation_job.attempt_token}",
+    )
+
+
+def _replace_workspace_image_paths(
+    value: Any,
+    replacements: Mapping[str, str],
+) -> Any:
+    """Replace provider staging paths throughout persisted JSON values."""
+
+    if isinstance(value, str):
+        old_paths = sorted(replacements, key=len, reverse=True)
+        if not old_paths:
+            return value
+        pattern = re.compile("|".join(re.escape(path) for path in old_paths))
+        return pattern.sub(lambda match: replacements[match.group(0)], value)
+    if isinstance(value, list):
+        return [_replace_workspace_image_paths(item, replacements) for item in value]
+    if isinstance(value, tuple):
+        return tuple(
+            _replace_workspace_image_paths(item, replacements) for item in value
+        )
+    if isinstance(value, dict):
+        return {
+            key: _replace_workspace_image_paths(item, replacements)
+            for key, item in value.items()
+        }
+    return value
+
+
+async def _workspace_operation_fencing_token(
+    sql_session: AsyncSession,
+    *,
+    generation_job: PresentationGenerationJob,
+    presentation_id: uuid.UUID,
+) -> int:
+    """Read the exact running attempt fence before allowing provider writes."""
+
+    operation_id = generation_job.workspace_operation_id
+    attempt_token = generation_job.attempt_token
+    if operation_id is None or not attempt_token:
+        raise WorkspaceArtifactPublicationError("operation_lease_lost")
+    fencing_token = await sql_session.scalar(
+        select(WorkspaceOperation.fencing_token).where(
+            WorkspaceOperation.id == operation_id,
+            WorkspaceOperation.presentation_id == presentation_id,
+            WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+            WorkspaceOperation.state == "running",
+            WorkspaceOperation.attempt_token == attempt_token,
+        )
+    )
+    if fencing_token is None:
+        raise WorkspaceArtifactPublicationError("operation_lease_lost")
+    return int(fencing_token)
+
+
+async def _discard_render_staging(
+    sql_session: AsyncSession,
+    render_presentation_id: uuid.UUID | None,
+    *,
+    target_presentation_id: uuid.UUID,
+) -> None:
+    """Best-effort compensation for an isolated exporter snapshot."""
+
+    if render_presentation_id is None or render_presentation_id == target_presentation_id:
+        return
+    await sql_session.rollback()
+    await sql_session.execute(
+        delete(SlideModel).where(SlideModel.presentation == render_presentation_id)
+    )
+    await sql_session.execute(
+        delete(PresentationModel).where(PresentationModel.id == render_presentation_id)
+    )
+    await sql_session.commit()
+
+
+async def _promote_render_staging(
+    sql_session: AsyncSession,
+    *,
+    target: PresentationModel,
+    render: PresentationModel,
+) -> None:
+    """Stage a complete snapshot replacement in the final publication UoW.
+
+    This function deliberately does not commit.  The subsequent revision/artifact
+    publication is the sole commit token, so any fence or external-publication
+    failure rolls the target fields and its slide replacement back together.
+    """
+
+    if target.id == render.id:
+        return
+    for field_name in _PRESENTATION_RENDER_FIELDS:
+        setattr(target, field_name, getattr(render, field_name))
+    target.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
+    sql_session.add(target)
+    await sql_session.execute(
+        delete(SlideModel).where(SlideModel.presentation == target.id)
+    )
+    await sql_session.execute(
+        update(SlideModel)
+        .where(SlideModel.presentation == render.id)
+        .values(presentation=target.id)
+        .execution_options(synchronize_session=False)
+    )
+    await sql_session.delete(render)
+
+
+async def _publish_staged_presentation(
+    sql_session: AsyncSession,
+    presentation: PresentationModel,
+    export_path: str,
+    generation_job: PresentationGenerationJob | None = None,
+    async_status: AsyncPresentationGenerationTaskModel | None = None,
+    render_presentation: PresentationModel | None = None,
+    generated_assets: tuple[ImageAsset, ...] = (),
+    image_staging: PreparedWorkspaceChatArtifactStaging | None = None,
+    image_artifacts: tuple[PreparedWorkspaceArtifact, ...] = (),
+) -> str:
+    """Publish once with revision acting as the final commit token."""
+
+    expected_revision = presentation.revision
+    if generation_job is not None and generation_job.workspace_operation_id is not None:
+        if not generation_job.attempt_token:
+            await sql_session.rollback()
+            raise HTTPException(status_code=409, detail="operation_lease_lost")
+        artifact: PreparedWorkspaceArtifact | None = None
+        publication_started = False
+        try:
+            artifact = await prepare_workspace_generation_artifact(
+                sql_session,
+                source_path=export_path,
+                operation_id=generation_job.workspace_operation_id,
+                presentation_id=presentation.id,
+                source_revision=expected_revision + 1,
+            )
+            if render_presentation is not None:
+                await _promote_render_staging(
+                    sql_session,
+                    target=presentation,
+                    render=render_presentation,
+                )
+            if generated_assets:
+                sql_session.add_all(generated_assets)
+            if image_staging is not None:
+                await stage_workspace_chat_artifacts_for_publication(
+                    sql_session,
+                    staging=image_staging,
+                    artifacts=image_artifacts,
+                )
+            if async_status is not None:
+                async_status.message = "Presentation generation completed"
+                async_status.status = "completed"
+                async_status.data = PresentationPathAndEditPath(
+                    presentation_id=presentation.id,
+                    path=artifact.public_path,
+                    edit_path=f"/presentation?id={presentation.id}",
+                ).model_dump(mode="json")
+                async_status.error = None
+                async_status.updated_at = datetime.now(timezone.utc)
+                sql_session.add(async_status)
+            publication_started = True
+            await publish_workspace_generation_artifact(
+                sql_session,
+                artifact=artifact,
+                expected_revision=expected_revision,
+                attempt_token=generation_job.attempt_token,
+            )
+        except BaseException as error:
+            if artifact is not None and not publication_started:
+                try:
+                    await sql_session.rollback()
+                    await compensate_workspace_artifact(sql_session, artifact)
+                except BaseException:
+                    logger.exception(
+                        "Failed to compensate unpublished presentation artifact %s",
+                        artifact.artifact_id,
+                    )
+            if isinstance(error, WorkspaceArtifactPublicationError):
+                raise HTTPException(status_code=409, detail=error.code) from error
+            raise
+        assert artifact is not None
+        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
+        presentation.revision = expected_revision + 1
+        return artifact.public_path
+
+    if async_status is not None:
+        async_status.message = "Presentation generation completed"
+        async_status.status = "completed"
+        async_status.data = PresentationPathAndEditPath(
+            presentation_id=presentation.id,
+            path=export_path,
+            edit_path=f"/presentation?id={presentation.id}",
+        ).model_dump(mode="json")
+        async_status.error = None
+        async_status.updated_at = datetime.now(timezone.utc)
+        sql_session.add(async_status)
+    result = await sql_session.execute(
+        update(PresentationModel)
+        .where(
+            PresentationModel.id == presentation.id,
+            PresentationModel.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING,
+            PresentationModel.revision == expected_revision,
+        )
+        .values(
+            lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
+            revision=PresentationModel.revision + 1,
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    if result.rowcount != 1:
+        await sql_session.rollback()
+        raise HTTPException(status_code=409, detail="revision_conflict")
+    await sql_session.commit()
+    presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
+    presentation.revision = expected_revision + 1
+    return export_path
+
+
 def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     """Restore private worker state from an internal durable-job payload."""
 
     values = dict(payload)
     snapshot_id = values.pop(_INTERNAL_EXACT_SNAPSHOT_KEY, None)
+    # Internal runner metadata is deliberately outside the public request
+    # schema. It remains on the durable job across operation rebinds, but must
+    # never be passed to Pydantic as caller input.
+    values.pop(_INTERNAL_ADMISSION_RETRY_KEY, None)
     request = GeneratePresentationRequest.model_validate(values)
     if snapshot_id is not None:
         request._authored_exact_snapshot_id = str(snapshot_id)
@@ -187,14 +509,21 @@ def _authored_exact_admission_exception(
     # (style id and validation reason).  That context can identify a private
     # preset and must not cross the API or durable task-status boundary.
     if "failed preset validation" in str(error):
-        return HTTPException(
+        exception = HTTPException(
             status_code=422,
             detail="authored_exact_reconstruction_invalid",
         )
-    return HTTPException(
-        status_code=403,
-        detail="authored_exact_reconstruction_unavailable",
-    )
+    else:
+        exception = HTTPException(
+            status_code=403,
+            detail="authored_exact_reconstruction_unavailable",
+        )
+    # The workspace operation adapter preserves these attributes when it maps
+    # a retry admission failure. Exact-preset failures are deterministic and
+    # must not be presented as an automatically retryable card.
+    exception.code = str(exception.detail)
+    exception.retryable = False
+    return exception
 
 
 def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> None:
@@ -367,6 +696,197 @@ async def _load_document_context(
     )
 
 
+class GenerationAdmissionRetryError(RuntimeError):
+    """Safe failure raised when a retried operation no longer passes admission."""
+
+    def __init__(self, code: str, *, status_code: int, retryable: bool) -> None:
+        super().__init__(code)
+        self.code = code
+        self.status_code = status_code
+        self.retryable = retryable
+        self.detail = {
+            "code": code,
+            "status_code": status_code,
+            "retryable": retryable,
+            "stage": "admission",
+        }
+
+
+def _generation_admission_failure_metadata(
+    error: Exception,
+) -> tuple[str, int, bool]:
+    """Return stable, non-sensitive operation failure metadata."""
+
+    raw_status = getattr(error, "status_code", 500)
+    status_code = raw_status if isinstance(raw_status, int) else 500
+    explicit_retryable = getattr(error, "retryable", None)
+    retryable = (
+        explicit_retryable
+        if isinstance(explicit_retryable, bool)
+        else status_code in {408, 425, 429} or status_code >= 500
+    )
+    candidates = (getattr(error, "code", None), getattr(error, "detail", None))
+    code = next(
+        (
+            candidate
+            for candidate in candidates
+            if isinstance(candidate, str)
+            and _STABLE_ADMISSION_ERROR_CODE.fullmatch(candidate)
+        ),
+        None,
+    )
+    if code is None:
+        code = (
+            "generation_admission_unavailable"
+            if retryable
+            else "generation_admission_rejected"
+        )
+    return code, status_code, retryable
+
+
+async def _record_chat_first_generation_admission_failure(
+    sql_session: AsyncSession,
+    *,
+    operation: WorkspaceOperation,
+    presentation: PresentationModel,
+    request: GeneratePresentationRequest,
+    fingerprint: str,
+    key_hash: str | None,
+    error: Exception,
+) -> bool:
+    """Atomically link and project a bootstrap admission failure.
+
+    The first message and its operation anchor already exist at this point.
+    Creating the failed legacy task/job in the same transaction as the
+    ``operation.error`` projection makes response-loss replay unambiguous and
+    gives terminal operation retry a durable job to rebind.
+    """
+
+    code, status_code, retryable = _generation_admission_failure_metadata(error)
+    now = datetime.now(timezone.utc)
+    safe_error = {
+        "code": code,
+        "detail": code,
+        "status_code": status_code,
+        "retryable": retryable,
+        "stage": "admission",
+    }
+    payload = _durable_request_payload(request)
+    if presentation.file_paths is not None:
+        payload["files"] = list(presentation.file_paths)
+    payload[_INTERNAL_ADMISSION_RETRY_KEY] = True
+
+    status = AsyncPresentationGenerationTaskModel(
+        status="error",
+        message="Generation request was not admitted",
+        error=safe_error,
+        data=None,
+        updated_at=now,
+    )
+    target = request._template_v2_generation_target
+    job = PresentationGenerationJob(
+        task_id=status.id,
+        presentation_id=presentation.id,
+        workspace_operation_id=operation.id,
+        idempotency_key_hash=key_hash,
+        request_id=request._request_id,
+        request_sha256=fingerprint,
+        request_payload=payload,
+        template_v2_target=(
+            target.to_durable_payload() if target is not None else None
+        ),
+        export_cookie_required=False,
+        state="failed",
+        current_stage="admission",
+        last_error=safe_error,
+        resume_allowed=retryable,
+        failed_at=now,
+    )
+    operation_payload = {
+        "generation_request": payload,
+        "task_id": status.id,
+        "job_id": str(job.id),
+        "admission_retry_required": True,
+    }
+    sql_session.add(status)
+    sql_session.add(job)
+    try:
+        # ``append_operation_event`` executes SQL and may autoflush the pending
+        # linked job before commit. Keep both that flush and the final commit
+        # inside the uniqueness-race guard.
+        event = await append_operation_event(
+            sql_session,
+            operation_id=operation.id,
+            event_type="operation.error",
+            payload={
+                "status": "failed",
+                "stage": "admission",
+                "error_code": code,
+                "retryable": retryable,
+                "task_id": status.id,
+                "job_id": str(job.id),
+            },
+            allowed_states=("awaiting_approval",),
+            expected_version=operation.version,
+            projection_values={
+                "state": "failed",
+                "request_hash": fingerprint,
+                "request_payload": operation_payload,
+                "next_attempt_at": None,
+                "backoff_seconds": 0,
+                "approval_expires_at": None,
+                "error_code": code,
+                "error_detail": safe_error,
+                "completed_at": now,
+            },
+        )
+        if event is None:
+            await sql_session.rollback()
+            return False
+        await sql_session.commit()
+    except IntegrityError:
+        # A concurrent same-presentation admission won the unique job/CAS
+        # race. Its durable task is returned by the normal replay path.
+        await sql_session.rollback()
+        return False
+    logger.warning(
+        "chat-first generation admission failed presentation_id=%s "
+        "operation_id=%s task_id=%s error_code=%s status_code=%s retryable=%s",
+        presentation.id,
+        operation.id,
+        status.id,
+        code,
+        status_code,
+        retryable,
+    )
+    return True
+
+
+async def _revalidate_generation_admission_for_retry(
+    request: GeneratePresentationRequest,
+    generation_job: PresentationGenerationJob | None,
+    sql_session: AsyncSession,
+) -> None:
+    """Re-run mutable admission checks before a failed job executes again."""
+
+    if generation_job is None or not generation_job.request_payload.get(
+        _INTERNAL_ADMISSION_RETRY_KEY
+    ):
+        return
+    try:
+        _validate_authored_exact_admission(request)
+        await check_if_api_request_is_valid(request, sql_session)
+        if request.files:
+            await _load_document_context(request.files, request.language)
+    except Exception as error:
+        code, status_code, retryable = _generation_admission_failure_metadata(error)
+        raise GenerationAdmissionRetryError(
+            code,
+            status_code=status_code,
+            retryable=retryable,
+        ) from error
+
+
 async def _generate_template_v2_presentation(
     *,
     request: GeneratePresentationRequest,
@@ -384,6 +904,14 @@ async def _generate_template_v2_presentation(
     if request.template_v2_id is None or request.template_v2_revision is None:
         raise HTTPException(status_code=400, detail="template_v2_target_required")
 
+    isolated_render = _uses_isolated_render_staging(generation_job)
+    render_presentation_id = (
+        _render_staging_id(generation_job)
+        if isolated_render and generation_job is not None
+        else presentation_id
+    )
+    target_presentation: PresentationModel | None = None
+
     generation_started_at = perf_counter()
     try:
         target = request._template_v2_generation_target
@@ -391,7 +919,7 @@ async def _generate_template_v2_presentation(
             raise TemplateV2GenerationError("template_v2_snapshot_missing")
         if async_status:
             async_status.message = "Selecting Template V2 layouts"
-            async_status.updated_at = datetime.now()
+            async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
             await sql_session.commit()
 
@@ -407,13 +935,13 @@ async def _generate_template_v2_presentation(
 
         if async_status:
             async_status.message = "Generating Template V2 slides"
-            async_status.updated_at = datetime.now()
+            async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
             await sql_session.commit()
 
         slides = await build_template_v2_slides(
             target=target,
-            presentation_id=presentation_id,
+            presentation_id=render_presentation_id,
             outlines=presentation_outlines,
             structure=presentation_structure,
             language=language_to_use,
@@ -450,32 +978,53 @@ async def _generate_template_v2_presentation(
             created_at=created_at,
             native_pptx_preflight=native_pptx_preflight,
         )
-        presentation = PresentationModel(
-            id=presentation_id,
-            content=request.content,
-            n_slides=len(slides),
-            language=language_to_use or "",
-            title=get_presentation_title_from_presentation_outline(
-                presentation_outlines
-            ),
-            file_paths=request.files,
-            outlines=presentation_outlines.model_dump(mode="json"),
-            layout=None,
-            structure=None,
-            tone=request.tone.value,
-            verbosity=request.verbosity.value,
-            instructions=request.instructions,
-            include_table_of_contents=request.include_table_of_contents,
-            include_title_slide=request.include_title_slide,
-            web_search=request.web_search,
-            mode="template",
-            version=TEMPLATE_V2_VERSION,
-            lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
-            theme={
-                "mode": "template",
-                "template_v2": provenance,
-            },
+        target_presentation = await sql_session.get(PresentationModel, presentation_id)
+        if isolated_render:
+            if target_presentation is None:
+                raise TemplateV2GenerationError("template_v2_generation_invalid")
+            presentation = PresentationModel(
+                id=render_presentation_id,
+                owner_id=target_presentation.owner_id,
+                content=request.content,
+                n_slides=len(slides),
+                language=language_to_use or "",
+                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+            )
+        elif target_presentation is None:
+            presentation = PresentationModel(
+                id=presentation_id,
+                content=request.content,
+                n_slides=len(slides),
+                language=language_to_use or "",
+                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+            )
+        elif target_presentation.lifecycle_status != PRESENTATION_LIFECYCLE_STAGING:
+            raise TemplateV2GenerationError("template_v2_generation_invalid")
+        else:
+            presentation = target_presentation
+        presentation.content = request.content
+        presentation.n_slides = len(slides)
+        presentation.language = language_to_use or ""
+        presentation.title = get_presentation_title_from_presentation_outline(
+            presentation_outlines
         )
+        presentation.file_paths = request.files
+        presentation.outlines = presentation_outlines.model_dump(mode="json")
+        presentation.layout = None
+        presentation.structure = None
+        presentation.tone = request.tone.value
+        presentation.verbosity = request.verbosity.value
+        presentation.instructions = request.instructions
+        presentation.include_table_of_contents = request.include_table_of_contents
+        presentation.include_title_slide = request.include_title_slide
+        presentation.web_search = request.web_search
+        presentation.mode = "template"
+        presentation.version = TEMPLATE_V2_VERSION
+        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
+        presentation.theme = {
+            "mode": "template",
+            "template_v2": provenance,
+        }
         if resolve_presentation_strategies(presentation, slides) != TEMPLATE_V2_STRATEGIES:
             raise TemplateV2GenerationError("template_v2_generation_invalid")
 
@@ -502,8 +1051,20 @@ async def _generate_template_v2_presentation(
             duration_ms=(perf_counter() - generation_started_at) * 1000,
             code=error.code,
         )
+        if isolated_render:
+            try:
+                await _discard_render_staging(
+                    sql_session,
+                    render_presentation_id,
+                    target_presentation_id=presentation_id,
+                )
+            except BaseException:
+                logger.exception(
+                    "Failed to discard Template V2 render staging %s",
+                    render_presentation_id,
+                )
         raise _template_v2_http_exception(error) from error
-    except Exception:
+    except BaseException:
         log_template_v2_generation_observation(
             operation="generate",
             outcome="failure",
@@ -512,11 +1073,23 @@ async def _generate_template_v2_presentation(
             duration_ms=(perf_counter() - generation_started_at) * 1000,
             code="template_v2_unexpected_failure",
         )
+        if isolated_render:
+            try:
+                await _discard_render_staging(
+                    sql_session,
+                    render_presentation_id,
+                    target_presentation_id=presentation_id,
+                )
+            except BaseException:
+                logger.exception(
+                    "Failed to discard Template V2 render staging %s",
+                    render_presentation_id,
+                )
         raise
 
     if async_status:
         async_status.message = "Exporting presentation"
-        async_status.updated_at = datetime.now()
+        async_status.updated_at = datetime.now(timezone.utc)
         sql_session.add(async_status)
 
     export_started_at = perf_counter()
@@ -526,13 +1099,13 @@ async def _generate_template_v2_presentation(
             and request.export_as == "pptx"
         ):
             presentation_and_path = export_template_v2_native_pptx(
-                presentation_id=presentation_id,
+                presentation_id=render_presentation_id,
                 title=presentation.title or str(uuid.uuid4()),
                 preflight=native_pptx_preflight,
             )
         else:
             presentation_and_path = await export_presentation(
-                presentation_id,
+                render_presentation_id,
                 presentation.title or str(uuid.uuid4()),
                 request.export_as,
                 cookie_header=export_cookie_header,
@@ -545,7 +1118,7 @@ async def _generate_template_v2_presentation(
             duration_ms=(perf_counter() - export_started_at) * 1000,
             export_type=request.export_as,
         )
-    except Exception:
+    except BaseException:
         log_template_v2_generation_observation(
             operation="export",
             outcome="failure",
@@ -555,39 +1128,66 @@ async def _generate_template_v2_presentation(
             export_type=request.export_as,
             code="template_v2_export_failed",
         )
-        # The exporter reads through the committed database state. Compensate
-        # immediately so a failed export cannot leave a queryable partial deck.
-        # A future durable worker should replace this short visibility window
-        # with an explicit staging -> published state transition.
+        # The exporter reads through committed database state. Chat-first writes
+        # use an isolated render identity, so compensating it never deletes or
+        # mutates the durable target deck. Legacy generation retains its prior
+        # staging-row cleanup behavior.
         try:
-            await sql_session.rollback()
-            await sql_session.execute(
-                delete(SlideModel).where(SlideModel.presentation == presentation_id)
+            await _discard_render_staging(
+                sql_session,
+                render_presentation_id,
+                target_presentation_id=presentation_id,
             )
-            await sql_session.execute(
-                delete(PresentationModel).where(PresentationModel.id == presentation_id)
-            )
-            await sql_session.commit()
-        except Exception:
+            if not isolated_render:
+                await sql_session.rollback()
+                await sql_session.execute(
+                    delete(SlideModel).where(SlideModel.presentation == presentation_id)
+                )
+                await sql_session.execute(
+                    delete(PresentationModel).where(
+                        PresentationModel.id == presentation_id
+                    )
+                )
+                await sql_session.commit()
+        except BaseException:
             logger.exception(
                 "Failed to compensate Template V2 export for presentation %s",
                 presentation_id,
             )
         raise
     response = PresentationPathAndEditPath(
-        **presentation_and_path.model_dump(),
+        presentation_id=presentation_id,
+        path=presentation_and_path.path,
         edit_path=f"/presentation?id={presentation_id}",
     )
-    presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
-    sql_session.add(presentation)
-
-    if async_status:
-        async_status.message = "Presentation generation completed"
-        async_status.status = "completed"
-        async_status.data = response.model_dump(mode="json")
-        async_status.updated_at = datetime.now()
-        sql_session.add(async_status)
-    await sql_session.commit()
+    publication_target = target_presentation if isolated_render else presentation
+    if publication_target is None:
+        raise HTTPException(status_code=409, detail="revision_conflict")
+    try:
+        published_path = await _publish_staged_presentation(
+            sql_session,
+            publication_target,
+            presentation_and_path.path,
+            generation_job,
+            async_status,
+            render_presentation=presentation if isolated_render else None,
+        )
+    except BaseException:
+        if isolated_render:
+            try:
+                await _discard_render_staging(
+                    sql_session,
+                    render_presentation_id,
+                    target_presentation_id=presentation_id,
+                )
+            except BaseException:
+                logger.exception(
+                    "Failed to discard Template V2 render staging %s",
+                    render_presentation_id,
+                )
+        raise
+    if published_path != response.path:
+        response.path = published_path
 
     if request.trigger_webhook:
         CONCURRENT_SERVICE.run_task(
@@ -607,6 +1207,34 @@ async def generate_presentation_handler(
     generation_job: Optional[PresentationGenerationJob] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    # Bootstrap admission failures have a linked failed job so a terminal
+    # operation retry can safely rebind it. Re-check validation, template
+    # policy and immutable document readability before doing any generation
+    # work; mutable policy/assets may have changed since the original request.
+    try:
+        await _revalidate_generation_admission_for_retry(
+            request,
+            generation_job,
+            sql_session,
+        )
+    except GenerationAdmissionRetryError as error:
+        # The generic runner projects the retry operation failure, while this
+        # compatibility row remains the status source for older polling
+        # clients. Keep both durable projections aligned without persisting the
+        # underlying validation/provider exception.
+        if async_status is not None:
+            async_status.status = "error"
+            async_status.message = "Generation request was not admitted"
+            async_status.error = error.detail
+            async_status.updated_at = datetime.now(timezone.utc)
+            sql_session.add(async_status)
+            await sql_session.commit()
+        raise
+    render_presentation_id: uuid.UUID | None = None
+    isolated_render = _uses_isolated_render_staging(generation_job)
+    image_staging: PreparedWorkspaceChatArtifactStaging | None = None
+    promoted_images = PromotedWorkspaceChatArtifacts(artifacts=(), replacements={})
+    generated_assets: list[ImageAsset] = []
     try:
         using_slides_markdown = False
         language_to_use = (request.language or "").strip() or None
@@ -633,7 +1261,7 @@ async def generate_presentation_handler(
             # Updating async status
             if async_status:
                 async_status.message = "Generating presentation outlines"
-                async_status.updated_at = datetime.now()
+                async_status.updated_at = datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 await sql_session.commit()
 
@@ -810,7 +1438,7 @@ async def generate_presentation_handler(
         if request.template == AUTHORED_TEMPLATE:
             if async_status:
                 async_status.message = "Authoring bespoke slides"
-                async_status.updated_at = datetime.now()
+                async_status.updated_at = datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 await sql_session.commit()
             response = await generate_authored_presentation(
@@ -821,13 +1449,6 @@ async def generate_presentation_handler(
                 sql_session,
                 generation_job,
             )
-            if async_status:
-                async_status.message = "Presentation generation completed"
-                async_status.status = "completed"
-                async_status.data = response.model_dump(mode="json")
-                async_status.updated_at = datetime.now()
-                sql_session.add(async_status)
-                await sql_session.commit()
             if request.trigger_webhook:
                 CONCURRENT_SERVICE.run_task(
                     None,
@@ -840,7 +1461,7 @@ async def generate_presentation_handler(
         # Updating async status
         if async_status:
             async_status.message = "Selecting layout for each slide"
-            async_status.updated_at = datetime.now()
+            async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
             await sql_session.commit()
 
@@ -893,44 +1514,94 @@ async def generate_presentation_handler(
 
         final_n_slides = len(presentation_outlines.slides)
 
-        # Create PresentationModel
-        presentation = PresentationModel(
-            id=presentation_id,
-            content=request.content,
-            n_slides=final_n_slides,
-            language=language_to_use or "",
-            # Use the descriptive outline (pre-projection): on the adaptive path
-            # presentation_outlines was replaced with the projected SlideSpec outline
-            # whose first slide's content is the composition JSON, which would leak
-            # into the title. vqa_source_outline is the descriptive outline (== the
-            # same object on the template path, so this is correct for both).
-            title=get_presentation_title_from_presentation_outline(
-                vqa_source_outline
-            ),
-            outlines=presentation_outlines.model_dump(),
-            layout=layout_model.model_dump(),
-            structure=presentation_structure.model_dump(),
-            tone=request.tone.value,
-            verbosity=request.verbosity.value,
-            instructions=request.instructions,
-            # Authored decks return before this point, so this handler only ever
-            # persists adaptive (composition present) or template decks.
-            mode="adaptive" if adaptive_composition else "template",
-            deck_plan=(
-                adaptive_composition.model_dump(mode="json")
-                if adaptive_composition
-                else None
-            ),
+        # Exporters read committed presentation state. Durable chat-first writes
+        # therefore build under an attempt-fenced render identity and leave the
+        # admitted/public target byte-for-byte untouched until final publication.
+        target_presentation = await sql_session.get(
+            PresentationModel, presentation_id
         )
+        if isolated_render:
+            if target_presentation is None or generation_job is None:
+                raise HTTPException(status_code=409, detail="revision_conflict")
+            render_presentation_id = _render_staging_id(generation_job)
+            presentation = PresentationModel(
+                id=render_presentation_id,
+                owner_id=target_presentation.owner_id,
+                content=request.content,
+                n_slides=final_n_slides,
+                language=language_to_use or "",
+                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+            )
+        elif target_presentation is None:
+            presentation = PresentationModel(
+                id=presentation_id,
+                content=request.content,
+                n_slides=final_n_slides,
+                language=language_to_use or "",
+                lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+            )
+        elif target_presentation.lifecycle_status != PRESENTATION_LIFECYCLE_STAGING:
+            raise HTTPException(status_code=409, detail="revision_conflict")
+        else:
+            presentation = target_presentation
+        presentation.content = request.content
+        presentation.n_slides = final_n_slides
+        presentation.language = language_to_use or ""
+        # Use the descriptive outline (pre-projection): on the adaptive path
+        # presentation_outlines was replaced with the projected SlideSpec outline
+        # whose first slide's content is the composition JSON, which would leak
+        # into the title. vqa_source_outline is the descriptive outline (== the
+        # same object on the template path, so this is correct for both).
+        presentation.title = get_presentation_title_from_presentation_outline(
+            vqa_source_outline
+        )
+        presentation.file_paths = request.files
+        presentation.outlines = presentation_outlines.model_dump()
+        presentation.layout = layout_model.model_dump()
+        presentation.structure = presentation_structure.model_dump()
+        presentation.tone = request.tone.value
+        presentation.verbosity = request.verbosity.value
+        presentation.instructions = request.instructions
+        presentation.include_table_of_contents = request.include_table_of_contents
+        presentation.include_title_slide = request.include_title_slide
+        presentation.web_search = request.web_search
+        # Authored decks return before this point, so this handler only ever
+        # persists adaptive (composition present) or template decks.
+        presentation.mode = "adaptive" if adaptive_composition else "template"
+        presentation.deck_plan = (
+            adaptive_composition.model_dump(mode="json")
+            if adaptive_composition
+            else None
+        )
+        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
 
         # Updating async status
         if async_status:
             async_status.message = "Generating slides"
-            async_status.updated_at = datetime.now()
+            async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
             await sql_session.commit()
 
-        image_generation_service = ImageGenerationService(get_images_directory())
+        image_output_directory = get_images_directory()
+        if isolated_render:
+            if generation_job is None or target_presentation is None:
+                raise WorkspaceArtifactPublicationError("operation_lease_lost")
+            fencing_token = await _workspace_operation_fencing_token(
+                sql_session,
+                generation_job=generation_job,
+                presentation_id=presentation_id,
+            )
+            image_staging = await prepare_workspace_chat_artifact_staging(
+                sql_session,
+                operation_id=generation_job.workspace_operation_id,
+                presentation_id=presentation_id,
+                source_revision=target_presentation.revision + 1,
+                attempt_token=generation_job.attempt_token,
+                fencing_token=fencing_token,
+            )
+            image_output_directory = str(image_staging.staging_directory)
+
+        image_generation_service = ImageGenerationService(image_output_directory)
         async_assets_generation_tasks = []
 
         # 7. Build slides (adaptive: directly from the composition; legacy: batched
@@ -944,7 +1615,7 @@ async def generate_presentation_handler(
             # fetch image/icon assets per slide (markers handled depth-agnostically).
             for i, spec in enumerate(adaptive_composition.slides):
                 slide = SlideModel(
-                    presentation=presentation_id,
+                    presentation=presentation.id,
                     layout_group=layout_model.name,
                     layout=slide_layouts[i].id,
                     index=i,
@@ -990,7 +1661,7 @@ async def generate_presentation_handler(
                     i = start + offset
                     slide_layout = slide_layouts[i]
                     slide = SlideModel(
-                        presentation=presentation_id,
+                        presentation=presentation.id,
                         layout_group=layout_model.name,
                         layout=slide_layout.id,
                         index=i,
@@ -1023,7 +1694,7 @@ async def generate_presentation_handler(
 
         if async_status:
             async_status.message = "Fetching assets for slides"
-            async_status.updated_at = datetime.now()
+            async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
             await sql_session.commit()
 
@@ -1033,10 +1704,31 @@ async def generate_presentation_handler(
         for assets_list in generated_assets_list:
             generated_assets.extend(assets_list)
 
+        if isolated_render and image_staging is not None:
+            promoted_images = await promote_workspace_chat_image_artifacts(
+                sql_session,
+                image_staging,
+            )
+            for slide in slides:
+                slide.content = _replace_workspace_image_paths(
+                    slide.content,
+                    promoted_images.replacements,
+                )
+            for generated_asset in generated_assets:
+                generated_asset.path = _replace_workspace_image_paths(
+                    generated_asset.path,
+                    promoted_images.replacements,
+                )
+                generated_asset.extras = _replace_workspace_image_paths(
+                    generated_asset.extras,
+                    promoted_images.replacements,
+                )
+
         # 8. Save PresentationModel and Slides
         sql_session.add(presentation)
         sql_session.add_all(slides)
-        sql_session.add_all(generated_assets)
+        if not isolated_render:
+            sql_session.add_all(generated_assets)
         await sql_session.commit()
 
         # 8b. Optional vision-QA pass (opt-in via request.vision_qa, adaptive only):
@@ -1055,7 +1747,7 @@ async def generate_presentation_handler(
                     os.getenv("NEXT_PUBLIC_URL") or ""
                 ).strip() or get_next_internal_base_url()
                 adaptive_composition, fixed_idx = await run_vision_qa_pass(
-                    str(presentation_id),
+                    str(presentation.id),
                     vqa_source_outline,
                     adaptive_composition,
                     language=language_to_use,
@@ -1085,29 +1777,39 @@ async def generate_presentation_handler(
 
         if async_status:
             async_status.message = "Exporting presentation"
-            async_status.updated_at = datetime.now()
+            async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
 
         # 9. Export
         presentation_and_path = await export_presentation(
-            presentation_id,
+            presentation.id,
             presentation.title or str(uuid.uuid4()),
             request.export_as,
             cookie_header=export_cookie_header,
         )
 
         response = PresentationPathAndEditPath(
-            **presentation_and_path.model_dump(),
+            presentation_id=presentation_id,
+            path=presentation_and_path.path,
             edit_path=f"/presentation?id={presentation_id}",
         )
 
-        if async_status:
-            async_status.message = "Presentation generation completed"
-            async_status.status = "completed"
-            async_status.data = response.model_dump(mode="json")
-            async_status.updated_at = datetime.now()
-            sql_session.add(async_status)
-            await sql_session.commit()
+        # Publish once, only after the exported artifact exists.  The
+        # optimistic revision is the publication commit token; intermediate
+        # checkpoints above intentionally leave the staging revision intact.
+        published_path = await _publish_staged_presentation(
+            sql_session,
+            target_presentation if isolated_render else presentation,
+            presentation_and_path.path,
+            generation_job,
+            async_status,
+            render_presentation=presentation if isolated_render else None,
+            generated_assets=tuple(generated_assets) if isolated_render else (),
+            image_staging=image_staging,
+            image_artifacts=promoted_images.artifacts,
+        )
+        if published_path != response.path:
+            response.path = published_path
 
         # Triggering webhook on success (opt-in via request.trigger_webhook)
         if request.trigger_webhook:
@@ -1120,7 +1822,7 @@ async def generate_presentation_handler(
 
         return response
 
-    except Exception as e:
+    except BaseException as e:
         authored_attempt_number = (
             generation_job.attempt_number
             if isinstance(e, AuthoredStageError) and generation_job is not None
@@ -1128,8 +1830,41 @@ async def generate_presentation_handler(
         )
         try:
             await sql_session.rollback()
-        except Exception:
+        except BaseException:
             logger.exception("Failed to roll back presentation generation session")
+        if image_staging is not None:
+            try:
+                image_publication_committed = (
+                    await workspace_chat_artifacts_were_published(
+                        sql_session,
+                        staging=image_staging,
+                        artifacts=promoted_images.artifacts,
+                    )
+                )
+                if not image_publication_committed:
+                    await compensate_workspace_chat_artifact_staging(
+                        sql_session,
+                        image_staging,
+                    )
+            except BaseException:
+                logger.exception(
+                    "Failed to compensate adaptive/template image staging %s",
+                    image_staging.artifact_id,
+                )
+        if isolated_render and render_presentation_id is not None:
+            try:
+                await _discard_render_staging(
+                    sql_session,
+                    render_presentation_id,
+                    target_presentation_id=presentation_id,
+                )
+            except BaseException:
+                logger.exception(
+                    "Failed to discard adaptive/template render staging %s",
+                    render_presentation_id,
+                )
+        if isinstance(e, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+            raise
         if (
             isinstance(e, AuthoredStageError)
             and e.code == "authored_attempt_lost"
@@ -1146,6 +1881,11 @@ async def generate_presentation_handler(
             )
             api_error_payload = safe_error
             safe_exception = HTTPException(status_code=500, detail=safe_error)
+        elif isinstance(e, WorkspaceArtifactPublicationError):
+            safe_exception = HTTPException(status_code=409, detail=e.code)
+            api_error_payload = APIErrorModel.from_exception(
+                safe_exception, request_id=request._request_id
+            ).model_dump(mode="json")
         elif not isinstance(e, HTTPException):
             traceback.print_exc()
             safe_exception = HTTPException(
@@ -1172,7 +1912,7 @@ async def generate_presentation_handler(
         if async_status:
             async_status.status = "error"
             async_status.message = "Presentation generation failed"
-            async_status.updated_at = datetime.now()
+            async_status.updated_at = datetime.now(timezone.utc)
             async_status.error = api_error_payload
             sql_session.add(async_status)
             await sql_session.commit()
@@ -1189,6 +1929,11 @@ async def generate_presentation_sync(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    # The synchronous endpoint executes the mutation inline and therefore has
+    # no durable workspace operation, lease, revision fence, or timeline card.
+    # Once chat-first owns writes, callers must use /generate/async after the
+    # atomic /presentation/create bootstrap admission.
+    require_legacy_presentation_write_path()
     request._request_id = getattr(request_http.state, "request_id", None)
     try:
         (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
@@ -1400,11 +2145,21 @@ async def queue_presentation_generation(
     idempotency_key: Optional[str] = None,
 ) -> AsyncPresentationGenerationTaskModel:
     """Validate and atomically enqueue one durable, idempotent generation job."""
-    # Do this before fingerprint/idempotency lookup or any row/task is created.
-    # A rejected exact request must never appear as a pending generation job.
-    _validate_authored_exact_admission(request)
+    chat_first_enabled = _chat_first_generation_enabled()
+    # Legacy requests have no pre-existing timeline anchor, so retain their
+    # fail-before-session behavior. Chat-first requests are admitted only after
+    # locating the bootstrap operation so every rejection can be durably
+    # projected into that card.
+    if not chat_first_enabled:
+        _validate_authored_exact_admission(request)
+    if chat_first_enabled and request.presentation_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="chat_first_presentation_id_required",
+        )
     submitted_payload = _durable_request_payload(request)
     fingerprint = request_sha256(submitted_payload)
+    key_error: HTTPException | None = None
     try:
         key_hash = (
             idempotency_key_hash(idempotency_key)
@@ -1412,7 +2167,20 @@ async def queue_presentation_generation(
             else None
         )
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        key_error = HTTPException(status_code=400, detail=str(error))
+        if not chat_first_enabled:
+            raise key_error from error
+        key_hash = None
+
+    def require_chat_first_link(existing_job: PresentationGenerationJob) -> None:
+        # A legacy idempotency row has no durable workspace command to resume.
+        # Replaying it while Chat-first is enabled would bypass the operation
+        # timeline and launch the parallel legacy dispatcher.
+        if chat_first_enabled and existing_job.workspace_operation_id is None:
+            raise HTTPException(
+                status_code=409,
+                detail="chat_first_idempotency_record_unlinked",
+            )
 
     if key_hash is not None:
         existing = (
@@ -1423,6 +2191,19 @@ async def queue_presentation_generation(
             )
         ).scalar_one_or_none()
         if existing is not None:
+            require_chat_first_link(existing)
+            if existing.workspace_operation_id is not None:
+                operation = await sql_session.get(
+                    WorkspaceOperation, existing.workspace_operation_id
+                )
+                if (
+                    operation is None
+                    or operation.owner_scope != get_workspace_owner_scope()
+                ):
+                    raise HTTPException(
+                        status_code=404,
+                        detail="idempotency_record_not_found",
+                    )
             if existing.request_sha256 != fingerprint:
                 raise HTTPException(
                     status_code=409,
@@ -1436,6 +2217,9 @@ async def queue_presentation_generation(
                     status_code=409,
                     detail="idempotency_record_incomplete",
                 )
+            if existing.workspace_operation_id is not None:
+                wake_workspace_operation_runner()
+                return existing_status
             resumed = await _resume_failed_authored_job(
                 existing, existing_status, sql_session
             )
@@ -1447,10 +2231,117 @@ async def queue_presentation_generation(
                 )
             return existing_status
 
-    (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
-    if request.files:
-        # Reject oversized extracted input before persisting a durable job.
-        await _load_document_context(request.files, request.language)
+    admitted_presentation: PresentationModel | None = None
+    workspace_operation: WorkspaceOperation | None = None
+    if chat_first_enabled:
+        assert request.presentation_id is not None
+        presentation_id = request.presentation_id
+        admitted_presentation = await sql_session.get(
+            PresentationModel,
+            presentation_id,
+        )
+        workspace_operation = await sql_session.scalar(
+            select(WorkspaceOperation)
+            .where(
+                WorkspaceOperation.presentation_id == presentation_id,
+                WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+                WorkspaceOperation.kind == "presentation.generate",
+                WorkspaceOperation.retry_of_operation_id.is_(None),
+            )
+            .order_by(WorkspaceOperation.created_at)
+            .limit(1)
+        )
+        if admitted_presentation is None or workspace_operation is None:
+            raise HTTPException(
+                status_code=409,
+                detail="chat_first_bootstrap_operation_not_found",
+            )
+        existing_for_presentation = (
+            await sql_session.execute(
+                select(PresentationGenerationJob)
+                .join(
+                    WorkspaceOperation,
+                    WorkspaceOperation.id
+                    == PresentationGenerationJob.workspace_operation_id,
+                )
+                .where(
+                    PresentationGenerationJob.presentation_id == presentation_id,
+                    WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_for_presentation is not None:
+            if existing_for_presentation.request_sha256 != fingerprint:
+                raise HTTPException(
+                    status_code=409,
+                    detail="idempotency_key_payload_conflict",
+                )
+            existing_status = await sql_session.get(
+                AsyncPresentationGenerationTaskModel,
+                existing_for_presentation.task_id,
+            )
+            if existing_status is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="idempotency_record_incomplete",
+                )
+            wake_workspace_operation_runner()
+            return existing_status
+
+        if workspace_operation.state != "awaiting_approval":
+            raise HTTPException(
+                status_code=409,
+                detail="chat_first_bootstrap_operation_not_found",
+            )
+
+        # Work on a private copy. Validation normalizes templates and paths;
+        # mutating the caller's model would change the fingerprint if the same
+        # request object is replayed in-process by a test or recovery path.
+        admitted_request = request.model_copy(deep=True)
+        if admitted_presentation.file_paths is not None:
+            admitted_request.files = list(admitted_presentation.file_paths)
+        try:
+            if key_error is not None:
+                raise key_error
+            _validate_authored_exact_admission(admitted_request)
+            await check_if_api_request_is_valid(admitted_request, sql_session)
+            if admitted_request.files:
+                # Bootstrap copied uploads to immutable workspace storage.
+                # Admission and all later retries consume only those paths.
+                await _load_document_context(
+                    admitted_request.files,
+                    admitted_request.language,
+                )
+        except Exception as error:
+            workspace_projected = (
+                await _record_chat_first_generation_admission_failure(
+                    sql_session,
+                    operation=workspace_operation,
+                    presentation=admitted_presentation,
+                    request=admitted_request,
+                    fingerprint=fingerprint,
+                    key_hash=key_hash,
+                    error=error,
+                )
+            )
+            if workspace_projected:
+                code, status_code, _retryable = (
+                    _generation_admission_failure_metadata(error)
+                )
+                raise HTTPException(
+                    status_code=status_code,
+                    detail=code,
+                    headers={CHAT_FIRST_WORKSPACE_PROJECTED_HEADER: "true"},
+                ) from error
+            raise
+        request = admitted_request
+    else:
+        (presentation_id,) = await check_if_api_request_is_valid(
+            request, sql_session
+        )
+        if request.files:
+            # Reject oversized extracted input before persisting a durable job.
+            await _load_document_context(request.files, request.language)
 
     # Validation may normalize legacy template identifiers. Persist the exact
     # admitted request that the worker will execute. The fingerprint remains
@@ -1462,10 +2353,28 @@ async def queue_presentation_generation(
         message="Queued for generation",
         data=None,
     )
+    workspace_operation_id: uuid.UUID | None = (
+        workspace_operation.id if workspace_operation is not None else None
+    )
+    presentation: PresentationModel | None = admitted_presentation
+    if chat_first_enabled:
+        if presentation is None or workspace_operation is None:
+            raise HTTPException(
+                status_code=409,
+                detail="chat_first_bootstrap_operation_not_found",
+            )
+        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
+        sql_session.add(presentation)
+        # The bootstrap transaction copied legacy upload paths into immutable
+        # workspace storage. Workers must consume those durable paths, not the
+        # caller's potentially ephemeral upload references.
+        if presentation.file_paths is not None:
+            payload["files"] = list(presentation.file_paths)
     target = request._template_v2_generation_target
     job = PresentationGenerationJob(
         task_id=async_status.id,
         presentation_id=presentation_id,
+        workspace_operation_id=workspace_operation_id,
         idempotency_key_hash=key_hash,
         request_id=request._request_id,
         request_sha256=fingerprint,
@@ -1473,17 +2382,73 @@ async def queue_presentation_generation(
         template_v2_target=(
             target.to_durable_payload() if target is not None else None
         ),
-        export_cookie_required=export_cookie_header is not None,
+        export_cookie_required=(
+            export_cookie_header is not None and workspace_operation_id is None
+        ),
         state="queued",
     )
     sql_session.add(async_status)
     sql_session.add(job)
+    if workspace_operation is not None and presentation is not None:
+        try:
+            await activate_workspace_operation(
+                sql_session,
+                operation_id=workspace_operation.id,
+                request_hash=fingerprint,
+                request_payload={
+                    "generation_request": payload,
+                    "task_id": async_status.id,
+                    "job_id": str(job.id),
+                },
+                expected_revision=presentation.revision,
+                expected_operation_version=workspace_operation.version,
+                commit=False,
+            )
+        except WorkspaceServiceError as error:
+            await sql_session.rollback()
+            raise HTTPException(
+                status_code=error.status_code,
+                detail=error.code,
+            ) from error
     try:
         await sql_session.commit()
     except IntegrityError:
         await sql_session.rollback()
         if key_hash is None:
-            raise
+            if not chat_first_enabled:
+                raise
+            existing = (
+                await sql_session.execute(
+                    select(PresentationGenerationJob)
+                    .join(
+                        WorkspaceOperation,
+                        WorkspaceOperation.id
+                        == PresentationGenerationJob.workspace_operation_id,
+                    )
+                    .where(
+                        PresentationGenerationJob.presentation_id
+                        == presentation_id,
+                        WorkspaceOperation.owner_scope
+                        == get_workspace_owner_scope(),
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is None or existing.request_sha256 != fingerprint:
+                raise HTTPException(
+                    status_code=409,
+                    detail="generation_concurrency_conflict",
+                )
+            existing_status = await sql_session.get(
+                AsyncPresentationGenerationTaskModel,
+                existing.task_id,
+            )
+            if existing_status is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="idempotency_record_incomplete",
+                )
+            wake_workspace_operation_runner()
+            return existing_status
         existing = (
             await sql_session.execute(
                 select(PresentationGenerationJob).where(
@@ -1496,6 +2461,7 @@ async def queue_presentation_generation(
                 status_code=409,
                 detail="idempotency_key_payload_conflict",
             )
+        require_chat_first_link(existing)
         existing_status = await sql_session.get(
             AsyncPresentationGenerationTaskModel, existing.task_id
         )
@@ -1504,6 +2470,20 @@ async def queue_presentation_generation(
                 status_code=409,
                 detail="idempotency_record_incomplete",
             )
+        if existing.workspace_operation_id is not None:
+            operation = await sql_session.get(
+                WorkspaceOperation, existing.workspace_operation_id
+            )
+            if (
+                operation is None
+                or operation.owner_scope != get_workspace_owner_scope()
+            ):
+                raise HTTPException(
+                    status_code=404,
+                    detail="idempotency_record_not_found",
+                )
+            wake_workspace_operation_runner()
+            return existing_status
         resumed = await _resume_failed_authored_job(
             existing, existing_status, sql_session
         )
@@ -1515,11 +2495,14 @@ async def queue_presentation_generation(
             )
         return existing_status
 
-    background_tasks.add_task(
-        launch_generation_job,
-        job.id,
-        export_cookie_header,
-    )
+    if workspace_operation_id is not None:
+        wake_workspace_operation_runner()
+    else:
+        background_tasks.add_task(
+            launch_generation_job,
+            job.id,
+            export_cookie_header,
+        )
     return async_status
 
 
@@ -1598,6 +2581,10 @@ async def cancel_async_presentation_generation(
     running in this worker is interrupted best-effort. Already-terminal tasks
     are returned unchanged.
     """
+    # Chat-first cancellation is an operation action so the operation and its
+    # linked compatibility generation job transition together.  Mutating the
+    # legacy task row directly would leave the timeline and runner divergent.
+    require_legacy_presentation_write_path()
     task = await cancel_generation_job(id)
     if task is None:
         raise HTTPException(

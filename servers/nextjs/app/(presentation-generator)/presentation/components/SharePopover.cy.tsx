@@ -5,6 +5,21 @@ import SharePopover from "./SharePopover";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 
 describe("SharePopover", () => {
+  it("hides legacy share mutations when chat-first is enabled", () => {
+    const getStatus = cy.stub(PresentationGenerationApi, "getShareStatus");
+    const enable = cy.stub(PresentationGenerationApi, "enableShare");
+    const disable = cy.stub(PresentationGenerationApi, "disableShare");
+
+    mount(<SharePopover presentationId="p1" chatFirstEnabled />);
+
+    cy.get('[data-testid="share-popover-trigger"]').should("not.exist");
+    cy.then(() => {
+      expect(getStatus).not.to.have.been.called;
+      expect(enable).not.to.have.been.called;
+      expect(disable).not.to.have.been.called;
+    });
+  });
+
   it("creates a share link when not yet shared", () => {
     cy.stub(PresentationGenerationApi, "getShareStatus").resolves({
       shared: false,

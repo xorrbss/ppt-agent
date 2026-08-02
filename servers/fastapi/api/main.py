@@ -105,6 +105,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Chat-First-Workspace-Projected"],
 )
 
 app.add_middleware(UserConfigEnvUpdateMiddleware)

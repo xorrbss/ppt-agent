@@ -398,6 +398,7 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 
 - **DATABASE_URL**: SQLAlchemy URL; if unset, the app falls back to SQLite under app data.
 - **MIGRATE_DATABASE_ON_STARTUP**: Compose sets **`true`** for all services so migrations run on startup.
+- **PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE**: Required when migration `e7a9c2d4f6b8` upgrades a populated PostgreSQL task table. Set the single PostgreSQL timezone name used by the legacy app process (for example `UTC` or `Asia/Seoul`); an unset, invalid, or conflicting value fails closed rather than reinterpreting local wall-clock timestamps. Mixed writer timezones and DST-ambiguous/nonexistent wall-clock rows require an audited row-level backfill instead of automatic conversion.
 
 #### Image generation
 

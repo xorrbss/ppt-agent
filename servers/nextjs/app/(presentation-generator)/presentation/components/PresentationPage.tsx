@@ -32,6 +32,11 @@ import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
 
 import PresentationHeader from "./PresentationHeader";
 import Chat from "./Chat";
+import {
+  WorkspaceChatPanel,
+  type WorkspaceCommandDispatcher,
+} from "../workspace";
+import { useChatFirstWorkbenchRollout } from "@/lib/use-chat-first-workbench-rollout";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
@@ -48,8 +53,25 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(null);
   const [chatTargetedSlides, setChatTargetedSlides] = useState<number[]>([]);
   const [error, setError] = useState(false);
+  const [compactWorkspacePane, setCompactWorkspacePane] = useState<
+    "slides" | "chat"
+  >("chat");
+  const [workspaceDrawerOpen, setWorkspaceDrawerOpen] = useState(true);
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
+  const chatFirstRollout = useChatFirstWorkbenchRollout();
+  const chatFirstEnabled = chatFirstRollout.mode === "chat";
+  const workspaceShellEnabled = chatFirstRollout.mode !== "legacy";
+  const legacyMutationsEnabled = chatFirstRollout.mode === "legacy";
+  const workspaceCapability = chatFirstRollout.capability;
+  const [workspaceCommandDispatcher, setWorkspaceCommandDispatcher] =
+    useState<WorkspaceCommandDispatcher | null>(null);
+  const handleWorkspaceCommandDispatcherReady = useCallback(
+    (dispatcher: WorkspaceCommandDispatcher | null) => {
+      setWorkspaceCommandDispatcher(() => dispatcher);
+    },
+    [],
+  );
 
 
 
@@ -76,7 +98,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   // Auto-save functionality
   const { isSaving, saveFailed } = useAutoSave({
     debounceMs: 2000,
-    enabled: !!presentationData && !isStreaming,
+    enabled: legacyMutationsEnabled && !!presentationData && !isStreaming,
     onSaveSuccess: scheduleHybridExportWarmup,
   });
 
@@ -301,13 +323,13 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   }
 
   return (
-    <div className="h-screen overflow-hidden font-syne">
+    <div className="h-screen w-full max-w-full overflow-clip font-syne">
       <div
         style={{
           background: "#EDEEEF",
         }}
         id="presentation-slides-wrapper"
-        className="relative flex h-full flex-col overflow-hidden"
+        className="relative flex h-full w-full min-w-0 max-w-full flex-col overflow-clip"
       >
         <PresentationHeader
           presentation_id={presentation_id}
@@ -316,19 +338,92 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           currentSlide={selectedSlide}
           isAuthoredDeck={isAuthoredDeck}
           onReload={() => fetchUserSlides({ clearHistory: true })}
+          mutationsEnabled={legacyMutationsEnabled}
+          chatFirstEnabled={chatFirstEnabled}
+          workspaceCommandsEnabled={
+            chatFirstEnabled &&
+            workspaceCapability.commands &&
+            workspaceCommandDispatcher !== null
+          }
+          onWorkspaceCommand={workspaceCommandDispatcher ?? undefined}
         />
         {isAuthoredDeck && (
           <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
             이 발표자료는 <span className="font-bold">AI 저작(고품질)</span> 모드입니다 — 인앱은 보기 전용입니다. 내보낸 PPTX를 PowerPoint에서 편집하세요.
           </div>
         )}
-        <div className="flex flex-1 min-h-0 gap-6 overflow-hidden">
-          <div className="w-[120px] h-full shrink-0 self-start sticky top-0 pt-[18px]">
+        {workspaceShellEnabled && (
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 py-2 xl:hidden">
+            <div
+              className="flex min-w-0 flex-1 gap-1 lg:hidden"
+              role="tablist"
+              aria-label="작업 영역"
+            >
+              <button
+                type="button"
+                id="compact-slides-tab"
+                role="tab"
+                aria-selected={compactWorkspacePane === "slides"}
+                aria-controls="presentation-slides-pane"
+                data-testid="responsive-slides-tab"
+                onClick={() => setCompactWorkspacePane("slides")}
+                className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
+                  compactWorkspacePane === "slides"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                슬라이드
+              </button>
+              <button
+                type="button"
+                id="compact-chat-tab"
+                role="tab"
+                aria-selected={compactWorkspacePane === "chat"}
+                aria-controls="workspace-chat-pane"
+                data-testid="responsive-chat-tab"
+                onClick={() => setCompactWorkspacePane("chat")}
+                className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
+                  compactWorkspacePane === "chat"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                작업 대화
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-expanded={workspaceDrawerOpen}
+              aria-controls="workspace-chat-pane"
+              data-testid="workspace-drawer-toggle"
+              onClick={() => setWorkspaceDrawerOpen((isOpen) => !isOpen)}
+              className="ml-auto hidden rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex xl:hidden"
+            >
+              {workspaceDrawerOpen ? "작업 대화 닫기" : "작업 대화 열기"}
+            </button>
+          </div>
+        )}
+        <div className="relative flex flex-1 min-h-0 gap-6 overflow-hidden">
+          <div
+            id="presentation-slides-pane"
+            role={workspaceShellEnabled ? "tabpanel" : undefined}
+            aria-labelledby={workspaceShellEnabled ? "compact-slides-tab" : undefined}
+            className={`min-w-0 flex-1 gap-6 ${
+              workspaceShellEnabled
+                ? compactWorkspacePane === "slides"
+                  ? "flex"
+                  : "hidden lg:flex"
+                : "flex"
+            }`}
+          >
+          <div className="hidden md:block w-[120px] h-full shrink-0 self-start sticky top-0 pt-[18px]">
             <SidePanel
               selectedSlide={selectedSlide}
               onSlideClick={handleSlideClick}
               presentationId={presentation_id}
               loading={loading}
+              mutationsEnabled={legacyMutationsEnabled}
             />
           </div>
           <div className="w-full min-w-0 h-full flex-1 pt-[18px]">
@@ -403,6 +498,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                           slide={slide}
                           index={index}
                           presentationId={presentation_id}
+                          mutationsEnabled={legacyMutationsEnabled}
                           isChatEditing={
                             highlightedSlideIndex !== null &&
                             index === highlightedSlideIndex
@@ -419,15 +515,69 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               </div>
             </div>
           </div>
-          <div className="w-full max-w-[370px] h-full shrink-0 self-start sticky top-0">
-            <Chat
-              presentationId={presentation_id}
-              currentSlide={selectedSlide}
-              onPresentationChanged={handlePresentationChanged}
-              onChatSendingStateChange={handleChatSendingStateChange}
-              onFollowModeChange={setIsFollowModeEnabled}
-              onAgentSlideFocus={handleAgentSlideFocus}
-            />
+          </div>
+          <div
+            id="workspace-chat-pane"
+            role={workspaceShellEnabled ? "tabpanel" : undefined}
+            aria-labelledby={workspaceShellEnabled ? "compact-chat-tab" : undefined}
+            data-testid="workspace-chat-pane"
+            className={`h-full min-w-0 max-w-full overflow-hidden ${
+              workspaceShellEnabled
+                ? `${
+                    compactWorkspacePane === "chat" ? "flex" : "hidden"
+                  } ${workspaceDrawerOpen ? "lg:flex" : "lg:hidden"} xl:flex flex-1 lg:absolute lg:inset-y-0 lg:right-0 lg:z-40 lg:w-[min(440px,100%)] lg:max-w-[440px] lg:flex-none lg:shadow-2xl xl:sticky xl:top-0 xl:z-auto xl:w-full xl:max-w-[clamp(360px,30vw,560px)] xl:shrink-0 xl:self-start xl:shadow-none`
+                : "w-full max-w-[370px] shrink-0 self-start sticky top-0"
+            }`}
+          >
+            {chatFirstEnabled ? (
+              <WorkspaceChatPanel
+                presentationId={presentation_id}
+                currentSlide={selectedSlide}
+                commandsEnabled={workspaceCapability.commands}
+                onPresentationChanged={handlePresentationChanged}
+                onCommandDispatcherReady={handleWorkspaceCommandDispatcherReady}
+              />
+            ) : chatFirstRollout.mode === "checking" ? (
+              <div
+                className="flex h-full items-center justify-center border-l border-slate-200 bg-white text-sm text-slate-500"
+                role="status"
+                aria-live="polite"
+              >
+                작업 대화를 연결하는 중입니다.
+              </div>
+            ) : chatFirstRollout.mode === "blocked" ? (
+              <div
+                className="flex h-full flex-col items-center justify-center gap-3 border-l border-slate-200 bg-white px-6 text-center"
+                role="alert"
+              >
+                <AlertCircle className="h-5 w-5 text-amber-600" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-medium text-slate-800">
+                    작업 대화를 연결할 수 없습니다.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    안전을 위해 이전 채팅의 수정 기능으로 전환하지 않았습니다.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void chatFirstRollout.refresh()}
+                >
+                  다시 연결
+                </Button>
+              </div>
+            ) : (
+              <Chat
+                presentationId={presentation_id}
+                currentSlide={selectedSlide}
+                onPresentationChanged={handlePresentationChanged}
+                onChatSendingStateChange={handleChatSendingStateChange}
+                onFollowModeChange={setIsFollowModeEnabled}
+                onAgentSlideFocus={handleAgentSlideFocus}
+              />
+            )}
           </div>
         </div>
       </div>

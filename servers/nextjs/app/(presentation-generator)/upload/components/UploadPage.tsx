@@ -40,7 +40,9 @@ import TemplateSelection from "../../outline/components/TemplateSelection";
 import { resolveTemplateSelection, templateSelectionToId } from "@/app/presentation-templates/select";
 import ThemeGallery from "./ThemeGallery";
 import { useUploadLimits } from "@/lib/use-upload-limits";
-import { applyDeckTheme } from "./applyDeckTheme";
+import { applyDeckTheme, resolveDeckTheme } from "./applyDeckTheme";
+import { useChatFirstWorkbenchRollout } from "@/lib/use-chat-first-workbench-rollout";
+import { resolvePresentationCreateThemeStrategy } from "@/lib/chat-first-workbench";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const FILE_TYPE_WORD = new Set([".doc", ".docx", ".docm", ".odt", ".rtf"]);
@@ -123,6 +125,10 @@ const getSelectedImageQuality = (config?: LLMConfig): string => {
 };
 
 const UploadPage = () => {
+  const chatFirstRollout = useChatFirstWorkbenchRollout();
+  const themeStrategy = resolvePresentationCreateThemeStrategy(chatFirstRollout.mode);
+  const generationEnabled =
+    chatFirstRollout.mode === "chat" || chatFirstRollout.mode === "legacy";
   const uploadLimits = useUploadLimits();
   const router = useRouter();
   const pathname = usePathname();
@@ -318,6 +324,10 @@ const UploadPage = () => {
    * Handles the presentation generation process
    */
   const handleGeneratePresentation = async () => {
+    // A chat-first build must not regain legacy writes while capability
+    // discovery is pending or unhealthy. Only the explicit backend kill switch
+    // resolves to legacy mode.
+    if (!generationEnabled) return;
     if (!validateConfiguration()) return;
     trackEvent(MixpanelEvent.Upload_Generation_Started, getUploadSnapshotProps());
 
@@ -386,7 +396,13 @@ const UploadPage = () => {
       .filter((item: any) => item && item.name && item.file_path)
       .map((item: any) => item.file_path);
 
+    const presentationId = crypto.randomUUID();
+    const selectedTheme = themeStrategy === "embedded"
+      ? await resolveDeckTheme(selectedThemeId)
+      : undefined;
     const createResponse = await PresentationGenerationApi.createPresentation({
+      presentation_id: presentationId,
+      idempotency_key: `presentation-create:${presentationId}`,
       content: config?.prompt ?? "",
       n_slides: config?.slides ? parseInt(config.slides, 10) : null,
       file_paths: documentPaths,
@@ -397,9 +413,12 @@ const UploadPage = () => {
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
+      theme: selectedTheme,
     });
 
-    await applyDeckTheme(createResponse.id, selectedThemeId);
+    if (themeStrategy === "legacy-patch") {
+      await applyDeckTheme(createResponse.id, selectedThemeId);
+    }
     dispatch(setPresentationId(createResponse.id));
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
@@ -426,7 +445,13 @@ const UploadPage = () => {
     const selectedLanguage = config?.language ?? "";
 
     // Use the first available layout group for direct generation
+    const presentationId = crypto.randomUUID();
+    const selectedTheme = themeStrategy === "embedded"
+      ? await resolveDeckTheme(selectedThemeId)
+      : undefined;
     const createResponse = await PresentationGenerationApi.createPresentation({
+      presentation_id: presentationId,
+      idempotency_key: `presentation-create:${presentationId}`,
       content: config?.prompt ?? "",
       n_slides: config?.slides ? parseInt(config.slides, 10) : null,
       file_paths: [],
@@ -437,10 +462,13 @@ const UploadPage = () => {
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
+      theme: selectedTheme,
     });
 
 
-    await applyDeckTheme(createResponse.id, selectedThemeId);
+    if (themeStrategy === "legacy-patch") {
+      await applyDeckTheme(createResponse.id, selectedThemeId);
+    }
     dispatch(setPresentationId(createResponse.id));
     dispatch(clearOutlines())
     trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
@@ -500,7 +528,7 @@ const UploadPage = () => {
           <PromptInput
             value={config.prompt}
             onChange={(value) => handleConfigChange("prompt", value)}
-            onSubmit={handleGeneratePresentation}
+            onSubmit={generationEnabled ? handleGeneratePresentation : undefined}
           />
 
           <div className="mt-3">
@@ -519,6 +547,21 @@ const UploadPage = () => {
             <CurrentConfig />
           </div>
         </div>
+
+        {chatFirstRollout.mode === "checking" ? (
+          <p className="mt-3 text-center text-sm text-[#667085]" role="status" aria-live="polite">
+            작업 공간 연결을 확인하는 중입니다.
+          </p>
+        ) : chatFirstRollout.mode === "blocked" ? (
+          <div className="mt-3 flex flex-col items-center gap-2 text-center" role="alert">
+            <p className="text-sm text-amber-700">
+              작업 공간을 안전하게 연결할 수 없어 생성을 시작하지 않았습니다.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void chatFirstRollout.refresh()}>
+              다시 확인
+            </Button>
+          </div>
+        ) : null}
 
         <div className="mt-8 w-full">
           <h2 className="mb-3 text-base font-semibold text-[#101828] font-syne">템플릿 선택</h2>
@@ -543,10 +586,11 @@ const UploadPage = () => {
         <div className="mt-6 flex w-full justify-center">
           <Button
             onClick={handleGeneratePresentation}
+            disabled={!generationEnabled || loadingState.isLoading}
             style={{
               background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)"
             }}
-            className="rounded-[28px] flex items-center justify-center py-5 px-8 text-[#101323] font-syne font-semibold text-sm"
+            className="rounded-[28px] flex items-center justify-center py-5 px-8 text-[#101323] font-syne font-semibold text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span>생성하기</span>
             <ChevronRight className="!w-5 !h-5 " />

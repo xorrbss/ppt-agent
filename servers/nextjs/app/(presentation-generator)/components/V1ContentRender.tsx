@@ -104,8 +104,12 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
         slide?.content?.__authored__ === true || slide.layout_group === "authored";
     if (isAuthored) {
         const imageRef = slide?.content?.image || slide?.properties?.image;
+        const imagePath =
+            typeof imageRef === "string" && /^(?:[a-z][a-z\d+.-]*:|\/)/i.test(imageRef)
+                ? imageRef
+                : `/app_data/images/${imageRef}`;
         const src = imageRef
-            ? resolveBackendAssetUrl(`/app_data/images/${imageRef}`)
+            ? resolveBackendAssetUrl(imagePath)
             : "";
         if (preferAuthoredHtml) {
             return (

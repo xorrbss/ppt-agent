@@ -41,20 +41,11 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         "/openapi.json",
         "/redoc",
     }
-    # Public, unauthenticated assets are image files under /app_data/images/
-    # (incl. authored subfolders like images/authored/<id>/slide_N.png). The
-    # exemption is checked on a NORMALIZED path AND requires an image extension,
-    # so a traversal segment can't ride it up to secrets (userConfig.json / the
-    # DB) elsewhere under app_data.
-    _PUBLIC_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg")
 
     @staticmethod
     def _normalize(path: str) -> str:
-        # Collapse dot-segments BEFORE any prefix/exemption test. Without this,
-        # /app_data/images/%2e%2e/userConfig.json (uvicorn-decoded to
-        # /app_data/images/../userConfig.json) matches the image exemption here
-        # while StaticFiles normalizes it to /app_data/userConfig.json and serves
-        # the auth secret + provider keys unauthenticated.
+        # Collapse dot-segments before any prefix/exemption test so routing and
+        # authorization cannot disagree about which protected path was requested.
         normalized = posixpath.normpath(path)
         return normalized if normalized.startswith("/") else "/" + normalized
 
@@ -64,11 +55,6 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
     def _requires_auth(self, path: str) -> bool:
         if path.startswith("/api/"):
             return True
-        # PPTX export may re-fetch slide images without session/basic headers.
-        if path.startswith("/app_data/images/") and path.lower().endswith(
-            self._PUBLIC_IMAGE_EXTS
-        ):
-            return False
         if path.startswith("/app_data/"):
             return True
         return path in self._PROTECTED_NON_API_PATHS

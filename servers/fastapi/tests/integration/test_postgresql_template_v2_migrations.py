@@ -8,11 +8,12 @@ false-green skip.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import re
 import uuid
+from zoneinfo import ZoneInfo
 
 from alembic import command
 from alembic.config import Config
@@ -22,13 +23,15 @@ from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import NullPool
 
+import migrations
 from utils.db_utils import to_sync_sqlalchemy_url
 
 
 FASTAPI_ROOT = Path(__file__).resolve().parents[2]
 PRE_TEMPLATE_V2_REVISION = "f3a4b5c6d7e8"
 PRE_LOCAL_STATE_REVISION = "e8f9a0b1c2d3"
-HEAD_REVISION = "3d4e5f6a7b8c"
+HEAD_REVISION = "e7a9c2d4f6b8"
+LEGACY_TASK_TIMEZONE = "Asia/Seoul"
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -330,14 +333,17 @@ def test_postgresql_full_cycle_preserves_legacy_data_and_contracts(
 
 def _seed_populated_template_v2(
     engine: Engine,
-) -> tuple[uuid.UUID, uuid.UUID, str, uuid.UUID]:
+) -> tuple[uuid.UUID, uuid.UUID, str, uuid.UUID, datetime, datetime]:
     presentation_id = uuid.uuid4()
     slide_id = uuid.uuid4()
     template_id = "postgres-preserved-template"
     import_id = uuid.uuid4()
     task_id = "postgres-preserved-import"
     now = datetime.now(timezone.utc)
-    task_now = now.replace(tzinfo=None)
+    # The legacy model used datetime.now(), so this value represents a local
+    # wall clock rather than UTC. The e7 migration must preserve its instant.
+    task_created_at = datetime(2026, 8, 3, 15, 30, 45)
+    task_updated_at = task_created_at + timedelta(minutes=7, seconds=11)
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -404,8 +410,8 @@ def _seed_populated_template_v2(
             ),
             {
                 "id": task_id,
-                "created_at": task_now,
-                "updated_at": task_now,
+                "created_at": task_created_at,
+                "updated_at": task_updated_at,
             },
         )
         connection.execute(
@@ -439,7 +445,14 @@ def _seed_populated_template_v2(
                 "manifest": "{}",
             },
         )
-    return presentation_id, slide_id, template_id, import_id
+    return (
+        presentation_id,
+        slide_id,
+        template_id,
+        import_id,
+        task_created_at,
+        task_updated_at,
+    )
 
 
 def _assert_populated_state(
@@ -447,8 +460,19 @@ def _assert_populated_state(
     presentation_id: uuid.UUID,
     template_id: str,
     import_id: uuid.UUID,
+    legacy_task_created_at: datetime,
+    legacy_task_updated_at: datetime,
 ) -> None:
     with engine.connect() as connection:
+        task_timestamp_columns = {
+            column["name"]: column["type"]
+            for column in inspect(connection).get_columns(
+                "async_presentation_generation_tasks"
+            )
+            if column["name"] in {"created_at", "updated_at"}
+        }
+        assert task_timestamp_columns["created_at"].timezone is True
+        assert task_timestamp_columns["updated_at"].timezone is True
         local_state = (
             connection.execute(
                 text(
@@ -478,23 +502,100 @@ def _assert_populated_state(
             )
             == template_id
         )
+        task_timestamps = connection.execute(
+            text(
+                """
+                SELECT task.created_at, task.updated_at
+                FROM async_presentation_generation_tasks AS task
+                JOIN template_v2_pptx_imports AS import_job
+                  ON import_job.task_id = task.id
+                WHERE import_job.id = :id
+                """
+            ),
+            {"id": import_id},
+        ).mappings().one()
+        assert task_timestamps["created_at"].tzinfo is not None
+        assert task_timestamps["updated_at"].tzinfo is not None
+        assert task_timestamps["created_at"] == legacy_task_created_at.replace(
+            tzinfo=ZoneInfo(LEGACY_TASK_TIMEZONE)
+        ).astimezone(timezone.utc)
+        assert task_timestamps["updated_at"] == legacy_task_updated_at.replace(
+            tzinfo=ZoneInfo(LEGACY_TASK_TIMEZONE)
+        ).astimezone(timezone.utc)
+
+
+def _task_migration_state(engine: Engine) -> tuple[object, ...]:
+    with engine.connect() as connection:
+        timestamp_types = {
+            column["name"]: bool(column["type"].timezone)
+            for column in inspect(connection).get_columns(
+                "async_presentation_generation_tasks"
+            )
+            if column["name"] in {"created_at", "updated_at"}
+        }
+        task_timestamps = [
+            tuple(row)
+            for row in connection.execute(
+                text(
+                    """
+                    SELECT created_at, updated_at
+                    FROM async_presentation_generation_tasks
+                    ORDER BY id
+                    """
+                )
+            ).all()
+        ]
+        revision = connection.scalar(
+            text("SELECT version_num FROM alembic_version")
+        )
+    return revision, timestamp_types, task_timestamps
 
 
 def test_postgresql_populated_sidecar_cycle_and_child_first_delete(
     postgres_database,
+    monkeypatch,
 ):
     engine, config = postgres_database
     command.upgrade(config, PRE_LOCAL_STATE_REVISION)
-    presentation_id, slide_id, template_id, import_id = _seed_populated_template_v2(
-        engine
-    )
+    (
+        presentation_id,
+        slide_id,
+        template_id,
+        import_id,
+        legacy_task_created_at,
+        legacy_task_updated_at,
+    ) = _seed_populated_template_v2(engine)
 
+    legacy_state = _task_migration_state(engine)
+
+    monkeypatch.delenv("PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE", raising=False)
+    with pytest.raises(
+        RuntimeError,
+        match="PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE is required",
+    ):
+        command.upgrade(config, "head")
+    assert _task_migration_state(engine) == legacy_state
+
+    monkeypatch.setenv("PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE", "Mars/Olympus")
+    with pytest.raises(
+        RuntimeError,
+        match="must name a PostgreSQL timezone",
+    ):
+        command.upgrade(config, "head")
+    assert _task_migration_state(engine) == legacy_state
+
+    monkeypatch.setenv(
+        "PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE",
+        LEGACY_TASK_TIMEZONE,
+    )
     command.upgrade(config, "head")
     _assert_populated_state(
         engine,
         presentation_id,
         template_id,
         import_id,
+        legacy_task_created_at,
+        legacy_task_updated_at,
     )
     _assert_head_constraints(engine)
 
@@ -514,11 +615,52 @@ def test_postgresql_populated_sidecar_cycle_and_child_first_delete(
         presentation_id,
         template_id,
         import_id,
+        legacy_task_created_at,
+        legacy_task_updated_at,
     )
 
+    aware_state = _task_migration_state(engine)
+    monkeypatch.delenv("PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE", raising=False)
+    with pytest.raises(
+        RuntimeError,
+        match="PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE is required",
+    ):
+        command.downgrade(config, PRE_LOCAL_STATE_REVISION)
+    assert _task_migration_state(engine) == aware_state
+
+    monkeypatch.setenv(
+        "PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE",
+        LEGACY_TASK_TIMEZONE,
+    )
     command.downgrade(config, PRE_LOCAL_STATE_REVISION)
     with engine.connect() as connection:
-        assert "template_v2_local_state" not in inspect(connection).get_table_names()
+        downgraded_inspector = inspect(connection)
+        assert "template_v2_local_state" not in downgraded_inspector.get_table_names()
+        downgraded_timestamp_columns = {
+            column["name"]: column["type"]
+            for column in downgraded_inspector.get_columns(
+                "async_presentation_generation_tasks"
+            )
+            if column["name"] in {"created_at", "updated_at"}
+        }
+        assert downgraded_timestamp_columns["created_at"].timezone is False
+        assert downgraded_timestamp_columns["updated_at"].timezone is False
+        downgraded_task_timestamps = connection.execute(
+            text(
+                """
+                SELECT task.created_at, task.updated_at
+                FROM async_presentation_generation_tasks AS task
+                JOIN template_v2_pptx_imports AS import_job
+                  ON import_job.task_id = task.id
+                WHERE import_job.id = :id
+                """
+            ),
+            {"id": import_id},
+        ).mappings().one()
+        assert downgraded_task_timestamps["created_at"].tzinfo is None
+        assert downgraded_task_timestamps["updated_at"].tzinfo is None
+        assert downgraded_task_timestamps["created_at"] == legacy_task_created_at
+        assert downgraded_task_timestamps["updated_at"] == legacy_task_updated_at
         assert (
             connection.scalar(
                 text("SELECT revision FROM template_v2 WHERE id = :id"),
@@ -546,6 +688,8 @@ def test_postgresql_populated_sidecar_cycle_and_child_first_delete(
         presentation_id,
         template_id,
         import_id,
+        legacy_task_created_at,
+        legacy_task_updated_at,
     )
 
     with engine.begin() as connection:
@@ -606,3 +750,76 @@ def test_postgresql_populated_sidecar_cycle_and_child_first_delete(
             )
             == 1
         )
+
+
+def test_postgresql_task_timestamp_recovery_is_type_idempotent(
+    postgres_database,
+    monkeypatch,
+):
+    engine, config = postgres_database
+    monkeypatch.delenv("PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE", raising=False)
+    command.upgrade(config, "head")
+
+    created_at = datetime(2026, 8, 3, 6, 30, 45, tzinfo=timezone.utc)
+    updated_at = created_at + timedelta(minutes=9, seconds=13)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO async_presentation_generation_tasks
+                    (id, status, created_at, updated_at)
+                VALUES
+                    ('timestamp-recovery', 'SUCCESS', :created_at, :updated_at)
+                """
+            ),
+            {"created_at": created_at, "updated_at": updated_at},
+        )
+
+    expected_head_state = _task_migration_state(engine)
+    assert expected_head_state[0] == HEAD_REVISION
+
+    # Defense in depth: a stale d6 stamp must not reinterpret already-aware
+    # values when Alembic invokes e7 again.
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE alembic_version SET version_num = :revision"),
+            {"revision": migrations.REVISION_CHAT_FIRST_WORKSPACE},
+        )
+    command.upgrade(config, "head")
+    assert _task_migration_state(engine) == expected_head_state
+
+    database_url = engine.url.render_as_string(hide_password=False)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE alembic_version"))
+    migrations._stamp_legacy_database_if_needed(config, database_url)
+    assert _task_migration_state(engine) == expected_head_state
+
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE alembic_version SET version_num = 'orphaned_e7'")
+        )
+    migrations._repair_orphan_alembic_revision(config, database_url)
+    assert _task_migration_state(engine) == expected_head_state
+
+    # A hand-edited mixed state cannot be inferred safely. The orphan repair
+    # must leave its revision, types, and values unchanged.
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                ALTER TABLE async_presentation_generation_tasks
+                ALTER COLUMN created_at TYPE TIMESTAMP WITHOUT TIME ZONE
+                USING created_at AT TIME ZONE 'UTC'
+                """
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE alembic_version "
+                "SET version_num = 'orphaned_mixed_revision'"
+            )
+        )
+    mixed_state = _task_migration_state(engine)
+    with pytest.raises(RuntimeError, match="only partially applied"):
+        migrations._repair_orphan_alembic_revision(config, database_url)
+    assert _task_migration_state(engine) == mixed_state

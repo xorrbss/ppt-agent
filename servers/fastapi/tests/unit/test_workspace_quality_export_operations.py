@@ -1,0 +1,743 @@
+from __future__ import annotations
+
+import asyncio
+import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+from sqlalchemy import event, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import SQLModel
+
+from models.sql.presentation import PresentationModel
+from models.sql.async_presentation_generation_status import (
+    AsyncPresentationGenerationTaskModel,
+)
+from models.sql.user import User
+from models.sql.workspace import (
+    WorkspaceArtifact,
+    WorkspaceConversation,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
+from models.workspace import WorkspaceCommandRequest
+from services import workspace_artifact_publication_service as publication
+from services.workspace_operation_handler_registry import (
+    NonRetryableWorkspaceOperationError,
+    WorkspaceOperationClaim,
+    WorkspaceOperationCancelled,
+    WorkspaceOperationLeaseLost,
+    WorkspaceOperationResult,
+)
+from services.workspace_operation_runner import finalize_workspace_operation_success
+from services.workspace_quality_export_operation_handlers import (
+    WorkspaceExportOperationHandler,
+    WorkspaceQualityReviewOperationHandler,
+)
+from models.presentation_and_path import PresentationAndPath
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+
+TABLES = [
+    User.__table__,
+    PresentationModel.__table__,
+    WorkspaceConversation.__table__,
+    WorkspaceOperation.__table__,
+    WorkspaceOperationEvent.__table__,
+    WorkspaceOutbox.__table__,
+    WorkspaceArtifact.__table__,
+    AsyncPresentationGenerationTaskModel.__table__,
+]
+
+
+async def _database(path: Path):
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _sqlite_safety(connection, _record):
+        connection.execute("PRAGMA foreign_keys=ON")
+
+    async with engine.begin() as connection:
+        await connection.run_sync(
+            lambda sync_connection: SQLModel.metadata.create_all(
+                sync_connection, tables=TABLES
+            )
+        )
+    return engine, async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def _seed_export(maker, *, revision: int = 7):
+    async with maker() as session, session.begin():
+        presentation = PresentationModel(
+            content="export",
+            n_slides=1,
+            language="ko",
+            revision=revision,
+        )
+        session.add(presentation)
+        await session.flush()
+        conversation = WorkspaceConversation(presentation_id=presentation.id)
+        session.add(conversation)
+        await session.flush()
+        operation = WorkspaceOperation(
+            conversation_id=conversation.id,
+            presentation_id=presentation.id,
+            anchor_position=1,
+            kind="export.pptx",
+            state="running",
+            idempotency_key_hash="a" * 64,
+            request_hash="b" * 64,
+            request_payload={},
+            expected_revision=revision,
+            attempt_token="attempt-1",
+            fencing_token=3,
+        )
+        session.add(operation)
+        await session.flush()
+    return presentation.id, operation.id
+
+
+def test_command_contract_accepts_quality_and_export_and_rejects_credentials():
+    for kind in ("quality.review", "export.pptx", "export.pdf"):
+        request = WorkspaceCommandRequest(
+            command="실행",
+            command_type=kind,
+            idempotency_key=f"key-{kind}",
+            expected_revision=2,
+        )
+        assert request.command_type == kind
+    with pytest.raises(ValidationError):
+        WorkspaceCommandRequest(
+            command="내보내기",
+            command_type="export.pdf",
+            idempotency_key="secret-test",
+            context={"cookie": "must-not-persist"},
+        )
+
+
+def test_quality_review_rejects_mutating_mode_before_execution():
+    claim = WorkspaceOperationClaim(
+        operation_id=uuid.uuid4(),
+        owner_id=None,
+        owner_scope="anonymous",
+        conversation_id=uuid.uuid4(),
+        presentation_id=uuid.uuid4(),
+        kind="quality.review",
+        request_payload={"context": {"mode": "analyze_and_fix"}},
+        expected_revision=0,
+        attempt_number=1,
+        attempt_token="attempt",
+        fencing_token=1,
+    )
+
+    class Context:
+        async def raise_if_cancelled(self):
+            return None
+
+        async def progress(self, **_kwargs):
+            return True
+
+    context = Context()
+    context.claim = claim
+    with pytest.raises(
+        NonRetryableWorkspaceOperationError,
+        match="quality_review_read_only_required",
+    ):
+        asyncio.run(WorkspaceQualityReviewOperationHandler().execute(context))
+
+
+@pytest.mark.parametrize("change_revision", [False, True])
+def test_quality_review_is_read_only_and_detects_concurrent_revision_change(
+    tmp_path: Path, monkeypatch, change_revision: bool
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / f"quality-{change_revision}.db")
+        try:
+            async with maker() as session, session.begin():
+                presentation = PresentationModel(
+                    content="quality",
+                    n_slides=1,
+                    language="ko",
+                    revision=11,
+                )
+                session.add(presentation)
+                await session.flush()
+                presentation_id = presentation.id
+
+            async def fake_review(presentation_id, request, task, session):
+                assert request.mode == "analyze_only"
+                task.status = "completed"
+                task.message = "Review completed"
+                task.data = {
+                    "reviewed_count": 1,
+                    "error_count": 0,
+                    "warning_count": 1,
+                    "info_count": 0,
+                    "issues": [{"severity": "warning", "code": "test"}],
+                    "slide_results": [],
+                }
+                if change_revision:
+                    presentation = await session.get(
+                        PresentationModel, presentation_id
+                    )
+                    presentation.revision = 12
+                await session.commit()
+
+            monkeypatch.setattr(
+                "services.workspace_quality_export_operation_handlers.run_authored_quality_review",
+                fake_review,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=uuid.uuid4(),
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=uuid.uuid4(),
+                presentation_id=presentation_id,
+                kind="quality.review",
+                request_payload={"context": {"mode": "analyze_only"}},
+                expected_revision=11,
+                attempt_number=1,
+                attempt_token="attempt",
+                fencing_token=1,
+            )
+
+            class Context:
+                def __init__(self):
+                    self.claim = claim
+
+                async def raise_if_cancelled(self):
+                    return None
+
+                async def progress(self, **_kwargs):
+                    return True
+
+            handler = WorkspaceQualityReviewOperationHandler(session_factory=maker)
+            if change_revision:
+                with pytest.raises(
+                    NonRetryableWorkspaceOperationError,
+                    match="quality_review_revision_changed",
+                ):
+                    await handler.execute(Context())
+            else:
+                result = await handler.execute(Context())
+                assert result.result_revision == 11
+                assert result.payload["inspected_revision"] == 11
+                assert result.payload["mode"] == "analyze_only"
+                async with maker() as session:
+                    presentation = await session.get(
+                        PresentationModel, presentation_id
+                    )
+                    assert presentation.revision == 11
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_quality_review_propagates_lease_loss_after_review(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "quality-lease-loss.db")
+        try:
+            async with maker() as session, session.begin():
+                presentation = PresentationModel(
+                    content="quality",
+                    n_slides=1,
+                    language="ko",
+                    revision=4,
+                )
+                session.add(presentation)
+                await session.flush()
+                presentation_id = presentation.id
+
+            async def fake_review(_presentation_id, _request, task, session):
+                task.status = "completed"
+                task.message = "Review completed"
+                task.data = {"reviewed_count": 1, "issues": []}
+                await session.commit()
+
+            monkeypatch.setattr(
+                "services.workspace_quality_export_operation_handlers.run_authored_quality_review",
+                fake_review,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=uuid.uuid4(),
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=uuid.uuid4(),
+                presentation_id=presentation_id,
+                kind="quality.review",
+                request_payload={"context": {"mode": "analyze_only"}},
+                expected_revision=4,
+                attempt_number=1,
+                attempt_token="attempt",
+                fencing_token=1,
+            )
+
+            class Context:
+                def __init__(self):
+                    self.claim = claim
+                    self.cancel_checks = 0
+
+                async def raise_if_cancelled(self):
+                    self.cancel_checks += 1
+                    if self.cancel_checks == 2:
+                        raise WorkspaceOperationLeaseLost("operation_lease_lost")
+
+                async def progress(self, **_kwargs):
+                    return True
+
+            with pytest.raises(
+                WorkspaceOperationLeaseLost,
+                match="operation_lease_lost",
+            ):
+                await WorkspaceQualityReviewOperationHandler(
+                    session_factory=maker
+                ).execute(Context())
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_export_publication_is_immutable_fenced_and_revision_neutral(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "export.db")
+        app_data = tmp_path / "app-data"
+        source = app_data / "exports" / "deck.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"immutable pptx")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        monkeypatch.setenv("WORKSPACE_EXPORT_ARTIFACT_TTL_SECONDS", "3600")
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pptx",
+                )
+                result_revision = await publication.publish_workspace_export_artifact(
+                    session,
+                    artifact=artifact,
+                    attempt_token="attempt-1",
+                    fencing_token=3,
+                    export_format="pptx",
+                )
+            async with maker() as session:
+                presentation = await session.get(PresentationModel, presentation_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+                artifact_row = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                terminal = await session.scalar(
+                    select(WorkspaceOperationEvent).where(
+                        WorkspaceOperationEvent.operation_id == operation_id,
+                        WorkspaceOperationEvent.event_type == "operation.result",
+                    )
+                )
+                outbox = await session.scalar(
+                    select(WorkspaceOutbox).where(
+                        WorkspaceOutbox.operation_id == operation_id
+                    )
+                )
+                assert result_revision == presentation.revision == 7
+                assert operation.state == "succeeded"
+                assert operation.result["source_revision"] == 7
+                assert "expires_at" in operation.result
+                assert "path" not in operation.result
+                assert "cookie" not in str(operation.result).lower()
+                assert artifact_row.status == "ready"
+                assert artifact_row.expires_at is not None
+                assert artifact.absolute_path.read_bytes() == b"immutable pptx"
+                assert terminal is not None and outbox is not None
+
+            claim = WorkspaceOperationClaim(
+                operation_id=operation_id,
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=operation.conversation_id,
+                presentation_id=presentation_id,
+                kind="export.pptx",
+                request_payload={},
+                expected_revision=7,
+                attempt_number=1,
+                attempt_token="attempt-1",
+                fencing_token=3,
+            )
+            assert await finalize_workspace_operation_success(
+                claim,
+                WorkspaceOperationResult(
+                    payload={"status": "handler-returned"},
+                    result_revision=7,
+                ),
+                session_factory=maker,
+            )
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation_id)
+                events = (
+                    await session.scalars(
+                        select(WorkspaceOperationEvent).where(
+                            WorkspaceOperationEvent.operation_id == operation_id,
+                            WorkspaceOperationEvent.event_type == "operation.result",
+                        )
+                    )
+                ).all()
+                assert operation.result["artifact_id"] == str(artifact.artifact_id)
+                assert "status" not in operation.result
+                assert len(events) == 1
+
+                resolved = await publication.resolve_workspace_export_artifact(
+                    session,
+                    artifact_id=artifact.artifact_id,
+                )
+                assert resolved.absolute_path == artifact.absolute_path
+                assert resolved.absolute_path.is_file()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_export_lease_loss_compensates_and_expired_artifact_is_not_resolved(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "lease-and-expiry.db")
+        app_data = tmp_path / "app-data-lease"
+        source = app_data / "exports" / "deck.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"lease")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pptx",
+                )
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError,
+                    match="operation_lease_lost",
+                ):
+                    await publication.publish_workspace_export_artifact(
+                        session,
+                        artifact=artifact,
+                        attempt_token="stale-attempt",
+                        fencing_token=2,
+                        export_format="pptx",
+                    )
+            assert not artifact.absolute_path.exists()
+
+            source.write_bytes(b"expiry")
+            presentation_id, operation_id = await _seed_export(maker, revision=7)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pptx",
+                )
+                await publication.publish_workspace_export_artifact(
+                    session,
+                    artifact=artifact,
+                    attempt_token="attempt-1",
+                    fencing_token=3,
+                    export_format="pptx",
+                )
+            expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+            async with maker() as session, session.begin():
+                row = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                row.expires_at = expired_at
+            async with maker() as session:
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError,
+                    match="workspace_export_expired",
+                ):
+                    await publication.resolve_workspace_export_artifact(
+                        session,
+                        artifact_id=artifact.artifact_id,
+                    )
+            swept = await publication.sweep_workspace_artifact_cleanup(
+                session_factory=maker,
+                now=datetime.now(timezone.utc),
+            )
+            assert swept["deleted"] == 1
+            assert not artifact.absolute_path.exists()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_stale_export_publication_compensates_external_file(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "stale.db")
+        app_data = tmp_path / "app-data-stale"
+        source = app_data / "exports" / "deck.pdf"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"pdf")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pdf",
+                )
+            async with maker() as session, session.begin():
+                presentation = await session.get(PresentationModel, presentation_id)
+                presentation.revision = 8
+            async with maker() as session:
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError,
+                    match="stale_presentation_revision",
+                ):
+                    await publication.publish_workspace_export_artifact(
+                        session,
+                        artifact=artifact,
+                        attempt_token="attempt-1",
+                        fencing_token=3,
+                        export_format="pdf",
+                    )
+            assert not artifact.absolute_path.exists()
+            async with maker() as session:
+                row = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                assert row.status == "deleted"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "cancel.db")
+        app_data = tmp_path / "app-data-cancel"
+        source = app_data / "exports" / "cancel.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"cancel me")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation_id)
+
+            async def fake_headers():
+                return {"Cookie": "session=ephemeral"}
+
+            async def fake_export(*_args, **_kwargs):
+                return PresentationAndPath(
+                    presentation_id=presentation_id,
+                    path=str(source),
+                )
+
+            monkeypatch.setattr(
+                "services.workspace_quality_export_operation_handlers.export_presentation",
+                fake_export,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=operation_id,
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=operation.conversation_id,
+                presentation_id=presentation_id,
+                kind="export.pptx",
+                request_payload={},
+                expected_revision=7,
+                attempt_number=1,
+                attempt_token="attempt-1",
+                fencing_token=3,
+            )
+
+            class CancellingContext:
+                def __init__(self):
+                    self.claim = claim
+                    self.checks = 0
+
+                async def progress(self, **_kwargs):
+                    return True
+
+                async def raise_if_cancelled(self):
+                    self.checks += 1
+                    if self.checks == 3:
+                        raise WorkspaceOperationCancelled()
+
+            with pytest.raises(WorkspaceOperationCancelled):
+                await WorkspaceExportOperationHandler(
+                    session_factory=maker,
+                    internal_header_provider=fake_headers,
+                ).execute(CancellingContext())
+            assert not source.exists()
+            async with maker() as session:
+                rows = (
+                    await session.scalars(
+                        select(WorkspaceArtifact).where(
+                            WorkspaceArtifact.operation_id == operation_id
+                        )
+                    )
+                ).all()
+                assert len(rows) == 1
+                assert rows[0].status == "deleted"
+                assert "ephemeral" not in str(rows[0])
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("lost_ack", [False, True])
+def test_export_publication_commit_failure_compensates_but_lost_ack_reconciles(
+    tmp_path: Path, monkeypatch, lost_ack: bool
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / f"commit-{lost_ack}.db")
+        app_data = tmp_path / f"app-data-commit-{lost_ack}"
+        source = app_data / "exports" / "deck.pdf"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"commit boundary")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pdf",
+                )
+                original_commit = session.commit
+
+                async def fail_or_lose_ack():
+                    if lost_ack:
+                        await original_commit()
+                    raise RuntimeError("injected commit boundary failure")
+
+                monkeypatch.setattr(session, "commit", fail_or_lose_ack)
+                if lost_ack:
+                    assert (
+                        await publication.publish_workspace_export_artifact(
+                            session,
+                            artifact=artifact,
+                            attempt_token="attempt-1",
+                            fencing_token=3,
+                            export_format="pdf",
+                        )
+                        == 7
+                    )
+                else:
+                    with pytest.raises(
+                        RuntimeError,
+                        match="injected commit boundary failure",
+                    ):
+                        await publication.publish_workspace_export_artifact(
+                            session,
+                            artifact=artifact,
+                            attempt_token="attempt-1",
+                            fencing_token=3,
+                            export_format="pdf",
+                        )
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation_id)
+                artifact_row = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                if lost_ack:
+                    assert operation.state == "succeeded"
+                    assert artifact_row.status == "ready"
+                    assert artifact.absolute_path.exists()
+                else:
+                    assert operation.state == "running"
+                    assert artifact_row.status == "deleted"
+                    assert not artifact.absolute_path.exists()
+                presentation = await session.get(PresentationModel, presentation_id)
+                assert presentation.revision == 7
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_export_download_resolution_is_owner_scoped(tmp_path: Path, monkeypatch):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "owner.db")
+        app_data = tmp_path / "app-data-owner"
+        source = app_data / "exports" / "owner.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"owner")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        owner_a = uuid.uuid4()
+        owner_b = uuid.uuid4()
+        owner_token = set_current_owner_id(owner_a)
+        try:
+            async with maker() as session, session.begin():
+                session.add(
+                    User(
+                        id=owner_a,
+                        username=f"owner-{owner_a.hex}",
+                        hashed_password="test-only",
+                    )
+                )
+            presentation_id, operation_id = await _seed_export(maker)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pptx",
+                )
+                await publication.publish_workspace_export_artifact(
+                    session,
+                    artifact=artifact,
+                    attempt_token="attempt-1",
+                    fencing_token=3,
+                    export_format="pptx",
+                )
+                assert (
+                    await publication.resolve_workspace_export_artifact(
+                        session,
+                        artifact_id=artifact.artifact_id,
+                    )
+                ).absolute_path == artifact.absolute_path
+        finally:
+            reset_current_owner_id(owner_token)
+
+        other_token = set_current_owner_id(owner_b)
+        try:
+            async with maker() as session:
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError,
+                    match="workspace_export_not_found",
+                ):
+                    await publication.resolve_workspace_export_artifact(
+                        session,
+                        artifact_id=artifact.artifact_id,
+                    )
+        finally:
+            reset_current_owner_id(other_token)
+            await engine.dispose()
+
+    asyncio.run(scenario())

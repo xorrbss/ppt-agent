@@ -85,6 +85,14 @@ def test_postgresql_owner_status_filter_and_terminal_semantics():
         now = datetime.now(timezone.utc)
         try:
             async with engine.begin() as connection:
+                # The durable generation job now has an optional bridge to the
+                # generalized workspace runner.  This focused facade fixture
+                # does not exercise workspace rows, but PostgreSQL still needs
+                # the referenced relation before it can create the real job
+                # table and foreign key.
+                await connection.execute(
+                    text("CREATE TABLE workspace_operations (id UUID PRIMARY KEY)")
+                )
                 await connection.run_sync(
                     SQLModel.metadata.create_all,
                     tables=[

@@ -121,11 +121,11 @@ def _now() -> datetime:
 
 
 def _task_timestamp(value: datetime) -> datetime:
-    """Match the legacy task table's timezone-naive UTC timestamp columns."""
+    """Normalize task timestamps to timezone-aware UTC."""
 
     if value.tzinfo is None:
-        return value
-    return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _task_data(

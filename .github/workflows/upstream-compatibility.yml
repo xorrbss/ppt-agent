@@ -31,6 +31,8 @@ on:
       - "servers/fastapi/alembic/versions/**"
       - "servers/fastapi/migrations.py"
       - "servers/fastapi/services/presentation_deletion_service.py"
+      - "servers/fastapi/services/workspace_*.py"
+      - "servers/fastapi/models/workspace_*.py"
       - "servers/fastapi/services/async_task_read_service.py"
       - "servers/fastapi/services/template_v2_pptx_analysis_service.py"
       - "servers/fastapi/services/template_v2_pptx_dispatcher.py"
@@ -48,6 +50,7 @@ on:
       - "servers/fastapi/tests/integration/test_postgresql_template_v2_canary_rollback.py"
       - "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
       - "servers/fastapi/tests/integration/test_postgresql_async_task_read_facade.py"
+      - "servers/fastapi/tests/integration/test_postgresql_workspace.py"
       - "docs/template-v2-canary-rehearsal-prompt-20260725.md"
       - "docs/template-v2-canary-runbook.md"
       - "electron/app/main.ts"
@@ -131,9 +134,10 @@ jobs:
           enable-cache: true
       - name: Install locked FastAPI dependencies
         run: uv sync --frozen
-      - name: Verify Template V2 on PostgreSQL
+      - name: Verify Template V2 and Chat-first workspace on PostgreSQL
         run: >-
           uv run pytest -q --no-header
           tests/integration/test_postgresql_template_v2_migrations.py
           tests/integration/test_postgresql_template_v2_canary_rollback.py
           tests/integration/test_postgresql_async_task_read_facade.py
+          tests/integration/test_postgresql_workspace.py

@@ -29,6 +29,7 @@ interface SlideContentProps {
   presentationId: string;
   isChatEditing?: boolean;
   isChatTargeted?: boolean;
+  mutationsEnabled?: boolean;
 }
 
 const SlideContent = ({
@@ -37,6 +38,7 @@ const SlideContent = ({
   presentationId,
   isChatEditing = false,
   isChatTargeted = false,
+  mutationsEnabled = true,
 }: SlideContentProps) => {
   const dispatch = useDispatch();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -53,6 +55,7 @@ const SlideContent = ({
   const pathname = usePathname();
 
   const handleSubmit = async () => {
+    if (!mutationsEnabled) return;
     if (!editPrompt.trim()) {
       notify.warning("프롬프트가 필요합니다", "제출하기 전에 프롬프트를 입력해 주세요.");
       return;
@@ -94,6 +97,7 @@ const SlideContent = ({
   };
 
   const onDeleteSlide = async () => {
+    if (!mutationsEnabled) return;
     try {
       trackEvent(MixpanelEvent.Presentation_Slide_Deleted, {
         pathname,
@@ -119,6 +123,7 @@ const SlideContent = ({
     <>
       <div
         id={`slide-${slide.index}`}
+        data-mutations-enabled={mutationsEnabled ? "true" : "false"}
         className=" w-full  main-slide flex items-center max-md:mb-4  justify-center relative"
       >
         {isStreaming && (
@@ -142,12 +147,16 @@ const SlideContent = ({
             <SlideScale
               slide={slide}
               theme={presentationData?.theme || null}
+              isEditMode={mutationsEnabled}
               showEditScan={isChatEditing}
               preferAuthoredHtml
             />
           </div>
-          {!showNewSlideSelection && (
-            <div className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300">
+          {mutationsEnabled && !showNewSlideSelection && (
+            <div
+              className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300"
+              data-testid="slide-add-control"
+            >
               <ToolTip content="아래에 새 슬라이드 추가">
                 {!isStreaming && (
                   <div
@@ -162,7 +171,7 @@ const SlideContent = ({
               </ToolTip>
             </div>
           )}
-          {showNewSlideSelection && (
+          {mutationsEnabled && showNewSlideSelection && (
             <div
               className="fixed inset-0 z-[1000] overflow-y-auto bg-black/50 px-4 py-16"
               onClick={() => setShowNewSlideSelection(false)}
@@ -183,8 +192,9 @@ const SlideContent = ({
             </div>
           )}
 
-          {!isStreaming && (
+          {mutationsEnabled && !isStreaming && (
             <div
+              data-testid="slide-mutation-controls"
               className={`absolute right-3 top-3 z-30 hidden md:flex flex-row items-center gap-2 rounded-[28px] border border-gray-200/80 bg-white/95 px-2.5 py-2 ${
                 isEditPopoverOpen || isSpeakerPopoverOpen
                   ? "opacity-100 pointer-events-auto"

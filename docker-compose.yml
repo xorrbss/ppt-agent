@@ -8,6 +8,9 @@ x-presenton-env: &presenton-env
   # Bundled PPTX/PDF export (Puppeteer); matches CI and production image.
   PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
   MIGRATE_DATABASE_ON_STARTUP: "true"
+  # Required only when upgrading a populated PostgreSQL database through e7.
+  # Leave empty to fail closed until the legacy writer timezone is confirmed.
+  PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE: ${PPT_AGENT_ASYNC_TASK_LEGACY_TIMEZONE:-}
   PRESENTON_MAX_UPLOAD_MB: ${PRESENTON_MAX_UPLOAD_MB:-100}
   PRESENTON_MAX_UPLOAD_TOTAL_MB: ${PRESENTON_MAX_UPLOAD_TOTAL_MB:-512}
   PRESENTON_MAX_IMAGE_UPLOAD_MB: ${PRESENTON_MAX_IMAGE_UPLOAD_MB:-20}
@@ -73,6 +76,16 @@ x-presenton-env: &presenton-env
   DISABLE_THINKING: ${DISABLE_THINKING}
   WEB_GROUNDING: ${WEB_GROUNDING}
   DATABASE_URL: ${DATABASE_URL}
+  # Chat-first remains fail-closed in the stock deployment.  The frontend
+  # switch is also supplied as a build ARG below because Next embeds it.
+  # Roll back without schema rollback: set both flags to false and recreate.
+  CHAT_FIRST_WORKSPACE_ENABLED: ${CHAT_FIRST_WORKSPACE_ENABLED:-false}
+  CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: ${CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE:-}
+  NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
+  # Do not enable this on the stock image: it does not ship a malware scanner
+  # or trusted signature-definition update strategy.
+  WORKSPACE_ASSET_MALWARE_SCAN_MODE: ${WORKSPACE_ASSET_MALWARE_SCAN_MODE:-disabled}
+  WORKSPACE_ASSET_MALWARE_SCANNER: ${WORKSPACE_ASSET_MALWARE_SCANNER:-}
   DISABLE_ANONYMOUS_TRACKING: ${DISABLE_ANONYMOUS_TRACKING}
   COMFYUI_URL: ${COMFYUI_URL}
   COMFYUI_WORKFLOW: ${COMFYUI_WORKFLOW}
@@ -101,6 +114,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
     ports:
       # You can replace 5000 with any other port number of your choice to run Presenton on a different port number.
       - "5000:80"
@@ -123,6 +138,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
     deploy:
       resources:
         reservations:

@@ -81,9 +81,49 @@ def test_save_slide_pngs_keeps_owner_namespace_in_browser_reference(
     finally:
         reset_current_owner_id(owner_token)
 
-    expected = f"users/{owner_id}/authored/{presentation_id}/slide_0.png"
+    image_set = authored_service._authored_image_set_digest([b"png"])
+    content_hash = hashlib.sha256(b"png").hexdigest()
+    expected = (
+        f"users/{owner_id}/authored/{presentation_id}/sets/{image_set}/"
+        f"slide_0-{content_hash}.png"
+    )
     assert refs == [expected]
     assert (app_data / "images" / expected).read_bytes() == b"png"
+
+
+def test_save_slide_pngs_never_overwrites_another_publication_set(
+    monkeypatch,
+    tmp_path,
+):
+    owner_id = uuid.uuid4()
+    presentation_id = uuid.uuid4()
+    app_data = tmp_path / "app_data"
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+
+    owner_token = set_current_owner_id(owner_id)
+    try:
+        first = authored_service._save_slide_pngs(
+            presentation_id,
+            [b"first revision"],
+            "operation-a:attempt-a",
+        )
+        second = authored_service._save_slide_pngs(
+            presentation_id,
+            [b"second revision"],
+            "operation-b:attempt-b",
+        )
+        first_retry = authored_service._save_slide_pngs(
+            presentation_id,
+            [b"first revision"],
+            "operation-a:attempt-a",
+        )
+    finally:
+        reset_current_owner_id(owner_token)
+
+    assert first != second
+    assert first_retry == first
+    assert (app_data / "images" / first[0]).read_bytes() == b"first revision"
+    assert (app_data / "images" / second[0]).read_bytes() == b"second revision"
 
 
 # --- HTML validity + fallback ------------------------------------------------

@@ -1,4 +1,6 @@
+import uuid
 from typing import Any, List, Literal, Optional
+
 from pydantic import BaseModel, Field, PrivateAttr
 
 from enums.tone import Tone
@@ -12,6 +14,11 @@ class GeneratePresentationRequest(BaseModel):
     _template_v2_generation_target: Any = PrivateAttr(default=None)
     _request_id: Optional[str] = PrivateAttr(default=None)
     _authored_exact_snapshot_id: Optional[str] = PrivateAttr(default=None)
+
+    # Chat-first async generation reuses the durable presentation shell and
+    # awaiting-approval operation created by /presentation/create.  Legacy
+    # generation ignores this field while the feature flag is disabled.
+    presentation_id: Optional[uuid.UUID] = Field(default=None)
 
     content: str = Field(..., description="The content for generating the presentation")
     slides_markdown: Optional[List[str]] = Field(

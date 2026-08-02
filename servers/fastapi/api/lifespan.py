@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from api.v1.auth.bootstrap import bootstrap_database_admin
 from migrations import migrate_database_on_startup
-from services.database import create_db_and_tables, dispose_engines
+from services.database import create_db_and_tables, dispose_engines, sql_engine
 from services.export_retention_service import (
     start_export_retention_sweeper,
     stop_export_retention_sweeper,
@@ -14,6 +14,9 @@ from services.export_retention_service import (
 from services.presentation_generation_job_service import (
     start_presentation_generation_dispatcher,
     stop_presentation_generation_dispatcher,
+)
+from services.presentation_generation_operation_handler import (
+    register_presentation_generation_operation_handler,
 )
 from services.template_v2_pptx_ingestion_service import (
     start_template_v2_pptx_dispatcher,
@@ -28,6 +31,33 @@ from services.template_v2_pptx_retention_service import (
     stop_template_v2_private_source_cleanup,
 )
 from services.template_v2_pptx_worker import should_start_embedded_worker
+from services.workspace_operation_outbox_dispatcher import (
+    start_workspace_operation_outbox_dispatcher,
+    stop_workspace_operation_outbox_dispatcher,
+)
+from services.workspace_operation_runner import (
+    start_workspace_operation_runner,
+    stop_workspace_operation_runner,
+)
+from services.workspace_chat_operation_handler import (
+    register_presentation_chat_operation_handlers,
+)
+from services.workspace_quality_export_operation_handlers import (
+    register_workspace_quality_export_operation_handlers,
+)
+from services.workspace_asset_maintenance import (
+    start_workspace_asset_maintenance,
+    stop_workspace_asset_maintenance,
+)
+from services.workspace_asset_service import (
+    require_workspace_asset_malware_scan_safety,
+)
+from services.workspace_event_retention import (
+    start_workspace_event_retention,
+    stop_workspace_event_retention,
+)
+from services.workspace_runtime_profile import validate_chat_first_workspace_rollout
+from services.workspace_service import workspace_commands_enabled
 from templates.v2.policy import get_structured_template_policy
 from utils.get_env import get_app_data_directory_env
 from utils.model_availability import (
@@ -63,6 +93,14 @@ async def app_lifespan(_: FastAPI):
     require_template_v2_database_safety(
         feature_enabled=template_v2_policy.creation_enabled,
     )
+    rollout = validate_chat_first_workspace_rollout(
+        workspace_commands_enabled(),
+        sql_engine.url,
+    )
+    chat_first_enabled = rollout.enabled
+    require_workspace_asset_malware_scan_safety(
+        feature_enabled=chat_first_enabled,
+    )
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
@@ -70,6 +108,10 @@ async def app_lifespan(_: FastAPI):
     template_v2_cleanup_started = False
     export_retention_started = False
     presentation_generation_dispatcher_started = False
+    workspace_operation_runner_started = False
+    workspace_outbox_dispatcher_started = False
+    workspace_asset_maintenance_started = False
+    workspace_event_retention_started = False
     try:
         try:
             await log_template_v2_operational_health()
@@ -81,6 +123,18 @@ async def app_lifespan(_: FastAPI):
         export_retention_started = True
         await start_presentation_generation_dispatcher()
         presentation_generation_dispatcher_started = True
+        if chat_first_enabled:
+            register_presentation_generation_operation_handler(replace=True)
+            register_presentation_chat_operation_handlers(replace=True)
+            register_workspace_quality_export_operation_handlers(replace=True)
+            await start_workspace_operation_outbox_dispatcher()
+            workspace_outbox_dispatcher_started = True
+            await start_workspace_operation_runner()
+            workspace_operation_runner_started = True
+            await start_workspace_asset_maintenance()
+            workspace_asset_maintenance_started = True
+            await start_workspace_event_retention()
+            workspace_event_retention_started = True
         if (
             template_v2_policy.creation_enabled
             and template_v2_policy.allowed_template_ids
@@ -93,20 +147,36 @@ async def app_lifespan(_: FastAPI):
         yield
     finally:
         try:
-            if template_v2_dispatcher_started:
-                await stop_template_v2_pptx_dispatcher()
+            if workspace_event_retention_started:
+                await stop_workspace_event_retention()
         finally:
             try:
-                if presentation_generation_dispatcher_started:
-                    await stop_presentation_generation_dispatcher()
+                if workspace_asset_maintenance_started:
+                    await stop_workspace_asset_maintenance()
             finally:
                 try:
-                    if export_retention_started:
-                        await stop_export_retention_sweeper()
+                    if workspace_operation_runner_started:
+                        await stop_workspace_operation_runner()
                 finally:
                     try:
-                        if template_v2_cleanup_started:
-                            await stop_template_v2_private_source_cleanup()
+                        if workspace_outbox_dispatcher_started:
+                            await stop_workspace_operation_outbox_dispatcher()
                     finally:
-                        # Release all database connections to prevent stale/leaked pools.
-                        await dispose_engines()
+                        try:
+                            if template_v2_dispatcher_started:
+                                await stop_template_v2_pptx_dispatcher()
+                        finally:
+                            try:
+                                if presentation_generation_dispatcher_started:
+                                    await stop_presentation_generation_dispatcher()
+                            finally:
+                                try:
+                                    if export_retention_started:
+                                        await stop_export_retention_sweeper()
+                                finally:
+                                    try:
+                                        if template_v2_cleanup_started:
+                                            await stop_template_v2_private_source_cleanup()
+                                    finally:
+                                        # Release all database connections to prevent stale/leaked pools.
+                                        await dispose_engines()

@@ -29,6 +29,7 @@ export class ApiError extends Error {
   readonly retryable?: boolean;
   readonly exceptionType?: string;
   readonly fingerprint?: string;
+  readonly workspaceProjected: boolean;
 
   constructor(
     message: string,
@@ -42,6 +43,7 @@ export class ApiError extends Error {
       retryable?: boolean;
       exceptionType?: string;
       fingerprint?: string;
+      workspaceProjected?: boolean;
     } = {}
   ) {
     super(message);
@@ -55,6 +57,7 @@ export class ApiError extends Error {
     this.retryable = options.retryable;
     this.exceptionType = options.exceptionType;
     this.fingerprint = options.fingerprint;
+    this.workspaceProjected = options.workspaceProjected === true;
   }
 }
 
@@ -274,6 +277,11 @@ export class ApiResponseHandler {
 
     // Handle error responses
     let errorMessage = defaultErrorMessage;
+    const workspaceProjected =
+      response.headers
+        .get("x-chat-first-workspace-projected")
+        ?.trim()
+        .toLowerCase() === "true";
     
     try {
       const errorData: ApiErrorResponse = await response.json();
@@ -308,6 +316,7 @@ export class ApiResponseHandler {
         retryable: structuredError?.retryable,
         exceptionType: structuredError?.exception_type,
         fingerprint: structuredError?.fingerprint,
+        workspaceProjected,
       });
     } catch (error) {
       if (error instanceof ApiError) throw error;
@@ -324,6 +333,7 @@ export class ApiResponseHandler {
       requestId:
         response.headers.get("x-request-id") ||
         response.headers.get("x-correlation-id"),
+      workspaceProjected,
     });
   }
 

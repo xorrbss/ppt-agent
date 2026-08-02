@@ -3,8 +3,9 @@ import secrets
 from typing import Optional
 import uuid
 
-from sqlalchemy import JSON, Column, Uuid
+from sqlalchemy import JSON, Column, DateTime, Uuid
 from sqlmodel import Field, SQLModel
+from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
 
@@ -25,6 +26,12 @@ class AsyncPresentationGenerationTaskModel(SQLModel, table=True):
     status: str
     message: Optional[str] = None
     error: Optional[dict] = Field(sa_column=Column(JSON), default=None)
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
     data: Optional[dict] = Field(sa_column=Column(JSON), default=None)

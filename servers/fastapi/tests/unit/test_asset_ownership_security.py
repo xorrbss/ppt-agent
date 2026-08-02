@@ -50,6 +50,21 @@ def test_browser_asset_paths_are_owner_scoped_and_traversal_safe():
         user_id=owner_id,
         is_admin=True,
     )
+    assert is_app_data_path_authorized(
+        f"/app_data/workspace-artifacts/users/{owner_id}/operation/artifact.pptx",
+        user_id=owner_id,
+        is_admin=False,
+    )
+    assert not is_app_data_path_authorized(
+        f"/app_data/workspace-artifacts/users/{other_id}/operation/artifact.pptx",
+        user_id=owner_id,
+        is_admin=True,
+    )
+    assert not is_app_data_path_authorized(
+        "/app_data/workspace-artifacts/operation/artifact.pptx",
+        user_id=owner_id,
+        is_admin=False,
+    )
 
 
 def test_server_side_file_resolution_rejects_other_users_and_symlink_escape(
