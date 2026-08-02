@@ -10,7 +10,7 @@ import sys
 from time import perf_counter
 import uuid
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, inspect, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,13 @@ from services.template_v2_pptx_retention_service import (
 from services.template_v2_pptx_observability import (
     log_pptx_analysis_observation,
 )
+from services.template_v2_native_storage import (
+    NATIVE_SOURCE_SCHEMA_VERSION,
+    TemplateV2NativeStorageError,
+    native_source_storage_key,
+    promote_native_source,
+    remove_native_source,
+)
 from services.template_v2_pptx_queue_observability import (
     log_pptx_queue_observation,
 )
@@ -50,10 +57,12 @@ from services.template_v2_pptx_analysis_service import (
     with_private_asset_references as _with_private_asset_references,
 )
 from services.template_v2_pptx_storage import (
+    PptxUploadRejected,
     get_private_source_retention_ttl,
     relocate_runtime_assets,
     verify_private_source,
 )
+from services.template_v2_revision_service import append_revision
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.models.layouts import RawSlideLayouts, SlideLayouts
 from templates.v2.generation import build_generated_slide
@@ -336,12 +345,10 @@ async def confirm_template_v2_pptx_import(
         TemplateV2PptxImport.revision == expected_revision,
         TemplateV2PptxImport.draft_template_id.is_(None),
     ]
+    # Runtime-derived layouts retain private media references, so retention must
+    # not race confirmation. Deterministic imports can still confirm as explicitly
+    # non-publishable reconstructed templates when a legacy source is unavailable.
     if _is_runtime_analysis(import_job):
-        # The guard above reads the row loaded when this request started; retention
-        # claims and empties the private directory without touching `state` or
-        # `revision`, so nothing else here would notice a cleanup that began after
-        # that read. Only the runtime path is narrowed: a deterministic import is
-        # still allowed to confirm once its source is gone.
         gate_predicates.append(TemplateV2PptxImport.source_deleted_at.is_(None))
         gate_predicates.append(TemplateV2PptxImport.source_cleanup_token.is_(None))
     gate = await session.execute(
@@ -369,6 +376,37 @@ async def confirm_template_v2_pptx_import(
         if current is not None and _runtime_assets_reclaimed(current):
             return "assets_reclaimed"
         return "revision_conflict"
+
+    private_source = None
+    layout_source_parts: dict[str, str] | None = None
+    promoted_storage_key: str | None = None
+    try:
+        private_source = verify_private_source(
+            import_job.source_storage_key,
+            import_job.source_sha256,
+            expected_import_id=import_id,
+            expected_size_bytes=import_job.source_size_bytes,
+        )
+        candidates = parse_presentation_candidates(
+            PptxPackageReader(private_source),
+            source_sha256=import_job.source_sha256,
+        )
+    except (PptxUploadRejected, UnsafePptxPackage):
+        if _is_runtime_analysis(import_job):
+            await session.rollback()
+            return "assets_reclaimed"
+    else:
+        if len(candidates.slides) != len(assembled.layouts.layouts):
+            await session.rollback()
+            return "state_conflict"
+        layout_source_parts = {
+            layout.id: candidates.slides[index].source_part
+            for index, layout in enumerate(assembled.layouts.layouts)
+        }
+        promoted_storage_key = native_source_storage_key(
+            import_job.requested_template_id,
+            1,
+        )
 
     presentation = PresentationModel(
         content=f"Private PPTX import {import_job.source_filename}",
@@ -416,7 +454,28 @@ async def confirm_template_v2_pptx_import(
                 "components": {"components": all_components},
                 "merged_components": None,
                 "layouts": assembled.layouts.model_dump(mode="json"),
-                "assets": None,
+                "assets": (
+                    {
+                        "native_pptx": {
+                            "schema_version": NATIVE_SOURCE_SCHEMA_VERSION,
+                            "preservation_mode": "native_clone",
+                            "storage_key": promoted_storage_key,
+                            "source_sha256": import_job.source_sha256,
+                            "source_size_bytes": import_job.source_size_bytes,
+                            "layout_source_parts": layout_source_parts,
+                            "capabilities": {
+                                "native_clone": True,
+                                "text_patch": True,
+                                "table_patch": True,
+                                "master_layout_theme": True,
+                                "relationships_media": True,
+                            },
+                            "publication_status": "publishable",
+                        }
+                    }
+                    if promoted_storage_key is not None
+                    else None
+                ),
                 "is_default": False,
             },
             presentation_id=presentation.id,
@@ -445,37 +504,110 @@ async def confirm_template_v2_pptx_import(
             "required": False,
             "reason": "owner_confirmed_candidate",
         },
+        "native_pptx": (
+            {
+                "schema_version": NATIVE_SOURCE_SCHEMA_VERSION,
+                "preservation_mode": "native_clone",
+                "source_sha256": import_job.source_sha256,
+                "source_size_bytes": import_job.source_size_bytes,
+                "layout_source_parts": layout_source_parts,
+                "publication_status": "publishable",
+            }
+            if promoted_storage_key is not None
+            else {
+                "preservation_mode": "reconstructed",
+                "publication_status": "blocked",
+                "reason": "native_source_unavailable",
+            }
+        ),
     }
     session.add(presentation)
     session.add_all(slides)
     session.add(template)
     session.add(local_state)
+    revision_table_available = await session.run_sync(
+        lambda sync_session: inspect(sync_session.get_bind()).has_table(
+            "template_v2_revisions"
+        )
+    )
+    if revision_table_available:
+        await append_revision(
+            session,
+            template=template,
+            revision=1,
+            reason="pptx-import-confirm",
+        )
+
+    # Promotion is intentionally the last filesystem mutation before the DB
+    # transaction is flushed. Every failure from this point through commit must
+    # roll back the transaction and remove the exact template/revision source.
+    if promoted_storage_key is not None:
+        assert private_source is not None
+        try:
+            actual_storage_key = promote_native_source(
+                private_source,
+                template_id=template.id,
+                revision=1,
+                expected_sha256=import_job.source_sha256,
+                expected_size_bytes=import_job.source_size_bytes,
+            )
+        except TemplateV2NativeStorageError:
+            await session.rollback()
+            raise
+        if actual_storage_key != promoted_storage_key:
+            await session.rollback()
+            remove_native_source(
+                actual_storage_key,
+                template_id=template.id,
+                revision=1,
+            )
+            raise RuntimeError("template_v2_native_storage_key_mismatch")
+
+    def cleanup_promoted_source() -> None:
+        if promoted_storage_key is not None:
+            remove_native_source(
+                promoted_storage_key,
+                template_id=template.id,
+                revision=1,
+            )
+
     try:
         await session.flush()
     except IntegrityError:
         await session.rollback()
+        cleanup_promoted_source()
         return "template_conflict"
-    await session.execute(
-        update(TemplateV2PptxImport)
-        .where(
-            TemplateV2PptxImport.id == import_id,
-            TemplateV2PptxImport.owner_scope == owner_scope,
-            TemplateV2PptxImport.state == "confirming",
-            TemplateV2PptxImport.revision == expected_revision + 1,
+    except Exception:
+        await session.rollback()
+        cleanup_promoted_source()
+        raise
+    try:
+        await session.execute(
+            update(TemplateV2PptxImport)
+            .where(
+                TemplateV2PptxImport.id == import_id,
+                TemplateV2PptxImport.owner_scope == owner_scope,
+                TemplateV2PptxImport.state == "confirming",
+                TemplateV2PptxImport.revision == expected_revision + 1,
+            )
+            .values(
+                state="confirmed",
+                draft_template_id=template.id,
+                confirmed_at=confirmed_at,
+                manifest=manifest,
+                repeat_suggestions=repeat_decisions,
+                updated_at=confirmed_at,
+            )
+            .execution_options(synchronize_session=False)
         )
-        .values(
-            state="confirmed",
-            draft_template_id=template.id,
-            confirmed_at=confirmed_at,
-            manifest=manifest,
-            repeat_suggestions=repeat_decisions,
-            updated_at=confirmed_at,
-        )
-        .execution_options(synchronize_session=False)
-    )
-    task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
+        task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
+    except Exception:
+        await session.rollback()
+        cleanup_promoted_source()
+        raise
     if task is None:
         await session.rollback()
+        cleanup_promoted_source()
         return "state_conflict"
     task.status = "completed"
     task.message = "Template V2 created after explicit confirmation"
@@ -492,6 +624,7 @@ async def confirm_template_v2_pptx_import(
         await session.commit()
     except IntegrityError:
         await session.rollback()
+        cleanup_promoted_source()
         current = (
             await session.execute(
                 select(TemplateV2PptxImport).where(
@@ -503,6 +636,10 @@ async def confirm_template_v2_pptx_import(
         if current and current.state == "confirmed" and current.draft_template_id:
             return "already_confirmed"
         return "template_conflict"
+    except Exception:
+        await session.rollback()
+        cleanup_promoted_source()
+        raise
     return "confirmed"
 
 

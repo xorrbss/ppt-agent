@@ -1,5 +1,6 @@
 import asyncio
 from copy import deepcopy
+from datetime import datetime, timezone
 from types import SimpleNamespace
 import uuid
 
@@ -180,7 +181,7 @@ def test_existing_template_read_remains_available_when_flag_is_off(
     assert response.layouts == template.layouts
 
 
-def test_draft_template_with_null_layouts_remains_readable_and_discoverable(
+def test_draft_template_with_null_layouts_remains_readable_but_undiscoverable(
     monkeypatch,
     fake_async_session,
 ):
@@ -206,8 +207,56 @@ def test_draft_template_with_null_layouts_remains_readable_and_discoverable(
     discovered = asyncio.run(list_structured_templates(sql_session=ListedSession()))
 
     assert response.layouts is None
-    assert len(discovered) == 1
-    assert discovered[0].layouts is None
+    assert discovered == []
+
+
+def test_discovery_paginates_after_filtering_blocked_rows(monkeypatch):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv(
+        "TEMPLATE_V2_TEMPLATE_ALLOWLIST",
+        "blocked,published-one,published-two",
+    )
+
+    now = datetime.now(timezone.utc)
+
+    def listed(template_id: str, *, publishable: bool) -> TemplateV2:
+        template = _template(template_id)
+        template.name = template_id
+        template.assets = _publishable_native_assets() if publishable else {}
+        template.is_default = False
+        template.revision = 1
+        template.created_at = now
+        template.updated_at = now
+        return template
+
+    rows = [
+        listed("blocked", publishable=False),
+        listed("published-one", publishable=True),
+        listed("published-two", publishable=True),
+    ]
+
+    class FakeTemplateV2Service:
+        def __init__(self, _session):
+            pass
+
+        async def list(self, *, template_ids, offset, limit):
+            assert set(template_ids) == {
+                "blocked",
+                "published-one",
+                "published-two",
+            }
+            return rows[offset : offset + limit]
+
+    monkeypatch.setattr(
+        "api.v1.ppt.endpoints.structured_templates.TemplateV2Service",
+        FakeTemplateV2Service,
+    )
+
+    discovered = asyncio.run(
+        list_structured_templates(offset=1, limit=1, sql_session=object())
+    )
+
+    assert [template.id for template in discovered] == ["published-two"]
 
 
 def test_non_null_malformed_layouts_fail_closed(fake_async_session):
@@ -471,6 +520,27 @@ def test_temp_sqlite_asgi_auth_crud_contract_and_off_mutation_gate(
         "api.middlewares.resolve_request_principal",
         resolve_test_principal,
     )
+
+
+def _publishable_native_assets() -> dict:
+    return {
+        "native_pptx": {
+            "schema_version": "presenton.template-v2-native-source/v1",
+            "preservation_mode": "native_clone",
+            "storage_key": "template-v2/native/published/revision-1/source.pptx",
+            "source_sha256": "a" * 64,
+            "source_size_bytes": 1024,
+            "layout_source_parts": {"title": "ppt/slides/slide1.xml"},
+            "capabilities": {
+                "native_clone": True,
+                "text_patch": True,
+                "table_patch": True,
+                "master_layout_theme": True,
+                "relationships_media": True,
+            },
+            "publication_status": "publishable",
+        }
+    }
 
     async_engine = create_async_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'structured-api.db'}",

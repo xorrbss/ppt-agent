@@ -23,7 +23,9 @@ interface PresentationGenUploadState {
 const initialState: PresentationGenUploadState = {
   config: null,
   files: [],
-  selectedTemplate: "adaptive", // default = content-first adaptive composer; see presentation-templates/select.ts
+  // New flows wait for TemplateSelection to resolve the single Template V2 default.
+  // Stored legacy ids remain supported during rehydration.
+  selectedTemplate: null,
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
   authoredVisionQa: false,
   authoredStyle: "default",

@@ -6,12 +6,38 @@ import { getHeader } from "@/app/(presentation-generator)/services/api/header";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { getApiUrl } from "@/utils/api";
 
+export interface StructuredTemplateSource {
+  repository: string;
+  commit_sha: string;
+  path: string;
+  files?: Array<{
+    path: string;
+    sha256: string;
+    role: string;
+  }>;
+}
+
 export interface StructuredTemplateSummary {
   id: string;
   name: string;
   description: string | null;
   revision: number;
   is_default: boolean;
+  /** Human-readable origin supplied by the Template V2 catalog. */
+  source?: string | StructuredTemplateSource | null;
+  provenance?: {
+    source?: string | null;
+    source_name?: string | null;
+    repository?: string | null;
+    path?: string | null;
+    commit?: string | null;
+    license?: string | null;
+    importer_version?: string | null;
+    runtime_network_fetch?: boolean | null;
+  } | null;
+  /** Optional catalog capabilities. Both API representations are supported. */
+  capabilities?: string[] | Record<string, boolean | string | null> | null;
+  capability_badges?: string[] | null;
 }
 
 export const TEMPLATE_V2_SELECTION_PREFIX = "template-v2:";
