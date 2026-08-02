@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 import uuid
 
+import pytest
 from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -290,6 +292,84 @@ def test_concurrent_confirmation_creates_exactly_one_template(
                 )
         finally:
             await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_confirmation_commit_failure_removes_promoted_native_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "native-cleanup.sqlite")
+        orphan = tmp_path / "orphan-source.pptx"
+        try:
+            import_id, task_id = await _insert_import(maker)
+            await _mark_review_required(maker, import_id, task_id)
+
+            monkeypatch.setattr(
+                ingestion,
+                "verify_private_source",
+                lambda *args, **kwargs: tmp_path / "verified-source.pptx",
+            )
+            monkeypatch.setattr(
+                ingestion,
+                "parse_presentation_candidates",
+                lambda *args, **kwargs: SimpleNamespace(
+                    slides=[SimpleNamespace(source_part="ppt/slides/slide1.xml")]
+                ),
+            )
+
+            def promote(*args, **kwargs) -> str:
+                orphan.write_bytes(b"retained-native-source")
+                return ingestion.native_source_storage_key(
+                    kwargs["template_id"],
+                    kwargs["revision"],
+                )
+
+            removed: list[str] = []
+
+            def remove(storage_key: str, **kwargs) -> None:
+                removed.append(storage_key)
+                orphan.unlink(missing_ok=True)
+
+            monkeypatch.setattr(ingestion, "promote_native_source", promote)
+            monkeypatch.setattr(ingestion, "remove_native_source", remove)
+
+            async with maker() as session:
+                async def fail_commit() -> None:
+                    raise RuntimeError("simulated_commit_failure")
+
+                monkeypatch.setattr(session, "commit", fail_commit)
+                with pytest.raises(RuntimeError, match="simulated_commit_failure"):
+                    await ingestion.confirm_template_v2_pptx_import(
+                        session,
+                        import_id,
+                        task_id,
+                        owner_scope="local-disabled-auth-scope-v1",
+                        expected_revision=2,
+                    )
+
+            assert not orphan.exists()
+            assert removed == [
+                ingestion.native_source_storage_key(
+                    (await _requested_template_id(maker, import_id)),
+                    1,
+                )
+            ]
+            async with maker() as session:
+                job = await session.get(TemplateV2PptxImport, import_id)
+                assert job is not None
+                assert job.state == "review_required"
+                assert job.draft_template_id is None
+        finally:
+            await engine.dispose()
+
+    async def _requested_template_id(maker, import_id: uuid.UUID) -> str:
+        async with maker() as session:
+            job = await session.get(TemplateV2PptxImport, import_id)
+            assert job is not None
+            return job.requested_template_id
 
     asyncio.run(scenario())
 

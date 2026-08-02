@@ -1,0 +1,317 @@
+{
+  "schema_version": "presenton.template-v2-design-catalog/v1",
+  "entries": [
+    {
+      "id": "ppt-master-swiss-grid-systems",
+      "name": "Swiss Grid",
+      "template_kind": "layout",
+      "preservation_mode": "native_clone",
+      "publication_status": "blocked",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "commit_sha": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "path": "examples/ppt169_swiss_grid_systems",
+        "files": [
+          {
+            "path": "examples/ppt169_swiss_grid_systems/design_spec.md",
+            "sha256": "d8a45ac336c4022e4f33e702bb92d186205d167c042ce8526ba0b422a50dd20d",
+            "role": "design_spec"
+          },
+          {
+            "path": "examples/ppt169_swiss_grid_systems/spec_lock.md",
+            "sha256": "f8e77a734c84438bfa4162747488c28ae394553eb15b619924b9061c2c7c8364",
+            "role": "spec_lock"
+          },
+          {
+            "path": "examples/ppt169_swiss_grid_systems/exports/swiss_grid_systems.pptx",
+            "sha256": "8082dcb4d6c9ff93c60912daa417d62b1b31a3744fe2dd9d9f3b5e68a3e0745d",
+            "role": "candidate_pptx"
+          },
+          {
+            "path": "skills/ppt-master/workflows/create-template.md",
+            "sha256": "e6f75c8288698eb040b102953e58eea657d34747d44aca274683bc9f168d4682",
+            "role": "workflow"
+          },
+          {
+            "path": "skills/ppt-master/workflows/template-fill-pptx.md",
+            "sha256": "e006158716930a78a3586bc768fa2e85a75262903e2bb8c854d61cf19fe180b3",
+            "role": "workflow"
+          },
+          {
+            "path": "LICENSE",
+            "sha256": "cd9cf27f52d3c336dd42e13f4a1df453da118e25e15520bbe02f91d75531e91b",
+            "role": "repository_license"
+          }
+        ]
+      },
+      "provenance": {
+        "importer_version": "1.0.0",
+        "runtime_network_fetch": false,
+        "license": {
+          "repository_spdx": "MIT",
+          "repository_license_verified": true,
+          "embedded_assets_license_verified": false,
+          "redistribution_approved": false,
+          "attribution": "PPT Master by Hugo He; repository metadata inspected at commit 8858c4960b870f12baf952994fbd0c76ab5ba4ec."
+        },
+        "asset_rights_review": {
+          "raster_image_count": 3,
+          "vector_image_count": 28,
+          "pptx_count": 1,
+          "font_file_count": 0,
+          "copied_asset_count": 0,
+          "unresolved_rights": [
+            "No per-asset license or attribution manifest was found for raster images.",
+            "Derived SVG and PPTX redistribution rights were not independently verified."
+          ]
+        },
+        "decision_reasons": [
+          "Repository MIT license is not treated as evidence for embedded media rights.",
+          "No external asset is copied and the candidate remains undiscoverable."
+        ]
+      },
+      "capabilities": {
+        "native_clone": true,
+        "text_patch": true,
+        "table_patch": true,
+        "master_layout_theme": true,
+        "relationships_media": true,
+        "image_replacement": true
+      }
+    },
+    {
+      "id": "ppt-master-editorial-magazine",
+      "name": "Editorial Magazine",
+      "template_kind": "deck",
+      "preservation_mode": "native_clone",
+      "publication_status": "blocked",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "commit_sha": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "path": "examples/ppt169_pritzker_2026",
+        "files": [
+          {
+            "path": "examples/ppt169_pritzker_2026/design_spec.md",
+            "sha256": "2ca672b75ad222c9c34e1afc3d3b67821f3d34d4d648ad69cf1e61867f54144a",
+            "role": "design_spec"
+          },
+          {
+            "path": "examples/ppt169_pritzker_2026/spec_lock.md",
+            "sha256": "835ea31cda3c308151bffcec1bffa1dda2bf676ae583b593a6a8f6a48bb87531",
+            "role": "spec_lock"
+          },
+          {
+            "path": "examples/ppt169_pritzker_2026/exports/pritzker_2026.pptx",
+            "sha256": "095f9085bd12d03e10cb537078e3a903047e710af85fdb7301f7297e2674f625",
+            "role": "candidate_pptx"
+          },
+          {
+            "path": "skills/ppt-master/workflows/create-template.md",
+            "sha256": "e6f75c8288698eb040b102953e58eea657d34747d44aca274683bc9f168d4682",
+            "role": "workflow"
+          },
+          {
+            "path": "skills/ppt-master/workflows/template-fill-pptx.md",
+            "sha256": "e006158716930a78a3586bc768fa2e85a75262903e2bb8c854d61cf19fe180b3",
+            "role": "workflow"
+          },
+          {
+            "path": "LICENSE",
+            "sha256": "cd9cf27f52d3c336dd42e13f4a1df453da118e25e15520bbe02f91d75531e91b",
+            "role": "repository_license"
+          }
+        ]
+      },
+      "provenance": {
+        "importer_version": "1.0.0",
+        "runtime_network_fetch": false,
+        "license": {
+          "repository_spdx": "MIT",
+          "repository_license_verified": true,
+          "embedded_assets_license_verified": false,
+          "redistribution_approved": false,
+          "attribution": "PPT Master by Hugo He; repository metadata inspected at commit 8858c4960b870f12baf952994fbd0c76ab5ba4ec."
+        },
+        "asset_rights_review": {
+          "raster_image_count": 25,
+          "vector_image_count": 22,
+          "pptx_count": 1,
+          "font_file_count": 0,
+          "copied_asset_count": 0,
+          "unresolved_rights": [
+            "Architectural photographs have no per-image source, license, or attribution manifest.",
+            "Derived SVG and PPTX redistribution rights were not independently verified."
+          ]
+        },
+        "decision_reasons": [
+          "Repository MIT license is not treated as evidence for embedded media rights.",
+          "No external asset is copied and the candidate remains undiscoverable."
+        ]
+      },
+      "capabilities": {
+        "native_clone": true,
+        "text_patch": true,
+        "table_patch": true,
+        "master_layout_theme": true,
+        "relationships_media": true,
+        "image_replacement": true
+      }
+    },
+    {
+      "id": "ppt-master-data-journalism",
+      "name": "Data Journalism",
+      "template_kind": "deck",
+      "preservation_mode": "native_clone",
+      "publication_status": "blocked",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "commit_sha": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "path": "examples/ppt169_global_ai_capital_2026",
+        "files": [
+          {
+            "path": "examples/ppt169_global_ai_capital_2026/design_spec.md",
+            "sha256": "90d736e31479924e7d03db9989f4a866af0938f0889db496fcb29fa825f27dcd",
+            "role": "design_spec"
+          },
+          {
+            "path": "examples/ppt169_global_ai_capital_2026/spec_lock.md",
+            "sha256": "03ca577243c279ca14e89e23d20931604014aec079ebcdc9226edb8f8202b38c",
+            "role": "spec_lock"
+          },
+          {
+            "path": "examples/ppt169_global_ai_capital_2026/exports/global_ai_capital_2026.pptx",
+            "sha256": "2a323935de5a736e301e46b00707521026c31b1436663d7d7ebdec3166991972",
+            "role": "candidate_pptx"
+          },
+          {
+            "path": "skills/ppt-master/workflows/create-template.md",
+            "sha256": "e6f75c8288698eb040b102953e58eea657d34747d44aca274683bc9f168d4682",
+            "role": "workflow"
+          },
+          {
+            "path": "skills/ppt-master/workflows/template-fill-pptx.md",
+            "sha256": "e006158716930a78a3586bc768fa2e85a75262903e2bb8c854d61cf19fe180b3",
+            "role": "workflow"
+          },
+          {
+            "path": "LICENSE",
+            "sha256": "cd9cf27f52d3c336dd42e13f4a1df453da118e25e15520bbe02f91d75531e91b",
+            "role": "repository_license"
+          }
+        ]
+      },
+      "provenance": {
+        "importer_version": "1.0.0",
+        "runtime_network_fetch": false,
+        "license": {
+          "repository_spdx": "MIT",
+          "repository_license_verified": true,
+          "embedded_assets_license_verified": false,
+          "redistribution_approved": false,
+          "attribution": "PPT Master by Hugo He; repository metadata inspected at commit 8858c4960b870f12baf952994fbd0c76ab5ba4ec."
+        },
+        "asset_rights_review": {
+          "raster_image_count": 3,
+          "vector_image_count": 40,
+          "pptx_count": 1,
+          "font_file_count": 0,
+          "copied_asset_count": 0,
+          "unresolved_rights": [
+            "Generated-looking raster media has no explicit reusable-asset license manifest.",
+            "Derived SVG and PPTX redistribution rights were not independently verified."
+          ]
+        },
+        "decision_reasons": [
+          "Repository MIT license is not treated as evidence for embedded media rights.",
+          "No external asset is copied and the candidate remains undiscoverable."
+        ]
+      },
+      "capabilities": {
+        "native_clone": true,
+        "text_patch": true,
+        "table_patch": true,
+        "master_layout_theme": true,
+        "relationships_media": true,
+        "image_replacement": true
+      }
+    },
+    {
+      "id": "ppt-master-glassmorphism-saas",
+      "name": "Glassmorphism SaaS",
+      "template_kind": "brand",
+      "preservation_mode": "native_clone",
+      "publication_status": "blocked",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "commit_sha": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "path": "examples/ppt169_glassmorphism_demo",
+        "files": [
+          {
+            "path": "examples/ppt169_glassmorphism_demo/design_spec.md",
+            "sha256": "64735a1937a3df42ee650ac5d2f98095542e994114065e2901ecec85f9197b20",
+            "role": "design_spec"
+          },
+          {
+            "path": "examples/ppt169_glassmorphism_demo/spec_lock.md",
+            "sha256": "41ff1589fb98425d4283882cf832e04865a99c8a89df942f7b203f08174f2403",
+            "role": "spec_lock"
+          },
+          {
+            "path": "examples/ppt169_glassmorphism_demo/exports/glassmorphism_demo.pptx",
+            "sha256": "291bdc5f8a203a7076d387bc667b67b074c2a9bd94d5e7ee0892d8b22b44b46b",
+            "role": "candidate_pptx"
+          },
+          {
+            "path": "skills/ppt-master/workflows/create-template.md",
+            "sha256": "e6f75c8288698eb040b102953e58eea657d34747d44aca274683bc9f168d4682",
+            "role": "workflow"
+          },
+          {
+            "path": "skills/ppt-master/workflows/template-fill-pptx.md",
+            "sha256": "e006158716930a78a3586bc768fa2e85a75262903e2bb8c854d61cf19fe180b3",
+            "role": "workflow"
+          },
+          {
+            "path": "LICENSE",
+            "sha256": "cd9cf27f52d3c336dd42e13f4a1df453da118e25e15520bbe02f91d75531e91b",
+            "role": "repository_license"
+          }
+        ]
+      },
+      "provenance": {
+        "importer_version": "1.0.0",
+        "runtime_network_fetch": false,
+        "license": {
+          "repository_spdx": "MIT",
+          "repository_license_verified": true,
+          "embedded_assets_license_verified": false,
+          "redistribution_approved": false,
+          "attribution": "PPT Master by Hugo He; repository metadata inspected at commit 8858c4960b870f12baf952994fbd0c76ab5ba4ec."
+        },
+        "asset_rights_review": {
+          "raster_image_count": 8,
+          "vector_image_count": 24,
+          "pptx_count": 1,
+          "font_file_count": 0,
+          "copied_asset_count": 0,
+          "unresolved_rights": [
+            "Generated-looking raster media has no explicit reusable-asset license manifest.",
+            "Derived SVG and PPTX redistribution rights were not independently verified."
+          ]
+        },
+        "decision_reasons": [
+          "Repository MIT license is not treated as evidence for embedded media rights.",
+          "No external asset is copied and the candidate remains undiscoverable."
+        ]
+      },
+      "capabilities": {
+        "native_clone": true,
+        "text_patch": true,
+        "table_patch": true,
+        "master_layout_theme": true,
+        "relationships_media": true,
+        "image_replacement": true
+      }
+    }
+  ]
+}

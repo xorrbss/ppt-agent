@@ -4,7 +4,9 @@ import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils"
 /** Default template for the compose screen — the content-first adaptive composer
  * (NotebookLM/Gamma-style; AI composes a fresh archetype per slide). Legacy
  * template groups remain selectable. */
-export const DEFAULT_TEMPLATE_ID = "adaptive";
+// New flows resolve the unique `is_default` entry from the Template V2 catalog.
+// Existing stored ids are still accepted by resolveTemplateSelection below.
+export const DEFAULT_TEMPLATE_ID: null = null;
 
 /**
  * Resolve a stored template id into the value that TemplateSelection and

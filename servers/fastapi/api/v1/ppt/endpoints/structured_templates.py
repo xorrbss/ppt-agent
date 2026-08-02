@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -37,11 +37,13 @@ from services.template_v2_service import (
     TemplateV2SourceNotFoundError,
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
+from templates.v2.catalog import get_template_v2_catalog_entry
 from templates.v2.policy import (
     StructuredTemplatePolicy,
     StructuredTemplatePolicyError,
     get_structured_template_policy,
 )
+from templates.v2.publication import evaluate_template_v2_publication
 from templates.v2.wire_codec import (
     TemplateV2WireCodecError,
     decode_wire_layouts,
@@ -115,6 +117,12 @@ class StructuredTemplateResponse(BaseModel):
     revision: int
     created_at: datetime
     updated_at: datetime
+    source: dict[str, Any] | None = None
+    provenance: dict[str, Any] | None = None
+    capabilities: dict[str, bool] | None = None
+    preservation_mode: Literal["native_clone", "reconstructed"] | None = None
+    template_kind: Literal["brand", "layout", "deck"] | None = None
+    publication_status: Literal["published", "blocked"] | None = None
 
 
 class StructuredTemplateRevisionResponse(BaseModel):
@@ -165,7 +173,58 @@ def _response(template: TemplateV2) -> StructuredTemplateResponse:
                 detail="template_v2_layouts_invalid",
             ) from error
     response = StructuredTemplateResponse.model_validate(template)
-    return response.model_copy(update={"layouts": deepcopy(layouts)})
+    return response.model_copy(
+        update={
+            "layouts": deepcopy(layouts),
+            **_catalog_metadata(template),
+        }
+    )
+
+
+def _catalog_metadata(template: TemplateV2) -> dict[str, Any]:
+    """Project validated catalog/native evidence into optional API fields."""
+
+    catalog_entry = get_template_v2_catalog_entry(template.id)
+    decision = evaluate_template_v2_publication(template.assets)
+    if catalog_entry is not None:
+        metadata = catalog_entry.api_metadata()
+        if not decision.publishable:
+            metadata["publication_status"] = "blocked"
+        return metadata
+
+    native_metadata = template.assets if isinstance(template.assets, dict) else {}
+    nested = native_metadata.get("native_pptx")
+    if isinstance(nested, dict):
+        native_metadata = nested
+    capabilities = native_metadata.get("capabilities")
+    if not (
+        isinstance(capabilities, dict)
+        and all(
+            isinstance(name, str) and isinstance(enabled, bool)
+            for name, enabled in capabilities.items()
+        )
+    ):
+        capabilities = None
+    preservation_mode = decision.preservation_mode
+    template_kind = native_metadata.get("template_kind")
+    if template_kind not in {"brand", "layout", "deck"}:
+        template_kind = None
+    return {
+        "source": None,
+        "provenance": None,
+        "capabilities": deepcopy(capabilities),
+        "preservation_mode": preservation_mode,
+        "template_kind": template_kind,
+        "publication_status": "published" if decision.publishable else "blocked",
+    }
+
+
+def _is_discoverable(template: TemplateV2) -> bool:
+    decision = evaluate_template_v2_publication(template.assets)
+    if not decision.publishable:
+        return False
+    catalog_entry = get_template_v2_catalog_entry(template.id)
+    return catalog_entry is None or catalog_entry.publication_status == "published"
 
 
 def _service_http_error(error: TemplateV2ServiceError) -> HTTPException:
@@ -228,11 +287,27 @@ async def list_structured_templates(
     if offset < 0 or limit < 1 or limit > 200:
         raise HTTPException(status_code=400, detail="invalid_pagination")
 
-    templates = await TemplateV2Service(sql_session).list(
-        template_ids=policy.allowed_template_ids,
-        offset=offset,
-        limit=limit,
-    )
+    # Publication evidence is stored in the JSON assets contract, so it cannot
+    # be expressed safely as a portable SQL predicate.  Page the allowlisted
+    # rows first, filter each batch, and only then apply the public offset.  If
+    # filtering happened after the requested SQL page, a blocked row could
+    # truncate the response and make later publishable templates unreachable.
+    service = TemplateV2Service(sql_session)
+    wanted = offset + limit
+    templates: list[Any] = []
+    raw_offset = 0
+    batch_size = 200
+    while len(templates) < wanted:
+        batch = await service.list(
+            template_ids=policy.allowed_template_ids,
+            offset=raw_offset,
+            limit=batch_size,
+        )
+        templates.extend(template for template in batch if _is_discoverable(template))
+        raw_offset += len(batch)
+        if len(batch) < batch_size:
+            break
+    templates = templates[offset:wanted]
     observer = _telemetry(policy)
     for template in templates:
         observer.can_discover(template.id)

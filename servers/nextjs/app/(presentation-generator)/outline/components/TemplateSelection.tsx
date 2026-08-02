@@ -1,70 +1,18 @@
 "use client";
-import React, { useMemo, useCallback, memo } from "react";
+
+import React, { memo, useCallback, useEffect, useMemo } from "react";
 
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
-import { selectableTemplates } from "@/app/presentation-templates";
-import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { CustomTemplates, useCustomTemplateSummaries } from "@/app/hooks/useCustomTemplates";
 import {
+  makeTemplateV2SelectionId,
   TEMPLATE_V2_SELECTION_PREFIX,
   useStructuredTemplateSummaries,
 } from "@/app/hooks/useStructuredTemplates";
 
-import CreateCustomTemplate from "../../(dashboard)/templates/components/CreateCustomTemplate";
 import AuthoredStylePicker from "./AuthoredStylePicker";
-import { CustomTemplateCard } from "./CustomTemplateCard";
 import { StructuredTemplateCard } from "./StructuredTemplateCard";
-import {
-  TemplatePreviewStage,
-  InbuiltTemplatePreview,
-} from "../../components/TemplatePreviewComponents";
 
-const BuiltInTemplateCard = memo(function BuiltInTemplateCard({
-  template,
-  isSelected,
-  onSelect,
-}: {
-  template: TemplateLayoutsWithSettings;
-  isSelected: boolean;
-  onSelect: (template: TemplateLayoutsWithSettings) => void;
-}) {
-  const handleClick = useCallback(() => onSelect(template), [onSelect, template]);
-
-  return (
-    <Card
-      className={cn(
-        "relative hover:shadow-sm transition-all duration-200 group overflow-hidden rounded-[22px] bg-white border",
-        isSelected
-          ? " border-blue-500 ring-2 ring-blue-500/25 shadow-sm"
-          : " border-[#E8E9EC]"
-      )}
-    >
-      <button
-        type="button"
-        aria-pressed={isSelected}
-        className="block h-full w-full min-w-0 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
-        onClick={handleClick}
-      >
-        <TemplatePreviewStage>
-          <InbuiltTemplatePreview layouts={template.layouts} templateId={template.id} isOutline={true} />
-        </TemplatePreviewStage>
-        <div className="flex items-center justify-between px-6 py-5 bg-white border-t border-[#EDEEEF] relative z-40">
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-gray-900 capitalize font-syne">
-              {template.name}
-            </h3>
-            <p className="text-xs text-gray-600 line-clamp-2 font-syne">
-              {template.description}
-            </p>
-          </div>
-        </div>
-      </button>
-    </Card>
-  );
-});
-
-// Sentinel id for the authored (high-quality) mode — not a real layout template.
+// Sentinel id for the authored (high-quality) mode; this is not a layout template.
 export const AUTHORED_TEMPLATE_ID = "authored";
 
 interface TemplateSelectionProps {
@@ -76,31 +24,19 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
   selectedTemplate,
   onSelectTemplate,
 }) {
-  const { templates: customTemplates, loading: customLoading } = useCustomTemplateSummaries();
-  const { templates: structuredTemplates, loading: structuredLoading } =
-    useStructuredTemplateSummaries();
+  const {
+    templates: structuredTemplates,
+    loading: structuredLoading,
+    error: structuredError,
+  } = useStructuredTemplateSummaries();
+
   const handleAuthoredActivate = useCallback(
     () => onSelectTemplate(AUTHORED_TEMPLATE_ID),
     [onSelectTemplate]
   );
-
-  const handleCustomSelect = useCallback(
-    (template: TemplateLayoutsWithSettings | string) => onSelectTemplate(template),
+  const handleStructuredSelect = useCallback(
+    (template: string) => onSelectTemplate(template),
     [onSelectTemplate]
-  );
-
-  const handleBuiltInSelect = useCallback(
-    (template: TemplateLayoutsWithSettings) => onSelectTemplate(template),
-    [onSelectTemplate]
-  );
-
-  const selectedCustomId = useMemo(
-    () =>
-      typeof selectedTemplate === "string" &&
-      !selectedTemplate.startsWith(TEMPLATE_V2_SELECTION_PREFIX)
-        ? selectedTemplate
-        : null,
-    [selectedTemplate]
   );
 
   const selectedStructuredId = useMemo(
@@ -111,61 +47,44 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
         : null,
     [selectedTemplate]
   );
-
-  const selectedBuiltInId = useMemo(
-    () => (typeof selectedTemplate !== "string" ? selectedTemplate?.id ?? null : null),
-    [selectedTemplate]
+  const defaultTemplates = useMemo(
+    () => structuredTemplates.filter((template) => template.is_default),
+    [structuredTemplates]
   );
+  const defaultTemplate = defaultTemplates.length === 1 ? defaultTemplates[0] : null;
+  const catalogConfigurationError = useMemo(() => {
+    if (structuredLoading || structuredError || structuredTemplates.length === 0) {
+      return null;
+    }
+    if (defaultTemplates.length === 0) {
+      return "Template V2 카탈로그에 기본 템플릿이 설정되어 있지 않습니다.";
+    }
+    if (defaultTemplates.length > 1) {
+      return "Template V2 카탈로그에 기본 템플릿이 둘 이상 설정되어 있습니다.";
+    }
+    return null;
+  }, [defaultTemplates.length, structuredError, structuredLoading, structuredTemplates.length]);
 
-  // Custom template cards as a flat list so they can flow inline in the unified
-  // grid (after the "create" card, before the built-in templates). Empty while
-  // loading — built-in templates and the create card render immediately.
-  const customTemplateCards = useMemo(
-    () =>
-      customLoading
-        ? []
-        : customTemplates.map((template: CustomTemplates) => (
-            <CustomTemplateCard
-              key={template.id}
-              template={template}
-              onSelectTemplate={handleCustomSelect}
-              selectedTemplate={selectedCustomId}
-            />
-          )),
-    [customLoading, customTemplates, handleCustomSelect, selectedCustomId]
-  );
-
-  const builtInTemplateCards = useMemo(
-    () =>
-      selectableTemplates.map((template: TemplateLayoutsWithSettings) => (
-        <BuiltInTemplateCard
-          key={template.id}
-          template={template}
-          isSelected={selectedBuiltInId === template.id}
-          onSelect={handleBuiltInSelect}
-        />
-      )),
-    [selectedBuiltInId, handleBuiltInSelect]
-  );
+  // Fresh flows begin from the single catalog-declared default. Do not overwrite
+  // a rehydrated legacy id: existing V1 documents must remain renderable.
+  useEffect(() => {
+    if (!defaultTemplate || selectedTemplate !== null) return;
+    onSelectTemplate(
+      makeTemplateV2SelectionId(defaultTemplate.id, defaultTemplate.revision)
+    );
+  }, [defaultTemplate, onSelectTemplate, selectedTemplate]);
 
   const structuredTemplateCards = useMemo(
     () =>
-      structuredLoading
-        ? []
-        : structuredTemplates.map((template) => (
-            <StructuredTemplateCard
-              key={template.id}
-              template={template}
-              onSelectTemplate={handleCustomSelect}
-              selectedTemplate={selectedStructuredId}
-            />
-          )),
-    [
-      handleCustomSelect,
-      selectedStructuredId,
-      structuredLoading,
-      structuredTemplates,
-    ]
+      structuredTemplates.map((template) => (
+        <StructuredTemplateCard
+          key={template.id}
+          template={template}
+          onSelectTemplate={handleStructuredSelect}
+          selectedTemplate={selectedStructuredId}
+        />
+      )),
+    [handleStructuredSelect, selectedStructuredId, structuredTemplates]
   );
 
   return (
@@ -177,12 +96,12 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
         <div className="mb-4">
           <h2
             id="authored-template-heading"
-            className="text-base font-bold text-gray-900 font-syne"
+            className="font-syne text-base font-bold text-gray-900"
           >
-            AI 저작 템플릿(고품질)
+            AI 저작 템플릿 (고품질)
           </h2>
           <p className="mt-1 break-words text-sm leading-6 text-gray-600">
-            AI가 슬라이드별 디자인을 직접 저작하며, 인앱에서는 보기 전용으로 제공됩니다.
+            AI가 슬라이드별 시각 구성을 직접 저작하는 별도 모드입니다.
           </p>
         </div>
         <AuthoredStylePicker
@@ -198,23 +117,39 @@ const TemplateSelection: React.FC<TemplateSelectionProps> = memo(function Templa
         <div className="mb-4">
           <h2
             id="layout-template-heading"
-            className="text-base font-bold text-gray-900 font-syne"
+            className="font-syne text-base font-bold text-gray-900"
           >
-            레이아웃 템플릿(편집 가능 PPTX)
+            레이아웃 템플릿 (편집 가능 PPTX)
           </h2>
           <p className="mt-1 break-words text-sm leading-6 text-gray-600">
-            기존 레이아웃을 사용해 PowerPoint에서 편집 가능한 슬라이드를 만듭니다.
+            Template V2 카탈로그의 검증된 편집 가능 PPTX 템플릿입니다.
           </p>
         </div>
-        <div
-          data-testid="layout-template-grid"
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-        >
-          <CreateCustomTemplate />
-          {structuredTemplateCards}
-          {customTemplateCards}
-          {builtInTemplateCards}
-        </div>
+
+        {structuredLoading ? (
+          <div data-testid="template-v2-catalog-loading" role="status">
+            Template V2 카탈로그를 불러오는 중입니다.
+          </div>
+        ) : structuredError ? (
+          <div data-testid="template-v2-catalog-empty" role="alert">
+            Template V2 카탈로그를 불러오지 못했습니다. 레이아웃 템플릿을 선택할 수 없습니다.
+          </div>
+        ) : structuredTemplates.length === 0 ? (
+          <div data-testid="template-v2-catalog-empty" role="status">
+            현재 사용할 수 있는 Template V2 템플릿이 없습니다.
+          </div>
+        ) : catalogConfigurationError ? (
+          <div data-testid="template-v2-catalog-configuration-error" role="alert">
+            {catalogConfigurationError} 관리자에게 카탈로그 구성을 확인해 달라고 요청하세요.
+          </div>
+        ) : (
+          <div
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            data-testid="layout-template-grid"
+          >
+            {structuredTemplateCards}
+          </div>
+        )}
       </section>
     </div>
   );

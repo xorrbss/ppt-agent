@@ -86,6 +86,7 @@ from services.presentation_generation_job_service import (
 from services.template_v2_generation_service import (
     TemplateV2GenerationError,
     build_template_v2_slides,
+    export_template_v2_native_pptx,
     load_template_v2_generation_target,
     preflight_template_v2_native_pptx,
     source_content_sha256,
@@ -422,6 +423,7 @@ async def _generate_template_v2_presentation(
         native_pptx_preflight = preflight_template_v2_native_pptx(
             target=target,
             slides=slides,
+            select_for_export=request.export_as == "pptx",
         )
         created_at = datetime.now(timezone.utc)
         provenance = target.provenance(
@@ -518,12 +520,22 @@ async def _generate_template_v2_presentation(
 
     export_started_at = perf_counter()
     try:
-        presentation_and_path = await export_presentation(
-            presentation_id,
-            presentation.title or str(uuid.uuid4()),
-            request.export_as,
-            cookie_header=export_cookie_header,
-        )
+        if (
+            target.preservation_mode == "native_clone"
+            and request.export_as == "pptx"
+        ):
+            presentation_and_path = export_template_v2_native_pptx(
+                presentation_id=presentation_id,
+                title=presentation.title or str(uuid.uuid4()),
+                preflight=native_pptx_preflight,
+            )
+        else:
+            presentation_and_path = await export_presentation(
+                presentation_id,
+                presentation.title or str(uuid.uuid4()),
+                request.export_as,
+                cookie_header=export_cookie_header,
+            )
         log_template_v2_generation_observation(
             operation="export",
             outcome="success",
