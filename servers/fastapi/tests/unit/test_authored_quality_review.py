@@ -31,10 +31,12 @@ from services.authored_exact_provenance import (
     build_exact_provenance,
 )
 from services.authored_review_asset_store import publish_reviewed_png
+from tests.unit.authored_quality_test_metrics import complete_browser_metrics
 from utils.authored_styles import (
     AuthoredExactReconstructionUnavailableError,
     AuthoredStyle,
 )
+from utils.authored_ocr_quality import OcrQualityResult
 from utils.llm_calls.author_deck import AuthoredDeckResult
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
@@ -44,8 +46,37 @@ from utils.llm_calls.author_slide import (
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 
+@pytest.fixture(autouse=True)
+def _complete_browser_telemetry(monkeypatch):
+    monkeypatch.setattr(
+        quality_service,
+        "get_cached_browser_metrics",
+        complete_browser_metrics,
+    )
+
+
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _mock_text_preserving_ocr(monkeypatch) -> None:
+    async def fake_ocr(
+        _image, *, expected_text=None, language="eng", cache=None, **_kwargs
+    ):
+        cache.calls += 1
+        return OcrQualityResult(
+            available=True,
+            status="success",
+            failure_reason=None,
+            text="preserved slide text",
+            text_digest="preserved-slide-text",
+            metrics={},
+            calls=cache.calls,
+            cache_hits=cache.cache_hits,
+            elapsed_ms=0.0,
+        )
+
+    monkeypatch.setattr(quality_service, "inspect_authored_ocr", fake_ocr)
 
 
 @pytest.mark.parametrize(
@@ -140,6 +171,8 @@ def _slides(presentation_id):
 def test_existing_authored_deck_repairs_only_flagged_slide_and_saves_version(
     tmp_path, monkeypatch
 ):
+    _mock_text_preserving_ocr(monkeypatch)
+
     async def runner():
         engine = await _make_engine(tmp_path / "quality-review.db")
         presentation = _presentation()
@@ -765,6 +798,8 @@ def test_analyze_and_fix_uses_process_local_lock(monkeypatch):
 def test_analyze_and_fix_cas_rejects_stale_slide_and_rolls_back_snapshot(
     tmp_path, monkeypatch, competing_change
 ):
+    _mock_text_preserving_ocr(monkeypatch)
+
     async def runner():
         engine = await _make_engine(tmp_path / "quality-review-cas.db")
         presentation = _presentation()
@@ -999,6 +1034,8 @@ def test_exact_quality_review_reuses_initial_critique_rechecks_only_candidates_a
     tmp_path, monkeypatch, caplog
 ):
     caplog.set_level(logging.INFO, logger=quality_service.__name__)
+    _mock_text_preserving_ocr(monkeypatch)
+
     async def runner():
         engine = await _make_engine(tmp_path / "exact-fix.db")
         presentation = _presentation()

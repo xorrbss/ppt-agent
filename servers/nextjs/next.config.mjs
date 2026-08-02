@@ -36,11 +36,10 @@ const runtimeTailwindTrace = [
 const nextConfig = {
   reactStrictMode: false,
   distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
-  // The repository contains multiple package roots. Pin Turbopack to this
-  // Next.js app so a dev-server restart cannot infer `app/` (or the repository
-  // root) as the project root and silently lose every route except `/`.
+  // Next requires this to agree with outputFileTracingRoot. The repository root
+  // is required to trace the presentation-export runtime outside this app.
   turbopack: {
-    root: nextjsRoot,
+    root: repositoryRoot,
   },
   experimental: {
     // Fidelity tests isolate their distDir per run. Avoid duplicating Turbopack's

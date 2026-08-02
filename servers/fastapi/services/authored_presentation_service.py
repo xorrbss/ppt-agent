@@ -63,6 +63,7 @@ from utils.asset_directory_utils import (
     get_images_directory,
 )
 from utils.authored_illustrations import apply_authored_illustration
+from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_styles import (
     resolve_authored_style,
     validate_exact_reconstruction_style,
@@ -701,7 +702,9 @@ async def _generate_authored_presentation(
             outline, brand, style, generation_job=generation_job
         )
     authored_deck = pipeline.deck
-    htmls = authored_deck.htmls
+    # Persist stable edit targets for future local quality-review patches. Attribute
+    # insertion is deterministic and has no visual effect on the already-rendered PNG.
+    htmls = [ensure_authored_qids(html) for html in authored_deck.htmls]
     pngs = pipeline.pngs
 
     fixed_count = 0

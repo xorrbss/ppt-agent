@@ -23,8 +23,19 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services import authored_quality_review_service as quality_service
+from tests.unit.authored_quality_test_metrics import complete_browser_metrics
+from utils.authored_ocr_quality import OcrQualityResult
 from utils.llm_calls.author_slide import STYLE_REFERENCE, Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+
+
+@pytest.fixture(autouse=True)
+def _complete_browser_telemetry(monkeypatch):
+    monkeypatch.setattr(
+        quality_service,
+        "get_cached_browser_metrics",
+        complete_browser_metrics,
+    )
 
 
 def _run(coro):
@@ -103,6 +114,22 @@ def _style_plan() -> SimpleNamespace:
 
 
 def _install_style_reference_stubs(monkeypatch, critique, compare, revise):
+    async def fake_ocr(
+        _image, *, expected_text=None, language="eng", cache=None, **_kwargs
+    ):
+        cache.calls += 1
+        return OcrQualityResult(
+            available=True,
+            status="success",
+            failure_reason=None,
+            text="preserved slide text",
+            text_digest="preserved-slide-text",
+            metrics={},
+            calls=cache.calls,
+            cache_hits=cache.cache_hits,
+            elapsed_ms=0.0,
+        )
+
     monkeypatch.setattr(
         quality_service,
         "resolve_authored_style",
@@ -121,6 +148,7 @@ def _install_style_reference_stubs(monkeypatch, critique, compare, revise):
         quality_service, "critique_authored_style_comparison", compare
     )
     monkeypatch.setattr(quality_service, "revise_authored_deck", revise)
+    monkeypatch.setattr(quality_service, "inspect_authored_ocr", fake_ocr)
     monkeypatch.setattr(
         quality_service,
         "_observe_critique_cache",

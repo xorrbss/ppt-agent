@@ -6,6 +6,10 @@ deck is checkpointed before any replacement so the operation can be undone throu
 the existing presentation version history.
 """
 
+# Private facade imports are intentionally re-exported for existing tests and
+# extension monkeypatch points while their implementations live in helper modules.
+# ruff: noqa: F401
+
 import asyncio
 import json
 import logging
@@ -14,13 +18,10 @@ import time
 import uuid
 import weakref
 from collections import Counter
-from typing import Iterable, List, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
-
 from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -28,6 +29,40 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from utils.authored_dom_quality import (
+    DomQualityReport,
+    ensure_authored_qids,
+    inspect_authored_dom,
+)
+from utils.authored_ocr_quality import inspect_authored_ocr
+from utils.authored_review_routing import plan_authored_review_routing
+from utils.authored_styles import (
+    AuthoredExactReconstructionUnavailableError,
+    resolve_authored_style,
+)
+from utils.datetime_utils import get_current_utc_datetime
+from utils.llm_calls import author_vision_qa
+from utils.llm_calls.author_deck import prepare_authored_deck
+from utils.llm_calls.author_slide import (
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
+    Brand,
+    normalize_reference_mode,
+)
+from utils.llm_calls.author_vision_qa import (
+    critique_authored,
+    critique_authored_style_comparison,
+    revise_authored_deck,
+)
+from utils.llm_calls.critique_slide import SlideCritique
+from utils.slide_capture import (
+    get_cached_browser_metrics,
+    render_html_to_png,
+    render_html_to_png_with_metrics,
+)
+
 from services import presentation_version_service as version_service
 from services.authored_exact_provenance import (
     ExactProvenanceError,
@@ -37,48 +72,158 @@ from services.authored_exact_source_snapshot import (
     ExactSourceSnapshotError,
     materialize_exact_source_style,
 )
+from services.authored_quality_acceptance import (
+    acceptance_decision as _acceptance_decision,
+)
+from services.authored_quality_acceptance import (
+    critique_score as _critique_score,
+)
+from services.authored_quality_acceptance import (
+    critique_unusable_reason as _critique_unusable_reason,
+)
+from services.authored_quality_acceptance import (
+    is_improved as _is_improved,
+)
+from services.authored_quality_acceptance import (
+    local_acceptance_decision as _local_acceptance_decision,
+)
+from services.authored_quality_acceptance import (
+    style_acceptance_decision as _style_acceptance_decision,
+)
+from services.authored_quality_acceptance import (
+    style_comparison_has_regression as _style_comparison_has_regression,
+)
+from services.authored_quality_ocr import (
+    RequestOcrRuntime,
+)
+from services.authored_quality_ocr import (
+    capture_initial_ocr as _capture_initial_ocr,
+)
+from services.authored_quality_ocr import (
+    evaluate_candidate_ocr as _evaluate_candidate_ocr,
+)
+from services.authored_quality_ocr import (
+    normalize_ocr_check as _normalize_ocr_check,
+)
+from services.authored_quality_ocr import (
+    ocr_language as _ocr_language,
+)
+from services.authored_quality_ocr import (
+    ocr_omissions as _ocr_omissions,
+)
+from services.authored_quality_ocr import (
+    ocr_unavailable_reason as _ocr_unavailable_reason,
+)
+from services.authored_quality_ocr import (
+    safe_ocr_payload as _safe_ocr_payload,
+)
+from services.authored_quality_results import (
+    build_slide_results as _build_slide_results,
+)
+from services.authored_quality_results import (
+    critique_details as _critique_details,
+)
+from services.authored_quality_routing import (
+    hybrid_style_initial_review,
+)
+from services.authored_quality_routing import (
+    render_review_montage as _render_review_montage,
+)
+from services.authored_quality_telemetry import (
+    build_review_event,
+)
+from services.authored_quality_telemetry import (
+    observe_critique_cache as _observe_critique_cache,
+)
+from services.authored_quality_telemetry import (
+    observe_style_comparison_cache as _observe_style_comparison_cache,
+)
+from services.authored_quality_telemetry import (
+    review_observation_metadata as _review_observation_metadata,
+)
+from services.authored_quality_telemetry import (
+    safe_review_model as _safe_review_model,
+)
+from services.authored_quality_telemetry import (
+    style_comparison_observation_metadata as _style_comparison_observation_metadata,
+)
 from services.authored_review_asset_store import publish_reviewed_png
 from services.database import async_session_maker
-from utils.authored_styles import (
-    AuthoredExactReconstructionUnavailableError,
-    resolve_authored_style,
-)
-from utils.datetime_utils import get_current_utc_datetime
-from utils.llm_calls.author_deck import prepare_authored_deck
-from utils.llm_calls.author_slide import (
-    EXACT_RECONSTRUCTION,
-    STYLE_REFERENCE,
-    Brand,
-    normalize_reference_mode,
-)
-from utils.llm_calls.critique_slide import SlideCritique
-from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_vision_qa import (
-    critique_authored,
-    critique_authored_style_comparison,
-    revise_authored_deck,
-)
-from utils.slide_capture import render_html_to_png
-
 
 LOGGER = logging.getLogger(__name__)
-_INDETERMINATE_PREFIX = "INDETERMINATE:"
-_SAFE_OBSERVATION_TOKEN = re.compile(r"^[A-Za-z0-9._:/@+-]{1,128}$")
-_SAFE_REJECTION_REASONS = {
-    "no_candidate",
-    "unchanged",
-    "worsened",
-    "initial_unavailable",
-    "initial_inconsistent",
-    "initial_indeterminate",
-    "final_unavailable",
-    "final_inconsistent",
-    "final_indeterminate",
-    "regression",
-}
+_ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
 _ANALYZE_AND_FIX_LOCKS: weakref.WeakValueDictionary[uuid.UUID, asyncio.Lock] = (
     weakref.WeakValueDictionary()
 )
+
+_OCR_DOM_CATEGORIES = {"content", "overflow", "clipping", "off_canvas"}
+_OCR_DETAIL_SIGNAL = re.compile(
+    r"(?:text|title|label|number|numeric|digit|symbol|character|glyph|word|"
+    r"missing|omitt|truncat|clip|crop|content\s+loss|"
+    r"텍스트|제목|레이블|문자|숫자|기호|누락|생략|잘림|내용)",
+    re.IGNORECASE,
+)
+
+
+async def _execute_sqlalchemy(session: AsyncSession, statement: Any) -> Any:
+    """Execute through SQLAlchemy even when a SQLModel session subclass is supplied.
+
+    Production sessions are SQLAlchemy ``AsyncSession`` instances, while a few
+    compatibility tests intentionally supply SQLModel's subclass.  SQLModel
+    deprecates its inherited ``execute`` method and SQLAlchemy's ``scalars``
+    dynamically dispatches to that deprecated override.  Calling the base method
+    explicitly keeps one result contract (``Result``) in both environments without
+    suppressing warnings or changing the database/session architecture.
+    """
+    return await AsyncSession.execute(session, statement)
+
+
+def _ocr_route_signals(
+    local_report: DomQualityReport | None,
+    critique: SlideCritique | None,
+    repair_detail: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """Return closed, content-free reasons for selectively running slide OCR."""
+    signals: set[str] = set()
+    if local_report is not None:
+        for issue in local_report.issues:
+            if issue.category in _OCR_DOM_CATEGORIES:
+                signals.add(f"dom:{issue.category}")
+    if critique is not None:
+        for issue in critique.issues:
+            issue_type = str(issue.type)
+            if issue_type in {"overflow", "placeholder"} or _OCR_DETAIL_SIGNAL.search(
+                issue.detail or ""
+            ):
+                signals.add(f"vqa:{issue_type}")
+    if repair_detail is not None:
+        # Full re-authoring can alter any text even when the triggering defect was
+        # purely visual.  Always compare its render against the baseline; this is
+        # the highest-risk path and must not depend on VQA mentioning text loss.
+        if str(repair_detail.get("path") or "") == "full_fallback":
+            signals.add("repair:full_fallback")
+        for change in repair_detail.get("element_changes") or []:
+            if not isinstance(change, Mapping):
+                continue
+            action = str(change.get("action") or "").casefold().replace("_", "")
+            if "text" in action:
+                signals.add("repair:text_change")
+                break
+    return sorted(signals)
+
+
+async def _inspect_ocr_for_review(*args, **kwargs):
+    """Resolve the service facade at call time so tests/integrators can patch it."""
+    return await inspect_authored_ocr(*args, **kwargs)
+
+
+class _RequestOcrRuntime(RequestOcrRuntime):
+    def __init__(self, language: str) -> None:
+        super().__init__(
+            language,
+            inspect_ocr=_inspect_ocr_for_review,
+            logger=LOGGER,
+        )
 
 
 def _is_authored_slide(slide: SlideModel) -> bool:
@@ -112,7 +257,7 @@ async def _set_status(
 
 def _resolve_positions(
     request: AuthoredQualityReviewRequest, slide_count: int
-) -> List[int]:
+) -> list[int]:
     if request.scope == "all":
         return list(range(slide_count))
     if len(request.slide_indices) != 1:
@@ -148,234 +293,56 @@ def _saved_role(slide: SlideModel, fallback: str) -> str:
     return fallback
 
 
-def _serialize_critiques(positions: Iterable[int], critiques: list) -> List[dict]:
-    results: List[dict] = []
+def _serialize_critiques(positions: Iterable[int], critiques: list) -> list[dict]:
+    results: list[dict] = []
     for position, critique in zip(positions, critiques):
         if critique is None or not critique.needs_fix:
             continue
         results.append(
             {
                 "slide_index": position,
-                "issues": [
-                    issue.model_dump(mode="json") for issue in critique.issues
-                ],
+                "issues": [issue.model_dump(mode="json") for issue in critique.issues],
             }
         )
     return results
 
 
-def _critique_unusable_reason(critique: SlideCritique | None) -> str | None:
-    if critique is None:
-        return "unavailable"
-    if critique.needs_fix != bool(critique.issues):
-        return "inconsistent"
-    if any(
-        issue.detail.lstrip().upper().startswith(_INDETERMINATE_PREFIX)
-        for issue in critique.issues
-    ):
-        return "indeterminate"
-    return None
+async def _render_review_html(html: str) -> tuple[bytes, Mapping | None]:
+    """Render with co-located telemetry while preserving legacy test doubles."""
+    if render_html_to_png is not _ORIGINAL_RENDER_HTML_TO_PNG:
+        png = await render_html_to_png(html)
+        return png, get_cached_browser_metrics(html)
+    return await render_html_to_png_with_metrics(html)
 
 
-def _critique_score(critique: SlideCritique | None) -> tuple[int, int, int] | None:
-    """Return a deterministic defect score, or None when comparison is unsafe."""
-    if _critique_unusable_reason(critique) is not None:
-        return None
-    severity = {"high": 3, "medium": 2, "low": 1}
-    return (
-        int(critique.needs_fix),
-        sum(severity.get(issue.severity, 3) for issue in critique.issues),
-        len(critique.issues),
-    )
-
-
-def _acceptance_decision(
-    before: SlideCritique | None, after: SlideCritique | None
-) -> tuple[bool, str]:
-    """Accept exact HTML only after a strictly better, determinate comparison."""
-    before_error = _critique_unusable_reason(before)
-    if before_error is not None:
-        return False, f"initial_{before_error}"
-    after_error = _critique_unusable_reason(after)
-    if after_error is not None:
-        return False, f"final_{after_error}"
-
-    before_score = _critique_score(before)
-    after_score = _critique_score(after)
-    assert before_score is not None and after_score is not None
-    if after_score < before_score:
-        return True, "improved"
-    if after_score == before_score:
-        return False, "unchanged"
-    return False, "worsened"
-
-
-def _style_comparison_has_regression(critique: SlideCritique | None) -> bool:
-    """Return whether a STYLE_REFERENCE comparison identified a new regression."""
-    if critique is None:
-        return False
-    prefix = str(
-        getattr(
-            author_vision_qa,
-            "STYLE_COMPARISON_REGRESSION_PREFIX",
-            "REGRESSION:",
-        )
-    ).upper()
-    return any(
-        issue.detail.lstrip().upper().startswith(prefix)
-        for issue in critique.issues
-    )
-
-
-def _style_acceptance_decision(
-    before: SlideCritique | None, after: SlideCritique | None
-) -> tuple[bool, str]:
-    """Accept a style repair only when it improves without a new regression."""
-    before_error = _critique_unusable_reason(before)
-    if before_error is not None:
-        return False, f"initial_{before_error}"
-    after_error = _critique_unusable_reason(after)
-    if after_error is not None:
-        return False, f"final_{after_error}"
-    if _style_comparison_has_regression(after):
-        return False, "regression"
-    return _acceptance_decision(before, after)
-
-
-def _is_improved(
-    before: SlideCritique | None, after: SlideCritique | None
-) -> bool:
-    return _acceptance_decision(before, after)[0]
-
-
-def _safe_review_model() -> str:
-    """Return a bounded configuration token, never a prompt or provider response."""
-    try:
-        model = str(author_vision_qa.get_model() or "unknown")
-    except Exception:  # Provider configuration is best-effort for telemetry only.
-        return "unknown"
-    return model if _SAFE_OBSERVATION_TOKEN.fullmatch(model) else "unknown"
-
-
-def _review_observation_metadata() -> dict[str, str]:
-    """Read static reviewer configuration without initiating any VQA request."""
-    return {
-        "model": _safe_review_model(),
-        "prompt_version": str(
-            getattr(author_vision_qa, "CRITIQUE_PROMPT_VERSION", "unknown")
-        ),
-        "cache_version": str(
-            getattr(author_vision_qa, "_VQA_PROMPT_VERSION", "unknown")
-        ),
-    }
-
-
-def _style_comparison_observation_metadata() -> dict[str, str]:
-    """Read comparison-review configuration without exposing cache-key material."""
-    return {
-        "model": _safe_review_model(),
-        "prompt_version": str(
-            getattr(
-                author_vision_qa,
-                "STYLE_COMPARISON_VQA_PROMPT_VERSION",
-                "unknown",
-            )
-        ),
-        "cache_version": str(
-            getattr(
-                author_vision_qa,
-                "STYLE_COMPARISON_VQA_PROMPT_VERSION",
-                "unknown",
-            )
-        ),
-    }
-
-
-def _observe_critique_cache(
-    images: Iterable[bytes],
-    contexts: Iterable[str | None],
+async def _hybrid_style_initial_review(
     *,
-    source_images: Iterable[bytes] | None = None,
-    reference_mode: str = STYLE_REFERENCE,
-) -> tuple[int, int]:
-    """Count cache lookups immediately before one ``critique_authored`` call.
-
-    This deliberately mirrors the existing cache key rather than changing the vision
-    QA API. A cache miss includes an in-flight coalesced request; it did not have a
-    completed cached result at call start. The helper never invokes the model.
-    """
-    image_list = list(images)
-    context_list = list(contexts)
-    source_list = (
-        list(source_images) if source_images is not None else [None] * len(image_list)
+    pngs: list[bytes],
+    contexts: list[str],
+    positions: list[int],
+    slide_count: int,
+    local_reports: list[DomQualityReport],
+    sampling_seed: str,
+) -> tuple[
+    list[SlideCritique | None],
+    dict,
+    int,
+    int,
+    float,
+    float,
+]:
+    """Delegate routing while preserving service-level monkeypatch points."""
+    return await hybrid_style_initial_review(
+        pngs=pngs,
+        contexts=contexts,
+        positions=positions,
+        slide_count=slide_count,
+        local_reports=local_reports,
+        sampling_seed=sampling_seed,
+        critique_batch=critique_authored,
+        observe_cache=_observe_critique_cache,
+        unusable_reason=_critique_unusable_reason,
     )
-    if len(context_list) != len(image_list) or len(source_list) != len(image_list):
-        return 0, len(image_list)
-    try:
-        cache_enabled = int(getattr(author_vision_qa, "VQA_CACHE_SIZE", 0)) > 0
-    except (TypeError, ValueError):
-        cache_enabled = False
-    if not cache_enabled:
-        return 0, len(image_list)
-
-    key_builder = getattr(author_vision_qa, "_critique_cache_key", None)
-    cache = getattr(author_vision_qa, "_vqa_cache", None)
-    if not callable(key_builder) or cache is None:
-        return 0, len(image_list)
-
-    hits = 0
-    for image, context, source_image in zip(image_list, context_list, source_list):
-        try:
-            key = key_builder(
-                image,
-                context,
-                source_image=source_image,
-                reference_mode=reference_mode,
-            )
-            hits += int(key in cache)
-        except Exception:  # Cache observability must never affect a review.
-            continue
-    return hits, len(image_list) - hits
-
-
-def _observe_style_comparison_cache(
-    baseline_images: Iterable[bytes],
-    candidate_images: Iterable[bytes],
-    contexts: Iterable[str | None],
-) -> tuple[int, int]:
-    """Count completed cache hits for one STYLE_REFERENCE comparison batch."""
-    baseline_list = list(baseline_images)
-    candidate_list = list(candidate_images)
-    context_list = list(contexts)
-    if not (len(baseline_list) == len(candidate_list) == len(context_list)):
-        return 0, len(candidate_list)
-    try:
-        cache_enabled = int(getattr(author_vision_qa, "VQA_CACHE_SIZE", 0)) > 0
-    except (TypeError, ValueError):
-        cache_enabled = False
-    if not cache_enabled:
-        return 0, len(candidate_list)
-
-    key_builder = getattr(author_vision_qa, "_style_comparison_cache_key", None)
-    cache = getattr(author_vision_qa, "_style_comparison_vqa_cache", None)
-    if not callable(key_builder) or cache is None:
-        return 0, len(candidate_list)
-
-    hits = 0
-    for baseline, candidate, context in zip(
-        baseline_list, candidate_list, context_list
-    ):
-        try:
-            key = key_builder(
-                baseline,
-                candidate,
-                context,
-                reference_mode=STYLE_REFERENCE,
-            )
-            hits += int(key in cache)
-        except Exception:  # Cache observability must never affect a review.
-            continue
-    return hits, len(candidate_list) - hits
 
 
 def _log_review_event(
@@ -397,41 +364,37 @@ def _log_review_event(
     critique_ms: float = 0.0,
     revision_ms: float = 0.0,
     indeterminate_count: int = 0,
+    ocr_executed: bool = False,
+    ocr_requests: int = 0,
+    ocr_calls: int = 0,
+    ocr_cache_hits: int = 0,
+    ocr_total_ms: float = 0.0,
 ) -> None:
-    """Emit a closed, content-free high-quality-review observation."""
-    raw_reasons = rejection_reasons or {}
-    reasons: Counter[str] = Counter()
-    for reason, count in raw_reasons.items():
-        safe_reason = reason if reason in _SAFE_REJECTION_REASONS else "other"
-        reasons[safe_reason] += max(0, int(count))
-    rejected = sum(reasons.values())
-    event = {
-        "schema_version": 1,
-        "pipeline": "authored_quality_review",
-        "reference_mode": reference_mode,
-        "stage": stage,
-        "slides": slide_count,
-        "attempted": attempted,
-        "accepted": accepted,
-        "rejected": rejected,
-        "rejection_reasons": dict(sorted(reasons.items())),
-        "model": model or "unknown",
-        "prompt_version": prompt_version or "unknown",
-        "cache_version": cache_version or "unknown",
-        # One batch fans out to one cached critique per slide. A miss means there was
-        # no completed cache result; an in-flight coalesced request can lower the
-        # actual remote-call count, so this is a conservative request estimate.
-        "critique_batch_count": critique_batch_count,
-        "critique_slide_request_count": critique_slide_request_count,
-        "cache_hits": cache_hits,
-        "cache_misses": cache_misses,
-        "render_ms": round(render_ms, 3),
-        "ocr_ms": 0.0,
-        "ocr_executed": False,
-        "critique_ms": round(critique_ms, 3),
-        "revision_ms": round(revision_ms, 3),
-        "indeterminate_count": indeterminate_count,
-    }
+    """Emit telemetry through this module's logger for compatibility."""
+    event = build_review_event(
+        reference_mode=reference_mode,
+        stage=stage,
+        slide_count=slide_count,
+        attempted=attempted,
+        accepted=accepted,
+        rejection_reasons=rejection_reasons,
+        model=model,
+        prompt_version=prompt_version,
+        cache_version=cache_version,
+        critique_batch_count=critique_batch_count,
+        critique_slide_request_count=critique_slide_request_count,
+        cache_hits=cache_hits,
+        cache_misses=cache_misses,
+        render_ms=render_ms,
+        critique_ms=critique_ms,
+        revision_ms=revision_ms,
+        indeterminate_count=indeterminate_count,
+        ocr_executed=ocr_executed,
+        ocr_requests=ocr_requests,
+        ocr_calls=ocr_calls,
+        ocr_cache_hits=ocr_cache_hits,
+        ocr_total_ms=ocr_total_ms,
+    )
     LOGGER.info(
         "authored_quality_review %s",
         json.dumps(event, sort_keys=True, separators=(",", ":")),
@@ -450,6 +413,7 @@ async def _run_authored_quality_review_unlocked(
     task: AsyncPresentationGenerationTaskModel,
     session: AsyncSession,
 ) -> None:
+    review_started_at = time.perf_counter()
     presentation = await session.get(PresentationModel, presentation_id)
     if presentation is None:
         raise ValueError("Presentation not found")
@@ -457,17 +421,17 @@ async def _run_authored_quality_review_unlocked(
     if outline is None or not outline.slides:
         raise ValueError("The saved AI-authored outline is missing")
 
-    slides = list(
-        (
-            await session.scalars(
-                select(SlideModel)
-                .where(SlideModel.presentation == presentation_id)
-                .order_by(SlideModel.index)
-            )
-        ).all()
+    slide_rows = await _execute_sqlalchemy(
+        session,
+        select(SlideModel)
+        .where(SlideModel.presentation == presentation_id)
+        .order_by(SlideModel.index),
     )
-    if not slides or not presentation.is_authored() or not all(
-        _is_authored_slide(slide) for slide in slides
+    slides = list(slide_rows.scalars().all())
+    if (
+        not slides
+        or not presentation.is_authored()
+        or not all(_is_authored_slide(slide) for slide in slides)
     ):
         raise ValueError("High-quality review supports AI-authored presentations only")
     if len(outline.slides) != len(slides):
@@ -526,16 +490,16 @@ async def _run_authored_quality_review_unlocked(
         legacy_reference_mode = theme.get("reference_mode")
         if (
             isinstance(legacy_reference_mode, str)
-            and normalize_reference_mode(legacy_reference_mode)
-            == EXACT_RECONSTRUCTION
+            and normalize_reference_mode(legacy_reference_mode) == EXACT_RECONSTRUCTION
         ):
             raise ExactProvenanceError(
                 "Saved exact reconstruction provenance is missing"
             )
         style = resolve_authored_style(saved_style_id)
-        if normalize_reference_mode(
-            getattr(style, "reference_mode", STYLE_REFERENCE)
-        ) == EXACT_RECONSTRUCTION:
+        if (
+            normalize_reference_mode(getattr(style, "reference_mode", STYLE_REFERENCE))
+            == EXACT_RECONSTRUCTION
+        ):
             raise ExactProvenanceError(
                 "Saved exact reconstruction provenance is missing"
             )
@@ -553,7 +517,10 @@ async def _run_authored_quality_review_unlocked(
         _saved_role(target, plan.roles[position])
         for position, target in zip(positions, targets)
     ]
-    htmls = [str(target.html_content) for target in targets]
+    persisted_htmls = [str(target.html_content) for target in targets]
+    # Existing decks are migrated in memory; accepted fixes persist the stable ids.
+    # The original values remain available for the compare-and-swap publish guard.
+    htmls = [ensure_authored_qids(html) for html in persisted_htmls]
     exact_reconstruction = plan_reference_mode == EXACT_RECONSTRUCTION
     if exact_reconstruction:
         planned_references = getattr(plan, "reference_images", None)
@@ -572,6 +539,7 @@ async def _run_authored_quality_review_unlocked(
         else None
     )
     review_metadata = _review_observation_metadata()
+    ocr_runtime = _RequestOcrRuntime(_ocr_language(plan.brand.language))
 
     await _set_status(
         session,
@@ -580,8 +548,19 @@ async def _run_authored_quality_review_unlocked(
         message=f"{len(targets)}개 슬라이드를 렌더링하고 있습니다.",
     )
     render_started_at = time.perf_counter()
-    pngs = list(await asyncio.gather(*(render_html_to_png(html) for html in htmls)))
+    rendered = list(
+        await asyncio.gather(*(_render_review_html(html) for html in htmls))
+    )
+    pngs = [png for png, _metrics in rendered]
+    browser_metrics = [metrics for _png, metrics in rendered]
     render_ms = (time.perf_counter() - render_started_at) * 1000
+
+    local_started_at = time.perf_counter()
+    local_reports = [
+        inspect_authored_dom(html, metrics, reference_mode=plan_reference_mode)
+        for html, metrics in zip(htmls, browser_metrics)
+    ]
+    local_inspection_ms = (time.perf_counter() - local_started_at) * 1000
 
     await _set_status(
         session,
@@ -596,29 +575,91 @@ async def _run_authored_quality_review_unlocked(
             "reference_mode": plan_reference_mode,
         }
     critique_contexts = [content[:240] for content in contents]
-    initial_cache_hits, initial_cache_misses = _observe_critique_cache(
-        pngs,
-        critique_contexts,
-        source_images=source_images,
-        reference_mode=plan_reference_mode,
+    routing_metadata: dict = {}
+    montage_ms = 0.0
+    use_hybrid_deck_routing = (
+        request.scope == "all" and not exact_reconstruction and len(targets) >= 6
     )
-    initial_critique_started_at = time.perf_counter()
-    initial_critiques = list(
-        await critique_authored(
-            pngs,
+    if use_hybrid_deck_routing:
+        (
+            initial_critiques,
+            routing_metadata,
+            initial_cache_hits,
+            initial_cache_misses,
+            montage_ms,
+            initial_critique_ms,
+        ) = await _hybrid_style_initial_review(
+            pngs=pngs,
             contexts=critique_contexts,
-            **critique_kwargs,
+            positions=positions,
+            slide_count=len(slides),
+            local_reports=local_reports,
+            sampling_seed=str(presentation_id),
         )
-    )
-    if len(initial_critiques) != len(targets):
-        initial_critiques = (initial_critiques + [None] * len(targets))[
-            : len(targets)
-        ]
-    initial_critique_ms = (time.perf_counter() - initial_critique_started_at) * 1000
+    else:
+        routing_plan = plan_authored_review_routing(
+            scope=request.scope,
+            slide_count=len(slides),
+            local_issue_indices=[
+                positions[index]
+                for index, report in enumerate(local_reports)
+                if report.needs_attention
+            ],
+            current_slide_index=(positions[0] if request.scope == "current" else None),
+            target_indices=positions,
+            sampling_seed=str(presentation_id),
+        )
+        routing_metadata = {
+            "plan": routing_plan.as_dict(),
+            "escalation": None,
+            "montage_promoted_batches": [],
+            "montage_vqa_count": 0,
+            "detail_vqa_count": len(targets),
+            "montage_vqa_batch_count": 0,
+            "detail_vqa_batch_count": 1 if targets else 0,
+            "vqa_batch_count": 1 if targets else 0,
+        }
+        initial_cache_hits, initial_cache_misses = _observe_critique_cache(
+            pngs,
+            critique_contexts,
+            source_images=source_images,
+            reference_mode=plan_reference_mode,
+        )
+        initial_critique_started_at = time.perf_counter()
+        initial_critiques = list(
+            await critique_authored(
+                pngs,
+                contexts=critique_contexts,
+                **critique_kwargs,
+            )
+        )
+        if len(initial_critiques) != len(targets):
+            initial_critiques = (initial_critiques + [None] * len(targets))[
+                : len(targets)
+            ]
+        initial_critique_ms = (time.perf_counter() - initial_critique_started_at) * 1000
     initial_indeterminate_count = sum(
         _critique_unusable_reason(critique) == "indeterminate"
         for critique in initial_critiques
     )
+    ocr_checks: list[dict[str, Any]] = []
+    for local_index, (position, local_report, initial_critique) in enumerate(
+        zip(positions, local_reports, initial_critiques)
+    ):
+        ocr_checks.append(
+            await _capture_initial_ocr(
+                runtime=ocr_runtime,
+                slide_index=position,
+                reference_mode=plan_reference_mode,
+                source_image=(
+                    source_images[local_index] if source_images is not None else None
+                ),
+                baseline_image=pngs[local_index],
+                baseline_metrics=browser_metrics[local_index],
+                signals=_ocr_route_signals(local_report, initial_critique),
+            )
+        )
+    ocr_summary = ocr_runtime.summary()
     _log_review_event(
         reference_mode=plan_reference_mode,
         stage="initial_review",
@@ -626,13 +667,14 @@ async def _run_authored_quality_review_unlocked(
         model=review_metadata["model"],
         prompt_version=review_metadata["prompt_version"],
         cache_version=review_metadata["cache_version"],
-        critique_batch_count=1,
+        critique_batch_count=routing_metadata["vqa_batch_count"],
         critique_slide_request_count=initial_cache_misses,
         cache_hits=initial_cache_hits,
         cache_misses=initial_cache_misses,
         render_ms=render_ms,
         critique_ms=initial_critique_ms,
         indeterminate_count=initial_indeterminate_count,
+        **ocr_summary,
     )
     if exact_reconstruction and any(
         _critique_score(critique) is None for critique in initial_critiques
@@ -648,6 +690,7 @@ async def _run_authored_quality_review_unlocked(
             if not initial_issues
             else f"검수가 완료되었습니다. {len(initial_issues)}개 슬라이드에서 문제를 확인했습니다."
         )
+        total_ms = (time.perf_counter() - review_started_at) * 1000
         await _set_status(
             session,
             task,
@@ -666,7 +709,52 @@ async def _run_authored_quality_review_unlocked(
                 "remaining_slide_indices": [
                     issue["slide_index"] for issue in initial_issues
                 ],
+                "remaining_issues": initial_issues,
                 "version_saved": False,
+                "slide_results": _build_slide_results(
+                    positions=positions,
+                    initial_critiques=initial_critiques,
+                    final_critiques=initial_critiques,
+                    repair_details=[],
+                ),
+                "local_checks": [
+                    {
+                        "slide_index": position,
+                        "telemetry_status": report.telemetry_status,
+                        "inspected_elements": report.inspected_elements,
+                        "issues": [issue.to_dict() for issue in report.issues],
+                    }
+                    for position, report in zip(positions, local_reports)
+                ],
+                "ocr_checks": ocr_checks,
+                "routing": routing_metadata,
+                "metrics": {
+                    "stage_timings_ms": {
+                        "render": round(render_ms, 3),
+                        "local_inspection": round(local_inspection_ms, 3),
+                        "montage_vqa": round(montage_ms, 3),
+                        "detail_vqa": round(initial_critique_ms, 3),
+                        "ocr": ocr_summary["ocr_total_ms"],
+                    },
+                    "total_ms": round(total_ms, 3),
+                    "cache_hits": initial_cache_hits,
+                    "vqa_calls": initial_cache_misses,
+                    "patch_count": 0,
+                    "fallback_count": 0,
+                    "patch_attempts": 0,
+                    "patch_successes": 0,
+                    "patch_failures": 0,
+                    "patch_attempted": 0,
+                    "patch_succeeded": 0,
+                    "patch_failed": 0,
+                    "fallback_attempts": 0,
+                    "fallback_successes": 0,
+                    "fallback_failures": 0,
+                    "fallback_attempted": 0,
+                    "fallback_succeeded": 0,
+                    "fallback_failed": 0,
+                    **ocr_summary,
+                },
             },
         )
         return
@@ -677,12 +765,15 @@ async def _run_authored_quality_review_unlocked(
         status="processing",
         message=f"문제가 발견된 {len(initial_issues)}개 슬라이드를 자동 수정하고 있습니다.",
     )
-    revise_kwargs = {"initial_critiques": initial_critiques}
+    revise_kwargs = {
+        "initial_critiques": initial_critiques,
+        "return_details": True,
+    }
     candidate_decisions: list[dict] = []
     if exact_reconstruction:
         revise_kwargs["reference_images_by_slide"] = target_references
     revision_started_at = time.perf_counter()
-    revised_htmls, revised_pngs, candidate_local_indices = await revise_authored_deck(
+    revision_result = await revise_authored_deck(
         htmls,
         pngs,
         contents,
@@ -695,6 +786,16 @@ async def _run_authored_quality_review_unlocked(
         total_slides=len(slides),
         **revise_kwargs,
     )
+    if len(revision_result) == 4:
+        (
+            revised_htmls,
+            revised_pngs,
+            candidate_local_indices,
+            repair_details,
+        ) = revision_result
+    else:  # Backward-compatible for alternate/custom revision implementations.
+        revised_htmls, revised_pngs, candidate_local_indices = revision_result
+        repair_details = []
     candidate_local_indices = list(dict.fromkeys(candidate_local_indices))
     if any(
         type(index) is not int or index < 0 or index >= len(targets)
@@ -704,6 +805,22 @@ async def _run_authored_quality_review_unlocked(
             "Authored quality review returned an invalid candidate index"
         )
     revision_ms = (time.perf_counter() - revision_started_at) * 1000
+    candidate_browser_metrics = {
+        index: get_cached_browser_metrics(revised_htmls[index])
+        for index in candidate_local_indices
+    }
+    candidate_local_reports = {
+        index: inspect_authored_dom(
+            revised_htmls[index],
+            candidate_browser_metrics[index],
+            reference_mode=plan_reference_mode,
+        )
+        for index in candidate_local_indices
+    }
+    candidate_local_decisions = {
+        index: _local_acceptance_decision(local_reports[index], report)
+        for index, report in candidate_local_reports.items()
+    }
     _log_review_event(
         reference_mode=plan_reference_mode,
         stage="correction",
@@ -720,6 +837,7 @@ async def _run_authored_quality_review_unlocked(
         cache_version=review_metadata["cache_version"],
         render_ms=render_ms,
         revision_ms=revision_ms,
+        **ocr_runtime.summary(),
     )
 
     await _set_status(
@@ -729,13 +847,14 @@ async def _run_authored_quality_review_unlocked(
         message="수정 결과를 다시 검증하고 있습니다.",
     )
     if exact_reconstruction:
-        accepted_local_indices: List[int] = []
+        accepted_local_indices: list[int] = []
         chosen_critiques = list(initial_critiques)
         rejection_reasons: Counter[str] = Counter()
+        final_cache_hits = 0
+        final_cache_misses = 0
+        final_critique_ms = 0.0
         if candidate_local_indices:
-            candidate_pngs = [
-                revised_pngs[index] for index in candidate_local_indices
-            ]
+            candidate_pngs = [revised_pngs[index] for index in candidate_local_indices]
             candidate_contexts = [
                 contents[index][:240] for index in candidate_local_indices
             ]
@@ -756,6 +875,61 @@ async def _run_authored_quality_review_unlocked(
                 reference_mode=plan_reference_mode,
             )
             final_critique_ms = (time.perf_counter() - final_critique_started_at) * 1000
+            for offset, local_index in enumerate(candidate_local_indices):
+                final_critique = (
+                    candidate_critiques[offset]
+                    if offset < len(candidate_critiques)
+                    else None
+                )
+                accepted, reason = _acceptance_decision(
+                    initial_critiques[local_index], final_critique
+                )
+                local_accepted, local_reason = candidate_local_decisions[local_index]
+                if accepted and not local_accepted:
+                    accepted, reason = False, local_reason
+                repair_detail = next(
+                    (
+                        detail
+                        for detail in reversed(repair_details)
+                        if detail.get("local_index") == local_index
+                    ),
+                    {},
+                )
+                path = str(repair_detail.get("path") or "none")
+                ocr_required, ocr_accepted, ocr_reason = await _evaluate_candidate_ocr(
+                    runtime=ocr_runtime,
+                    entry=ocr_checks[local_index],
+                    reference_mode=plan_reference_mode,
+                    source_image=source_images[local_index],
+                    baseline_image=pngs[local_index],
+                    candidate_image=revised_pngs[local_index],
+                    baseline_metrics=browser_metrics[local_index],
+                    candidate_metrics=candidate_browser_metrics.get(local_index),
+                    signals=_ocr_route_signals(
+                        candidate_local_reports.get(local_index),
+                        final_critique,
+                        repair_detail,
+                    ),
+                    path=path,
+                )
+                if accepted and ocr_required and not ocr_accepted:
+                    accepted, reason = False, str(ocr_reason or "ocr_unavailable")
+                candidate_decisions.append(
+                    {
+                        "slide_index": positions[local_index],
+                        "accepted": accepted,
+                        "reason": reason,
+                        "attempted": True,
+                        "applied": accepted,
+                        "rejection_reason": None if accepted else reason,
+                        "path": path,
+                    }
+                )
+                if accepted:
+                    accepted_local_indices.append(local_index)
+                    chosen_critiques[local_index] = final_critique
+                else:
+                    rejection_reasons[reason] += 1
             _log_review_event(
                 reference_mode=plan_reference_mode,
                 stage="final_review",
@@ -775,28 +949,8 @@ async def _run_authored_quality_review_unlocked(
                     _critique_unusable_reason(critique) == "indeterminate"
                     for critique in candidate_critiques
                 ),
+                **ocr_runtime.summary(),
             )
-            for offset, local_index in enumerate(candidate_local_indices):
-                final_critique = (
-                    candidate_critiques[offset]
-                    if offset < len(candidate_critiques)
-                    else None
-                )
-                accepted, reason = _acceptance_decision(
-                    initial_critiques[local_index], final_critique
-                )
-                candidate_decisions.append(
-                    {
-                        "slide_index": positions[local_index],
-                        "accepted": accepted,
-                        "reason": reason,
-                    }
-                )
-                if accepted:
-                    accepted_local_indices.append(local_index)
-                    chosen_critiques[local_index] = final_critique
-                else:
-                    rejection_reasons[reason] += 1
         fixed_local_indices = accepted_local_indices
         final_critiques = chosen_critiques
         _log_review_event(
@@ -815,23 +969,26 @@ async def _run_authored_quality_review_unlocked(
                 _critique_unusable_reason(critique) == "indeterminate"
                 for critique in final_critiques
             ),
+            **ocr_runtime.summary(),
         )
     else:
         accepted_local_indices = []
         chosen_critiques = list(initial_critiques)
-        rejection_reasons = Counter()
         comparison_metadata = _style_comparison_observation_metadata()
         final_critique_ms = 0.0
         candidate_critiques: list[SlideCritique | None] = []
         final_cache_hits = 0
         final_cache_misses = 0
+        fallback_comparison_batch_count = 0
+        repair_by_index = {
+            detail.get("local_index"): detail
+            for detail in repair_details
+            if isinstance(detail, Mapping)
+            and isinstance(detail.get("local_index"), int)
+        }
         if candidate_local_indices:
-            baseline_candidate_pngs = [
-                pngs[index] for index in candidate_local_indices
-            ]
-            candidate_pngs = [
-                revised_pngs[index] for index in candidate_local_indices
-            ]
+            baseline_candidate_pngs = [pngs[index] for index in candidate_local_indices]
+            candidate_pngs = [revised_pngs[index] for index in candidate_local_indices]
             candidate_contexts = [
                 contents[index][:240] for index in candidate_local_indices
             ]
@@ -848,9 +1005,7 @@ async def _run_authored_quality_review_unlocked(
                     contexts=candidate_contexts,
                 )
             )
-            final_critique_ms = (
-                time.perf_counter() - final_critique_started_at
-            ) * 1000
+            final_critique_ms = (time.perf_counter() - final_critique_started_at) * 1000
             for offset, local_index in enumerate(candidate_local_indices):
                 final_critique = (
                     candidate_critiques[offset]
@@ -860,29 +1015,296 @@ async def _run_authored_quality_review_unlocked(
                 accepted, reason = _style_acceptance_decision(
                     initial_critiques[local_index], final_critique
                 )
+                local_accepted, local_reason = candidate_local_decisions[local_index]
+                if accepted and not local_accepted:
+                    accepted, reason = False, local_reason
+                path = str(repair_by_index.get(local_index, {}).get("path") or "none")
+                repair_detail = repair_by_index.get(local_index, {})
+                ocr_required, ocr_accepted, ocr_reason = await _evaluate_candidate_ocr(
+                    runtime=ocr_runtime,
+                    entry=ocr_checks[local_index],
+                    reference_mode=plan_reference_mode,
+                    source_image=None,
+                    baseline_image=pngs[local_index],
+                    candidate_image=revised_pngs[local_index],
+                    baseline_metrics=browser_metrics[local_index],
+                    candidate_metrics=candidate_browser_metrics.get(local_index),
+                    signals=_ocr_route_signals(
+                        candidate_local_reports.get(local_index),
+                        final_critique,
+                        repair_detail,
+                    ),
+                    path=path,
+                )
+                if accepted and ocr_required and not ocr_accepted:
+                    accepted, reason = False, str(ocr_reason or "ocr_unavailable")
                 candidate_decisions.append(
                     {
                         "slide_index": positions[local_index],
                         "accepted": accepted,
                         "reason": reason,
+                        "attempted": True,
+                        "applied": accepted,
+                        "rejection_reason": None if accepted else reason,
+                        "path": path,
                     }
                 )
                 if accepted:
                     accepted_local_indices.append(local_index)
                     chosen_critiques[local_index] = final_critique
+
+        # A local patch that is determinate but fails the final quality gate gets one
+        # high-reasoning structural retry. Provider/unavailable/indeterminate results
+        # deliberately stop here: accepting a second candidate would not be safe.
+        fallback_eligible_reasons = {
+            "unchanged",
+            "worsened",
+            "regression",
+            "local_regression",
+            "local_baseline_unavailable",
+            "local_candidate_unavailable",
+            "local_high_remaining",
+            "local_not_improved",
+            "ocr_not_improved",
+            "ocr_regression",
+        }
+        decisions_by_position = {
+            decision["slide_index"]: decision for decision in candidate_decisions
+        }
+        fallback_local_indices = [
+            local_index
+            for local_index in candidate_local_indices
+            if (
+                decisions_by_position[positions[local_index]]["reason"]
+                in fallback_eligible_reasons
+                and decisions_by_position[positions[local_index]]["path"]
+                == "local_patch"
+            )
+        ]
+        if fallback_local_indices:
+            clean_critique = SlideCritique(needs_fix=False, issues=[])
+            fallback_initial_critiques = [
+                initial_critiques[index]
+                if index in fallback_local_indices
+                else clean_critique
+                for index in range(len(targets))
+            ]
+            fallback_started_at = time.perf_counter()
+            fallback_result = await revise_authored_deck(
+                htmls,
+                pngs,
+                contents,
+                roles,
+                plan.brand,
+                plan.design_system,
+                max_cycles=1,
+                style=style,
+                slide_indices=positions,
+                total_slides=len(slides),
+                initial_critiques=fallback_initial_critiques,
+                return_details=True,
+                force_full_reauthor_indices=fallback_local_indices,
+            )
+            revision_ms += (time.perf_counter() - fallback_started_at) * 1000
+            if len(fallback_result) == 4:
+                legacy_fallback_result = False
+                (
+                    fallback_htmls,
+                    fallback_pngs,
+                    fallback_candidate_indices,
+                    fallback_repair_details,
+                ) = fallback_result
+            else:  # Backward-compatible custom implementation.
+                legacy_fallback_result = True
+                (
+                    fallback_htmls,
+                    fallback_pngs,
+                    fallback_candidate_indices,
+                ) = fallback_result
+                fallback_repair_details = []
+            fallback_candidate_indices = list(dict.fromkeys(fallback_candidate_indices))
+            if any(
+                type(index) is not int or index not in fallback_local_indices
+                for index in fallback_candidate_indices
+            ):
+                raise RuntimeError(
+                    "Authored quality review returned an invalid fallback candidate index"
+                )
+            if legacy_fallback_result:
+                fallback_candidate_set = set(fallback_candidate_indices)
+                fallback_repair_details = []
+                for index in fallback_local_indices:
+                    succeeded = index in fallback_candidate_set
+                    failure = None
+                    if not succeeded:
+                        failure = {
+                            "stage": "full_reauthor",
+                            "code": "fallback_failed",
+                            "error_type": "UnknownFallbackFailure",
+                        }
+                    fallback_repair_details.append(
+                        {
+                            "local_index": index,
+                            "slide_index": positions[index],
+                            "path": "full_fallback",
+                            "attempted": True,
+                            "succeeded": succeeded,
+                            "failure_detail": failure,
+                            "patch": {
+                                "attempted": False,
+                                "succeeded": False,
+                                "failure_detail": None,
+                            },
+                            "fallback": {
+                                "attempted": True,
+                                "succeeded": succeeded,
+                                "failure_detail": failure,
+                            },
+                            "element_changes": [],
+                        }
+                    )
+            repair_details.extend(fallback_repair_details)
+            fallback_detail_by_index = {
+                detail.get("local_index"): detail
+                for detail in fallback_repair_details
+                if isinstance(detail, Mapping)
+                and isinstance(detail.get("local_index"), int)
+            }
+            fallback_browser_metrics = {
+                index: get_cached_browser_metrics(fallback_htmls[index])
+                for index in fallback_candidate_indices
+            }
+            fallback_local_reports = {
+                index: inspect_authored_dom(
+                    fallback_htmls[index],
+                    fallback_browser_metrics[index],
+                    reference_mode=plan_reference_mode,
+                )
+                for index in fallback_candidate_indices
+            }
+            fallback_local_decisions = {
+                index: _local_acceptance_decision(local_reports[index], report)
+                for index, report in fallback_local_reports.items()
+            }
+            fallback_critiques: list[SlideCritique | None] = []
+            if fallback_candidate_indices:
+                fallback_comparison_batch_count = 1
+                fallback_baseline_pngs = [
+                    pngs[index] for index in fallback_candidate_indices
+                ]
+                fallback_candidate_pngs = [
+                    fallback_pngs[index] for index in fallback_candidate_indices
+                ]
+                fallback_contexts = [
+                    contents[index][:240] for index in fallback_candidate_indices
+                ]
+                cache_hits, cache_misses = _observe_style_comparison_cache(
+                    fallback_baseline_pngs,
+                    fallback_candidate_pngs,
+                    fallback_contexts,
+                )
+                final_cache_hits += cache_hits
+                final_cache_misses += cache_misses
+                fallback_review_started_at = time.perf_counter()
+                fallback_critiques = list(
+                    await critique_authored_style_comparison(
+                        fallback_baseline_pngs,
+                        fallback_candidate_pngs,
+                        contexts=fallback_contexts,
+                    )
+                )
+                final_critique_ms += (
+                    time.perf_counter() - fallback_review_started_at
+                ) * 1000
+                candidate_critiques.extend(fallback_critiques)
+
+            fallback_critique_by_index = {
+                local_index: (
+                    fallback_critiques[offset]
+                    if offset < len(fallback_critiques)
+                    else None
+                )
+                for offset, local_index in enumerate(fallback_candidate_indices)
+            }
+            for local_index in fallback_local_indices:
+                decision = decisions_by_position[positions[local_index]]
+                initial_rejection_reason = decision["reason"]
+                final_critique = fallback_critique_by_index.get(local_index)
+                if local_index not in fallback_candidate_indices:
+                    failure = (
+                        fallback_detail_by_index.get(local_index, {}).get(
+                            "failure_detail"
+                        )
+                        or {}
+                    )
+                    accepted, reason = (
+                        False,
+                        str(failure.get("code") or "fallback_failed"),
+                    )
                 else:
-                    rejection_reasons[reason] += 1
+                    accepted, reason = _style_acceptance_decision(
+                        initial_critiques[local_index], final_critique
+                    )
+                    local_accepted, local_reason = fallback_local_decisions[local_index]
+                    if accepted and not local_accepted:
+                        accepted, reason = False, local_reason
+                    fallback_detail = fallback_detail_by_index.get(local_index, {})
+                    (
+                        ocr_required,
+                        ocr_accepted,
+                        ocr_reason,
+                    ) = await _evaluate_candidate_ocr(
+                        runtime=ocr_runtime,
+                        entry=ocr_checks[local_index],
+                        reference_mode=plan_reference_mode,
+                        source_image=None,
+                        baseline_image=pngs[local_index],
+                        candidate_image=fallback_pngs[local_index],
+                        baseline_metrics=browser_metrics[local_index],
+                        candidate_metrics=fallback_browser_metrics.get(local_index),
+                        signals=_ocr_route_signals(
+                            fallback_local_reports.get(local_index),
+                            final_critique,
+                            fallback_detail,
+                        ),
+                        path="full_fallback",
+                    )
+                    if accepted and ocr_required and not ocr_accepted:
+                        accepted, reason = False, str(ocr_reason or "ocr_unavailable")
+                decision.update(
+                    {
+                        "accepted": accepted,
+                        "reason": reason,
+                        "attempted": True,
+                        "applied": accepted,
+                        "rejection_reason": None if accepted else reason,
+                        "path": "full_fallback",
+                        "initial_rejection_reason": initial_rejection_reason,
+                    }
+                )
+                if accepted:
+                    revised_htmls[local_index] = fallback_htmls[local_index]
+                    revised_pngs[local_index] = fallback_pngs[local_index]
+                    accepted_local_indices.append(local_index)
+                    chosen_critiques[local_index] = final_critique
+
+        rejection_reasons = Counter(
+            decision["reason"]
+            for decision in candidate_decisions
+            if not decision["accepted"]
+        )
         fixed_local_indices = accepted_local_indices
         final_critiques = chosen_critiques
         _log_review_event(
             reference_mode=plan_reference_mode,
             stage="final_review",
-            slide_count=len(candidate_local_indices),
-            attempted=len(candidate_local_indices),
+            slide_count=len(candidate_critiques),
+            attempted=len(candidate_critiques),
             model=comparison_metadata["model"],
             prompt_version=comparison_metadata["prompt_version"],
             cache_version=comparison_metadata["cache_version"],
-            critique_batch_count=1 if candidate_local_indices else 0,
+            critique_batch_count=(1 if candidate_local_indices else 0)
+            + fallback_comparison_batch_count,
             critique_slide_request_count=final_cache_misses,
             cache_hits=final_cache_hits,
             cache_misses=final_cache_misses,
@@ -893,12 +1315,13 @@ async def _run_authored_quality_review_unlocked(
                 _critique_unusable_reason(critique) == "indeterminate"
                 for critique in candidate_critiques
             ),
+            **ocr_runtime.summary(),
         )
         _log_review_event(
             reference_mode=plan_reference_mode,
             stage="acceptance",
             slide_count=len(targets),
-            attempted=len(candidate_local_indices),
+            attempted=len(candidate_decisions),
             accepted=len(accepted_local_indices),
             rejection_reasons=rejection_reasons,
             model=comparison_metadata["model"],
@@ -910,11 +1333,14 @@ async def _run_authored_quality_review_unlocked(
                 _critique_unusable_reason(critique) == "indeterminate"
                 for critique in candidate_critiques
             ),
+            **ocr_runtime.summary(),
         )
     remaining_issues = _serialize_critiques(positions, final_critiques)
 
     fixed_positions = [positions[index] for index in fixed_local_indices]
+    persist_ms = 0.0
     if fixed_local_indices:
+        persist_started_at = time.perf_counter()
         # Publish every immutable candidate before staging any database change.
         # A failed asset write therefore leaves both the live deck and its snapshot
         # history untouched (an unreferenced immutable file is safe to retain).
@@ -959,11 +1385,12 @@ async def _run_authored_quality_review_unlocked(
             revised_properties,
         ) in pending_updates:
             slide = targets[local_index]
-            result = await session.execute(
+            result = await _execute_sqlalchemy(
+                session,
                 update(SlideModel)
                 .where(
                     SlideModel.id == slide.id,
-                    SlideModel.html_content == htmls[local_index],
+                    SlideModel.html_content == persisted_htmls[local_index],
                     SlideModel.content == slide.content,
                     SlideModel.properties == slide.properties,
                 )
@@ -972,7 +1399,7 @@ async def _run_authored_quality_review_unlocked(
                     content=revised_content,
                     properties=revised_properties,
                 )
-                .execution_options(synchronize_session=False)
+                .execution_options(synchronize_session=False),
             )
             if result.rowcount != 1:
                 await session.rollback()
@@ -980,6 +1407,7 @@ async def _run_authored_quality_review_unlocked(
                     "Presentation changed during quality review; no fixes were applied"
                 )
         await session.commit()
+        persist_ms = (time.perf_counter() - persist_started_at) * 1000
 
     task_rejection_reasons: Counter[str] = Counter(
         decision["reason"]
@@ -990,6 +1418,38 @@ async def _run_authored_quality_review_unlocked(
     if no_candidate_count:
         task_rejection_reasons["no_candidate"] += no_candidate_count
 
+    fallback_count = sum(
+        detail.get("path") == "full_fallback" and detail.get("succeeded", True)
+        for detail in repair_details
+        if isinstance(detail, Mapping)
+    )
+    patch_count = sum(
+        detail.get("path") == "local_patch" and detail.get("succeeded", True)
+        for detail in repair_details
+        if isinstance(detail, Mapping)
+    )
+    patch_attempts = sum(
+        bool((detail.get("patch") or {}).get("attempted"))
+        for detail in repair_details
+        if isinstance(detail, Mapping)
+    )
+    patch_successes = sum(
+        bool((detail.get("patch") or {}).get("succeeded"))
+        for detail in repair_details
+        if isinstance(detail, Mapping)
+    )
+    fallback_attempts = sum(
+        bool((detail.get("fallback") or {}).get("attempted"))
+        for detail in repair_details
+        if isinstance(detail, Mapping)
+    )
+    fallback_successes = sum(
+        bool((detail.get("fallback") or {}).get("succeeded"))
+        for detail in repair_details
+        if isinstance(detail, Mapping)
+    )
+    ocr_summary = ocr_runtime.summary()
+    total_ms = (time.perf_counter() - review_started_at) * 1000
     await _set_status(
         session,
         task,
@@ -1021,6 +1481,54 @@ async def _run_authored_quality_review_unlocked(
             ],
             "remaining_issues": remaining_issues,
             "version_saved": bool(fixed_positions),
+            "slide_results": _build_slide_results(
+                positions=positions,
+                initial_critiques=initial_critiques,
+                final_critiques=final_critiques,
+                repair_details=repair_details,
+                candidate_decisions=candidate_decisions,
+            ),
+            "local_checks": [
+                {
+                    "slide_index": position,
+                    "telemetry_status": report.telemetry_status,
+                    "inspected_elements": report.inspected_elements,
+                    "issues": [issue.to_dict() for issue in report.issues],
+                }
+                for position, report in zip(positions, local_reports)
+            ],
+            "ocr_checks": ocr_checks,
+            "routing": routing_metadata,
+            "metrics": {
+                "stage_timings_ms": {
+                    "render": round(render_ms, 3),
+                    "local_inspection": round(local_inspection_ms, 3),
+                    "montage_vqa": round(montage_ms, 3),
+                    "detail_vqa": round(initial_critique_ms, 3),
+                    "repair": round(revision_ms, 3),
+                    "final_vqa": round(final_critique_ms, 3),
+                    "ocr": ocr_summary["ocr_total_ms"],
+                    "persist": round(persist_ms, 3),
+                },
+                "total_ms": round(total_ms, 3),
+                "cache_hits": initial_cache_hits + final_cache_hits,
+                "vqa_calls": initial_cache_misses + final_cache_misses,
+                "patch_count": patch_count,
+                "fallback_count": fallback_count,
+                "patch_attempts": patch_attempts,
+                "patch_successes": patch_successes,
+                "patch_failures": max(0, patch_attempts - patch_successes),
+                "patch_attempted": patch_attempts,
+                "patch_succeeded": patch_successes,
+                "patch_failed": max(0, patch_attempts - patch_successes),
+                "fallback_attempts": fallback_attempts,
+                "fallback_successes": fallback_successes,
+                "fallback_failures": max(0, fallback_attempts - fallback_successes),
+                "fallback_attempted": fallback_attempts,
+                "fallback_succeeded": fallback_successes,
+                "fallback_failed": max(0, fallback_attempts - fallback_successes),
+                **ocr_summary,
+            },
         },
     )
 
@@ -1064,9 +1572,7 @@ async def _run_quality_review(
         if task is None:
             return
         try:
-            await run_authored_quality_review(
-                presentation_id, request, task, session
-            )
+            await run_authored_quality_review(presentation_id, request, task, session)
         except Exception as exc:  # noqa: BLE001 - background task boundary
             exact_failure = isinstance(
                 exc,
@@ -1105,17 +1611,17 @@ async def queue_authored_quality_review(
     if presentation is None:
         raise HTTPException(status_code=404, detail="Presentation not found")
 
-    slides = list(
-        (
-            await session.scalars(
-                select(SlideModel)
-                .where(SlideModel.presentation == presentation_id)
-                .order_by(SlideModel.index)
-            )
-        ).all()
+    slide_rows = await _execute_sqlalchemy(
+        session,
+        select(SlideModel)
+        .where(SlideModel.presentation == presentation_id)
+        .order_by(SlideModel.index),
     )
-    if not presentation.is_authored() or not slides or not all(
-        _is_authored_slide(slide) for slide in slides
+    slides = list(slide_rows.scalars().all())
+    if (
+        not presentation.is_authored()
+        or not slides
+        or not all(_is_authored_slide(slide) for slide in slides)
     ):
         raise HTTPException(
             status_code=400,
@@ -1133,7 +1639,5 @@ async def queue_authored_quality_review(
     )
     session.add(task)
     await session.commit()
-    background_tasks.add_task(
-        _run_quality_review, presentation_id, request, task.id
-    )
+    background_tasks.add_task(_run_quality_review, presentation_id, request, task.id)
     return task
