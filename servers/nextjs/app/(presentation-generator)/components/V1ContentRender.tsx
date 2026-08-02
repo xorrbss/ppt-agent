@@ -18,11 +18,12 @@ import { updateSlideContent, updateAdaptiveBlock } from "@/store/slices/presenta
 import { resolveBackendAssetUrl } from "@/utils/api";
 import { useDispatch } from "react-redux";
 import { Loader2 } from "lucide-react";
+import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
 
 
 
 
-export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEditMode: boolean, theme?: any, enableEditMode?: boolean }) => {
+export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml = false }: { slide: any, isEditMode: boolean, theme?: any, enableEditMode?: boolean, preferAuthoredHtml?: boolean }) => {
     const dispatch = useDispatch();
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -95,10 +96,10 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
         }
     }, [isCustomTemplate, customTemplate, slide.layout, slide.layout_group]);
 
-    // Authored mode: slides are model-authored HTML rendered to a full-bleed image
-    // (no React layout template). Display the stored slide image so authored decks are
-    // viewable in the browser (editor canvas, thumbnails, /pdf-maker). Text editing
-    // still happens in PowerPoint via the image PPTX — this is view-only by design.
+    // Authored HTML is the source of truth; the generated PNG is a preview cache.
+    // Main-canvas previews use an isolated HTML frame. Thumbnails and export surfaces
+    // retain the PNG cache to avoid loading an iframe for every slide at once.
+    // PowerPoint export remains the editable surface; this browser preview is read-only.
     const isAuthored =
         slide?.content?.__authored__ === true || slide.layout_group === "authored";
     if (isAuthored) {
@@ -106,6 +107,20 @@ export const V1ContentRender = ({ slide, isEditMode, theme }: { slide: any, isEd
         const src = imageRef
             ? resolveBackendAssetUrl(`/app_data/images/${imageRef}`)
             : "";
+        if (preferAuthoredHtml && typeof slide.html_content === "string" && slide.html_content.trim()) {
+            return (
+                <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+                    <div ref={containerRef} className="h-full w-full">
+                        <AuthoredSlidePreview
+                            slideIndex={slide.index}
+                            html={slide.html_content}
+                            imageSrc={src}
+                            preferHtml
+                        />
+                    </div>
+                </SlideErrorBoundary>
+            );
+        }
         return (
             <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
                 <div

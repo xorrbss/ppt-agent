@@ -252,6 +252,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
               theme={theme ?? undefined}
               isEditMode={false}
               presentMode
+              preferAuthoredHtml
             />
           ) : null}
         </div>

@@ -15,6 +15,7 @@ const SlideScale = ({
     presentMode = false,
     isClickable = true,
     fixedSize = false,
+    preferAuthoredHtml = false,
 }: {
     slide: any;
     theme?: any;
@@ -23,6 +24,7 @@ const SlideScale = ({
     presentMode?: boolean;
     isClickable?: boolean;
     fixedSize?: boolean;
+    preferAuthoredHtml?: boolean;
 }) => {
 
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -97,7 +99,12 @@ const SlideScale = ({
                         aria-hidden="true"
 
                     />}
-                    <V1ContentRender slide={slide} isEditMode={isEditMode} theme={theme} />
+                    <V1ContentRender
+                        slide={slide}
+                        isEditMode={isEditMode}
+                        theme={theme}
+                        preferAuthoredHtml={preferAuthoredHtml}
+                    />
                     {showEditScan && (
                         <div
                             className="slide-edit-overlay pointer-events-none absolute inset-0 overflow-hidden"
