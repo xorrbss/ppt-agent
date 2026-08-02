@@ -119,7 +119,6 @@ def test_quality_observation_log_contains_only_policy_metadata(caplog):
         model="gpt-vision-test",
         prompt_version="review-v7",
         cache_version="cache-v3",
-        render_batch_sha256="b" * 64,
         critique_batch_count=1,
         critique_slide_request_count=3,
         cache_hits=1,
@@ -146,7 +145,6 @@ def test_quality_observation_log_contains_only_policy_metadata(caplog):
         "model": "gpt-vision-test",
         "prompt_version": "review-v7",
         "cache_version": "cache-v3",
-        "render_batch_sha256": "b" * 64,
         "critique_batch_count": 1,
         "critique_slide_request_count": 3,
         "cache_hits": 1,
@@ -161,19 +159,8 @@ def test_quality_observation_log_contains_only_policy_metadata(caplog):
     assert "raw html" not in message.lower()
     assert "raw prompt" not in message.lower()
     assert "raw image" not in message.lower()
-
-
-def test_observation_uses_ordered_content_free_image_fingerprints():
-    first = quality_service._ordered_image_batch_sha256([b"source-a", b"source-b"])
-    repeated = quality_service._ordered_image_batch_sha256([b"source-a", b"source-b"])
-    reversed_order = quality_service._ordered_image_batch_sha256(
-        [b"source-b", b"source-a"]
-    )
-
-    assert first == repeated
-    assert first != reversed_order
-    assert "source-a" not in first
-    assert quality_service._ordered_image_batch_sha256(None) is None
+    assert "sha256" not in event
+    assert "digest" not in message.lower()
 
 
 def test_cache_observation_counts_completed_cache_hits_without_vqa_call(monkeypatch):

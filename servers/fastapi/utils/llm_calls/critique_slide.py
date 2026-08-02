@@ -76,9 +76,30 @@ _EXACT_SYSTEM = (
     "empty issues list. Be specific and concise."
 )
 
+STYLE_COMPARISON_REGRESSION_PREFIX = "REGRESSION:"
+_STYLE_COMPARISON_SYSTEM = (
+    "You are a meticulous presentation design reviewer. Compare a PRE-FIX BASELINE "
+    "render with a POST-FIX CANDIDATE render. The baseline is not ground truth and "
+    "may contain defects; fixes and visual changes are allowed. Judge the candidate "
+    "itself and report its remaining real, visible defects. Also compare it with the "
+    "baseline for newly introduced or worsened clipping, overflow, overlap, content "
+    "loss, readability problems, alignment errors, or aspect ratio distortion. Do not "
+    "flag a difference merely because it differs from the baseline, and do not "
+    "penalize a candidate for fixing a baseline defect. Every issue caused or worsened "
+    "by the "
+    "candidate must have detail starting exactly with "
+    f"'{STYLE_COMPARISON_REGRESSION_PREFIX}'. Other real "
+    "candidate defects need no such prefix. If resolution, blur, occlusion, or another "
+    "image limitation makes a material comparison genuinely impossible, do not guess: "
+    "return needs_fix=true with one high-severity other issue whose detail starts with "
+    "'INDETERMINATE:'. If the candidate is clean and readable and has no regression, "
+    "return needs_fix=false with an empty issues list. Be specific and concise."
+)
+
 STYLE_REFERENCE = "style_reference"
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 CRITIQUE_PROMPT_VERSION = "slide-critique-v3"
+STYLE_COMPARISON_PROMPT_VERSION = "slide-style-comparison-v1"
 
 
 def _image_mime_type(image: bytes) -> str:
@@ -140,6 +161,39 @@ def _build_critique_messages(
     ]
 
 
+def _build_style_comparison_messages(
+    baseline_image: bytes,
+    candidate_image: bytes,
+    *,
+    slide_context: Optional[str] = None,
+    baseline_mime_type: str = "image/png",
+    candidate_mime_type: str = "image/png",
+):
+    """Assemble pre-fix-baseline vs post-fix-candidate review messages."""
+    if not baseline_image or not candidate_image:
+        raise ValueError(
+            "Style comparison requires non-empty baseline and candidate images"
+        )
+
+    prompt = (
+        "Compare the candidate with the pre-fix baseline, then report the candidate's "
+        "remaining real defects and any regressions."
+    )
+    if slide_context:
+        prompt += f" Slide context: {slide_context}"
+    return [
+        SystemMessage(content=_STYLE_COMPARISON_SYSTEM),
+        UserMessage(
+            content=[
+                TextContentPart(text="PRE-FIX BASELINE (not ground truth):"),
+                ImageContentPart(data=baseline_image, mime_type=baseline_mime_type),
+                TextContentPart(text=f"POST-FIX CANDIDATE: {prompt}"),
+                ImageContentPart(data=candidate_image, mime_type=candidate_mime_type),
+            ]
+        ),
+    ]
+
+
 async def critique_slide_image(
     image: bytes,
     slide_context: Optional[str] = None,
@@ -161,6 +215,45 @@ async def critique_slide_image(
         mime_type=mime_type,
         source_image=source_image,
         reference_mode=reference_mode,
+    )
+    try:
+        content = await generate_structured_with_schema_retries(
+            client,
+            model,
+            messages=messages,
+            response_format=response_format,
+            json_schema=schema,
+            strict=False,
+            validate_schema=True,
+        )
+        return SlideCritique(**content)
+    except Exception as e:
+        raise handle_llm_client_exceptions(e)
+
+
+async def critique_slide_style_comparison(
+    baseline_image: bytes,
+    candidate_image: bytes,
+    slide_context: Optional[str] = None,
+    *,
+    baseline_mime_type: str = "image/png",
+    candidate_mime_type: str = "image/png",
+) -> SlideCritique:
+    """Review one post-fix candidate against its non-authoritative pre-fix baseline."""
+    client = get_client(config=get_llm_config())
+    model = get_model()
+    schema = prepare_schema_for_validation(
+        SlideCritique.model_json_schema(), strict=False
+    )
+    response_format = JSONSchemaResponse(
+        name="critique", json_schema=schema, strict=False
+    )
+    messages = _build_style_comparison_messages(
+        baseline_image,
+        candidate_image,
+        slide_context=slide_context,
+        baseline_mime_type=baseline_mime_type,
+        candidate_mime_type=candidate_mime_type,
     )
     try:
         content = await generate_structured_with_schema_retries(

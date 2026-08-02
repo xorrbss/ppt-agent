@@ -7,12 +7,10 @@ the existing presentation version history.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 import re
 import time
-import traceback
 import uuid
 import weakref
 from collections import Counter
@@ -55,7 +53,11 @@ from utils.llm_calls.author_slide import (
 )
 from utils.llm_calls.critique_slide import SlideCritique
 from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_vision_qa import critique_authored, revise_authored_deck
+from utils.llm_calls.author_vision_qa import (
+    critique_authored,
+    critique_authored_style_comparison,
+    revise_authored_deck,
+)
 from utils.slide_capture import render_html_to_png
 
 
@@ -72,6 +74,7 @@ _SAFE_REJECTION_REASONS = {
     "final_unavailable",
     "final_inconsistent",
     "final_indeterminate",
+    "regression",
 }
 _ANALYZE_AND_FIX_LOCKS: weakref.WeakValueDictionary[uuid.UUID, asyncio.Lock] = (
     weakref.WeakValueDictionary()
@@ -207,27 +210,42 @@ def _acceptance_decision(
     return False, "worsened"
 
 
+def _style_comparison_has_regression(critique: SlideCritique | None) -> bool:
+    """Return whether a STYLE_REFERENCE comparison identified a new regression."""
+    if critique is None:
+        return False
+    prefix = str(
+        getattr(
+            author_vision_qa,
+            "STYLE_COMPARISON_REGRESSION_PREFIX",
+            "REGRESSION:",
+        )
+    ).upper()
+    return any(
+        issue.detail.lstrip().upper().startswith(prefix)
+        for issue in critique.issues
+    )
+
+
+def _style_acceptance_decision(
+    before: SlideCritique | None, after: SlideCritique | None
+) -> tuple[bool, str]:
+    """Accept a style repair only when it improves without a new regression."""
+    before_error = _critique_unusable_reason(before)
+    if before_error is not None:
+        return False, f"initial_{before_error}"
+    after_error = _critique_unusable_reason(after)
+    if after_error is not None:
+        return False, f"final_{after_error}"
+    if _style_comparison_has_regression(after):
+        return False, "regression"
+    return _acceptance_decision(before, after)
+
+
 def _is_improved(
     before: SlideCritique | None, after: SlideCritique | None
 ) -> bool:
     return _acceptance_decision(before, after)[0]
-
-
-def _ordered_image_batch_sha256(images: Iterable[bytes] | None) -> str | None:
-    """Fingerprint a batch without retaining or logging any image content.
-
-    The length-prefixed per-image digest makes the order significant. That matters for
-    exact reconstruction: a reordered source/render mapping must not look like the
-    same review batch in operational evidence.
-    """
-    if images is None:
-        return None
-    digest = hashlib.sha256()
-    for image in images:
-        image_digest = hashlib.sha256(image).digest()
-        digest.update(len(image_digest).to_bytes(2, "big"))
-        digest.update(image_digest)
-    return digest.hexdigest()
 
 
 def _safe_review_model() -> str:
@@ -248,6 +266,27 @@ def _review_observation_metadata() -> dict[str, str]:
         ),
         "cache_version": str(
             getattr(author_vision_qa, "_VQA_PROMPT_VERSION", "unknown")
+        ),
+    }
+
+
+def _style_comparison_observation_metadata() -> dict[str, str]:
+    """Read comparison-review configuration without exposing cache-key material."""
+    return {
+        "model": _safe_review_model(),
+        "prompt_version": str(
+            getattr(
+                author_vision_qa,
+                "STYLE_COMPARISON_VQA_PROMPT_VERSION",
+                "unknown",
+            )
+        ),
+        "cache_version": str(
+            getattr(
+                author_vision_qa,
+                "STYLE_COMPARISON_VQA_PROMPT_VERSION",
+                "unknown",
+            )
         ),
     }
 
@@ -299,6 +338,46 @@ def _observe_critique_cache(
     return hits, len(image_list) - hits
 
 
+def _observe_style_comparison_cache(
+    baseline_images: Iterable[bytes],
+    candidate_images: Iterable[bytes],
+    contexts: Iterable[str | None],
+) -> tuple[int, int]:
+    """Count completed cache hits for one STYLE_REFERENCE comparison batch."""
+    baseline_list = list(baseline_images)
+    candidate_list = list(candidate_images)
+    context_list = list(contexts)
+    if not (len(baseline_list) == len(candidate_list) == len(context_list)):
+        return 0, len(candidate_list)
+    try:
+        cache_enabled = int(getattr(author_vision_qa, "VQA_CACHE_SIZE", 0)) > 0
+    except (TypeError, ValueError):
+        cache_enabled = False
+    if not cache_enabled:
+        return 0, len(candidate_list)
+
+    key_builder = getattr(author_vision_qa, "_style_comparison_cache_key", None)
+    cache = getattr(author_vision_qa, "_style_comparison_vqa_cache", None)
+    if not callable(key_builder) or cache is None:
+        return 0, len(candidate_list)
+
+    hits = 0
+    for baseline, candidate, context in zip(
+        baseline_list, candidate_list, context_list
+    ):
+        try:
+            key = key_builder(
+                baseline,
+                candidate,
+                context,
+                reference_mode=STYLE_REFERENCE,
+            )
+            hits += int(key in cache)
+        except Exception:  # Cache observability must never affect a review.
+            continue
+    return hits, len(candidate_list) - hits
+
+
 def _log_review_event(
     *,
     reference_mode: str,
@@ -310,7 +389,6 @@ def _log_review_event(
     model: str | None = None,
     prompt_version: str | None = None,
     cache_version: str | None = None,
-    render_batch_sha256: str | None = None,
     critique_batch_count: int = 0,
     critique_slide_request_count: int = 0,
     cache_hits: int = 0,
@@ -340,7 +418,6 @@ def _log_review_event(
         "model": model or "unknown",
         "prompt_version": prompt_version or "unknown",
         "cache_version": cache_version or "unknown",
-        "render_batch_sha256": render_batch_sha256,
         # One batch fans out to one cached critique per slide. A miss means there was
         # no completed cache result; an in-flight coalesced request can lower the
         # actual remote-call count, so this is a conservative request estimate.
@@ -505,7 +582,6 @@ async def _run_authored_quality_review_unlocked(
     render_started_at = time.perf_counter()
     pngs = list(await asyncio.gather(*(render_html_to_png(html) for html in htmls)))
     render_ms = (time.perf_counter() - render_started_at) * 1000
-    render_batch_sha256 = _ordered_image_batch_sha256(pngs)
 
     await _set_status(
         session,
@@ -527,11 +603,17 @@ async def _run_authored_quality_review_unlocked(
         reference_mode=plan_reference_mode,
     )
     initial_critique_started_at = time.perf_counter()
-    initial_critiques = await critique_authored(
-        pngs,
-        contexts=critique_contexts,
-        **critique_kwargs,
+    initial_critiques = list(
+        await critique_authored(
+            pngs,
+            contexts=critique_contexts,
+            **critique_kwargs,
+        )
     )
+    if len(initial_critiques) != len(targets):
+        initial_critiques = (initial_critiques + [None] * len(targets))[
+            : len(targets)
+        ]
     initial_critique_ms = (time.perf_counter() - initial_critique_started_at) * 1000
     initial_indeterminate_count = sum(
         _critique_unusable_reason(critique) == "indeterminate"
@@ -544,7 +626,6 @@ async def _run_authored_quality_review_unlocked(
         model=review_metadata["model"],
         prompt_version=review_metadata["prompt_version"],
         cache_version=review_metadata["cache_version"],
-        render_batch_sha256=render_batch_sha256,
         critique_batch_count=1,
         critique_slide_request_count=initial_cache_misses,
         cache_hits=initial_cache_hits,
@@ -596,12 +677,10 @@ async def _run_authored_quality_review_unlocked(
         status="processing",
         message=f"문제가 발견된 {len(initial_issues)}개 슬라이드를 자동 수정하고 있습니다.",
     )
-    revise_kwargs = {}
+    revise_kwargs = {"initial_critiques": initial_critiques}
+    candidate_decisions: list[dict] = []
     if exact_reconstruction:
-        revise_kwargs = {
-            "initial_critiques": initial_critiques,
-            "reference_images_by_slide": target_references,
-        }
+        revise_kwargs["reference_images_by_slide"] = target_references
     revision_started_at = time.perf_counter()
     revised_htmls, revised_pngs, candidate_local_indices = await revise_authored_deck(
         htmls,
@@ -616,6 +695,14 @@ async def _run_authored_quality_review_unlocked(
         total_slides=len(slides),
         **revise_kwargs,
     )
+    candidate_local_indices = list(dict.fromkeys(candidate_local_indices))
+    if any(
+        type(index) is not int or index < 0 or index >= len(targets)
+        for index in candidate_local_indices
+    ):
+        raise RuntimeError(
+            "Authored quality review returned an invalid candidate index"
+        )
     revision_ms = (time.perf_counter() - revision_started_at) * 1000
     _log_review_event(
         reference_mode=plan_reference_mode,
@@ -631,7 +718,6 @@ async def _run_authored_quality_review_unlocked(
         model=review_metadata["model"],
         prompt_version=review_metadata["prompt_version"],
         cache_version=review_metadata["cache_version"],
-        render_batch_sha256=render_batch_sha256,
         render_ms=render_ms,
         revision_ms=revision_ms,
     )
@@ -678,7 +764,6 @@ async def _run_authored_quality_review_unlocked(
                 model=review_metadata["model"],
                 prompt_version=review_metadata["prompt_version"],
                 cache_version=review_metadata["cache_version"],
-                render_batch_sha256=_ordered_image_batch_sha256(candidate_pngs),
                 critique_batch_count=1,
                 critique_slide_request_count=final_cache_misses,
                 cache_hits=final_cache_hits,
@@ -691,11 +776,21 @@ async def _run_authored_quality_review_unlocked(
                     for critique in candidate_critiques
                 ),
             )
-            for local_index, final_critique in zip(
-                candidate_local_indices, candidate_critiques
-            ):
+            for offset, local_index in enumerate(candidate_local_indices):
+                final_critique = (
+                    candidate_critiques[offset]
+                    if offset < len(candidate_critiques)
+                    else None
+                )
                 accepted, reason = _acceptance_decision(
                     initial_critiques[local_index], final_critique
+                )
+                candidate_decisions.append(
+                    {
+                        "slide_index": positions[local_index],
+                        "accepted": accepted,
+                        "reason": reason,
+                    }
                 )
                 if accepted:
                     accepted_local_indices.append(local_index)
@@ -714,7 +809,6 @@ async def _run_authored_quality_review_unlocked(
             model=review_metadata["model"],
             prompt_version=review_metadata["prompt_version"],
             cache_version=review_metadata["cache_version"],
-            render_batch_sha256=render_batch_sha256,
             render_ms=render_ms,
             revision_ms=revision_ms,
             indeterminate_count=sum(
@@ -723,47 +817,99 @@ async def _run_authored_quality_review_unlocked(
             ),
         )
     else:
-        fixed_local_indices = candidate_local_indices
-        final_contexts = [content[:240] for content in contents]
-        final_cache_hits, final_cache_misses = _observe_critique_cache(
-            revised_pngs,
-            final_contexts,
-            reference_mode=plan_reference_mode,
-        )
-        final_critique_started_at = time.perf_counter()
-        final_critiques = await critique_authored(
-            revised_pngs, contexts=final_contexts
-        )
-        final_critique_ms = (time.perf_counter() - final_critique_started_at) * 1000
+        accepted_local_indices = []
+        chosen_critiques = list(initial_critiques)
+        rejection_reasons = Counter()
+        comparison_metadata = _style_comparison_observation_metadata()
+        final_critique_ms = 0.0
+        candidate_critiques: list[SlideCritique | None] = []
+        final_cache_hits = 0
+        final_cache_misses = 0
+        if candidate_local_indices:
+            baseline_candidate_pngs = [
+                pngs[index] for index in candidate_local_indices
+            ]
+            candidate_pngs = [
+                revised_pngs[index] for index in candidate_local_indices
+            ]
+            candidate_contexts = [
+                contents[index][:240] for index in candidate_local_indices
+            ]
+            final_cache_hits, final_cache_misses = _observe_style_comparison_cache(
+                baseline_candidate_pngs,
+                candidate_pngs,
+                candidate_contexts,
+            )
+            final_critique_started_at = time.perf_counter()
+            candidate_critiques = list(
+                await critique_authored_style_comparison(
+                    baseline_candidate_pngs,
+                    candidate_pngs,
+                    contexts=candidate_contexts,
+                )
+            )
+            final_critique_ms = (
+                time.perf_counter() - final_critique_started_at
+            ) * 1000
+            for offset, local_index in enumerate(candidate_local_indices):
+                final_critique = (
+                    candidate_critiques[offset]
+                    if offset < len(candidate_critiques)
+                    else None
+                )
+                accepted, reason = _style_acceptance_decision(
+                    initial_critiques[local_index], final_critique
+                )
+                candidate_decisions.append(
+                    {
+                        "slide_index": positions[local_index],
+                        "accepted": accepted,
+                        "reason": reason,
+                    }
+                )
+                if accepted:
+                    accepted_local_indices.append(local_index)
+                    chosen_critiques[local_index] = final_critique
+                else:
+                    rejection_reasons[reason] += 1
+        fixed_local_indices = accepted_local_indices
+        final_critiques = chosen_critiques
         _log_review_event(
             reference_mode=plan_reference_mode,
             stage="final_review",
-            slide_count=len(revised_pngs),
+            slide_count=len(candidate_local_indices),
             attempted=len(candidate_local_indices),
-            model=review_metadata["model"],
-            prompt_version=review_metadata["prompt_version"],
-            cache_version=review_metadata["cache_version"],
-            render_batch_sha256=_ordered_image_batch_sha256(revised_pngs),
-            critique_batch_count=1,
+            model=comparison_metadata["model"],
+            prompt_version=comparison_metadata["prompt_version"],
+            cache_version=comparison_metadata["cache_version"],
+            critique_batch_count=1 if candidate_local_indices else 0,
             critique_slide_request_count=final_cache_misses,
             cache_hits=final_cache_hits,
             cache_misses=final_cache_misses,
             render_ms=render_ms,
             critique_ms=final_critique_ms,
             revision_ms=revision_ms,
+            indeterminate_count=sum(
+                _critique_unusable_reason(critique) == "indeterminate"
+                for critique in candidate_critiques
+            ),
         )
         _log_review_event(
             reference_mode=plan_reference_mode,
             stage="acceptance",
             slide_count=len(targets),
             attempted=len(candidate_local_indices),
-            accepted=len(candidate_local_indices),
-            model=review_metadata["model"],
-            prompt_version=review_metadata["prompt_version"],
-            cache_version=review_metadata["cache_version"],
-            render_batch_sha256=render_batch_sha256,
+            accepted=len(accepted_local_indices),
+            rejection_reasons=rejection_reasons,
+            model=comparison_metadata["model"],
+            prompt_version=comparison_metadata["prompt_version"],
+            cache_version=comparison_metadata["cache_version"],
             render_ms=render_ms,
             revision_ms=revision_ms,
+            indeterminate_count=sum(
+                _critique_unusable_reason(critique) == "indeterminate"
+                for critique in candidate_critiques
+            ),
         )
     remaining_issues = _serialize_critiques(positions, final_critiques)
 
@@ -835,6 +981,15 @@ async def _run_authored_quality_review_unlocked(
                 )
         await session.commit()
 
+    task_rejection_reasons: Counter[str] = Counter(
+        decision["reason"]
+        for decision in candidate_decisions
+        if not decision["accepted"]
+    )
+    no_candidate_count = max(0, len(initial_issues) - len(candidate_local_indices))
+    if no_candidate_count:
+        task_rejection_reasons["no_candidate"] += no_candidate_count
+
     await _set_status(
         session,
         task,
@@ -853,6 +1008,13 @@ async def _run_authored_quality_review_unlocked(
             "issues": initial_issues,
             "fixed_count": len(fixed_positions),
             "fixed_slide_indices": fixed_positions,
+            "candidate_count": len(candidate_local_indices),
+            "accepted_candidate_count": len(fixed_positions),
+            "rejected_candidate_count": (
+                len(candidate_local_indices) - len(fixed_positions)
+            ),
+            "rejection_reasons": dict(sorted(task_rejection_reasons.items())),
+            "candidate_decisions": candidate_decisions,
             "remaining_issue_count": len(remaining_issues),
             "remaining_slide_indices": [
                 issue["slide_index"] for issue in remaining_issues
@@ -884,12 +1046,12 @@ async def run_authored_quality_review(
 
 
 def _public_review_error_detail(exc: Exception) -> str:
-    """Return a stable task error without exposing private exact metadata."""
+    """Return a stable task error without exposing private review metadata."""
     if isinstance(exc, AuthoredExactReconstructionUnavailableError):
         return "authored_exact_reconstruction_unavailable"
     if isinstance(exc, ExactProvenanceError):
         return "authored_exact_reconstruction_provenance_mismatch"
-    return str(exc)
+    return "authored_quality_review_failed"
 
 
 async def _run_quality_review(
@@ -906,20 +1068,23 @@ async def _run_quality_review(
                 presentation_id, request, task, session
             )
         except Exception as exc:  # noqa: BLE001 - background task boundary
-            private_exact_failure = isinstance(
+            exact_failure = isinstance(
                 exc,
                 (
                     AuthoredExactReconstructionUnavailableError,
                     ExactProvenanceError,
                 ),
             )
-            if private_exact_failure:
+            if exact_failure:
                 LOGGER.warning(
                     "Exact reconstruction quality review failed closed (%s)",
                     type(exc).__name__,
                 )
             else:
-                traceback.print_exc()
+                LOGGER.warning(
+                    "Authored quality review failed (%s)",
+                    type(exc).__name__,
+                )
             await session.rollback()
             await _set_status(
                 session,

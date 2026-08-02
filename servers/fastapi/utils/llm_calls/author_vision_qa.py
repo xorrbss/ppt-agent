@@ -28,8 +28,11 @@ from utils.llm_calls.author_slide import (
 from utils.authored_styles import reference_images_for_role
 from utils.llm_calls.critique_slide import (
     CRITIQUE_PROMPT_VERSION,
+    STYLE_COMPARISON_PROMPT_VERSION,
+    STYLE_COMPARISON_REGRESSION_PREFIX as _STYLE_COMPARISON_REGRESSION_PREFIX,
     SlideCritique,
     critique_slide_image,
+    critique_slide_style_comparison,
 )
 from utils.llm_provider import get_model
 from utils.slide_capture import render_html_to_png
@@ -67,8 +70,14 @@ _vqa_sem: Optional[asyncio.Semaphore] = None
 # token in the fingerprint so configuration or reviewer-policy changes invalidate safely.
 VQA_CACHE_SIZE = _env_nonnegative_int("AUTHORED_VQA_CACHE_SIZE", 64)
 _VQA_PROMPT_VERSION = f"authored-vqa-v2:{CRITIQUE_PROMPT_VERSION}"
+STYLE_COMPARISON_REGRESSION_PREFIX = _STYLE_COMPARISON_REGRESSION_PREFIX
+STYLE_COMPARISON_VQA_PROMPT_VERSION = (
+    f"authored-style-comparison-v1:{STYLE_COMPARISON_PROMPT_VERSION}"
+)
 _vqa_cache: "OrderedDict[str, SlideCritique]" = OrderedDict()
 _vqa_inflight: Dict[str, "asyncio.Task[SlideCritique]"] = {}
+_style_comparison_vqa_cache: "OrderedDict[str, SlideCritique]" = OrderedDict()
+_style_comparison_vqa_inflight: Dict[str, "asyncio.Task[SlideCritique]"] = {}
 
 
 def _get_vqa_sem() -> asyncio.Semaphore:
@@ -166,6 +175,129 @@ async def _critique_cached(
     while len(_vqa_cache) > VQA_CACHE_SIZE:
         _vqa_cache.popitem(last=False)
     return critique
+
+
+def _style_comparison_cache_key(
+    baseline: bytes,
+    candidate: bytes,
+    context: Optional[str],
+    *,
+    reference_mode: str = STYLE_REFERENCE,
+) -> str:
+    """Fingerprint a style comparison independently from all existing QA caches."""
+    mode = normalize_reference_mode(reference_mode)
+    if mode != STYLE_REFERENCE:
+        raise ValueError("Authored style comparison only supports style_reference mode")
+
+    digest = hashlib.sha256()
+    digest.update(STYLE_COMPARISON_VQA_PROMPT_VERSION.encode("utf-8"))
+    digest.update(b"\0")
+    try:
+        model = str(get_model() or "")
+    except Exception:
+        model = ""
+    digest.update(model.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(mode.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update((context or "").encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(hashlib.sha256(baseline).digest())
+    digest.update(hashlib.sha256(candidate).digest())
+    return digest.hexdigest()
+
+
+async def _style_comparison_cached(
+    baseline: bytes,
+    candidate: bytes,
+    context: Optional[str],
+    *,
+    reference_mode: str = STYLE_REFERENCE,
+) -> Optional[SlideCritique]:
+    """Return one best-effort baseline-vs-candidate style critique."""
+    mode = normalize_reference_mode(reference_mode)
+    if mode != STYLE_REFERENCE:
+        raise ValueError("Authored style comparison only supports style_reference mode")
+
+    async def invoke() -> SlideCritique:
+        async with _get_vqa_sem():
+            return await critique_slide_style_comparison(
+                baseline,
+                candidate,
+                slide_context=context,
+            )
+
+    if VQA_CACHE_SIZE <= 0:
+        try:
+            return await invoke()
+        except Exception:
+            return None
+
+    key = _style_comparison_cache_key(
+        baseline,
+        candidate,
+        context,
+        reference_mode=mode,
+    )
+    cached = _style_comparison_vqa_cache.get(key)
+    if cached is not None:
+        _style_comparison_vqa_cache.move_to_end(key)
+        return cached
+
+    task = _style_comparison_vqa_inflight.get(key)
+    if task is None:
+        task = asyncio.create_task(invoke())
+        _style_comparison_vqa_inflight[key] = task
+
+    try:
+        critique = await asyncio.shield(task)
+    except Exception:
+        return None
+    finally:
+        if _style_comparison_vqa_inflight.get(key) is task and task.done():
+            _style_comparison_vqa_inflight.pop(key, None)
+
+    _style_comparison_vqa_cache[key] = critique
+    _style_comparison_vqa_cache.move_to_end(key)
+    while len(_style_comparison_vqa_cache) > VQA_CACHE_SIZE:
+        _style_comparison_vqa_cache.popitem(last=False)
+    return critique
+
+
+async def critique_authored_style_comparison(
+    baseline_pngs: List[bytes],
+    candidate_pngs: List[bytes],
+    contexts: Optional[List[Optional[str]]] = None,
+    *,
+    reference_mode: str = STYLE_REFERENCE,
+) -> List[Optional[SlideCritique]]:
+    """Compare post-fix authored renders with non-authoritative pre-fix baselines.
+
+    Returns ``None`` for a candidate whose single model call failed. Empty batches are
+    valid and return immediately without invoking the model.
+    """
+    mode = normalize_reference_mode(reference_mode)
+    if mode != STYLE_REFERENCE:
+        raise ValueError("Authored style comparison only supports style_reference mode")
+    if len(baseline_pngs) != len(candidate_pngs):
+        raise ValueError("Style comparison baseline and candidate counts must match")
+    if any(not isinstance(image, bytes) or not image for image in baseline_pngs):
+        raise ValueError("Style comparison baselines must be non-empty bytes")
+    if any(not isinstance(image, bytes) or not image for image in candidate_pngs):
+        raise ValueError("Style comparison candidates must be non-empty bytes")
+
+    ctx = contexts or []
+
+    async def review(i: int) -> Optional[SlideCritique]:
+        context = ctx[i] if i < len(ctx) else None
+        return await _style_comparison_cached(
+            baseline_pngs[i],
+            candidate_pngs[i],
+            context,
+            reference_mode=mode,
+        )
+
+    return list(await asyncio.gather(*[review(i) for i in range(len(candidate_pngs))]))
 
 
 def _feedback(critique: SlideCritique, *, exact_reconstruction: bool = False) -> str:
