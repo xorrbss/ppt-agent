@@ -582,7 +582,14 @@ def preflight_template_v2_native_pptx(
                     expected_size_bytes=target.native_source.source_size_bytes,
                 )
             except TemplateV2NativeStorageError as error:
-                raise TemplateV2GenerationError(error.code) from error
+                # Storage exposes granular integrity and filesystem codes for
+                # ingestion diagnostics.  Generation deliberately collapses
+                # them to one stable, content-free API/metrics dimension so a
+                # missing or changed private source cannot break observation
+                # logging or reveal storage topology.
+                raise TemplateV2GenerationError(
+                    "template_v2_native_source_invalid"
+                ) from error
             compilation = compile_template_v2_native_clone(
                 source_pptx,
                 clone_input,
@@ -600,6 +607,8 @@ def preflight_template_v2_native_pptx(
             unsupported_path=error.path,
             preservation_mode=target.preservation_mode,
         )
+    except TemplateV2GenerationError:
+        raise
     except (ValueError, JSONSchemaValidationError) as error:
         raise TemplateV2GenerationError("template_v2_generation_invalid") from error
 

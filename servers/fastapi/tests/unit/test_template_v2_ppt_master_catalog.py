@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+import hashlib
 import inspect
 import json
 from pathlib import Path
@@ -14,15 +15,26 @@ from api.v1.ppt.endpoints.structured_templates import (
     _response,
     list_structured_templates,
 )
+from api.v1.ppt.endpoints import structured_templates as structured_templates_module
 from models.sql.template_v2 import TemplateV2
 from templates.v2 import catalog as catalog_module
 from templates.v2.catalog import (
     CATALOG_SCHEMA_VERSION,
     DEFAULT_CATALOG_PATH,
+    DEFAULT_RIGHTS_PATH,
+    RIGHTS_SCHEMA_VERSION,
+    TemplateRightsManifest,
+    TemplateRightsRecord,
+    TemplateV2CatalogEntry,
     TemplateV2CatalogManifest,
+    catalog_entry_sha256,
+    evaluate_rights_readiness,
     get_template_v2_catalog_entry,
+    is_template_v2_catalog_entry_rights_ready,
     list_template_v2_catalog_entries,
+    load_template_rights_manifest,
     load_template_v2_catalog,
+    rights_evidence_set_sha256,
 )
 
 
@@ -121,6 +133,190 @@ def test_unverified_embedded_assets_are_blocked_and_never_copied():
     assert copied_binaries == []
 
 
+def test_rights_manifest_pins_import_receipts_but_keeps_all_candidates_pending():
+    catalog = {entry.id: entry for entry in load_template_v2_catalog().entries}
+    rights = load_template_rights_manifest()
+
+    assert rights.schema_version == RIGHTS_SCHEMA_VERSION
+    assert {record.template_id for record in rights.records} == CATALOG_IDS
+    for record in rights.records:
+        entry = catalog[record.template_id]
+        candidate = next(
+            item for item in entry.source.files if item.role == "candidate_pptx"
+        )
+        assert record.catalog_entry_sha256 == catalog_entry_sha256(entry)
+        assert record.source.repository == entry.source.repository
+        assert record.source.revision == entry.source.commit_sha
+        assert record.source.candidate_pptx_path == candidate.path
+        assert record.source.candidate_pptx_sha256 == candidate.sha256
+        assert record.source.candidate_pptx_size_bytes > 0
+        assert set(record.required_scopes) >= {"candidate_pptx", "embedded_media"}
+        assert set(record.required_permissions) == {
+            "redistribute",
+            "modify",
+            "commercial_use",
+        }
+        assert record.evidence == ()
+        assert record.approval.status == "pending"
+
+        report = evaluate_rights_readiness(entry, record)
+        assert report.ready_for_publication_review is False
+        assert "rights approval is not approved" in report.blockers
+        assert any("embedded_media" in blocker for blocker in report.blockers)
+        assert entry.publication_status == "blocked"
+
+
+def _approved_rights_record(tmp_path: Path) -> tuple[TemplateRightsRecord, Path]:
+    payload = json.loads(DEFAULT_RIGHTS_PATH.read_text(encoding="utf-8"))["records"][0]
+    evidence_path = tmp_path / "evidence" / "rights-holder-grant.txt"
+    evidence_path.parent.mkdir()
+    evidence_path.write_text(
+        "The rights holder grants redistribution, modification, and commercial use "
+        "of the identified PPTX and all embedded media.",
+        encoding="utf-8",
+    )
+    payload["evidence"] = [
+        {
+            "id": "rights-holder-grant-001",
+            "evidence_type": "rights_holder_grant",
+            "document_path": "evidence/rights-holder-grant.txt",
+            "document_sha256": hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+            "issuer": "Verified rights holder",
+            "license_expression": "Written redistribution grant",
+            "covered_scopes": ["candidate_pptx", "embedded_media"],
+            "covered_artifact_sha256": payload["source"]["candidate_pptx_sha256"],
+            "granted_permissions": ["redistribute", "modify", "commercial_use"],
+            "attribution_text": "PPT Master by Hugo He",
+            "coverage_statement": "Grant explicitly covers the complete pinned PPTX package.",
+        }
+    ]
+    pending = TemplateRightsRecord.model_validate(payload)
+    payload["approval"] = {
+        "status": "approved",
+        "reviewer": "rights-review@example.invalid",
+        "reviewed_at": "2026-08-02T12:00:00+09:00",
+        "evidence_set_sha256": rights_evidence_set_sha256(pending),
+        "decision": "Issuer and scope verified against the pinned package digest.",
+    }
+    return TemplateRightsRecord.model_validate(payload), evidence_path
+
+
+def test_verified_local_evidence_can_reach_review_ready_without_auto_publishing(
+    tmp_path: Path,
+):
+    entry = load_template_v2_catalog().entries[0]
+    record, _ = _approved_rights_record(tmp_path)
+
+    report = evaluate_rights_readiness(entry, record, evidence_root=tmp_path)
+
+    assert report.ready_for_publication_review is True
+    assert report.blockers == ()
+    assert entry.publication_status == "blocked"
+
+
+def _published_catalog_entry() -> TemplateV2CatalogEntry:
+    payload = load_template_v2_catalog().entries[0].model_dump(mode="json")
+    payload["publication_status"] = "published"
+    payload["provenance"]["license"]["embedded_assets_license_verified"] = True
+    payload["provenance"]["license"]["redistribution_approved"] = True
+    return TemplateV2CatalogEntry.model_validate(payload)
+
+
+def test_catalog_publication_status_cannot_bypass_pending_rights_manifest():
+    entry = _published_catalog_entry()
+
+    assert is_template_v2_catalog_entry_rights_ready(entry) is False
+
+
+def test_rights_readiness_requires_evidence_for_operator_added_scope(tmp_path: Path):
+    entry = load_template_v2_catalog().entries[0]
+    record, _ = _approved_rights_record(tmp_path)
+    payload = record.model_dump(mode="json")
+    payload["required_scopes"].append("fonts")
+    payload["approval"] = {"status": "pending"}
+    pending = TemplateRightsRecord.model_validate(payload)
+    payload["approval"] = {
+        "status": "approved",
+        "reviewer": "rights-review@example.invalid",
+        "reviewed_at": "2026-08-02T12:00:00+09:00",
+        "evidence_set_sha256": rights_evidence_set_sha256(pending),
+        "decision": "Additional font scope requires its own evidence.",
+    }
+
+    report = evaluate_rights_readiness(
+        entry,
+        TemplateRightsRecord.model_validate(payload),
+        evidence_root=tmp_path,
+    )
+
+    assert report.ready_for_publication_review is False
+    assert "no complete verified rights evidence covers scope: fonts" in report.blockers
+
+
+def test_rights_readiness_fails_closed_for_tampering_or_stale_approval(tmp_path: Path):
+    entry = load_template_v2_catalog().entries[0]
+    record, evidence_path = _approved_rights_record(tmp_path)
+    evidence_path.write_text("tampered", encoding="utf-8")
+
+    tampered = evaluate_rights_readiness(entry, record, evidence_root=tmp_path)
+    assert tampered.ready_for_publication_review is False
+    assert any("document digest mismatch" in blocker for blocker in tampered.blockers)
+
+    payload = record.model_dump(mode="json")
+    payload["approval"]["evidence_set_sha256"] = "f" * 64
+    stale = evaluate_rights_readiness(
+        entry,
+        TemplateRightsRecord.model_validate(payload),
+        evidence_root=tmp_path,
+    )
+    assert stale.ready_for_publication_review is False
+    assert "rights approval digest does not match the evidence set" in stale.blockers
+
+
+def test_rights_schema_rejects_network_paths_incomplete_review_and_duplicates():
+    payload = json.loads(DEFAULT_RIGHTS_PATH.read_text(encoding="utf-8"))
+    record = deepcopy(payload["records"][0])
+    record["evidence"] = [
+        {
+            "id": "unsafe-evidence",
+            "evidence_type": "rights_holder_grant",
+            "document_path": "https://example.invalid/grant.pdf",
+            "document_sha256": "a" * 64,
+            "issuer": "Unknown",
+            "license_expression": "Unknown",
+            "covered_scopes": ["candidate_pptx"],
+            "covered_artifact_sha256": record["source"]["candidate_pptx_sha256"],
+            "granted_permissions": ["redistribute"],
+            "coverage_statement": "Incomplete and remote.",
+        }
+    ]
+    with pytest.raises(ValidationError):
+        TemplateRightsRecord.model_validate(record)
+
+    record = deepcopy(payload["records"][0])
+    record["approval"] = {"status": "approved"}
+    with pytest.raises(ValidationError):
+        TemplateRightsRecord.model_validate(record)
+
+    for field in ("reviewer", "decision"):
+        record = deepcopy(payload["records"][0])
+        record["approval"] = {
+            "status": "approved",
+            "reviewer": "rights-reviewer",
+            "reviewed_at": "2026-08-02T00:00:00+09:00",
+            "evidence_set_sha256": "a" * 64,
+            "decision": "approved for publication",
+        }
+        record["approval"][field] = "   "
+        with pytest.raises(ValidationError):
+            TemplateRightsRecord.model_validate(record)
+
+    duplicate = deepcopy(payload)
+    duplicate["records"].append(deepcopy(duplicate["records"][0]))
+    with pytest.raises(ValidationError):
+        TemplateRightsManifest.model_validate(duplicate)
+
+
 def test_catalog_loader_has_no_runtime_network_fallback():
     source = inspect.getsource(catalog_module)
 
@@ -216,6 +412,50 @@ def test_list_api_hides_legacy_and_blocked_catalog_rows_but_keeps_verified_v2(
     assert discovered[0].preservation_mode == "native_clone"
     assert discovered[0].source is None
     assert discovered[0].provenance is None
+
+
+def test_list_and_response_require_rights_readiness_for_published_catalog_row(
+    monkeypatch,
+):
+    catalog_entry = _published_catalog_entry()
+    candidate = _template(catalog_entry.id, _native_clone_assets())
+
+    class ListedSession:
+        async def execute(self, *_args, **_kwargs):
+            class Result:
+                def scalars(self):
+                    return self
+
+                def all(self):
+                    return [candidate]
+
+            return Result()
+
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", catalog_entry.id)
+    monkeypatch.setattr(
+        structured_templates_module,
+        "get_template_v2_catalog_entry",
+        lambda _template_id: catalog_entry,
+    )
+    monkeypatch.setattr(
+        structured_templates_module,
+        "is_template_v2_catalog_entry_rights_ready",
+        lambda _entry: False,
+    )
+
+    assert asyncio.run(list_structured_templates(sql_session=ListedSession())) == []
+    assert _response(candidate).publication_status == "blocked"
+
+    monkeypatch.setattr(
+        structured_templates_module,
+        "is_template_v2_catalog_entry_rights_ready",
+        lambda _entry: True,
+    )
+    discovered = asyncio.run(list_structured_templates(sql_session=ListedSession()))
+
+    assert [template.id for template in discovered] == [catalog_entry.id]
+    assert discovered[0].publication_status == "published"
 
 
 def test_unknown_template_keeps_backward_compatible_optional_fields():

@@ -104,6 +104,24 @@ def test_native_clone_unsupported_is_a_fail_closed_generation_error(monkeypatch)
     assert rejected.value.code == "template_v2_native_pptx_unsupported"
 
 
+def test_native_storage_details_collapse_to_safe_generation_error(monkeypatch):
+    def reject(*args, **kwargs):
+        raise generation.TemplateV2NativeStorageError(
+            "template_v2_native_source_missing"
+        )
+
+    monkeypatch.setattr(generation, "read_native_source", reject)
+
+    with pytest.raises(generation.TemplateV2GenerationError) as rejected:
+        generation.preflight_template_v2_native_pptx(
+            target=_target(),
+            slides=[_slide()],
+            select_for_export=True,
+        )
+
+    assert rejected.value.code == "template_v2_native_source_invalid"
+
+
 def test_native_export_writes_the_exact_preflight_bytes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

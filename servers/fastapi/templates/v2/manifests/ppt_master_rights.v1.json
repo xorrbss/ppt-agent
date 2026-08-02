@@ -1,0 +1,65 @@
+{
+  "schema_version": "presenton.template-v2-rights-evidence/v1",
+  "records": [
+    {
+      "template_id": "ppt-master-swiss-grid-systems",
+      "catalog_entry_sha256": "afbf863736475b6b7cd793c6d49d770b3b89f1ee8ef2f07e2d73798a3af963b8",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "revision": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "candidate_pptx_path": "examples/ppt169_swiss_grid_systems/exports/swiss_grid_systems.pptx",
+        "candidate_pptx_sha256": "8082dcb4d6c9ff93c60912daa417d62b1b31a3744fe2dd9d9f3b5e68a3e0745d",
+        "candidate_pptx_size_bytes": 1555342
+      },
+      "required_scopes": ["candidate_pptx", "embedded_media"],
+      "required_permissions": ["redistribute", "modify", "commercial_use"],
+      "evidence": [],
+      "approval": {"status": "pending"}
+    },
+    {
+      "template_id": "ppt-master-editorial-magazine",
+      "catalog_entry_sha256": "b71b1e7e649574d69b4a6c95196ec549cce27ba665b311d40b79add57179cb5e",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "revision": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "candidate_pptx_path": "examples/ppt169_pritzker_2026/exports/pritzker_2026.pptx",
+        "candidate_pptx_sha256": "095f9085bd12d03e10cb537078e3a903047e710af85fdb7301f7297e2674f625",
+        "candidate_pptx_size_bytes": 15854611
+      },
+      "required_scopes": ["candidate_pptx", "embedded_media"],
+      "required_permissions": ["redistribute", "modify", "commercial_use"],
+      "evidence": [],
+      "approval": {"status": "pending"}
+    },
+    {
+      "template_id": "ppt-master-data-journalism",
+      "catalog_entry_sha256": "06926eaf04bea2bec5bde01b93bd4b8ba5cd0f5af4bfe33f36738fefb3ea4b15",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "revision": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "candidate_pptx_path": "examples/ppt169_global_ai_capital_2026/exports/global_ai_capital_2026.pptx",
+        "candidate_pptx_sha256": "2a323935de5a736e301e46b00707521026c31b1436663d7d7ebdec3166991972",
+        "candidate_pptx_size_bytes": 3486177
+      },
+      "required_scopes": ["candidate_pptx", "embedded_media"],
+      "required_permissions": ["redistribute", "modify", "commercial_use"],
+      "evidence": [],
+      "approval": {"status": "pending"}
+    },
+    {
+      "template_id": "ppt-master-glassmorphism-saas",
+      "catalog_entry_sha256": "a3b416586d1c4d547f5d9d23e084a095fa4b2593180533483f1a5269643d5d80",
+      "source": {
+        "repository": "https://github.com/hugohe3/ppt-master",
+        "revision": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+        "candidate_pptx_path": "examples/ppt169_glassmorphism_demo/exports/glassmorphism_demo.pptx",
+        "candidate_pptx_sha256": "291bdc5f8a203a7076d387bc667b67b074c2a9bd94d5e7ee0892d8b22b44b46b",
+        "candidate_pptx_size_bytes": 7843702
+      },
+      "required_scopes": ["candidate_pptx", "embedded_media"],
+      "required_permissions": ["redistribute", "modify", "commercial_use"],
+      "evidence": [],
+      "approval": {"status": "pending"}
+    }
+  ]
+}

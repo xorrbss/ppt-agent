@@ -14,7 +14,15 @@ from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile, ZipInfo
 
 from templates.v2.generation import build_generated_slide
-from templates.v2.models.elements import Container, Group, Table, Text, TextList
+from templates.v2.models.elements import (
+    Chart,
+    Container,
+    Group,
+    Image,
+    Table,
+    Text,
+    TextList,
+)
 from templates.v2.models.layouts import SlideLayout
 from templates.v2.pptx.native_compiler import TemplateV2NativePptxCompileError
 
@@ -35,6 +43,7 @@ _SLIDE_REL_TYPE = (
 _SLIDE_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
 )
+_XML_NS = "http://www.w3.org/XML/1998/namespace"
 
 
 @dataclass(frozen=True, slots=True)
@@ -425,13 +434,37 @@ def _patch_element(
         _replace_table(shape, [columns, *rows], path)
         patched.append(element.name)
         return
-    if isinstance(element, TextList) and element.decorative:
+    if isinstance(element, TextList):
+        if element.decorative:
+            return
+        value = scope.get(element.name)
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_pptx_content_value_invalid",
+                path=f"{path}.content.{element.name}",
+            )
+        shape = _unique_shape(shape_map, element.name, path)
+        _replace_text_list(shape, value, path)
+        patched.append(element.name)
         return
-    if getattr(element, "decorative", True) is False:
+    if isinstance(element, Image) and not element.decorative:
         raise TemplateV2NativePptxCompileError(
-            "template_v2_native_clone_element_unsupported",
-            path=f"{path}.type={element.type}",
+            "template_v2_native_clone_image_relationship_replacement_unsupported",
+            path=f"{path}.type=image",
         )
+    if isinstance(element, Chart) and not element.decorative:
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_chart_relationship_replacement_unsupported",
+            path=f"{path}.type=chart",
+        )
+    if getattr(element, "decorative", True) is True:
+        return
+    raise TemplateV2NativePptxCompileError(
+        "template_v2_native_clone_element_unsupported",
+        path=f"{path}.type={element.type}",
+    )
 
 
 def _shape_name(shape: ET.Element) -> str | None:
@@ -473,6 +506,106 @@ def _replace_text(shape: ET.Element, value: str, path: str) -> None:
     runs[0].text = value
     for run in runs[1:]:
         run.text = ""
+
+
+def _replace_text_list(shape: ET.Element, values: list[str], path: str) -> None:
+    """Patch a fixed-cardinality list while retaining all list OOXML structure."""
+
+    if shape.tag != f"{{{_P_NS}}}sp":
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_text_body_missing", path=path
+        )
+    text_bodies = shape.findall(f"{{{_P_NS}}}txBody")
+    if len(text_bodies) != 1:
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_text_body_missing", path=path
+        )
+    text_body = text_bodies[0]
+    paragraphs = text_body.findall(f"{{{_A_NS}}}p")
+    if not paragraphs:
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_text_body_missing", path=path
+        )
+    if len(values) != len(paragraphs):
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_pptx_text_list_shape_change_unsupported",
+            path=path,
+        )
+    for index, (paragraph, value) in enumerate(
+        zip(paragraphs, values, strict=True)
+    ):
+        _replace_plain_paragraph_text(
+            paragraph, value, f"{path}.content.items.{index}"
+        )
+
+
+def _replace_plain_paragraph_text(
+    paragraph: ET.Element, value: str, path: str
+) -> None:
+    """Replace ordinary DrawingML runs without changing paragraph/run structure."""
+
+    if any(not _is_safe_plain_xml_character(character) for character in value):
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_text_list_paragraph_unsupported", path=path
+        )
+    if any(
+        node.tag in {f"{{{_A_NS}}}hlinkClick", f"{{{_A_NS}}}hlinkMouseOver"}
+        for node in paragraph.iter()
+    ):
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_text_list_paragraph_unsupported", path=path
+        )
+    allowed_paragraph_tags = {
+        f"{{{_A_NS}}}pPr",
+        f"{{{_A_NS}}}r",
+        f"{{{_A_NS}}}endParaRPr",
+    }
+    if any(child.tag not in allowed_paragraph_tags for child in paragraph):
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_text_list_paragraph_unsupported", path=path
+        )
+    runs = paragraph.findall(f"{{{_A_NS}}}r")
+    if not runs:
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_text_list_paragraph_unsupported", path=path
+        )
+    text_nodes: list[ET.Element] = []
+    for run in runs:
+        allowed_run_tags = {f"{{{_A_NS}}}rPr", f"{{{_A_NS}}}t"}
+        if any(child.tag not in allowed_run_tags for child in run):
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_clone_text_list_paragraph_unsupported", path=path
+            )
+        texts = run.findall(f"{{{_A_NS}}}t")
+        if len(texts) != 1:
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_clone_text_list_paragraph_unsupported", path=path
+            )
+        text_nodes.append(texts[0])
+
+    text_nodes[0].text = value
+    _set_xml_space(text_nodes[0], value)
+    for text_node in text_nodes[1:]:
+        text_node.text = ""
+        text_node.attrib.pop(f"{{{_XML_NS}}}space", None)
+
+
+def _is_safe_plain_xml_character(character: str) -> bool:
+    codepoint = ord(character)
+    return (
+        codepoint >= 0x20
+        and codepoint not in {0x7F, 0x85}
+        and not 0xD800 <= codepoint <= 0xDFFF
+        and codepoint not in {0xFFFE, 0xFFFF}
+    )
+
+
+def _set_xml_space(text_node: ET.Element, value: str) -> None:
+    attribute = f"{{{_XML_NS}}}space"
+    if value.startswith(" ") or value.endswith(" "):
+        text_node.set(attribute, "preserve")
+    else:
+        text_node.attrib.pop(attribute, None)
 
 
 def _replace_table(shape: ET.Element, values: list[list[str]], path: str) -> None:

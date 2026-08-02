@@ -9,7 +9,9 @@ handled by :mod:`templates.v2.publication`.
 
 from __future__ import annotations
 
+from datetime import datetime
 from functools import lru_cache
+import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -19,15 +21,29 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 CATALOG_SCHEMA_VERSION = "presenton.template-v2-design-catalog/v1"
+RIGHTS_SCHEMA_VERSION = "presenton.template-v2-rights-evidence/v1"
 DEFAULT_CATALOG_PATH = (
     Path(__file__).resolve().parent
     / "manifests"
     / "ppt_master_catalog.v1.json"
 )
+DEFAULT_RIGHTS_PATH = (
+    Path(__file__).resolve().parent
+    / "manifests"
+    / "ppt_master_rights.v1.json"
+)
 
 TemplateKind = Literal["brand", "layout", "deck"]
 PreservationMode = Literal["native_clone", "reconstructed"]
 PublicationStatus = Literal["published", "blocked"]
+RightsScope = Literal["candidate_pptx", "embedded_media", "fonts"]
+RequiredPermission = Literal["redistribute", "modify", "commercial_use"]
+EvidenceType = Literal[
+    "asset_license_manifest",
+    "rights_holder_grant",
+    "public_domain_declaration",
+]
+ApprovalStatus = Literal["pending", "approved", "rejected"]
 SourceFileRole = Literal[
     "design_spec",
     "spec_lock",
@@ -39,6 +55,16 @@ SourceFileRole = Literal[
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+
+def _canonical_sha256(payload: Any) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _validate_relative_source_path(value: str) -> str:
@@ -219,6 +245,273 @@ class TemplateV2CatalogManifest(BaseModel):
         return self
 
 
+class RightsSourceReceipt(BaseModel):
+    """Immutable source coordinates prepared before any binary is imported."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    repository: Literal["https://github.com/hugohe3/ppt-master"]
+    revision: str
+    candidate_pptx_path: str
+    candidate_pptx_sha256: str
+    candidate_pptx_size_bytes: int = Field(gt=0)
+
+    @field_validator("revision")
+    @classmethod
+    def validate_revision(cls, value: str) -> str:
+        if not _GIT_SHA_RE.fullmatch(value):
+            raise ValueError("revision must be a pinned 40-character git SHA")
+        return value
+
+    @field_validator("candidate_pptx_path")
+    @classmethod
+    def validate_candidate_path(cls, value: str) -> str:
+        return _validate_relative_source_path(value)
+
+    @field_validator("candidate_pptx_sha256")
+    @classmethod
+    def validate_candidate_sha256(cls, value: str) -> str:
+        if not _SHA256_RE.fullmatch(value):
+            raise ValueError("candidate_pptx_sha256 must be lowercase SHA-256")
+        return value
+
+
+class RightsEvidenceItem(BaseModel):
+    """A local, digest-pinned document that grants rights for one source package."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{2,127}$")
+    evidence_type: EvidenceType
+    document_path: str
+    document_sha256: str
+    issuer: str = Field(min_length=1, max_length=300)
+    license_expression: str = Field(min_length=1, max_length=300)
+    covered_scopes: tuple[RightsScope, ...] = Field(min_length=1)
+    covered_artifact_sha256: str
+    granted_permissions: tuple[RequiredPermission, ...] = Field(min_length=1)
+    attribution_text: str | None = Field(default=None, max_length=1000)
+    coverage_statement: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("document_path")
+    @classmethod
+    def validate_document_path(cls, value: str) -> str:
+        value = _validate_relative_source_path(value)
+        if not value.startswith("evidence/"):
+            raise ValueError("rights evidence must live below the local evidence/ directory")
+        return value
+
+    @field_validator("document_sha256", "covered_artifact_sha256")
+    @classmethod
+    def validate_sha256(cls, value: str) -> str:
+        if not _SHA256_RE.fullmatch(value):
+            raise ValueError("rights evidence digests must be lowercase SHA-256")
+        return value
+
+    @model_validator(mode="after")
+    def require_unique_claims(self) -> "RightsEvidenceItem":
+        if len(self.covered_scopes) != len(set(self.covered_scopes)):
+            raise ValueError("covered_scopes must be unique")
+        if len(self.granted_permissions) != len(set(self.granted_permissions)):
+            raise ValueError("granted_permissions must be unique")
+        return self
+
+
+class RightsApproval(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    status: ApprovalStatus
+    reviewer: str | None = Field(default=None, min_length=1, max_length=300)
+    reviewed_at: datetime | None = None
+    evidence_set_sha256: str | None = None
+    decision: str | None = Field(default=None, min_length=1, max_length=1000)
+
+    @field_validator("evidence_set_sha256")
+    @classmethod
+    def validate_evidence_set_sha256(cls, value: str | None) -> str | None:
+        if value is not None and not _SHA256_RE.fullmatch(value):
+            raise ValueError("evidence_set_sha256 must be lowercase SHA-256")
+        return value
+
+    @model_validator(mode="after")
+    def require_review_metadata(self) -> "RightsApproval":
+        review_fields = (
+            self.reviewer,
+            self.reviewed_at,
+            self.evidence_set_sha256,
+            self.decision,
+        )
+        if self.status == "pending" and any(value is not None for value in review_fields):
+            raise ValueError("pending approval must not carry review metadata")
+        if self.status in {"approved", "rejected"} and any(
+            value is None for value in review_fields
+        ):
+            raise ValueError("completed approval requires reviewer, time, digest, and decision")
+        if self.reviewed_at is not None and self.reviewed_at.tzinfo is None:
+            raise ValueError("reviewed_at must include a timezone")
+        return self
+
+
+class TemplateRightsRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    template_id: str
+    catalog_entry_sha256: str
+    source: RightsSourceReceipt
+    required_scopes: tuple[RightsScope, ...] = Field(min_length=1)
+    required_permissions: tuple[RequiredPermission, ...] = Field(min_length=1)
+    evidence: tuple[RightsEvidenceItem, ...]
+    approval: RightsApproval
+
+    @field_validator("catalog_entry_sha256")
+    @classmethod
+    def validate_catalog_entry_sha256(cls, value: str) -> str:
+        if not _SHA256_RE.fullmatch(value):
+            raise ValueError("catalog_entry_sha256 must be lowercase SHA-256")
+        return value
+
+    @model_validator(mode="after")
+    def require_unique_items(self) -> "TemplateRightsRecord":
+        if len(self.required_scopes) != len(set(self.required_scopes)):
+            raise ValueError("required_scopes must be unique")
+        if len(self.required_permissions) != len(set(self.required_permissions)):
+            raise ValueError("required_permissions must be unique")
+        evidence_ids = [item.id for item in self.evidence]
+        if len(evidence_ids) != len(set(evidence_ids)):
+            raise ValueError("rights evidence ids must be unique per template")
+        return self
+
+
+class TemplateRightsManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[RIGHTS_SCHEMA_VERSION]
+    records: tuple[TemplateRightsRecord, ...]
+
+    @model_validator(mode="after")
+    def require_unique_template_ids(self) -> "TemplateRightsManifest":
+        template_ids = [record.template_id for record in self.records]
+        if len(template_ids) != len(set(template_ids)):
+            raise ValueError("rights records must have unique template ids")
+        return self
+
+
+class RightsReadinessReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    template_id: str
+    ready_for_publication_review: bool
+    evidence_set_sha256: str
+    blockers: tuple[str, ...]
+
+
+def catalog_entry_sha256(entry: TemplateV2CatalogEntry) -> str:
+    return _canonical_sha256(entry.model_dump(mode="json"))
+
+
+def rights_evidence_set_sha256(record: TemplateRightsRecord) -> str:
+    """Digest all approval inputs except the approval decision itself."""
+
+    return _canonical_sha256(
+        {
+            "template_id": record.template_id,
+            "catalog_entry_sha256": record.catalog_entry_sha256,
+            "source": record.source.model_dump(mode="json"),
+            "required_scopes": record.required_scopes,
+            "required_permissions": record.required_permissions,
+            "evidence": [item.model_dump(mode="json") for item in record.evidence],
+        }
+    )
+
+
+def evaluate_rights_readiness(
+    entry: TemplateV2CatalogEntry,
+    record: TemplateRightsRecord,
+    *,
+    evidence_root: Path | None = None,
+) -> RightsReadinessReport:
+    """Fail closed unless source, rights evidence, and human approval all agree."""
+
+    blockers: list[str] = []
+    evidence_digest = rights_evidence_set_sha256(record)
+    candidate_files = [item for item in entry.source.files if item.role == "candidate_pptx"]
+    candidate = candidate_files[0] if len(candidate_files) == 1 else None
+
+    if record.template_id != entry.id:
+        blockers.append("template_id does not match the catalog entry")
+    if record.catalog_entry_sha256 != catalog_entry_sha256(entry):
+        blockers.append("catalog entry digest is stale or mismatched")
+    if record.source.repository != entry.source.repository:
+        blockers.append("source repository does not match the catalog")
+    if record.source.revision != entry.source.commit_sha:
+        blockers.append("source revision does not match the pinned catalog commit")
+    if candidate is None:
+        blockers.append("catalog must contain exactly one candidate PPTX receipt")
+    elif (
+        record.source.candidate_pptx_path != candidate.path
+        or record.source.candidate_pptx_sha256 != candidate.sha256
+    ):
+        blockers.append("candidate PPTX path or digest does not match the catalog")
+
+    expected_scopes = {"candidate_pptx"}
+    asset_review = entry.provenance.asset_rights_review
+    if asset_review.raster_image_count or asset_review.vector_image_count:
+        expected_scopes.add("embedded_media")
+    if asset_review.font_file_count:
+        expected_scopes.add("fonts")
+    if not expected_scopes.issubset(set(record.required_scopes)):
+        blockers.append("required rights scopes do not cover every cataloged asset class")
+
+    expected_permissions = {"redistribute", "modify", "commercial_use"}
+    if not expected_permissions.issubset(set(record.required_permissions)):
+        blockers.append("required permissions are incomplete")
+
+    root = (
+        DEFAULT_RIGHTS_PATH.parent if evidence_root is None else Path(evidence_root)
+    ).resolve()
+    usable_evidence: list[RightsEvidenceItem] = []
+    for item in record.evidence:
+        try:
+            evidence_path = (
+                root / Path(*PurePosixPath(item.document_path).parts)
+            ).resolve(strict=True)
+            if not evidence_path.is_relative_to(root):
+                blockers.append(f"rights evidence escapes the evidence root: {item.id}")
+                continue
+            document_bytes = evidence_path.read_bytes()
+        except OSError:
+            blockers.append(f"rights evidence document is missing: {item.id}")
+            continue
+        if hashlib.sha256(document_bytes).hexdigest() != item.document_sha256:
+            blockers.append(f"rights evidence document digest mismatch: {item.id}")
+            continue
+        if item.covered_artifact_sha256 != record.source.candidate_pptx_sha256:
+            blockers.append(f"rights evidence targets a different artifact: {item.id}")
+            continue
+        usable_evidence.append(item)
+
+    for scope in set(record.required_scopes):
+        if not any(
+            scope in item.covered_scopes
+            and expected_permissions.issubset(set(item.granted_permissions))
+            for item in usable_evidence
+        ):
+            blockers.append(f"no complete verified rights evidence covers scope: {scope}")
+
+    approval = record.approval
+    if approval.status != "approved":
+        blockers.append("rights approval is not approved")
+    elif approval.evidence_set_sha256 != evidence_digest:
+        blockers.append("rights approval digest does not match the evidence set")
+
+    return RightsReadinessReport(
+        template_id=entry.id,
+        ready_for_publication_review=not blockers,
+        evidence_set_sha256=evidence_digest,
+        blockers=tuple(blockers),
+    )
+
+
 def load_template_v2_catalog(
     manifest_path: Path | None = None,
 ) -> TemplateV2CatalogManifest:
@@ -229,9 +522,24 @@ def load_template_v2_catalog(
     return TemplateV2CatalogManifest.model_validate(payload)
 
 
+def load_template_rights_manifest(
+    manifest_path: Path | None = None,
+) -> TemplateRightsManifest:
+    """Load local rights claims; existence and digests are checked during evaluation."""
+
+    path = DEFAULT_RIGHTS_PATH if manifest_path is None else Path(manifest_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return TemplateRightsManifest.model_validate(payload)
+
+
 @lru_cache(maxsize=1)
 def _default_catalog() -> TemplateV2CatalogManifest:
     return load_template_v2_catalog()
+
+
+@lru_cache(maxsize=1)
+def _default_rights_manifest() -> TemplateRightsManifest:
+    return load_template_rights_manifest()
 
 
 def get_template_v2_catalog_entry(
@@ -243,6 +551,31 @@ def get_template_v2_catalog_entry(
     )
 
 
+def get_template_rights_record(template_id: str) -> TemplateRightsRecord | None:
+    return next(
+        (
+            record
+            for record in _default_rights_manifest().records
+            if record.template_id == template_id
+        ),
+        None,
+    )
+
+
+def is_template_v2_catalog_entry_rights_ready(
+    entry: TemplateV2CatalogEntry,
+) -> bool:
+    """Require verified local evidence before a catalog row can be discovered."""
+
+    try:
+        record = get_template_rights_record(entry.id)
+        if record is None:
+            return False
+        return evaluate_rights_readiness(entry, record).ready_for_publication_review
+    except (OSError, ValueError):
+        return False
+
+
 def list_template_v2_catalog_entries(
     *,
     include_unpublished: bool = False,
@@ -250,12 +583,19 @@ def list_template_v2_catalog_entries(
     entries = _default_catalog().entries
     if include_unpublished:
         return entries
-    return tuple(entry for entry in entries if entry.publication_status == "published")
+    return tuple(
+        entry
+        for entry in entries
+        if entry.publication_status == "published"
+        and is_template_v2_catalog_entry_rights_ready(entry)
+    )
 
 
 __all__ = [
     "CATALOG_SCHEMA_VERSION",
     "DEFAULT_CATALOG_PATH",
+    "DEFAULT_RIGHTS_PATH",
+    "RIGHTS_SCHEMA_VERSION",
     "CatalogProvenance",
     "CatalogSource",
     "ImportCapabilities",
@@ -264,7 +604,16 @@ __all__ = [
     "TemplateKind",
     "TemplateV2CatalogEntry",
     "TemplateV2CatalogManifest",
+    "TemplateRightsManifest",
+    "TemplateRightsRecord",
+    "RightsReadinessReport",
+    "catalog_entry_sha256",
+    "evaluate_rights_readiness",
+    "get_template_rights_record",
     "get_template_v2_catalog_entry",
+    "is_template_v2_catalog_entry_rights_ready",
     "list_template_v2_catalog_entries",
+    "load_template_rights_manifest",
     "load_template_v2_catalog",
+    "rights_evidence_set_sha256",
 ]
