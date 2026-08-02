@@ -125,7 +125,8 @@ def test_fallback_slide_html_uses_bottom_center_number_after_cover():
     html = fallback_slide_html("content", _brand(), "PROBLEM", 1, 5)
 
     assert '<div class="foot">01</div>' in html
-    assert "left:0;right:0;bottom:27px;text-align:center" in html
+    assert "left:0;right:0;bottom:14px;text-align:center" in html
+    assert "line-height:16px;font-weight:500;color:#A7ACB3" in html
     assert "01 / 05" not in html
 
 
@@ -235,7 +236,9 @@ def test_default_design_system_is_byte_for_byte_canonical_output():
 
     assert canonical_default == without_style
     assert "precise bottom" in without_style
-    assert "bottom:27px" in without_style
+    assert "bottom:14px" in without_style
+    assert "bottom 72px" in without_style
+    assert "#A7ACB3" in without_style
     assert "12px type (9pt equivalent)" in without_style
     assert "number only" in without_style
 
@@ -269,7 +272,9 @@ def test_custom_design_system_injects_brief_without_weakening_common_rules():
     assert "FIT IS CRITICAL" in design_system
     assert "unnecessarily hard-to-read" in design_system
     assert "precise bottom" in design_system
-    assert "bottom:27px" in design_system
+    assert "bottom:14px" in design_system
+    assert "bottom 72px" in design_system
+    assert "#A7ACB3" in design_system
     assert "12px type (9pt equivalent)" in design_system
     assert "number only" in design_system
     assert "Return ONLY the complete HTML document." in design_system
