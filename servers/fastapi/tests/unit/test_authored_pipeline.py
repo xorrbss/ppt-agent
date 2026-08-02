@@ -398,6 +398,23 @@ def test_author_slide_style_reference_keeps_art_direction_multimodal_contract(
     assert getattr(user_content[1], "mime_type", None) == "image/png"
 
 
+def test_author_slide_style_reference_enforces_screen_font_floor(monkeypatch):
+    authored = (
+        "<!doctype html><html><head><style>.caption{font-size:8px}</style></head>"
+        "<body><p class='caption'>Caption</p></body></html>"
+    )
+    calls = _capture_author_requests(monkeypatch, [authored])
+
+    html = _run(
+        author_slide_mod.author_slide_html(
+            "content", "DESIGN", _brand(), "CONTENT", 1, 2
+        )
+    )
+
+    assert ".caption{font-size:12px}" in html
+    assert len(calls) == 1
+
+
 def test_author_slide_style_reference_preserves_text_only_fallback(monkeypatch, tmp_path):
     calls = _capture_author_requests(monkeypatch, [RuntimeError("vision unavailable"), _VALID])
 
@@ -417,7 +434,11 @@ def test_author_slide_style_reference_preserves_text_only_fallback(monkeypatch, 
 
 
 def test_author_slide_exact_reconstruction_uses_fidelity_prompt(monkeypatch, tmp_path):
-    calls = _capture_author_requests(monkeypatch, [_VALID])
+    authored = (
+        "<!doctype html><html><head><style>.source{font-size:8px}</style></head>"
+        "<body><p class='source'>Source</p></body></html>"
+    )
+    calls = _capture_author_requests(monkeypatch, [authored])
 
     html = _run(
         author_slide_mod.author_slide_html(
@@ -429,7 +450,7 @@ def test_author_slide_exact_reconstruction_uses_fidelity_prompt(monkeypatch, tmp
 
     user_content = _author_user_content(calls[0])
     prompt = " ".join(user_content[0].text.lower().split())
-    assert html == _VALID
+    assert html == authored
     assert len(user_content) == 2
     for required in (
         "exact reconstruction mode",
