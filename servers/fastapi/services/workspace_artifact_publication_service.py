@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_DELETED,
     PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
     PresentationModel,
@@ -35,6 +36,10 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
     get_workspace_owner_scope,
+)
+from services.account_deletion_service import (
+    AccountDeletionFenceConflict,
+    require_active_account_generation,
 )
 from utils.get_env import get_app_data_directory_env
 from utils.owner_context import get_current_owner_id
@@ -1309,8 +1314,18 @@ async def claim_workspace_artifact_cleanup(
 
 def _cleanup_paths_for_claim(
     claim: WorkspaceArtifactCleanupClaim,
+    *,
+    storage_root: Path | None = None,
 ) -> tuple[Path, Path]:
-    root = _app_data_root()
+    root = (
+        Path(storage_root).resolve(strict=False)
+        if storage_root is not None
+        else _app_data_root()
+    )
+    if not root.is_absolute() or root == Path(root.anchor):
+        raise WorkspaceArtifactPublicationError(
+            "workspace_artifact_cleanup_root_invalid"
+        )
     relative = PurePosixPath(claim.storage_key)
     suffix = relative.suffix.lower()
     expected = _artifact_relative_path(
@@ -1326,7 +1341,9 @@ def _cleanup_paths_for_claim(
         raise WorkspaceArtifactPublicationError(
             "workspace_artifact_cleanup_path_invalid"
         )
-    destination = root.joinpath(*expected.parts).resolve()
+    lexical_destination = root.joinpath(*expected.parts)
+    _assert_path_parents_are_not_symlinks(root, lexical_destination)
+    destination = lexical_destination.resolve(strict=False)
     try:
         destination.relative_to(root)
     except ValueError as error:
@@ -1339,8 +1356,18 @@ def _cleanup_paths_for_claim(
 
 def _chat_cleanup_directory_for_claim(
     claim: WorkspaceArtifactCleanupClaim,
+    *,
+    storage_root: Path | None = None,
 ) -> Path:
-    root = _app_data_root()
+    root = (
+        Path(storage_root).resolve(strict=False)
+        if storage_root is not None
+        else _app_data_root()
+    )
+    if not root.is_absolute() or root == Path(root.anchor):
+        raise WorkspaceArtifactPublicationError(
+            "workspace_chat_artifact_cleanup_root_invalid"
+        )
     relative = PurePosixPath(claim.storage_key)
     parts = relative.parts
     if claim.owner_id is None:
@@ -1375,14 +1402,24 @@ def _chat_cleanup_directory_for_claim(
 
 def _delete_claimed_artifact_files(
     claim: WorkspaceArtifactCleanupClaim,
+    *,
+    storage_root: Path | None = None,
 ) -> None:
     """Idempotently remove both process-boundary filesystem possibilities."""
 
     if claim.kind == "chat.image.journal":
-        _remove_owned_tree(_chat_cleanup_directory_for_claim(claim))
+        _remove_owned_tree(
+            _chat_cleanup_directory_for_claim(
+                claim,
+                storage_root=storage_root,
+            )
+        )
         return
 
-    temporary, destination = _cleanup_paths_for_claim(claim)
+    temporary, destination = _cleanup_paths_for_claim(
+        claim,
+        storage_root=storage_root,
+    )
     failures: list[tuple[Path, OSError]] = []
     for path in (temporary, destination):
         try:
@@ -1666,6 +1703,63 @@ async def compensate_workspace_artifact(
         raise WorkspaceArtifactPublicationError(error_code)
 
 
+def _captured_account_generation(operation: WorkspaceOperation) -> int | None:
+    """Read a generation captured at admission without trusting bool-as-int."""
+
+    value = (operation.request_payload or {}).get("account_deletion_generation")
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return None
+
+
+async def _fence_artifact_publication_account(
+    session: AsyncSession,
+    *,
+    artifact: PreparedWorkspaceArtifact,
+) -> None:
+    """Serialize immutable publication against the owning account tombstone."""
+
+    operation = await session.scalar(
+        select(WorkspaceOperation).where(
+            WorkspaceOperation.id == artifact.operation_id,
+            WorkspaceOperation.presentation_id == artifact.presentation_id,
+            WorkspaceOperation.owner_id == artifact.owner_id,
+            WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+        )
+    )
+    if operation is None:
+        raise WorkspaceArtifactPublicationError("operation_lease_lost")
+    if operation.owner_id is None:
+        return
+    try:
+        await require_active_account_generation(
+            session,
+            user_id=operation.owner_id,
+            expected_generation=_captured_account_generation(operation),
+        )
+    except AccountDeletionFenceConflict as error:
+        raise WorkspaceArtifactPublicationError(
+            "account_deletion_in_progress"
+        ) from error
+
+
+async def _raise_publication_revision_error(
+    session: AsyncSession,
+    *,
+    artifact: PreparedWorkspaceArtifact,
+    fallback_code: str,
+) -> None:
+    lifecycle_status = await session.scalar(
+        select(PresentationModel.lifecycle_status).where(
+            PresentationModel.id == artifact.presentation_id,
+            PresentationModel.owner_id == artifact.owner_id,
+        )
+    )
+    if lifecycle_status == PRESENTATION_LIFECYCLE_DELETED:
+        raise WorkspaceArtifactPublicationError("presentation_deleted")
+    raise WorkspaceArtifactPublicationError(fallback_code)
+
+
 async def publish_workspace_generation_artifact(
     session: AsyncSession,
     *,
@@ -1697,6 +1791,10 @@ async def publish_workspace_generation_artifact(
     now = datetime.now(timezone.utc)
     result_payload = artifact.result_payload()
     try:
+        # Lock the active account generation before any operation, job or
+        # presentation projection is mutated. Account deletion takes the same
+        # serialization point before its durable cleanup snapshot and cascade.
+        await _fence_artifact_publication_account(session, artifact=artifact)
         linked_job_result = await session.execute(
             update(PresentationGenerationJob)
             .where(
@@ -1774,6 +1872,7 @@ async def publish_workspace_generation_artifact(
             update(PresentationModel)
             .where(
                 PresentationModel.id == artifact.presentation_id,
+                PresentationModel.owner_id == artifact.owner_id,
                 PresentationModel.lifecycle_status
                 == PRESENTATION_LIFECYCLE_STAGING,
                 PresentationModel.revision == expected_revision,
@@ -1785,7 +1884,11 @@ async def publish_workspace_generation_artifact(
             )
         )
         if presentation_result.rowcount != 1:
-            raise WorkspaceArtifactPublicationError("revision_conflict")
+            await _raise_publication_revision_error(
+                session,
+                artifact=artifact,
+                fallback_code="revision_conflict",
+            )
 
         artifact_result = await session.execute(
             update(WorkspaceArtifact)
@@ -1966,16 +2069,27 @@ async def publish_workspace_export_artifact(
         "expires_at": export_expires_at.isoformat(),
     }
     try:
+        await _fence_artifact_publication_account(session, artifact=artifact)
         presentation_cas = await session.execute(
             update(PresentationModel)
             .where(
                 PresentationModel.id == artifact.presentation_id,
+                PresentationModel.owner_id == artifact.owner_id,
+                PresentationModel.lifecycle_status
+                != PRESENTATION_LIFECYCLE_DELETED,
                 PresentationModel.revision == artifact.source_revision,
             )
-            .values(revision=PresentationModel.revision)
+            .values(
+                revision=PresentationModel.revision,
+                updated_at=PresentationModel.updated_at,
+            )
         )
         if presentation_cas.rowcount != 1:
-            raise WorkspaceArtifactPublicationError("stale_presentation_revision")
+            await _raise_publication_revision_error(
+                session,
+                artifact=artifact,
+                fallback_code="stale_presentation_revision",
+            )
 
         operation_cas = await session.execute(
             update(WorkspaceOperation)

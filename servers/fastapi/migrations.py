@@ -53,6 +53,8 @@ REVISION_AUTHORED_RESUME_COUNT = "b4d6f8a1c3e5"
 REVISION_AUTHORED_EXACT_PROVENANCE = "c5e7f9a1b3d4"
 REVISION_CHAT_FIRST_WORKSPACE = "d6f8a1c3e5b7"
 REVISION_ASYNC_PRESENTATION_TASK_TZ = "e7a9c2d4f6b8"
+REVISION_DURABLE_DELETION = "f8b0d3e5a7c9"
+REVISION_ACCOUNT_DELETION_FENCE = "fa1b2c3d4e5f"
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {
@@ -276,6 +278,68 @@ WORKSPACE_FOREIGN_KEYS = {
         (("presentation_id",), "presentations", "CASCADE"),
     },
 }
+DURABLE_DELETION_PRESENTATION_COLUMNS = {
+    "deleted_at",
+    "deletion_operation_id",
+}
+DURABLE_ATTACHMENT_SNAPSHOT_COLUMNS = {
+    "asset_id_snapshot",
+    "asset_sha256",
+    "asset_failure_code",
+    "asset_failure_detail",
+}
+WORKSPACE_CLEANUP_JOURNAL_COLUMNS = {
+    "id",
+    "owner_id_snapshot",
+    "presentation_id_snapshot",
+    "operation_id_snapshot",
+    "storage_namespace",
+    "resource_kind",
+    "storage_key",
+    "sha256",
+    "size_bytes",
+    "source_revision",
+    "resource_metadata",
+    "idempotency_key_hash",
+    "status",
+    "cleanup_token",
+    "cleanup_lease_expires_at",
+    "next_attempt_at",
+    "cleanup_attempts",
+    "max_attempts",
+    "fencing_token",
+    "redrive_count",
+    "last_redriven_at",
+    "last_redriven_by_snapshot",
+    "last_error",
+    "deleted_at",
+    "created_at",
+    "updated_at",
+}
+WORKSPACE_CLEANUP_JOURNAL_CHECKS = {
+    "ck_workspace_cleanup_journal_status",
+    "ck_workspace_cleanup_journal_size",
+    "ck_workspace_cleanup_journal_attempts",
+    "ck_workspace_cleanup_journal_max_attempts",
+    "ck_workspace_cleanup_journal_fencing_token",
+    "ck_workspace_cleanup_journal_redrive_count",
+}
+WORKSPACE_CLEANUP_JOURNAL_INDEXES = {
+    "ix_workspace_cleanup_journal_dispatch",
+    "ix_workspace_cleanup_journal_presentation",
+    "ix_workspace_cleanup_journal_owner",
+}
+ACCOUNT_DELETION_USER_COLUMNS = {
+    "deletion_state",
+    "deletion_generation",
+    "deletion_requested_at",
+}
+ACCOUNT_DELETION_USER_CHECKS = {
+    "ck_user_deletion_state",
+    "ck_user_deletion_generation",
+    "ck_user_deletion_marker",
+}
+ACCOUNT_DELETION_USER_INDEXES = {"ix_user_deletion_state_requested_at"}
 DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -477,7 +541,31 @@ def _workspace_schema_applied(
                 f"Chat-first workspace table {table} is missing indexes"
             )
         foreign_keys = _foreign_key_signatures(inspector, table)
-        if not WORKSPACE_FOREIGN_KEYS[table].issubset(foreign_keys):
+        expected_foreign_keys = WORKSPACE_FOREIGN_KEYS[table]
+        missing_foreign_keys = expected_foreign_keys - foreign_keys
+        # f8 replaces the attachment's live RESTRICT pointer with a nullable
+        # SET NULL pointer.  The d6 prefix remains complete in either state;
+        # the stricter f8 validator below distinguishes them.
+        if table == "workspace_message_attachments" and missing_foreign_keys == {
+            (("asset_id",), "workspace_assets", "RESTRICT")
+        }:
+            attachment_columns = {
+                column["name"] if isinstance(column, dict) else column
+                for column in inspector.get_columns(table)
+            }
+            if (
+                DURABLE_ATTACHMENT_SNAPSHOT_COLUMNS.issubset(
+                    attachment_columns
+                )
+                and (
+                    ("asset_id",),
+                    "workspace_assets",
+                    "SET NULL",
+                )
+                in foreign_keys
+            ):
+                missing_foreign_keys = set()
+        if missing_foreign_keys:
             raise RuntimeError(
                 f"Chat-first workspace table {table} is missing foreign keys"
             )
@@ -512,6 +600,176 @@ def _workspace_schema_applied(
             "Chat-first generation job operation foreign key is only partially applied"
         )
     return True
+
+
+def _account_deletion_schema_revision(
+    inspector,
+    tables: set[str],
+    previous_revision: str,
+) -> str:
+    """Validate the durable user-deletion marker as an atomic contract."""
+
+    if "user" not in tables:
+        return previous_revision
+    column_definitions = {
+        column["name"]: column for column in inspector.get_columns("user")
+    }
+    present_columns = ACCOUNT_DELETION_USER_COLUMNS & set(column_definitions)
+    check_names = {
+        constraint.get("name")
+        for constraint in inspector.get_check_constraints("user")
+    }
+    index_definitions = {
+        index.get("name"): index for index in inspector.get_indexes("user")
+    }
+    present_checks = ACCOUNT_DELETION_USER_CHECKS & check_names
+    present_indexes = ACCOUNT_DELETION_USER_INDEXES & set(index_definitions)
+    if not present_columns and not present_checks and not present_indexes:
+        return previous_revision
+    if previous_revision != REVISION_DURABLE_DELETION:
+        raise RuntimeError(
+            "Account deletion fence exists without durable cleanup prerequisites"
+        )
+    if present_columns != ACCOUNT_DELETION_USER_COLUMNS:
+        raise RuntimeError("Account deletion fence columns are only partially applied")
+
+    for column_name, expected_nullable in (
+        ("deletion_state", False),
+        ("deletion_generation", False),
+        ("deletion_requested_at", True),
+    ):
+        nullable = column_definitions[column_name].get("nullable")
+        if nullable is not expected_nullable:
+            raise RuntimeError(
+                "Account deletion fence column "
+                f"{column_name} has incompatible nullability"
+            )
+    if present_checks != ACCOUNT_DELETION_USER_CHECKS:
+        raise RuntimeError("Account deletion fence checks are incomplete")
+    if present_indexes != ACCOUNT_DELETION_USER_INDEXES:
+        raise RuntimeError("Account deletion fence index is incomplete")
+    deletion_index = index_definitions["ix_user_deletion_state_requested_at"]
+    if tuple(deletion_index.get("column_names") or ()) != (
+        "deletion_state",
+        "deletion_requested_at",
+    ) or bool(deletion_index.get("unique")):
+        raise RuntimeError("Account deletion fence index is incompatible")
+    return REVISION_ACCOUNT_DELETION_FENCE
+
+
+def _durable_deletion_schema_revision(
+    inspector,
+    tables: set[str],
+    presentation_columns: set[str],
+    previous_revision: str,
+) -> str:
+    """Validate f8 as one atomic physical contract or return its predecessor."""
+
+    attachment_table = "workspace_message_attachments"
+    cleanup_table = "workspace_cleanup_journal"
+    attachment_columns = (
+        {
+            column["name"] if isinstance(column, dict) else column
+            for column in inspector.get_columns(attachment_table)
+        }
+        if attachment_table in tables
+        else set()
+    )
+    present_presentation_markers = (
+        DURABLE_DELETION_PRESENTATION_COLUMNS & presentation_columns
+    )
+    present_attachment_markers = (
+        DURABLE_ATTACHMENT_SNAPSHOT_COLUMNS & attachment_columns
+    )
+    has_cleanup_table = cleanup_table in tables
+    if (
+        not present_presentation_markers
+        and not present_attachment_markers
+        and not has_cleanup_table
+    ):
+        return _account_deletion_schema_revision(
+            inspector,
+            tables,
+            previous_revision,
+        )
+
+    if present_presentation_markers != DURABLE_DELETION_PRESENTATION_COLUMNS:
+        raise RuntimeError(
+            "Durable presentation deletion schema is only partially applied"
+        )
+    if present_attachment_markers != DURABLE_ATTACHMENT_SNAPSHOT_COLUMNS:
+        raise RuntimeError(
+            "Immutable attachment snapshot schema is only partially applied"
+        )
+    if not has_cleanup_table:
+        raise RuntimeError("Workspace cleanup journal schema is missing")
+
+    attachment_column_definitions = {
+        column["name"]: column
+        for column in inspector.get_columns(attachment_table)
+    }
+    if attachment_column_definitions["asset_id"].get("nullable") is not True:
+        raise RuntimeError("Workspace attachment live asset pointer must be nullable")
+    if attachment_column_definitions["asset_id_snapshot"].get("nullable") is not False:
+        raise RuntimeError("Workspace attachment asset snapshot must be non-null")
+    attachment_foreign_keys = _foreign_key_signatures(
+        inspector, attachment_table
+    )
+    if (
+        (("asset_id",), "workspace_assets", "SET NULL")
+        not in attachment_foreign_keys
+    ):
+        raise RuntimeError(
+            "Workspace attachment live asset pointer must use ON DELETE SET NULL"
+        )
+    attachment_uniques = {
+        constraint.get("name"): tuple(
+            constraint.get("column_names")
+            or constraint.get("constrained_columns")
+            or ()
+        )
+        for constraint in inspector.get_unique_constraints(attachment_table)
+    }
+    if attachment_uniques.get("uq_workspace_message_attachments_asset") != (
+        "message_id",
+        "asset_id_snapshot",
+    ):
+        raise RuntimeError(
+            "Workspace attachment snapshot uniqueness is only partially applied"
+        )
+
+    cleanup_columns = {
+        column["name"] if isinstance(column, dict) else column
+        for column in inspector.get_columns(cleanup_table)
+    }
+    if not WORKSPACE_CLEANUP_JOURNAL_COLUMNS.issubset(cleanup_columns):
+        raise RuntimeError("Workspace cleanup journal columns are incomplete")
+    cleanup_checks = {
+        constraint.get("name")
+        for constraint in inspector.get_check_constraints(cleanup_table)
+    }
+    if not WORKSPACE_CLEANUP_JOURNAL_CHECKS.issubset(cleanup_checks):
+        raise RuntimeError("Workspace cleanup journal checks are incomplete")
+    cleanup_uniques = {
+        constraint.get("name")
+        for constraint in inspector.get_unique_constraints(cleanup_table)
+    }
+    if "uq_workspace_cleanup_journal_idempotency" not in cleanup_uniques:
+        raise RuntimeError("Workspace cleanup journal idempotency is missing")
+    cleanup_indexes = {
+        index.get("name") for index in inspector.get_indexes(cleanup_table)
+    }
+    if not WORKSPACE_CLEANUP_JOURNAL_INDEXES.issubset(cleanup_indexes):
+        raise RuntimeError("Workspace cleanup journal indexes are incomplete")
+    if inspector.get_foreign_keys(cleanup_table):
+        raise RuntimeError(
+            "Workspace cleanup journal snapshot identifiers must not have foreign keys"
+        )
+    return _account_deletion_schema_revision(
+        inspector,
+        tables,
+        REVISION_DURABLE_DELETION,
+    )
 
 
 def _async_task_timestamp_revision(
@@ -1070,9 +1328,14 @@ def _infer_revision_from_schema(
                         presentation_columns,
                         job_columns,
                     ):
-                        return _async_task_timestamp_revision(
+                        return _durable_deletion_schema_revision(
                             inspector,
                             tables,
+                            presentation_columns,
+                            _async_task_timestamp_revision(
+                                inspector,
+                                tables,
+                            ),
                         )
                     return authored_revision
                 return authored_revision
@@ -1193,9 +1456,14 @@ def _infer_revision_from_schema(
                     presentation_columns,
                     job_columns,
                 ):
-                    return _async_task_timestamp_revision(
+                    return _durable_deletion_schema_revision(
                         inspector,
                         tables,
+                        presentation_columns,
+                        _async_task_timestamp_revision(
+                            inspector,
+                            tables,
+                        ),
                     )
                 return authored_revision
             return authored_revision

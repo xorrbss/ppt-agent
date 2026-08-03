@@ -146,7 +146,8 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
         ) as client:
             capabilities = await client.get("/api/v1/ppt/workspace/capabilities")
             assert capabilities.status_code == 200
-            assert capabilities.json() == {
+            capabilities_body = capabilities.json()
+            required_capabilities = {
                 "schema_version": 1,
                 "supported": True,
                 "enabled": True,
@@ -156,6 +157,17 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
                 "runtime_profile": "sqlite-local",
                 "reason": None,
             }
+            assert {
+                key: capabilities_body[key]
+                for key in required_capabilities
+            } == required_capabilities
+            assert capabilities_body["reads_supported"] is True
+            assert capabilities_body["writes_supported"] is True
+            assert capabilities_body["commands_enabled"] is True
+            assert capabilities_body["cohort_eligible"] is True
+            assert capabilities_body["cohort_bucket"] is None
+            assert capabilities_body["kill_switch_active"] is False
+            assert capabilities_body["shadow_mode"] is False
 
             bootstrap_payload = {
                 "idempotency_key": "gate-e-bootstrap-1",
@@ -202,16 +214,29 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
             assert first_message["generation_settings"] == bootstrap_payload[
                 "generation_settings"
             ]
-            assert first_message["attachments"] == [
-                {
-                    "id": first_message["attachments"][0]["id"],
-                    "name": "strategy-brief.pdf",
-                    "status": "uploaded",
-                    "mime_type": "application/pdf",
-                    "size_bytes": 4096,
-                    "error": None,
-                }
-            ]
+            assert len(first_message["attachments"]) == 1
+            attachment = first_message["attachments"][0]
+            required_attachment = {
+                "id": attachment["id"],
+                "name": "strategy-brief.pdf",
+                "status": "uploaded",
+                "mime_type": "application/pdf",
+                "size_bytes": 4096,
+                "error": None,
+            }
+            assert {
+                key: attachment[key]
+                for key in required_attachment
+            } == required_attachment
+            assert attachment["schema_version"] == 1
+            assert attachment["current_state"] == attachment["status"]
+            assert attachment["sha256"] == "e" * 64
+            assert attachment["safe_failure"] is None
+            assert attachment["unavailable_reason"] == "workspace_asset_not_ready"
+            assert attachment["download_url"] is None
+            assert attachment["download_action"] is None
+            assert attachment["preview_url"] is None
+            assert attachment["preview_action"] is None
 
             command_payload = {
                 "command": "표지 제목을 이사회 전략 보고로 바꿔 줘.",

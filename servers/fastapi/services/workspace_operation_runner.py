@@ -18,17 +18,25 @@ import secrets
 from typing import Any
 import uuid
 
-from sqlalchemy import and_, exists, or_, select, text, update
+from sqlalchemy import and_, exists, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_DELETED,
+    PresentationModel,
+)
 from models.sql.workspace import (
+    WorkspaceCleanupJournal,
     WorkspaceOperation,
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
 from services.database import async_session_maker
+from services.account_deletion_service import (
+    AccountDeletionFenceConflict,
+    require_active_account_generation,
+)
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationBlocked,
@@ -117,6 +125,185 @@ _SAFE_PAYLOAD_KEYS = frozenset(
     }
 )
 
+# Result payload additions are scoped to a specific operation kind.  Keeping
+# these out of the general event allowlist prevents an unrelated handler from
+# publishing fields that only make sense for another operation's result card.
+_SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
+    "quality.review": frozenset(
+        {
+            "kind",
+            "message",
+            "mode",
+            "scope",
+            "slide_indices",
+            "inspected_revision",
+            "reviewed_count",
+            "issue_slide_count",
+            "fixed_count",
+            "fixed_slide_indices",
+            "remaining_issue_count",
+            "remaining_slide_indices",
+            "remaining_issues",
+            "issues",
+            "slide_results",
+            "version_saved",
+            "canvas_refresh_required",
+            "canvas_refresh_slide_index",
+            "canvas_refresh_status",
+            "result",
+        }
+    ),
+    "presentation.delete": frozenset(
+        {
+            "lifecycle_status",
+            "cleanup_pending",
+            "deletion_operation_id",
+        }
+    ),
+}
+
+_QUALITY_REVIEW_INDEX_LIST_KEYS = frozenset(
+    {"slide_indices", "fixed_slide_indices", "remaining_slide_indices"}
+)
+_QUALITY_REVIEW_ISSUE_LIST_KEYS = frozenset({"issues", "remaining_issues"})
+_MAX_QUALITY_REVIEW_ISSUES = 500
+_MAX_QUALITY_REVIEW_MESSAGE_LENGTH = 500
+
+
+def _quality_review_issue_message(value: Mapping[str, Any]) -> str | None:
+    for key in ("message", "detail", "title", "code", "reason"):
+        candidate = value.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
+    return None
+
+
+def _sanitize_quality_review_issues(value: Any) -> list[dict[str, Any]]:
+    """Flatten findings while retaining only user-visible review history."""
+
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        return []
+    safe: list[dict[str, Any]] = []
+    for raw_issue in value:
+        if not isinstance(raw_issue, Mapping):
+            continue
+        raw_slide_index = raw_issue.get("slide_index")
+        slide_index = (
+            raw_slide_index
+            if isinstance(raw_slide_index, int)
+            and not isinstance(raw_slide_index, bool)
+            and raw_slide_index >= 0
+            else None
+        )
+        nested = raw_issue.get("issues")
+        candidates = (
+            nested
+            if isinstance(nested, Sequence)
+            and not isinstance(nested, (str, bytes, bytearray))
+            else (raw_issue,)
+        )
+        for candidate in candidates:
+            if not isinstance(candidate, Mapping):
+                continue
+            message = _quality_review_issue_message(candidate)
+            issue_type = next(
+                (
+                    candidate.get(key).strip()[:100]
+                    for key in ("type", "category", "code")
+                    if isinstance(candidate.get(key), str)
+                    and candidate.get(key).strip()
+                ),
+                None,
+            )
+            severity = candidate.get("severity")
+            severity = (
+                severity.strip()[:50]
+                if isinstance(severity, str) and severity.strip()
+                else None
+            )
+            fix_action = next(
+                (
+                    candidate.get(key).strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
+                    for key in ("fix_action", "action", "resolution")
+                    if isinstance(candidate.get(key), str)
+                    and candidate.get(key).strip()
+                ),
+                None,
+            )
+            applied = candidate.get("applied")
+            if message is None and issue_type is None and severity is None:
+                continue
+            item: dict[str, Any] = {}
+            if slide_index is not None:
+                item["slide_index"] = slide_index
+            if issue_type is not None:
+                item["type"] = issue_type
+            if severity is not None:
+                item["severity"] = severity
+            if message is not None:
+                # ``message`` remains for older result-card clients; the
+                # explicit description key is the page-history contract.
+                item["message"] = message
+                item["description"] = message
+            if fix_action is not None:
+                item["fix_action"] = fix_action
+            if isinstance(applied, bool):
+                item["applied"] = applied
+            safe.append(item)
+            if len(safe) >= _MAX_QUALITY_REVIEW_ISSUES:
+                return safe
+    return safe
+
+
+def _sanitize_quality_review_slide_results(value: Any) -> list[dict[str, Any]]:
+    """Keep page-level fix outcomes without DOM/HTML or before/after content."""
+
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        return []
+    safe: list[dict[str, Any]] = []
+    for raw_result in value:
+        if not isinstance(raw_result, Mapping):
+            continue
+        raw_slide_index = raw_result.get("slide_index")
+        if (
+            not isinstance(raw_slide_index, int)
+            or isinstance(raw_slide_index, bool)
+            or raw_slide_index < 0
+        ):
+            continue
+        item: dict[str, Any] = {"slide_index": raw_slide_index}
+        for key in ("attempted", "applied"):
+            if isinstance(raw_result.get(key), bool):
+                item[key] = raw_result[key]
+        raw_action = raw_result.get("fix_action", raw_result.get("path"))
+        if isinstance(raw_action, str) and raw_action.strip():
+            item["fix_action"] = raw_action.strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
+        rejection_reason = raw_result.get("rejection_reason")
+        if isinstance(rejection_reason, str) and rejection_reason.strip():
+            item["rejection_reason"] = rejection_reason.strip()[
+                :_MAX_QUALITY_REVIEW_MESSAGE_LENGTH
+            ]
+        for key in (
+            "resolved_issues",
+            "remaining_issues",
+            "slide_level_resolved_issues",
+            "slide_level_remaining_issues",
+        ):
+            raw_items = raw_result.get(key)
+            if not isinstance(raw_items, Sequence) or isinstance(
+                raw_items, (str, bytes, bytearray)
+            ):
+                continue
+            item[key] = [
+                issue.strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
+                for issue in raw_items
+                if isinstance(issue, str) and issue.strip()
+            ][:_MAX_QUALITY_REVIEW_ISSUES]
+        safe.append(item)
+        if len(safe) >= 500:
+            break
+    return safe
+
 
 def _positive_int_env(name: str, default: int) -> int:
     try:
@@ -188,22 +375,70 @@ def _observe_claim(
 
 def sanitize_workspace_event_payload(
     payload: Mapping[str, Any] | None,
+    *,
+    operation_kind: str | None = None,
 ) -> dict[str, Any]:
-    """Return a shallow, metadata-only event payload."""
+    """Return a bounded, metadata-only event payload.
+
+    Quality review results additionally retain a deliberately small,
+    presentation-safe summary used by the workspace result card.  Raw model
+    responses, DOM inspection details, OCR output and slide HTML remain
+    excluded.
+    """
 
     if not payload:
         return {}
+    allowed_keys = _SAFE_PAYLOAD_KEYS | _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND.get(
+        operation_kind or "", frozenset()
+    )
     safe: dict[str, Any] = {}
     for key, value in payload.items():
         normalized = str(key)
-        if normalized not in _SAFE_PAYLOAD_KEYS:
+        if normalized not in allowed_keys:
             continue
         if isinstance(value, uuid.UUID):
             safe[normalized] = str(value)
         elif isinstance(value, datetime):
             safe[normalized] = value.isoformat()
+        elif (
+            operation_kind == "quality.review"
+            and normalized in _QUALITY_REVIEW_INDEX_LIST_KEYS
+            and isinstance(value, Sequence)
+            and not isinstance(value, (str, bytes, bytearray))
+        ):
+            safe[normalized] = [
+                item
+                for item in value
+                if isinstance(item, int)
+                and not isinstance(item, bool)
+                and item >= 0
+            ][:500]
+        elif (
+            operation_kind == "quality.review"
+            and normalized in _QUALITY_REVIEW_ISSUE_LIST_KEYS
+        ):
+            safe[normalized] = _sanitize_quality_review_issues(value)
+        elif operation_kind == "quality.review" and normalized == "slide_results":
+            safe[normalized] = _sanitize_quality_review_slide_results(value)
+        elif (
+            operation_kind == "quality.review"
+            and normalized == "result"
+            and isinstance(value, Mapping)
+        ):
+            # A nested result is emitted for live timeline projection.  Strip
+            # another nested result to keep recursion bounded for hostile data.
+            safe[normalized] = sanitize_workspace_event_payload(
+                {key: item for key, item in value.items() if key != "result"},
+                operation_kind=operation_kind,
+            )
         elif value is None or isinstance(value, (str, int, float, bool)):
-            safe[normalized] = value
+            safe[normalized] = (
+                value[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
+                if operation_kind == "quality.review"
+                and normalized == "message"
+                and isinstance(value, str)
+                else value
+            )
     return safe
 
 
@@ -304,6 +539,7 @@ async def append_operation_event(
     operation_id: uuid.UUID,
     event_type: str,
     payload: Mapping[str, Any] | None = None,
+    operation_kind: str | None = None,
     attempt_token: str | None = None,
     allowed_states: Collection[str] | None = None,
     projection_values: Mapping[str, Any] | None = None,
@@ -359,7 +595,10 @@ async def append_operation_event(
         return None
 
     sequence = int(row["next_event_sequence"]) - 1
-    safe_payload = sanitize_workspace_event_payload(payload)
+    safe_payload = sanitize_workspace_event_payload(
+        payload,
+        operation_kind=operation_kind,
+    )
     safe_payload.setdefault("operation_id", str(operation_id))
     safe_payload.setdefault("presentation_id", str(row["presentation_id"]))
     safe_payload.setdefault("conversation_id", str(row["conversation_id"]))
@@ -753,29 +992,58 @@ async def finalize_workspace_operation_success(
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
 ) -> bool:
     now = _utc_now()
-    safe_result = sanitize_workspace_event_payload(result.payload)
+    safe_result = sanitize_workspace_event_payload(
+        result.payload,
+        operation_kind=claim.kind,
+    )
     if result.result_revision is not None:
         safe_result["result_revision"] = result.result_revision
+    event_payload: dict[str, Any] = {"state": "succeeded", **safe_result}
+    projection_values: dict[str, Any] = {
+        "state": "succeeded",
+        "result": safe_result,
+        "result_revision": result.result_revision,
+        "attempt_token": None,
+        "lease_expires_at": None,
+        "heartbeat_at": now,
+        "error_code": None,
+        "error_detail": None,
+        "completed_at": now,
+    }
+    if claim.kind == "quality.review":
+        completion_progress = {
+            "stage": "quality_review_completed",
+            "percent": 100,
+        }
+        # The nested result lets an already-open timeline render the result
+        # card from the terminal event without waiting for a snapshot reload.
+        event_payload.update(completion_progress, result=safe_result)
+        projection_values["progress"] = completion_progress
     async with session_factory() as session:
         operation_before = await session.get(WorkspaceOperation, claim.operation_id)
+        if (
+            operation_before is not None
+            and operation_before.state == "running"
+            and operation_before.attempt_token == claim.attempt_token
+        ):
+            # Fence the final event/projection commit in the same transaction.
+            # A successful handler may have raced either account deletion or a
+            # deck tombstone while doing external work; neither may publish a
+            # late result after the durable deletion serialization point.
+            await _fence_workspace_claim(
+                session,
+                claim,
+                check_revision=False,
+            )
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
             event_type="operation.result",
-            payload={"state": "succeeded", **safe_result},
+            payload=event_payload,
+            operation_kind=claim.kind,
             attempt_token=claim.attempt_token,
             allowed_states=("running",),
-            projection_values={
-                "state": "succeeded",
-                "result": safe_result,
-                "result_revision": result.result_revision,
-                "attempt_token": None,
-                "lease_expires_at": None,
-                "heartbeat_at": now,
-                "error_code": None,
-                "error_detail": None,
-                "completed_at": now,
-            },
+            projection_values=projection_values,
         )
         if event is not None:
             await session.commit()
@@ -846,6 +1114,103 @@ async def finalize_workspace_operation_success(
             fence_outcome="publish_committed",
         )
         return True
+
+
+def _claim_account_generation(claim: WorkspaceOperationClaim) -> int | None:
+    value = claim.request_payload.get("account_deletion_generation")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        # Operations written before the additive fence field remain runnable,
+        # but still undergo the active-account check at publication time.
+        return None
+    return value
+
+
+async def _fence_workspace_claim(
+    session: AsyncSession,
+    claim: WorkspaceOperationClaim,
+    *,
+    check_revision: bool,
+) -> int:
+    """Serialize runner execution/publication against durable deletion."""
+
+    if claim.owner_id is not None:
+        try:
+            await require_active_account_generation(
+                session,
+                user_id=claim.owner_id,
+                expected_generation=_claim_account_generation(claim),
+            )
+        except AccountDeletionFenceConflict as error:
+            raise NonRetryableWorkspaceOperationError(
+                "account_deletion_in_progress"
+            ) from error
+
+    owner_predicate = (
+        PresentationModel.owner_id.is_(None)
+        if claim.owner_id is None
+        else PresentationModel.owner_id == claim.owner_id
+    )
+    lifecycle_predicate = (
+        or_(
+            PresentationModel.lifecycle_status
+            != PRESENTATION_LIFECYCLE_DELETED,
+            and_(
+                PresentationModel.lifecycle_status
+                == PRESENTATION_LIFECYCLE_DELETED,
+                PresentationModel.deletion_operation_id == claim.operation_id,
+            ),
+        )
+        if claim.kind == "presentation.delete"
+        else PresentationModel.lifecycle_status
+        != PRESENTATION_LIFECYCLE_DELETED
+    )
+    row = (
+        await session.execute(
+            update(PresentationModel)
+            .where(
+                PresentationModel.id == claim.presentation_id,
+                owner_predicate,
+                lifecycle_predicate,
+            )
+            .values(updated_at=PresentationModel.updated_at)
+            .returning(
+                PresentationModel.revision,
+                PresentationModel.lifecycle_status,
+            )
+            .execution_options(synchronize_session=False)
+        )
+    ).one_or_none()
+    if row is None:
+        lifecycle = (
+            await session.execute(
+                select(PresentationModel.lifecycle_status).where(
+                    PresentationModel.id == claim.presentation_id,
+                    owner_predicate,
+                )
+            )
+        ).scalar_one_or_none()
+        if lifecycle is None:
+            raise NonRetryableWorkspaceOperationError("presentation_not_found")
+        if lifecycle == PRESENTATION_LIFECYCLE_DELETED:
+            raise NonRetryableWorkspaceOperationError("presentation_deleted")
+        raise NonRetryableWorkspaceOperationError(
+            "workspace_mutation_admission_conflict"
+        )
+
+    revision = int(row.revision)
+    if (
+        check_revision
+        and claim.expected_revision is not None
+        and revision != claim.expected_revision
+    ):
+        raise NonRetryableWorkspaceOperationError(
+            "revision_conflict",
+            detail={
+                "error_code": "revision_conflict",
+                "revision": revision,
+            },
+        )
+    return revision
 
 
 async def _published_workspace_operation_result(
@@ -1230,7 +1595,64 @@ async def recover_expired_workspace_operations(
                 if stale["attempt_token"] is None
                 else WorkspaceOperation.attempt_token == stale["attempt_token"]
             )
-            if (
+            committed_delete_result: dict[str, Any] | None = None
+            if stale["kind"] == "presentation.delete":
+                deletion_operation_id = await session.scalar(
+                    select(PresentationModel.deletion_operation_id)
+                    .where(
+                        PresentationModel.id == stale["presentation_id"],
+                        PresentationModel.lifecycle_status
+                        == PRESENTATION_LIFECYCLE_DELETED,
+                    )
+                    .execution_options(skip_owner_scope=True)
+                )
+                if deletion_operation_id == stale["id"]:
+                    cleanup_count = int(
+                        await session.scalar(
+                            select(func.count())
+                            .select_from(WorkspaceCleanupJournal)
+                            .where(
+                                WorkspaceCleanupJournal.presentation_id_snapshot
+                                == stale["presentation_id"],
+                                WorkspaceCleanupJournal.status.not_in(
+                                    ("succeeded", "dead_letter")
+                                ),
+                            )
+                        )
+                        or 0
+                    )
+                    committed_delete_result = {
+                        "presentation_id": str(stale["presentation_id"]),
+                        "lifecycle_status": PRESENTATION_LIFECYCLE_DELETED,
+                        "cleanup_pending": cleanup_count > 0,
+                        "deletion_operation_id": str(stale["id"]),
+                        "result_revision": stale["expected_revision"],
+                    }
+
+            if committed_delete_result is not None:
+                # A same-operation tombstone is the durable serialization
+                # point for deletion.  It wins over a late cancel marker and
+                # legacy approval TTL left behind by the former split commit.
+                next_state = "succeeded"
+                event_type = "operation.result"
+                payload = {"state": next_state, **committed_delete_result}
+                projection = {
+                    "state": next_state,
+                    "result": committed_delete_result,
+                    "result_revision": stale["expected_revision"],
+                    "attempt_token": None,
+                    "lease_expires_at": None,
+                    "heartbeat_at": now,
+                    "next_attempt_at": None,
+                    "approval_expires_at": None,
+                    "cancel_requested_at": None,
+                    "cancelled_at": None,
+                    "error_code": None,
+                    "error_detail": None,
+                    "completed_at": now,
+                }
+                observed_retry_count = stale["retry_count"]
+            elif (
                 stale["state"] == "cancelling"
                 or stale["cancel_requested_at"] is not None
             ):
@@ -1324,6 +1746,7 @@ async def recover_expired_workspace_operations(
                 operation_id=stale["id"],
                 event_type=event_type,
                 payload=payload,
+                operation_kind=stale["kind"],
                 allowed_states=(stale["state"],),
                 expected_version=stale["version"],
                 projection_values=projection,
@@ -1365,7 +1788,7 @@ async def recover_expired_workspace_operations(
                 result_status=next_state,
                 error_code=(
                     None
-                    if next_state == "cancelled"
+                    if next_state in {"cancelled", "succeeded"}
                     else "operation_recovery_required"
                 ),
                 duration_ms=_elapsed_ms(stale["created_at"], now),
@@ -1373,7 +1796,11 @@ async def recover_expired_workspace_operations(
                 retry_count=observed_retry_count,
                 recovery_count=1,
                 expected_revision=stale["expected_revision"],
-                result_revision=stale["result_revision"],
+                result_revision=(
+                    stale["expected_revision"]
+                    if next_state == "succeeded"
+                    else stale["result_revision"]
+                ),
                 fencing_token=stale["fencing_token"],
                 fence_outcome="recovery_committed",
             )
@@ -1624,26 +2051,13 @@ class WorkspaceOperationRunner:
     async def _validate_claim_revision(
         self, claim: WorkspaceOperationClaim
     ) -> None:
-        """Recheck the optimistic deck token immediately before execution."""
+        """Recheck deck/account deletion fences immediately before execution."""
 
         async with self.session_factory() as session:
-            revision = await session.scalar(
-                select(PresentationModel.revision).where(
-                    PresentationModel.id == claim.presentation_id
-                )
-            )
-        if revision is None:
-            raise NonRetryableWorkspaceOperationError("presentation_not_found")
-        if (
-            claim.expected_revision is not None
-            and int(revision) != claim.expected_revision
-        ):
-            raise NonRetryableWorkspaceOperationError(
-                "revision_conflict",
-                detail={
-                    "error_code": "revision_conflict",
-                    "revision": int(revision),
-                },
+            await _fence_workspace_claim(
+                session,
+                claim,
+                check_revision=True,
             )
 
     async def _execute(self, claim: WorkspaceOperationClaim) -> None:

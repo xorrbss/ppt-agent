@@ -62,7 +62,10 @@ import {
 } from "@/lib/authored-hybrid/export-metadata";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import { buildSafeExportFileName } from "../utils/buildSafeExportFileName";
-import type { WorkspaceCommandDispatcher } from "../workspace";
+import type {
+  WorkspaceCommandDispatcher,
+  WorkspaceQualityReviewRequester,
+} from "../workspace";
 
 type PptxExportMode = "fidelity" | "hybrid";
 
@@ -103,6 +106,7 @@ const PresentationHeader = ({
   chatFirstEnabled = false,
   workspaceCommandsEnabled = false,
   onWorkspaceCommand,
+  onWorkspaceQualityReviewRequest,
 }: {
   presentation_id: string;
   isPresentationSaving: boolean;
@@ -114,6 +118,7 @@ const PresentationHeader = ({
   chatFirstEnabled?: boolean;
   workspaceCommandsEnabled?: boolean;
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
+  onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
 }) => {
   const [open, setOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
@@ -478,24 +483,14 @@ const PresentationHeader = ({
       setIsExporting(false);
     }
   };
-  const handleQualityReview = async () => {
+  const handleQualityReview = () => {
     if (
       !chatFirstEnabled ||
       !workspaceCommandsEnabled ||
-      !onWorkspaceCommand ||
+      !onWorkspaceQualityReviewRequest ||
       isStreaming
     ) return;
-    try {
-      await onWorkspaceCommand("현재 발표자료를 읽기 전용으로 품질 검토해 줘", {
-        commandType: "quality.review",
-        context: {
-          mode: "analyze_only",
-          ...(currentSlide === undefined ? {} : { current_slide: currentSlide }),
-        },
-      });
-    } catch {
-      // The durable timeline owns request errors and explicit retry UI.
-    }
+    onWorkspaceQualityReviewRequest(currentSlide);
   };
   const handleReGenerate = () => {
     if (!mutationsEnabled) return;
@@ -766,17 +761,34 @@ const PresentationHeader = ({
           ) : null}
 
           {chatFirstEnabled && presentationData && isAuthoredDeck && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!workspaceCommandsEnabled || !onWorkspaceCommand || isStreaming === true}
-              onClick={() => void handleQualityReview()}
-              data-testid="workspace-quality-review"
-              aria-label="채팅에서 읽기 전용 품질 검토 시작"
-            >
-              고품질 검수
-            </Button>
+            <>
+              <AuthoredTemplateChanger
+                presentationId={presentation_id}
+                currentStyleId={getAuthoredStyleId(presentationData.theme)}
+                disabled={
+                  !workspaceCommandsEnabled ||
+                  !onWorkspaceCommand ||
+                  isStreaming === true ||
+                  isPresentationSaving
+                }
+                onWorkspaceCommand={onWorkspaceCommand}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={
+                  !workspaceCommandsEnabled ||
+                  !onWorkspaceQualityReviewRequest ||
+                  isStreaming === true
+                }
+                onClick={handleQualityReview}
+                data-testid="workspace-quality-review"
+                aria-label="채팅에서 고품질 검수 옵션 열기"
+              >
+                고품질 검수
+              </Button>
+            </>
           )}
 
           <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
@@ -785,6 +797,7 @@ const PresentationHeader = ({
                 type="button"
                 onClick={() => setIsRegenerateConfirmOpen(true)}
                 data-testid="presentation-regenerate"
+                aria-label="발표자료 재생성"
                 className={cn("group", !mutationsEnabled && "hidden")}
               >
                 <RotateCcw className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
@@ -793,8 +806,10 @@ const PresentationHeader = ({
             <Separator orientation="vertical" className="h-4" />
             <ToolTip content="실행 취소">
               <button
+                type="button"
                 disabled={!canUndo}
                 data-testid="presentation-undo"
+                aria-label="실행 취소"
                 className={cn(
                   "disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group",
                   !historyEnabled && "hidden",
@@ -809,8 +824,10 @@ const PresentationHeader = ({
             <Separator orientation="vertical" className="h-4" />
             <ToolTip content="다시 실행">
               <button
+                type="button"
                 disabled={!canRedo}
                 data-testid="presentation-redo"
+                aria-label="다시 실행"
                 className={cn(
                   "disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group",
                   !historyEnabled && "hidden",
@@ -825,6 +842,7 @@ const PresentationHeader = ({
             <Separator orientation="vertical" className="h-4 w-[2px]" />
             <ToolTip content="발표 시작">
               <button
+                type="button"
                 onClick={() => {
                   const to = `?id=${presentation_id}&mode=present&slide=${
                     currentSlide || 0
@@ -843,6 +861,7 @@ const PresentationHeader = ({
                   !presentationData?.slides ||
                   presentationData?.slides.length === 0
                 }
+                aria-label="발표 시작"
                 className="cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
               >
                 <Play className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />

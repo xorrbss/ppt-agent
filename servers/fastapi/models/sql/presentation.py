@@ -15,6 +15,8 @@ from utils.owner_context import get_current_owner_id
 
 PRESENTATION_LIFECYCLE_STAGING = "staging"
 PRESENTATION_LIFECYCLE_PUBLISHED = "published"
+PRESENTATION_LIFECYCLE_GENERATION_FAILED = "generation_failed"
+PRESENTATION_LIFECYCLE_DELETED = "deleted"
 
 
 class PresentationVersion(str, Enum):
@@ -95,6 +97,18 @@ class PresentationModel(SQLModel, table=True):
             server_default=PRESENTATION_LIFECYCLE_PUBLISHED,
         ),
         default=PRESENTATION_LIFECYCLE_PUBLISHED,
+    )
+    # A delete command leaves a minimal tombstone so the durable operation can
+    # append its terminal Event after the destructive transaction commits.
+    # The operation id is intentionally not a foreign key: account cleanup and
+    # legacy hard deletion must not make the tombstone relationship cyclic.
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    deletion_operation_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(Uuid, nullable=True),
     )
     # Publication commit token. Intermediate checkpoints never change this;
     # the final database pointer commit increments it once using compare-and-swap.

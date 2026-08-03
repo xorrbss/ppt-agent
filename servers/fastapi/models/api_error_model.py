@@ -14,6 +14,14 @@ class APIErrorModel(BaseModel):
     code: Optional[str] = None
     message: Optional[str] = None
     request_id: Optional[str] = None
+    safe_message: Optional[str] = None
+    retryable: Optional[bool] = None
+
+    def model_dump(self, *args, **kwargs):
+        # Preserve the historical Python/wire shape when the workspace-only
+        # fields are not populated.
+        kwargs.setdefault("exclude_none", True)
+        return super().model_dump(*args, **kwargs)
 
     @model_validator(mode="after")
     def fill_compatible_defaults(self) -> "APIErrorModel":
@@ -38,6 +46,8 @@ class APIErrorModel(BaseModel):
         request_id: Optional[str] = None,
         code: Optional[str] = None,
         message: Optional[str] = None,
+        safe_message: Optional[str] = None,
+        retryable: Optional[bool] = None,
     ) -> "APIErrorModel":
         if isinstance(e, HTTPException):
             status_code = e.status_code
@@ -52,6 +62,8 @@ class APIErrorModel(BaseModel):
             code=code,
             message=message,
             request_id=request_id,
+            safe_message=safe_message,
+            retryable=retryable,
         )
 
 

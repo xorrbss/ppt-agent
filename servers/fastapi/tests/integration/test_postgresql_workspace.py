@@ -71,6 +71,7 @@ WORKSPACE_TABLES = {
     "workspace_action_receipts",
     "workspace_artifacts",
     "workspace_assets",
+    "workspace_cleanup_journal",
     "workspace_conversations",
     "workspace_message_attachments",
     "workspace_messages",
@@ -136,9 +137,31 @@ def postgres_workspace_database() -> tuple[Engine, Config, URL]:
 def _assert_workspace_schema(engine: Engine) -> None:
     inspector = inspect(engine)
     assert WORKSPACE_TABLES.issubset(inspector.get_table_names())
-    assert "revision" in {
-        column["name"] for column in inspector.get_columns("presentations")
+    presentation_columns = {
+        column["name"]: column
+        for column in inspector.get_columns("presentations")
     }
+    assert {
+        "revision",
+        "deleted_at",
+        "deletion_operation_id",
+    }.issubset(presentation_columns)
+    user_columns = {
+        column["name"]: column for column in inspector.get_columns("user")
+    }
+    assert migrations.ACCOUNT_DELETION_USER_COLUMNS.issubset(user_columns)
+    assert user_columns["deletion_state"]["nullable"] is False
+    assert user_columns["deletion_generation"]["nullable"] is False
+    assert str(user_columns["deletion_generation"]["type"]).upper() == "BIGINT"
+    assert migrations.ACCOUNT_DELETION_USER_CHECKS.issubset(
+        {
+            constraint["name"]
+            for constraint in inspector.get_check_constraints("user")
+        }
+    )
+    assert migrations.ACCOUNT_DELETION_USER_INDEXES.issubset(
+        {index["name"] for index in inspector.get_indexes("user")}
+    )
     assert "workspace_operation_id" in {
         column["name"]
         for column in inspector.get_columns("presentation_generation_jobs")
@@ -147,6 +170,40 @@ def _assert_workspace_schema(engine: Engine) -> None:
         column["name"]
         for column in inspector.get_columns("workspace_operations")
     }
+    attachment_columns = {
+        column["name"]: column
+        for column in inspector.get_columns("workspace_message_attachments")
+    }
+    assert {
+        "asset_id_snapshot",
+        "asset_sha256",
+        "asset_failure_code",
+        "asset_failure_detail",
+    }.issubset(attachment_columns)
+    assert attachment_columns["asset_id"]["nullable"] is True
+    assert attachment_columns["asset_id_snapshot"]["nullable"] is False
+    attachment_asset_fk = next(
+        foreign_key
+        for foreign_key in inspector.get_foreign_keys(
+            "workspace_message_attachments"
+        )
+        if foreign_key["name"] == "fk_workspace_message_attachments_asset_id"
+    )
+    assert attachment_asset_fk["constrained_columns"] == ["asset_id"]
+    assert attachment_asset_fk["referred_table"] == "workspace_assets"
+    assert attachment_asset_fk["options"]["ondelete"].upper() == "SET NULL"
+    attachment_asset_unique = next(
+        constraint
+        for constraint in inspector.get_unique_constraints(
+            "workspace_message_attachments"
+        )
+        if constraint["name"] == "uq_workspace_message_attachments_asset"
+    )
+    assert attachment_asset_unique["column_names"] == [
+        "message_id",
+        "asset_id_snapshot",
+    ]
+    assert inspector.get_foreign_keys("workspace_cleanup_journal") == []
     conversation_columns = {
         column["name"]: column
         for column in inspector.get_columns("workspace_conversations")
@@ -625,12 +682,27 @@ def test_postgresql_workspace_migrations_and_concurrency_contracts(
         column["name"]
         for column in downgraded_inspector.get_columns("presentations")
     }
+    assert {
+        "deleted_at",
+        "deletion_operation_id",
+    }.isdisjoint(
+        {
+            column["name"]
+            for column in downgraded_inspector.get_columns("presentations")
+        }
+    )
     assert "workspace_operation_id" not in {
         column["name"]
         for column in downgraded_inspector.get_columns(
             "presentation_generation_jobs"
         )
     }
+    assert migrations.ACCOUNT_DELETION_USER_COLUMNS.isdisjoint(
+        {
+            column["name"]
+            for column in downgraded_inspector.get_columns("user")
+        }
+    )
 
     command.upgrade(config, "head")
     _assert_workspace_schema(engine)

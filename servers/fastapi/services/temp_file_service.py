@@ -180,7 +180,8 @@ class TempFileService:
         os.rmdir(dir_path)
 
     def cleanup_base_dir(self):
-        self.cleanup_temp_dir(self.base_dir)
+        os.makedirs(self.base_dir, exist_ok=True)
+        self._delete_dir_files(self.base_dir)
 
 
 TEMP_FILE_SERVICE = TempFileService()

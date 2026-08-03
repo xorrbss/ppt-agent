@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from models.sql.presentation import PresentationModel
+from models.presentation_and_path import PresentationAndPath
+from models.presentation_from_template import AuthoredQualityReviewRequest
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.presentation import PresentationModel
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceArtifact,
@@ -27,19 +29,22 @@ from models.workspace import WorkspaceCommandRequest
 from services import workspace_artifact_publication_service as publication
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
-    WorkspaceOperationClaim,
     WorkspaceOperationCancelled,
+    WorkspaceOperationClaim,
+    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,
     WorkspaceOperationResult,
 )
-from services.workspace_operation_runner import finalize_workspace_operation_success
+from services.workspace_operation_runner import (
+    finalize_workspace_operation_success,
+    sanitize_workspace_event_payload,
+)
 from services.workspace_quality_export_operation_handlers import (
     WorkspaceExportOperationHandler,
     WorkspaceQualityReviewOperationHandler,
+    register_workspace_quality_export_operation_handlers,
 )
-from models.presentation_and_path import PresentationAndPath
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
-
 
 TABLES = [
     User.__table__,
@@ -100,6 +105,47 @@ async def _seed_export(maker, *, revision: int = 7):
     return presentation.id, operation.id
 
 
+async def _seed_quality_operation(
+    maker,
+    *,
+    revision: int = 11,
+    command_context: dict | None = None,
+):
+    request_context = command_context or {
+        "mode": "analyze_and_fix",
+        "scope": "current",
+        "slide_indices": [0],
+    }
+    async with maker() as session, session.begin():
+        presentation = PresentationModel(
+            content="quality",
+            n_slides=1,
+            language="ko",
+            revision=revision,
+        )
+        session.add(presentation)
+        await session.flush()
+        conversation = WorkspaceConversation(presentation_id=presentation.id)
+        session.add(conversation)
+        await session.flush()
+        operation = WorkspaceOperation(
+            conversation_id=conversation.id,
+            presentation_id=presentation.id,
+            anchor_position=1,
+            kind="quality.review",
+            state="running",
+            idempotency_key_hash="c" * 64,
+            request_hash="d" * 64,
+            request_payload={"context": request_context},
+            expected_revision=revision,
+            attempt_token="quality-attempt-1",
+            fencing_token=4,
+        )
+        session.add(operation)
+        await session.flush()
+    return presentation.id, conversation.id, operation.id
+
+
 def test_command_contract_accepts_quality_and_export_and_rejects_credentials():
     for kind in ("quality.review", "export.pptx", "export.pdf"):
         request = WorkspaceCommandRequest(
@@ -118,7 +164,141 @@ def test_command_contract_accepts_quality_and_export_and_rejects_credentials():
         )
 
 
-def test_quality_review_rejects_mutating_mode_before_execution():
+def test_quality_review_registration_enables_automatic_crash_recovery():
+    registry = WorkspaceOperationHandlerRegistry()
+
+    register_workspace_quality_export_operation_handlers(registry=registry)
+
+    assert registry.recovery_policy("quality.review") == "automatic"
+
+
+def test_quality_review_result_sanitizer_keeps_only_user_visible_summary():
+    payload = {
+        "kind": "quality.review",
+        "message": "검수가 완료되었습니다.",
+        "mode": "analyze_and_fix",
+        "scope": "all",
+        "inspected_revision": 11,
+        "reviewed_count": 3,
+        "issue_slide_count": 2,
+        "fixed_count": 1,
+        "fixed_slide_indices": [0, True, -1, 2],
+        "remaining_issue_count": 1,
+        "remaining_slide_indices": [2],
+        "remaining_issues": [
+            {
+                "slide_index": 2,
+                "issues": [
+                    {
+                        "type": "low-contrast",
+                        "severity": "medium",
+                        "detail": "본문 대비를 확인하세요.",
+                        "fix_action": "contrast-adjustment",
+                        "applied": False,
+                        "provider_trace": "must-not-persist",
+                    }
+                ],
+            }
+        ],
+        "version_saved": True,
+        "slide_results": [
+            {
+                "slide_index": 2,
+                "path": "automatic-layout-fix",
+                "attempted": True,
+                "applied": True,
+                "resolved_issues": ["low-contrast"],
+                "before": "private slide HTML",
+                "after": "private fixed HTML",
+                "element_changes": [{"dom": "private DOM"}],
+            }
+        ],
+        "local_checks": [{"dom": "private telemetry"}],
+        "ocr_checks": [{"text": "private OCR output"}],
+    }
+
+    assert sanitize_workspace_event_payload(
+        payload, operation_kind="quality.review"
+    ) == {
+        "kind": "quality.review",
+        "message": "검수가 완료되었습니다.",
+        "mode": "analyze_and_fix",
+        "scope": "all",
+        "inspected_revision": 11,
+        "reviewed_count": 3,
+        "issue_slide_count": 2,
+        "fixed_count": 1,
+        "fixed_slide_indices": [0, 2],
+        "remaining_issue_count": 1,
+        "remaining_slide_indices": [2],
+        "remaining_issues": [
+            {
+                "slide_index": 2,
+                "type": "low-contrast",
+                "severity": "medium",
+                "message": "본문 대비를 확인하세요.",
+                "description": "본문 대비를 확인하세요.",
+                "fix_action": "contrast-adjustment",
+                "applied": False,
+            }
+        ],
+        "slide_results": [
+            {
+                "slide_index": 2,
+                "attempted": True,
+                "applied": True,
+                "fix_action": "automatic-layout-fix",
+                "resolved_issues": ["low-contrast"],
+            }
+        ],
+        "version_saved": True,
+    }
+
+
+def test_quality_review_emits_live_progress_during_long_analysis(monkeypatch):
+    async def scenario():
+        release_review = asyncio.Event()
+        progress_values: list[int] = []
+
+        async def fake_review(_presentation_id, _request, _task, _session):
+            await release_review.wait()
+
+        monkeypatch.setattr(
+            "services.workspace_quality_export_operation_handlers.run_authored_quality_review",
+            fake_review,
+        )
+        monkeypatch.setattr(
+            "services.workspace_quality_export_operation_handlers.QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS",
+            0.001,
+        )
+
+        class Context:
+            async def raise_if_cancelled(self):
+                return None
+
+            async def progress(self, **kwargs):
+                progress_values.append(kwargs["percent"])
+                release_review.set()
+                return True
+
+        await WorkspaceQualityReviewOperationHandler()._run_review_with_live_progress(
+            context=Context(),
+            presentation_id=uuid.uuid4(),
+            request=AuthoredQualityReviewRequest(
+                scope="all", slide_indices=[], mode="analyze_and_fix"
+            ),
+            task=object(),
+            session=object(),
+        )
+
+        assert progress_values
+        assert progress_values[0] > 20
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("mode", ["analyze_only", "unsupported"])
+def test_quality_review_rejects_any_mode_except_auto_fix_before_execution(mode):
     claim = WorkspaceOperationClaim(
         operation_id=uuid.uuid4(),
         owner_id=None,
@@ -126,7 +306,7 @@ def test_quality_review_rejects_mutating_mode_before_execution():
         conversation_id=uuid.uuid4(),
         presentation_id=uuid.uuid4(),
         kind="quality.review",
-        request_payload={"context": {"mode": "analyze_and_fix"}},
+        request_payload={"context": {"mode": mode}},
         expected_revision=0,
         attempt_number=1,
         attempt_token="attempt",
@@ -144,13 +324,13 @@ def test_quality_review_rejects_mutating_mode_before_execution():
     context.claim = claim
     with pytest.raises(
         NonRetryableWorkspaceOperationError,
-        match="quality_review_read_only_required",
+        match="quality_review_request_invalid",
     ):
         asyncio.run(WorkspaceQualityReviewOperationHandler().execute(context))
 
 
 @pytest.mark.parametrize("change_revision", [False, True])
-def test_quality_review_is_read_only_and_detects_concurrent_revision_change(
+def test_quality_review_without_fixes_is_revision_neutral_and_detects_change(
     tmp_path: Path, monkeypatch, change_revision: bool
 ):
     async def scenario():
@@ -168,7 +348,7 @@ def test_quality_review_is_read_only_and_detects_concurrent_revision_change(
                 presentation_id = presentation.id
 
             async def fake_review(presentation_id, request, task, session):
-                assert request.mode == "analyze_only"
+                assert request.mode == "analyze_and_fix"
                 task.status = "completed"
                 task.message = "Review completed"
                 task.data = {
@@ -176,6 +356,8 @@ def test_quality_review_is_read_only_and_detects_concurrent_revision_change(
                     "error_count": 0,
                     "warning_count": 1,
                     "info_count": 0,
+                    "fixed_count": 0,
+                    "fixed_slide_indices": [],
                     "issues": [{"severity": "warning", "code": "test"}],
                     "slide_results": [],
                 }
@@ -197,7 +379,7 @@ def test_quality_review_is_read_only_and_detects_concurrent_revision_change(
                 conversation_id=uuid.uuid4(),
                 presentation_id=presentation_id,
                 kind="quality.review",
-                request_payload={"context": {"mode": "analyze_only"}},
+                request_payload={"context": {"mode": "analyze_and_fix"}},
                 expected_revision=11,
                 attempt_number=1,
                 attempt_token="attempt",
@@ -225,12 +407,337 @@ def test_quality_review_is_read_only_and_detects_concurrent_revision_change(
                 result = await handler.execute(Context())
                 assert result.result_revision == 11
                 assert result.payload["inspected_revision"] == 11
-                assert result.payload["mode"] == "analyze_only"
+                assert result.payload["mode"] == "analyze_and_fix"
+                assert result.payload["canvas_refresh_required"] is False
+                assert result.payload["canvas_refresh_status"] == "not_required"
                 async with maker() as session:
                     presentation = await session.get(
                         PresentationModel, presentation_id
                     )
                     assert presentation.revision == 11
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_quality_review_auto_fix_publishes_new_revision(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "quality-auto-fix.db")
+        try:
+            presentation_id, conversation_id, operation_id = (
+                await _seed_quality_operation(maker)
+            )
+
+            async def fake_review(_presentation_id, request, task, session):
+                assert request.mode == "analyze_and_fix"
+                assert request.scope == "current"
+                assert request.slide_indices == [0]
+                task.status = "completed"
+                task.message = "Review and fixes completed"
+                task.data = {
+                    "reviewed_count": 1,
+                    "fixed_count": 1,
+                    "fixed_slide_indices": [0],
+                    "version_saved": True,
+                    "issues": [
+                        {
+                            "slide_index": 0,
+                            "issues": [
+                                {
+                                    "type": "alignment",
+                                    "severity": "medium",
+                                    "detail": "Align the title.",
+                                    "provider_response": "must-not-persist",
+                                }
+                            ],
+                        }
+                    ],
+                    "slide_results": [
+                        {
+                            "slide_index": 0,
+                            "path": "automatic-layout-fix",
+                            "attempted": True,
+                            "applied": True,
+                            "before": "private HTML",
+                            "after": "private HTML",
+                        }
+                    ],
+                    "ocr_checks": [{"text": "private OCR"}],
+                }
+                await session.commit()
+
+            monkeypatch.setattr(
+                "services.workspace_quality_export_operation_handlers.run_authored_quality_review",
+                fake_review,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=operation_id,
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=conversation_id,
+                presentation_id=presentation_id,
+                kind="quality.review",
+                request_payload={
+                    "context": {
+                        "mode": "analyze_and_fix",
+                        "scope": "current",
+                        "slide_indices": [0],
+                    }
+                },
+                expected_revision=11,
+                attempt_number=1,
+                attempt_token="quality-attempt-1",
+                fencing_token=4,
+            )
+
+            class Context:
+                def __init__(self):
+                    self.claim = claim
+                    self.progress_updates = []
+
+                async def raise_if_cancelled(self):
+                    return None
+
+                async def progress(self, **kwargs):
+                    self.progress_updates.append(kwargs)
+                    return True
+
+            context = Context()
+            result = await WorkspaceQualityReviewOperationHandler(
+                session_factory=maker
+            ).execute(context)
+
+            assert result.result_revision == 12
+            assert result.payload["mode"] == "analyze_and_fix"
+            assert result.payload["fixed_count"] == 1
+            assert result.payload["canvas_refresh_required"] is True
+            assert result.payload["canvas_refresh_slide_index"] == 0
+            assert max(update["percent"] for update in context.progress_updates) == 96
+            async with maker() as session:
+                presentation = await session.get(PresentationModel, presentation_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+                terminal_events = (
+                    await session.execute(
+                        select(WorkspaceOperationEvent).where(
+                            WorkspaceOperationEvent.operation_id == operation_id,
+                            WorkspaceOperationEvent.event_type == "operation.result",
+                        )
+                    )
+                ).scalars().all()
+                assert presentation.revision == 12
+                assert operation is not None and operation.state == "succeeded"
+                assert operation.result_revision == 12
+                assert operation.result == result.payload
+                assert operation.progress == {
+                    "stage": "quality_review_completed",
+                    "percent": 100,
+                }
+                assert len(terminal_events) == 1
+                assert terminal_events[0].payload["percent"] == 100
+                assert terminal_events[0].payload["result"] == result.payload
+                assert "provider_response" not in str(operation.result)
+                assert "private HTML" not in str(operation.result)
+                assert "private OCR" not in str(operation.result)
+
+            # Runner completion and retry reconciliation must not publish the
+            # already-committed fixes or terminal result twice.
+            assert await finalize_workspace_operation_success(
+                claim, result, session_factory=maker
+            )
+            async with maker() as session:
+                terminal_count = await session.scalar(
+                    select(func.count())
+                    .select_from(WorkspaceOperationEvent)
+                    .where(
+                        WorkspaceOperationEvent.operation_id == operation_id,
+                        WorkspaceOperationEvent.event_type == "operation.result",
+                    )
+                )
+                assert terminal_count == 1
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_quality_review_retry_reuses_completed_task_without_duplicate_fix(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "quality-resume.db")
+        try:
+            presentation_id, conversation_id, operation_id = (
+                await _seed_quality_operation(maker)
+            )
+            async with maker() as session, session.begin():
+                session.add(
+                    AsyncPresentationGenerationTaskModel(
+                        id=f"workspace-quality-{operation_id}",
+                        status="completed",
+                        message="Review and fixes completed",
+                        data={
+                            "reviewed_count": 1,
+                            "fixed_count": 1,
+                            "fixed_slide_indices": [0],
+                            "issues": [],
+                            "remaining_issue_count": 0,
+                            "remaining_issues": [],
+                            "slide_results": [],
+                        },
+                    )
+                )
+
+            async def duplicate_review(*_args, **_kwargs):
+                raise AssertionError("completed review must not run twice")
+
+            monkeypatch.setattr(
+                "services.workspace_quality_export_operation_handlers.run_authored_quality_review",
+                duplicate_review,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=operation_id,
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=conversation_id,
+                presentation_id=presentation_id,
+                kind="quality.review",
+                request_payload={"context": {"scope": "all"}},
+                expected_revision=11,
+                attempt_number=2,
+                attempt_token="quality-attempt-1",
+                fencing_token=4,
+            )
+
+            class Context:
+                def __init__(self):
+                    self.claim = claim
+
+                async def raise_if_cancelled(self):
+                    return None
+
+                async def progress(self, **_kwargs):
+                    return True
+
+            result = await WorkspaceQualityReviewOperationHandler(
+                session_factory=maker
+            ).execute(Context())
+            assert result.result_revision == 12
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation_id)
+                presentation = await session.get(PresentationModel, presentation_id)
+                assert operation is not None and operation.state == "succeeded"
+                assert presentation is not None and presentation.revision == 12
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_quality_review_subset_without_fixes_finalizes_result_atomically(
+    tmp_path: Path, monkeypatch
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "quality-subset-no-fix.db")
+        try:
+            presentation_id, conversation_id, operation_id = (
+                await _seed_quality_operation(
+                    maker,
+                    command_context={
+                        "scope": "subset",
+                        "slide_indices": [0, 0],
+                    },
+                )
+            )
+
+            async def fake_review(_presentation_id, request, task, session):
+                assert request.mode == "analyze_and_fix"
+                assert request.scope == "subset"
+                assert request.slide_indices == [0]
+                task.status = "completed"
+                task.message = "No fixes needed"
+                task.data = {
+                    "reviewed_count": 1,
+                    "issue_slide_count": 0,
+                    "fixed_count": 0,
+                    "fixed_slide_indices": [],
+                    "remaining_issue_count": 0,
+                    "remaining_issues": [],
+                    "slide_results": [],
+                }
+                await session.commit()
+
+            monkeypatch.setattr(
+                "services.workspace_quality_export_operation_handlers.run_authored_quality_review",
+                fake_review,
+            )
+            claim = WorkspaceOperationClaim(
+                operation_id=operation_id,
+                owner_id=None,
+                owner_scope="anonymous",
+                conversation_id=conversation_id,
+                presentation_id=presentation_id,
+                kind="quality.review",
+                request_payload={
+                    "context": {"scope": "subset", "slide_indices": [0, 0]}
+                },
+                expected_revision=11,
+                attempt_number=1,
+                attempt_token="quality-attempt-1",
+                fencing_token=4,
+            )
+
+            class Context:
+                def __init__(self):
+                    self.claim = claim
+                    self.progress_updates = []
+
+                async def raise_if_cancelled(self):
+                    return None
+
+                async def progress(self, **kwargs):
+                    self.progress_updates.append(kwargs)
+                    return True
+
+            context = Context()
+            result = await WorkspaceQualityReviewOperationHandler(
+                session_factory=maker
+            ).execute(context)
+            assert result.result_revision == 11
+            assert result.payload["scope"] == "subset"
+            assert result.payload["slide_indices"] == [0]
+            assert result.payload["canvas_refresh_status"] == "not_required"
+            assert max(update["percent"] for update in context.progress_updates) == 96
+
+            # Handler completion alone is deliberately not 100%: the runner's
+            # single terminal transaction still has to persist the result.
+            async with maker() as session:
+                operation = await session.get(WorkspaceOperation, operation_id)
+                assert operation is not None and operation.state == "running"
+                assert operation.result is None
+
+            assert await finalize_workspace_operation_success(
+                claim, result, session_factory=maker
+            )
+            async with maker() as session:
+                presentation = await session.get(PresentationModel, presentation_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+                event_row = (
+                    await session.execute(
+                        select(WorkspaceOperationEvent).where(
+                            WorkspaceOperationEvent.operation_id == operation_id,
+                            WorkspaceOperationEvent.event_type == "operation.result",
+                        )
+                    )
+                ).scalar_one()
+                assert presentation is not None and presentation.revision == 11
+                assert operation is not None and operation.state == "succeeded"
+                assert operation.result == result.payload
+                assert operation.progress["percent"] == 100
+                assert event_row.payload["result"] == result.payload
+                assert event_row.payload["percent"] == 100
         finally:
             await engine.dispose()
 
@@ -271,7 +778,7 @@ def test_quality_review_propagates_lease_loss_after_review(
                 conversation_id=uuid.uuid4(),
                 presentation_id=presentation_id,
                 kind="quality.review",
-                request_payload={"context": {"mode": "analyze_only"}},
+                request_payload={"context": {"mode": "analyze_and_fix"}},
                 expected_revision=4,
                 attempt_number=1,
                 attempt_token="attempt",
@@ -458,7 +965,7 @@ def test_export_lease_loss_compensates_and_expired_artifact_is_not_resolved(
                     fencing_token=3,
                     export_format="pptx",
                 )
-            expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+            expired_at = datetime.now(UTC) - timedelta(seconds=1)
             async with maker() as session, session.begin():
                 row = await session.get(WorkspaceArtifact, artifact.artifact_id)
                 row.expires_at = expired_at
@@ -473,7 +980,7 @@ def test_export_lease_loss_compensates_and_expired_artifact_is_not_resolved(
                     )
             swept = await publication.sweep_workspace_artifact_cleanup(
                 session_factory=maker,
-                now=datetime.now(timezone.utc),
+                now=datetime.now(UTC),
             )
             assert swept["deleted"] == 1
             assert not artifact.absolute_path.exists()

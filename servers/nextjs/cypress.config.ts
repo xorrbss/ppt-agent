@@ -18,6 +18,10 @@ export default defineConfig({
     supportFile: false,
   },
   component: {
+    specPattern: [
+      "cypress/component/**/*.cy.{js,jsx,ts,tsx}",
+      "app/**/*.cy.{js,jsx,ts,tsx}",
+    ],
     devServer: {
       framework: "react",
       bundler: "webpack",

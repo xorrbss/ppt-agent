@@ -212,6 +212,7 @@ def test_timed_out_child_is_reaped(tmp_path: Path) -> None:
             check=True,
             capture_output=True,
             text=True,
+            errors="replace",
         ).stdout
         assert f'"{pid}"' not in listing
     else:

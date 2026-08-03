@@ -607,9 +607,8 @@ export class PresentationGenerationApi {
   static async reviewAuthoredPresentation(
     presentationId: string,
     reviewData: {
-      scope: "all" | "current";
+      scope: "all" | "current" | "subset";
       slide_indices?: number[];
-      mode: "analyze_only" | "analyze_and_fix";
     }
   ) {
     try {
@@ -620,7 +619,7 @@ export class PresentationGenerationApi {
         {
           method: "POST",
           headers: getHeader(),
-          body: JSON.stringify(reviewData),
+          body: JSON.stringify({ ...reviewData, mode: "analyze_and_fix" }),
           cache: "no-cache",
         }
       );

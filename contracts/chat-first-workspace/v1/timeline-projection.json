@@ -1,49 +1,206 @@
 {
   "schema_version": 1,
-  "conversation_id": "conv-demo-0001",
-  "pagination": {
-    "next_message_cursor": "message-position:3",
-    "direction": "forward"
+  "timeline": {
+    "schema_version": 1,
+    "conversation_id": "22222222-2222-4222-8222-222222222222",
+    "items": [
+      {
+        "schema_version": 1,
+        "anchor_type": "message",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "position": 1,
+        "role": "user",
+        "content": "Create a concise quarterly planning deck.",
+        "created_at": "2026-08-03T00:00:01Z",
+        "attachments": [
+          {
+            "schema_version": 1,
+            "id": "66666666-6666-4666-8666-666666666666",
+            "name": "planning-notes.pdf",
+            "status": "ready",
+            "current_state": "deleted",
+            "mime_type": "application/pdf",
+            "size_bytes": 4096,
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "error": "workspace_asset_deleted",
+            "safe_failure": {
+              "failure_code": "workspace_asset_deleted",
+              "safe_message": "An attachment was deleted and must be uploaded again.",
+              "retryable": false
+            },
+            "download_url": null,
+            "download_action": null,
+            "preview_url": null,
+            "preview_action": null,
+            "unavailable_reason": "workspace_asset_deleted"
+          }
+        ],
+        "generation_settings": {
+          "language": "en",
+          "n_slides": 8,
+          "tone": "professional"
+        }
+      },
+      {
+        "schema_version": 1,
+        "anchor_type": "operation",
+        "id": "55555555-5555-4555-8555-555555555555",
+        "operation_id": "44444444-4444-4444-8444-444444444444",
+        "position": 2,
+        "operation_type": "presentation.generate",
+        "title": "Generate presentation",
+        "status": "approval_required",
+        "progress": 45.0,
+        "error": null,
+        "error_message": null,
+        "retryable": null,
+        "result": {
+          "outline_sections": 8
+        },
+        "version": 3,
+        "operation_version": 3,
+        "expected_revision": 0,
+        "result_revision": null,
+        "approval_expires_at": "2026-08-03T00:15:00Z",
+        "retry_of_operation_id": null,
+        "created_at": "2026-08-03T00:00:01Z",
+        "updated_at": "2026-08-03T00:00:03Z",
+        "actor": {
+          "type": "user",
+          "label": "You"
+        },
+        "target": {
+          "presentation_id": "11111111-1111-4111-8111-111111111111",
+          "summary": "Create the presentation",
+          "context": {
+            "slide_count": 8
+          }
+        },
+        "activity_summary": "Outline approval required",
+        "allowed_actions": [
+          {
+            "id": "approve",
+            "label": "Approve",
+            "variant": "primary",
+            "enabled": true,
+            "reason": null
+          },
+          {
+            "id": "cancel",
+            "label": "Cancel",
+            "variant": "danger",
+            "enabled": true,
+            "reason": null
+          }
+        ],
+        "events": [
+          {
+            "schema_version": 1,
+            "id": "event-demo-generate-0001",
+            "operation_id": "44444444-4444-4444-8444-444444444444",
+            "operation_version": 1,
+            "sequence": 1,
+            "cursor": "1",
+            "operation_anchor_position": 2,
+            "type": "queued",
+            "status": "queued",
+            "message": "Generation queued.",
+            "progress": 0.0,
+            "error": null,
+            "safe_message": null,
+            "retryable": null,
+            "result": null,
+            "created_at": "2026-08-03T00:00:01Z"
+          },
+          {
+            "schema_version": 1,
+            "id": "event-demo-generate-0002",
+            "operation_id": "44444444-4444-4444-8444-444444444444",
+            "operation_version": 2,
+            "sequence": 2,
+            "cursor": "2",
+            "operation_anchor_position": 2,
+            "type": "progress",
+            "status": "running",
+            "message": "Drafting the outline.",
+            "progress": 45.0,
+            "error": null,
+            "safe_message": null,
+            "retryable": null,
+            "result": null,
+            "created_at": "2026-08-03T00:00:02Z"
+          },
+          {
+            "schema_version": 1,
+            "id": "event-demo-generate-0003",
+            "operation_id": "44444444-4444-4444-8444-444444444444",
+            "operation_version": 3,
+            "sequence": 3,
+            "cursor": "3",
+            "operation_anchor_position": 2,
+            "type": "approval_required",
+            "status": "approval_required",
+            "message": "Review the outline to continue.",
+            "progress": 45.0,
+            "error": null,
+            "safe_message": null,
+            "retryable": null,
+            "result": {
+              "outline_sections": 8
+            },
+            "created_at": "2026-08-03T00:00:03Z"
+          }
+        ]
+      },
+      {
+        "schema_version": 1,
+        "anchor_type": "message",
+        "id": "77777777-7777-4777-8777-777777777777",
+        "position": 3,
+        "role": "assistant",
+        "content": "Review the outline before generation continues.",
+        "created_at": "2026-08-03T00:00:03Z",
+        "attachments": [],
+        "generation_settings": null
+      }
+    ],
+    "next_before_position": null,
+    "event_high_watermark": "3",
+    "has_more": false,
+    "revision": 4
   },
-  "event_replay": {
-    "high_watermark_cursor": "event-sequence:op-demo-generate-0001:3",
-    "stream_cursor": "event-sequence:op-demo-generate-0001:3"
-  },
-  "top_level_items": [
-    {
-      "kind": "message",
-      "message_id": "msg-demo-0001",
-      "position": 1,
-      "role": "user",
-      "content": "Create a concise quarterly planning deck."
-    },
-    {
-      "kind": "operation_anchor",
-      "message_id": "msg-demo-0002",
-      "position": 2,
-      "role": "assistant",
-      "operation_id": "op-demo-generate-0001"
-    },
-    {
-      "kind": "message",
-      "message_id": "msg-demo-0003",
-      "position": 3,
-      "role": "assistant",
-      "content": "The deck is ready."
-    }
-  ],
-  "operation_card": {
-    "operation_id": "op-demo-generate-0001",
-    "anchor_message_id": "msg-demo-0002",
+  "event_page": {
+    "schema_version": 1,
     "events": [
-      {"sequence": 1, "type": "queued", "payload": {"status": "queued"}},
-      {"sequence": 2, "type": "progress", "payload": {"percent": 45}},
-      {"sequence": 3, "type": "completed", "payload": {"revision": 4}}
-    ]
+      {
+        "schema_version": 1,
+        "id": "event-demo-generate-0003",
+        "operation_id": "44444444-4444-4444-8444-444444444444",
+        "operation_version": 3,
+        "sequence": 3,
+        "cursor": "3",
+        "operation_anchor_position": 2,
+        "type": "approval_required",
+        "status": "approval_required",
+        "message": "Review the outline to continue.",
+        "progress": 45.0,
+        "error": null,
+        "safe_message": null,
+        "retryable": null,
+        "result": {
+          "outline_sections": 8
+        },
+        "created_at": "2026-08-03T00:00:03Z"
+      }
+    ],
+    "event_high_watermark": "3"
   },
   "projection_invariants": {
     "top_level_order": "position_only",
+    "pagination_cursor": "next_before_position",
+    "event_replay_cursor": "event_high_watermark",
     "event_projection": "update_anchor_card_only",
-    "message_pagination_and_event_replay_are_independent": true
+    "message_pagination_and_event_replay_are_independent": true,
+    "canonical_decimal_event_cursor": true
   }
 }

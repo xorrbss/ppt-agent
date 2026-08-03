@@ -672,7 +672,7 @@ def test_exact_generation_persists_private_provenance_then_reviews_current_nonze
             await quality_service.run_authored_quality_review(
                 presentation_id,
                 AuthoredQualityReviewRequest(
-                    scope="current", slide_indices=[1], mode="analyze_only"
+                    scope="current", slide_indices=[1]
                 ),
                 task,
                 session,
@@ -737,9 +737,7 @@ def test_legacy_exact_theme_without_private_provenance_fails_before_render_or_mo
             ):
                 await quality_service.run_authored_quality_review(
                     presentation.id,
-                    AuthoredQualityReviewRequest(
-                        scope="all", mode="analyze_only"
-                    ),
+                    AuthoredQualityReviewRequest(scope="all"),
                     task,
                     session,
                 )
@@ -950,7 +948,7 @@ def test_analyze_and_fix_cas_rejects_stale_slide_and_rolls_back_snapshot(
     _run(runner())
 
 
-def test_exact_quality_review_compares_ordered_source_render_pairs_once_analyze_only(
+def test_exact_quality_review_compares_ordered_source_render_pairs_once_when_clean(
     tmp_path, monkeypatch, caplog
 ):
     caplog.set_level(logging.INFO, logger=quality_service.__name__)
@@ -993,7 +991,7 @@ def test_exact_quality_review_compares_ordered_source_render_pairs_once_analyze_
 
             await quality_service.run_authored_quality_review(
                 presentation.id,
-                AuthoredQualityReviewRequest(scope="all", mode="analyze_only"),
+                AuthoredQualityReviewRequest(scope="all"),
                 task,
                 session,
             )

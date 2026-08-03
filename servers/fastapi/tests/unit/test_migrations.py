@@ -63,6 +63,52 @@ def _script_head(database_url: str) -> str:
     return ScriptDirectory.from_config(_alembic_config(database_url)).get_current_head()
 
 
+def test_durable_deletion_upgrade_rejects_dangling_attachment_asset(tmp_path):
+    database_url = f"sqlite:///{(tmp_path / 'dangling-attachment.db').as_posix()}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ)
+
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO workspace_message_attachments
+                        (id, message_id, asset_id, display_name, asset_state)
+                    VALUES
+                        (:id, :message_id, :asset_id, 'orphaned.pdf', 'ready')
+                    """
+                ),
+                {
+                    "id": "11111111111111111111111111111111",
+                    "message_id": "22222222222222222222222222222222",
+                    "asset_id": "33333333333333333333333333333333",
+                },
+            )
+            connection.commit()
+
+        with pytest.raises(RuntimeError, match="missing live asset"):
+            command.upgrade(config, "head")
+
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalar_one()
+                == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
+            )
+            assert "asset_id_snapshot" not in {
+                column["name"]
+                for column in inspect(connection).get_columns(
+                    "workspace_message_attachments"
+                )
+            }
+    finally:
+        engine.dispose()
+
+
 def test_alembic_ini_preserves_existing_application_loggers(tmp_path, monkeypatch):
     """Loading the CLI config must not disable loggers imported by the app."""
     fastapi_root = Path(__file__).resolve().parents[2]
@@ -436,6 +482,17 @@ def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_pa
     try:
         with engine.begin() as connection:
             connection.execute(
+                text(
+                    "CREATE TABLE user ("
+                    "id CHAR(32) PRIMARY KEY, "
+                    "is_active BOOLEAN NOT NULL DEFAULT 1"
+                    ")"
+                )
+            )
+            connection.execute(
+                text("CREATE TABLE presentations (id CHAR(32) PRIMARY KEY)")
+            )
+            connection.execute(
                 text("CREATE TABLE template_v2 (id VARCHAR PRIMARY KEY)")
             )
             connection.execute(
@@ -499,7 +556,7 @@ def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_pa
             ).scalar_one() == "keep me"
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
+            ).scalar_one() == _script_head(database_url)
 
         command.downgrade(config, migrations.REVISION_PRIMARY_ADMIN)
         command.upgrade(config, "head")
@@ -507,7 +564,7 @@ def test_head_repair_adds_missing_chat_template_scope_without_losing_rows(tmp_pa
         with engine.connect() as connection:
             assert connection.execute(
                 text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
+            ).scalar_one() == _script_head(database_url)
             assert "template_v2_id" in {
                 column["name"]
                 for column in inspect(connection).get_columns(
@@ -612,7 +669,7 @@ def test_template_v2_phase_one_migration_is_additive_from_actual_previous_head(
                 "workspace_action_receipts"
             )
 
-        assert revision == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
+        assert revision == _script_head(database_url)
         assert "template_v2" in tables
         assert "template_v2_local_state" in tables
         assert "template_v2_pptx_imports" in tables
@@ -2078,7 +2135,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
+                == _script_head(database_url)
             )
             assert "presentation_generation_jobs" in inspector.get_table_names()
             assert "lifecycle_status" in {
@@ -2122,7 +2179,7 @@ def test_template_v2_upgrade_downgrade_upgrade_cycle(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
+                == _script_head(database_url)
             )
             assert "template_v2" in inspector.get_table_names()
             assert "presentation_generation_jobs" in inspector.get_table_names()

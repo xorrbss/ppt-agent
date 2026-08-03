@@ -27,6 +27,7 @@ from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
+from models.sql.workspace import WorkspaceOperation
 from services import authored_presentation_service as authored
 from services import database
 from services import presentation_generation_job_service as jobs
@@ -139,6 +140,10 @@ async def _lifespan(_app: FastAPI):
                 AuthoredSlideCheckpoint.__table__,
                 PresentationModel.__table__,
                 SlideModel.__table__,
+                # PresentationGenerationJob has an optional FK to this table.
+                # SQLite still requires the referenced table to exist when a
+                # legacy job with a NULL workspace_operation_id is inserted.
+                WorkspaceOperation.__table__,
             ],
         )
     await jobs.start_presentation_generation_dispatcher()

@@ -47,6 +47,7 @@ Protect `main` with these exact, always-present pull-request checks:
 
 - `Test All Applications / Test Main FastAPI (locked + system + binary)`
 - `Test All Applications / Test Main Next.js`
+- `Test All Applications / Workspace chat-first browser E2E`
 - `G4 round-trip and release gates / production export runtime stage`
 - `G4 round-trip and release gates / Windows v0.4.2 release gate`
 - `G4 round-trip and release gates / adaptive PPTX round-trip`
@@ -76,6 +77,15 @@ working branches.
 After changing workflow or job `name` fields, update branch protection and this
 list together.
 
+The canonical `origin` is Bitbucket, so `bitbucket-pipelines.yml` also defines
+the exact `Workspace chat-first browser E2E` step for every pull request and
+for `main`. In Bitbucket repository settings, enable both merge checks **No
+failed pipelines** and **Minimum number of successful builds: 1** on the
+`main` branch restriction. Bitbucket stores merge checks outside the repository;
+the versioned pipeline and `scripts/required-ci-contract.test.mjs` keep the job
+name, PR trigger, command, main verification, and artifact paths reviewable.
+Do not merge if that exact pull-request step is absent, skipped, or failed.
+
 ## Workflow roles
 
 The workflows deliberately separate portable application tests from
@@ -83,7 +93,8 @@ capability-specific integration gates:
 
 | Workflow | Required environment | Role |
 | --- | --- | --- |
-| `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, and the selected Cypress component suite. It also validates the local runner's complete dry-run plan. |
+| `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, selected Cypress component tests, and the required workspace browser E2E job. It also validates the local runner's complete dry-run plan. |
+| `bitbucket-pipelines.yml` | Cypress 15.19 image, Node, Python 3.11, locked `uv` environment | Canonical-origin pull-request and `main` workspace browser E2E gate. Repository merge checks must require a successful pipeline and reject failed pipelines. |
 | `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and real PostgreSQL migration, canary rollback, and owner-scoped async-read integration tests. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
 | `upstream-intake.yml` | Offline fixture on pull requests; GitHub API on schedule/manual dispatch | Detects upstream movement without merging it. Live intake is intentionally not a pull-request dependency. |
 | `template-v2-export-fidelity.yml` | Ubuntu, macOS, and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on all three operating systems. |
@@ -146,7 +157,9 @@ entrypoint. The default core profile runs:
 - static upstream compatibility and the offline intake fixture;
 - the locked complete FastAPI SQLite suite with feature flags at their default
   OFF state;
-- the shared Next.js Node suite, lint, and production build.
+- the shared Next.js Node suite, lint, and production build;
+- the isolated workspace browser + FastAPI SQLite E2E suite, with preserved
+  server/Cypress diagnostics on failure.
 
 Capability-specific gates are explicit:
 

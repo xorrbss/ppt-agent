@@ -9,6 +9,7 @@ from services.workspace_operation_observability import (
     build_workspace_operation_observation,
     log_workspace_operation_observation,
 )
+from services.workspace_metrics import WORKSPACE_METRICS
 
 
 def test_workspace_operation_observation_emits_closed_metadata_schema():
@@ -176,14 +177,19 @@ def test_unbounded_or_non_finite_metrics_are_rejected(field, value):
 def test_logging_failure_never_changes_operation_control_flow():
     logger = Mock()
     logger.info.side_effect = RuntimeError("collector contains sensitive details")
+    WORKSPACE_METRICS.reset()
 
-    assert (
-        log_workspace_operation_observation(
-            name="runner_fault",
-            result_status="running",
-            error_code="workspace_operation_internal_error",
-            fence_outcome="not_applicable",
-            logger=logger,
-        )
-        is None
+    event = log_workspace_operation_observation(
+        name="runner_fault",
+        result_status="running",
+        error_code="workspace_operation_internal_error",
+        fence_outcome="not_applicable",
+        logger=logger,
     )
+
+    assert event is not None
+    assert WORKSPACE_METRICS.snapshot()["signal_failures"] == {
+        "operation_observation": 1
+    }
+    assert WORKSPACE_METRICS.snapshot()["operations"]
+    WORKSPACE_METRICS.reset()

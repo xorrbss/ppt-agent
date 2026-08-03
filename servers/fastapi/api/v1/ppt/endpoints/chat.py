@@ -27,7 +27,9 @@ from services.workspace_legacy_write_gate import require_legacy_presentation_wri
 CHAT_ROUTER = APIRouter(prefix="/chat", tags=["Chat"])
 
 
-def _require_legacy_chat_write_path() -> None:
+def _require_legacy_chat_write_path(
+    presentation_id: uuid.UUID | None = None,
+) -> None:
     """Fail closed once workspace commands own presentation mutations.
 
     Keeping the legacy POST routes writable while the operation runner is
@@ -36,7 +38,7 @@ def _require_legacy_chat_write_path() -> None:
     rollout and rollback.
     """
 
-    require_legacy_presentation_write_path()
+    require_legacy_presentation_write_path(presentation_id)
 
 
 @CHAT_ROUTER.get("/conversations", response_model=list[ChatConversationListItem])
@@ -89,7 +91,7 @@ async def chat_message(
     payload: ChatMessageRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    _require_legacy_chat_write_path()
+    _require_legacy_chat_write_path(payload.presentation_id)
     service = PresentationChatService(
         sql_session=sql_session,
         presentation_id=payload.presentation_id,
@@ -110,7 +112,7 @@ async def chat_message_stream(
     payload: ChatMessageRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    _require_legacy_chat_write_path()
+    _require_legacy_chat_write_path(payload.presentation_id)
     service = PresentationChatService(
         sql_session=sql_session,
         presentation_id=payload.presentation_id,

@@ -76,6 +76,10 @@ def get_database_url_and_connect_args() -> tuple[str, dict]:
     connect_args = {}
     if "sqlite" in database_url:
         connect_args["check_same_thread"] = False
+        # External workspace workers and the API can briefly contend for the
+        # local database.  Let SQLite wait for the current writer instead of
+        # surfacing transient ``database is locked`` responses immediately.
+        connect_args["timeout"] = 30.0
 
     try:
         split_result = urlsplit(database_url)

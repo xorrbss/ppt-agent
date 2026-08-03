@@ -1,26 +1,690 @@
 {
   "schema_version": 1,
-  "runtime_capabilities": {
-    "sqlite": {"chat_first_workspace": true, "mode": "local"},
-    "postgresql": {"chat_first_workspace": true, "mode": "cluster"},
-    "mysql": {
-      "chat_first_workspace": false,
-      "mode": "blocked",
-      "error_code": "chat_first_runtime_unsupported"
+  "capability_responses": {
+    "sqlite_enabled": {
+      "schema_version": 1,
+      "supported": true,
+      "enabled": true,
+      "timeline": true,
+      "commands": true,
+      "events": true,
+      "reads_supported": true,
+      "writes_supported": true,
+      "commands_enabled": true,
+      "runtime_profile": "sqlite-local",
+      "reason": null,
+      "cohort_eligible": true,
+      "cohort_bucket": 1234,
+      "kill_switch_active": false,
+      "shadow_mode": false
+    },
+    "postgresql_read_only": {
+      "schema_version": 1,
+      "supported": true,
+      "enabled": false,
+      "timeline": true,
+      "commands": false,
+      "events": true,
+      "reads_supported": true,
+      "writes_supported": false,
+      "commands_enabled": false,
+      "runtime_profile": "postgresql-cluster",
+      "reason": "chat_first_kill_switch_enabled",
+      "cohort_eligible": true,
+      "cohort_bucket": 1234,
+      "kill_switch_active": true,
+      "shadow_mode": false
+    },
+    "mysql_blocked": {
+      "schema_version": 1,
+      "supported": false,
+      "enabled": false,
+      "timeline": false,
+      "commands": false,
+      "events": false,
+      "reads_supported": false,
+      "writes_supported": false,
+      "commands_enabled": false,
+      "runtime_profile": "unsupported",
+      "reason": "chat_first_runtime_unsupported",
+      "cohort_eligible": false,
+      "cohort_bucket": null,
+      "kill_switch_active": false,
+      "shadow_mode": false
     }
   },
   "errors": [
-    {"code": "chat_first_feature_disabled", "retryable": false, "safe_message": "Workspace operations are not enabled."},
-    {"code": "chat_first_runtime_unsupported", "retryable": false, "safe_message": "This database runtime does not support workspace operations."},
-    {"code": "asset_processing_timeout", "retryable": true, "safe_message": "An attachment did not finish processing in time."},
-    {"code": "operation_state_conflict", "retryable": false, "safe_message": "This action is no longer available."},
-    {"code": "revision_conflict", "retryable": true, "safe_message": "The presentation changed in another session. Reload and try again."},
-    {"code": "event_cursor_expired", "retryable": true, "safe_message": "Updates expired; reload the workspace timeline."},
-    {"code": "operation_recovery_required", "retryable": true, "safe_message": "The operation is being recovered after an interruption."},
-    {"code": "operation_dead_lettered", "retryable": true, "safe_message": "The operation could not complete. Retry it from this conversation."}
+    {
+      "code": "chat_first_feature_disabled",
+      "status_code": 503,
+      "safe_message": "Workspace operations are not enabled.",
+      "retryable": false
+    },
+    {
+      "code": "chat_first_runtime_unsupported",
+      "status_code": 501,
+      "safe_message": "This database runtime does not support workspace operations.",
+      "retryable": false
+    },
+    {
+      "code": "chat_first_runtime_profile_required",
+      "status_code": 503,
+      "safe_message": "Workspace writes require an explicit runtime profile.",
+      "retryable": false
+    },
+    {
+      "code": "chat_first_runtime_profile_invalid",
+      "status_code": 503,
+      "safe_message": "The configured workspace runtime profile is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "chat_first_runtime_profile_mismatch",
+      "status_code": 503,
+      "safe_message": "The configured workspace runtime profile does not match the database.",
+      "retryable": false
+    },
+    {
+      "code": "chat_first_kill_switch_enabled",
+      "status_code": 503,
+      "safe_message": "Workspace operations are temporarily unavailable.",
+      "retryable": true
+    },
+    {
+      "code": "chat_first_cohort_excluded",
+      "status_code": 503,
+      "safe_message": "Workspace operations are not enabled for this presentation.",
+      "retryable": false
+    },
+    {
+      "code": "chat_first_presentation_scope_required",
+      "status_code": 503,
+      "safe_message": "A presentation is required to evaluate workspace rollout.",
+      "retryable": false
+    },
+    {
+      "code": "request_validation_error",
+      "status_code": 422,
+      "safe_message": "The workspace request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_request_failed",
+      "status_code": 400,
+      "safe_message": "The workspace request could not be completed.",
+      "retryable": false
+    },
+    {
+      "code": "internal_server_error",
+      "status_code": 500,
+      "safe_message": "The workspace request could not be completed.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_route_not_found",
+      "status_code": 404,
+      "safe_message": "The workspace endpoint was not found.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_not_found",
+      "status_code": 404,
+      "safe_message": "The presentation was not found.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_deleted",
+      "status_code": 409,
+      "safe_message": "The presentation was deleted and cannot be changed.",
+      "retryable": false
+    },
+    {
+      "code": "account_deletion_in_progress",
+      "status_code": 409,
+      "safe_message": "This account is being deleted. Workspace changes are unavailable.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_mutation_admission_conflict",
+      "status_code": 409,
+      "safe_message": "The presentation is temporarily busy. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_operation_not_found",
+      "status_code": 404,
+      "safe_message": "The workspace operation was not found.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_not_found",
+      "status_code": 404,
+      "safe_message": "The attachment was not found.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_not_found",
+      "status_code": 404,
+      "safe_message": "The exported file was not found.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_expired",
+      "status_code": 410,
+      "safe_message": "The exported file expired. Export it again.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_not_ready",
+      "status_code": 409,
+      "safe_message": "The exported file is not ready yet.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_export_missing",
+      "status_code": 410,
+      "safe_message": "The exported file is no longer available. Export it again.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_artifact_path_invalid",
+      "status_code": 404,
+      "safe_message": "The exported file was not found.",
+      "retryable": false
+    },
+    {
+      "code": "asset_processing_timeout",
+      "status_code": 409,
+      "safe_message": "An attachment did not finish processing in time.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_not_ready",
+      "status_code": 409,
+      "safe_message": "An attachment is still being processed.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_failed",
+      "status_code": 409,
+      "safe_message": "An attachment could not be processed.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_quarantined",
+      "status_code": 409,
+      "safe_message": "An attachment did not pass the safety check.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_expired",
+      "status_code": 409,
+      "safe_message": "An attachment expired and must be uploaded again.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_deleted",
+      "status_code": 409,
+      "safe_message": "An attachment was deleted and must be uploaded again.",
+      "retryable": false
+    },
+    {
+      "code": "operation_state_conflict",
+      "status_code": 409,
+      "safe_message": "This action is no longer available.",
+      "retryable": false
+    },
+    {
+      "code": "operation_not_retryable",
+      "status_code": 409,
+      "safe_message": "This operation cannot be retried. Submit a new command instead.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_undo_not_supported",
+      "status_code": 409,
+      "safe_message": "Undo is not available for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "revision_conflict",
+      "status_code": 409,
+      "safe_message": "The presentation changed in another session. Reload and try again.",
+      "retryable": true
+    },
+    {
+      "code": "stale_presentation_revision",
+      "status_code": 409,
+      "safe_message": "The presentation changed in another session. Reload and try again.",
+      "retryable": true
+    },
+    {
+      "code": "event_cursor_expired",
+      "status_code": 410,
+      "safe_message": "Updates expired; reload the workspace timeline.",
+      "retryable": true
+    },
+    {
+      "code": "operation_recovery_required",
+      "status_code": 409,
+      "safe_message": "The operation is being recovered after an interruption.",
+      "retryable": true
+    },
+    {
+      "code": "operation_dead_lettered",
+      "status_code": 409,
+      "safe_message": "The operation could not complete. Retry it from this conversation.",
+      "retryable": true
+    },
+    {
+      "code": "approval_expired",
+      "status_code": 409,
+      "safe_message": "This approval request expired. Submit the command again to continue.",
+      "retryable": false
+    },
+    {
+      "code": "unsupported_operation_type",
+      "status_code": 422,
+      "safe_message": "This workspace operation is not supported.",
+      "retryable": false
+    },
+    {
+      "code": "idempotency_key_payload_conflict",
+      "status_code": 409,
+      "safe_message": "This idempotency key was already used for a different request.",
+      "retryable": false
+    },
+    {
+      "code": "idempotency_record_incomplete",
+      "status_code": 409,
+      "safe_message": "The earlier request is still being recovered. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "invalid_idempotency_key",
+      "status_code": 400,
+      "safe_message": "Provide a valid idempotency key.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_expected_revision_required",
+      "status_code": 409,
+      "safe_message": "Reload the presentation and submit its current revision.",
+      "retryable": true
+    },
+    {
+      "code": "initial_operation_state_conflict",
+      "status_code": 400,
+      "safe_message": "The requested operation state is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "invalid_initial_operation_state",
+      "status_code": 400,
+      "safe_message": "The requested operation state is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "bootstrap_concurrency_conflict",
+      "status_code": 409,
+      "safe_message": "The workspace changed concurrently. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "invalid_event_cursor",
+      "status_code": 400,
+      "safe_message": "The event cursor is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_id_required",
+      "status_code": 400,
+      "safe_message": "Upload the attachment before submitting this request.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_hash_invalid",
+      "status_code": 400,
+      "safe_message": "The attachment metadata is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_hash_mismatch",
+      "status_code": 409,
+      "safe_message": "The attachment changed and must be uploaded again.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_reprocess_required",
+      "status_code": 409,
+      "safe_message": "Reprocess the failed attachment before retrying.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_reattach_required",
+      "status_code": 409,
+      "safe_message": "Replace the unavailable attachment before retrying.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_media_type_invalid",
+      "status_code": 400,
+      "safe_message": "The attachment type is not supported.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_media_type_mismatch",
+      "status_code": 400,
+      "safe_message": "The attachment content does not match its declared type.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_empty",
+      "status_code": 400,
+      "safe_message": "The attachment is empty.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_signature_mismatch",
+      "status_code": 400,
+      "safe_message": "The attachment content does not match its file type.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_malware_scan_mode_invalid",
+      "status_code": 503,
+      "safe_message": "Attachment safety scanning is unavailable.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_malware_scanner_unavailable",
+      "status_code": 503,
+      "safe_message": "Attachment safety scanning is unavailable.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_malware_scan_failed",
+      "status_code": 503,
+      "safe_message": "The attachment safety check could not be completed.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_malware_detected",
+      "status_code": 400,
+      "safe_message": "The attachment did not pass the safety check.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_file_type_invalid",
+      "status_code": 400,
+      "safe_message": "The attachment type is not supported.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_storage_invalid",
+      "status_code": 500,
+      "safe_message": "The attachment could not be stored.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_source_changed",
+      "status_code": 409,
+      "safe_message": "The attachment changed while it was being imported.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_too_large",
+      "status_code": 413,
+      "safe_message": "The attachment exceeds the upload limit.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_upload_invalid",
+      "status_code": 400,
+      "safe_message": "The attachment could not be uploaded.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_conversation_not_found",
+      "status_code": 404,
+      "safe_message": "The workspace conversation was not found.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_asset_version_conflict",
+      "status_code": 409,
+      "safe_message": "The attachment changed concurrently. Reload and try again.",
+      "retryable": true
+    },
+    {
+      "code": "workspace_asset_transition_invalid",
+      "status_code": 409,
+      "safe_message": "The requested attachment state transition is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "authored_cluster_capacity_unavailable",
+      "status_code": 503,
+      "safe_message": "Presentation generation capacity is temporarily unavailable.",
+      "retryable": true
+    },
+    {
+      "code": "authored_template_request_invalid",
+      "status_code": 422,
+      "safe_message": "The authored template request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "authored_template_generation_job_missing",
+      "status_code": 503,
+      "safe_message": "The template generation job is being recovered. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "authored_template_generation_enqueue_failed",
+      "status_code": 503,
+      "safe_message": "Template generation could not be started. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "authored_template_generation_task_missing",
+      "status_code": 503,
+      "safe_message": "The template generation task is being recovered. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "authored_template_result_missing",
+      "status_code": 503,
+      "safe_message": "The generated presentation is not ready yet. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "invalid_operation_handler_result",
+      "status_code": 500,
+      "safe_message": "The workspace operation returned an invalid result.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_already_deleted",
+      "status_code": 409,
+      "safe_message": "The presentation was already deleted.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_approval_expired",
+      "status_code": 409,
+      "safe_message": "The deletion approval expired. Submit the command again.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_approval_required",
+      "status_code": 409,
+      "safe_message": "Deleting this presentation requires approval.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_database_unavailable",
+      "status_code": 503,
+      "safe_message": "The presentation cannot be deleted right now. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "presentation_delete_dependency_conflict",
+      "status_code": 409,
+      "safe_message": "The presentation cannot be deleted while related work is active.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_expected_revision_mismatch",
+      "status_code": 409,
+      "safe_message": "The presentation changed before deletion. Reload and try again.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_expected_revision_required",
+      "status_code": 409,
+      "safe_message": "Reload the presentation before deleting it.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_operation_kind_invalid",
+      "status_code": 422,
+      "safe_message": "The deletion operation is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_owner_mismatch",
+      "status_code": 404,
+      "safe_message": "The presentation could not be found for this workspace.",
+      "retryable": false
+    },
+    {
+      "code": "presentation_delete_temporarily_unavailable",
+      "status_code": 503,
+      "safe_message": "The presentation cannot be deleted right now. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "presentation_edit_failed",
+      "status_code": 500,
+      "safe_message": "The presentation edit could not be completed. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "presentation_export_failed",
+      "status_code": 500,
+      "safe_message": "The presentation export could not be completed. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "presentation_generation_job_missing",
+      "status_code": 503,
+      "safe_message": "The presentation generation job is being recovered. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "presentation_generation_job_not_linked",
+      "status_code": 503,
+      "safe_message": "The presentation generation job is being linked. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "presentation_generation_task_missing",
+      "status_code": 500,
+      "safe_message": "The presentation generation task could not be recovered.",
+      "retryable": false
+    },
+    {
+      "code": "quality_review_failed",
+      "status_code": 500,
+      "safe_message": "The quality review could not be completed. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "quality_review_result_commit_failed",
+      "status_code": 500,
+      "safe_message": "The quality review result could not be saved. Try again.",
+      "retryable": true
+    },
+    {
+      "code": "quality_review_read_only_required",
+      "status_code": 422,
+      "safe_message": "Quality review supports analysis-only requests.",
+      "retryable": false
+    },
+    {
+      "code": "quality_review_request_invalid",
+      "status_code": 422,
+      "safe_message": "The quality review request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "quality_review_revision_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed during quality review. Run it again.",
+      "retryable": false
+    },
+    {
+      "code": "quality_review_unsupported_presentation",
+      "status_code": 422,
+      "safe_message": "This presentation cannot be reviewed.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_command_missing",
+      "status_code": 422,
+      "safe_message": "Provide a workspace command.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_format_invalid",
+      "status_code": 422,
+      "safe_message": "Choose a supported export format.",
+      "retryable": false
+    },
+    {
+      "code": "version_not_found",
+      "status_code": 404,
+      "safe_message": "The selected presentation version no longer exists.",
+      "retryable": false
+    },
+    {
+      "code": "version_restore_target_invalid",
+      "status_code": 409,
+      "safe_message": "Choose a valid presentation version to restore.",
+      "retryable": false
+    },
+    {
+      "code": "version_snapshot_invalid",
+      "status_code": 409,
+      "safe_message": "The selected presentation version cannot be restored.",
+      "retryable": false
+    },
+    {
+      "code": "version_restore_failed",
+      "status_code": 500,
+      "safe_message": "The presentation version could not be restored. Try again.",
+      "retryable": true
+    }
   ],
   "privacy": {
-    "telemetry_forbidden_fields": ["prompt", "message_content", "attachment_file_name", "attachment_url", "trace", "stack_trace"],
-    "public_share_forbidden_fields": ["prompt", "attachments", "conversation", "operation", "operation_events", "error", "trace", "revision"]
+    "telemetry_forbidden_fields": [
+      "prompt",
+      "message_content",
+      "attachment_file_name",
+      "attachment_url",
+      "trace",
+      "stack_trace"
+    ],
+    "public_share_forbidden_fields": [
+      "prompt",
+      "attachments",
+      "conversation",
+      "operation",
+      "operation_events",
+      "error",
+      "trace",
+      "revision"
+    ]
   }
 }

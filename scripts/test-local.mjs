@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { delimiter, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir, platform, tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -35,8 +35,9 @@ if (unknownArguments.length > 0) {
 if (argv.has("--help")) {
   console.log(`Usage: npm run test:local -- [options]
 
-The default profile runs the portable CI contracts, locked FastAPI suite, and
-Next.js Node/lint/build gates. Capability-specific gates are never silently
+The default profile runs the portable CI contracts, locked FastAPI suite,
+Next.js Node/lint/build gates, and the isolated chat-first browser E2E suite.
+Capability-specific gates are never silently
 treated as passed.
 
 Options:
@@ -56,15 +57,51 @@ Options:
 const dryRun = argv.has("--dry-run");
 const requestAll = argv.has("--all");
 const requested = (flag) => requestAll || argv.has(flag);
-const runtimeRoot = join(tmpdir(), "ppt-agent-ci-local");
+const runtimeRoot = join(tmpdir(), "ppt-agent-ci-local", `run-${process.pid}-${Date.now()}`);
 const appDataDirectory = join(runtimeRoot, "app-data");
 const tempDirectory = join(runtimeRoot, "temp");
+const pytestBaseDirectory = join(runtimeRoot, "pytest");
 const artifactDirectory = join(runtimeRoot, "artifacts", `template-v2-${platform()}`);
 const sqlitePath = join(runtimeRoot, "test.db").replaceAll("\\", "/");
 const fastapiDirectory = join(root, "servers", "fastapi");
 const nextDirectory = join(root, "servers", "nextjs");
 const electronDirectory = join(root, "electron");
 const results = [];
+
+function cleanupLocalRuntime() {
+  const failures = results.filter((result) => result.status === "FAIL");
+  if (failures.length > 0) {
+    console.error(`[diagnostics] Preserving failed local run artifacts at ${runtimeRoot}`);
+    return;
+  }
+  const localRoot = resolve(tmpdir(), "ppt-agent-ci-local");
+  const runtimeRelative = relative(localRoot, runtimeRoot);
+  if (!runtimeRelative || runtimeRelative.startsWith("..") || resolve(localRoot, runtimeRelative) !== resolve(runtimeRoot)) {
+    console.error(`[cleanup] Refusing to remove unexpected local test path: ${runtimeRoot}`);
+    return;
+  }
+  try {
+    rmSync(runtimeRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: isWindows ? 12 : 3,
+      retryDelay: isWindows ? 250 : 100,
+    });
+  } catch (error) {
+    const code = error?.code || "unknown";
+    console.error(
+      `[cleanup] Could not remove isolated local test path ${runtimeRoot} (${code}): ${error.message}`,
+    );
+    if (isWindows && (code === "EPERM" || code === "EACCES" || code === "EBUSY")) {
+      console.error(
+        "[cleanup] A child process or scanner still owns a handle. The isolated path was preserved; " +
+        "close the reported process and remove only that run directory.",
+      );
+    }
+  }
+}
+
+if (!dryRun) process.once("exit", cleanupLocalRuntime);
 
 function executableCandidates(name) {
   if (!isWindows) return [name];
@@ -202,6 +239,10 @@ const commonEnv = {
   CI: "true",
   APP_DATA_DIRECTORY: appDataDirectory,
   TEMP_DIRECTORY: tempDirectory,
+  TEMP: tempDirectory,
+  TMP: tempDirectory,
+  TMPDIR: tempDirectory,
+  PYTEST_DEBUG_TEMPROOT: pytestBaseDirectory,
   USER_CONFIG_PATH: join(appDataDirectory, "userConfig.json"),
   DATABASE_URL: `sqlite+aiosqlite:///${sqlitePath}`,
   DISABLE_ANONYMOUS_TRACKING: "true",
@@ -276,6 +317,7 @@ function runStep({
 if (!dryRun) {
   mkdirSync(appDataDirectory, { recursive: true });
   mkdirSync(tempDirectory, { recursive: true });
+  mkdirSync(pytestBaseDirectory, { recursive: true });
   mkdirSync(artifactDirectory, { recursive: true });
 }
 
@@ -343,7 +385,14 @@ runStep({
 runStep({
   name: "Full FastAPI SQLite suite",
   command: uv,
-  args: ["run", "pytest", "-q", "--no-header"],
+  args: [
+    "run",
+    "pytest",
+    "-q",
+    "--no-header",
+    "--basetemp",
+    join(pytestBaseDirectory, "sqlite"),
+  ],
   cwd: fastapiDirectory,
   precondition: () => browserPath ? null : "Chrome/Chromium is required because CI=true forbids Chrome smoke skips",
   preconditionDescription: "locked dependencies and Chrome/Chromium; feature flags remain default OFF",
@@ -383,6 +432,26 @@ runStep({
   },
 });
 
+const workspaceE2eCommand = platform() === "linux" ? "xvfb-run" : npm;
+const workspaceE2eArgs = workspaceE2eCommand === "xvfb-run"
+  ? ["-a", npm, "run", "test:workspace-e2e"]
+  : ["run", "test:workspace-e2e"];
+runStep({
+  name: "Workspace chat-first browser + FastAPI SQLite E2E",
+  command: workspaceE2eCommand,
+  args: workspaceE2eArgs,
+  cwd: nextDirectory,
+  precondition: withNode22(() => {
+    if (platform() === "linux" && !findOnPath("xvfb-run")) return "xvfb-run is required on Linux";
+    if (!findOnPath("uv")) return "uv is required for the isolated FastAPI+SQLite harness";
+    return null;
+  }),
+  preconditionDescription: "Node 22, Next.js npm ci, Cypress browser, uv, and xvfb-run on Linux",
+  env: {
+    WORKSPACE_E2E_ARTIFACT_DIR: join(artifactDirectory, "workspace-e2e"),
+  },
+});
+
 const fastapiBinarySelected = requested("--with-fastapi-binary");
 runStep({
   name: "FastAPI PyInstaller binary",
@@ -418,6 +487,9 @@ const cypressSpecs = [
   "**/api/authored.cy.ts",
   "**/usePresentationGeneration.cy.tsx",
   "**/PresentationHeader.cy.tsx",
+  "**/Chat.cy.tsx",
+  "**/WorkspaceChatPanel.cy.tsx",
+  "**/SharePopover.cy.tsx",
   "**/TemplateV2Studio.cy.tsx",
   "**/TemplateV2Studio.matrix.cy.tsx",
   "**/TemplateV2SelectionToolbar.cy.tsx",
@@ -466,15 +538,20 @@ runStep({
 const postgresSelected = requested("--with-postgres");
 const postgresUrl = process.env.PPT_AGENT_POSTGRES_TEST_URL;
 runStep({
-  name: "Template V2 real PostgreSQL integration",
+  name: "Real PostgreSQL integration suites",
   command: uv,
   args: [
     "run",
     "pytest",
     "-q",
     "--no-header",
+    "--basetemp",
+    join(pytestBaseDirectory, "postgres"),
+    "tests/integration/test_postgresql_async_task_read_facade.py",
+    "tests/integration/test_postgresql_authored_cluster_quota.py",
     "tests/integration/test_postgresql_template_v2_migrations.py",
     "tests/integration/test_postgresql_template_v2_canary_rollback.py",
+    "tests/integration/test_postgresql_workspace.py",
   ],
   cwd: fastapiDirectory,
   selected: postgresSelected,

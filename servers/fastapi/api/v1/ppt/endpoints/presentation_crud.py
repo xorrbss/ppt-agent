@@ -49,12 +49,16 @@ from services.presentation_deletion_service import (
     PresentationDeletionService,
     is_retryable_sqlite_lock,
 )
+from services.presentation_access_service import require_live_presentation
 from services.workspace_asset_service import (
     import_workspace_document_asset,
     inspect_workspace_document_asset,
 )
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
+)
+from services.workspace_rollout_policy import (
+    resolve_active_workspace_write_rollout,
 )
 from services.workspace_runtime_profile import resolve_chat_first_workspace_rollout
 from services.workspace_service import (
@@ -173,9 +177,7 @@ async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_se
 async def get_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(404, "Presentation not found")
+    presentation = await require_live_presentation(sql_session, id)
     slides_result = await sql_session.scalars(
         select(SlideModel)
         .where(SlideModel.presentation == id)
@@ -197,9 +199,7 @@ async def get_presentation(
 async def get_presentation_generation_info(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(404, "Presentation not found")
+    presentation = await require_live_presentation(sql_session, id)
 
     attachment_file_names = [
         file_name
@@ -228,9 +228,9 @@ async def get_presentation_generation_info(
 async def delete_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    require_legacy_presentation_write_path()
+    require_legacy_presentation_write_path(id)
     try:
-        presentation = await sql_session.get(PresentationModel, id)
+        presentation = await require_live_presentation(sql_session, id)
     except OperationalError as error:
         await sql_session.rollback()
         if not is_retryable_sqlite_lock(error, sql_session):
@@ -244,9 +244,6 @@ async def delete_presentation(
             },
             headers={"Retry-After": "1"},
         ) from error
-    if not presentation:
-        raise HTTPException(404, "Presentation not found")
-
     try:
         await PresentationDeletionService(sql_session).delete(presentation)
     except PresentationDeleteConflictError as error:
@@ -288,7 +285,14 @@ async def create_presentation(
     ] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    chat_first_enabled = _chat_first_create_enabled()
+    proposed_presentation_id = presentation_id or uuid.uuid4()
+    chat_first_runtime_enabled = _chat_first_create_enabled()
+    chat_first_enabled = bool(
+        chat_first_runtime_enabled
+        and resolve_active_workspace_write_rollout(
+            proposed_presentation_id
+        ).enabled
+    )
     resolved_theme = (
         _normalize_presentation_create_theme(theme) if chat_first_enabled else None
     )
@@ -319,9 +323,12 @@ async def create_presentation(
             detail="presentation_id_required_for_idempotency",
         )
 
+    # Once the runtime flag is requested, retain the proposed id even when a
+    # kill switch or cohort exclusion restores the legacy writer.  The stable
+    # owner+deck cohort must not be recomputed against a different persisted id.
     resolved_presentation_id = (
-        presentation_id
-        if chat_first_enabled and presentation_id is not None
+        proposed_presentation_id
+        if chat_first_runtime_enabled
         else uuid.uuid4()
     )
     resolved_idempotency_key = (

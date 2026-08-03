@@ -9,10 +9,288 @@ const {
   atomicReplaceDirectory,
   copyTreeSafe,
   materializeTreeInPlace,
+  preflightWindowsSymlinkFallback,
   removeMaterializedPnpmStore,
   validateCopiedLinks,
   validateLinkFreeTree,
 } = require("../scripts/standalone-copy.cjs")
+const {
+  installWindowsSymlinkFallback,
+} = require("../scripts/next-standalone-symlink-fallback.cjs")
+
+test("Next standalone fallback converts a relative package link EPERM into a junction", async () => {
+  const calls = []
+  const root = path.join(path.sep, "build", "standalone")
+  const traceRoot = path.join(path.sep, "source")
+  const destination = path.join(root, "node_modules", "package")
+  const realTarget = path.join(traceRoot, ".pnpm", "package")
+  const fsImpl = {
+    promises: {
+      async symlink(target, destination, type) {
+        calls.push({ target, destination, type })
+        if (calls.length === 1) {
+          const error = new Error("symlink privilege is not held")
+          error.code = "EPERM"
+          throw error
+        }
+      },
+      async realpath(sourceLink) {
+        assert.equal(sourceLink, path.resolve(traceRoot, "node_modules", "package"))
+        return realTarget
+      },
+      async stat(target) {
+        assert.equal(target, realTarget)
+        return { isDirectory: () => true, isFile: () => false }
+      },
+    },
+  }
+  const result = installWindowsSymlinkFallback({
+    fsImpl,
+    platform: "win32",
+    standaloneRoot: root,
+    tracingRoot: traceRoot,
+  })
+
+  const relativeTarget = path.join("..", ".pnpm", "package")
+  await fsImpl.promises.symlink(relativeTarget, destination)
+
+  assert.equal(result.installed, true)
+  assert.deepEqual(calls, [
+    { target: relativeTarget, destination, type: undefined },
+    {
+      target: realTarget,
+      destination,
+      type: "junction",
+    },
+  ])
+  result.restore()
+})
+
+test("Next standalone fallback never changes symlink behavior outside its output root", async () => {
+  let calls = 0
+  const primaryError = Object.assign(new Error("denied"), { code: "EPERM" })
+  const fsImpl = {
+    promises: {
+      async symlink() {
+        calls += 1
+        throw primaryError
+      },
+    },
+  }
+  const result = installWindowsSymlinkFallback({
+    fsImpl,
+    platform: "win32",
+    standaloneRoot: path.join(path.sep, "build", "standalone"),
+    tracingRoot: path.join(path.sep, "source"),
+  })
+
+  await assert.rejects(
+    fsImpl.promises.symlink("target", path.join(path.sep, "unrelated", "link")),
+    (error) => error === primaryError,
+  )
+  assert.equal(calls, 1)
+  result.restore()
+})
+
+test("Next standalone fallback leaves successful symlink creation unchanged", async () => {
+  const calls = []
+  const fsImpl = {
+    promises: {
+      async symlink(target, destination, type) {
+        calls.push({ target, destination, type })
+      },
+    },
+  }
+  const result = installWindowsSymlinkFallback({
+    fsImpl,
+    platform: "win32",
+    standaloneRoot: path.join(path.sep, "build", "standalone"),
+    tracingRoot: path.join(path.sep, "source"),
+  })
+
+  await fsImpl.promises.symlink(
+    "target",
+    path.join(path.sep, "build", "standalone", "link"),
+  )
+  assert.equal(calls.length, 1)
+  result.restore()
+})
+
+test("Next standalone fallback copies a traced file link when junctions are invalid", async () => {
+  const root = path.join(path.sep, "build", "standalone")
+  const traceRoot = path.join(path.sep, "source")
+  const destination = path.join(root, "node_modules", ".bin", "tool")
+  const realTarget = path.join(traceRoot, "package", "tool.js")
+  let copied
+  const fsImpl = {
+    promises: {
+      async symlink() {
+        throw Object.assign(new Error("access denied"), { code: "EACCES" })
+      },
+      async realpath(sourceLink) {
+        assert.equal(sourceLink, path.resolve(traceRoot, "node_modules", ".bin", "tool"))
+        return realTarget
+      },
+      async stat() {
+        return { isDirectory: () => false, isFile: () => true }
+      },
+      async copyFile(source, target) {
+        copied = { source, target }
+      },
+    },
+  }
+  const result = installWindowsSymlinkFallback({
+    fsImpl,
+    platform: "win32",
+    standaloneRoot: root,
+    tracingRoot: traceRoot,
+  })
+
+  await fsImpl.promises.symlink("../tool.js", destination)
+
+  assert.deepEqual(copied, { source: realTarget, target: destination })
+  result.restore()
+})
+
+test("Next standalone fallback rejects a traced link that resolves outside the source root", async () => {
+  const root = path.join(path.sep, "build", "standalone")
+  const traceRoot = path.join(path.sep, "source")
+  const primaryError = Object.assign(new Error("symlink privilege is not held"), {
+    code: "EPERM",
+  })
+  let statCalled = false
+  const fsImpl = {
+    promises: {
+      async symlink() {
+        throw primaryError
+      },
+      async realpath() {
+        return path.join(path.sep, "outside", "package")
+      },
+      async stat() {
+        statCalled = true
+      },
+    },
+  }
+  const result = installWindowsSymlinkFallback({
+    fsImpl,
+    platform: "win32",
+    standaloneRoot: root,
+    tracingRoot: traceRoot,
+  })
+
+  await assert.rejects(
+    fsImpl.promises.symlink("../../outside", path.join(root, "node_modules", "package")),
+    (error) => error === primaryError,
+  )
+  assert.equal(statCalled, false)
+  result.restore()
+})
+
+test("Windows symlink EPERM preflight selects the materialized-copy fallback", () => {
+  let removed = false
+  const result = preflightWindowsSymlinkFallback({
+    platform: "win32",
+    temporaryDirectory: "C:\\temp",
+    fsImpl: {
+      mkdtempSync: () => "C:\\temp\\presenton-link-preflight-test",
+      mkdirSync: () => undefined,
+      symlinkSync: () => {
+        const error = new Error("symlink privilege is not held")
+        error.code = "EPERM"
+        throw error
+      },
+      rmSync: (_path, options) => {
+        removed = true
+        assert.equal(options.maxRetries, 12)
+      },
+    },
+  })
+
+  assert.equal(result.mode, "materialize")
+  assert.equal(result.symlinkCapability, "unavailable")
+  assert.match(result.reason, /EPERM/)
+  assert.match(result.reason, /privilege-free materialized-copy fallback/)
+  assert.equal(removed, true)
+})
+
+test("Windows symlink EACCES preflight uses the same privilege-free fallback", () => {
+  const result = preflightWindowsSymlinkFallback({
+    platform: "win32",
+    temporaryDirectory: "C:\\temp",
+    fsImpl: {
+      mkdtempSync: () => "C:\\temp\\presenton-link-preflight-test",
+      mkdirSync: () => undefined,
+      symlinkSync: () => {
+        const error = new Error("access denied")
+        error.code = "EACCES"
+        throw error
+      },
+      rmSync: () => undefined,
+    },
+  })
+
+  assert.equal(result.mode, "materialize")
+  assert.equal(result.symlinkCapability, "unavailable")
+  assert.match(result.reason, /EACCES/)
+})
+
+test("Windows preflight records available symlinks but keeps packages link-free", () => {
+  const result = preflightWindowsSymlinkFallback({
+    platform: "win32",
+    temporaryDirectory: "C:\\temp",
+    fsImpl: {
+      mkdtempSync: () => "C:\\temp\\presenton-link-preflight-test",
+      mkdirSync: () => undefined,
+      symlinkSync: () => undefined,
+      rmSync: () => undefined,
+    },
+  })
+
+  assert.deepEqual(result, {
+    mode: "materialize",
+    symlinkCapability: "available",
+    reason: "directory symlink capability available; package policy remains link-free",
+  })
+})
+
+test("preflight cleanup diagnostics do not block the materialized-copy fallback", () => {
+  const result = preflightWindowsSymlinkFallback({
+    platform: "win32",
+    temporaryDirectory: "C:\\temp",
+    fsImpl: {
+      mkdtempSync: () => "C:\\temp\\presenton-link-preflight-test",
+      mkdirSync: () => undefined,
+      symlinkSync: () => {
+        const error = new Error("symlink privilege is not held")
+        error.code = "EPERM"
+        throw error
+      },
+      rmSync: () => {
+        const error = new Error("directory is still in use")
+        error.code = "EBUSY"
+        throw error
+      },
+    },
+  })
+
+  assert.equal(result.mode, "materialize")
+  assert.match(result.cleanupWarning, /EBUSY/)
+})
+
+test("non-Windows preflight selects link-free materialization without filesystem probes", () => {
+  const fsImpl = new Proxy({}, {
+    get: () => {
+      throw new Error("filesystem should not be accessed")
+    },
+  })
+
+  assert.deepEqual(preflightWindowsSymlinkFallback({ platform: "linux", fsImpl }), {
+    mode: "materialize",
+    symlinkCapability: "not-applicable",
+    reason: "link-free standalone copies are required",
+  })
+})
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "presenton-copy-test-"))

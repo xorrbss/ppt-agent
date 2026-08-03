@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_DELETED,
     PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
     PresentationModel,
@@ -32,6 +33,7 @@ from models.sql.workspace import (
 from services import workspace_artifact_publication_service as publication
 from services import workspace_operation_runner
 from api.v1.ppt.endpoints.presentation_generate import _publish_staged_presentation
+from services.account_deletion_service import mark_account_deleting
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
@@ -375,6 +377,214 @@ def test_cancel_request_after_staging_fences_publication_and_compensates(
                 assert operation.state == "cancelling"
                 assert "operation.cancelling" in event_types
                 assert "operation.result" not in event_types
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_account_deletion_marker_fences_generation_publication_and_compensates(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "account-deletion-fence.db")
+        app_data = tmp_path / "account-deletion-fence-app-data"
+        source = app_data / "exports" / "deck.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"must not publish after account deletion")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        owner_id = uuid.uuid4()
+        owner_token = set_current_owner_id(owner_id)
+        try:
+            presentation_id, operation_id = await _seed_running_operation(
+                maker,
+                owner_id=owner_id,
+            )
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=1,
+                )
+
+            async with maker() as session:
+                marker = await mark_account_deleting(session, user_id=owner_id)
+            assert marker.generation == 1
+
+            async with maker() as session:
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError
+                ) as caught:
+                    await publication.publish_workspace_generation_artifact(
+                        session,
+                        artifact=artifact,
+                        expected_revision=0,
+                        attempt_token="attempt-1",
+                    )
+                assert caught.value.code == "account_deletion_in_progress"
+
+            assert not artifact.absolute_path.exists()
+            assert source.read_bytes() == b"must not publish after account deletion"
+            async with maker() as session:
+                stored = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                presentation = await session.get(PresentationModel, presentation_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+                job = await session.scalar(
+                    select(PresentationGenerationJob).where(
+                        PresentationGenerationJob.workspace_operation_id
+                        == operation_id
+                    )
+                )
+                assert stored is not None and stored.status == "deleted"
+                assert presentation is not None
+                assert presentation.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING
+                assert presentation.revision == 0
+                assert operation is not None and operation.state == "running"
+                assert job is not None and job.state == "running"
+                assert (
+                    await session.execute(select(WorkspaceOperationEvent))
+                ).all() == []
+        finally:
+            reset_current_owner_id(owner_token)
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_presentation_tombstone_fences_generation_publication_and_compensates(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "generation-tombstone-fence.db")
+        app_data = tmp_path / "generation-tombstone-fence-app-data"
+        source = app_data / "exports" / "deck.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"must not revive a deleted presentation")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_running_operation(maker)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=1,
+                )
+            async with maker() as session:
+                await session.execute(
+                    update(PresentationModel)
+                    .where(PresentationModel.id == presentation_id)
+                    .values(
+                        lifecycle_status=PRESENTATION_LIFECYCLE_DELETED,
+                        deleted_at=datetime.now(timezone.utc),
+                        deletion_operation_id=uuid.uuid4(),
+                    )
+                )
+                await session.commit()
+
+            async with maker() as session:
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError
+                ) as caught:
+                    await publication.publish_workspace_generation_artifact(
+                        session,
+                        artifact=artifact,
+                        expected_revision=0,
+                        attempt_token="attempt-1",
+                    )
+                assert caught.value.code == "presentation_deleted"
+
+            assert not artifact.absolute_path.exists()
+            async with maker() as session:
+                stored = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                presentation = await session.get(PresentationModel, presentation_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+                job = await session.scalar(
+                    select(PresentationGenerationJob).where(
+                        PresentationGenerationJob.workspace_operation_id
+                        == operation_id
+                    )
+                )
+                assert stored is not None and stored.status == "deleted"
+                assert presentation is not None
+                assert presentation.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED
+                assert presentation.revision == 0
+                assert operation is not None and operation.state == "running"
+                assert job is not None and job.state == "running"
+                assert (
+                    await session.execute(select(WorkspaceOperationEvent))
+                ).all() == []
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_presentation_tombstone_fences_export_publication_and_compensates(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "export-tombstone-fence.db")
+        app_data = tmp_path / "export-tombstone-fence-app-data"
+        source = app_data / "exports" / "deck.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"must not export a deleted presentation")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_running_operation(maker)
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=0,
+                    kind="export.pptx",
+                )
+            async with maker() as session:
+                await session.execute(
+                    update(PresentationModel)
+                    .where(PresentationModel.id == presentation_id)
+                    .values(
+                        lifecycle_status=PRESENTATION_LIFECYCLE_DELETED,
+                        deleted_at=datetime.now(timezone.utc),
+                        deletion_operation_id=uuid.uuid4(),
+                    )
+                )
+                await session.commit()
+
+            async with maker() as session:
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError
+                ) as caught:
+                    await publication.publish_workspace_export_artifact(
+                        session,
+                        artifact=artifact,
+                        attempt_token="attempt-1",
+                        fencing_token=0,
+                        export_format="pptx",
+                    )
+                assert caught.value.code == "presentation_deleted"
+
+            assert not artifact.absolute_path.exists()
+            async with maker() as session:
+                stored = await session.get(WorkspaceArtifact, artifact.artifact_id)
+                presentation = await session.get(PresentationModel, presentation_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+                assert stored is not None and stored.status == "deleted"
+                assert presentation is not None
+                assert presentation.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED
+                assert presentation.revision == 0
+                assert operation is not None and operation.state == "running"
+                assert (
+                    await session.execute(select(WorkspaceOperationEvent))
+                ).all() == []
         finally:
             await engine.dispose()
 

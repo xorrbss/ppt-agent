@@ -23,6 +23,7 @@ from services.document_conversion_service import (
 )
 from services.liteparse_service import LiteParseError, LiteParseService
 from utils.document_context import (
+    HARD_MAX_DOCUMENT_CONTEXT_CHARS,
     DocumentContextLimitError,
     ensure_document_within_limit,
     get_document_context_limits,
@@ -200,9 +201,11 @@ class DocumentsLoader:
         self,
         file_paths: List[str],
         presentation_language: Optional[str] = None,
+        allow_context_truncation: bool = False,
     ):
         self._file_paths = file_paths
         self._ocr_language = presentation_language_to_ocr_code(presentation_language)
+        self._allow_context_truncation = allow_context_truncation
         self.liteparse_service = LiteParseService(
             timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS
         )
@@ -315,9 +318,14 @@ class DocumentsLoader:
 
     async def load_text(self, file_path: str) -> str:
         _, per_document_limit = get_document_context_limits()
+        read_limit = (
+            HARD_MAX_DOCUMENT_CONTEXT_CHARS
+            if self._allow_context_truncation
+            else per_document_limit
+        )
         filename = os.path.basename(file_path)
         max_encoded_bytes = (
-            per_document_limit * _MAX_TEXT_BYTES_PER_CHARACTER
+            read_limit * _MAX_TEXT_BYTES_PER_CHARACTER
             + _TEXT_BOM_ALLOWANCE_BYTES
         )
 
@@ -328,8 +336,8 @@ class DocumentsLoader:
         data = await asyncio.to_thread(_read_bounded)
         if len(data) > max_encoded_bytes:
             raise DocumentContextLimitError(
-                actual_chars=per_document_limit + 1,
-                limit_chars=per_document_limit,
+                actual_chars=read_limit + 1,
+                limit_chars=read_limit,
                 scope="document",
                 filename=filename,
             )
@@ -338,7 +346,7 @@ class DocumentsLoader:
         ensure_document_within_limit(
             text,
             filename=filename,
-            per_document_limit=per_document_limit,
+            per_document_limit=read_limit,
         )
         return text
 
@@ -352,23 +360,58 @@ class DocumentsLoader:
                 )
             return self.document_service.parse_to_markdown(file_path)
 
-        if temp_dir:
-            converted_path = self.document_conversion_service.convert_office_to_pdf(
-                file_path,
-                temp_dir,
-                timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
-            )
-            is_scanned = self._is_scanned_pdf(converted_path)
-            return self._parse_with_liteparse(converted_path, dpi=300 if is_scanned else None)
+        try:
+            if temp_dir:
+                converted_path = self.document_conversion_service.convert_office_to_pdf(
+                    file_path,
+                    temp_dir,
+                    timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
+                )
+                is_scanned = self._is_scanned_pdf(converted_path)
+                return self._parse_with_liteparse(
+                    converted_path,
+                    dpi=300 if is_scanned else None,
+                )
 
-        with tempfile.TemporaryDirectory(prefix="office-convert-") as conversion_dir:
-            converted_path = self.document_conversion_service.convert_office_to_pdf(
-                file_path,
-                conversion_dir,
-                timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
+            with tempfile.TemporaryDirectory(prefix="office-convert-") as conversion_dir:
+                converted_path = (
+                    self.document_conversion_service.convert_office_to_pdf(
+                        file_path,
+                        conversion_dir,
+                        timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
+                    )
+                )
+                is_scanned = self._is_scanned_pdf(converted_path)
+                return self._parse_with_liteparse(
+                    converted_path,
+                    dpi=300 if is_scanned else None,
+                )
+        except DocumentConversionError as conversion_error:
+            if self.document_service is None:
+                raise
+
+            filename = os.path.basename(file_path)
+            LOGGER.warning(
+                "[DocumentsLoader] LibreOffice conversion failed; trying native "
+                "office text extraction file=%s",
+                filename,
             )
-            is_scanned = self._is_scanned_pdf(converted_path)
-            return self._parse_with_liteparse(converted_path, dpi=300 if is_scanned else None)
+            try:
+                document = self.document_service.parse_to_markdown(file_path)
+            except Exception as fallback_error:
+                LOGGER.warning(
+                    "[DocumentsLoader] Native office text extraction also failed "
+                    "file=%s error_type=%s",
+                    filename,
+                    type(fallback_error).__name__,
+                )
+                raise conversion_error from fallback_error
+
+            LOGGER.info(
+                "[DocumentsLoader] Native office text extraction succeeded file=%s",
+                filename,
+            )
+            return document
 
     def load_image(self, file_path: str, temp_dir: Optional[str] = None) -> str:
         if temp_dir:

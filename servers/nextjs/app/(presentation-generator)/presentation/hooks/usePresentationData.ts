@@ -29,13 +29,14 @@ export const usePresentationData = (
           dispatch(clearHistory());
         }
         setLoading(false);
-      }
-      if (normalizedData.fonts) {
-        useFontLoader(normalizedData.fonts);
-      }
-      if (normalizedData?.theme) {
-        const el = document.getElementById("presentation-slides-wrapper");
-        applyPresentationThemeToElement(el, normalizedData.theme);
+        if (normalizedData.fonts) {
+          useFontLoader(normalizedData.fonts);
+        }
+        if (normalizedData.theme) {
+          const el = document.getElementById("presentation-slides-wrapper");
+          applyPresentationThemeToElement(el, normalizedData.theme);
+        }
+        return normalizedData;
       }
     } catch (error) {
       if (isUnauthorizedApiError(error)) {
@@ -46,6 +47,7 @@ export const usePresentationData = (
       notify.error("프레젠테이션을 불러오지 못했습니다", "프레젠테이션을 불러올 수 없습니다. 다시 시도해 주세요.");
       console.error("Error fetching user slides:", error);
       setLoading(false);
+      return undefined;
     }
   }, [presentationId, dispatch, setLoading, setError]);
 

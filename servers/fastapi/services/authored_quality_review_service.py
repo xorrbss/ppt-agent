@@ -1,7 +1,7 @@
 """Post-generation quality review for saved AI-authored presentations.
 
 The review renders the persisted authored HTML, critiques the resulting images in
-parallel, and optionally re-authors only the slides with visible defects. The live
+parallel, and re-authors only the slides with visible defects. The live
 deck is checkpointed before any replacement so the operation can be undone through
 the existing presentation version history.
 """
@@ -22,47 +22,16 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
-from models.presentation_from_template import AuthoredQualityReviewRequest
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.presentation_from_template import AuthoredQualityReviewRequest, ReviewScope
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from utils.authored_dom_quality import (
-    DomQualityReport,
-    ensure_authored_qids,
-    inspect_authored_dom,
-)
-from utils.authored_ocr_quality import inspect_authored_ocr
-from utils.authored_review_routing import plan_authored_review_routing
-from utils.authored_styles import (
-    AuthoredExactReconstructionUnavailableError,
-    resolve_authored_style,
-)
-from utils.datetime_utils import get_current_utc_datetime
-from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_deck import prepare_authored_deck
-from utils.llm_calls.author_slide import (
-    EXACT_RECONSTRUCTION,
-    STYLE_REFERENCE,
-    Brand,
-    normalize_reference_mode,
-)
-from utils.llm_calls.author_vision_qa import (
-    critique_authored,
-    critique_authored_style_comparison,
-    revise_authored_deck,
-)
-from utils.llm_calls.critique_slide import SlideCritique
-from utils.slide_capture import (
-    get_cached_browser_metrics,
-    render_html_to_png,
-    render_html_to_png_with_metrics,
-)
-
 from services import presentation_version_service as version_service
 from services.authored_exact_provenance import (
     ExactProvenanceError,
@@ -149,6 +118,37 @@ from services.authored_quality_telemetry import (
 )
 from services.authored_review_asset_store import publish_reviewed_png
 from services.database import async_session_maker
+from utils.authored_dom_quality import (
+    DomQualityReport,
+    ensure_authored_qids,
+    inspect_authored_dom,
+)
+from utils.authored_ocr_quality import inspect_authored_ocr
+from utils.authored_review_routing import plan_authored_review_routing
+from utils.authored_styles import (
+    AuthoredExactReconstructionUnavailableError,
+    resolve_authored_style,
+)
+from utils.datetime_utils import get_current_utc_datetime
+from utils.llm_calls import author_vision_qa
+from utils.llm_calls.author_deck import prepare_authored_deck
+from utils.llm_calls.author_slide import (
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
+    Brand,
+    normalize_reference_mode,
+)
+from utils.llm_calls.author_vision_qa import (
+    critique_authored,
+    critique_authored_style_comparison,
+    revise_authored_deck,
+)
+from utils.llm_calls.critique_slide import SlideCritique
+from utils.slide_capture import (
+    get_cached_browser_metrics,
+    render_html_to_png,
+    render_html_to_png_with_metrics,
+)
 
 LOGGER = logging.getLogger(__name__)
 _ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
@@ -260,12 +260,9 @@ def _resolve_positions(
 ) -> list[int]:
     if request.scope == "all":
         return list(range(slide_count))
-    if len(request.slide_indices) != 1:
-        raise ValueError("Current-slide review requires exactly one slide index")
-    index = request.slide_indices[0]
-    if index < 0 or index >= slide_count:
+    if any(index >= slide_count for index in request.slide_indices):
         raise ValueError("Slide index is outside the presentation")
-    return [index]
+    return list(request.slide_indices)
 
 
 def _saved_brand(presentation: PresentationModel) -> Brand:
@@ -323,6 +320,7 @@ async def _hybrid_style_initial_review(
     slide_count: int,
     local_reports: list[DomQualityReport],
     sampling_seed: str,
+    scope: ReviewScope = "all",
 ) -> tuple[
     list[SlideCritique | None],
     dict,
@@ -339,6 +337,7 @@ async def _hybrid_style_initial_review(
         slide_count=slide_count,
         local_reports=local_reports,
         sampling_seed=sampling_seed,
+        scope=scope,
         critique_batch=critique_authored,
         observe_cache=_observe_critique_cache,
         unusable_reason=_critique_unusable_reason,
@@ -601,7 +600,9 @@ async def _run_authored_quality_review_unlocked(
     routing_metadata: dict = {}
     montage_ms = 0.0
     use_hybrid_deck_routing = (
-        request.scope == "all" and not exact_reconstruction and len(targets) >= 6
+        request.scope in {"all", "subset"}
+        and not exact_reconstruction
+        and len(targets) >= 6
     )
     if use_hybrid_deck_routing:
         (
@@ -618,6 +619,7 @@ async def _run_authored_quality_review_unlocked(
             slide_count=len(slides),
             local_reports=local_reports,
             sampling_seed=str(presentation_id),
+            scope=request.scope,
         )
     else:
         routing_plan = plan_authored_review_routing(
@@ -707,7 +709,7 @@ async def _run_authored_quality_review_unlocked(
         )
     initial_issues = _serialize_critiques(positions, initial_critiques)
 
-    if request.mode == "analyze_only" or not initial_issues:
+    if not initial_issues:
         message = (
             "검수가 완료되었습니다. 수정이 필요한 슬라이드가 없습니다."
             if not initial_issues
@@ -1458,7 +1460,11 @@ async def _run_authored_quality_review_unlocked(
                 raise RuntimeError(
                     "Presentation changed during quality review; no fixes were applied"
                 )
-        await session.commit()
+        # Keep accepted slide mutations and the final completed task payload in
+        # one transaction. The operation handler uses that task as its durable
+        # resume marker, so a crash cannot leave applied fixes without the data
+        # needed to publish the revision exactly once.
+        await session.flush()
         persist_ms = (time.perf_counter() - persist_started_at) * 1000
 
     task_rejection_reasons: Counter[str] = Counter(
@@ -1639,12 +1645,6 @@ async def run_authored_quality_review(
     session: AsyncSession,
 ) -> None:
     """Serialize mutating reviews per deck and CAS each accepted slide at publish."""
-    if request.mode != "analyze_and_fix":
-        await _run_authored_quality_review_unlocked(
-            presentation_id, request, task, session
-        )
-        return
-
     lock = _ANALYZE_AND_FIX_LOCKS.setdefault(presentation_id, asyncio.Lock())
     async with lock:
         await _run_authored_quality_review_unlocked(

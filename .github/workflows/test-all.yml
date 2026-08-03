@@ -54,8 +54,11 @@ jobs:
     - name: Prepare runtime directories
       run: uv run python -c "from pathlib import Path; import os; [Path(os.environ[key]).mkdir(parents=True, exist_ok=True) for key in ('APP_DATA_DIRECTORY', 'TEMP_DIRECTORY')]"
 
-    - name: Run FastAPI pytest suite (including authored catalogue)
-      run: uv run pytest -q --no-header
+    - name: Run production lifecycle Gate E (real app + worker processes)
+      run: uv run pytest -q --no-header tests/integration/test_workspace_production_lifecycle_gate.py
+
+    - name: Run remaining FastAPI pytest suite (including authored catalogue)
+      run: uv run pytest -q --no-header --ignore=tests/integration/test_workspace_production_lifecycle_gate.py
 
     - name: Build FastAPI binary
       run: uv run --with pyinstaller python -m PyInstaller server.spec
@@ -112,6 +115,53 @@ jobs:
       with:
         working-directory: servers/nextjs
         component: true
-        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/Chat.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2Studio.matrix.cy.tsx,**/TemplateV2SelectionToolbar.cy.tsx,**/VectorToolbar.vector-geometry.cy.tsx,**/ChartTableToolbar.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx,**/TemplateV2ChartCopilotPanel.cy.tsx,**/TemplateV2TableEditorPanel.cy.tsx,**/TemplateV2QualityInspector.cy.tsx,**/TemplateV2ImageReplacementPanel.cy.tsx"
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/Chat.cy.tsx,**/WorkspaceChatPanel.cy.tsx,**/SharePopover.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2Studio.matrix.cy.tsx,**/TemplateV2SelectionToolbar.cy.tsx,**/VectorToolbar.vector-geometry.cy.tsx,**/ChartTableToolbar.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx,**/TemplateV2ChartCopilotPanel.cy.tsx,**/TemplateV2TableEditorPanel.cy.tsx,**/TemplateV2QualityInspector.cy.tsx,**/TemplateV2ImageReplacementPanel.cy.tsx"
         install: false
+
+  workspace-e2e:
+    name: Workspace chat-first browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      WORKSPACE_E2E_ARTIFACT_DIR: ${{ github.workspace }}/test-artifacts/workspace-e2e
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: servers/nextjs/package-lock.json
+
+    - name: Install uv (with Python 3.11)
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      with:
+        python-version: "3.11"
+        working-directory: servers/fastapi
+        enable-cache: true
+
+    - name: Install locked application dependencies
+      run: |
+        npm ci --prefix servers/nextjs
+        uv sync --frozen --directory servers/fastapi
+
+    - name: Run isolated workspace E2E suites
+      working-directory: servers/nextjs
+      run: xvfb-run -a npm run test:workspace-e2e
+
+    - name: Upload workspace E2E diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: workspace-e2e-${{ github.sha }}
+        path: |
+          test-artifacts/workspace-e2e
+          servers/nextjs/cypress/screenshots
+          servers/nextjs/cypress/videos
+        if-no-files-found: warn
+        retention-days: 14
 

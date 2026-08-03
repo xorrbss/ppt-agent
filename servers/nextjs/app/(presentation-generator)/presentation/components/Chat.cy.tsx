@@ -19,6 +19,14 @@ const mutationTrace = (tool: string, slideIndex?: number): StreamEvent => ({
 });
 
 const installChatApiFixture = (events: StreamEvent[], toolCalls: string[]) => {
+  cy.intercept("GET", "**/api/v1/ppt/presentation/*/generation-info", {
+    statusCode: 200,
+    body: {
+      prompt: "",
+      attachment_file_names: [],
+      settings: {},
+    },
+  }).as("generationInfo");
   cy.intercept("GET", "**/api/v1/ppt/chat/conversations*", {
     statusCode: 200,
     body: [],
@@ -52,6 +60,30 @@ const send = () => {
 describe("Chat mutation stream integration", () => {
   beforeEach(() => {
     cy.window().then((window) => window.sessionStorage.clear());
+  });
+
+  it("restores the original prompt and registered materials before chat history", () => {
+    cy.intercept("GET", "**/api/v1/ppt/presentation/*/generation-info", {
+      statusCode: 200,
+      body: {
+        prompt: "OSB저축은행 인터넷뱅킹 재구축 제안서를 만들어줘",
+        attachment_file_names: ["제안요청서.pdf", "현행업무.xlsx"],
+        settings: {},
+      },
+    }).as("generationInfo");
+    cy.intercept("GET", "**/api/v1/ppt/chat/conversations*", {
+      statusCode: 200,
+      body: [],
+    }).as("conversations");
+
+    cy.mount(<Chat presentationId="deck-generation-context" />);
+
+    cy.contains("최초 요청").should("be.visible");
+    cy.contains("OSB저축은행 인터넷뱅킹 재구축 제안서를 만들어줘").should(
+      "be.visible"
+    );
+    cy.contains("제안요청서.pdf").should("be.visible");
+    cy.contains("현행업무.xlsx").should("be.visible");
   });
 
   it("coalesces all supported deck mutations into a deck refresh without an LLM", () => {

@@ -11,7 +11,8 @@
     "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only",
     "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs",
     "test:chat-first-deployment-config": "node scripts/check-chat-first-deployment-config.mjs",
-    "test:next-ci": "node --test scripts/ppt-agent.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:next-ci": "node --test scripts/ppt-agent.test.mjs scripts/required-ci-contract.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:workspace-e2e": "npm --prefix servers/nextjs run test:workspace-e2e",
     "test:local": "node scripts/test-local.mjs"
   },
   "dependencies": {

@@ -16,6 +16,7 @@ from services.documents_loader import DocumentsLoader
 from tests.conftest import FakeAsyncSession
 from utils.document_context import (
     HARD_MAX_DOCUMENT_CONTEXT_CHARS,
+    TRUNCATION_MARKER,
     DocumentContextLimitError,
     build_document_context,
     get_document_context_limits,
@@ -46,7 +47,7 @@ def test_default_limits_accept_large_single_document(
     monkeypatch.delenv("PRESENTON_MAX_DOCUMENT_CHARS", raising=False)
     document = "x" * 117_486
 
-    assert get_document_context_limits() == (200_000, 200_000)
+    assert get_document_context_limits() == (500_000, 500_000)
     assert build_document_context([document], ["uploaded.txt"]) == document
 
 
@@ -100,6 +101,39 @@ def test_build_document_context_counts_separators_in_total_limit():
     assert exc.value.detail["limit_chars"] == 7
 
 
+def test_build_document_context_compacts_small_overflow_for_generation():
+    document = "A" * 150_000 + "Z" * 62_282
+
+    context = build_document_context(
+        [document],
+        ["uploaded.txt"],
+        total_limit=200_000,
+        overflow_strategy="truncate",
+    )
+
+    assert len(context) == 200_000
+    assert context.startswith("A")
+    assert context.endswith("Z")
+    assert TRUNCATION_MARKER in context
+
+
+def test_build_document_context_compacts_all_sources_proportionally():
+    documents = ["first:" + "A" * 120_000, "second:" + "B" * 92_282]
+
+    context = build_document_context(
+        documents,
+        ["first.txt", "second.txt"],
+        total_limit=200_000,
+        overflow_strategy="truncate",
+    )
+
+    assert len(context) == 200_000
+    assert context.startswith("first:")
+    assert "\n\nsecond:" in context
+    assert "A\n\nsecond:" in context
+    assert context.endswith("B")
+
+
 def test_configured_limits_are_clamped_to_hard_max(monkeypatch):
     monkeypatch.setenv("PRESENTON_MAX_DOCUMENT_CONTEXT_CHARS", "999999")
     monkeypatch.setenv("PRESENTON_MAX_DOCUMENT_CHARS", "999999")
@@ -137,6 +171,19 @@ def test_load_text_reads_only_a_bounded_prefix_for_oversized_input():
     assert exc.value.status_code == 413
     assert exc.value.detail["filename"] == "reference.md"
     assert "C:/private/customer" not in json.dumps(exc.value.detail)
+
+
+def test_text_loader_allows_generation_to_compact_below_hard_ceiling(tmp_path):
+    document_path = tmp_path / "uploaded.txt"
+    document_path.write_text("x" * 212_282, encoding="utf-8")
+    loader = DocumentsLoader(
+        file_paths=[str(document_path)],
+        allow_context_truncation=True,
+    )
+
+    document = _run(loader.load_text(str(document_path)))
+
+    assert len(document) == 212_282
 
 
 def test_outline_stream_emits_safe_error_and_skips_llm_for_oversized_document(
@@ -203,39 +250,32 @@ def test_outline_stream_emits_safe_error_and_skips_llm_for_oversized_document(
     mock_outline.assert_not_called()
 
 
-def test_direct_generation_returns_413_before_any_llm_call():
-    request = GeneratePresentationRequest(
-        content="Create a deck.",
-        files=["C:/private/customer/oversized.md"],
-    )
-    session = FakeAsyncSession()
+def test_direct_generation_loader_keeps_document_within_new_default_limit():
     loader = MagicMock()
     loader.load_documents = AsyncMock()
-    loader.documents = ["x" * 200_001]
+    loader.documents = ["A" * 200_000 + "Z" * 12_282]
 
     with patch.object(
         presentation_generate,
         "DocumentsLoader",
         return_value=loader,
-    ), patch.object(
-        presentation_generate,
-        "generate_content_brief",
-        new=AsyncMock(),
-    ) as mock_brief, pytest.raises(DocumentContextLimitError) as exc:
-        _run(
-            presentation_generate.generate_presentation_handler(
-                request,
-                uuid.uuid4(),
-                None,
-                sql_session=session,
+    ) as loader_class:
+        context = _run(
+            presentation_generate._load_document_context(
+                ["C:/private/customer/oversized.md"],
+                "English",
             )
         )
 
-    assert exc.value.status_code == 413
-    assert exc.value.detail["code"] == "document_context_too_large"
-    assert exc.value.detail["filename"] == "oversized.md"
-    assert session.rollback_count == 1
-    mock_brief.assert_not_awaited()
+    assert len(context) == 212_282
+    assert context.startswith("A")
+    assert context.endswith("Z")
+    assert TRUNCATION_MARKER not in context
+    loader_class.assert_called_once_with(
+        file_paths=["C:/private/customer/oversized.md"],
+        presentation_language="English",
+        allow_context_truncation=True,
+    )
 
 
 def test_async_queue_rejects_oversized_context_before_creating_job():

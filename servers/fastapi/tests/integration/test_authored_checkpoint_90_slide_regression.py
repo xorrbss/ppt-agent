@@ -42,10 +42,12 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
 
     async def scenario():
         engine = create_async_engine(
-            f"sqlite+aiosqlite:///{tmp_path / 'authored-90-slide.db'}"
+            f"sqlite+aiosqlite:///{tmp_path / 'authored-90-slide.db'}",
+            connect_args={"timeout": 30.0},
         )
         async with engine.begin() as connection:
             await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
+            await connection.exec_driver_sql("PRAGMA busy_timeout=30000")
             await connection.run_sync(
                 SQLModel.metadata.create_all,
                 tables=[

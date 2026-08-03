@@ -117,6 +117,7 @@ async def reconcile_timed_out_workspace_assets(
                 except WorkspaceServiceError as error:
                     await session.rollback()
                     if error.code not in {
+                        "account_deletion_in_progress",
                         "workspace_asset_not_found",
                         "workspace_asset_version_conflict",
                         "workspace_asset_transition_invalid",

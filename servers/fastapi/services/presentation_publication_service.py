@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
 import uuid
 
 from sqlalchemy import update
@@ -22,9 +21,10 @@ async def publish_presentation_revision(
     *,
     presentation_id: uuid.UUID,
     expected_revision: int,
-    operation_id: Optional[uuid.UUID] = None,
-    attempt_token: Optional[str] = None,
-    result: Optional[dict] = None,
+    operation_id: uuid.UUID | None = None,
+    attempt_token: str | None = None,
+    result: dict | None = None,
+    operation_kind: str | None = None,
 ) -> int:
     """Increment the publication token exactly once using a fenced CAS.
 
@@ -109,13 +109,26 @@ async def publish_presentation_revision(
                 state="succeeded",
                 result_revision=new_revision,
             )
+            projection_values = None
+            if operation_kind == "quality.review":
+                completion_progress = {
+                    "stage": "quality_review_completed",
+                    "percent": 100,
+                }
+                terminal_payload.update(
+                    completion_progress,
+                    result=dict(result or {}),
+                )
+                projection_values = {"progress": completion_progress}
             terminal_event = await append_operation_event(
                 session,
                 operation_id=operation_id,
                 event_type="operation.result",
                 payload=terminal_payload,
+                operation_kind=operation_kind,
                 allowed_states=("succeeded",),
                 expected_version=published_operation_version,
+                projection_values=projection_values,
                 increment_version=True,
             )
             if terminal_event is None:

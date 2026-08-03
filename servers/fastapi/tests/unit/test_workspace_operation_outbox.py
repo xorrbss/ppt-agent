@@ -6,6 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 import uuid
 
+import pytest
 from sqlalchemy import event, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -18,6 +19,7 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
+from services.workspace_metrics import WORKSPACE_METRICS
 from services.workspace_operation_outbox_dispatcher import (
     WorkspaceOperationOutboxDispatcher,
     WorkspaceOutboxTopicRegistry,
@@ -37,6 +39,13 @@ OUTBOX_TABLES = [
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
 ]
+
+
+@pytest.fixture(autouse=True)
+def _reset_workspace_metrics():
+    WORKSPACE_METRICS.reset()
+    yield
+    WORKSPACE_METRICS.reset()
 
 
 async def _database(path: Path):
@@ -237,6 +246,12 @@ async def _dispatcher_isolates_delivery_failures(tmp_path: Path):
             "error_code": "unsupported_outbox_topic",
             "retryable": False,
         }
+        assert WORKSPACE_METRICS.snapshot()["outbox"] == {
+            "dispatched": 3,
+            "retry_wait": 1,
+            "delivered": 1,
+            "dead_letter": 1,
+        }
     finally:
         await engine.dispose()
 
@@ -301,5 +316,140 @@ async def _dispatcher_fences_handler_when_heartbeat_loses_lease(
         assert stored.status == "delivering"
         assert stored.delivered_at is None
         assert stored.last_error is None
+        assert WORKSPACE_METRICS.snapshot()["outbox"] == {
+            "dispatched": 1,
+            "lease_lost": 1,
+        }
+    finally:
+        await engine.dispose()
+
+
+def test_operation_event_delivery_records_creation_to_delivery_lag(tmp_path: Path):
+    asyncio.run(_operation_event_delivery_records_lag(tmp_path))
+
+
+async def _operation_event_delivery_records_lag(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "outbox-event-lag.db")
+    try:
+        row_id = await _seed_outbox(
+            maker,
+            topic="workspace.operation.event",
+        )
+        created_at = get_current_utc_datetime() - timedelta(seconds=2)
+        async with maker() as session, session.begin():
+            await session.execute(
+                update(WorkspaceOutbox)
+                .where(WorkspaceOutbox.id == row_id)
+                .values(created_at=created_at)
+            )
+
+        claim = await claim_next_workspace_outbox(session_factory=maker)
+        assert claim is not None
+        assert claim.created_at.replace(tzinfo=created_at.tzinfo) == created_at
+        assert await mark_workspace_outbox_delivered(
+            claim,
+            session_factory=maker,
+        )
+
+        snapshot = WORKSPACE_METRICS.snapshot()
+        assert snapshot["event_lag_count"] == 1
+        assert snapshot["event_lag_max_ms"] >= 2_000
+        assert snapshot["outbox"]["event_delivered"] == 1
+    finally:
+        await engine.dispose()
+
+
+def test_operation_event_lag_metric_failure_records_closed_signal(
+    tmp_path: Path,
+    monkeypatch,
+):
+    asyncio.run(
+        _operation_event_lag_metric_failure_records_closed_signal(
+            tmp_path,
+            monkeypatch,
+        )
+    )
+
+
+async def _operation_event_lag_metric_failure_records_closed_signal(
+    tmp_path: Path,
+    monkeypatch,
+):
+    engine, maker = await _database(tmp_path / "outbox-event-lag-failure.db")
+    try:
+        await _seed_outbox(maker, topic="workspace.operation.event")
+        claim = await claim_next_workspace_outbox(session_factory=maker)
+        assert claim is not None
+        monkeypatch.setattr(
+            WORKSPACE_METRICS,
+            "record_event_lag_ms",
+            lambda _lag_ms: (_ for _ in ()).throw(RuntimeError("sink down")),
+        )
+
+        assert await mark_workspace_outbox_delivered(
+            claim,
+            session_factory=maker,
+        )
+
+        snapshot = WORKSPACE_METRICS.snapshot()
+        assert snapshot["outbox"]["event_delivered"] == 1
+        assert snapshot["signal_failures"] == {"event_lag": 1}
+    finally:
+        await engine.dispose()
+
+
+def test_dispatcher_observes_lease_loss_when_final_cas_is_fenced(
+    tmp_path: Path,
+    monkeypatch,
+):
+    asyncio.run(
+        _dispatcher_observes_lease_loss_when_final_cas_is_fenced(
+            tmp_path,
+            monkeypatch,
+        )
+    )
+
+
+async def _dispatcher_observes_lease_loss_when_final_cas_is_fenced(
+    tmp_path: Path,
+    monkeypatch,
+):
+    engine, maker = await _database(tmp_path / "outbox-final-cas-loss.db")
+    try:
+        row_id = await _seed_outbox(
+            maker, topic="test.final-cas-loss", ordinal=1
+        )
+
+        async def successful_handler(_payload):
+            return None
+
+        async def lose_final_lease(_claim, **_kwargs):
+            return False
+
+        monkeypatch.setattr(
+            "services.workspace_operation_outbox_dispatcher."
+            "mark_workspace_outbox_delivered",
+            lose_final_lease,
+        )
+        registry = WorkspaceOutboxTopicRegistry()
+        registry.register("test.final-cas-loss", successful_handler)
+        dispatcher = WorkspaceOperationOutboxDispatcher(
+            session_factory=maker,
+            registry=registry,
+            max_concurrency=1,
+            heartbeat_seconds=60,
+        )
+
+        assert await dispatcher.dispatch_once() == 1
+        tasks = tuple(dispatcher._active.values())
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=1)
+
+        stored = await _outbox(maker, row_id)
+        assert stored.status == "delivering"
+        assert stored.delivered_at is None
+        assert WORKSPACE_METRICS.snapshot()["outbox"] == {
+            "dispatched": 1,
+            "lease_lost": 1,
+        }
     finally:
         await engine.dispose()

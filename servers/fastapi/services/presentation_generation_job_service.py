@@ -972,6 +972,34 @@ async def launch_generation_job(
     task.add_done_callback(_discard)
 
 
+async def resolve_generation_job_presentation_id(
+    task_id: str,
+) -> uuid.UUID | None:
+    """Return an owner-scoped deck id without mutating generation state."""
+
+    owner_id = get_current_owner_id()
+    owner_filter = (
+        AsyncPresentationGenerationTaskModel.owner_id.is_(None)
+        if owner_id is None
+        else AsyncPresentationGenerationTaskModel.owner_id == owner_id
+    )
+    async with async_session_maker() as session:
+        return (
+            await session.execute(
+                select(PresentationGenerationJob.presentation_id)
+                .join(
+                    AsyncPresentationGenerationTaskModel,
+                    AsyncPresentationGenerationTaskModel.id
+                    == PresentationGenerationJob.task_id,
+                )
+                .where(
+                    AsyncPresentationGenerationTaskModel.id == task_id,
+                    owner_filter,
+                )
+            )
+        ).scalar_one_or_none()
+
+
 async def cancel_generation_job(
     task_id: str,
 ) -> AsyncPresentationGenerationTaskModel | None:

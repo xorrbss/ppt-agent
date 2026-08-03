@@ -20,6 +20,17 @@ describe("SharePopover", () => {
     });
   });
 
+  it("restores legacy sharing when the runtime kill switch rolls back", () => {
+    cy.stub(PresentationGenerationApi, "getShareStatus").resolves({
+      shared: false,
+      share_token: null,
+    });
+
+    mount(<SharePopover presentationId="p1" chatFirstEnabled={false} />);
+
+    cy.get('[data-testid="share-popover-trigger"]').should("be.visible");
+  });
+
   it("creates a share link when not yet shared", () => {
     cy.stub(PresentationGenerationApi, "getShareStatus").resolves({
       shared: false,

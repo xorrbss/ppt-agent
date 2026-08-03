@@ -24,6 +24,7 @@ from models.sql.workspace import (
 )
 from models.workspace import (
     WorkspaceAttachmentInput,
+    WorkspaceAssetTransitionRequest,
     WorkspaceBootstrapRequest,
     WorkspaceCommandRequest,
     WorkspaceEventPageResponse,
@@ -38,6 +39,8 @@ from services.workspace_service import (
     workspace_events,
     workspace_timeline,
 )
+from services.workspace_api_contract import project_workspace_timeline
+from services.workspace_asset_service import transition_workspace_asset
 from utils.datetime_utils import get_current_utc_datetime
 
 
@@ -217,12 +220,24 @@ async def _bootstrap_durably_projects_first_message_attachment_and_settings(
             assert first_message["generation_settings"] == request.generation_settings
             assert first_message["attachments"] == [
                 {
+                    "schema_version": 1,
                     "id": first_message["attachments"][0]["id"],
                     "name": "market.pdf",
                     "status": "ready",
+                    "current_state": "ready",
                     "mime_type": "application/pdf",
                     "size_bytes": 321,
+                    "sha256": "a" * 64,
                     "error": None,
+                    "safe_failure": None,
+                    "download_url": (
+                        "/api/v1/ppt/workspace/assets/"
+                        f"{first_message['attachments'][0]['id']}/download"
+                    ),
+                    "download_action": "download",
+                    "preview_url": None,
+                    "preview_action": None,
+                    "unavailable_reason": None,
                 }
             ]
             assert timeline["items"][1]["events"][0]["type"] == "queued"
@@ -233,6 +248,108 @@ async def _bootstrap_durably_projects_first_message_attachment_and_settings(
             assert await session.scalar(select(func.count()).select_from(WorkspaceAsset)) == 1
             assert await session.scalar(select(func.count()).select_from(WorkspaceOperation)) == 1
             assert await session.scalar(select(func.count()).select_from(WorkspaceOutbox)) == 1
+    finally:
+        await engine.dispose()
+
+
+def test_timeline_attachment_snapshot_survives_live_mutation_and_delete(
+    tmp_path: Path,
+):
+    asyncio.run(_timeline_attachment_snapshot_survives_live_mutation_and_delete(tmp_path))
+
+
+async def _timeline_attachment_snapshot_survives_live_mutation_and_delete(
+    tmp_path: Path,
+):
+    engine, maker = await _database(tmp_path / "attachment-history.db")
+    try:
+        presentation = await _create_presentation(maker)
+        async with maker() as session:
+            await bootstrap_workspace(
+                session,
+                presentation_id=presentation.id,
+                request=_bootstrap_request(key="attachment-history"),
+            )
+
+        async with maker() as session:
+            asset = (await session.scalars(select(WorkspaceAsset))).one()
+            immutable_asset_id = asset.id
+            asset.state = "failed"
+            asset.original_name = "mutated-secret-name.bin"
+            asset.media_type = "application/x-private"
+            asset.size_bytes = 999
+            asset.sha256 = "b" * 64
+            asset.failure_code = "provider_scanner_internal_42"
+            asset.failure_detail = {
+                "scanner": "private-vendor",
+                "path": "C:/private/quarantine/file",
+                "stack": "must-not-cross-wire",
+            }
+            session.add(asset)
+            await session.commit()
+
+        async with maker() as session:
+            projected = project_workspace_timeline(
+                await workspace_timeline(session, presentation_id=presentation.id),
+                presentation_id=presentation.id,
+            ).model_dump(mode="json")
+            attachment = projected["items"][0]["attachments"][0]
+            assert attachment == {
+                "schema_version": 1,
+                "id": str(immutable_asset_id),
+                "name": "market.pdf",
+                "status": "ready",
+                "current_state": "failed",
+                "mime_type": "application/pdf",
+                "size_bytes": 321,
+                "sha256": "a" * 64,
+                "error": "workspace_asset_failed",
+                "safe_failure": {
+                    "failure_code": "workspace_asset_failed",
+                    "safe_message": "An attachment could not be processed.",
+                    "retryable": True,
+                },
+                "download_url": None,
+                "download_action": None,
+                "preview_url": None,
+                "preview_action": None,
+                "unavailable_reason": "workspace_asset_failed",
+            }
+            assert "private-vendor" not in str(projected)
+            assert "must-not-cross-wire" not in str(projected)
+
+        async with maker() as session:
+            asset = await session.get(WorkspaceAsset, immutable_asset_id)
+            assert asset is not None
+            await session.delete(asset)
+            await session.commit()
+
+        async with maker() as session:
+            durable_attachment = (
+                await session.scalars(select(WorkspaceMessageAttachment))
+            ).one()
+            assert durable_attachment.asset_id is None
+            assert durable_attachment.asset_id_snapshot == immutable_asset_id
+            projected = project_workspace_timeline(
+                await workspace_timeline(session, presentation_id=presentation.id),
+                presentation_id=presentation.id,
+            ).model_dump(mode="json")
+            attachment = projected["items"][0]["attachments"][0]
+            assert attachment["id"] == str(immutable_asset_id)
+            assert attachment["name"] == "market.pdf"
+            assert attachment["status"] == "ready"
+            assert attachment["current_state"] is None
+            assert attachment["mime_type"] == "application/pdf"
+            assert attachment["size_bytes"] == 321
+            assert attachment["sha256"] == "a" * 64
+            assert attachment["download_url"] is None
+            assert attachment["download_action"] is None
+            assert attachment["unavailable_reason"] == "workspace_asset_deleted"
+            assert attachment["safe_failure"] == {
+                "failure_code": "workspace_asset_deleted",
+                "safe_message": "An attachment was deleted and must be uploaded again.",
+                "retryable": False,
+            }
     finally:
         await engine.dispose()
 
@@ -317,6 +434,218 @@ async def _command_idempotency_scope(tmp_path: Path):
                     ),
                 )
         assert conflict.value.code == "idempotency_key_payload_conflict"
+    finally:
+        await engine.dispose()
+
+
+def test_command_asset_ids_are_claimed_snapshotted_and_atomic(tmp_path: Path):
+    asyncio.run(_command_asset_ids_are_claimed_snapshotted_and_atomic(tmp_path))
+
+
+async def _command_asset_ids_are_claimed_snapshotted_and_atomic(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "command-assets.db")
+    try:
+        presentation = await _create_presentation(maker)
+        ready_asset = WorkspaceAsset(
+            state="ready",
+            original_name=r"C:\private\source\evidence.pdf",
+            media_type="application/pdf",
+            size_bytes=987,
+            storage_key=f"command-assets/{uuid.uuid4()}",
+            sha256="b" * 64,
+        )
+        invalid_hash_asset = WorkspaceAsset(
+            state="ready",
+            original_name="invalid-hash.pdf",
+            media_type="application/pdf",
+            size_bytes=123,
+            storage_key=f"command-assets/{uuid.uuid4()}",
+            sha256=None,
+        )
+        async with maker() as session:
+            session.add_all((ready_asset, invalid_hash_asset))
+            await session.commit()
+
+        request = WorkspaceCommandRequest(
+            command="Use the attached evidence on the opening slide",
+            command_type="presentation.edit",
+            idempotency_key="command-with-ready-asset",
+            expected_revision=0,
+            asset_ids=[ready_asset.id],
+        )
+        async with maker() as session:
+            operation, duplicate = await create_workspace_command(
+                session,
+                presentation_id=presentation.id,
+                request=request,
+            )
+        assert duplicate is False
+        assert operation.state == "queued"
+        assert operation.request_payload["asset_ids"] == [str(ready_asset.id)]
+        assert operation.request_payload["initial_operation_state"] == "queued"
+        message_id = uuid.UUID(operation.request_payload["user_message_id"])
+
+        # Reopen the session: attachment metadata must come from immutable,
+        # authoritative snapshots rather than the command request or live row.
+        async with maker() as session:
+            claimed = await session.get(WorkspaceAsset, ready_asset.id)
+            assert claimed is not None
+            assert claimed.conversation_id == operation.conversation_id
+            snapshot = (
+                await session.scalars(
+                    select(WorkspaceMessageAttachment).where(
+                        WorkspaceMessageAttachment.message_id == message_id
+                    )
+                )
+            ).one()
+            assert snapshot.asset_id == ready_asset.id
+            assert snapshot.asset_id_snapshot == ready_asset.id
+            assert snapshot.ordinal == 0
+            assert snapshot.display_name == "evidence.pdf"
+            assert snapshot.media_type == "application/pdf"
+            assert snapshot.size_bytes == 987
+            assert snapshot.asset_state == "ready"
+            assert snapshot.asset_sha256 == "b" * 64
+
+            timeline = project_workspace_timeline(
+                await workspace_timeline(session, presentation_id=presentation.id),
+                presentation_id=presentation.id,
+            ).model_dump(mode="json")
+            message_item = next(
+                item for item in timeline["items"] if item["id"] == str(message_id)
+            )
+            assert message_item["attachments"][0]["id"] == str(ready_asset.id)
+            assert message_item["attachments"][0]["name"] == "evidence.pdf"
+            assert message_item["attachments"][0]["sha256"] == "b" * 64
+
+        async with maker() as session:
+            replay, duplicate = await create_workspace_command(
+                session,
+                presentation_id=presentation.id,
+                request=request,
+            )
+        assert duplicate is True
+        assert replay.id == operation.id
+
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as changed_assets:
+                await create_workspace_command(
+                    session,
+                    presentation_id=presentation.id,
+                    request=request.model_copy(update={"asset_ids": []}),
+                )
+        assert changed_assets.value.code == "idempotency_key_payload_conflict"
+
+        # Hash validation occurs after the orphan is tentatively claimed. A
+        # rejected command must roll back the claim and every staged row even if
+        # the caller catches the error and subsequently commits this session.
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as invalid_hash:
+                await create_workspace_command(
+                    session,
+                    presentation_id=presentation.id,
+                    request=WorkspaceCommandRequest(
+                        command="Use an invalid attachment",
+                        idempotency_key="command-invalid-asset-hash",
+                        expected_revision=0,
+                        asset_ids=[invalid_hash_asset.id],
+                    ),
+                )
+            assert invalid_hash.value.code == "workspace_asset_hash_invalid"
+            await session.commit()
+
+        async with maker() as session:
+            rejected_asset = await session.get(WorkspaceAsset, invalid_hash_asset.id)
+            assert rejected_asset is not None
+            assert rejected_asset.conversation_id is None
+            assert await session.scalar(
+                select(func.count()).select_from(WorkspaceMessage)
+            ) == 1
+            assert await session.scalar(
+                select(func.count()).select_from(WorkspaceOperation)
+            ) == 1
+            assert await session.scalar(
+                select(func.count()).select_from(WorkspaceMessageAttachment)
+            ) == 1
+    finally:
+        await engine.dispose()
+
+
+def test_destructive_command_waits_for_assets_without_bypassing_approval(
+    tmp_path: Path,
+):
+    asyncio.run(
+        _destructive_command_waits_for_assets_without_bypassing_approval(tmp_path)
+    )
+
+
+async def _destructive_command_waits_for_assets_without_bypassing_approval(
+    tmp_path: Path,
+):
+    engine, maker = await _database(tmp_path / "command-asset-approval.db")
+    try:
+        presentation = await _create_presentation(maker)
+        asset = WorkspaceAsset(
+            state="processing",
+            original_name="delete-plan.pdf",
+            media_type="application/pdf",
+            size_bytes=456,
+            storage_key=f"command-assets/{uuid.uuid4()}",
+            sha256="c" * 64,
+        )
+        async with maker() as session:
+            session.add(asset)
+            await session.commit()
+
+        async with maker() as session:
+            operation, duplicate = await create_workspace_command(
+                session,
+                presentation_id=presentation.id,
+                request=WorkspaceCommandRequest(
+                    command="Delete this presentation after checking the attachment",
+                    command_type="presentation.delete",
+                    idempotency_key="destructive-command-waits-for-asset",
+                    expected_revision=0,
+                    asset_ids=[asset.id],
+                ),
+            )
+        assert duplicate is False
+        assert operation.state == "waiting_for_assets"
+        assert operation.request_payload["initial_operation_state"] == (
+            "awaiting_approval"
+        )
+        assert operation.request_payload["asset_ids"] == [str(asset.id)]
+
+        async with maker() as session:
+            claimed = await session.get(WorkspaceAsset, asset.id)
+            assert claimed is not None
+            transitioned = await transition_workspace_asset(
+                session,
+                asset_id=asset.id,
+                request=WorkspaceAssetTransitionRequest(
+                    state="ready",
+                    expected_version=claimed.version,
+                ),
+            )
+            assert transitioned.state == "ready"
+
+        async with maker() as session:
+            fresh_operation = await session.get(WorkspaceOperation, operation.id)
+            assert fresh_operation is not None
+            assert fresh_operation.state == "awaiting_approval"
+            assert fresh_operation.next_attempt_at is None
+            event_types = list(
+                (
+                    await session.scalars(
+                        select(WorkspaceOperationEvent.event_type)
+                        .where(
+                            WorkspaceOperationEvent.operation_id == operation.id
+                        )
+                        .order_by(WorkspaceOperationEvent.sequence)
+                    )
+                ).all()
+            )
+            assert event_types == ["waiting_for_assets", "asset_state_changed"]
     finally:
         await engine.dispose()
 
@@ -539,6 +868,9 @@ async def _message_pagination_and_event_high_watermark_are_independent(tmp_path:
             assert [
                 event["operation_version"] for event in all_events["events"]
             ] == [0, 0]
+            assert [
+                event["operation_anchor_position"] for event in all_events["events"]
+            ] == [2, 4]
             first_event_cursor = all_events["events"][0]["cursor"]
             backfill = await workspace_events(
                 session,
@@ -789,6 +1121,28 @@ async def _empty_workspace_validates_and_canonicalizes_event_cursor(tmp_path: Pa
                 )
         assert invalid.value.code == "invalid_event_cursor"
         assert invalid.value.status_code == 400
+
+        for malformed in ("01", "cursor:1", "+1", "１"):
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as invalid:
+                    await workspace_events(
+                        session,
+                        presentation_id=presentation.id,
+                        after=malformed,
+                    )
+            assert invalid.value.code == "invalid_event_cursor"
+            assert invalid.value.status_code == 400
+
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as ahead:
+                await workspace_events(
+                    session,
+                    presentation_id=presentation.id,
+                    after="1",
+                )
+        assert ahead.value.code == "event_cursor_expired"
+        assert ahead.value.status_code == 410
+        assert ahead.value.retryable is True
     finally:
         await engine.dispose()
 
@@ -843,6 +1197,15 @@ async def _event_cursor_expiry_is_conversation_scoped(tmp_path: Path):
             )
             assert initial["events"]
             assert int(initial["event_high_watermark"]) >= floor_a
+            with pytest.raises(WorkspaceServiceError) as ahead:
+                await workspace_events(
+                    session,
+                    presentation_id=presentation_a.id,
+                    after=str(int(initial["event_high_watermark"]) + 1),
+                )
+            assert ahead.value.code == "event_cursor_expired"
+            assert ahead.value.status_code == 410
+            assert ahead.value.retryable is True
 
             rebased_timeline = await workspace_timeline(
                 session,

@@ -64,10 +64,17 @@ servers/fastapi/dist/
 electron/servers/
 servers/nextjs/cypress/screenshots/
 servers/nextjs/cypress/videos/
+servers/nextjs/cypress/downloads/
 
 # Scratch runtime for local end-to-end runs (browser profiles, dev-server logs,
 # temp exports). Regenerated on demand and hundreds of MB when populated.
 .test-runtime/
+/.server-logs-main/
+/.tmp/
+servers/fastapi/.codex-backend.*.log
+servers/fastapi/.pytest-*/
+servers/nextjs/test-results/
+electron/kor.traineddata
 
 # Release candidates are generated and quarantined by CI. Only signed release
 # manifests deliberately added through the release process belong in Git.

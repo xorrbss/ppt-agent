@@ -13,7 +13,7 @@ from hashlib import sha256
 from math import ceil
 from typing import Literal
 
-ReviewScope = Literal["all", "current"]
+ReviewScope = Literal["all", "current", "subset"]
 EscalationLevel = Literal["none", "batch", "full"]
 
 
@@ -61,6 +61,8 @@ class ReviewRoutingEscalation:
 
 
 def _unique_sorted(indices: Sequence[int], *, slide_count: int) -> tuple[int, ...]:
+    if any(not isinstance(index, int) or isinstance(index, bool) for index in indices):
+        raise ValueError("Slide indices must be integers")
     normalized = sorted(set(indices))
     if any(index < 0 or index >= slide_count for index in normalized):
         raise ValueError("Slide index is outside the presentation")
@@ -146,8 +148,8 @@ def plan_authored_review_routing(
     before accepting a deck-level result.
     """
 
-    if scope not in ("all", "current"):
-        raise ValueError("scope must be 'all' or 'current'")
+    if scope not in ("all", "current", "subset"):
+        raise ValueError("scope must be 'all', 'current', or 'subset'")
     if slide_count < 1:
         raise ValueError("slide_count must be positive")
     if not 6 <= batch_size <= 9:
@@ -181,6 +183,11 @@ def plan_authored_review_routing(
             detail_vqa_indices=selected,
             sampling_seed=sampling_seed,
         )
+
+    if scope == "subset" and explicit_targets is None:
+        raise ValueError("subset scope requires target_indices")
+    if scope == "subset" and not explicit_targets:
+        raise ValueError("subset scope requires at least one target index")
 
     selected = (
         explicit_targets if explicit_targets is not None else tuple(range(slide_count))

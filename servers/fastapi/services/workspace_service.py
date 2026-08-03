@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
@@ -25,7 +26,16 @@ from models.workspace import (
     canonical_workspace_key,
     is_sensitive_workspace_key,
 )
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_DELETED,
+    PresentationModel,
+)
+from models.workspace_operation_kinds import (
+    WORKSPACE_DESTRUCTIVE_OPERATION_KINDS,
+    get_workspace_operation_kind,
+    is_workspace_bootstrap_kind,
+    is_workspace_command_kind,
+)
 from models.sql.workspace import (
     WorkspaceActionReceipt,
     WorkspaceAsset,
@@ -42,6 +52,11 @@ from services.workspace_db_adapter import (
     reserve_conversation_positions,
     reserve_operation_event_sequence,
 )
+from services.account_deletion_service import (
+    AccountDeletionFenceConflict,
+    require_active_account_generation,
+)
+from services.workspace_error_registry import resolve_workspace_error
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
@@ -50,7 +65,7 @@ _TRUE_VALUES = {"1", "true", "on", "yes"}
 _ASSET_WAIT_STATES = {"uploaded", "scanning", "processing"}
 _ASSET_BLOCK_STATES = {"failed", "quarantined", "expired", "deleted"}
 _TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
-_DESTRUCTIVE_OPERATION_KINDS = {"slide.delete", "version.restore"}
+_DESTRUCTIVE_OPERATION_KINDS = WORKSPACE_DESTRUCTIVE_OPERATION_KINDS
 _DEFAULT_DESTRUCTIVE_APPROVAL_TTL_SECONDS = 24 * 60 * 60
 _SAFE_ERROR_MESSAGES = {
     "asset_processing_timeout": "An attachment did not finish processing in time.",
@@ -89,6 +104,69 @@ _PRIVATE_PAYLOAD_KEYS = {
     "token",
     "trace",
 }
+
+
+def _attachment_unavailable_code(
+    asset: WorkspaceAsset | None,
+    *,
+    now: datetime,
+) -> str | None:
+    """Return a stable public reason when the immutable upload is not usable."""
+
+    if asset is None:
+        return "workspace_asset_deleted"
+    if asset.deleted_at is not None or asset.state == "deleted":
+        return "workspace_asset_deleted"
+    if asset.expires_at is not None and _as_utc(asset.expires_at) <= now:
+        return "workspace_asset_expired"
+    return {
+        "uploaded": "workspace_asset_not_ready",
+        "scanning": "workspace_asset_not_ready",
+        "processing": "workspace_asset_not_ready",
+        "failed": "workspace_asset_failed",
+        "quarantined": "workspace_asset_quarantined",
+        "expired": "workspace_asset_expired",
+    }.get(asset.state)
+
+
+def _attachment_snapshot_failure_code(
+    attachment: WorkspaceMessageAttachment,
+) -> str | None:
+    """Map at-attach-time failure metadata to the public error registry."""
+
+    if attachment.asset_failure_code:
+        return resolve_workspace_error(attachment.asset_failure_code).code
+    return {
+        "failed": "workspace_asset_failed",
+        "quarantined": "workspace_asset_quarantined",
+        "expired": "workspace_asset_expired",
+        "deleted": "workspace_asset_deleted",
+    }.get(attachment.asset_state)
+
+
+def _attachment_safe_failure(
+    attachment: WorkspaceMessageAttachment,
+    *,
+    unavailable_code: str | None,
+) -> dict[str, Any] | None:
+    """Project only allow-listed failure fields; raw scanner detail stays private."""
+
+    code = _attachment_snapshot_failure_code(attachment)
+    if code is None and unavailable_code in {
+        "workspace_asset_failed",
+        "workspace_asset_quarantined",
+        "workspace_asset_expired",
+        "workspace_asset_deleted",
+    }:
+        code = unavailable_code
+    if code is None:
+        return None
+    definition = resolve_workspace_error(code)
+    return {
+        "failure_code": definition.code,
+        "safe_message": definition.safe_message,
+        "retryable": definition.retryable,
+    }
 
 
 class WorkspaceServiceError(RuntimeError):
@@ -207,6 +285,77 @@ async def _presentation_or_404(
     if presentation is None:
         raise WorkspaceServiceError("presentation_not_found", status_code=404)
     return presentation
+
+
+async def _lock_workspace_mutation_admission(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+) -> tuple[PresentationModel, int | None]:
+    """Serialize a new mutation against account and presentation deletion.
+
+    The account row is always fenced first, matching the account-deletion
+    finalizer's lock order.  The presentation no-op UPDATE is the tombstone
+    serialization point on both PostgreSQL and SQLite; the lock remains held
+    until the caller commits or rolls back its command/action transaction.
+    """
+
+    owner_id = get_current_owner_id()
+    account_generation: int | None = None
+    if owner_id is not None:
+        try:
+            account_generation = await require_active_account_generation(
+                session,
+                user_id=owner_id,
+            )
+        except AccountDeletionFenceConflict as error:
+            raise WorkspaceServiceError(
+                "account_deletion_in_progress",
+                status_code=409,
+                retryable=False,
+            ) from error
+
+    admitted = (
+        await session.execute(
+            update(PresentationModel)
+            .where(
+                PresentationModel.id == presentation_id,
+                _owner_id_predicate(PresentationModel.owner_id),
+                PresentationModel.lifecycle_status
+                != PRESENTATION_LIFECYCLE_DELETED,
+            )
+            # Explicitly suppress SQLAlchemy's ``updated_at`` onupdate hook:
+            # admission takes a writer lock but is not itself a deck change.
+            .values(updated_at=PresentationModel.updated_at)
+            .returning(PresentationModel.id)
+            .execution_options(synchronize_session=False)
+        )
+    ).scalar_one_or_none()
+    if admitted is None:
+        presentation = await _presentation_or_404(session, presentation_id)
+        if presentation.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED:
+            raise WorkspaceServiceError(
+                "presentation_deleted",
+                status_code=409,
+                retryable=False,
+            )
+        raise WorkspaceServiceError(
+            "workspace_mutation_admission_conflict",
+            status_code=409,
+            retryable=True,
+        )
+
+    presentation = (
+        await session.execute(
+            select(PresentationModel)
+            .where(
+                PresentationModel.id == presentation_id,
+                _owner_id_predicate(PresentationModel.owner_id),
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    return presentation, account_generation
 
 
 async def _conversation_for_presentation(
@@ -528,11 +677,15 @@ async def _materialize_attachments(
             WorkspaceMessageAttachment(
                 message_id=message.id,
                 asset_id=asset.id,
+                asset_id_snapshot=asset.id,
                 ordinal=ordinal,
                 display_name=display_name,
                 media_type=media_type,
                 size_bytes=size_bytes,
                 asset_state=asset.state,
+                asset_sha256=asset.sha256,
+                asset_failure_code=asset.failure_code,
+                asset_failure_detail=deepcopy(asset.failure_detail),
             )
         )
         assets.append(asset)
@@ -565,7 +718,10 @@ async def _bootstrap_workspace_once(
             raise WorkspaceServiceError("idempotency_record_incomplete", status_code=409)
         return conversation, message, existing, True
 
-    presentation = await _presentation_or_404(session, presentation_id)
+    presentation, account_generation = await _lock_workspace_mutation_admission(
+        session,
+        presentation_id=presentation_id,
+    )
     expected_revision = (
         presentation.revision
         if request.expected_revision is None
@@ -580,6 +736,7 @@ async def _bootstrap_workspace_once(
     operation_payload = {
         **admitted_payload,
         "user_message_id": str(message_id),
+        "account_deletion_generation": account_generation,
         # Filled from authoritative asset rows after the attachment snapshots exist.
         "asset_ids": [],
     }
@@ -679,6 +836,10 @@ async def bootstrap_workspace(
     surrounding presentation/job transaction.
     """
 
+    if not is_workspace_bootstrap_kind(request.operation_type):
+        raise WorkspaceServiceError(
+            "unsupported_operation_type", status_code=422, retryable=False
+        )
     if (
         initial_state is not None
         and initial_operation_state is not None
@@ -785,11 +946,14 @@ async def activate_workspace_operation(
     ).scalar_one_or_none()
     if operation is None:
         raise WorkspaceServiceError("workspace_operation_not_found", status_code=404)
-    presentation = await _presentation_or_404(session, operation.presentation_id)
-    if presentation.revision != expected_revision:
-        raise WorkspaceServiceError("revision_conflict", status_code=409, retryable=True)
     if operation.state == "queued" and operation.request_hash == request_hash:
         return operation, True
+    presentation, account_generation = await _lock_workspace_mutation_admission(
+        session,
+        presentation_id=operation.presentation_id,
+    )
+    if presentation.revision != expected_revision:
+        raise WorkspaceServiceError("revision_conflict", status_code=409, retryable=True)
     if operation.state != "awaiting_approval":
         raise WorkspaceServiceError("operation_state_conflict", status_code=409)
     expected_version = (
@@ -797,7 +961,11 @@ async def activate_workspace_operation(
         if expected_operation_version is None
         else expected_operation_version
     )
-    merged_payload = {**operation.request_payload, **dict(request_payload)}
+    merged_payload = {
+        **operation.request_payload,
+        **dict(request_payload),
+        "account_deletion_generation": account_generation,
+    }
     now = get_current_utc_datetime()
     changed = (
         await session.execute(
@@ -852,7 +1020,11 @@ async def activate_workspace_operation(
     return operation, False
 
 
-def _event_to_wire(event: WorkspaceOperationEvent) -> dict[str, Any]:
+def _event_to_wire(
+    event: WorkspaceOperationEvent,
+    *,
+    operation_anchor_position: int | None = None,
+) -> dict[str, Any]:
     payload = _safe_payload(event.payload or {})
     return {
         "id": f"{event.operation_id}:{event.sequence}",
@@ -860,6 +1032,7 @@ def _event_to_wire(event: WorkspaceOperationEvent) -> dict[str, Any]:
         "operation_version": event.operation_version,
         "sequence": event.sequence,
         "cursor": str(event.cursor) if event.cursor is not None else None,
+        "operation_anchor_position": operation_anchor_position,
         "type": event.event_type,
         "status": payload.get("status") if isinstance(payload, dict) else None,
         "message": payload.get("message") if isinstance(payload, dict) else None,
@@ -892,6 +1065,7 @@ def _operation_title(kind: str) -> str:
         "slide.regenerate": "슬라이드 다시 생성",
         "slide.delete": "슬라이드 삭제",
         "version.restore": "버전 복원",
+        "template.apply": "AI 저작 템플릿 변경",
         "quality.review": "프레젠테이션 품질 검사",
         "export.pptx": "PowerPoint 내보내기",
         "export.pdf": "PDF 내보내기",
@@ -1045,7 +1219,7 @@ async def workspace_timeline(
             (
                 await session.execute(
                     select(WorkspaceMessageAttachment, WorkspaceAsset)
-                    .join(
+                    .outerjoin(
                         WorkspaceAsset,
                         WorkspaceAsset.id == WorkspaceMessageAttachment.asset_id,
                     )
@@ -1054,15 +1228,49 @@ async def workspace_timeline(
                 )
             ).all()
         )
-        for attachment, asset in attachment_rows:
+        now = get_current_utc_datetime()
+        for attachment, joined_asset in attachment_rows:
+            # The live row is capability metadata only.  Treat a mismatched
+            # pointer/owner as unavailable rather than projecting a capability
+            # for a different immutable upload.
+            asset = joined_asset
+            if asset is not None and (
+                asset.id != attachment.asset_id_snapshot
+                or asset.owner_id != attachment.owner_id
+            ):
+                asset = None
+            unavailable_code = _attachment_unavailable_code(asset, now=now)
+            safe_failure = _attachment_safe_failure(
+                attachment,
+                unavailable_code=unavailable_code,
+            )
+            can_download = asset is not None and unavailable_code is None
+            download_url = (
+                f"/api/v1/ppt/workspace/assets/{asset.id}/download"
+                if can_download
+                else None
+            )
             attachments_by_message[attachment.message_id].append(
                 {
-                    "id": str(asset.id),
+                    "schema_version": 1,
+                    "id": str(attachment.asset_id_snapshot),
                     "name": attachment.display_name,
-                    "status": asset.state,
+                    "status": attachment.asset_state,
+                    "current_state": asset.state if asset is not None else None,
                     "mime_type": attachment.media_type,
                     "size_bytes": attachment.size_bytes,
-                    "error": asset.failure_code,
+                    "sha256": attachment.asset_sha256,
+                    "error": (
+                        safe_failure["failure_code"]
+                        if safe_failure is not None
+                        else None
+                    ),
+                    "safe_failure": safe_failure,
+                    "download_url": download_url,
+                    "download_action": "download" if can_download else None,
+                    "preview_url": None,
+                    "preview_action": None,
+                    "unavailable_reason": unavailable_code,
                 }
             )
 
@@ -1081,7 +1289,14 @@ async def workspace_timeline(
             ).all()
         )
         for event in event_rows:
-            events_by_operation[event.operation_id].append(_event_to_wire(event))
+            events_by_operation[event.operation_id].append(
+                _event_to_wire(
+                    event,
+                    operation_anchor_position=operations_by_id[
+                        event.operation_id
+                    ].anchor_position,
+                )
+            )
 
     items: list[dict[str, Any]] = []
     for position, kind, row in selected:
@@ -1177,14 +1392,12 @@ async def workspace_timeline(
 def parse_event_cursor(value: Optional[str]) -> int:
     if value is None or not value.strip():
         return 0
-    candidate = value.strip().rsplit(":", 1)[-1]
-    try:
-        cursor = int(candidate)
-    except ValueError as error:
-        raise WorkspaceServiceError("invalid_event_cursor", status_code=400) from error
-    if cursor < 0:
+    candidate = value.strip()
+    if not candidate.isascii() or not candidate.isdecimal():
         raise WorkspaceServiceError("invalid_event_cursor", status_code=400)
-    return cursor
+    if len(candidate) > 1 and candidate.startswith("0"):
+        raise WorkspaceServiceError("invalid_event_cursor", status_code=400)
+    return int(candidate)
 
 
 async def workspace_events(
@@ -1198,6 +1411,12 @@ async def workspace_events(
     cursor = parse_event_cursor(after)
     conversation = await _conversation_for_presentation(session, presentation_id)
     if conversation is None:
+        if after is not None and after.strip() and cursor > 0:
+            raise WorkspaceServiceError(
+                "event_cursor_expired",
+                status_code=410,
+                retryable=True,
+            )
         return {
             "schema_version": 1,
             "events": [],
@@ -1213,11 +1432,32 @@ async def workspace_events(
             status_code=410,
             retryable=True,
         )
+    latest_cursor = await session.scalar(
+        select(func.max(WorkspaceOperationEvent.cursor))
+        .join(
+            WorkspaceOperation,
+            WorkspaceOperation.id == WorkspaceOperationEvent.operation_id,
+        )
+        .where(WorkspaceOperation.conversation_id == conversation.id)
+    )
+    authoritative_high_watermark = max(
+        int(latest_cursor or 0),
+        conversation.event_retention_floor_cursor,
+    )
+    if after is not None and after.strip() and cursor > authoritative_high_watermark:
+        raise WorkspaceServiceError(
+            "event_cursor_expired",
+            status_code=410,
+            retryable=True,
+        )
     effective_limit = max(1, min(limit, 500))
     rows = list(
         (
-            await session.scalars(
-                select(WorkspaceOperationEvent)
+            await session.execute(
+                select(
+                    WorkspaceOperationEvent,
+                    WorkspaceOperation.anchor_position,
+                )
                 .join(
                     WorkspaceOperation,
                     WorkspaceOperation.id == WorkspaceOperationEvent.operation_id,
@@ -1232,12 +1472,18 @@ async def workspace_events(
         ).all()
     )
     high_watermark = max(
-        rows[-1].cursor if rows else cursor,
+        rows[-1][0].cursor if rows else cursor,
         conversation.event_retention_floor_cursor,
     )
     return {
         "schema_version": 1,
-        "events": [_event_to_wire(event) for event in rows],
+        "events": [
+            _event_to_wire(
+                event,
+                operation_anchor_position=anchor_position,
+            )
+            for event, anchor_position in rows
+        ],
         "event_high_watermark": str(high_watermark),
     }
 
@@ -1248,6 +1494,10 @@ async def create_workspace_command(
     presentation_id: uuid.UUID,
     request: WorkspaceCommandRequest,
 ) -> tuple[WorkspaceOperation, bool]:
+    if not is_workspace_command_kind(request.command_type):
+        raise WorkspaceServiceError(
+            "unsupported_operation_type", status_code=422, retryable=False
+        )
     idempotency_hash = workspace_idempotency_hash(request.idempotency_key)
     payload = {
         "presentation_id": str(presentation_id),
@@ -1255,6 +1505,7 @@ async def create_workspace_command(
         "command_type": request.command_type,
         "context": request.context,
         "expected_revision": request.expected_revision,
+        "asset_ids": [str(asset_id) for asset_id in request.asset_ids],
     }
     request_hash = canonical_payload_hash(payload)
     existing = await _existing_operation_for_key(
@@ -1268,7 +1519,10 @@ async def create_workspace_command(
             raise WorkspaceServiceError("idempotency_key_payload_conflict", status_code=409)
         return existing, True
 
-    presentation = await _presentation_or_404(session, presentation_id)
+    presentation, account_generation = await _lock_workspace_mutation_admission(
+        session,
+        presentation_id=presentation_id,
+    )
     expected_revision = (
         presentation.revision
         if request.expected_revision is None
@@ -1303,23 +1557,75 @@ async def create_workspace_command(
         state=initial_state,
         idempotency_key_hash=idempotency_hash,
         request_hash=request_hash,
-        request_payload={**payload, "user_message_id": str(message.id)},
+        request_payload={
+            **payload,
+            "user_message_id": str(message.id),
+            "account_deletion_generation": account_generation,
+            # Asset transitions must restore this state after every referenced
+            # asset becomes ready instead of bypassing destructive approval.
+            "initial_operation_state": initial_state,
+        },
         expected_revision=expected_revision,
         approval_expires_at=approval_expires_at,
     )
     session.add_all((message, operation))
     try:
         await session.flush()
+        assets = await _materialize_attachments(
+            session,
+            conversation=conversation,
+            message=message,
+            asset_ids=request.asset_ids,
+            attachments=[],
+        )
+        states = [asset.state for asset in assets]
+        asset_state = _asset_operation_state(states)
+        operation_state = initial_state if asset_state == "queued" else asset_state
+        operation.state = operation_state
+        operation.error_code = _asset_block_error(states)
+        operation.error_detail = (
+            {"retryable": operation.error_code == "workspace_asset_failed"}
+            if operation.error_code
+            else None
+        )
+        operation.request_payload = {
+            **operation.request_payload,
+            # Persist only IDs resolved from authoritative, owner-scoped rows.
+            "asset_ids": [str(asset.id) for asset in assets],
+        }
+        await session.flush()
         event = await append_workspace_operation_event(
             session,
             operation=operation,
-            event_type="approval_required" if requires_approval else "queued",
+            event_type=(
+                "approval_required"
+                if operation_state == "awaiting_approval"
+                else operation_state
+            ),
             payload={
-                "status": initial_state,
-                "message": "Awaiting approval." if requires_approval else "Queued.",
+                "status": operation_state,
+                "message": (
+                    "Waiting for attachments."
+                    if operation_state == "waiting_for_assets"
+                    else "An attachment cannot be used."
+                    if operation_state == "blocked"
+                    else "Awaiting approval."
+                    if operation_state == "awaiting_approval"
+                    else "Queued."
+                ),
                 "approval_expires_at": (
                     approval_expires_at.isoformat()
-                    if approval_expires_at is not None
+                    if operation_state == "awaiting_approval"
+                    and approval_expires_at is not None
+                    else None
+                ),
+                "error": (
+                    {
+                        "code": operation.error_code,
+                        "retryable": operation.error_code
+                        == "workspace_asset_failed",
+                    }
+                    if operation.error_code
                     else None
                 ),
             },
@@ -1338,6 +1644,12 @@ async def create_workspace_command(
         if existing is None or existing.request_hash != request_hash:
             raise WorkspaceServiceError("idempotency_key_payload_conflict", status_code=409)
         return existing, True
+    except Exception:
+        # Attachment admission happens after the message/operation pair is
+        # staged. Keep asset claims and snapshots atomic with command creation
+        # even when callers catch a service error and reuse this session.
+        await session.rollback()
+        raise
 
 
 def _operation_asset_ids(operation: WorkspaceOperation) -> list[uuid.UUID]:
@@ -1432,7 +1744,14 @@ async def apply_workspace_action(
     ).scalar_one_or_none()
     if operation is None:
         raise WorkspaceServiceError("workspace_operation_not_found", status_code=404)
-    presentation = await _presentation_or_404(session, operation.presentation_id)
+    if get_workspace_operation_kind(operation.kind) is None:
+        raise WorkspaceServiceError(
+            "unsupported_operation_type", status_code=422, retryable=False
+        )
+    presentation, account_generation = await _lock_workspace_mutation_admission(
+        session,
+        presentation_id=operation.presentation_id,
+    )
     if (
         request.expected_revision is not None
         and presentation.revision != request.expected_revision
@@ -1485,6 +1804,7 @@ async def apply_workspace_action(
         retry_payload = {
             **source_operation.request_payload,
             "retry_of_operation_id": str(source_operation.id),
+            "account_deletion_generation": account_generation,
         }
         retry_request_hash = canonical_payload_hash(
             {
@@ -1584,7 +1904,14 @@ async def apply_workspace_action(
         ):
             raise WorkspaceServiceError("approval_expired", status_code=409)
         allowed_states = ("approval_required", "awaiting_approval")
-        values = {"state": "queued", "next_attempt_at": now}
+        # The expiry bounds the approval action itself.  Clearing it makes the
+        # consumed approval durable so a delayed or recovered worker does not
+        # reinterpret an already-approved command as expired.
+        values = {
+            "state": "queued",
+            "next_attempt_at": now,
+            "approval_expires_at": None,
+        }
     else:
         if operation.state == "blocked":
             await _guard_blocked_operation_retry(session, operation)

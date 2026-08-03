@@ -229,7 +229,7 @@ async def enable_share(
 ):
     """Enable read-only sharing (idempotent). `regenerate=true` rotates the token,
     which immediately voids the previous link."""
-    require_legacy_presentation_write_path()
+    require_legacy_presentation_write_path(id)
     presentation = await sql_session.get(PresentationModel, id)
     if (
         not presentation
@@ -248,7 +248,7 @@ async def enable_share(
 async def disable_share(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    require_legacy_presentation_write_path()
+    require_legacy_presentation_write_path(id)
     presentation = await sql_session.get(PresentationModel, id)
     if (
         not presentation

@@ -35,6 +35,7 @@ from models.sql.workspace import (
     WorkspaceActionReceipt,
     WorkspaceArtifact,
     WorkspaceAsset,
+    WorkspaceCleanupJournal,
     WorkspaceConversation,
     WorkspaceMessage,
     WorkspaceMessageAttachment,
@@ -67,6 +68,12 @@ if "sqlite" in database_url:
     def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
         try:
+            # sqlite-local supports a separate worker process. WAL keeps API
+            # reads available while that worker publishes a short write, and
+            # busy_timeout absorbs the remaining writer/writer hand-off.
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.fetchone()
             cursor.execute("PRAGMA foreign_keys=ON")
         finally:
             cursor.close()
@@ -171,6 +178,7 @@ async def create_db_and_tables():
                         WorkspaceOutbox.__table__,
                         WorkspaceActionReceipt.__table__,
                         WorkspaceArtifact.__table__,
+                        WorkspaceCleanupJournal.__table__,
                         AuthoredExactProvenance.__table__,
                         PresentationGenerationJob.__table__,
                         AuthoredSlideCheckpoint.__table__,

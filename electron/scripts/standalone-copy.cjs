@@ -1,5 +1,57 @@
 const fs = require("fs")
+const os = require("os")
 const path = require("path")
+
+function preflightWindowsSymlinkFallback({
+  fsImpl = fs,
+  platform = process.platform,
+  temporaryDirectory = os.tmpdir(),
+} = {}) {
+  // The packager always materializes links, but probe Windows explicitly so a
+  // Developer Mode/elevation policy change is recorded instead of surfacing as
+  // an opaque EPERM halfway through a standalone copy.
+  if (platform !== "win32") {
+    return {
+      mode: "materialize",
+      symlinkCapability: "not-applicable",
+      reason: "link-free standalone copies are required",
+    }
+  }
+  const root = fsImpl.mkdtempSync(path.join(temporaryDirectory, "presenton-link-preflight-"))
+  let result
+  let primaryError
+  try {
+    const target = path.join(root, "target")
+    const link = path.join(root, "link")
+    fsImpl.mkdirSync(target)
+    fsImpl.symlinkSync(target, link, "dir")
+    result = {
+      mode: "materialize",
+      symlinkCapability: "available",
+      reason: "directory symlink capability available; package policy remains link-free",
+    }
+  } catch (error) {
+    if (error?.code === "EPERM" || error?.code === "EACCES") {
+      result = {
+        mode: "materialize",
+        symlinkCapability: "unavailable",
+        reason: `directory symlink unavailable (${error.code}); using privilege-free materialized-copy fallback`,
+      }
+    } else {
+      primaryError = error
+    }
+  } finally {
+    try {
+      fsImpl.rmSync(root, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 })
+    } catch (cleanupError) {
+      if (!primaryError && result) {
+        result.cleanupWarning = `could not remove symlink preflight directory (${cleanupError.code || "unknown"}): ${cleanupError.message}`
+      }
+    }
+  }
+  if (primaryError) throw primaryError
+  return result
+}
 
 function isWithin(root, candidate) {
   const relative = path.relative(root, candidate)
@@ -298,6 +350,7 @@ module.exports = {
   copyTreeSafe,
   isWithin,
   materializeTreeInPlace,
+  preflightWindowsSymlinkFallback,
   removeMaterializedPnpmStore,
   validateCopiedLinks,
   validateLinkFreeTree,

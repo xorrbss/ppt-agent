@@ -132,6 +132,7 @@ def remove_native_source(
     *,
     template_id: str,
     revision: int,
+    storage_root: Path | None = None,
 ) -> None:
     """Remove only one canonical package after a failed owning transaction."""
 
@@ -140,6 +141,7 @@ def remove_native_source(
         template_id=template_id,
         revision=revision,
         require_exists=False,
+        storage_root=storage_root,
     )
     target.unlink(missing_ok=True)
     for directory in (target.parent, target.parent.parent):
@@ -174,6 +176,7 @@ def _resolve_scoped_key(
     template_id: str,
     revision: int,
     require_exists: bool,
+    storage_root: Path | None = None,
 ) -> Path:
     expected = native_source_storage_key(template_id, revision)
     if not isinstance(storage_key, str) or storage_key != expected:
@@ -182,7 +185,15 @@ def _resolve_scoped_key(
     if pure.is_absolute() or ".." in pure.parts or "\\" in storage_key:
         raise TemplateV2NativeStorageError("template_v2_native_storage_key_invalid")
 
-    root = native_source_root().resolve()
+    root = (
+        Path(storage_root).resolve(strict=False)
+        if storage_root is not None
+        else native_source_root().resolve()
+    )
+    if not root.is_absolute() or root == Path(root.anchor):
+        raise TemplateV2NativeStorageError(
+            "template_v2_native_storage_root_invalid"
+        )
     relative = Path(*pure.parts[2:])
     lexical = root / relative
     current = root

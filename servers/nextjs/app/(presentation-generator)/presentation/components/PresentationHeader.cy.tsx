@@ -13,7 +13,10 @@ import {
   setStreaming,
 } from "@/store/slices/presentationGeneration";
 import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
-import type { WorkspaceCommandDispatcher } from "../workspace";
+import type {
+  WorkspaceCommandDispatcher,
+  WorkspaceQualityReviewRequester,
+} from "../workspace";
 
 const mountHeader = (
   isAuthoredDeck: boolean,
@@ -21,6 +24,7 @@ const mountHeader = (
   workspace?: {
     enabled: boolean;
     command: WorkspaceCommandDispatcher;
+    qualityReview?: WorkspaceQualityReviewRequester;
   },
 ) => {
   store.dispatch(
@@ -59,6 +63,7 @@ const mountHeader = (
             chatFirstEnabled={workspace !== undefined}
             workspaceCommandsEnabled={workspace?.enabled ?? false}
             onWorkspaceCommand={workspace?.command}
+            onWorkspaceQualityReviewRequest={workspace?.qualityReview}
           />
         </Provider>
       </PathnameContext.Provider>
@@ -351,17 +356,17 @@ describe("PresentationHeader authored export", () => {
 
   it("dispatches quality and export through chat-first operations without invoking legacy export", () => {
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
-    mountHeader(true, false, { enabled: true, command: workspaceCommand });
+    const qualityReview = cy.stub().as("qualityReview");
+    mountHeader(true, false, {
+      enabled: true,
+      command: workspaceCommand,
+      qualityReview,
+    });
 
     cy.get('[data-testid="workspace-quality-review"]').click();
     cy.wrap(null).then(() => {
-      expect(workspaceCommand.getCall(0).args).to.deep.equal([
-        "현재 발표자료를 읽기 전용으로 품질 검토해 줘",
-        {
-          commandType: "quality.review",
-          context: { mode: "analyze_only" },
-        },
-      ]);
+      expect(qualityReview).to.have.been.calledOnceWith(undefined);
+      expect(workspaceCommand).not.to.have.been.called;
     });
 
     openExportOptions();
@@ -370,11 +375,11 @@ describe("PresentationHeader authored export", () => {
     cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
 
     cy.wrap(null).then(() => {
-      expect(workspaceCommand.getCall(1).args).to.deep.equal([
+      expect(workspaceCommand.getCall(0).args).to.deep.equal([
         "PDF로 내보내기",
         { commandType: "export.pdf", context: { format: "pdf" } },
       ]);
-      expect(workspaceCommand.getCall(2).args).to.deep.equal([
+      expect(workspaceCommand.getCall(1).args).to.deep.equal([
         "편집 가능한 요소를 분리해 PPTX로 내보내기",
         {
           commandType: "export.pptx",

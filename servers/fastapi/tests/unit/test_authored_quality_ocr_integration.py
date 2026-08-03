@@ -170,7 +170,7 @@ async def _style_scenario(
     tmp_path: Path,
     monkeypatch,
     *,
-    analyze_only: bool = False,
+    clean_initial: bool = False,
     candidate_text: str = "Revenue 42%",
     fallback_text: str | None = None,
     unavailable: bool = False,
@@ -224,7 +224,7 @@ async def _style_scenario(
         return {"elements": [{"qid": "title", "visible": True, "rendered_text": text}]}
 
     def fake_dom(html, _metrics, *, reference_mode):
-        if "original" in html and not analyze_only:
+        if "original" in html and not clean_initial:
             issues = (
                 DomQualityIssue(
                     "content",
@@ -239,7 +239,7 @@ async def _style_scenario(
         return DomQualityReport(reference_mode, issues, (), 1, "available")
 
     async def fake_initial(_pngs, contexts=None, **_kwargs):
-        return [_clean() if analyze_only else _text_defect()]
+        return [_clean() if clean_initial else _text_defect()]
 
     async def fake_compare(_baseline, _candidate, contexts=None, **_kwargs):
         return [_clean()]
@@ -338,7 +338,6 @@ async def _style_scenario(
             presentation.id,
             AuthoredQualityReviewRequest(
                 scope="all",
-                mode="analyze_only" if analyze_only else "analyze_and_fix",
             ),
             task,
             session,
@@ -347,11 +346,11 @@ async def _style_scenario(
     return task, revise_calls, ocr_images
 
 
-def test_analyze_only_clean_slide_routes_skip_and_reports_zero_ocr(
+def test_clean_slide_auto_fix_review_routes_skip_and_reports_zero_ocr(
     tmp_path, monkeypatch
 ):
     task, revise_calls, ocr_images = _run(
-        _style_scenario(tmp_path, monkeypatch, analyze_only=True)
+        _style_scenario(tmp_path, monkeypatch, clean_initial=True)
     )
 
     assert revise_calls == []

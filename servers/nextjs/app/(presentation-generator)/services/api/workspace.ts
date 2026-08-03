@@ -1,12 +1,17 @@
 import { buildAbsoluteApiRequestUrl, getApiUrl } from "@/utils/api";
-import { getHeader } from "./header";
+import { getHeader, getHeaderForFormData } from "./header";
 import {
   normalizeEventPage,
-  normalizeOperationEvent,
   normalizeTimelinePage,
+  normalizeWorkspaceActionReceipt,
 } from "../../presentation/workspace/timelineProjection";
+import {
+  consumeWorkspaceSseStream,
+  WorkspaceStreamError,
+} from "../../presentation/workspace/workspaceStream";
 import type {
   WorkspaceCapability,
+  WorkspaceActionReceipt,
   WorkspaceCommandRequest,
   WorkspaceEventPage,
   WorkspaceOperationActionRequest,
@@ -21,6 +26,7 @@ export class WorkspaceApiError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    readonly retryable?: boolean,
   ) {
     super(message);
     this.name = "WorkspaceApiError";
@@ -36,7 +42,10 @@ async function parseResponse(response: Response): Promise<unknown> {
     payload = {};
   }
   if (!response.ok) {
-    const raw = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+    const raw =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : {};
     const detail =
       raw.detail && typeof raw.detail === "object"
         ? (raw.detail as Record<string, unknown>)
@@ -45,14 +54,19 @@ async function parseResponse(response: Response): Promise<unknown> {
       raw.error && typeof raw.error === "object"
         ? (raw.error as Record<string, unknown>)
         : {};
+    const retryable =
+      typeof envelopeError.retryable === "boolean"
+        ? envelopeError.retryable
+        : typeof detail.retryable === "boolean"
+          ? detail.retryable
+          : undefined;
+    const safeMessage =
+      (typeof envelopeError.safe_message === "string" &&
+        envelopeError.safe_message) ||
+      (typeof detail.safe_message === "string" && detail.safe_message) ||
+      (typeof raw.safe_message === "string" && raw.safe_message);
     throw new WorkspaceApiError(
-      (typeof raw.detail === "string" && raw.detail) ||
-        (typeof envelopeError.safe_message === "string" && envelopeError.safe_message) ||
-        (typeof envelopeError.message === "string" && envelopeError.message) ||
-        (typeof detail.safe_message === "string" && detail.safe_message) ||
-        (typeof detail.message === "string" && detail.message) ||
-        (typeof raw.message === "string" && raw.message) ||
-        `Workspace request failed (${response.status})`,
+      safeMessage || `Workspace request failed (${response.status})`,
       response.status,
       typeof raw.code === "string"
         ? raw.code
@@ -63,20 +77,32 @@ async function parseResponse(response: Response): Promise<unknown> {
             : typeof raw.detail === "string"
               ? raw.detail
               : undefined,
+      retryable,
     );
   }
   return payload;
 }
 
-export async function getWorkspaceCapabilities(signal?: AbortSignal): Promise<WorkspaceCapability> {
+export async function getWorkspaceCapabilities(
+  signal?: AbortSignal,
+  presentationId?: string,
+): Promise<WorkspaceCapability> {
   try {
-    const response = await fetch(getApiUrl(`${ROOT}/capabilities`), {
+    const url = new URL(buildAbsoluteApiRequestUrl(`${ROOT}/capabilities`));
+    if (presentationId) url.searchParams.set("presentation_id", presentationId);
+    const response = await fetch(url, {
       headers: getHeader(),
       signal,
       cache: "no-store",
     });
     if (response.status === 404 || response.status === 501) {
-      return { supported: false, timeline: false, commands: false, events: false, reason: "unsupported" };
+      return {
+        supported: false,
+        timeline: false,
+        commands: false,
+        events: false,
+        reason: "unsupported",
+      };
     }
     const payload = (await parseResponse(response)) as Record<string, unknown>;
     const data =
@@ -90,25 +116,48 @@ export async function getWorkspaceCapabilities(signal?: AbortSignal): Promise<Wo
       timeline: supported && data.timeline !== false,
       commands: supported && enabled && data.commands !== false,
       events: supported && data.events !== false,
-      reason: typeof data.reason === "string" ? data.reason : supported ? undefined : "disabled",
+      reason:
+        typeof data.reason === "string"
+          ? data.reason
+          : supported
+            ? undefined
+            : "disabled",
     };
   } catch (error) {
     if (error instanceof WorkspaceApiError) throw error;
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return { supported: false, timeline: false, commands: false, events: false, reason: "unavailable" };
+    if (error instanceof DOMException && error.name === "AbortError")
+      throw error;
+    return {
+      supported: false,
+      timeline: false,
+      commands: false,
+      events: false,
+      reason: "unavailable",
+    };
   }
 }
 
 export async function getWorkspaceTimeline(
   presentationId: string,
-  options: { beforePosition?: number; limit?: number; signal?: AbortSignal } = {},
+  options: {
+    beforePosition?: number;
+    limit?: number;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<WorkspaceTimelinePage> {
   const url = new URL(
-    buildAbsoluteApiRequestUrl(`${ROOT}/presentations/${encodeURIComponent(presentationId)}/timeline`),
+    buildAbsoluteApiRequestUrl(
+      `${ROOT}/presentations/${encodeURIComponent(presentationId)}/timeline`,
+    ),
   );
-  if (options.beforePosition !== undefined) url.searchParams.set("before_position", String(options.beforePosition));
+  if (options.beforePosition !== undefined)
+    url.searchParams.set("before_position", String(options.beforePosition));
   url.searchParams.set("limit", String(options.limit ?? 50));
-  const response = await fetch(url, { headers: getHeader(), signal: options.signal, cache: "no-store" });
+  const response = await fetch(url, {
+    headers: getHeader(),
+    signal: options.signal,
+    cache: "no-store",
+  });
   return normalizeTimelinePage(await parseResponse(response));
 }
 
@@ -117,11 +166,17 @@ export async function getWorkspaceEvents(
   options: { after?: string; limit?: number; signal?: AbortSignal } = {},
 ): Promise<WorkspaceEventPage> {
   const url = new URL(
-    buildAbsoluteApiRequestUrl(`${ROOT}/presentations/${encodeURIComponent(presentationId)}/events`),
+    buildAbsoluteApiRequestUrl(
+      `${ROOT}/presentations/${encodeURIComponent(presentationId)}/events`,
+    ),
   );
   if (options.after) url.searchParams.set("after", options.after);
   url.searchParams.set("limit", String(options.limit ?? 200));
-  const response = await fetch(url, { headers: getHeader(), signal: options.signal, cache: "no-store" });
+  const response = await fetch(url, {
+    headers: getHeader(),
+    signal: options.signal,
+    cache: "no-store",
+  });
   return normalizeEventPage(await parseResponse(response));
 }
 
@@ -129,9 +184,11 @@ export async function postWorkspaceCommand(
   presentationId: string,
   request: WorkspaceCommandRequest,
   signal?: AbortSignal,
-): Promise<WorkspaceTimelinePage> {
+): Promise<WorkspaceActionReceipt> {
   const response = await fetch(
-    getApiUrl(`${ROOT}/presentations/${encodeURIComponent(presentationId)}/commands`),
+    getApiUrl(
+      `${ROOT}/presentations/${encodeURIComponent(presentationId)}/commands`,
+    ),
     {
       method: "POST",
       headers: { ...getHeader(), "Content-Type": "application/json" },
@@ -141,30 +198,34 @@ export async function postWorkspaceCommand(
         idempotency_key: request.idempotencyKey,
         expected_revision: request.expectedRevision,
         context: request.context,
+        asset_ids: request.assetIds,
       }),
       signal,
     },
   );
-  return normalizeTimelinePage(await parseResponse(response));
+  return normalizeWorkspaceActionReceipt(await parseResponse(response));
 }
 
 export async function postWorkspaceOperationAction(
   operationId: string,
   request: WorkspaceOperationActionRequest,
   signal?: AbortSignal,
-): Promise<WorkspaceTimelinePage> {
-  const response = await fetch(getApiUrl(`${ROOT}/operations/${encodeURIComponent(operationId)}/actions`), {
-    method: "POST",
-    headers: { ...getHeader(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: request.action,
-      idempotency_key: request.idempotencyKey,
-      expected_revision: request.expectedRevision,
-      expected_operation_version: request.expectedOperationVersion,
-    }),
-    signal,
-  });
-  return normalizeTimelinePage(await parseResponse(response));
+): Promise<WorkspaceActionReceipt> {
+  const response = await fetch(
+    getApiUrl(`${ROOT}/operations/${encodeURIComponent(operationId)}/actions`),
+    {
+      method: "POST",
+      headers: { ...getHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: request.action,
+        idempotency_key: request.idempotencyKey,
+        expected_revision: request.expectedRevision,
+        expected_operation_version: request.expectedOperationVersion,
+      }),
+      signal,
+    },
+  );
+  return normalizeWorkspaceActionReceipt(await parseResponse(response));
 }
 
 export interface WorkspaceArtifactDownload {
@@ -205,14 +266,19 @@ export async function downloadWorkspaceArtifact(
   if (!response.ok) await parseResponse(response);
   return {
     blob: await response.blob(),
-    fileName: contentDispositionFileName(response.headers.get("content-disposition")),
+    fileName: contentDispositionFileName(
+      response.headers.get("content-disposition"),
+    ),
   };
 }
 
 interface StreamOptions {
   after?: string;
   signal?: AbortSignal;
-  onEvent: (event: WorkspaceOperationEvent, cursor?: string) => void;
+  onEvent: (
+    event: WorkspaceOperationEvent,
+    cursor?: string,
+  ) => void | Promise<void>;
 }
 
 export async function streamWorkspaceEvents(
@@ -220,46 +286,99 @@ export async function streamWorkspaceEvents(
   options: StreamOptions,
 ): Promise<void> {
   const url = new URL(
-    buildAbsoluteApiRequestUrl(`${ROOT}/presentations/${encodeURIComponent(presentationId)}/events`),
+    buildAbsoluteApiRequestUrl(
+      `${ROOT}/presentations/${encodeURIComponent(presentationId)}/events`,
+    ),
   );
   url.searchParams.set("stream", "1");
   if (options.after) url.searchParams.set("after", options.after);
   const headers: Record<string, string> = { ...getHeader() };
   headers.Accept = "text/event-stream";
   if (options.after) headers["Last-Event-ID"] = options.after;
-  const response = await fetch(url, { headers, signal: options.signal, cache: "no-store" });
+  const response = await fetch(url, {
+    headers,
+    signal: options.signal,
+    cache: "no-store",
+  });
   if (!response.ok || !response.body) await parseResponse(response);
-  if (!response.body) throw new WorkspaceApiError("Event stream is unavailable", response.status || 503);
-  if (!response.headers.get("content-type")?.toLowerCase().includes("text/event-stream")) {
-    throw new WorkspaceApiError("Event stream is unavailable", 503, "stream_unavailable");
+  if (!response.body)
+    throw new WorkspaceApiError(
+      "Event stream is unavailable",
+      response.status || 503,
+    );
+  if (
+    !response.headers
+      .get("content-type")
+      ?.toLowerCase()
+      .includes("text/event-stream")
+  ) {
+    throw new WorkspaceApiError(
+      "Event stream is unavailable",
+      503,
+      "stream_unavailable",
+    );
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let boundary = buffer.search(/\r?\n\r?\n/);
-    while (boundary >= 0) {
-      const block = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary).replace(/^\r?\n\r?\n/, "");
-      let id: string | undefined;
-      const data: string[] = [];
-      for (const line of block.split(/\r?\n/)) {
-        if (line.startsWith("id:")) id = line.slice(3).trim();
-        if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
-      }
-      if (data.length > 0) {
-        try {
-          const event = normalizeOperationEvent(JSON.parse(data.join("\n")));
-          if (event) options.onEvent(event, id ?? event.cursor);
-        } catch {
-          // A malformed/heartbeat frame cannot mutate the projection.
-        }
-      }
-      boundary = buffer.search(/\r?\n\r?\n/);
-    }
+  try {
+    await consumeWorkspaceSseStream(response.body, options.onEvent);
+  } catch (error: unknown) {
+    if (!(error instanceof WorkspaceStreamError)) throw error;
+    const cursorExpired =
+      error.code === "cursor_expired" || error.code === "event_cursor_expired";
+    throw new WorkspaceApiError(
+      error.message,
+      cursorExpired ? 410 : 503,
+      error.code,
+      error.retryable,
+    );
   }
+}
+
+export interface WorkspaceUploadedAsset {
+  assetId: string;
+  fileName: string;
+  mediaType?: string;
+  sizeBytes: number;
+  status: string;
+}
+
+export async function postWorkspaceAsset(
+  file: File,
+  presentationId: string,
+  signal?: AbortSignal,
+): Promise<WorkspaceUploadedAsset> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("presentation_id", presentationId);
+  const response = await fetch(getApiUrl(`${ROOT}/assets`), {
+    method: "POST",
+    headers: getHeaderForFormData(),
+    body: form,
+    signal,
+  });
+  const payload = (await parseResponse(response)) as Record<string, unknown>;
+  const data =
+    payload.data && typeof payload.data === "object"
+      ? (payload.data as Record<string, unknown>)
+      : payload;
+  const assetId = typeof data.asset_id === "string" ? data.asset_id : data.id;
+  if (typeof assetId !== "string" || assetId.length === 0) {
+    throw new WorkspaceApiError(
+      "업로드 결과에서 자산 ID를 확인하지 못했습니다.",
+      502,
+      "invalid_asset_response",
+      false,
+    );
+  }
+  return {
+    assetId,
+    fileName: typeof data.file_name === "string" ? data.file_name : file.name,
+    mediaType:
+      typeof data.media_type === "string"
+        ? data.media_type
+        : file.type || undefined,
+    sizeBytes:
+      typeof data.size_bytes === "number" ? data.size_bytes : file.size,
+    status: typeof data.status === "string" ? data.status : "uploaded",
+  };
 }

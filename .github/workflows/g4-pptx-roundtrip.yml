@@ -177,6 +177,12 @@ jobs:
           npm run test:build-config
           npm run test:update-channel
 
+      - name: Smoke Windows materialized Next.js standalone resource
+        working-directory: electron
+        run: |
+          npm run build:nextjs
+          node -e "require('./scripts/standalone-copy.cjs').validateLinkFreeTree('resources/nextjs')"
+
       - name: Test Windows release artifact verifier
         working-directory: electron
         run: node --test scripts/verify-windows-release.test.cjs
@@ -441,6 +447,9 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '22'
+
+      - name: Invoke production release lifecycle preflight
+        run: node scripts/operational-release-preflight.mjs release
 
       - name: Test export runtime release gate
         run: npm run test:presentation-export-sync

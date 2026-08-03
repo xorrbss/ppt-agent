@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from services.document_conversion_service import DocumentConversionError
 from services.documents_loader import (
     DocumentsLoader,
     _decode_text_bytes,
@@ -133,6 +134,65 @@ def test_load_pdf_requires_temp_dir_when_images_are_requested():
 
     assert exc.value.status_code == 400
     assert "temp_dir is required" in exc.value.detail
+
+
+def test_load_office_falls_back_to_native_extraction_when_libreoffice_rejects_pptx(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "source.pptx"
+    source.write_bytes(b"pptx")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    loader.document_service = MagicMock()
+    loader.document_service.parse_to_markdown.return_value = "native slide text"
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "is_soffice_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_office_to_pdf",
+        MagicMock(
+            side_effect=DocumentConversionError(
+                "LibreOffice source file could not be loaded"
+            )
+        ),
+    )
+
+    result = loader.load_office_document(str(source), str(tmp_path))
+
+    assert result == "native slide text"
+    loader.document_service.parse_to_markdown.assert_called_once_with(str(source))
+
+
+def test_load_office_keeps_conversion_error_when_native_fallback_also_fails(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "source.pptx"
+    source.write_bytes(b"invalid")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    conversion_error = DocumentConversionError(
+        "LibreOffice source file could not be loaded"
+    )
+    loader.document_service = MagicMock()
+    loader.document_service.parse_to_markdown.side_effect = DocumentConversionError(
+        "Native parser could not read the file"
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "is_soffice_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_office_to_pdf",
+        MagicMock(side_effect=conversion_error),
+    )
+
+    with pytest.raises(DocumentConversionError) as exc:
+        loader.load_office_document(str(source), str(tmp_path))
+
+    assert exc.value is conversion_error
 
 
 @pytest.mark.parametrize(

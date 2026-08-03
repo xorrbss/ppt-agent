@@ -26,11 +26,7 @@ export interface AuthoredQualityReviewElementChange {
 }
 
 export type AuthoredOcrStatus =
-  | "executed"
-  | "routed_skip"
-  | "unavailable"
-  | "timeout"
-  | "unknown";
+  "executed" | "routed_skip" | "unavailable" | "timeout" | "unknown";
 
 /** Counts only: OCR source text is intentionally not retained for UI display. */
 export interface AuthoredQualityReviewOcrOmissions {
@@ -94,8 +90,8 @@ export interface AuthoredQualityReviewMetrics {
 
 export interface AuthoredQualityReviewResult {
   presentation_id?: string;
-  mode?: "analyze_only" | "analyze_and_fix";
-  scope?: "all" | "current";
+  mode?: "analyze_and_fix";
+  scope?: "all" | "current" | "subset";
   reviewed_count: number;
   issue_slide_count: number;
   fixed_count: number;
@@ -116,8 +112,7 @@ export const AUTHORED_STYLE_CATEGORIES = [
   "creative",
 ] as const;
 
-export type AuthoredStyleCategory =
-  (typeof AUTHORED_STYLE_CATEGORIES)[number];
+export type AuthoredStyleCategory = (typeof AUTHORED_STYLE_CATEGORIES)[number];
 
 export interface AuthoredStyleSummary {
   id: string;
@@ -132,8 +127,7 @@ export interface AuthoredStyleSummary {
 export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
   id: "default",
   name: "기본 블루프린트",
-  description:
-    "깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일",
+  description: "깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일",
   category: "general",
   tags: ["범용", "깔끔한", "컨설팅"],
   use_cases: ["회사 소개", "프로젝트 제안", "일반 보고서"],
@@ -170,9 +164,14 @@ function normalizeNumber(value: unknown): number | undefined {
 
 function normalizeIndexList(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value.filter((item): item is number =>
-    typeof item === "number" && Number.isInteger(item) && item >= 0
-  ))].sort((left, right) => left - right);
+  return [
+    ...new Set(
+      value.filter(
+        (item): item is number =>
+          typeof item === "number" && Number.isInteger(item) && item >= 0,
+      ),
+    ),
+  ].sort((left, right) => left - right);
 }
 
 function normalizeIssueList(value: unknown): string[] {
@@ -186,7 +185,9 @@ function normalizeIssueList(value: unknown): string[] {
 }
 
 function normalizeRepairPath(value: unknown): AuthoredReviewRepairPath {
-  return value === "local_patch" || value === "full_fallback" || value === "none"
+  return value === "local_patch" ||
+    value === "full_fallback" ||
+    value === "none"
     ? value
     : "none";
 }
@@ -234,7 +235,7 @@ function normalizeOcrStatus(value: unknown): AuthoredOcrStatus | undefined {
 }
 
 function normalizeOcrOmissions(
-  value: unknown
+  value: unknown,
 ): AuthoredQualityReviewOcrOmissions | undefined {
   if (!isRecord(value)) return undefined;
   const source = isRecord(value.omissions)
@@ -247,18 +248,42 @@ function normalizeOcrOmissions(
     const numeric = normalizeNumber(candidate);
     if (numeric !== undefined) return numeric;
     if (!isRecord(candidate)) return undefined;
-    return normalizeNumber(firstDefined(candidate.count, candidate.total, candidate.length));
+    return normalizeNumber(
+      firstDefined(candidate.count, candidate.total, candidate.length),
+    );
   };
-  const text = count(firstDefined(source.text, source.texts, source.missing_text, source.text_omissions));
-  const numbers = count(firstDefined(source.numbers, source.number, source.missing_numbers, source.number_omissions));
-  const symbols = count(firstDefined(source.symbols, source.symbol, source.missing_symbols, source.symbol_omissions));
-  if (text === undefined && numbers === undefined && symbols === undefined) return undefined;
+  const text = count(
+    firstDefined(
+      source.text,
+      source.texts,
+      source.missing_text,
+      source.text_omissions,
+    ),
+  );
+  const numbers = count(
+    firstDefined(
+      source.numbers,
+      source.number,
+      source.missing_numbers,
+      source.number_omissions,
+    ),
+  );
+  const symbols = count(
+    firstDefined(
+      source.symbols,
+      source.symbol,
+      source.missing_symbols,
+      source.symbol_omissions,
+    ),
+  );
+  if (text === undefined && numbers === undefined && symbols === undefined)
+    return undefined;
   return { text: text ?? 0, numbers: numbers ?? 0, symbols: symbols ?? 0 };
 }
 
 function deriveResolvedOmissions(
   baseline?: AuthoredQualityReviewOcrOmissions,
-  candidate?: AuthoredQualityReviewOcrOmissions
+  candidate?: AuthoredQualityReviewOcrOmissions,
 ): AuthoredQualityReviewOcrOmissions | undefined {
   if (!baseline || !candidate) return undefined;
   return {
@@ -268,36 +293,92 @@ function deriveResolvedOmissions(
   };
 }
 
-function normalizeOcrCheck(value: unknown): AuthoredQualityReviewOcrCheck | undefined {
+function normalizeOcrCheck(
+  value: unknown,
+): AuthoredQualityReviewOcrCheck | undefined {
   if (!isRecord(value)) return undefined;
   const hasMetrics = isRecord(value.metrics);
   const comparisonSource = isRecord(value.comparison) ? value.comparison : {};
-  const executed = normalizeBoolean(firstDefined(value.executed, value.ocr_executed));
+  const executed = normalizeBoolean(
+    firstDefined(value.executed, value.ocr_executed),
+  );
   const available = normalizeBoolean(value.available);
-  const status = normalizeOcrStatus(firstDefined(value.status, value.ocr_status));
-  const reason = normalizeOptionalString(firstDefined(
-    value.failure_reason, value.skip_reason, value.reason, value.error, value.message
-  ));
+  const status = normalizeOcrStatus(
+    firstDefined(value.status, value.ocr_status),
+  );
+  const reason = normalizeOptionalString(
+    firstDefined(
+      value.failure_reason,
+      value.skip_reason,
+      value.reason,
+      value.error,
+      value.message,
+    ),
+  );
   // The current backend exposes compact, privacy-safe omission counts at the
   // top level while retaining nested result metadata for diagnostics. Prefer
   // those counts; the nested object intentionally contains no OCR source text.
-  const baseline = normalizeOcrOmissions(firstDefined(value.baseline_omissions, value.baseline));
-  const candidate = normalizeOcrOmissions(firstDefined(value.candidate_omissions, value.candidate));
+  const baseline = normalizeOcrOmissions(
+    firstDefined(value.baseline_omissions, value.baseline),
+  );
+  const candidate = normalizeOcrOmissions(
+    firstDefined(value.candidate_omissions, value.candidate),
+  );
   const comparison: AuthoredQualityReviewOcrComparison = {
-    accepted: normalizeBoolean(firstDefined(comparisonSource.accepted, value.accepted)),
-    strict_improvement: normalizeBoolean(firstDefined(comparisonSource.strict_improvement, value.strict_improvement)),
-    no_regression: normalizeBoolean(firstDefined(comparisonSource.no_regression, value.no_regression)),
-    reason: normalizeOptionalString(firstDefined(comparisonSource.reason, comparisonSource.failure_reason)),
-    resolved: normalizeOcrOmissions(firstDefined(comparisonSource.resolved, value.resolved)),
-    remaining: normalizeOcrOmissions(firstDefined(comparisonSource.remaining, value.remaining)),
-    regressions: normalizeOcrOmissions(firstDefined(comparisonSource.regressions, comparisonSource.regression, value.regressions)),
+    accepted: normalizeBoolean(
+      firstDefined(comparisonSource.accepted, value.accepted),
+    ),
+    strict_improvement: normalizeBoolean(
+      firstDefined(
+        comparisonSource.strict_improvement,
+        value.strict_improvement,
+      ),
+    ),
+    no_regression: normalizeBoolean(
+      firstDefined(comparisonSource.no_regression, value.no_regression),
+    ),
+    reason: normalizeOptionalString(
+      firstDefined(comparisonSource.reason, comparisonSource.failure_reason),
+    ),
+    resolved: normalizeOcrOmissions(
+      firstDefined(comparisonSource.resolved, value.resolved),
+    ),
+    remaining: normalizeOcrOmissions(
+      firstDefined(comparisonSource.remaining, value.remaining),
+    ),
+    regressions: normalizeOcrOmissions(
+      firstDefined(
+        comparisonSource.regressions,
+        comparisonSource.regression,
+        value.regressions,
+      ),
+    ),
   };
-  if (!comparison.resolved) comparison.resolved = deriveResolvedOmissions(baseline, candidate);
-  const hasComparison = Object.values(comparison).some((item) => item !== undefined && item !== null);
-  const hasEvidence = executed !== undefined || available !== undefined || status !== undefined || reason !== null ||
-    baseline !== undefined || candidate !== undefined || hasComparison || hasMetrics || value.routed !== undefined;
+  if (!comparison.resolved)
+    comparison.resolved = deriveResolvedOmissions(baseline, candidate);
+  const hasComparison = Object.values(comparison).some(
+    (item) => item !== undefined && item !== null,
+  );
+  const hasEvidence =
+    executed !== undefined ||
+    available !== undefined ||
+    status !== undefined ||
+    reason !== null ||
+    baseline !== undefined ||
+    candidate !== undefined ||
+    hasComparison ||
+    hasMetrics ||
+    value.routed !== undefined;
   if (!hasEvidence) return undefined;
-  const inferredStatus = status ?? (executed === true ? "executed" : available === false ? "unavailable" : value.routed === false || reason !== null ? "routed_skip" : "unknown");
+  const inferredStatus =
+    status ??
+    (executed === true
+      ? "executed"
+      : available === false
+        ? "unavailable"
+        : value.routed === false || reason !== null
+          ? "routed_skip"
+          : "unknown");
   return {
     status: inferredStatus,
     executed: executed ?? inferredStatus === "executed",
@@ -310,13 +391,14 @@ function normalizeOcrCheck(value: unknown): AuthoredQualityReviewOcrCheck | unde
 
 function normalizeDisplayValue(value: unknown): string | undefined {
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   return undefined;
 }
 
 function normalizeElementChange(
   value: unknown,
-  legacyApplied: boolean
+  legacyApplied: boolean,
 ): AuthoredQualityReviewElementChange | null {
   if (!isRecord(value)) return null;
   const path = normalizeRepairPath(value.path);
@@ -340,7 +422,7 @@ function normalizeElementChange(
 function normalizeSlideResult(
   value: unknown,
   fixedSlideIndices: ReadonlySet<number>,
-  ocr?: AuthoredQualityReviewOcrCheck
+  ocr?: AuthoredQualityReviewOcrCheck,
 ): AuthoredQualityReviewSlideResult | null {
   if (!isRecord(value)) {
     return null;
@@ -365,11 +447,12 @@ function normalizeSlideResult(
   // candidate.
   const applied = normalizeApplied(
     value.applied,
-    fixedSlideIndices.has(slideIndex)
+    fixedSlideIndices.has(slideIndex),
   );
-  const attempted = typeof value.attempted === "boolean"
-    ? value.attempted
-    : path !== "none" || rawChanges.length > 0 || rejectionReason !== null;
+  const attempted =
+    typeof value.attempted === "boolean"
+      ? value.attempted
+      : path !== "none" || rawChanges.length > 0 || rejectionReason !== null;
   const changes = rawChanges.flatMap((change) => {
     const normalized = normalizeElementChange(change, applied);
     return normalized ? [normalized] : [];
@@ -381,7 +464,9 @@ function normalizeSlideResult(
     ...(rejectionReason === null ? {} : { rejection_reason: rejectionReason }),
     element_changes: changes,
     resolved_issues: normalizeIssueList(value.resolved_issues),
-    remaining_issues: normalizeIssueList(value.remaining_issues ?? value.issues),
+    remaining_issues: normalizeIssueList(
+      value.remaining_issues ?? value.issues,
+    ),
     path,
     ...(ocr ? { ocr } : {}),
   };
@@ -393,22 +478,30 @@ function normalizeStageTimings(value: unknown): Record<string, number> {
     Object.entries(value).flatMap(([stage, duration]) => {
       const normalized = normalizeNumber(duration);
       return normalized === undefined ? [] : [[stage, normalized]];
-    })
+    }),
   );
 }
 
-function normalizeSlideOcr(value: unknown): AuthoredQualityReviewOcrCheck | undefined {
+function normalizeSlideOcr(
+  value: unknown,
+): AuthoredQualityReviewOcrCheck | undefined {
   if (!isRecord(value)) return undefined;
   const nested = firstDefined(
     isRecord(value.ocr) ? value.ocr : undefined,
     isRecord(value.ocr_check) ? value.ocr_check : undefined,
     isRecord(value.ocr_result) ? value.ocr_result : undefined,
-    isRecord(value.ocr_validation) ? value.ocr_validation : undefined
+    isRecord(value.ocr_validation) ? value.ocr_validation : undefined,
   );
   if (nested !== undefined) return normalizeOcrCheck(nested);
   const hasOcrFields = [
-    "ocr_executed", "ocr_status", "routed", "skip_reason", "failure_reason",
-    "baseline", "candidate", "comparison",
+    "ocr_executed",
+    "ocr_status",
+    "routed",
+    "skip_reason",
+    "failure_reason",
+    "baseline",
+    "candidate",
+    "comparison",
   ].some((key) => value[key] !== undefined);
   return hasOcrFields ? normalizeOcrCheck(value) : undefined;
 }
@@ -418,7 +511,7 @@ function normalizeSlideOcr(value: unknown): AuthoredQualityReviewOcrCheck | unde
  * Unknown additions are ignored so server rollouts remain forwards compatible.
  */
 export function normalizeAuthoredQualityReviewResult(
-  value: unknown
+  value: unknown,
 ): AuthoredQualityReviewResult {
   const payload = isRecord(value) ? value : {};
   const rawSlideResults = Array.isArray(payload.slide_results)
@@ -434,9 +527,13 @@ export function normalizeAuthoredQualityReviewResult(
       ? payload.telemetry
       : {};
   const stageTimings = normalizeStageTimings(
-    metricsSource.stage_timings_ms ?? metricsSource.stage_timings ?? payload.stage_timings_ms
+    metricsSource.stage_timings_ms ??
+      metricsSource.stage_timings ??
+      payload.stage_timings_ms,
   );
-  const metrics: AuthoredQualityReviewMetrics = { stage_timings_ms: stageTimings };
+  const metrics: AuthoredQualityReviewMetrics = {
+    stage_timings_ms: stageTimings,
+  };
   const metricAliases = {
     total_ms: [],
     cache_hits: [],
@@ -460,9 +557,9 @@ export function normalizeAuthoredQualityReviewResult(
     const normalized = normalizeNumber(raw);
     if (normalized !== undefined) metrics[key] = normalized;
   }
-  const ocrExecuted = normalizeBoolean(firstDefined(
-    metricsSource.ocr_executed, payload.ocr_executed
-  ));
+  const ocrExecuted = normalizeBoolean(
+    firstDefined(metricsSource.ocr_executed, payload.ocr_executed),
+  );
   if (ocrExecuted !== undefined) metrics.ocr_executed = ocrExecuted;
   const ocrMetricAliases = {
     ocr_calls: ["ocr_call_count", "ocr_requests"],
@@ -472,19 +569,28 @@ export function normalizeAuthoredQualityReviewResult(
   for (const [key, aliases] of Object.entries(ocrMetricAliases) as Array<
     [keyof typeof ocrMetricAliases, readonly string[]]
   >) {
-    const raw = [key, ...aliases]
-      .map((candidate) => metricsSource[candidate] ?? payload[candidate])
-      .find((candidate) => candidate !== undefined) ?? (key === "ocr_total_ms" ? stageTimings.ocr : undefined);
+    const raw =
+      [key, ...aliases]
+        .map((candidate) => metricsSource[candidate] ?? payload[candidate])
+        .find((candidate) => candidate !== undefined) ??
+      (key === "ocr_total_ms" ? stageTimings.ocr : undefined);
     const normalized = normalizeNumber(raw);
     if (normalized !== undefined) metrics[key] = normalized;
   }
   const fixedSlideIndices = normalizeIndexList(payload.fixed_slide_indices);
   const fixedSlideIndexSet = new Set(fixedSlideIndices);
   const ocrChecks = new Map<number, AuthoredQualityReviewOcrCheck>();
-  const rawOcrChecks = Array.isArray(payload.ocr_checks) ? payload.ocr_checks : [];
+  const rawOcrChecks = Array.isArray(payload.ocr_checks)
+    ? payload.ocr_checks
+    : [];
   for (const rawCheck of rawOcrChecks) {
-    if (!isRecord(rawCheck) || typeof rawCheck.slide_index !== "number" ||
-      !Number.isInteger(rawCheck.slide_index) || rawCheck.slide_index < 0) continue;
+    if (
+      !isRecord(rawCheck) ||
+      typeof rawCheck.slide_index !== "number" ||
+      !Number.isInteger(rawCheck.slide_index) ||
+      rawCheck.slide_index < 0
+    )
+      continue;
     const normalized = normalizeOcrCheck(rawCheck);
     if (normalized) ocrChecks.set(rawCheck.slide_index, normalized);
   }
@@ -510,15 +616,25 @@ export function normalizeAuthoredQualityReviewResult(
   }
   slideResults.sort((left, right) => left.slide_index - right.slide_index);
   return {
-    presentation_id: typeof payload.presentation_id === "string" ? payload.presentation_id : undefined,
-    mode: payload.mode === "analyze_only" || payload.mode === "analyze_and_fix" ? payload.mode : undefined,
-    scope: payload.scope === "all" || payload.scope === "current" ? payload.scope : undefined,
+    presentation_id:
+      typeof payload.presentation_id === "string"
+        ? payload.presentation_id
+        : undefined,
+    mode: payload.mode === "analyze_and_fix" ? payload.mode : undefined,
+    scope:
+      payload.scope === "all" ||
+      payload.scope === "current" ||
+      payload.scope === "subset"
+        ? payload.scope
+        : undefined,
     reviewed_count: normalizeNumber(payload.reviewed_count) ?? 0,
     issue_slide_count: normalizeNumber(payload.issue_slide_count) ?? 0,
     fixed_count: normalizeNumber(payload.fixed_count) ?? 0,
     fixed_slide_indices: fixedSlideIndices,
     remaining_issue_count: normalizeNumber(payload.remaining_issue_count) ?? 0,
-    remaining_slide_indices: normalizeIndexList(payload.remaining_slide_indices),
+    remaining_slide_indices: normalizeIndexList(
+      payload.remaining_slide_indices,
+    ),
     version_saved: payload.version_saved === true,
     slide_results: slideResults,
     metrics,
@@ -582,7 +698,9 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
   };
 }
 
-export function normalizeAuthoredStyles(payload: unknown): AuthoredStyleSummary[] {
+export function normalizeAuthoredStyles(
+  payload: unknown,
+): AuthoredStyleSummary[] {
   const uniqueStyles: AuthoredStyleSummary[] = [];
   const seenIds = new Set<string>();
 
@@ -596,10 +714,10 @@ export function normalizeAuthoredStyles(payload: unknown): AuthoredStyleSummary[
   }
 
   const serverDefault = uniqueStyles.find(
-    (style) => style.id === DEFAULT_AUTHORED_STYLE.id
+    (style) => style.id === DEFAULT_AUTHORED_STYLE.id,
   );
   const remainingStyles = uniqueStyles.filter(
-    (style) => style.id !== DEFAULT_AUTHORED_STYLE.id
+    (style) => style.id !== DEFAULT_AUTHORED_STYLE.id,
   );
 
   return [serverDefault ?? DEFAULT_AUTHORED_STYLE, ...remainingStyles];
@@ -615,7 +733,7 @@ class AuthoredStylesApi {
       });
       const payload: unknown = await ApiResponseHandler.handleResponse(
         response,
-        "Failed to get authored styles"
+        "Failed to get authored styles",
       );
       return normalizeAuthoredStyles(payload);
     } catch (error) {

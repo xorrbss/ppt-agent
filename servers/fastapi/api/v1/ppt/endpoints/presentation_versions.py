@@ -7,9 +7,9 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.presentation_with_slides import PresentationWithSlides
-from models.sql.presentation import PresentationModel
 from services import presentation_version_service as version_service
 from services.database import get_async_session
+from services.presentation_access_service import require_live_presentation
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
 )
@@ -32,9 +32,7 @@ class VersionSummary(BaseModel):
 async def list_presentation_versions(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    presentation = await require_live_presentation(sql_session, id)
 
     versions = await version_service.list_versions(sql_session, id)
     return [
@@ -57,10 +55,8 @@ async def restore_presentation_version(
     version_id: uuid.UUID,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    require_legacy_presentation_write_path()
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    require_legacy_presentation_write_path(id)
+    presentation = await require_live_presentation(sql_session, id)
 
     restored_slides = await version_service.restore_version(
         sql_session, id, version_id

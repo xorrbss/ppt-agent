@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import inspect
 import logging
 import os
@@ -21,6 +21,7 @@ from services.workspace_chat_memory_outbox import (
     WORKSPACE_CHAT_MEMORY_TOPIC,
     deliver_workspace_chat_memory,
 )
+from services.workspace_metrics import WORKSPACE_METRICS
 from services.workspace_operation_runner import (
     sanitize_workspace_event_payload,
     wake_workspace_operation_runner,
@@ -35,6 +36,37 @@ WORKSPACE_OUTBOX_HEARTBEAT_SECONDS = 15
 WORKSPACE_OUTBOX_POLL_SECONDS = 1.0
 WORKSPACE_OUTBOX_MAX_ATTEMPTS = 8
 WORKSPACE_OUTBOX_MAX_CONCURRENCY = 4
+
+
+def _record_workspace_outbox_outcome(outcome: str) -> None:
+    """Keep metrics best-effort and outside durable outbox transactions."""
+
+    try:
+        WORKSPACE_METRICS.record_outbox_outcome(outcome)
+    except Exception:
+        logger.exception(
+            "Workspace outbox metric recording failed outcome=%s", outcome
+        )
+
+
+def _record_workspace_event_lag(claim: "WorkspaceOutboxClaim", now: datetime) -> None:
+    """Measure only durable operation-event delivery, never payload contents."""
+
+    if claim.topic != "workspace.operation.event":
+        return
+    try:
+        created_at = claim.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        delivered_at = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+        lag_ms = max(0, int((delivered_at - created_at).total_seconds() * 1_000))
+        WORKSPACE_METRICS.record_event_lag_ms(lag_ms)
+    except Exception:
+        try:
+            WORKSPACE_METRICS.record_signal_failure("event_lag")
+        except Exception:
+            pass
+        logger.exception("Workspace event lag metric recording failed")
 
 
 class WorkspaceOutboxDeliveryError(RuntimeError):
@@ -96,6 +128,7 @@ class WorkspaceOutboxClaim:
     payload: Mapping[str, Any]
     delivery_attempts: int
     lease_expires_at: datetime
+    created_at: datetime
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -185,14 +218,17 @@ async def claim_next_workspace_outbox(
             await session.rollback()
             return None
         await session.commit()
-        return WorkspaceOutboxClaim(
+        claim = WorkspaceOutboxClaim(
             outbox_id=row.id,
             operation_id=row.operation_id,
             topic=row.topic,
             payload=sanitize_workspace_event_payload(row.payload),
             delivery_attempts=prior_attempts + 1,
             lease_expires_at=new_lease,
+            created_at=row.created_at,
         )
+        _record_workspace_outbox_outcome("dispatched")
+        return claim
 
 
 async def heartbeat_workspace_outbox_claim(
@@ -246,7 +282,13 @@ async def mark_workspace_outbox_delivered(
             )
         )
         await session.commit()
-        return result.rowcount == 1
+        updated = result.rowcount == 1
+    if updated:
+        _record_workspace_outbox_outcome("delivered")
+        if claim.topic == "workspace.operation.event":
+            _record_workspace_outbox_outcome("event_delivered")
+        _record_workspace_event_lag(claim, now)
+    return updated
 
 
 async def mark_workspace_outbox_failed(
@@ -285,7 +327,12 @@ async def mark_workspace_outbox_failed(
             )
         )
         await session.commit()
-        return result.rowcount == 1
+        updated = result.rowcount == 1
+    if updated:
+        _record_workspace_outbox_outcome(
+            "dead_letter" if terminal else "retry_wait"
+        )
+    return updated
 
 
 def _wake_operation_topic(_payload: Mapping[str, Any]) -> None:
@@ -492,6 +539,7 @@ class WorkspaceOperationOutboxDispatcher:
                 )
             await self._run_handler_while_owned(claim, handler)
         except _WorkspaceOutboxLeaseLost:
+            _record_workspace_outbox_outcome("lease_lost")
             logger.warning(
                 "Workspace outbox lease lost; delivery fenced "
                 "outbox_id=%s topic=%s",
@@ -516,16 +564,24 @@ class WorkspaceOperationOutboxDispatcher:
             )
 
         if failure is None:
-            await mark_workspace_outbox_delivered(
+            updated = await mark_workspace_outbox_delivered(
                 claim, session_factory=self.session_factory
             )
         else:
-            await mark_workspace_outbox_failed(
+            updated = await mark_workspace_outbox_failed(
                 claim,
                 code=failure.code,
                 retryable=failure.retryable,
                 max_attempts=self.max_attempts,
                 session_factory=self.session_factory,
+            )
+        if not updated:
+            _record_workspace_outbox_outcome("lease_lost")
+            logger.warning(
+                "Workspace outbox finalization lost its lease; delivery fenced "
+                "outbox_id=%s topic=%s",
+                claim.outbox_id,
+                claim.topic,
             )
 
     async def _wait_for_wake(self) -> None:

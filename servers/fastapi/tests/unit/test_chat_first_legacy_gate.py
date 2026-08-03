@@ -1,3 +1,5 @@
+import asyncio
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -40,3 +42,62 @@ def test_rollback_ignores_stale_profile_and_unsupported_legacy_database(
     assert (
         workspace_legacy_write_gate.require_legacy_presentation_write_path() is None
     )
+
+
+class _OutlineBootstrapSession:
+    def __init__(self, operation_id):
+        self.operation_id = operation_id
+
+    async def scalar(self, _statement):
+        return self.operation_id
+
+
+def test_outline_bootstrap_write_is_allowed_for_staged_pending_generation(
+    monkeypatch,
+):
+    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
+    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
+    presentation = SimpleNamespace(
+        id=uuid.uuid4(),
+        lifecycle_status="staging",
+        revision=0,
+    )
+
+    assert (
+        asyncio.run(
+            workspace_legacy_write_gate.require_outline_bootstrap_write_path(
+                _OutlineBootstrapSession(uuid.uuid4()),
+                presentation,
+            )
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("lifecycle_status", "operation_id"),
+    (("published", uuid.uuid4()), ("staging", None)),
+)
+def test_outline_bootstrap_write_remains_blocked_outside_pending_staging(
+    monkeypatch,
+    lifecycle_status,
+    operation_id,
+):
+    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
+    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
+    presentation = SimpleNamespace(
+        id=uuid.uuid4(),
+        lifecycle_status=lifecycle_status,
+        revision=0,
+    )
+
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(
+            workspace_legacy_write_gate.require_outline_bootstrap_write_path(
+                _OutlineBootstrapSession(operation_id),
+                presentation,
+            )
+        )
+
+    assert caught.value.status_code == 409
+    assert caught.value.detail == "chat_first_command_required"

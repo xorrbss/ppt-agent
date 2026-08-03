@@ -1,11 +1,11 @@
 # Chat-first Slides Workbench 설계
 
-- 상태: 평가 보완 완료 · 구현 기준안
+- 상태: 2026-08-02 역사적 설계 기준안 · §16의 P0/P1 표기는 당시 구현 순서이며 현재 blocker 목록이 아님 · 2026-08-03 Gate 1~8 source-tree 동기화는 §24 참조
 - 작성일: 2026-08-02
 - 보완일: 2026-08-02
 - 대상: Presenton 웹 편집기 및 생성 흐름
 - 목적: 생성, 수정, 검토, 내보내기, 복구의 모든 작업을 오른쪽 채팅 타임라인에서 시작하고 확인하는 슬라이드 작업 환경
-- 관련 문서: `docs/compose-ux-design.md`, `docs/template-v2-chat-parity-matrix-20260731.md`, `docs/chat-first-slides-workbench-design-review-20260802.md`
+- 관련 문서: `docs/compose-ux-design.md`, `docs/template-v2-chat-parity-matrix-20260731.md`, `docs/chat-first-slides-workbench-design-review-20260802.md`, `docs/chat-first-slides-workbench-design-review-v2-20260802.md`, `docs/chat-first-slides-workbench-runbook-20260803.md`
 
 ## 1. 결정 요약
 
@@ -28,7 +28,7 @@ UI 구현보다 다음 네 기반을 먼저 확정한다.
 3. 모든 변경 경로가 공유하는 authoritative deck revision
 4. DB 이벤트를 원본으로 사용하는 재생 가능한 durable timeline
 
-최초 생성은 업로드 완료 후 `staging presentation`, conversation, 첫 사용자 메시지, 첨부 연결, `deck.generate` operation을 하나의 bootstrap 트랜잭션으로 생성한다. 이 기반의 승인 기준을 통과하기 전에는 기존 작업 팝업을 제거하거나 새 워크벤치를 전체 사용자에게 활성화하지 않는다.
+최초 생성은 업로드 완료 후 `staging presentation`, conversation, 첫 사용자 메시지, 첨부 연결, `presentation.generate` operation을 하나의 bootstrap 트랜잭션으로 생성한다. 이 기반의 승인 기준을 통과하기 전에는 기존 작업 팝업을 제거하거나 새 워크벤치를 전체 사용자에게 활성화하지 않는다.
 
 팝업을 모두 기계적으로 없애지는 않는다. 다음 원칙을 적용한다.
 
@@ -90,7 +90,7 @@ UI 구현보다 다음 네 기반을 먼저 확정한다.
 
 - 단순하고 되돌릴 수 있는 편집은 계획을 짧게 표시하고 즉시 실행한다.
 - 덱 전체 재생성, 버전 복원, 다수 슬라이드 삭제는 영향 범위를 먼저 보여주고 승인을 기다린다.
-- 승인을 기다리는 동안 카드 상태는 `waiting_for_approval`이며 페이지를 떠나도 유지된다.
+- 승인을 기다리는 동안 durable operation 상태는 `awaiting_approval`이다. public projection은 호환을 위해 `approval_required`도 인식하며, 페이지를 떠나도 상태와 `approval_expires_at`이 유지된다.
 
 ### 3.3 캔버스와 채팅은 양방향으로 연결한다
 
@@ -176,23 +176,26 @@ UI 구현보다 다음 네 기반을 먼저 확정한다.
 카드는 서버가 전달한 명령형 데이터와 프론트엔드의 고정 레지스트리로 렌더링한다.
 
 ```ts
-type OperationCardRenderer = (operation: WorkspaceOperationView) => ReactNode;
-
-const operationCardRegistry = {
-  "deck.generate": DeckGenerationCard,
-  "slide.edit": SlideEditCard,
-  "deck.regenerate": RegenerationCard,
-  "template.apply": TemplateApplyCard,
-  "quality.review": QualityReviewCard,
-  "export.pptx": ExportArtifactCard,
-  "export.pdf": ExportArtifactCard,
-  "version.restore": VersionRestoreCard,
-} satisfies Record<WorkspaceCommandType, OperationCardRenderer>;
+const KNOWN_OPERATION_TYPES = [
+  "presentation.generate",
+  "presentation.edit",
+  "presentation.delete",
+  "slide.edit",
+  "slide.regenerate",
+  "slide.delete",
+  "version.restore",
+  "template.apply",
+  "quality.review",
+  "export.pptx",
+  "export.pdf",
+] as const;
 ```
+
+현재 프론트엔드는 이 strict operation allowlist와 고정 label/action projection을 사용한다. 새 operation type은 backend public model, canonical fixture, OpenAPI 검증, frontend decoder/allowlist를 함께 갱신한 뒤에만 전용 카드나 공용 카드에 연결한다.
 
 LLM 출력은 카드의 제목, 설명, 요약 같은 콘텐츠로만 사용한다. 컴포넌트 이름, 이벤트 핸들러, URL 스킴을 LLM이 직접 결정하지 않는다.
 
-- command, event, action, message metadata에는 `schemaVersion`을 포함한다.
+- timeline/message/operation/event/attachment와 receipt/error/capability 같은 versioned **응답 projection**에는 wire 필드 `schema_version`을 포함한다. command/action **요청**에는 이를 넣지 않으며 현재 v1 Pydantic 모델은 `extra="forbid"`로 정의되지 않은 필드를 거부한다.
 - 프론트엔드가 알지 못하는 버전을 받으면 항목을 버리지 않고 `UnknownOperationCard`로 제목, 상태, 안전한 요약, 추적 ID만 표시한다.
 - 서버가 선언하지 않은 카드 행동이나 URL은 렌더링하지 않는다.
 
@@ -242,7 +245,7 @@ LLM 출력은 카드의 제목, 설명, 요약 같은 콘텐츠로만 사용한�
 1. 사용자가 시작 화면에서 프롬프트, 참고 파일, 템플릿을 지정한다.
 2. 파일은 먼저 업로드·검사하고 임시 경로가 아닌 안정적인 `assetId`를 발급받는다. 추출 텍스트는 원본 asset에 provenance로 연결된 파생 자산으로 저장한다.
 3. 제출 시 `POST /workspace/bootstrap`을 한 번 호출한다.
-4. bootstrap 서비스는 하나의 DB 트랜잭션에서 `staging presentation`, conversation, 첫 사용자 메시지, 첨부 연결, `deck.generate` operation과 operation anchor 메시지를 생성한다.
+4. bootstrap 서비스는 하나의 DB 트랜잭션에서 `staging presentation`, conversation, 첫 사용자 메시지, 첨부 연결, `presentation.generate` operation을 생성하고 그 operation의 `anchor_position`을 예약한다. 별도 assistant message row는 만들지 않는다.
 5. 생성 설정은 첫 메시지의 접힌 `생성 정보` metadata로 저장한다.
 6. 응답으로 받은 presentation/conversation/operation ID를 사용해 같은 대화를 오른쪽 워크벤치에서 연다. 별도의 “생성 진행 팝업”은 열지 않는다.
 7. 첫 메시지 바로 다음에 생성 계획/진행 카드가 나타난다.
@@ -253,7 +256,7 @@ LLM 출력은 카드의 제목, 설명, 요약 같은 콘텐츠로만 사용한�
 
 생성 중에도 사용자는 이미 완성된 슬라이드를 볼 수 있다. 생성 작업과 충돌하는 편집 명령은 대상 슬라이드 단위로 대기시키거나 사용자에게 충돌을 설명한다.
 
-파일 업로드는 bootstrap 트랜잭션 밖에서 끝내되 bootstrap 실패 시 미연결 asset을 정리하는 만료 정책을 적용한다. bootstrap 재요청은 같은 `idempotencyKey`로 동일한 presentation/conversation/operation을 반환하며 최초 메시지를 복제하지 않는다. staging 덱이 생성에 실패해도 대화와 첫 메시지는 유지하고 카드에서 재시도하거나 삭제할 수 있다.
+파일 업로드는 bootstrap 트랜잭션 밖에서 끝내되 bootstrap 실패 시 미연결 asset을 정리하는 만료 정책을 적용한다. bootstrap 재요청은 같은 wire `idempotency_key`로 동일한 presentation/conversation/operation을 반환하며 최초 메시지를 복제하지 않는다. staging 덱이 생성에 실패해도 대화와 첫 메시지는 유지하고 카드에서 재시도하거나 삭제할 수 있다.
 
 ### 6.2 선택 후 AI 수정
 
@@ -290,12 +293,12 @@ LLM 출력은 카드의 제목, 설명, 요약 같은 콘텐츠로만 사용한�
 2. `quality.review` 카드가 검사 항목과 진행률을 표시한다.
 3. 결과는 심각도, 슬라이드, 문제 유형으로 묶어 표시한다.
 4. 각 항목에는 `이동`, `이 항목 수정`, `모두 수정`, `무시` 행동이 있다.
-5. 자동 수정은 별도의 `quality.fix` 작업이 되며 원래 검사 카드에 연결된다.
+5. v1의 `quality.review`는 검사 결과와 서버가 허용한 후속 행동만 제시한다. 자동 수정 command는 현재 public command allowlist에 없으므로 별도 계약·fixture·handler가 추가되기 전에는 노출하지 않는다.
 
 ### 6.6 전체 재생성과 버전 복원
 
 1. 요청 즉시 영향 범위, 보존되는 항목, 되돌릴 체크포인트를 보여준다.
-2. 카드가 `waiting_for_approval` 상태가 된다.
+2. 카드가 durable `awaiting_approval` 상태가 된다(`approval_required` public 호환 상태도 decoder가 인식한다).
 3. 사용자가 승인하면 실행하고, 거절하면 `cancelled`로 종료한다.
 4. 실행 중에는 새 덱 리비전을 잠그지 않고 서버의 낙관적 리비전 검사를 사용한다.
 5. 충돌 시 변경을 덮어쓰지 않고 최신 상태 재읽기 또는 새 분기로 실행하도록 안내한다.
@@ -314,62 +317,50 @@ LLM 출력은 카드의 제목, 설명, 요약 같은 콘텐츠로만 사용한�
 모든 진입점은 직접 API를 제각각 호출하지 않고 `WorkspaceCommandDispatcher`를 통한다.
 
 ```ts
-type WorkspaceCommand = {
-  schemaVersion: 1;
-  idempotencyKey: string;
-  presentationId: string;
-  conversationId: string;
-  type:
-    | "chat.message"
-    | "deck.generate"
-    | "deck.regenerate"
-    | "slide.add"
+type WorkspaceCommandRequest = {
+  command: string;
+  commandType?:
+    | "presentation.edit"
+    | "presentation.delete"
     | "slide.edit"
+    | "slide.regenerate"
     | "slide.delete"
-    | "template.apply"
-    | "theme.apply"
-    | "quality.review"
-    | "quality.fix"
-    | "export.pptx"
-    | "export.pdf"
     | "version.restore"
-    | "share.configure"
-    | "manual.edit.commit";
-  target?: {
-    slideIds?: string[];
-    elementIds?: string[];
-    selectionSnapshot?: unknown;
-    displaySnapshot?: {
-      slideIndices?: number[];
-      labels?: string[];
-    };
-  };
-  payload: Record<string, unknown>;
+    | "template.apply"
+    | "quality.review"
+    | "export.pptx"
+    | "export.pdf";
+  idempotencyKey: string;
   expectedRevision?: number;
+  assetIds?: string[];
+  context?: Record<string, unknown>;
 };
 ```
 
+위 타입은 프론트엔드 내부 camelCase 모델이다. serializer가 `commandType`, `idempotencyKey`, `expectedRevision`, `assetIds`를 각각 wire의 `command_type`, `idempotency_key`, `expected_revision`, `asset_ids`로 변환한다. presentation scope는 route path에서 정하고 conversation은 서버가 presentation에 귀속해 해석하며, body는 Pydantic `extra="forbid"` 계약을 따른다. bootstrap의 `presentation.generate`는 `WorkspaceBootstrapRequest.operation_type` 경로이며 일반 command request allowlist와 구분한다.
+
 헤더 버튼, 채팅 메시지, 단축키, 컨텍스트 메뉴는 모두 같은 명령을 만든다. UI 진입점은 달라도 실행과 기록 계약은 동일하다.
 
-- bootstrap 이후의 모든 명령은 `presentationId`와 `conversationId`를 필수로 가진다.
-- 덱을 변경하는 명령은 `expectedRevision`을 필수로 전달한다. 읽기 전용 명령은 생략할 수 있지만 검사한 리비전을 결과에 기록한다.
+- bootstrap 이후 command body에는 presentation/conversation ID를 중복하지 않는다. presentation ID는 route path에 있고 conversation은 owner-scoped presentation에서 서버가 결정한다.
+- 현재 프론트엔드는 command/action에 projection의 `expectedRevision`을 전달한다. v1 wire 모델의 `expected_revision`은 기존 호출 호환을 위해 optional이며, 생략되면 서버가 잠근 authoritative 현재 revision을 operation에 snapshot한다. 호출자가 보낸 값이 오래됐으면 `409 revision_conflict`로 종료한다.
 - 실행 대상의 정체성은 안정적인 `slideId`와 `elementId`로만 표현한다. 슬라이드 index는 사용자 표시용 snapshot이며 실행 시 다시 해석하지 않는다.
-- 존재하지 않거나 교체된 ID는 다른 대상을 추측해 수정하지 않고 `TARGET_STALE`로 종료한다.
-- 서버는 지원하는 `schemaVersion`과 command type을 검증하며 알 수 없는 필드는 보존하더라도 실행 권한으로 해석하지 않는다.
+- 존재하지 않거나 교체된 ID는 다른 대상을 추측해 수정하지 않고 operation별 중앙 error registry의 안전한 오류로 종료한다.
+- 서버는 strict `command_type` allowlist를 검증하고 알 수 없는 요청 필드를 거부한다. 응답 decoder는 `schema_version`을 검증하며 unknown version/operation은 mutation을 허용하지 않는 safe fallback 카드로 투영한다.
 
 ### 7.2 작업 상태
 
 ```text
-queued
-  → planning | cancelled
-planning
-  → waiting_for_approval | running | failed | cancelled
+create
+  → queued | waiting_for_assets | blocked | awaiting_approval
 
-waiting_for_approval
-  → running | cancelled | expired
+awaiting_approval (public compatibility: approval_required)
+  → queued (approve) | cancelled
+
+queued
+  → running | cancelled
 
 running
-  → succeeded | failed | cancelling
+  → succeeded | failed | cancelling | dead_letter
 
 cancelling
   → cancelled | succeeded | failed
@@ -379,10 +370,10 @@ cancelling
 
 상태 전이 규칙:
 
-- 터미널 상태는 `succeeded`, `failed`, `cancelled`, `expired`이다.
+- 현재 durable operation terminal 상태는 `succeeded`, `failed`, `cancelled`, `dead_letter`이다. `expired`는 asset/artifact 상태나 approval error code로 쓰일 수 있지만 operation state가 아니다.
 - 터미널 상태에서 원래 작업을 다시 실행하지 않는다. 재시도는 `retryOfOperationId`를 가진 새 작업이다.
-- `waiting_for_approval`에서만 승인/거절 행동을 허용한다.
-- `waiting_for_approval`에는 `approvalExpiresAt`을 두고 승인 순간 권한, 만료, `expectedRevision`을 다시 검사한다.
+- `awaiting_approval`/`approval_required`에서만 승인 행동을 허용하고, 승인하면 runner가 claim할 수 있도록 `queued`로 전이한다. 거절 전용 wire action은 없으며 현재 UI의 취소는 `cancel` action을 사용한다.
+- 승인 대기 작업에는 `approval_expires_at`을 두고 승인 순간 권한, 만료, operation version, presentation revision을 다시 검사한다. 기한이 지나면 상태를 임의로 `expired`로 바꾸지 않고 typed `approval_expired` 오류를 반환한다.
 - `running`에서 취소 요청을 받으면 즉시 `cancelled`로 단정하지 않고 `cancelling`으로 바꾼다. 외부 실행이 이미 완료된 경쟁 상황에서는 최종 상태가 `succeeded`일 수 있다.
 - 각 전이는 `operationVersion`을 1 증가시키는 비교 후 갱신(CAS)으로 수행한다.
 - 진행률은 뒤로 가지 않는다. 작업 단계를 바꾸는 경우 단계별 진행률과 전체 진행률을 구분한다.
@@ -391,92 +382,59 @@ cancelling
 ### 7.3 이벤트
 
 ```ts
-type WorkspaceEvent = {
-  schemaVersion: 1;
+type WorkspaceOperationEventV1 = {
+  schema_version: 1;
   id: string;
-  operationId: string;
-  operationVersion: number;
+  operation_id: string;
+  operation_version: number;
   sequence: number;
-  cursor: string;
-  presentationId: string;
-  conversationId: string;
-  type:
-    | "operation.created"
-    | "operation.plan"
-    | "operation.progress"
-    | "operation.approval_required"
-    | "operation.target_changed"
-    | "operation.result"
-    | "operation.error"
-    | "operation.cancelling"
-    | "operation.cancelled"
-    | "operation.expired"
-    | "artifact.ready"
-    | "deck.revision_changed";
-  status:
-    | "queued"
-    | "planning"
-    | "waiting_for_approval"
-    | "running"
-    | "cancelling"
-    | "succeeded"
-    | "failed"
-    | "cancelled"
-    | "expired";
-  actor: {
-    type: "user" | "worker" | "system";
-    id?: string;
-  };
-  title: string;
-  detail?: string;
-  progress?: {
-    current?: number;
-    total?: number;
-    percent?: number;
-    step?: string;
-  };
-  target?: {
-    slideIds?: string[];
-    elementIds?: string[];
-    displaySlideIndices?: number[];
-  };
-  payload?: Record<string, unknown>;
-  createdAt: string;
+  cursor?: string | null;
+  operation_anchor_position?: number | null;
+  type: string;
+  status?: string | null;
+  message?: string | null;
+  progress?: number | null;
+  error?: string | null;
+  safe_message?: string | null;
+  retryable?: boolean | null;
+  result?: unknown;
+  created_at?: string | null;
 };
 ```
 
-`sequence`는 작업 안에서 단조 증가하고 `(operation_id, sequence)`는 유일하다. `cursor`는 프레젠테이션 전체 스트림에서 이벤트 저장 순서를 나타내는 불투명하고 단조 증가하는 값이다. 프론트엔드는 이벤트 ID로 중복을 제거하고 마지막 `cursor` 다음부터 재연결한다.
+`sequence`는 작업 안에서 단조 증가하고 `(operation_id, sequence)`는 유일하다. `cursor`는 durable event log의 저장 순서를 나타내는 불투명하고 단조 증가하는 값이며, API는 owner/presentation 권한으로 이 로그를 필터링해 투영한다. 프론트엔드는 이벤트 ID로 중복을 제거하고 마지막 `cursor` 다음부터 재연결한다.
 
-`deck.revision_changed`는 `previousRevision`, `newRevision`, 변경된 `slideIds`를 포함한다. 이벤트 payload는 종류별 스키마와 크기 제한을 가지며 원본 문서, 내부 경로, 예외 스택을 포함하지 않는다.
+현재 revision 변경 완료 신호는 `operation.result`와 operation card의 `expected_revision`/`result_revision` projection을 사용한다. 이벤트 payload는 종류별 allowlist와 크기 제한을 가지며 원본 문서, 내부 경로, 예외 스택을 포함하지 않는다. actor, target, activity summary, 허용 행동은 개별 event가 아니라 operation timeline item에 서버가 투영한다.
 
 ### 7.4 행동
 
 카드 버튼은 서버가 허용한 행동만 렌더링한다.
 
 ```ts
-type OperationAction = {
+type WorkspaceAllowedActionV1 = {
   id: "approve" | "reject" | "cancel" | "retry" | "undo" | "download" | "focus";
   label: string;
   variant: "primary" | "secondary" | "danger";
   enabled: boolean;
-  reason?: string;
+  reason?: string | null;
 };
 
-type OperationActionRequest = {
-  schemaVersion: 1;
-  action: OperationAction["id"];
-  actionIdempotencyKey: string;
-  expectedOperationVersion: number;
-  expectedRevision?: number;
-  payload?: Record<string, unknown>;
+type WorkspaceOperationActionRequestV1 = {
+  action: "approve" | "cancel" | "retry";
+  idempotency_key: string;
+  action_id?: string;
+  expected_operation_version?: number;
+  expected_revision?: number;
 };
 ```
 
+`WorkspaceAllowedActionV1`은 표시/비변경 행동까지 포함하는 server projection이고, action POST의 mutation allowlist는 `approve`, `cancel`, `retry` 세 가지다. 프론트엔드 내부 camelCase 모델은 API serializer에서 위 snake_case wire body로 변환되며 요청 자체에는 `schema_version`을 보내지 않는다.
+
 프론트엔드가 작업 상태를 추측해 위험한 버튼을 활성화하지 않는다.
 
-- 행동 실행은 `(owner_id, operation_id, action, action_idempotency_key)`로 멱등성을 보장한다.
-- `expectedOperationVersion`이 다르면 `OPERATION_STATE_CONFLICT`를 반환하고 최신 작업 표현을 함께 보낸다.
-- `approve`, `undo`, `retry`처럼 덱을 변경할 수 있는 행동은 실행 직전에 덱 리비전과 권한을 다시 검사한다.
+- 행동 실행은 `(owner_scope, operation_id, action_type, idempotency_key_hash)` receipt 제약으로 멱등성을 보장한다. `action_id`가 있으면 `(operation_id, action_type, action_id)`도 유일하다.
+- wire의 `expected_operation_version`이 오래됐으면 typed `409 operation_state_conflict`를 반환하므로 클라이언트는 timeline을 다시 읽어 최신 operation projection을 사용한다.
+- `approve`와 `retry`처럼 실행 또는 새 실행을 허용할 수 있는 행동은 처리 직전에 operation version, 덱 revision과 권한을 다시 검사한다. `undo`는 server projection에 미지원 사유를 가진 disabled action으로만 노출되며 v1 action POST allowlist에는 없다.
 - 알 수 없는 action ID는 무시하지 않고 명시적인 4xx 오류로 종료한다.
 
 ## 8. 서버 API 설계
@@ -486,8 +444,10 @@ type OperationActionRequest = {
 ```http
 POST /api/v1/ppt/workspace/assets
 GET  /api/v1/ppt/workspace/assets/{asset_id}
-POST /api/v1/ppt/workspace/bootstrap
+POST /api/v1/ppt/workspace/presentations/{presentation_id}/bootstrap
 ```
+
+`POST /api/v1/ppt/workspace/bootstrap?presentation_id=...`는 초기 클라이언트를 위한 호환 경로다. asset upload는 multipart form의 `presentation_id`를 필수로 받아 owner와 presentation 범위를 함께 검증한다.
 
 `POST /assets`는 multipart 업로드를 받아 저장·파일명 정규화·MIME 확인·크기 제한·악성 파일 검사를 수행하고 안정적인 `asset_id`를 반환한다. 원본 추출이 비동기이면 `processing` 상태를 반환하며 bootstrap은 정책에 따라 준비를 기다리거나 파일 처리 단계를 생성 카드에 표시한다.
 
@@ -495,36 +455,50 @@ bootstrap 요청 예:
 
 ```json
 {
-  "schema_version": 1,
-  "idempotency_key": "bootstrap_01...",
+  "idempotency_key": "bootstrap-demo-0001",
   "prompt": "이 자료로 투자 제안용 12장 발표자료를 만들어줘.",
-  "asset_ids": ["asset_01...", "asset_02..."],
-  "generation_config": {
+  "asset_ids": ["66666666-6666-4666-8666-666666666666"],
+  "generation_settings": {
     "template_id": "blue-business",
     "language": "ko",
-    "slide_count": 12,
+    "n_slides": 12,
     "aspect_ratio": "16:9"
-  }
+  },
+  "operation_type": "presentation.generate",
+  "expected_revision": 0
 }
 ```
+
+bootstrap 요청도 `extra="forbid"`이며 응답 projection 전용인 `schema_version`은 보내지 않는다. 위 필드와 값의 기준 fixture는 `contracts/chat-first-workspace/v1/bootstrap-and-assets.json`이다.
 
 bootstrap 응답 예:
 
 ```json
 {
-  "presentation_id": "deck_01...",
-  "conversation_id": "conv_01...",
-  "first_message_id": "msg_01...",
-  "operation_id": "op_01...",
+  "schema_version": 1,
+  "receipt_id": "44444444-4444-4444-8444-444444444444",
+  "conversation_id": "22222222-2222-4222-8222-222222222222",
+  "first_user_message_id": "33333333-3333-4333-8333-333333333333",
+  "operation_id": "44444444-4444-4444-8444-444444444444",
   "status": "queued",
-  "high_watermark_cursor": "cursor_01..."
+  "operation_state": "queued",
+  "duplicate": false,
+  "timeline": {
+    "schema_version": 1,
+    "conversation_id": "22222222-2222-4222-8222-222222222222",
+    "items": [],
+    "next_before_position": null,
+    "event_high_watermark": "1",
+    "has_more": false,
+    "revision": 0
+  }
 }
 ```
 
 bootstrap은 다음을 보장한다.
 
 - 요청자의 asset 소유권과 상태를 먼저 검증한다.
-- staging presentation, conversation, 첫 user message, attachment rows, `deck.generate` operation, anchor message를 한 DB 트랜잭션으로 생성한다.
+- staging presentation, conversation, 첫 user message, attachment rows와 `presentation.generate` operation을 한 DB 트랜잭션으로 생성하고 operation의 `anchor_position`을 함께 예약한다.
 - conversation의 메시지 position을 row lock으로 예약한다.
 - 같은 idempotency key의 재요청은 기존 묶음을 반환한다.
 - 작업 큐 발행은 transactional outbox를 사용해 DB commit과 실행 요청 사이의 유실을 막는다.
@@ -532,11 +506,9 @@ bootstrap은 다음을 보장한다.
 ### 8.2 명령, 조회, 행동 API
 
 ```http
-POST /api/v1/ppt/workspace/commands
-GET  /api/v1/ppt/workspace/timeline?presentation_id=...&conversation_id=...
-GET  /api/v1/ppt/workspace/operations/{operation_id}
-GET  /api/v1/ppt/workspace/operations/{operation_id}/events?after_sequence=...
-GET  /api/v1/ppt/workspace/stream?presentation_id=...&conversation_id=...&after_cursor=...
+POST /api/v1/ppt/workspace/presentations/{presentation_id}/commands
+GET  /api/v1/ppt/workspace/presentations/{presentation_id}/timeline?before_position=...
+GET  /api/v1/ppt/workspace/presentations/{presentation_id}/events?after=...&stream=1
 POST /api/v1/ppt/workspace/operations/{operation_id}/actions
 ```
 
@@ -544,13 +516,24 @@ POST /api/v1/ppt/workspace/operations/{operation_id}/actions
 
 ```json
 {
-  "operation_id": "op_01...",
-  "conversation_id": "conv_01...",
+  "schema_version": 1,
+  "receipt_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "operation_id": "99999999-9999-4999-8999-999999999999",
   "status": "queued",
-  "idempotency_key": "client_01...",
-  "stream_url": "/api/v1/ppt/workspace/stream?presentation_id=...&conversation_id=..."
+  "duplicate": false,
+  "timeline": {
+    "schema_version": 1,
+    "conversation_id": "22222222-2222-4222-8222-222222222222",
+    "items": [],
+    "next_before_position": null,
+    "event_high_watermark": "1042",
+    "has_more": false,
+    "revision": 3
+  }
 }
 ```
+
+command/action 응답은 위 versioned receipt envelope를 기준으로 한다. 단계적 클라이언트 전환을 위해 v1에서는 timeline의 `conversation_id`, `items`, `next_before_position`, `event_high_watermark`, `has_more`, `revision`을 최상위에도 동일하게 투영한다.
 
 동일한 소유자, 프레젠테이션, 명령 종류, `idempotency_key` 조합이 반복되면 새 작업을 만들지 않고 기존 작업을 반환한다.
 
@@ -558,19 +541,23 @@ timeline 응답은 조회 시점의 일관된 snapshot과 스트림 경계를 �
 
 ```json
 {
+  "schema_version": 1,
+  "conversation_id": "22222222-2222-4222-8222-222222222222",
   "items": [],
-  "high_watermark_cursor": "cursor_1042",
-  "has_more_before": false
+  "next_before_position": null,
+  "event_high_watermark": "1042",
+  "has_more": false,
+  "revision": 3
 }
 ```
 
-클라이언트는 timeline을 먼저 렌더링한 뒤 `high_watermark_cursor` 다음부터 stream을 구독한다. 페이지네이션으로 과거 항목을 더 읽어도 현재 실시간 cursor는 되돌리지 않는다.
+클라이언트는 timeline을 먼저 렌더링한 뒤 `event_high_watermark` 다음부터 event stream을 구독한다. 페이지네이션으로 과거 항목을 더 읽어도 현재 실시간 cursor는 되돌리지 않는다.
 
 ### 8.3 Durable SSE 전송
 
 - 기존 `/chat/message/stream`의 전송 형식과 프론트 파서를 호환 어댑터에서 재사용할 수 있지만, 프로세스 메모리를 이벤트 원본으로 사용하지 않는다.
 - 이벤트 이름은 `workspace_event`, 연결 유지용 `heartbeat`, 복구 불가 오류용 `stream_error`로 제한한다.
-- 각 SSE의 `id`에는 저장된 `cursor`를 넣어 `Last-Event-ID` 또는 `after_cursor`로 재연결한다.
+- 각 SSE의 `id`에는 저장된 `cursor`를 넣어 `Last-Event-ID` 또는 `after` query로 재연결한다.
 - 이벤트를 먼저 DB에 기록한 뒤 전송한다. 전송 성공을 영속화 조건으로 삼지 않는다.
 - 연결이 끊겨도 작업 실행은 서버에서 계속된다. 사용자의 명시적 취소만 작업을 중단한다.
 - DB event row가 source of truth다. Postgres `LISTEN/NOTIFY` 또는 Redis pub/sub은 새 이벤트를 읽도록 깨우는 신호로만 사용한다.
@@ -606,32 +593,33 @@ conversation은 메시지의 임의 UUID 묶음이 아니라 소유권, 생명�
 | latest_cursor | 마지막으로 저장된 workspace event cursor |
 | created_at / updated_at | 시각 |
 
-메시지를 추가할 때 conversation row를 `SELECT ... FOR UPDATE`로 잠그고 `next_position`을 예약한다. `chat_history_messages`에는 다음 유일 제약을 둔다.
+메시지를 추가할 때 conversation row를 `SELECT ... FOR UPDATE`로 잠그고 `next_position`을 예약한다. `workspace_messages`에는 다음 유일 제약을 둔다.
 
 ```text
 (conversation_id, position)
 ```
 
-user message, operation, assistant operation anchor를 함께 만드는 요청은 하나의 트랜잭션에서 필요한 position을 예약한다. `max(position) + 1` 방식은 사용하지 않는다.
+user message와 operation을 함께 만드는 요청은 하나의 트랜잭션에서 message `position`과 operation `anchor_position`에 필요한 위치를 예약한다. `max(position) + 1` 방식은 사용하지 않는다.
 
-### 9.2 `uploaded_assets`
+### 9.2 `workspace_assets`
 
 | 필드 | 설명 |
 |---|---|
 | id | 안정적인 자산 ID |
 | owner_id | 업로드 소유자 |
-| original_name | 사용자가 업로드한 원본 파일명 |
-| safe_name | 정규화된 표시/저장용 파일명 |
-| mime_type | 서버가 확인한 MIME |
+| original_name | 정규화·검증 후 보존하는 사용자 표시 파일명 |
+| media_type | 서버가 확인한 MIME |
 | size_bytes | 파일 크기 |
 | storage_key | 외부에 노출하지 않는 저장소 키 |
 | sha256 | 무결성 및 중복 판별 해시 |
-| status | uploaded / scanning / processing / ready / failed / quarantined / expired / deleted |
+| state | uploaded / scanning / processing / ready / failed / quarantined / expired / deleted |
+| failure_code / failure_detail | 안전한 기계 코드와 내부 진단 상세 |
+| version | asset 상태 전이 CAS 버전 |
 | expires_at | 원본 만료 시각, 영구 보존이면 null |
-| derived_from_asset_id | 추출 텍스트 등 파생 자산의 원본 ID |
+| deleted_at | 삭제 상태 전이 시각 |
 | created_at / updated_at | 시각 |
 
-- 원본, 추출 텍스트, 미리보기는 별도 자산으로 관리하고 provenance로 연결한다.
+- 원본, 추출 텍스트, 미리보기의 파생 관계가 필요하면 public 계약을 추가하기 전까지 내부 metadata/별도 artifact 경계에서 관리한다. 현재 `workspace_assets` schema에 존재하지 않는 provenance column을 가정하지 않는다.
 - asset ID를 아는 것만으로 접근할 수 없으며 모든 조회에서 owner/덱 권한을 재검증한다.
 - 동일 소유자의 같은 sha256 업로드를 재사용할 수 있지만, 새 메시지의 attachment row는 별도로 만든다.
 - 격리·만료·삭제된 파일은 다운로드하지 못하더라도 최초 파일 카드의 표시 metadata와 상태는 유지한다.
@@ -639,94 +627,92 @@ user message, operation, assistant operation anchor를 함께 만드는 요청�
 
 ### 9.3 채팅 기록과 최초 첨부 파일
 
-기존 `chat_history_messages`는 LLM 대화 맥락을 담당하고, 작업 테이블은 실행 상태를 담당한다.
+새 Chat-first timeline은 legacy chat table을 증설하는 대신 `workspace_messages`와 operation anchor projection을 사용한다. legacy chat 기록은 기존 경로의 호환 데이터로 남고 자동으로 같은 ID 공간이라고 가정하지 않는다.
 
-- `chat_history_messages`에 nullable `operation_id`, `schema_version`, `metadata` JSON을 추가한다.
-- 최초 생성 프롬프트도 일반 `role="user"` 메시지로 저장하며 `metadata.source="initial_generation"`으로 구분한다.
+- `workspace_messages`는 `conversation_id`, 단조 증가 `position`, `role`, `content`, `schema_version`, `metadata`를 보존한다.
+- 최초 생성 프롬프트도 일반 `role="user"` workspace message로 저장하며 `metadata.source="initial_generation"`으로 구분한다.
 - UI 버튼으로 시작한 작업도 사람이 이해할 수 있는 사용자 행동 메시지를 만든다. 예: “PPTX로 내보내기”.
-- 작업 카드용 assistant anchor 메시지는 `operation_id`를 참조한다.
-- 대화 기록 API는 message ID, position, operation ID, 안전하게 필터된 metadata를 반환한다.
+- 작업 카드는 별도 assistant message row를 만들지 않는다. `workspace_operations.anchor_position`에 예약된 operation anchor를 timeline에서 `anchor_type="operation"`, `operation_id`로 투영한다.
+- 대화 기록 API는 message anchor의 message ID·position과 operation anchor의 operation ID·position을 구분하고, 안전하게 필터된 metadata를 반환한다.
 - retry는 기존 idempotency 결과를 반환하거나 명시적인 새 작업 메시지를 만들며 동일 position을 중복 예약하지 않는다.
 
-최초 첨부 파일은 메시지 metadata에 파일명만 복사하지 않고 `chat_message_attachments`로 연결한다.
+최초 첨부 파일은 메시지 metadata에 파일명만 복사하지 않고 `workspace_message_attachments`로 연결한다.
 
 | 필드 | 설명 |
 |---|---|
 | id | 첨부 연결 ID |
 | message_id | 최초 사용자 메시지 ID |
-| file_id | `uploaded_assets.id` |
+| asset_id | nullable live pointer인 `workspace_assets.id`; 삭제 시 `ON DELETE SET NULL` |
+| asset_id_snapshot | 과거 첨부 identity인 immutable asset ID |
+| ordinal | 메시지 안의 안정적 표시 순서 |
 | display_name | 사용자에게 보여줄 정규화된 파일명 |
-| mime_type | 업로드 당시 파일 형식 |
+| media_type | 업로드 당시 파일 형식 |
 | size_bytes | 업로드 당시 크기 |
-| processing_status | uploaded / processing / ready / failed / expired / legacy_unavailable |
-| error_code | 안전하게 표시 가능한 처리 오류 코드 |
+| asset_state | uploaded / scanning / processing / ready / failed / quarantined / expired / deleted |
+| asset_sha256 | 업로드 당시 무결성 해시 |
+| asset_failure_code / asset_failure_detail | 당시 실패 코드와 안전하게 투영할 진단 원본 |
 | created_at | 첨부 시각 |
 
 - 파일의 실제 저장 경로나 추출 텍스트를 attachment에 중복 저장하지 않는다.
-- 대화 기록 API는 접근 권한을 확인한 뒤 표시 metadata와 만료 가능한 미리보기 URL만 반환한다.
-- 원본이 만료돼도 이름과 당시 상태를 남기고 카드에는 `원본 만료됨`을 표시한다.
+- timeline은 immutable snapshot을 역사적 source of truth로 사용하고 live asset의 현재 상태·version·download/preview 가능 여부를 별도 필드로 투영한다.
+- 대화 기록 API는 접근 권한을 확인한 뒤 표시 metadata와 만료 가능한 미리보기/다운로드 경로만 반환한다.
+- 원본 row가 변경·만료·삭제돼도 파일명, MIME, 크기, sha256, 당시 상태와 실패 표시는 바뀌지 않는다. 현재 상태에 따라 다운로드/미리보기 또는 재첨부·retry 경로를 제공한다.
 
 ### 9.4 `workspace_operations`
 
 | 필드 | 설명 |
 |---|---|
 | id | 작업 ID |
-| schema_version | command/result 스키마 버전 |
-| owner_id | 소유자 |
+| owner_id / owner_scope | 로그인 소유자 FK와 anonymous를 포함한 멱등성·권한 scope |
 | presentation_id | 덱 ID |
 | conversation_id | 대화 ID |
-| command_type | 명령 종류 |
-| status | 현재 상태 |
-| operation_version | 상태·행동 CAS 버전 |
-| title | 카드 제목 |
-| target | 슬라이드/요소 JSON |
-| input | 정규화된 입력 JSON |
-| input_asset_ids | 입력 자산 ID 목록 |
+| anchor_position | conversation 안의 operation card 위치 |
+| kind | public projection의 `operation_type`/command 종류 |
+| state | 현재 durable 상태 |
+| version | 상태·행동 CAS용 `operation_version` projection 원본 |
+| request_payload / request_hash | 정규화한 command·target·asset 입력과 hash |
 | result | 최종 결과 JSON |
-| error | 구조화 오류 JSON |
+| error_code / error_detail | 중앙 registry용 기계 코드와 내부 진단 |
 | progress | 최신 진행 상태 JSON |
-| idempotency_key | 중복 실행 방지 키 |
+| idempotency_key_hash | 원문을 저장하지 않는 중복 실행 방지 hash |
 | expected_revision | 실행 시작 전 기대 덱 리비전 |
-| applied_revision | 성공 후 덱 리비전 |
-| checkpoint_id | 변경 전 복구 지점 |
-| parent_operation_id | 검사→수정 등 부모 작업 |
+| result_revision | 성공 후 authoritative 덱 리비전 |
 | retry_of_operation_id | 재시도 원본 작업 |
 | approval_expires_at | 승인 만료 시각 |
-| cancel_requested_at | 취소 요청 시각 |
-| lease_owner / lease_expires_at | worker 실행 lease |
-| created_at / updated_at / finished_at | 시각 |
+| attempt_number / attempt_token / fencing_token | worker attempt와 fencing |
+| lease_expires_at / heartbeat_at | worker 실행 lease와 heartbeat |
+| retry_count / max_attempts / next_attempt_at / backoff_seconds | 재시도 정책과 다음 claim 시각 |
+| cancel_requested_at / cancelled_at | 취소 요청·완료 시각 |
+| next_event_sequence | 다음 operation-local event 순번 |
+| created_at / updated_at / started_at / completed_at | 수명주기 시각 |
 
 권장 유일 제약:
 
 ```text
-(owner_id, presentation_id, command_type, idempotency_key)
+(owner_scope, presentation_id, kind, idempotency_key_hash)
 ```
 
-worker는 heartbeat로 lease를 연장한다. 만료된 lease를 재획득할 때는 마지막 영속 단계에서 복구하며, 외부 side effect를 재호출해도 안전하지 않은 handler는 자동 재실행하지 않고 `RECOVERY_REQUIRED`로 종료한다.
+worker는 heartbeat로 lease를 연장한다. 만료된 lease를 재획득할 때는 마지막 영속 단계에서 복구하며, 외부 side effect를 재호출해도 안전하지 않은 handler는 자동 재실행하지 않고 `dead_letter`로 종료한다. 이 경우 외부 계약에는 안전한 `operation_recovery_required` 오류 코드와 `manual_recovery_required` 사유를 투영한다.
 
-작업 행동의 멱등성은 별도 `workspace_operation_actions`에 다음 키로 기록한다.
+작업 행동의 멱등성은 별도 `workspace_action_receipts`에 다음 키로 기록한다.
 
 ```text
-(owner_id, operation_id, action_type, action_idempotency_key)
+(owner_scope, operation_id, action_type, idempotency_key_hash)
+(operation_id, action_type, action_id)
 ```
 
 ### 9.5 `workspace_operation_events`
 
 | 필드 | 설명 |
 |---|---|
-| id | 전역 이벤트 ID |
+| cursor | 전역 증가 event cursor이자 storage PK |
+| owner_id | 권한 필터용 소유자 FK |
 | schema_version | 이벤트 payload 스키마 버전 |
 | operation_id | 작업 ID |
-| presentation_id / conversation_id | stream 조회 경계와 권한 필터 |
 | operation_version | 이벤트 당시 작업 버전 |
 | sequence | 작업 내부 순번 |
-| stream_cursor | 프레젠테이션 전체 스트림의 저장 순번 |
 | event_type | 이벤트 종류 |
-| status | 이벤트 당시 상태 |
-| actor_type / actor_id | user / worker / system 및 주체 |
-| title / detail | 사용자 표시 텍스트 |
 | payload | 구조화 세부 정보 |
-| payload_size | 저장된 payload byte 크기 |
 | created_at | 시각 |
 
 권장 유일 제약:
@@ -735,7 +721,7 @@ worker는 heartbeat로 lease를 연장한다. 만료된 lease를 재획득할 �
 (operation_id, sequence)
 ```
 
-`stream_cursor`는 API 외부에서 의미를 해석하지 않는 불투명 값이다. 구현은 DB 증가 시퀀스를 사용할 수 있으며 연속적일 필요는 없지만 저장 순서는 항상 비교 가능해야 한다. event append와 operation 최신 상태 갱신은 같은 트랜잭션에서 수행한다.
+`cursor`는 API 외부에서 의미를 해석하지 않는 불투명 문자열로 직렬화한다. storage에서는 DB 증가 정수를 사용하며 연속적일 필요는 없지만 저장 순서는 항상 비교 가능해야 한다. presentation/conversation 경계는 event row에 중복 저장하지 않고 operation join으로 권한을 확인한다. event append와 operation 최신 상태 갱신은 같은 트랜잭션에서 수행한다.
 
 ### 9.6 `workspace_artifacts`
 
@@ -775,20 +761,18 @@ bootstrap은 빈 덱을 `staging`으로 만들고 최소 편집 가능 상태가
 - cursor 보존 범위를 벗어난 클라이언트는 부분 replay를 시도하지 않고 전체 timeline을 재동기화한다.
 - 삭제 요청은 asset 원본, 파생 자산, 메시지 표시 metadata, operation 감사 기록별 법적 보존 예외를 구분하고 사용자에게 결과를 설명한다.
 
-### 9.9 기존 데이터 backfill
+### 9.9 기존 데이터와 migration 경계
 
-- 기존 `chat_history_messages.conversation_id` 값은 가능한 한 그대로 새 `workspace_conversations.id`로 사용한다.
-- 동일 conversation UUID에 여러 owner 또는 presentation이 섞인 데이터는 자동 합치지 않고 마이그레이션 오류 목록으로 분리한다.
-- 기존 position 중복은 `created_at`, 기존 position, message ID 순으로 안정 정렬해 재번호화하고 unique 제약은 정리 후 추가한다.
-- 기존 presentation은 `revision=0`, `lifecycle_status=active`로 시작하되 배포 이후 모든 mutation을 revision service로 통과시킨 다음 feature flag를 연다.
-- 임시 파일 경로만 남은 과거 첨부는 존재하는 asset처럼 꾸미지 않는다. 표시 metadata가 있으면 `legacy_unavailable` 카드로 보이고, 없으면 재첨부 안내만 제공한다.
-- backfill은 dry-run에서 대화 수, 중복 position, 소유권 불일치, 해석 불가 attachment를 집계하고 reversible migration과 운영 확인 절차를 가진다.
+- additive migration은 legacy `chat_history_messages`를 `workspace_messages`로 자동 import하거나 기존 conversation ID를 재사용한다고 가정하지 않는다.
+- legacy 기록 import가 필요하면 owner/presentation 귀속, 안정 정렬, attachment 가용성을 검증하는 별도 감사 가능한 migration과 dry-run을 설계한다. 해석 불가 row를 조용히 합치지 않는다.
+- 현재 workspace timeline의 ID와 position은 bootstrap/command 경로에서 생성된 `workspace_conversations`·`workspace_messages` row가 권위 원본이다.
+- 기존 presentation revision/lifecycle backfill은 Alembic migration과 staging 검증 결과를 따른다. 임시 경로만 남은 과거 첨부는 존재하는 asset처럼 꾸미지 않고 별도 legacy-unavailable/재첨부 정책이 명시된 경우에만 투영한다.
 
 ## 10. 동시성, 리비전, 되돌리기
 
 ### 10.1 덱 리비전
 
-모든 변경 명령은 `expectedRevision`을 전달하고 서버는 같은 저장 트랜잭션에서 비교 후 갱신한다.
+shipped 프론트엔드는 변경 command/action에 `expectedRevision`을 전달한다. 서버 wire 필드는 호환을 위해 optional이지만, 누락되면 잠근 presentation의 현재 revision을 operation의 `expected_revision`으로 snapshot하고, 명시된 stale 값은 실행하지 않는다. 실제 content publication은 같은 저장 트랜잭션의 CAS와 `result_revision`으로 검증한다.
 
 ```sql
 UPDATE presentations
@@ -865,7 +849,7 @@ PresentationPage
 
 ### 11.3 캔버스 갱신
 
-- `deck.revision_changed` 이벤트를 받으면 해당 리비전을 한 번만 가져온다.
+- terminal `operation.result`와 operation card의 단조 증가한 `result_revision`을 받으면 해당 리비전을 한 번만 가져온다. late/lower operation version이나 revision은 이미 적용한 canvas 상태를 되돌리지 않는다.
 - 여러 tool trace가 연속되면 현재 Chat의 coalesced refresh 동작을 보존한다.
 - 대상 슬라이드 메타데이터가 있으면 변경된 슬라이드만 갱신할 수 있도록 API를 확장한다.
 - 사용자가 캔버스를 직접 탐색 중이면 자동 포커스를 하지 않고 “AI가 5번을 수정함” 배지를 제공한다.
@@ -980,22 +964,22 @@ type PresentationCapabilities = {
 3. 내부 사용자와 테스트 덱에 `chat_first_workspace` feature flag를 켠다.
 4. `quality.review`, `export.pptx`, `slide.edit` 순으로 기능별 dispatcher를 전환한다.
 5. 오류율, 누락 이벤트, 완료율 기준을 만족한 기능만 기본 활성화한다.
-6. 기능 플래그를 끄면 데이터 마이그레이션을 되돌리지 않고 기존 UI가 같은 기존 API 경로로 즉시 복귀할 수 있어야 한다.
+6. frontend의 `NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED`는 build-time gate라 값 변경에는 rebuild/redeploy가 필요하다. 해당 bundle이 배포된 뒤에는 backend feature-off, kill switch 또는 cohort 제외라는 authoritative runtime 판정으로 데이터 마이그레이션을 되돌리지 않고 SharePopover를 포함한 legacy UI와 legacy write 경로를 즉시 복원한다. runtime/profile 불건전이나 일반 command capability 실패는 legacy write 우회 조건이 아니며, write가 꺼져도 지원 dialect의 timeline/history와 artifact download read는 독립적으로 유지한다.
 7. 안정화와 보존 기간 검증 후 legacy modal/popover와 직접 호출 코드를 제거한다.
 
 ### 15.2 운영 복구
 
-- worker는 lease 만료 전에 heartbeat하며 만료 작업 감시기가 재획득 또는 `RECOVERY_REQUIRED`를 결정한다.
+- worker는 lease 만료 전에 heartbeat하며 만료 작업 감시기가 재획득 또는 `dead_letter`와 `operation_recovery_required` 투영을 결정한다.
 - 장시간 `queued`, `cancelling`, lease 만료, outbox 미전달, cursor lag 증가에 경보를 둔다.
 - 동일 side effect의 실행 여부가 불명확한 경우 자동 재실행하지 않고 외부 job ID나 artifact hash로 먼저 조정한다.
 - 배포 중 schema version 혼재를 허용하는 호환 기간을 두고 구버전 이벤트는 fallback 카드로 읽을 수 있어야 한다.
 
-## 16. 구현 단계
+## 16. 구현 단계 — 2026-08-02 역사적 계획
 
 ### P0-A. 데이터 기반
 
-- `workspace_conversations`, `uploaded_assets`, `chat_message_attachments`를 추가한다.
-- `workspace_operations`, `workspace_operation_actions`, `workspace_operation_events`, `workspace_artifacts`를 추가한다.
+- `workspace_conversations`, `workspace_messages`, `workspace_assets`, `workspace_message_attachments`를 추가한다.
+- `workspace_operations`, `workspace_action_receipts`, `workspace_operation_events`, `workspace_artifacts`를 추가한다.
 - `presentations.revision`과 모든 FK, unique, CAS 제약을 추가한다.
 - conversation row lock 기반 position 예약과 orphan asset 정리를 구현한다.
 - 기존 Chat history와 presentation 저장 경로를 특성 테스트로 고정한다.
@@ -1054,7 +1038,7 @@ type PresentationCapabilities = {
 ### P1-C. 변경 작업 수직 슬라이스
 
 - 단일 `slide.edit`에 stable target ID, expected revision CAS, 체크포인트를 적용한다.
-- 결과 강조, revision conflict, `TARGET_STALE`, undo operation UI를 구현한다.
+- 결과 강조, typed revision/target 오류, 서버가 `allowed_actions`로 제공하는 undo 또는 명시적 미지원 사유 UI를 구현한다.
 - authored/adaptive/template-v2의 서버 capabilities를 적용한다.
 
 완료 기준:
@@ -1066,7 +1050,7 @@ type PresentationCapabilities = {
 ### P2. 작업과 생성 흐름 확장
 
 - 전체 재생성, 템플릿/테마, 버전 복원, 공유, 저장 오류를 카드로 이동한다.
-- 아웃라인, 슬라이드 생성, 품질 검사, 부분 실패 재시도를 하나의 `deck.generate` 카드에 연결한다.
+- 아웃라인, 슬라이드 생성, 품질 검사, 부분 실패 재시도를 하나의 `presentation.generate` 카드에 연결한다.
 - 위험 작업의 승인 만료, 승인 시 revision/권한 재검사를 적용한다.
 - 헤더의 기능별 직접 API 호출을 순서대로 dispatcher로 전환한다.
 
@@ -1222,7 +1206,7 @@ type PresentationCapabilities = {
 - 네트워크 단절, 중복 클릭, 리비전 충돌에서 데이터가 중복되거나 조용히 덮어써지지 않는다.
 - worker와 SSE가 서로 다른 서버 프로세스에 있어도 DB에 저장된 이벤트가 전달된다.
 - 공개 공유에서 prompt, 첨부, 대화, 작업 정보가 노출되지 않는다.
-- 기능 플래그를 끄면 데이터 손실 없이 검증된 legacy UI로 복귀할 수 있다.
+- 배포된 frontend bundle에서 backend feature-off, kill switch 또는 cohort 제외를 적용하면 데이터 손실 없이 검증된 legacy UI/write로 복귀하고 read-only history/download는 유지된다. build-time frontend flag 자체를 변경하는 경우에는 rebuild/redeploy한다.
 - 기존 슬라이드 편집 및 생성 기능의 회귀 테스트가 통과한다.
 
 ### 20.1 작업 팝업 제거 전 승인 게이트
@@ -1232,7 +1216,7 @@ type PresentationCapabilities = {
 - [ ] 최초 프롬프트와 파일 2개가 새로고침 후 같은 첫 사용자 메시지로 복원된다.
 - [ ] 원본 asset이 만료돼도 파일 카드가 깨지지 않고 상태와 재첨부 경로를 설명한다.
 - [ ] timeline snapshot과 stream 사이에 발생한 이벤트가 누락되지 않는다.
-- [ ] 같은 bootstrap, command, approve, cancel, retry, undo를 두 번 보내도 side effect가 한 번만 실행된다.
+- [ ] 같은 bootstrap, command와 지원 action(`approve`, `cancel`, `retry`)을 두 번 보내도 side effect가 한 번만 실행된다. `undo`는 v1에서 미지원 사유를 가진 disabled projection으로 검증한다.
 - [ ] 두 변경 명령이 같은 덱 revision을 수정하려 하면 하나는 명시적 충돌로 종료된다.
 - [ ] 동시에 추가된 두 메시지의 conversation position이 중복되지 않는다.
 - [ ] worker 종료 후 lease가 만료된 작업이 안전하게 복구되거나 명시적으로 실패한다.
@@ -1263,7 +1247,7 @@ type PresentationCapabilities = {
 | B4 snapshot/stream race | 8.2~8.3 | 동일 snapshot high watermark와 replay 경계 정의 |
 | B5 multi-worker event | 8.3, 15.2 | DB 원본, wake-up 신호, heartbeat 재조회 정의 |
 | B6 message position | 8.1, 9.1 | conversation row lock과 unique position 정의 |
-| H1~H3 schema/state/action | 5.2, 7.2~7.4 | schema version, fallback, cancelling/expired, action CAS 정의 |
+| H1~H3 schema/state/action | 5.2, 7.2~7.4 | response schema version, fallback, `awaiting_approval`/`cancelling`/`dead_letter`, action CAS 정의 |
 | H4~H5 target/capability | 7.1, 11.4 | stable ID와 서버 권위 capability 정의 |
 | H6 share boundary | 13, 17 | 공개 공유의 workspace 데이터 차단과 테스트 정의 |
 | H7 rollout | 15.1 | shadow, parity, feature flag, rollback 순서 정의 |
@@ -1312,10 +1296,87 @@ type PresentationCapabilities = {
 
 ### Gate 적용 순서
 
+이 순서는 설계 당시의 수용 모델이며 현재 release candidate의 실행 증거나 통과 수치를 뜻하지 않는다.
+
 1. Gate A — 이 ADR, capability/error/API schema, 공용 contract fixture를 고정한다.
 2. Gate B — additive migration, bootstrap transaction, operation/event/outbox/receipt, runner recovery, revision/asset 상태 머신 테스트를 통과시킨다.
 3. Gate C — read-only snapshot/backfill과 첫 메시지/operation card projection을 feature flag 뒤에 제공한다.
 4. Gate D — 생성·수정 command adapter를 순차 전환한다. 해당 기능의 parity gate가 통과하기 전에는 기존 popup을 제거하지 않는다.
 5. Gate E — reconnect, worker crash, duplicate receipt, two-tab revision conflict, partial external write와 공개 공유 차단을 검증한 뒤 기본 활성화한다.
 
-롤백은 `chat_first_workspace`를 끄고 legacy 진입점을 다시 노출하는 방식이며, additive workspace 기록은 보존한다. 스키마 downgrade나 대화 기록 삭제는 롤백 절차에 포함하지 않는다.
+롤백은 backend의 authoritative feature-off/kill-switch/cohort 판정으로 write를 닫고 legacy 진입점을 다시 노출하는 방식이며, additive workspace 기록은 보존한다. `NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED`는 build-time 값이므로 그 값 자체를 바꾸는 롤백에는 rebuild/redeploy가 필요하다. 스키마 downgrade나 대화 기록 삭제는 롤백 절차에 포함하지 않는다.
+
+## 24. Gate 1~8 remediation addendum — 구현 동기화 (2026-08-03)
+
+이 절은 §23의 ADR-001~005와 authored/template/adaptive 저장·publication 경계를 변경하지 않는다. §6의 Gate 0~4와 §23의 Gate A~E는 역사적 설계·구현 순서를 설명하고, 아래 Gate 1~8은 2026-08-03 감사 항목을 현재 source-tree 계약에 매핑한다. 이 문서는 특정 release candidate의 최종 통과 수치나 commit SHA를 증명하지 않는다.
+
+### Gate 1 — SSE 무손실·EOF backoff
+
+- timeline snapshot의 `event_high_watermark` 다음부터 durable event를 구독하며 query `after`와 `Last-Event-ID`를 지원한다. access/cursor는 streaming header 전에 검증한다.
+- malformed 또는 unknown-version frame은 적용하거나 cursor를 전진시키지 않고 reconnect/backfill/rebase한다. 정상 EOF도 상태 전이와 jittered exponential backoff를 거쳐 busy reconnect loop를 막는다.
+- request/action 오류는 해당 요청에만 투영하고 fatal timeline 오류와 분리한다. late/lower cursor·sequence·version event는 상태를 되돌리지 못하며 pagination 중 event high-watermark는 단조 증가한다.
+- SSE는 DB를 source of truth로 사용하고 heartbeat, `no-cache`, `no-transform`, `X-Accel-Buffering: no`를 보낸다. cursor expiry나 불연속은 부분 이어붙이기 대신 snapshot rebase로 복구한다.
+
+### Gate 2 — presentation/account 삭제와 durable cleanup
+
+- presentation 삭제는 direct cascade가 아니라 승인된 `presentation.delete` Command → Operation → Event → Action 경로다. 실행 시 owner/edit 권한, approval TTL, expected revision, operation version, lease와 fencing을 다시 검사한다.
+- 같은 DB transaction에서 presentation을 tombstone/redact하고 durable audit history를 보존하며, 삭제할 immutable asset/artifact를 `workspace_cleanup_journal`에 snapshot한다. 같은 commit에 terminal operation 상태·`result` projection·`operation.result` event도 함께 기록해 tombstone만 먼저 확정되는 새 split-state를 만들지 않는다. staging/`generation_failed`와 authored/template/adaptive/Template V2 종속 row도 같은 경계를 따른다.
+- 이전 구현에서 tombstone/effect만 commit되고 operation이 비터미널로 남은 legacy split-state는 같은 operation의 durable effect와 cleanup intent를 확인한 뒤 외부 삭제를 반복하지 않고 terminal result/event를 멱등 복구한다. duplicate dispatch와 두 worker는 operation lease/fencing 및 journal idempotency로 하나의 결과에 수렴한다.
+- 삭제된 presentation은 durable tombstone으로 남지만 live presentation guard가 legacy read/write·stream 경로에서 이를 `404`로 숨긴다. Chat-first write가 활성화된 legacy mutation은 DB 조회 전에 `409 CHAT_FIRST_COMMAND_REQUIRED`로 차단하고, feature-off/kill-switch로 legacy UI가 복원된 경우에도 tombstone을 재활성화하거나 다시 삭제하지 않는다.
+- generation/export publication과 일반 operation의 최종 성공 commit도 presentation lifecycle을 다시 fence한다. 준비된 immutable artifact가 있는 사이 tombstone이 확정되면 `presentation_deleted`로 거부하고 staged file을 보상 삭제 또는 durable cleanup 상태로 수렴시키며, presentation revision이나 늦은 `operation.result` event를 되살리지 않는다.
+- 관리자 계정 삭제는 admission marker를 별도 commit해 token을 먼저 무효화하고, duplicate 요청이 같은 cleanup generation을 resume하게 한다. marker를 잠근 뒤 첫 cleanup target snapshot을 flush하고 한 번 더 rescan한 다음 restricted dependent와 user cascade를 commit한다. 이 두 pass가 구성된 asset/artifact/user tree의 정확한 owner 경로와 root snapshot을 journal에 남기므로 marker 직전 publication, root rotation 또는 외부 삭제 실패 뒤에도 durable intent로 복구할 수 있다. 최종 `204` 응답만 유실된 replay는 account-owned cleanup tombstone이 있을 때만 멱등 성공하며 임의의 존재하지 않는 UUID는 `404`다.
+- 실제 외부 삭제는 commit 이후 maintenance sweeper가 lease, fencing, idempotency hash, retry/backoff, `dead_letter`로 수행한다. sweeper는 chat-first flag와 독립된 app lifecycle에서 동작하고 missing target은 성공으로 수렴하며 traversal·symlink·root 이탈은 fail-close한다. `dead_letter`, 활성 cleanup token/lease 없음, `last_error.retryable=true`를 모두 만족하는 row만 관리자 `POST /api/v1/admin/workspace-cleanup/dead-letters/{journal_id}/redrive`가 단일 CAS로 `retry_wait`에 되돌리고 retry budget·fence·redrive 감사 필드를 갱신한다. 두 관리자 동시 요청 중 하나만 redrive하며 non-retryable 또는 분류가 없는 legacy row는 fail-close한다.
+
+### Gate 3 — runtime rollback과 read/write capability 분리
+
+- 지원 dialect에서는 workspace timeline/history/artifact read를 기능 플래그와 write profile 선언 여부와 독립적으로 유지한다. 기존 artifact 다운로드 같은 비변경 동작은 read-only에서도 허용한다.
+- write는 `CHAT_FIRST_WORKSPACE_ENABLED`, runtime profile/dialect 일치, kill switch와 deck cohort eligibility를 모두 통과해야 한다. UI는 `reads_supported`와 `commands_enabled`를 별도로 판정한다.
+- `NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED`는 build-time bundle gate이므로 값을 바꾸면 rebuild/redeploy가 필요하다. 이미 Chat-first bundle이 배포된 상태에서는 backend의 explicit feature-off, authoritative kill-switch 또는 cohort 제외 capability가 SharePopover를 포함한 legacy UI를 rebuild 없이 복원한다. additive workspace record는 보존하고 capability refresh를 focus/visibility/online/pageshow와 `BroadcastChannel`로 두 탭에 전파한다.
+- timeline/history/artifact read capability는 commands write와 독립적으로 유지한다. legacy write는 explicit feature-off/kill-switch/cohort rollback에서만 복원하고, read-only timeline은 그와 동시에 계속 접근 가능하다.
+- runtime 불건전, unsupported 또는 불완전한 command capability는 legacy write로 우회하지 않고 blocked 상태로 표시한다.
+
+### Gate 4 — immutable attachment snapshot과 복구 UX
+
+- `f8b0d3e5a7c9`는 `e7a9c2d4f6b8` 뒤에 presentation tombstone 필드, immutable attachment snapshot, `workspace_cleanup_journal`을 추가하고, 현재 Alembic sole head `fa1b2c3d4e5f`는 계정 삭제 admission/publication fence를 추가한다.
+- first-message attachment는 `asset_id_snapshot`, filename, MIME, size, SHA-256, state-at-time과 안전한 failure code/detail을 보존한다. live `asset_id`는 nullable + `ON DELETE SET NULL`이고 timeline은 snapshot을 주 데이터, 현재 asset 상태를 별도 projection으로 사용한다.
+- UI는 당시/현재 상태, 형식·크기·파일명과 안전 오류를 구분해 표시하고 가능한 다운로드/미리보기 또는 재첨부·retry 경로를 제공한다. 원본 row 변경·삭제는 과거 메시지를 바꾸지 않는다.
+- f8 upgrade는 snapshot column을 추가하기 전에 attachment의 `asset_id`가 null이거나 대응 live asset row가 없는지 preflight한다. dangling attachment가 하나라도 있으면 이전 Alembic revision과 schema를 그대로 유지한 채 fail-close하며, FK를 의도적으로 끈 SQLite fixture가 이 무부분변경 경계를 고정한다. 정보 손실이 예상되는 f8 downgrade 대신 flag/kill switch rollback으로 additive history를 보존한다.
+
+### Gate 5 — Workspace E2E required CI
+
+- live browser 경계는 immutable attachment snapshot의 당시 `uploaded` 상태를 먼저 확인한 뒤 live asset을 명시적으로 `failed`로 전이하고, current-state failure·safe failure code·generation `blocked` 투영을 검증한다. harness의 backfill gate는 marker가 있는 시나리오에만 적용하고 `afterEach` release로 실패한 spec이 후속 spec을 멈추지 않게 하며, 일반 성공 명령은 즉시 완료된다.
+
+- CI workflow는 `npm run test:workspace-e2e`를 관련 PR의 독립 job으로 실행하고 production lifecycle test를 backend FastAPI job의 비선택 step으로 실행한다. `required-CI` contract test는 이 topology와 timeout 뒤 서버/Cypress 로그·진단 artifact 수집을 검사한다. 실제 merge 차단에 필요한 required status 지정은 repository branch/merge-check 설정에서 별도로 확인한다.
+- 표준 local runner도 같은 browser E2E를 기본 profile에 포함하고 선택 capability는 `NOT RUN`으로 명시해 성공으로 세지 않는다.
+- 모든 run은 격리 temp/database/port와 cleanup trap을 사용한다. Windows child는 retained supervisor가 `CreateProcessW(CREATE_SUSPENDED)`로 만든 뒤 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` Job Object에 할당하고서만 resume한다. 정상 cleanup은 Node가 보유한 supervisor `ChildProcess` handle을 종료하고 실제 exit를 기다리며 기록된 PID, PPID 탐색 또는 `taskkill`로 process tree를 신호하지 않는다. lock metadata의 `processIdentity.birthId`는 `Get-Process -Id ... .StartTime.ToUniversalTime().ToFileTimeUtc()`의 exact FILETIME decimal string이고 `executable`은 `.Path`다. supervisor는 retained parent HANDLE에서 `GetProcessTimes`와 `QueryFullProcessImageName`으로 동일 identity를 다시 검증한다. stale recovery에서 정확한 supervisor가 살아 있거나 identity/legacy metadata를 검증할 수 없으면 project restore·lock release를 fail-close하고, supervisor가 사라졌거나 PID가 다른 process로 재사용된 경우에만 어떤 PID도 종료하지 않은 채 비파괴 recovery를 진행한다. 실제 supervisor create/exit와 retained-handle termination probe는 이 identity·Job Object 경계를 검증하지만 전체 stale recovery나 candidate RC 실행 증거는 아니다. `.cmd`/`.exe` 선택과 locked-handle `EPERM`/`EACCES`/`EBUSY` retry·진단 보존도 runner가 소유한 경로의 원인 추적을 돕는다. 다만 pytest 자체의 전역 numbered-temp/`pytest-current` atexit 정리는 별도 host 경계다. 해당 `PermissionError`/`WinError 5`가 남으면 종료 코드 0만으로 Windows cleanup Gate를 닫지 않고, 실제 Windows에서 고유 `--basetemp` 재실행과 잠금 process·ACL/handle 진단을 release evidence에 남긴다.
+
+### Gate 6 — receipt/error/schema-version 계약
+
+- command/action은 `schema_version`, `receipt_id`, `operation_id`, `duplicate`, `status`, `timeline`을 가진 versioned envelope를 반환하고 기존 flat field를 호환 기간 동안 함께 제공한다. durable duplicate receipt가 wire에서도 `duplicate=true`로 관찰된다.
+- 중앙 registry가 `{error:{status_code,code,safe_message,retryable},request_id}`와 OpenAPI response를 생성한다. raw exception, 내부 경로, secret은 public projection에 포함하지 않는다.
+- schema-version과 operation kind는 단일 immutable catalog의 strict allowlist로 입구에서 검증한다. command/bootstrap은 catalog에 없는 kind를 durable row 생성 전에 거부하고, 이미 저장된 legacy unknown operation은 action이 없는 non-retryable unsupported card로만 투영한다. 서버 `allowed_actions`가 UI action을 결정하며 클라이언트 상태 추측을 제거한다.
+- operation card는 actor, 시간, 대상, revision, activity, undo 또는 미지원 사유를 표시한다. action/re-export Promise와 history load 실패를 명시적으로 처리하고 설정/result raw key는 사용자 문구로 humanize한다.
+- `contracts/chat-first-workspace/v1/*.json`이 canonical wire fixture다. backend는 public Pydantic model의 exact round-trip과 생성된 OpenAPI `$ref`/response shape를 fixture에 대조하고, frontend Node suite는 같은 파일을 실제 response/error/timeline decoder로 통과시킨다. fixture 파일 존재만 확인하는 검사는 계약 증거로 보지 않는다.
+
+### Gate 7 — production-shaped lifecycle
+
+- `WORKSPACE_OPERATION_WORKER_MODE=external`이면 API lifespan의 embedded runner 대신 `python -m services.workspace_operation_worker` 프로세스가 claim, heartbeat, recovery와 handler execution을 소유한다.
+- production lifecycle integration test는 Alembic-upgraded 빈 SQLite DB와 실제 ASGI app lifespan, 별도 external worker process에서 bootstrap/duplicate receipt, stale revision, worker 종료와 marker의 lease-owner PID 기록, lease expiry 뒤 recovery, SSE disconnect + `Last-Event-ID` backfill을 검증한다. 별도 browser용 실제 HTTP/SQLite harness는 embedded durable runner와 결정론적 edit handler를 사용하며 `uv run python -m tests.support.workspace_browser_live_harness --port 8765`로 재현한다.
+- partial external publication/write는 production lifecycle 한 건이 아니라 deterministic fault/compensation tests에서 검증한다. PostgreSQL은 test URL이 있을 때 별도 dialect/concurrency suite 대상이며, 이 문서는 실제 PostgreSQL 배포 topology나 실제 LLM, production object store/scanner 실행을 완료했다고 주장하지 않는다.
+
+### Gate 8 — rollout·관측성·Windows 패키징·접근성
+
+- 서버 rollout은 kill switch, owner + deck ID의 salted stable cohort, shadow/parity 판정을 제공한다. partial rollout에서 deck scope가 없으면 fail-close하고 kill switch가 cohort보다 우선한다.
+- low-cardinality metrics와 SLO는 durable non-duplicate operation admission을 분모로 한 allowlisted operation/rollout/event lag/shadow parity/silent loss/dead-letter/lease-lost/revision-conflict와 cleanup/outbox claim·terminal outcome만 노출한다. API/worker scrape absent·down, shadow silent loss/divergence, telemetry sink failure와 event lag breach/stall을 Prometheus rule로 감시하며, lag-stall 분모는 chat-memory delivery가 아니라 `workspace.operation.event`의 `event_delivered`만 사용한다.
+- standalone packaging은 symlink 권한을 사전 점검하고 copy fallback, 격리 output, 명확한 진단을 제공한다. PR Windows workflow는 preflight와 link-free staging 계약을 자동 검사하며, 전체 standalone package/RC 작업은 명시적 workflow dispatch 대상이다. 이 source-tree 문서는 실제 Windows RC 실행 완료를 주장하지 않는다.
+- `/Logo.png`는 명시적 priority/size 경계로 LCP 경고를 제거한다. route E2E는 axe 위반 0, destructive approval의 제한된 assertive live region, 단일 polite status, tab/disclosure/progress ARIA와 기준 viewport를 검증한다.
+
+### 보존되는 모드 경계
+
+`template.apply` authored 경로는 원본 presentation timeline에서 작업을 추적하고 별도 생성된 새 덱 링크를 결과로 노출한다. authored/template/adaptive/Template V2의 내부 저장 모델은 합치지 않으며, 최종 publish만 expected revision, attempt/fencing, immutable artifact 검증이라는 공통 계약을 통과한다. public event payload는 operation-kind allowlist로 내부 generation task, storage path, cookie/header를 숨긴다.
+
+### 활성화와 롤백 판정
+
+기본 활성화 전에는 Gate 1~8 각각의 evidence가 같은 candidate에서 재현되어야 한다. 특히 capability가 read/write를 정확히 분리하고, cleanup journal backlog/`dead_letter`, SSE lag/rebase, shadow parity/silent loss와 lease/revision conflict가 SLO 안에 있어야 한다. legacy popup은 대응 command의 parity가 확인된 기능부터 제거한다.
+
+긴급 롤백은 kill switch로 새 write ingress를 먼저 차단하고 backend feature/cohort capability를 legacy로 전환한 뒤 external worker/operation/outbox 상태를 조정한다. `NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED` 자체를 내리는 절차는 rebuild/redeploy가 필요하므로 즉시 runtime 제어로 표현하지 않는다. 단, `workspace_cleanup_journal` sweeper는 chat-first write flag와 독립된 app lifecycle이므로 flag-off 중에도 계속 실행해 presentation/account deletion의 durable cleanup을 복구한다. 정상 app shutdown 때만 중단한다. 이미 commit된 timeline, attachment snapshot, receipt, artifact metadata와 cleanup intent는 지우지 않으며 f8/fa1 schema downgrade는 일반 롤백에 포함하지 않는다.

@@ -30,11 +30,14 @@ from constants.documents import (
 from models.sql.workspace import (
     WorkspaceAsset,
     WorkspaceConversation,
-    WorkspaceMessageAttachment,
     WorkspaceOperation,
     get_workspace_owner_scope,
 )
 from models.workspace import WorkspaceAssetResponse, WorkspaceAssetTransitionRequest
+from services.account_deletion_service import (
+    AccountDeletionFenceConflict,
+    require_active_account_generation,
+)
 from services.workspace_service import (
     WorkspaceServiceError,
     _asset_block_error,
@@ -48,6 +51,7 @@ from utils.datetime_utils import get_current_utc_datetime
 from utils.document_path_security import validated_upload_extension
 from utils.path_helpers import get_writable_path
 from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file
+from utils.owner_context import get_current_owner_id
 
 _ASSET_TRANSITIONS: dict[str, frozenset[str]] = {
     "uploaded": frozenset(
@@ -110,6 +114,25 @@ _MIME_BY_EXTENSION = {
     ".xlsm": {"application/vnd.ms-excel.sheet.macroenabled.12"},
     ".ods": {"application/vnd.oasis.opendocument.spreadsheet"},
 }
+
+
+async def _require_active_asset_owner(session: AsyncSession) -> int | None:
+    """Fence upload/worker publication against durable account deletion."""
+
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        return None
+    try:
+        return await require_active_account_generation(
+            session,
+            user_id=owner_id,
+        )
+    except AccountDeletionFenceConflict as error:
+        raise WorkspaceServiceError(
+            "account_deletion_in_progress",
+            status_code=409,
+            retryable=False,
+        ) from error
 
 
 def normalize_workspace_asset_name(value: str | None) -> str:
@@ -433,6 +456,73 @@ def workspace_asset_response(asset: WorkspaceAsset) -> WorkspaceAssetResponse:
     )
 
 
+async def resolve_workspace_asset_download(
+    session: AsyncSession,
+    *,
+    asset_id: uuid.UUID,
+    storage_root: Path | None = None,
+) -> tuple[WorkspaceAsset, Path]:
+    """Authorize and resolve one immutable attachment without exposing its key.
+
+    Owner filtering happens before lifecycle or filesystem inspection, so an
+    asset belonging to another account is indistinguishable from a missing id.
+    Only live ``ready`` assets may be downloaded; preview is intentionally not
+    offered because active-content formats require a separate sanitization
+    pipeline.
+    """
+
+    asset = await get_workspace_asset(session, asset_id=asset_id)
+    now = get_current_utc_datetime()
+    state_error = {
+        "failed": ("workspace_asset_failed", True),
+        "quarantined": ("workspace_asset_quarantined", False),
+        "expired": ("workspace_asset_expired", False),
+        "deleted": ("workspace_asset_deleted", False),
+    }.get(asset.state)
+    if state_error is not None:
+        code, retryable = state_error
+        raise WorkspaceServiceError(
+            code,
+            status_code=409,
+            retryable=retryable,
+        )
+    expires_at = asset.expires_at
+    comparison_now = (
+        now.replace(tzinfo=None)
+        if expires_at is not None and expires_at.tzinfo is None
+        else now
+    )
+    if expires_at is not None and expires_at <= comparison_now:
+        raise WorkspaceServiceError("workspace_asset_expired", status_code=409)
+    if asset.state != "ready":
+        raise WorkspaceServiceError(
+            "workspace_asset_not_ready",
+            status_code=409,
+            retryable=True,
+        )
+
+    root = (storage_root or Path(get_writable_path("workspace_assets"))).resolve()
+    storage_key = asset.storage_key or ""
+    key = PurePosixPath(storage_key)
+    if (
+        not storage_key
+        or "\\" in storage_key
+        or key.is_absolute()
+        or any(part in {"", ".", ".."} for part in key.parts)
+    ):
+        raise WorkspaceServiceError("workspace_asset_not_found", status_code=404)
+    try:
+        path = (root / Path(*key.parts)).resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise WorkspaceServiceError(
+            "workspace_asset_not_found",
+            status_code=404,
+        ) from None
+    if root not in path.parents or not path.is_file():
+        raise WorkspaceServiceError("workspace_asset_not_found", status_code=404)
+    return asset, path
+
+
 async def get_workspace_asset(
     session: AsyncSession,
     *,
@@ -490,6 +580,11 @@ async def create_workspace_asset(
             raise WorkspaceServiceError(
                 "workspace_conversation_not_found", status_code=404
             )
+
+    # Keep the account writer fence through both the immutable file move and
+    # the asset-row commit.  Account deletion therefore either wins first and
+    # rejects the upload, or waits and snapshots the newly committed target.
+    await _require_active_asset_owner(session)
 
     root = (storage_root or Path(get_writable_path("workspace_assets"))).resolve()
     asset_id = uuid.uuid4()
@@ -615,6 +710,9 @@ async def process_workspace_asset(
     request-owned background work.
     """
 
+    # Existing ``scanning`` work also fences before touching external state;
+    # every committed transition repeats the fence below after a prior commit.
+    await _require_active_asset_owner(session)
     asset = await get_workspace_asset(session, asset_id=asset_id)
     if expected_version is not None and asset.version != expected_version:
         raise WorkspaceServiceError("workspace_asset_version_conflict", status_code=409)
@@ -835,6 +933,7 @@ async def transition_workspace_asset(
     request: WorkspaceAssetTransitionRequest,
     commit: bool = True,
 ) -> WorkspaceAsset:
+    await _require_active_asset_owner(session)
     asset = await get_workspace_asset(session, asset_id=asset_id)
     if asset.version != request.expected_version:
         raise WorkspaceServiceError("workspace_asset_version_conflict", status_code=409)
@@ -893,14 +992,8 @@ async def transition_workspace_asset(
             .execution_options(populate_existing=True)
         )
     ).scalar_one()
-    await session.execute(
-        update(WorkspaceMessageAttachment)
-        .where(
-            WorkspaceMessageAttachment.asset_id == asset.id,
-            _owner_id_predicate(WorkspaceMessageAttachment.owner_id),
-        )
-        .values(asset_state=asset.state)
-    )
+    # Message attachments are immutable snapshots of the asset at send time.
+    # Later scan/processing/deletion transitions affect only the live asset row.
     await _project_asset_transition_to_operations(session, asset=asset)
     await session.flush()
     if commit:

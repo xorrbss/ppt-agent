@@ -8,17 +8,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { notify } from "@/components/ui/sonner";
-import { isChatFirstWorkbenchEnabled } from "@/lib/chat-first-workbench";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 
 const SharePopover = ({
   presentationId,
   disabled,
-  chatFirstEnabled: forceChatFirstEnabled = false,
+  chatFirstEnabled = false,
 }: {
   presentationId: string;
   disabled?: boolean;
-  /** Test/integration seam that can only force the fail-closed state. */
+  /** Runtime rollout state; false must restore the complete legacy control. */
   chatFirstEnabled?: boolean;
 }) => {
   const [open, setOpen] = useState(false);
@@ -27,9 +26,6 @@ const SharePopover = ({
   const [shared, setShared] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const chatFirstEnabled =
-    isChatFirstWorkbenchEnabled() || forceChatFirstEnabled;
-
   if (chatFirstEnabled) return null;
 
   const shareUrl =

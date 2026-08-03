@@ -6,7 +6,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 import pytest
-from sqlalchemy import event, inspect, select
+from sqlalchemy import event, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -18,6 +18,7 @@ from models.sql.workspace import (
     WorkspaceActionReceipt,
     WorkspaceArtifact,
     WorkspaceAsset,
+    WorkspaceCleanupJournal,
     WorkspaceConversation,
     WorkspaceMessage,
     WorkspaceMessageAttachment,
@@ -55,6 +56,7 @@ WORKSPACE_TABLES = [
     WorkspaceOutbox.__table__,
     WorkspaceActionReceipt.__table__,
     WorkspaceArtifact.__table__,
+    WorkspaceCleanupJournal.__table__,
 ]
 
 
@@ -305,7 +307,7 @@ def test_runtime_profile_declaration_matches_database():
             "sqlite+aiosqlite:///local.db",
             None,
             False,
-            False,
+            True,
             "chat_first_runtime_profile_required",
         ),
         (
@@ -313,7 +315,7 @@ def test_runtime_profile_declaration_matches_database():
             "sqlite+aiosqlite:///local.db",
             "typo",
             False,
-            False,
+            True,
             "chat_first_runtime_profile_invalid",
         ),
         (
@@ -321,7 +323,7 @@ def test_runtime_profile_declaration_matches_database():
             "sqlite+aiosqlite:///local.db",
             "postgresql-cluster",
             False,
-            False,
+            True,
             "chat_first_runtime_profile_mismatch",
         ),
         (
@@ -423,9 +425,59 @@ def test_workspace_migration_upgrades_sqlite(tmp_path: Path):
                 WorkspaceOutbox,
                 WorkspaceActionReceipt,
                 WorkspaceArtifact,
+                WorkspaceCleanupJournal,
             )).issubset(inspector.get_table_names())
-            assert "revision" in {column["name"] for column in inspector.get_columns("presentations")}
+            presentation_columns = {
+                column["name"]: column
+                for column in inspector.get_columns("presentations")
+            }
+            assert {
+                "revision",
+                "deleted_at",
+                "deletion_operation_id",
+            }.issubset(presentation_columns)
             assert "workspace_operation_id" in {column["name"] for column in inspector.get_columns("presentation_generation_jobs")}
+            attachment_columns = {
+                column["name"]: column
+                for column in inspector.get_columns(
+                    "workspace_message_attachments"
+                )
+            }
+            assert {
+                "asset_id_snapshot",
+                "asset_sha256",
+                "asset_failure_code",
+                "asset_failure_detail",
+            }.issubset(attachment_columns)
+            assert attachment_columns["asset_id"]["nullable"] is True
+            assert attachment_columns["asset_id_snapshot"]["nullable"] is False
+            attachment_asset_fk = next(
+                foreign_key
+                for foreign_key in inspector.get_foreign_keys(
+                    "workspace_message_attachments"
+                )
+                if foreign_key["name"]
+                == "fk_workspace_message_attachments_asset_id"
+            )
+            assert attachment_asset_fk["constrained_columns"] == ["asset_id"]
+            assert attachment_asset_fk["referred_table"] == "workspace_assets"
+            assert (
+                attachment_asset_fk.get("options", {}).get("ondelete", "").upper()
+                == "SET NULL"
+            )
+            attachment_asset_unique = next(
+                constraint
+                for constraint in inspector.get_unique_constraints(
+                    "workspace_message_attachments"
+                )
+                if constraint["name"]
+                == "uq_workspace_message_attachments_asset"
+            )
+            assert attachment_asset_unique["column_names"] == [
+                "message_id",
+                "asset_id_snapshot",
+            ]
+            assert inspector.get_foreign_keys("workspace_cleanup_journal") == []
             conversation_columns = {
                 column["name"]: column
                 for column in inspector.get_columns("workspace_conversations")
@@ -446,10 +498,57 @@ def test_workspace_migration_upgrades_sqlite(tmp_path: Path):
                 migrations._infer_revision_from_schema(
                     inspector,
                     set(inspector.get_table_names()),
-                    migrations.REVISION_CHAT_FIRST_WORKSPACE,
+                    migrations.REVISION_ACCOUNT_DELETION_FENCE,
                 )
-                == migrations.REVISION_CHAT_FIRST_WORKSPACE
+                == migrations.REVISION_ACCOUNT_DELETION_FENCE
             )
+    finally:
+        engine.dispose()
+
+
+def test_workspace_schema_inference_distinguishes_f8_from_partial_fa1(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "migration-inference.db"
+    config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(Path(__file__).resolve().parents[2] / "alembic")
+    )
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path.as_posix()}")
+    command.upgrade(config, migrations.REVISION_DURABLE_DELETION)
+
+    from sqlalchemy import create_engine
+
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            tables = set(inspector.get_table_names())
+            assert migrations._infer_revision_from_schema(
+                inspector,
+                tables,
+                migrations.REVISION_ACCOUNT_DELETION_FENCE,
+            ) == migrations.REVISION_DURABLE_DELETION
+
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    'ALTER TABLE "user" ADD COLUMN deletion_state '
+                    "VARCHAR(24) NOT NULL DEFAULT 'active'"
+                )
+            )
+
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            with pytest.raises(
+                RuntimeError,
+                match="Account deletion fence columns are only partially applied",
+            ):
+                migrations._infer_revision_from_schema(
+                    inspector,
+                    set(inspector.get_table_names()),
+                    migrations.REVISION_ACCOUNT_DELETION_FENCE,
+                )
     finally:
         engine.dispose()
 
@@ -471,10 +570,20 @@ def test_workspace_migration_downgrade_upgrade_cycle(tmp_path: Path):
         with engine.connect() as connection:
             inspector = inspect(connection)
             assert "workspace_conversations" not in inspector.get_table_names()
+            assert "workspace_cleanup_journal" not in inspector.get_table_names()
             assert "revision" not in {
                 column["name"]
                 for column in inspector.get_columns("presentations")
             }
+            assert {
+                "deleted_at",
+                "deletion_operation_id",
+            }.isdisjoint(
+                {
+                    column["name"]
+                    for column in inspector.get_columns("presentations")
+                }
+            )
             assert "workspace_operation_id" not in {
                 column["name"]
                 for column in inspector.get_columns(

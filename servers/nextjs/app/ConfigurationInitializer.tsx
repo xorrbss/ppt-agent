@@ -192,6 +192,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
                 className="mx-auto mb-4 h-12 w-auto opacity-90"
                 width={204}
                 height={48}
+                priority
               />
               <div className="mx-auto h-1 w-16 rounded-full bg-[#7C51F8]" />
             </div>

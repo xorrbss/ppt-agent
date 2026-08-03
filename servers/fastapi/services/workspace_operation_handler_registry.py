@@ -64,6 +64,8 @@ _VALID_RECOVERY_POLICIES = frozenset({"automatic", "manual"})
 # when recovery runs before application startup has registered handlers.
 _BUILTIN_RECOVERY_POLICIES: dict[str, WorkspaceOperationRecoveryPolicy] = {
     "presentation.generate": "automatic",
+    "presentation.delete": "automatic",
+    "template.apply": "automatic",
 }
 
 

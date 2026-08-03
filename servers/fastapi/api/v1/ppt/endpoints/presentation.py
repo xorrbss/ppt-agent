@@ -55,6 +55,7 @@ from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.presentation_access_service import require_live_presentation
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
 )
@@ -134,13 +135,11 @@ async def prepare_presentation(
     title: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    require_legacy_presentation_write_path()
+    require_legacy_presentation_write_path(presentation_id)
     if not outlines:
         raise HTTPException(status_code=400, detail="Outlines are required")
 
-    presentation = await sql_session.get(PresentationModel, presentation_id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    presentation = await require_live_presentation(sql_session, presentation_id)
 
     presentation_outline_model = PresentationOutlineModel(slides=outlines)
 
@@ -204,55 +203,19 @@ async def authored_quality_review_readiness():
     return await get_ocr_readiness()
 
 
-@PRESENTATION_ROUTER.post(
-    "/{id}/quality-review",
-    response_model=AsyncPresentationGenerationTaskModel,
-    summary="Review and optionally repair an existing AI-authored presentation",
-)
-async def quality_review_authored_presentation(
-    id: uuid.UUID,
-    request: AuthoredQualityReviewRequest,
-    background_tasks: BackgroundTasks,
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    """Run high-quality visual QA against persisted authored HTML.
-
-    The task can inspect either the whole deck or the current slide. In repair mode,
-    only slides with visible problems are re-authored, and the pre-review deck is
-    saved to version history before any live slide is replaced.
-    """
-    require_legacy_presentation_write_path()
-    return await queue_authored_quality_review(
-        id, request, background_tasks, sql_session
-    )
-
-
-@PRESENTATION_ROUTER.post(
-    "/{id}/retemplate",
-    response_model=AsyncPresentationGenerationTaskModel,
-    summary="Re-author a presentation with another AI-authored template",
-)
-async def retemplate_authored_presentation(
+async def build_authored_retemplate_generation_request(
     id: uuid.UUID,
     request: RetemplatePresentationRequest,
-    request_http: Request,
-    background_tasks: BackgroundTasks,
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    """Create a new AI-authored deck from the saved semantic outline.
+    sql_session: AsyncSession,
+) -> GeneratePresentationRequest:
+    """Build a new-deck request from a saved authored manuscript.
 
-    The authored HTML is intentionally not used as generation input.  It is a
-    rendered artifact and may contain shortened or decorative text. The stored
-    LLM-authored outline remains the authoritative source, and the original
-    presentation is never modified.
+    This boundary intentionally performs no route/write-gate check.  The HTTP
+    route applies the legacy gate, while the chat-first workspace handler calls
+    it from its already-authorized durable operation.
     """
-    require_legacy_presentation_write_path()
-    source = await sql_session.get(PresentationModel, id)
-    if not source:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    source = await require_live_presentation(sql_session, id)
 
-    # Early authored decks did not always persist presentation.mode/theme.mode.
-    # Their slides still contain authored layout/content sentinels.
     is_authored_source = source.is_authored()
     if not is_authored_source:
         source_slides = (
@@ -287,10 +250,7 @@ async def retemplate_authored_presentation(
         )
 
     exact_snapshot_id = None
-    if (
-        normalize_reference_mode(selected_style.reference_mode)
-        == EXACT_RECONSTRUCTION
-    ):
+    if normalize_reference_mode(selected_style.reference_mode) == EXACT_RECONSTRUCTION:
         try:
             validate_exact_reconstruction_style(
                 selected_style,
@@ -324,9 +284,6 @@ async def retemplate_authored_presentation(
             source.title or source.content or source_outline.slides[0].content
         )[:500],
         "slides_markdown": [slide.content for slide in source_outline.slides],
-        # The saved semantic outline is the authoritative LLM-authored manuscript.
-        # Do not feed rendered html_content back into the model and do not add
-        # internal conversion markers to the user's instructions.
         "instructions": source.instructions,
         "language": source.language,
         "template": "authored",
@@ -343,6 +300,56 @@ async def retemplate_authored_presentation(
 
     generation_request = GeneratePresentationRequest(**generation_payload)
     generation_request._authored_exact_snapshot_id = exact_snapshot_id
+    return generation_request
+
+
+@PRESENTATION_ROUTER.post(
+    "/{id}/quality-review",
+    response_model=AsyncPresentationGenerationTaskModel,
+    summary="Review and automatically repair an existing AI-authored presentation",
+)
+async def quality_review_authored_presentation(
+    id: uuid.UUID,
+    request: AuthoredQualityReviewRequest,
+    background_tasks: BackgroundTasks,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Run high-quality visual QA against persisted authored HTML.
+
+    The task can inspect the whole deck, the current slide, or an explicit page
+    subset. Slides with visible problems are automatically re-authored, and the
+    pre-review deck is saved to version history before any live slide is replaced.
+    """
+    require_legacy_presentation_write_path(id)
+    await require_live_presentation(sql_session, id)
+    return await queue_authored_quality_review(
+        id, request, background_tasks, sql_session
+    )
+
+
+@PRESENTATION_ROUTER.post(
+    "/{id}/retemplate",
+    response_model=AsyncPresentationGenerationTaskModel,
+    summary="Re-author a presentation with another AI-authored template",
+)
+async def retemplate_authored_presentation(
+    id: uuid.UUID,
+    request: RetemplatePresentationRequest,
+    request_http: Request,
+    background_tasks: BackgroundTasks,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Create a new AI-authored deck from the saved semantic outline.
+
+    The authored HTML is intentionally not used as generation input.  It is a
+    rendered artifact and may contain shortened or decorative text. The stored
+    LLM-authored outline remains the authoritative source, and the original
+    presentation is never modified.
+    """
+    require_legacy_presentation_write_path(id)
+    generation_request = await build_authored_retemplate_generation_request(
+        id, request, sql_session
+    )
     return await queue_presentation_generation(
         generation_request,
         background_tasks,
@@ -359,10 +366,8 @@ async def stream_presentation(
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     # Despite being a legacy GET route, the stream replaces persisted slides.
-    require_legacy_presentation_write_path()
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    require_legacy_presentation_write_path(id)
+    presentation = await require_live_presentation(sql_session, id)
     if presentation.is_authored():
         raise HTTPException(
             status_code=400,
@@ -585,10 +590,8 @@ async def update_presentation(
     slides: Annotated[Optional[List[SlideModel]], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    require_legacy_presentation_write_path()
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    require_legacy_presentation_write_path(id)
+    presentation = await require_live_presentation(sql_session, id)
 
     presentation_update_dict = {}
     if n_slides is not None:
@@ -676,10 +679,10 @@ async def edit_presentation_with_new_content(
     data: Annotated[EditPresentationRequest, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    require_legacy_presentation_write_path()
-    presentation = await sql_session.get(PresentationModel, data.presentation_id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    require_legacy_presentation_write_path(data.presentation_id)
+    presentation = await require_live_presentation(
+        sql_session, data.presentation_id
+    )
 
     slides = await sql_session.scalars(
         select(SlideModel).where(SlideModel.presentation == data.presentation_id)
@@ -728,10 +731,10 @@ async def derive_presentation_from_existing_one(
     data: Annotated[EditPresentationRequest, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    require_legacy_presentation_write_path()
-    presentation = await sql_session.get(PresentationModel, data.presentation_id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    require_legacy_presentation_write_path(data.presentation_id)
+    presentation = await require_live_presentation(
+        sql_session, data.presentation_id
+    )
 
     slides = await sql_session.scalars(
         select(SlideModel).where(SlideModel.presentation == data.presentation_id)

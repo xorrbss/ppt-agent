@@ -35,7 +35,7 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
-from services import workspace_asset_service
+from services import workspace_asset_service, workspace_legacy_write_gate
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     prepare_workspace_generation_artifact,
@@ -153,6 +153,63 @@ def test_create_replay_is_single_turn_and_payload_mismatch_conflicts(
                     )
                 assert caught.value.status_code == 409
                 assert caught.value.detail == "idempotency_key_payload_conflict"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_created_staging_deck_admits_outline_only_until_generation_activation(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "outline-bootstrap.db")
+        monkeypatch.setattr(
+            presentation_crud,
+            "_chat_first_create_enabled",
+            lambda: True,
+        )
+        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
+        monkeypatch.setenv(
+            "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE",
+            "sqlite-local",
+        )
+        presentation_id = uuid.uuid4()
+        admit_outline = (
+            workspace_legacy_write_gate.require_outline_bootstrap_write_path
+        )
+        try:
+            async with maker() as session:
+                presentation = await _create(
+                    session,
+                    presentation_id=presentation_id,
+                    idempotency_key=f"presentation-create:{presentation_id}",
+                )
+                assert (
+                    await admit_outline(
+                        session,
+                        presentation,
+                    )
+                    is None
+                )
+
+                operation = (
+                    await session.execute(select(WorkspaceOperation))
+                ).scalar_one()
+                operation.state = "queued"
+                session.add(operation)
+                await session.commit()
+
+            async with maker() as session:
+                presentation = await session.get(PresentationModel, presentation_id)
+                with pytest.raises(HTTPException) as caught:
+                    await admit_outline(
+                        session,
+                        presentation,
+                    )
+                assert caught.value.status_code == 409
+                assert caught.value.detail == "chat_first_command_required"
         finally:
             await engine.dispose()
 

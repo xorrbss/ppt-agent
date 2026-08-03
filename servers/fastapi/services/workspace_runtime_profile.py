@@ -40,9 +40,10 @@ class ChatFirstWorkspaceRollout:
 
     @property
     def workspace_reads_supported(self) -> bool:
-        if not self.profile.supported:
-            return False
-        return not self.requested or self.runtime_error is None
+        # Timeline/history/artifact reads depend only on the physical runtime.
+        # A missing or mismatched *write* declaration must not hide durable
+        # workspace state during a rollout rollback or configuration incident.
+        return self.profile.supported
 
 
 class UnsupportedWorkspaceRuntimeError(RuntimeError):

@@ -4,4 +4,8 @@ export type {
   WorkspaceCommandDispatcher,
   WorkspaceCommandOptions,
   WorkspaceCommandType,
+  WorkspacePresentationChange,
+  WorkspacePresentationChangedHandler,
+  WorkspacePresentationRefreshState,
+  WorkspaceQualityReviewRequester,
 } from "./types";

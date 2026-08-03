@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, PlainTextResponse
 
 from api.error_handling import install_api_error_handling
 from api.lifespan import app_lifespan
@@ -15,6 +15,7 @@ from api.v1.async_tasks.router import API_V1_ASYNC_TASKS_ROUTER
 from api.v1.mock.router import API_V1_MOCK_ROUTER
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
+from services.workspace_metrics import WORKSPACE_METRICS
 from utils.get_env import (
     get_app_data_directory_env,
     get_enable_mock_endpoints_env,
@@ -110,6 +111,25 @@ app.add_middleware(
 
 app.add_middleware(UserConfigEnvUpdateMiddleware)
 app.add_middleware(SessionAuthMiddleware)
+
+
+@app.get(
+    "/metrics/workspace",
+    response_class=PlainTextResponse,
+    include_in_schema=False,
+)
+async def workspace_metrics_scrape() -> PlainTextResponse:
+    """Expose only the closed, metadata-free workspace Prometheus schema.
+
+    The path intentionally lives outside ``/api`` so Prometheus does not need
+    an interactive user session.  Deployment network policy remains the
+    authorization boundary for this aggregate-only scrape endpoint.
+    """
+
+    return PlainTextResponse(
+        WORKSPACE_METRICS.prometheus_text(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @app.middleware("http")

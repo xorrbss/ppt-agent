@@ -91,6 +91,7 @@ from services.presentation_generation_job_service import (
     launch_generation_job,
     release_generation_job,
     request_sha256,
+    resolve_generation_job_presentation_id,
 )
 from services.template_v2_generation_observability import (
     log_template_v2_generation_observation,
@@ -119,7 +120,11 @@ from services.workspace_artifact_publication_service import (
     workspace_chat_artifacts_were_published,
 )
 from services.workspace_legacy_write_gate import (
+    legacy_write_requires_presentation_scope,
     require_legacy_presentation_write_path,
+)
+from services.workspace_rollout_policy import (
+    resolve_active_workspace_write_rollout,
 )
 from services.workspace_operation_runner import (
     append_operation_event,
@@ -688,11 +693,13 @@ async def _load_document_context(
     documents_loader = DocumentsLoader(
         file_paths=file_paths,
         presentation_language=presentation_language,
+        allow_context_truncation=True,
     )
     await documents_loader.load_documents()
     return build_document_context(
         documents_loader.documents,
         file_paths,
+        overflow_strategy="truncate",
     )
 
 
@@ -1933,7 +1940,9 @@ async def generate_presentation_sync(
     # no durable workspace operation, lease, revision fence, or timeline card.
     # Once chat-first owns writes, callers must use /generate/async after the
     # atomic /presentation/create bootstrap admission.
-    require_legacy_presentation_write_path()
+    require_legacy_presentation_write_path(
+        getattr(request, "presentation_id", None)
+    )
     request._request_id = getattr(request_http.state, "request_id", None)
     try:
         (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
@@ -2143,9 +2152,23 @@ async def queue_presentation_generation(
     sql_session: AsyncSession,
     export_cookie_header: Optional[str] = None,
     idempotency_key: Optional[str] = None,
+    force_legacy_dispatch: bool = False,
 ) -> AsyncPresentationGenerationTaskModel:
     """Validate and atomically enqueue one durable, idempotent generation job."""
-    chat_first_enabled = _chat_first_generation_enabled()
+    # Workspace orchestration can deliberately create a separate, new deck
+    # while keeping progress anchored to the source deck's operation timeline.
+    # That nested generation job must use the existing durable generator rather
+    # than trying to bootstrap a second workspace operation for a deck that does
+    # not exist yet.
+    chat_first_runtime_enabled = (
+        False if force_legacy_dispatch else _chat_first_generation_enabled()
+    )
+    chat_first_enabled = bool(
+        chat_first_runtime_enabled
+        and resolve_active_workspace_write_rollout(
+            request.presentation_id
+        ).enabled
+    )
     # Legacy requests have no pre-existing timeline anchor, so retain their
     # fail-before-session behavior. Chat-first requests are admitted only after
     # locating the bootstrap operation so every rejection can be durably
@@ -2584,7 +2607,9 @@ async def cancel_async_presentation_generation(
     # Chat-first cancellation is an operation action so the operation and its
     # linked compatibility generation job transition together.  Mutating the
     # legacy task row directly would leave the timeline and runner divergent.
-    require_legacy_presentation_write_path()
+    if legacy_write_requires_presentation_scope():
+        presentation_id = await resolve_generation_job_presentation_id(id)
+        require_legacy_presentation_write_path(presentation_id)
     task = await cancel_generation_job(id)
     if task is None:
         raise HTTPException(

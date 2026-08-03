@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -120,6 +121,31 @@ def test_temp_file_service_recursively_cleans_only_its_own_directory(
 
     assert not work_dir.exists()
     assert base_dir.is_dir()
+
+
+def test_temp_file_service_init_cleans_children_without_removing_base_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_dir = tmp_path / "temp-root"
+    nested_dir = base_dir / "stale" / "nested"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "data.bin").write_bytes(b"data")
+
+    original_rmdir = os.rmdir
+
+    def guarded_rmdir(path: str) -> None:
+        if os.path.realpath(path) == os.path.realpath(base_dir):
+            raise PermissionError(32, "The process cannot access the directory")
+        original_rmdir(path)
+
+    monkeypatch.setattr(os, "rmdir", guarded_rmdir)
+
+    service = TempFileService(str(base_dir))
+
+    assert Path(service.base_dir) == base_dir
+    assert base_dir.is_dir()
+    assert list(base_dir.iterdir()) == []
 
 
 @pytest.mark.parametrize("invalid_name", ["", " ", ".", ".."])

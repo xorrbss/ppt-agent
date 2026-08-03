@@ -32,15 +32,14 @@ canary는 다음 두 설정을 명시적으로 활성화한 뒤에만 시작한�
 ## Canary 전 검증
 
 - 이전 authored 문서(theme에 `reference_mode` 없음)를 열고 quality review
-  `analyze_only`와 `analyze_and_fix`를 실행한다. render-only 호출 수와
+  `analyze_and_fix`를 실행한다. render-only 호출 수와
   결과가 기존 기준과 같은지 확인한다.
 - exact preset마다 `slide_reference_images` 개수 = outline slide 수,
   모든 실경로 고유성, 파일 읽기, PNG/JPEG/WebP magic bytes를 배포 전에
   검사한다. 하나라도 실패하면 시작하지 않고 명시적으로 실패해야 한다.
 - same-role 슬라이드가 2장 이상인 표본에서 요청별 source/render 쌍의
   순서와 SHA-256을 기록해 1:1 매핑을 확인한다.
-- exact `analyze_only`는 슬라이드당 비교 1회여야 한다. exact
-  `analyze_and_fix`는 최초 비교 1회, 수정 후보만 최종 비교 1회여야 한다.
+- exact `analyze_and_fix`는 최초 비교 1회, 수정 후보만 최종 비교 1회여야 한다.
   style mode의 호출 수를 늘리지 않는다.
 - 수정 후보는 source-vs-render critique score가 엄격히 개선될 때만
   반영되는지, 거부 시 HTML/PNG/버전 스냅샷이 바뀌지 않는지 확인한다.
@@ -94,11 +93,11 @@ slide text, prompts, image bytes, paths, job identifiers, or model responses.
   coalescing can make actual remote calls lower than
   `critique_slide_request_count`.
 
-For exact `analyze_only` over N slides, the log therefore records one critique batch
-and at most N estimated per-slide requests. Exact `analyze_and_fix` records that same
-initial batch plus one final batch only when there are revision candidates; the final
-batch and its per-slide estimate cover only those changed candidate slides. These
-counts do not alter the preserved render-only style-mode call path.
+For exact `analyze_and_fix` over N slides, the log records one initial critique batch
+and at most N estimated per-slide requests, plus one final batch only when there are
+revision candidates. The final batch and its per-slide estimate cover only those
+changed candidate slides. These counts do not alter the preserved render-only
+style-mode call path.
 
 Operational stop/rollback rule: stop the exact canary immediately for any source
 mapping failure, unexpected critique-call count, indeterminate comparison, or

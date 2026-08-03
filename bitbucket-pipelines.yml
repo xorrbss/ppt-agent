@@ -1,0 +1,40 @@
+image: cypress/included:15.19.0
+
+definitions:
+  caches:
+    uv: ~/.cache/uv
+  steps:
+    - step: &workspace-chat-first-e2e
+        name: Workspace chat-first browser E2E
+        size: 2x
+        max-time: 25
+        caches:
+          - node
+          - uv
+        script:
+          - apt-get update
+          - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 python3-venv
+          - python3 -m venv .bitbucket-uv
+          - .bitbucket-uv/bin/python -m pip install --disable-pip-version-check uv==0.11.17
+          - npm ci --prefix servers/nextjs
+          - .bitbucket-uv/bin/uv sync --frozen --directory servers/fastapi
+          - export CI=true
+          - export PATH="$BITBUCKET_CLONE_DIR/.bitbucket-uv/bin:$PATH"
+          - export WORKSPACE_E2E_ARTIFACT_DIR="$BITBUCKET_CLONE_DIR/test-artifacts/workspace-e2e"
+          - cd servers/nextjs
+          - xvfb-run -a npm run test:workspace-e2e
+        artifacts:
+          upload:
+            - name: workspace-e2e-diagnostics
+              type: scoped
+              paths:
+                - test-artifacts/workspace-e2e/**
+              capture-on: always
+
+pipelines:
+  pull-requests:
+    "**":
+      - step: *workspace-chat-first-e2e
+  branches:
+    main:
+      - step: *workspace-chat-first-e2e

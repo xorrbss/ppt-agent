@@ -49,6 +49,13 @@ WORKSPACE_OPERATION_STATES = (
     "cancelled",
     "dead_letter",
 )
+WORKSPACE_CLEANUP_STATES = (
+    "pending",
+    "claimed",
+    "retry_wait",
+    "succeeded",
+    "dead_letter",
+)
 
 _EVENT_CURSOR_TYPE = BigInteger().with_variant(Integer, "sqlite")
 
@@ -197,7 +204,7 @@ class WorkspaceAsset(SQLModel, table=True):
 class WorkspaceMessageAttachment(SQLModel, table=True):
     __tablename__ = "workspace_message_attachments"
     __table_args__ = (
-        UniqueConstraint("message_id", "asset_id", name="uq_workspace_message_attachments_asset"),
+        UniqueConstraint("message_id", "asset_id_snapshot", name="uq_workspace_message_attachments_asset"),
         UniqueConstraint("message_id", "ordinal", name="uq_workspace_message_attachments_ordinal"),
         CheckConstraint("ordinal >= 0", name="ck_workspace_message_attachments_ordinal"),
         CheckConstraint(_state_check("asset_state", WORKSPACE_ASSET_STATES), name="ck_workspace_message_attachments_asset_state"),
@@ -210,12 +217,38 @@ class WorkspaceMessageAttachment(SQLModel, table=True):
         sa_column=_owner_column("workspace_message_attachments"),
     )
     message_id: uuid.UUID = Field(sa_column=Column(Uuid, ForeignKey("workspace_messages.id", name="fk_workspace_message_attachments_message_id", ondelete="CASCADE"), nullable=False))
-    asset_id: uuid.UUID = Field(sa_column=Column(Uuid, ForeignKey("workspace_assets.id", name="fk_workspace_message_attachments_asset_id", ondelete="RESTRICT"), nullable=False))
+    # ``asset_id`` is only a live pointer.  The immutable snapshot columns are
+    # the timeline source of truth and survive asset expiry/deletion.
+    asset_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            Uuid,
+            ForeignKey(
+                "workspace_assets.id",
+                name="fk_workspace_message_attachments_asset_id",
+                ondelete="SET NULL",
+            ),
+            nullable=True,
+        ),
+    )
+    asset_id_snapshot: uuid.UUID = Field(sa_column=Column(Uuid, nullable=False))
     ordinal: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0, server_default=text("0")))
     display_name: str = Field(sa_column=Column(String(512), nullable=False))
     media_type: Optional[str] = Field(default=None, sa_column=Column(String(255), nullable=True))
     size_bytes: int = Field(default=0, sa_column=Column(BigInteger, nullable=False, default=0, server_default=text("0")))
     asset_state: str = Field(sa_column=Column(String(24), nullable=False))
+    asset_sha256: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(64), nullable=True),
+    )
+    asset_failure_code: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(128), nullable=True),
+    )
+    asset_failure_detail: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
     created_at: datetime = Field(default_factory=get_current_utc_datetime, sa_column=Column(DateTime(timezone=True), nullable=False, default=get_current_utc_datetime, server_default=func.now()))
 
 
@@ -439,3 +472,163 @@ class WorkspaceArtifact(SQLModel, table=True):
     deleted_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     created_at: datetime = Field(default_factory=get_current_utc_datetime, sa_column=Column(DateTime(timezone=True), nullable=False, default=get_current_utc_datetime, server_default=func.now()))
     updated_at: datetime = Field(default_factory=get_current_utc_datetime, sa_column=Column(DateTime(timezone=True), nullable=False, default=get_current_utc_datetime, onupdate=get_current_utc_datetime, server_default=func.now()))
+
+
+class WorkspaceCleanupJournal(SQLModel, table=True):
+    """Durable, owner-independent intent to remove one private storage object.
+
+    Snapshot identifiers deliberately have no foreign keys.  This table must
+    survive presentation/account cascades and is claimed with a lease + fencing
+    token so two maintenance workers cannot finalize one another's attempts.
+    """
+
+    __tablename__ = "workspace_cleanup_journal"
+    __table_args__ = (
+        UniqueConstraint(
+            "idempotency_key_hash",
+            name="uq_workspace_cleanup_journal_idempotency",
+        ),
+        CheckConstraint(
+            _state_check("status", WORKSPACE_CLEANUP_STATES),
+            name="ck_workspace_cleanup_journal_status",
+        ),
+        CheckConstraint(
+            "size_bytes IS NULL OR size_bytes >= 0",
+            name="ck_workspace_cleanup_journal_size",
+        ),
+        CheckConstraint(
+            "cleanup_attempts >= 0",
+            name="ck_workspace_cleanup_journal_attempts",
+        ),
+        CheckConstraint(
+            "max_attempts >= 1",
+            name="ck_workspace_cleanup_journal_max_attempts",
+        ),
+        CheckConstraint(
+            "fencing_token >= 0",
+            name="ck_workspace_cleanup_journal_fencing_token",
+        ),
+        CheckConstraint(
+            "redrive_count >= 0",
+            name="ck_workspace_cleanup_journal_redrive_count",
+        ),
+        Index(
+            "ix_workspace_cleanup_journal_dispatch",
+            "status",
+            "next_attempt_at",
+            "cleanup_lease_expires_at",
+        ),
+        Index(
+            "ix_workspace_cleanup_journal_presentation",
+            "presentation_id_snapshot",
+            "created_at",
+        ),
+        Index(
+            "ix_workspace_cleanup_journal_owner",
+            "owner_id_snapshot",
+            "created_at",
+        ),
+    )
+
+    id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
+    owner_id_snapshot: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(Uuid, nullable=True),
+    )
+    presentation_id_snapshot: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(Uuid, nullable=True),
+    )
+    operation_id_snapshot: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(Uuid, nullable=True),
+    )
+    storage_namespace: str = Field(sa_column=Column(String(64), nullable=False))
+    resource_kind: str = Field(sa_column=Column(String(128), nullable=False))
+    storage_key: str = Field(sa_column=Column(String(1024), nullable=False))
+    sha256: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(64), nullable=True),
+    )
+    size_bytes: Optional[int] = Field(
+        default=None,
+        sa_column=Column(BigInteger, nullable=True),
+    )
+    source_revision: Optional[int] = Field(
+        default=None,
+        sa_column=Column(BigInteger, nullable=True),
+    )
+    resource_metadata: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
+    idempotency_key_hash: str = Field(sa_column=Column(String(64), nullable=False))
+    status: str = Field(
+        default="pending",
+        sa_column=Column(
+            String(24), nullable=False, default="pending", server_default="pending"
+        ),
+    )
+    cleanup_token: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(128), nullable=True),
+    )
+    cleanup_lease_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    next_attempt_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    cleanup_attempts: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, default=0, server_default=text("0")),
+    )
+    max_attempts: int = Field(
+        default=8,
+        sa_column=Column(Integer, nullable=False, default=8, server_default=text("8")),
+    )
+    fencing_token: int = Field(
+        default=0,
+        sa_column=Column(BigInteger, nullable=False, default=0, server_default=text("0")),
+    )
+    redrive_count: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, default=0, server_default=text("0")),
+    )
+    last_redriven_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    last_redriven_by_snapshot: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(Uuid, nullable=True),
+    )
+    last_error: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    created_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            default=get_current_utc_datetime,
+            server_default=func.now(),
+        ),
+    )
+    updated_at: datetime = Field(
+        default_factory=get_current_utc_datetime,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            default=get_current_utc_datetime,
+            onupdate=get_current_utc_datetime,
+            server_default=func.now(),
+        ),
+    )

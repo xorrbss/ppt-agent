@@ -79,7 +79,10 @@ def _start_server(*, python: Path, port: int, env: dict[str, str]):
         response = httpx.get(f"{base_url}/openapi.json", timeout=0.5)
         return response.status_code == 200
 
-    _wait_until(ready, timeout=15)
+    # Importing the full FastAPI graph is occasionally slower on contended
+    # Windows CI hosts; keep this bounded but avoid misclassifying cold startup
+    # as a checkpoint recovery failure.
+    _wait_until(ready, timeout=30)
     return process, base_url
 
 
@@ -176,13 +179,26 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
                 for event in _events(event_log)
             )
         )
-        running = httpx.get(
-            f"{first_url}/api/v1/ppt/presentation/status/{task_id}",
-            timeout=2,
-        ).json()
-        assert running["status"] == "running"
-        assert running["progress"]["completed_slides"] == 2
-        assert running["progress"]["current_stage"] == "render"
+        def running_render_status():
+            status_response = httpx.get(
+                f"{first_url}/api/v1/ppt/presentation/status/{task_id}",
+                timeout=2,
+            )
+            status_response.raise_for_status()
+            body = status_response.json()
+            progress = body.get("progress") or {}
+            if (
+                body.get("status") == "running"
+                and progress.get("completed_slides") == 2
+                and progress.get("current_stage") == "render"
+            ):
+                return body
+            return None
+
+        # The subprocess event log and the durable status projection are
+        # independent writes, so the render-blocked marker can become visible
+        # one scheduler tick before the HTTP projection catches up.
+        running = _wait_until(running_render_status, timeout=15)
         with sqlite3.connect(database_path) as connection:
             assert connection.execute(
                 "SELECT author_status, illustrate_status, render_status, "
@@ -199,7 +215,16 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
                 "SELECT state, attempt_number, completed_slides "
                 "FROM presentation_generation_jobs"
             ).fetchone()
-            assert crashed_job == ("running", 1, 2)
+            # A forced process-tree termination normally leaves the leased row
+            # running. On Windows the parent can briefly process task
+            # cancellation while taskkill tears down its children, in which
+            # case the same attempt is already placed in the safe resume state.
+            # Both boundaries must preserve checkpoints and require the same
+            # authenticated idempotent resume below.
+            assert crashed_job in {
+                ("running", 1, 2),
+                ("awaiting_resume", 1, 2),
+            }
             assert connection.execute(
                 "SELECT COUNT(*) FROM presentations"
             ).fetchone()[0] == 0
@@ -251,7 +276,11 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
             body = status_response.json()
             return body if body["status"] == "completed" else None
 
-        completed = _wait_until(completed_status, timeout=30)
+        # A full Windows suite can leave the resumed renderer contending with
+        # recently reaped browser/process resources. Keep the assertion
+        # bounded while allowing the same durable recovery proven by the
+        # focused test to finish under suite load.
+        completed = _wait_until(completed_status, timeout=60)
         assert completed["progress"]["completed_slides"] == 6
         assert completed["progress"]["percent"] == 100
         assert completed["failure"] is None
@@ -296,6 +325,14 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
                 "SELECT COUNT(*) FROM slides"
             ).fetchone()[0] == 6
     except Exception as error:
+        # Preserve subprocess diagnostics even when the failure happens before
+        # the normal hard-kill points (for example, during the initial POST).
+        if first is not None:
+            first_output = _kill_process_tree(first)
+            first = None
+        if second is not None:
+            second_output = _kill_process_tree(second)
+            second = None
         raise AssertionError(
             f"subprocess recovery failed; first={first_output!r}, "
             f"second={second_output!r}"

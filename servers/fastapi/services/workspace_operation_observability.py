@@ -56,10 +56,12 @@ _COMMAND_TYPES = frozenset(
     {
         "presentation.generate",
         "presentation.edit",
+        "presentation.delete",
         "slide.edit",
         "slide.regenerate",
         "slide.delete",
         "version.restore",
+        "template.apply",
         "quality.review",
         "export.pptx",
         "export.pdf",
@@ -278,10 +280,26 @@ def log_workspace_operation_observation(
             revision_conflict=revision_conflict,
             fence_outcome=fence_outcome,
         )
-        logger.info(
-            "workspace_operation %s",
-            json.dumps(event, sort_keys=True, separators=(",", ":")),
-        )
+        # The exporter is intentionally imported lazily to keep this builder
+        # usable in startup-critical paths and to make metrics non-authoritative.
+        from services.workspace_metrics import WORKSPACE_METRICS
+
+        try:
+            logger.info(
+                "workspace_operation %s",
+                json.dumps(event, sort_keys=True, separators=(",", ":")),
+            )
+        except Exception:
+            WORKSPACE_METRICS.record_signal_failure("operation_observation")
+        try:
+            WORKSPACE_METRICS.observe_operation(event)
+        except Exception:
+            # The exporter itself is the failed sink, so only a safe logger
+            # marker is available. Never include event contents here.
+            try:
+                logger.warning("Workspace operation metric recording failed")
+            except Exception:
+                pass
         return event
     except Exception:
         # Observability is deliberately non-authoritative.  In particular,

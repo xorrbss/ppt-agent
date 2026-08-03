@@ -10,7 +10,10 @@ from sqlalchemy import event, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from models.sql.presentation import PresentationModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_DELETED,
+    PresentationModel,
+)
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceConversation,
@@ -18,6 +21,7 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
+from services.account_deletion_service import mark_account_deleting
 from services.workspace_operation_handler_registry import (
     WorkspaceOperationHandlerRegistry,
     WorkspaceOperationResult,
@@ -498,6 +502,136 @@ async def _runner_rejects_stale_revision(tmp_path: Path):
         assert [event.operation_version for event in events] == [1, 2]
         assert operation.version == 2
     finally:
+        await engine.dispose()
+
+
+def test_runner_fences_success_after_presentation_is_tombstoned(tmp_path: Path):
+    asyncio.run(_runner_fences_success_after_presentation_is_tombstoned(tmp_path))
+
+
+async def _runner_fences_success_after_presentation_is_tombstoned(
+    tmp_path: Path,
+):
+    engine, maker = await _database(tmp_path / "late-presentation-delete.db")
+    release_handler = asyncio.Event()
+    handler_started = asyncio.Event()
+    try:
+        presentation_id, operation_ids = await _seed_operations(
+            maker,
+            owner_id=OWNER_ID,
+            revision=0,
+            expected_revision=0,
+        )
+
+        async def handler(_context):
+            handler_started.set()
+            await release_handler.wait()
+            return WorkspaceOperationResult(payload={"status": "completed"})
+
+        registry = WorkspaceOperationHandlerRegistry()
+        registry.register("test.operation", handler)
+        runner = WorkspaceOperationRunner(
+            session_factory=maker,
+            registry=registry,
+            max_concurrency=1,
+            heartbeat_seconds=60,
+        )
+        assert await runner.dispatch_once() == 1
+        active = tuple(runner._active.values())
+        await asyncio.wait_for(handler_started.wait(), timeout=1)
+
+        owner_token = set_current_owner_id(OWNER_ID)
+        try:
+            async with maker() as session:
+                tombstoned = await session.execute(
+                    update(PresentationModel)
+                    .where(PresentationModel.id == presentation_id)
+                    .values(
+                        lifecycle_status=PRESENTATION_LIFECYCLE_DELETED,
+                        deleted_at=get_current_utc_datetime(),
+                        deletion_operation_id=uuid.uuid4(),
+                    )
+                )
+                assert tombstoned.rowcount == 1
+                await session.commit()
+        finally:
+            reset_current_owner_id(owner_token)
+
+        release_handler.set()
+        await asyncio.wait_for(asyncio.gather(*active), timeout=2)
+        operation = await _operation(maker, operation_ids[0])
+        assert operation.state == "failed"
+        assert operation.error_code == "presentation_deleted"
+        assert not any(
+            event.event_type == "operation.result"
+            for event in await _events(maker, operation.id)
+        )
+    finally:
+        release_handler.set()
+        await engine.dispose()
+
+
+def test_runner_fences_success_after_account_deletion_marker(tmp_path: Path):
+    asyncio.run(_runner_fences_success_after_account_deletion_marker(tmp_path))
+
+
+async def _runner_fences_success_after_account_deletion_marker(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "late-account-delete.db")
+    release_handler = asyncio.Event()
+    handler_started = asyncio.Event()
+    try:
+        _, operation_ids = await _seed_operations(
+            maker,
+            owner_id=OWNER_ID,
+            revision=0,
+            expected_revision=0,
+        )
+        async with maker() as session:
+            captured = await session.execute(
+                update(WorkspaceOperation)
+                .where(WorkspaceOperation.id == operation_ids[0])
+                .values(
+                    request_payload={
+                        "ordinal": 0,
+                        "account_deletion_generation": 0,
+                    }
+                )
+            )
+            assert captured.rowcount == 1
+            await session.commit()
+
+        async def handler(_context):
+            handler_started.set()
+            await release_handler.wait()
+            return WorkspaceOperationResult(payload={"status": "completed"})
+
+        registry = WorkspaceOperationHandlerRegistry()
+        registry.register("test.operation", handler)
+        runner = WorkspaceOperationRunner(
+            session_factory=maker,
+            registry=registry,
+            max_concurrency=1,
+            heartbeat_seconds=60,
+        )
+        assert await runner.dispatch_once() == 1
+        active = tuple(runner._active.values())
+        await asyncio.wait_for(handler_started.wait(), timeout=1)
+
+        async with maker() as session:
+            marker = await mark_account_deleting(session, user_id=OWNER_ID)
+            assert marker.generation == 1
+
+        release_handler.set()
+        await asyncio.wait_for(asyncio.gather(*active), timeout=2)
+        operation = await _operation(maker, operation_ids[0])
+        assert operation.state == "failed"
+        assert operation.error_code == "account_deletion_in_progress"
+        assert not any(
+            event.event_type == "operation.result"
+            for event in await _events(maker, operation.id)
+        )
+    finally:
+        release_handler.set()
         await engine.dispose()
 
 

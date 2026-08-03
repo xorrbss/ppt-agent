@@ -18,26 +18,36 @@ from fastapi import (
     File,
     Form,
     Header,
-    HTTPException,
     Query,
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.sql.workspace import WorkspaceOperation
 from models.workspace import (
     WorkspaceBootstrapRequest,
     WorkspaceBootstrapResponse,
     WorkspaceAssetResponse,
+    WorkspaceActionResponse,
     WorkspaceCapabilitiesResponse,
     WorkspaceCommandRequest,
+    WorkspaceErrorEnvelopeResponse,
     WorkspaceOperationActionRequest,
+    WorkspaceSLOResponse,
     WorkspaceTimelineResponse,
+)
+from services.workspace_api_contract import (
+    project_workspace_event_page,
+    project_workspace_timeline,
+    resolve_workspace_operation_presentation_id,
+    workspace_receipt_response,
 )
 from services.workspace_asset_service import (
     create_workspace_asset,
     get_workspace_asset,
+    resolve_workspace_asset_download,
     workspace_asset_response,
 )
 from services.workspace_artifact_publication_service import (
@@ -45,6 +55,19 @@ from services.workspace_artifact_publication_service import (
     resolve_workspace_export_artifact,
 )
 from services.database import async_session_maker, get_async_session, sql_engine
+from services.workspace_error_registry import (
+    WORKSPACE_ERROR_REGISTRY,
+    WorkspaceAPIException,
+    resolve_workspace_error,
+)
+from services.workspace_metrics import WORKSPACE_METRICS
+from services.workspace_rollout_policy import (
+    WorkspaceWriteRolloutDecision,
+    resolve_workspace_write_rollout,
+)
+from services.workspace_shadow_parity import (
+    observe_workspace_timeline_shadow_parity,
+)
 from services.workspace_runtime_profile import (
     ChatFirstWorkspaceRollout,
     CHAT_FIRST_FEATURE_DISABLED,
@@ -62,7 +85,49 @@ from services.workspace_service import (
 )
 
 
-WORKSPACE_ROUTER = APIRouter(prefix="/workspace", tags=["Workspace"])
+def _workspace_error_responses() -> dict[int, dict[str, object]]:
+    """Publish every stable workspace error code in the generated OpenAPI."""
+
+    grouped: dict[int, dict[str, object]] = {}
+    for definition in WORKSPACE_ERROR_REGISTRY.values():
+        response = grouped.setdefault(
+            definition.status_code,
+            {
+                "model": WorkspaceErrorEnvelopeResponse,
+                "description": "Typed workspace error",
+                "content": {"application/json": {"examples": {}}},
+            },
+        )
+        content = response["content"]
+        assert isinstance(content, dict)
+        media_type = content["application/json"]
+        assert isinstance(media_type, dict)
+        examples = media_type["examples"]
+        assert isinstance(examples, dict)
+        examples[definition.code] = {
+            "summary": definition.safe_message,
+            "value": {
+                "detail": definition.code,
+                "error": {
+                    "status_code": definition.status_code,
+                    "detail": definition.code,
+                    "code": definition.code,
+                    "message": definition.safe_message,
+                    "request_id": "request-id",
+                    "safe_message": definition.safe_message,
+                    "retryable": definition.retryable,
+                },
+                "request_id": "request-id",
+            },
+        }
+    return grouped
+
+
+WORKSPACE_ROUTER = APIRouter(
+    prefix="/workspace",
+    tags=["Workspace"],
+    responses=_workspace_error_responses(),
+)
 
 
 def _runtime_profile():
@@ -76,38 +141,105 @@ def _rollout_status() -> ChatFirstWorkspaceRollout:
     )
 
 
+def _rollout_decision(
+    presentation_id: uuid.UUID | None = None,
+) -> WorkspaceWriteRolloutDecision:
+    decision = resolve_workspace_write_rollout(
+        _rollout_status(),
+        presentation_id,
+    )
+    try:
+        WORKSPACE_METRICS.record_rollout(
+            enabled=decision.enabled,
+            reason=decision.reason,
+        )
+    except Exception:
+        pass
+    return decision
+
+
 def _require_supported_runtime() -> None:
     rollout = _rollout_status()
     if not rollout.workspace_reads_supported:
         error_code = rollout.runtime_error or "chat_first_runtime_unsupported"
-        raise HTTPException(
-            status_code=(
-                501
-                if error_code == "chat_first_runtime_unsupported"
-                else 503
-            ),
-            detail=error_code,
+        raise WorkspaceAPIException(
+            error_code,
+            status_code=(501 if error_code == "chat_first_runtime_unsupported" else 503),
         )
 
 
-def _require_workspace_writes() -> None:
-    rollout = _rollout_status()
-    if rollout.enabled:
-        return
-    error_code = rollout.reason or CHAT_FIRST_FEATURE_DISABLED
-    raise HTTPException(
+def _require_workspace_writes(
+    presentation_id: uuid.UUID | None = None,
+) -> WorkspaceWriteRolloutDecision:
+    decision = _rollout_decision(presentation_id)
+    if decision.enabled:
+        return decision
+    error_code = decision.reason or CHAT_FIRST_FEATURE_DISABLED
+    raise WorkspaceAPIException(
+        error_code,
         status_code=(501 if error_code == "chat_first_runtime_unsupported" else 503),
-        detail=error_code,
     )
 
 
+_REVISION_CONFLICT_CODES = frozenset(
+    {"revision_conflict", "stale_presentation_revision"}
+)
+
+
+def _record_operation_admission(
+    operation_type: str,
+    *,
+    duplicate: bool,
+) -> None:
+    """Count only the first durable admission for an idempotent request."""
+
+    if duplicate:
+        return
+    try:
+        WORKSPACE_METRICS.record_operation_admission(operation_type)
+    except Exception:
+        # Metrics must never turn an already-durable mutation into a 5xx.
+        pass
+
+
+def _record_operation_action_admission(
+    requested_operation_id: uuid.UUID,
+    result_operation: WorkspaceOperation,
+    *,
+    duplicate: bool,
+) -> None:
+    """Count an action only when it durably created a replacement operation.
+
+    Approve, cancel, and in-place retry mutate an existing operation and must
+    not dilute operation-level SLO denominators.  A terminal retry returns the
+    newly persisted replacement operation, so it is a genuine admission.
+    """
+
+    if result_operation.id == requested_operation_id:
+        return
+    _record_operation_admission(result_operation.kind, duplicate=duplicate)
+
+
+def _record_revision_conflict(error_code: str) -> None:
+    if error_code not in _REVISION_CONFLICT_CODES:
+        return
+    try:
+        WORKSPACE_METRICS.record_revision_conflict()
+    except Exception:
+        pass
+
+
 def _raise_service_error(error: WorkspaceServiceError) -> None:
-    # A stable string detail is intentionally used so the shared API envelope
-    # promotes it to error.code without leaking private payloads.
-    raise HTTPException(status_code=error.status_code, detail=error.code) from error
+    _record_revision_conflict(error.code)
+    raise WorkspaceAPIException(
+        error.code,
+        status_code=error.status_code,
+        retryable=error.retryable,
+    ) from error
 
 
 def _raise_artifact_error(error: WorkspaceArtifactPublicationError) -> None:
+    _record_revision_conflict(error.code)
     status_code = {
         "workspace_export_not_found": 404,
         "workspace_export_expired": 410,
@@ -115,25 +247,77 @@ def _raise_artifact_error(error: WorkspaceArtifactPublicationError) -> None:
         "workspace_export_missing": 410,
         "workspace_artifact_path_invalid": 404,
     }.get(error.code, 409)
-    raise HTTPException(status_code=status_code, detail=error.code) from error
+    raise WorkspaceAPIException(error.code, status_code=status_code) from error
 
 
 @WORKSPACE_ROUTER.get(
     "/capabilities",
     response_model=WorkspaceCapabilitiesResponse,
 )
-async def workspace_capabilities() -> WorkspaceCapabilitiesResponse:
+async def workspace_capabilities(
+    presentation_id: Optional[uuid.UUID] = None,
+) -> WorkspaceCapabilitiesResponse:
     rollout = _rollout_status()
+    decision = _rollout_decision(presentation_id)
     supported = rollout.workspace_reads_supported
-    enabled = rollout.enabled
+    enabled = decision.enabled
     return WorkspaceCapabilitiesResponse(
         supported=supported,
         enabled=enabled,
         timeline=supported,
         commands=enabled,
         events=supported,
+        reads_supported=supported,
+        writes_supported=enabled,
+        commands_enabled=enabled,
         runtime_profile=rollout.profile.kind.value,
-        reason=rollout.reason,
+        reason=decision.reason,
+        cohort_eligible=decision.cohort_eligible,
+        cohort_bucket=decision.cohort_bucket,
+        kill_switch_active=decision.kill_switch_active,
+        shadow_mode=decision.shadow_mode,
+    )
+
+
+@WORKSPACE_ROUTER.get(
+    "/observability/metrics",
+    response_class=PlainTextResponse,
+    include_in_schema=False,
+)
+async def workspace_observability_metrics() -> PlainTextResponse:
+    _require_supported_runtime()
+    return PlainTextResponse(
+        WORKSPACE_METRICS.prometheus_text(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
+@WORKSPACE_ROUTER.get(
+    "/observability/slo",
+    response_model=WorkspaceSLOResponse,
+)
+async def workspace_observability_slo() -> WorkspaceSLOResponse:
+    _require_supported_runtime()
+    status = WORKSPACE_METRICS.evaluate_slo()
+    return WorkspaceSLOResponse(
+        healthy=status.healthy,
+        silent_loss_total=status.silent_loss_total,
+        shadow_parity_ratio=status.shadow_parity_ratio,
+        error_ratio=status.error_ratio,
+        dead_letter_total=status.dead_letter_total,
+        dead_letter_ratio=status.dead_letter_ratio,
+        lease_lost_total=status.lease_lost_total,
+        lease_lost_ratio=status.lease_lost_ratio,
+        revision_conflict_total=status.revision_conflict_total,
+        revision_conflict_ratio=status.revision_conflict_ratio,
+        cleanup_dead_letter_total=status.cleanup_dead_letter_total,
+        cleanup_dead_letter_ratio=status.cleanup_dead_letter_ratio,
+        outbox_dead_letter_total=status.outbox_dead_letter_total,
+        outbox_dead_letter_ratio=status.outbox_dead_letter_ratio,
+        outbox_lease_lost_total=status.outbox_lease_lost_total,
+        outbox_lease_lost_ratio=status.outbox_lease_lost_ratio,
+        event_lag_max_ms=status.event_lag_max_ms,
+        violations=list(status.violations),
     )
 
 
@@ -141,11 +325,12 @@ async def workspace_capabilities() -> WorkspaceCapabilitiesResponse:
 async def post_workspace_asset(
     file: UploadFile = File(...),
     conversation_id: Optional[uuid.UUID] = Form(default=None),
+    presentation_id: uuid.UUID = Form(...),
     session: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceAssetResponse:
     """Persist an immutable, owner-scoped upload before workspace bootstrap."""
 
-    _require_workspace_writes()
+    _require_workspace_writes(presentation_id)
     try:
         asset = await create_workspace_asset(
             session,
@@ -183,6 +368,39 @@ async def get_workspace_asset_metadata(
 
 
 @WORKSPACE_ROUTER.get(
+    "/assets/{asset_id}/download",
+    response_class=FileResponse,
+)
+async def download_workspace_asset(
+    asset_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+) -> FileResponse:
+    """Download one live owner-scoped attachment as a private response."""
+
+    _require_supported_runtime()
+    try:
+        asset, path = await resolve_workspace_asset_download(
+            session,
+            asset_id=asset_id,
+        )
+    except WorkspaceServiceError as error:
+        _raise_service_error(error)
+    return FileResponse(
+        path=path,
+        filename=asset.original_name,
+        # Force attachment handling.  Preview is deliberately unsupported for
+        # uploads because several accepted document formats may contain active
+        # content and need a separate sanitized rendering pipeline.
+        media_type="application/octet-stream",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "sandbox",
+        },
+    )
+
+
+@WORKSPACE_ROUTER.get(
     "/artifacts/{artifact_id}/download",
     response_class=FileResponse,
 )
@@ -207,7 +425,7 @@ async def download_workspace_export_artifact(
     }
     media_type = media_types.get(export_format)
     if media_type is None:
-        raise HTTPException(status_code=404, detail="workspace_export_not_found")
+        raise WorkspaceAPIException("workspace_export_not_found", status_code=404)
     return FileResponse(
         path=artifact.absolute_path,
         filename=(
@@ -228,12 +446,16 @@ async def _bootstrap_response(
     request: WorkspaceBootstrapRequest,
     session: AsyncSession,
 ) -> WorkspaceBootstrapResponse:
-    _require_workspace_writes()
+    _require_workspace_writes(presentation_id)
     try:
         conversation, message, operation, duplicate = await bootstrap_workspace(
             session,
             presentation_id=presentation_id,
             request=request,
+        )
+        _record_operation_admission(
+            request.operation_type,
+            duplicate=duplicate,
         )
         timeline = await workspace_timeline(
             session,
@@ -241,13 +463,19 @@ async def _bootstrap_response(
         )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
+    projected_timeline = project_workspace_timeline(
+        timeline,
+        presentation_id=presentation_id,
+    )
     return WorkspaceBootstrapResponse(
+        receipt_id=operation.id,
         conversation_id=conversation.id,
         first_user_message_id=message.id,
         operation_id=operation.id,
+        status=operation.state,
         operation_state=operation.state,
         duplicate=duplicate,
-        timeline=WorkspaceTimelineResponse.model_validate(timeline),
+        timeline=projected_timeline,
     )
 
 
@@ -302,7 +530,15 @@ async def get_presentation_workspace_timeline(
         )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
-    return WorkspaceTimelineResponse.model_validate(result)
+    await observe_workspace_timeline_shadow_parity(
+        session,
+        presentation_id=presentation_id,
+        timeline=result,
+    )
+    return project_workspace_timeline(
+        result,
+        presentation_id=presentation_id,
+    )
 
 
 @WORKSPACE_ROUTER.get("/timeline", response_model=WorkspaceTimelineResponse)
@@ -338,13 +574,29 @@ async def _event_stream(
                     limit=500,
                 )
             except WorkspaceServiceError as error:
+                definition = resolve_workspace_error(
+                    error.code,
+                    status_code=error.status_code,
+                    retryable=error.retryable,
+                )
                 data = json.dumps(
-                    {"code": error.code, "retryable": error.retryable},
+                    {
+                        "schema_version": 1,
+                        "error": {
+                            "code": definition.code,
+                            "safe_message": definition.safe_message,
+                            "retryable": definition.retryable,
+                        },
+                        # Compatibility fields for the shipped stream client.
+                        "code": definition.code,
+                        "retryable": definition.retryable,
+                    },
                     separators=(",", ":"),
                 )
                 yield f"event: stream_error\ndata: {data}\n\n"
                 return
-        events = page["events"]
+        projected_page = project_workspace_event_page(page)
+        events = projected_page.model_dump(mode="json")["events"]
         for event in events:
             event_cursor = event.get("cursor")
             if event_cursor is not None:
@@ -369,6 +621,14 @@ async def get_presentation_workspace_events(
     session: AsyncSession = Depends(get_async_session),
 ):
     _require_supported_runtime()
+    if (
+        after is not None
+        and last_event_id is not None
+        and after.strip() != last_event_id.strip()
+    ):
+        _raise_service_error(
+            WorkspaceServiceError("invalid_event_cursor", status_code=400)
+        )
     effective_cursor = after or last_event_id
     if stream:
         # Validate both presentation access and cursor before committing headers.
@@ -395,31 +655,36 @@ async def get_presentation_workspace_events(
             },
         )
     try:
-        return await workspace_events(
+        page = await workspace_events(
             session,
             presentation_id=presentation_id,
             after=effective_cursor,
             limit=limit,
         )
+        return project_workspace_event_page(page)
     except WorkspaceServiceError as error:
         _raise_service_error(error)
 
 
 @WORKSPACE_ROUTER.post(
     "/presentations/{presentation_id}/commands",
-    response_model=WorkspaceTimelineResponse,
+    response_model=WorkspaceActionResponse,
 )
 async def post_presentation_workspace_command(
     presentation_id: uuid.UUID,
     request: WorkspaceCommandRequest,
     session: AsyncSession = Depends(get_async_session),
-) -> WorkspaceTimelineResponse:
-    _require_workspace_writes()
+) -> WorkspaceActionResponse:
+    _require_workspace_writes(presentation_id)
     try:
-        await create_workspace_command(
+        operation, duplicate = await create_workspace_command(
             session,
             presentation_id=presentation_id,
             request=request,
+        )
+        _record_operation_admission(
+            request.command_type,
+            duplicate=duplicate,
         )
         timeline = await workspace_timeline(
             session,
@@ -427,29 +692,63 @@ async def post_presentation_workspace_command(
         )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
-    return WorkspaceTimelineResponse.model_validate(timeline)
+    projected_timeline = project_workspace_timeline(
+        timeline,
+        presentation_id=presentation_id,
+    )
+    return workspace_receipt_response(
+        receipt_id=operation.id,
+        operation_id=operation.id,
+        status=operation.state,
+        duplicate=duplicate,
+        timeline=projected_timeline,
+    )
 
 
 @WORKSPACE_ROUTER.post(
     "/operations/{operation_id}/actions",
-    response_model=WorkspaceTimelineResponse,
+    response_model=WorkspaceActionResponse,
 )
 async def post_workspace_operation_action(
     operation_id: uuid.UUID,
     request: WorkspaceOperationActionRequest,
     session: AsyncSession = Depends(get_async_session),
-) -> WorkspaceTimelineResponse:
-    _require_workspace_writes()
+) -> WorkspaceActionResponse:
     try:
-        _, operation, _ = await apply_workspace_action(
+        presentation_id = await resolve_workspace_operation_presentation_id(
+            session,
+            operation_id,
+        )
+        if presentation_id is None:
+            raise WorkspaceAPIException(
+                "workspace_operation_not_found",
+                status_code=404,
+            )
+        _require_workspace_writes(presentation_id)
+        receipt, operation, duplicate = await apply_workspace_action(
             session,
             operation_id=operation_id,
             request=request,
         )
+        _record_operation_action_admission(
+            operation_id,
+            operation,
+            duplicate=duplicate,
+        )
         timeline = await workspace_timeline(
             session,
-            presentation_id=operation.presentation_id,
+            presentation_id=presentation_id,
         )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
-    return WorkspaceTimelineResponse.model_validate(timeline)
+    projected_timeline = project_workspace_timeline(
+        timeline,
+        presentation_id=presentation_id,
+    )
+    return workspace_receipt_response(
+        receipt_id=receipt.id,
+        operation_id=operation.id,
+        status=receipt.status,
+        duplicate=duplicate,
+        timeline=projected_timeline,
+    )

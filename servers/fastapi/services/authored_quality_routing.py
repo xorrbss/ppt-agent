@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 
 from utils.authored_dom_quality import DomQualityReport
 from utils.authored_review_routing import (
+    ReviewScope,
     apply_audit_results,
     plan_authored_review_routing,
 )
@@ -55,13 +56,14 @@ async def hybrid_style_initial_review(
     slide_count: int,
     local_reports: list[DomQualityReport],
     sampling_seed: str,
+    scope: ReviewScope = "all",
     critique_batch: CritiqueBatch,
     observe_cache: ObserveCache,
     unusable_reason: UnusableReason,
 ) -> tuple[list[SlideCritique | None], dict[str, Any], int, int, float, float]:
     """Run montage + suspect/audit detail VQA and promote failed audits."""
     plan = plan_authored_review_routing(
-        scope="all",
+        scope=scope,
         slide_count=slide_count,
         local_issue_indices=[
             positions[index]

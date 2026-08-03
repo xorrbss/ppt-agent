@@ -4,6 +4,7 @@ const { spawnSync } = require("child_process")
 const {
   atomicReplaceDirectory,
   copyTreeSafe,
+  preflightWindowsSymlinkFallback,
   removeMaterializedPnpmStore,
   validateCopiedLinks,
   validateLinkFreeTree,
@@ -14,9 +15,25 @@ const nextjsDir = path.join(electronRoot, "..", "servers", "nextjs")
 const outDir = path.join(electronRoot, "resources", "nextjs")
 const nextBuildDir = path.join(nextjsDir, ".next-build")
 const standaloneDir = path.join(nextBuildDir, "standalone")
+const standaloneSymlinkFallback = path.join(
+  electronRoot,
+  "scripts",
+  "next-standalone-symlink-fallback.cjs"
+)
+
+const linkPreflight = preflightWindowsSymlinkFallback()
+console.log(`Standalone link preflight: ${linkPreflight.reason}`)
+if (linkPreflight.cleanupWarning) {
+  console.warn(`Standalone link preflight cleanup warning: ${linkPreflight.cleanupWarning}`)
+}
 
 function rm(p) {
-  fs.rmSync(p, { recursive: true, force: true })
+  fs.rmSync(p, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === "win32" ? 12 : 3,
+    retryDelay: process.platform === "win32" ? 250 : 100,
+  })
 }
 
 function cpDir(src, dest) {
@@ -35,9 +52,20 @@ const npmArgs =
   process.platform === "win32"
     ? ["/d", "/s", "/c", "npm.cmd run build"]
     : ["run", "build"]
+const nodeOptions = [
+  process.env.NODE_OPTIONS,
+  `--require=${JSON.stringify(standaloneSymlinkFallback)}`,
+].filter(Boolean).join(" ")
 const build = spawnSync(npmCmd, npmArgs, {
   cwd: nextjsDir,
-  env: { ...process.env, BUILD_TARGET: "electron" },
+  env: {
+    ...process.env,
+    BUILD_TARGET: "electron",
+    NODE_OPTIONS: nodeOptions,
+    PRESENTON_NEXT_STANDALONE_LINK_FALLBACK: "1",
+    PRESENTON_NEXT_STANDALONE_ROOT: standaloneDir,
+    PRESENTON_NEXT_TRACE_ROOT: path.resolve(nextjsDir, "..", ".."),
+  },
   stdio: "inherit",
   // npm.cmd needs cmd.exe on Windows. Invoke it explicitly so Node does not
   // concatenate unescaped arguments through shell:true (DEP0190).

@@ -10,7 +10,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.presentation_outline_model import PresentationOutlineModel
-from models.sql.presentation import PresentationModel
 from models.sse_response import (
     SSECompleteResponse,
     SSEErrorResponse,
@@ -22,6 +21,11 @@ from services.database import get_async_session
 from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
+)
+from services.presentation_access_service import require_live_presentation
+from services.workspace_legacy_write_gate import (
+    legacy_write_requires_presentation_scope,
+    require_outline_bootstrap_write_path,
 )
 from utils.document_context import (
     DocumentContextLimitError,
@@ -51,10 +55,12 @@ async def stream_outlines(
     request: Request,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation = await sql_session.get(PresentationModel, id)
-
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
+    # This GET endpoint persists its result. During the chat-first migration it
+    # may write only to the owner-scoped staging deck whose generation
+    # operation is still awaiting activation.
+    legacy_write_requires_presentation_scope()
+    presentation = await require_live_presentation(sql_session, id)
+    await require_outline_bootstrap_write_path(sql_session, presentation)
 
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
 
@@ -83,11 +89,13 @@ async def stream_outlines(
                 documents_loader = DocumentsLoader(
                     file_paths=presentation.file_paths,
                     presentation_language=presentation.language,
+                    allow_context_truncation=True,
                 )
                 await documents_loader.load_documents(temp_dir)
                 additional_context = build_document_context(
                     documents_loader.documents,
                     presentation.file_paths,
+                    overflow_strategy="truncate",
                 )
             except DocumentContextLimitError as error:
                 yield SSEErrorResponse(detail=error.to_sse_detail()).to_string()

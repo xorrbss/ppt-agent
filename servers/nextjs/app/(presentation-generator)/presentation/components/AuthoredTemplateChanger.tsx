@@ -27,6 +27,7 @@ import type {
 } from "../../services/api/authored";
 import AuthoredStyleCard from "../../outline/components/AuthoredStyleCard";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import type { WorkspaceCommandDispatcher } from "../workspace";
 
 const POLL_INTERVAL_MS = 2_000;
 const GENERATION_TIMEOUT_MS = 30 * 60 * 1_000;
@@ -49,10 +50,12 @@ export default function AuthoredTemplateChanger({
   presentationId,
   currentStyleId,
   disabled = false,
+  onWorkspaceCommand,
 }: {
   presentationId: string;
   currentStyleId?: string | null;
   disabled?: boolean;
+  onWorkspaceCommand?: WorkspaceCommandDispatcher;
 }) {
   const [open, setOpen] = useState(false);
   const [styles, setStyles] = useState<AuthoredStyleSummary[]>([]);
@@ -120,6 +123,24 @@ export default function AuthoredTemplateChanger({
 
     setIsGenerating(true);
     try {
+      if (onWorkspaceCommand) {
+        const selectedStyle = styles.find((style) => style.id === selectedStyleId);
+        // The durable chat timeline owns progress and errors from this point.
+        // Close the chooser immediately so generation never blocks the canvas.
+        setOpen(false);
+        await onWorkspaceCommand(
+          `${selectedStyle?.name || "선택한"} AI 저작 템플릿으로 새 자료를 만들어 줘`,
+          {
+            commandType: "template.apply",
+            context: {
+              authored_style: selectedStyleId,
+              vision_qa: visionQa,
+            },
+          }
+        );
+        return;
+      }
+
       const started =
         await PresentationGenerationApi.retemplateAuthoredPresentation(
           presentationId,
@@ -291,8 +312,8 @@ export default function AuthoredTemplateChanger({
               data-testid="template-change-confirm"
               onClick={changeTemplate}
             >
-              {isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isGenerating
+              {!onWorkspaceCommand && isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
+              {!onWorkspaceCommand && isGenerating
                 ? "AI 저작 자료 생성 중"
                 : "이 템플릿으로 새로 만들기"}
             </Button>

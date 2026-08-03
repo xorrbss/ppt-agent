@@ -228,10 +228,17 @@ def test_render_failure_resumes_same_job_without_regenerating_completed_slide(
             # its fenced failure write must not overwrite the committed result.
             async with maker() as resumed_session:
                 real_commit = resumed_session.commit
+                commit_count = 0
 
                 async def commit_then_disconnect():
+                    nonlocal commit_count
+                    commit_count += 1
                     await real_commit()
-                    raise ConnectionError("simulated disconnect after commit")
+                    # The first commit only releases the admission read
+                    # transaction. Inject the ambiguous ACK at the second,
+                    # final publication commit.
+                    if commit_count == 2:
+                        raise ConnectionError("simulated disconnect after commit")
 
                 monkeypatch.setattr(
                     resumed_session, "commit", commit_then_disconnect
@@ -245,6 +252,7 @@ def test_render_failure_resumes_same_job_without_regenerating_completed_slide(
                         resumed_session,
                         resumed_job,
                     )
+            assert commit_count == 2
             assert ambiguity.value.stage == "persist"
 
             # A fresh read is authoritative. The deterministic export and the

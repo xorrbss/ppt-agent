@@ -2,7 +2,17 @@ import datetime
 import uuid
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Uuid, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlmodel import SQLModel
 
@@ -17,6 +27,27 @@ class User(UserBase):
     """Username-only account model used by the FastAPI Users manager."""
 
     __tablename__ = "user"
+    __table_args__ = (
+        CheckConstraint(
+            "deletion_state IN ('active', 'deleting')",
+            name="ck_user_deletion_state",
+        ),
+        CheckConstraint(
+            "deletion_generation >= 0",
+            name="ck_user_deletion_generation",
+        ),
+        CheckConstraint(
+            "(deletion_state = 'active' AND deletion_requested_at IS NULL) "
+            "OR (deletion_state = 'deleting' "
+            "AND deletion_requested_at IS NOT NULL AND is_active = false)",
+            name="ck_user_deletion_marker",
+        ),
+        Index(
+            "ix_user_deletion_state_requested_at",
+            "deletion_state",
+            "deletion_requested_at",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid, primary_key=True, default=uuid.uuid4
@@ -42,4 +73,13 @@ class User(UserBase):
     )
     auth_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default=text("1")
+    )
+    deletion_state: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="active", server_default="active"
+    )
+    deletion_generation: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+    deletion_requested_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )

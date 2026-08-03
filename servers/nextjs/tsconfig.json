@@ -38,7 +38,9 @@
     ".next-build/types/**/*.ts",
     ".next-build/dev/types/**/*.ts",
     ".next-workspace-e2e/types/**/*.ts",
-    ".next-workspace-e2e/dev/types/**/*.ts"
+    ".next-workspace-e2e/dev/types/**/*.ts",
+    ".next-template-v2-fidelity-template-v2-fidelity-QVp8l0/types/**/*.ts",
+    ".next-template-v2-fidelity-template-v2-fidelity-QVp8l0/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

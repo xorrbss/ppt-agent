@@ -125,7 +125,14 @@ const getSelectedImageQuality = (config?: LLMConfig): string => {
 };
 
 const UploadPage = () => {
-  const chatFirstRollout = useChatFirstWorkbenchRollout();
+  // Allocate the server-visible deck id before capability discovery. Partial
+  // rollout decisions are deck scoped, so the capability check and the later
+  // create command must hash the exact same stable id across retries.
+  const [pendingPresentationId] = useState(() => crypto.randomUUID());
+  const chatFirstRollout = useChatFirstWorkbenchRollout(
+    undefined,
+    pendingPresentationId,
+  );
   const themeStrategy = resolvePresentationCreateThemeStrategy(chatFirstRollout.mode);
   const generationEnabled =
     chatFirstRollout.mode === "chat" || chatFirstRollout.mode === "legacy";
@@ -396,7 +403,7 @@ const UploadPage = () => {
       .filter((item: any) => item && item.name && item.file_path)
       .map((item: any) => item.file_path);
 
-    const presentationId = crypto.randomUUID();
+    const presentationId = pendingPresentationId;
     const selectedTheme = themeStrategy === "embedded"
       ? await resolveDeckTheme(selectedThemeId)
       : undefined;
@@ -445,7 +452,7 @@ const UploadPage = () => {
     const selectedLanguage = config?.language ?? "";
 
     // Use the first available layout group for direct generation
-    const presentationId = crypto.randomUUID();
+    const presentationId = pendingPresentationId;
     const selectedTheme = themeStrategy === "embedded"
       ? await resolveDeckTheme(selectedThemeId)
       : undefined;

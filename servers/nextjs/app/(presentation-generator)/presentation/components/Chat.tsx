@@ -6,6 +6,7 @@ import {
   Loader2,
   LocateFixed,
   MessageCircleMore,
+  Paperclip,
   Plus,
   RefreshCw,
   Send,
@@ -24,6 +25,7 @@ import React, {
 import { notify } from "@/components/ui/sonner";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { PresentationChatApi } from "../../services/api/chat";
+import { DashboardApi } from "../../services/api/dashboard";
 import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
 import type { ChatStreamTrace, ChatAttachmentPayload } from "../../services/api/chat";
 import { filesToChatAttachments } from "../utils/chatAttachments";
@@ -228,6 +230,8 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "error";
   content: string;
+  attachmentFileNames?: string[];
+  isGenerationContext?: boolean;
   toolCalls?: string[];
   activity?: AssistantActivity[];
 };
@@ -506,6 +510,8 @@ const Chat = ({
 }: ChatProps) => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [generationContextMessage, setGenerationContextMessage] =
+    useState<ChatMessage | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -559,6 +565,7 @@ const Chat = ({
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setMessages([]);
+    setGenerationContextMessage(null);
     setInput("");
     setConversationId(null);
     setIsSending(false);
@@ -578,6 +585,12 @@ const Chat = ({
           return;
         }
         const sKey = conversationStorageKey(presentationId);
+        const generationInfoPromise = DashboardApi.getPresentationGenerationInfo(
+          presentationId
+        ).catch((error: unknown) => {
+          console.warn("Failed to load presentation generation context:", error);
+          return null;
+        });
         let activeId = sessionStorage.getItem(sKey) ?? null;
         if (!activeId) {
           const list = await PresentationChatApi.listConversations(
@@ -588,20 +601,33 @@ const Chat = ({
             sessionStorage.setItem(sKey, activeId);
           }
         }
-        if (!activeId) {
-          return;
+        let data = null;
+        if (activeId) {
+          try {
+            data = await PresentationChatApi.getHistory(
+              presentationId,
+              activeId
+            );
+          } catch (error) {
+            if (isUnauthorizedApiError(error)) {
+              throw error;
+            }
+            console.warn("Failed to load chat history:", error);
+            sessionStorage.removeItem(sKey);
+            activeId = null;
+            notify.error(
+              "이전 대화를 불러오지 못했습니다",
+              "생성 당시 요청과 등록 자료만 복원했습니다."
+            );
+          }
         }
-        const data = await PresentationChatApi.getHistory(
-          presentationId,
-          activeId
-        );
+        const generationInfo = await generationInfoPromise;
         if (cancelled) {
           return;
         }
-        setConversationId(activeId);
+        setConversationId(activeId ?? null);
         const rows = Array.isArray(data?.messages) ? data.messages : [];
-        setMessages(
-          rows.map((m) => ({
+        const historyMessages: ChatMessage[] = rows.map((m) => ({
             id: createMessageId(),
             role:
               m.role === "assistant"
@@ -613,8 +639,28 @@ const Chat = ({
               m.role === "user"
                 ? stripBackendContextFromUserMessage(m.content)
                 : m.content,
-          }))
-        );
+          }));
+        const prompt = generationInfo?.prompt?.trim() ?? "";
+        const attachmentFileNames = Array.isArray(
+          generationInfo?.attachment_file_names
+        )
+          ? generationInfo.attachment_file_names.filter(
+              (fileName): fileName is string =>
+                typeof fileName === "string" && fileName.trim().length > 0
+            )
+          : [];
+        const initialMessage: ChatMessage | null =
+          prompt || attachmentFileNames.length > 0
+            ? {
+                id: `generation-context-${presentationId}`,
+                role: "user",
+                content: prompt,
+                attachmentFileNames,
+                isGenerationContext: true,
+              }
+            : null;
+        setGenerationContextMessage(initialMessage);
+        setMessages(initialMessage ? [initialMessage, ...historyMessages] : historyMessages);
       } catch (error) {
         if (isUnauthorizedApiError(error)) return;
         console.error("Failed to load chat history:", error);
@@ -784,7 +830,7 @@ const Chat = ({
   };
 
   const resetChat = () => {
-    setMessages([]);
+    setMessages(generationContextMessage ? [generationContextMessage] : []);
     setInput("");
     setConversationId(null);
     setActiveMutationToolCount(0);
@@ -1247,9 +1293,35 @@ const Chat = ({
                   className="flex items-start justify-end gap-2"
                 >
                   <div className="max-w-[78%] rounded-[20px] bg-[#A100FF] px-4 py-3 text-sm font-medium leading-5 text-white">
-                    <p className="whitespace-pre-wrap">
-                      {stripBackendContextFromUserMessage(message.content)}
-                    </p>
+                    {message.isGenerationContext && (
+                      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/70">
+                        최초 요청
+                      </div>
+                    )}
+                    {message.content && (
+                      <p className="whitespace-pre-wrap">
+                        {stripBackendContextFromUserMessage(message.content)}
+                      </p>
+                    )}
+                    {message.attachmentFileNames &&
+                      message.attachmentFileNames.length > 0 && (
+                        <div className={message.content ? "mt-3" : ""}>
+                          <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-white/75">
+                            <Paperclip className="h-3 w-3" aria-hidden="true" />
+                            등록 자료
+                          </div>
+                          <ul className="space-y-1">
+                            {message.attachmentFileNames.map((fileName, index) => (
+                              <li
+                                key={`${fileName}-${index}`}
+                                className="break-all rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-medium text-white"
+                              >
+                                {fileName}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                   </div>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF8617] text-sm font-semibold text-white">
                     U

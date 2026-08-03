@@ -37,7 +37,6 @@ const MAX_POLL_ERRORS = 4;
 const REVIEW_TASK_STORAGE_PREFIX = "presenton:authored-quality-review:task:";
 
 type ReviewScope = "all" | "current";
-type ReviewMode = "analyze_only" | "analyze_and_fix";
 
 function slideNumbers(indices?: number[]) {
   if (!indices?.length) return "";
@@ -94,10 +93,11 @@ export default function AuthoredQualityReview({
 }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<ReviewScope>("all");
-  const [mode, setMode] = useState<ReviewMode>("analyze_and_fix");
   const [isReviewing, setIsReviewing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const [result, setResult] = useState<AuthoredQualityReviewResult | null>(null);
+  const [result, setResult] = useState<AuthoredQualityReviewResult | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -110,7 +110,8 @@ export default function AuthoredQualityReview({
 
     const restoreCompletedReview = async () => {
       try {
-        const task = await PresentationGenerationApi.getGenerationStatus(taskId);
+        const task =
+          await PresentationGenerationApi.getGenerationStatus(taskId);
         if (cancelled) return;
 
         if (task?.status === "completed") {
@@ -144,18 +145,20 @@ export default function AuthoredQualityReview({
           {
             scope,
             slide_indices: scope === "current" ? [currentSlide] : [],
-            mode,
-          }
+          },
         );
       const taskId = started?.id;
       if (!taskId) throw new Error("검수 작업을 시작하지 못했습니다.");
-      window.sessionStorage.setItem(reviewTaskStorageKey(presentationId), taskId);
+      window.sessionStorage.setItem(
+        reviewTaskStorageKey(presentationId),
+        taskId,
+      );
 
       const deadline = Date.now() + REVIEW_TIMEOUT_MS;
       let pollErrors = 0;
       while (Date.now() < deadline) {
         await new Promise((resolve) =>
-          window.setTimeout(resolve, POLL_INTERVAL_MS)
+          window.setTimeout(resolve, POLL_INTERVAL_MS),
         );
 
         try {
@@ -167,7 +170,7 @@ export default function AuthoredQualityReview({
           if (task?.status === "completed") {
             const nextResult = normalizeAuthoredQualityReviewResult(task.data);
             setResult(nextResult);
-            if (mode === "analyze_and_fix" && nextResult.fixed_count > 0) {
+            if (nextResult.fixed_count > 0) {
               onReload?.();
             }
             notify.success(
@@ -176,7 +179,7 @@ export default function AuthoredQualityReview({
                 ? `${nextResult.fixed_count}개 슬라이드를 수정했습니다.`
                 : nextResult.issue_slide_count > 0
                   ? `${nextResult.issue_slide_count}개 슬라이드에서 문제를 확인했습니다.`
-                  : "수정이 필요한 시각적 문제가 없습니다."
+                  : "수정이 필요한 시각적 문제가 없습니다.",
             );
             return;
           }
@@ -188,14 +191,14 @@ export default function AuthoredQualityReview({
           if (pollErrors >= MAX_POLL_ERRORS) throw error;
         }
       }
-      throw new Error("검수 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.");
+      throw new Error(
+        "검수 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
+      );
     } catch (error) {
       console.error("Error reviewing AI-authored presentation", error);
       notify.error(
         "고품질 검수 실패",
-        error instanceof Error
-          ? error.message
-          : "검수 중 오류가 발생했습니다."
+        error instanceof Error ? error.message : "검수 중 오류가 발생했습니다.",
       );
       setStatusMessage("");
     } finally {
@@ -230,8 +233,8 @@ export default function AuthoredQualityReview({
             기존 자료 고품질 검수
           </DialogTitle>
           <DialogDescription className="leading-6">
-            저장된 AI 저작 슬라이드를 다시 렌더링해 글자 잘림, 요소 겹침,
-            정렬, 대비 문제를 검사합니다.
+            저장된 AI 저작 슬라이드를 다시 렌더링해 글자 잘림, 요소 겹침, 정렬,
+            대비 문제를 검사합니다.
           </DialogDescription>
         </DialogHeader>
 
@@ -292,19 +295,19 @@ export default function AuthoredQualityReview({
               {(result.metrics.total_ms !== undefined ||
                 Object.keys(result.metrics.stage_timings_ms).length > 0 ||
                 result.metrics.cache_hits !== undefined ||
-                 result.metrics.vqa_calls !== undefined ||
-                 result.metrics.patch_count !== undefined ||
-                 result.metrics.fallback_count !== undefined ||
-                 result.metrics.patch_attempted !== undefined ||
-                 result.metrics.patch_succeeded !== undefined ||
-                 result.metrics.patch_failed !== undefined ||
-                 result.metrics.fallback_attempted !== undefined ||
-                 result.metrics.fallback_succeeded !== undefined ||
-                 result.metrics.fallback_failed !== undefined ||
-                 result.metrics.ocr_executed !== undefined ||
-                 result.metrics.ocr_calls !== undefined ||
-                 result.metrics.ocr_cache_hits !== undefined ||
-                 result.metrics.ocr_total_ms !== undefined) && (
+                result.metrics.vqa_calls !== undefined ||
+                result.metrics.patch_count !== undefined ||
+                result.metrics.fallback_count !== undefined ||
+                result.metrics.patch_attempted !== undefined ||
+                result.metrics.patch_succeeded !== undefined ||
+                result.metrics.patch_failed !== undefined ||
+                result.metrics.fallback_attempted !== undefined ||
+                result.metrics.fallback_succeeded !== undefined ||
+                result.metrics.fallback_failed !== undefined ||
+                result.metrics.ocr_executed !== undefined ||
+                result.metrics.ocr_calls !== undefined ||
+                result.metrics.ocr_cache_hits !== undefined ||
+                result.metrics.ocr_total_ms !== undefined) && (
                 <section
                   data-testid="quality-review-metrics"
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700"
@@ -327,26 +330,38 @@ export default function AuthoredQualityReview({
                       <span>fallback {result.metrics.fallback_count}</span>
                     )}
                     {result.metrics.patch_attempted !== undefined && (
-                      <span>국소 패치 시도 {result.metrics.patch_attempted}</span>
+                      <span>
+                        국소 패치 시도 {result.metrics.patch_attempted}
+                      </span>
                     )}
                     {result.metrics.patch_succeeded !== undefined && (
-                      <span>국소 패치 성공 {result.metrics.patch_succeeded}</span>
+                      <span>
+                        국소 패치 성공 {result.metrics.patch_succeeded}
+                      </span>
                     )}
                     {result.metrics.patch_failed !== undefined && (
                       <span>국소 패치 실패 {result.metrics.patch_failed}</span>
                     )}
                     {result.metrics.fallback_attempted !== undefined && (
-                      <span>전체 재작성 시도 {result.metrics.fallback_attempted}</span>
+                      <span>
+                        전체 재작성 시도 {result.metrics.fallback_attempted}
+                      </span>
                     )}
                     {result.metrics.fallback_succeeded !== undefined && (
-                      <span>전체 재작성 성공 {result.metrics.fallback_succeeded}</span>
+                      <span>
+                        전체 재작성 성공 {result.metrics.fallback_succeeded}
+                      </span>
                     )}
                     {result.metrics.fallback_failed !== undefined && (
-                      <span>전체 재작성 실패 {result.metrics.fallback_failed}</span>
+                      <span>
+                        전체 재작성 실패 {result.metrics.fallback_failed}
+                      </span>
                     )}
                     {result.metrics.ocr_executed !== undefined && (
                       <span>
-                        {result.metrics.ocr_executed ? "OCR 실행됨" : "OCR 미실행"}
+                        {result.metrics.ocr_executed
+                          ? "OCR 실행됨"
+                          : "OCR 미실행"}
                       </span>
                     )}
                     {result.metrics.ocr_calls !== undefined && (
@@ -356,7 +371,9 @@ export default function AuthoredQualityReview({
                       <span>OCR 캐시 적중 {result.metrics.ocr_cache_hits}</span>
                     )}
                     {result.metrics.ocr_total_ms !== undefined && (
-                      <span>OCR 총 {formatDuration(result.metrics.ocr_total_ms)}</span>
+                      <span>
+                        OCR 총 {formatDuration(result.metrics.ocr_total_ms)}
+                      </span>
                     )}
                   </div>
                   {Object.keys(result.metrics.stage_timings_ms).length > 0 && (
@@ -366,15 +383,20 @@ export default function AuthoredQualityReview({
                           <span key={stage}>
                             {stage}: {formatDuration(duration)}
                           </span>
-                        )
+                        ),
                       )}
                     </div>
                   )}
                 </section>
               )}
               {result.slide_results.length > 0 && (
-                <section data-testid="quality-review-details" className="space-y-2">
-                  <p className="text-sm font-semibold text-[#191919]">슬라이드별 변경</p>
+                <section
+                  data-testid="quality-review-details"
+                  className="space-y-2"
+                >
+                  <p className="text-sm font-semibold text-[#191919]">
+                    슬라이드별 변경
+                  </p>
                   {result.slide_results.map((slide) => (
                     <details
                       key={slide.slide_index}
@@ -386,45 +408,81 @@ export default function AuthoredQualityReview({
                         <span className="mr-1 font-semibold">
                           {reviewOutcomeLabel(slide.attempted, slide.applied)} ·
                         </span>
-                        {slide.slide_index + 1}번 슬라이드 · {reviewPathLabel(slide.path)}
+                        {slide.slide_index + 1}번 슬라이드 ·{" "}
+                        {reviewPathLabel(slide.path)}
                       </summary>
                       <div className="mt-3 space-y-2 text-xs text-gray-700">
-                        {slide.attempted && !slide.applied && slide.rejection_reason && (
-                          <p className="text-amber-700">
-                            미채택 사유: {slide.rejection_reason}
-                          </p>
-                        )}
+                        {slide.attempted &&
+                          !slide.applied &&
+                          slide.rejection_reason && (
+                            <p className="text-amber-700">
+                              미채택 사유: {slide.rejection_reason}
+                            </p>
+                          )}
                         {slide.ocr && (
                           <div className="rounded-lg border border-sky-100 bg-sky-50 p-3 text-sky-950">
-                            <p className="font-medium">{ocrStatusLabel(slide.ocr)}</p>
+                            <p className="font-medium">
+                              {ocrStatusLabel(slide.ocr)}
+                            </p>
                             {slide.ocr.executed && (
                               <>
-                                <p className="mt-1">OCR 비교: baseline → candidate</p>
+                                <p className="mt-1">
+                                  OCR 비교: baseline → candidate
+                                </p>
                                 {slide.ocr.baseline && (
-                                  <p className="mt-1">기준 누락: {ocrOmissionLabel(slide.ocr.baseline)}</p>
+                                  <p className="mt-1">
+                                    기준 누락:{" "}
+                                    {ocrOmissionLabel(slide.ocr.baseline)}
+                                  </p>
                                 )}
                                 {slide.ocr.candidate && (
-                                  <p className="mt-1">후보 누락: {ocrOmissionLabel(slide.ocr.candidate)}</p>
+                                  <p className="mt-1">
+                                    후보 누락:{" "}
+                                    {ocrOmissionLabel(slide.ocr.candidate)}
+                                  </p>
                                 )}
-                                {(slide.ocr.comparison?.accepted === false || slide.ocr.comparison?.no_regression === false) && (
-                                  <p className="mt-1 text-amber-700">후보 판정: OCR 회귀로 미채택</p>
+                                {(slide.ocr.comparison?.accepted === false ||
+                                  slide.ocr.comparison?.no_regression ===
+                                    false) && (
+                                  <p className="mt-1 text-amber-700">
+                                    후보 판정: OCR 회귀로 미채택
+                                  </p>
                                 )}
                                 {slide.ocr.comparison?.reason && (
-                                  <p className="mt-1 text-amber-700">OCR 판정 사유: {slide.ocr.comparison.reason}</p>
+                                  <p className="mt-1 text-amber-700">
+                                    OCR 판정 사유: {slide.ocr.comparison.reason}
+                                  </p>
                                 )}
                                 {slide.ocr.comparison?.resolved && (
-                                  <p className="mt-1 text-emerald-700">해결된 OCR 누락: {ocrOmissionLabel(slide.ocr.comparison.resolved)}</p>
+                                  <p className="mt-1 text-emerald-700">
+                                    해결된 OCR 누락:{" "}
+                                    {ocrOmissionLabel(
+                                      slide.ocr.comparison.resolved,
+                                    )}
+                                  </p>
                                 )}
                                 {slide.ocr.comparison?.remaining && (
-                                  <p className="mt-1 text-amber-700">남은 OCR 누락: {ocrOmissionLabel(slide.ocr.comparison.remaining)}</p>
+                                  <p className="mt-1 text-amber-700">
+                                    남은 OCR 누락:{" "}
+                                    {ocrOmissionLabel(
+                                      slide.ocr.comparison.remaining,
+                                    )}
+                                  </p>
                                 )}
                                 {slide.ocr.comparison?.regressions && (
-                                  <p className="mt-1 text-amber-700">후보 OCR 회귀: {ocrOmissionLabel(slide.ocr.comparison.regressions)}</p>
+                                  <p className="mt-1 text-amber-700">
+                                    후보 OCR 회귀:{" "}
+                                    {ocrOmissionLabel(
+                                      slide.ocr.comparison.regressions,
+                                    )}
+                                  </p>
                                 )}
                               </>
                             )}
                             {!slide.ocr.executed && slide.ocr.reason && (
-                              <p className="mt-1 text-amber-700">사유: {slide.ocr.reason}</p>
+                              <p className="mt-1 text-amber-700">
+                                사유: {slide.ocr.reason}
+                              </p>
                             )}
                           </div>
                         )}
@@ -434,19 +492,32 @@ export default function AuthoredQualityReview({
                             className="rounded-lg bg-slate-50 p-3"
                           >
                             <p className="font-medium text-slate-900">
-                              <span className={change.applied ? "text-emerald-700" : "text-amber-700"}>
-                                {change.applied ? "적용된 변경" : "미채택 후보"} ·
+                              <span
+                                className={
+                                  change.applied
+                                    ? "text-emerald-700"
+                                    : "text-amber-700"
+                                }
+                              >
+                                {change.applied ? "적용된 변경" : "미채택 후보"}{" "}
+                                ·
                               </span>
-                              요소 {change.element_id ?? "슬라이드 수준"} · {reviewPathLabel(change.path)}
+                              요소 {change.element_id ?? "슬라이드 수준"} ·{" "}
+                              {reviewPathLabel(change.path)}
                             </p>
-                            {!change.applied && (change.before !== undefined || change.after !== undefined) && (
-                              <p className="mt-1 text-amber-700">
-                                아래 비교값은 실제 슬라이드에 적용되지 않은 미채택 후보입니다.
-                              </p>
-                            )}
-                            {(change.before !== undefined || change.after !== undefined) && (
+                            {!change.applied &&
+                              (change.before !== undefined ||
+                                change.after !== undefined) && (
+                                <p className="mt-1 text-amber-700">
+                                  아래 비교값은 실제 슬라이드에 적용되지 않은
+                                  미채택 후보입니다.
+                                </p>
+                              )}
+                            {(change.before !== undefined ||
+                              change.after !== undefined) && (
                               <p className="mt-1 break-words">
-                                전: {change.before ?? "—"} → 후: {change.after ?? "—"}
+                                전: {change.before ?? "—"} → 후:{" "}
+                                {change.after ?? "—"}
                               </p>
                             )}
                             {change.resolved_issues.length > 0 && (
@@ -491,7 +562,9 @@ export default function AuthoredQualityReview({
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#E3E4E8] p-4">
                     <RadioGroupItem value="all" />
                     <span>
-                      <span className="block text-sm font-semibold">전체 슬라이드</span>
+                      <span className="block text-sm font-semibold">
+                        전체 슬라이드
+                      </span>
                       <span className="mt-1 block text-xs text-gray-500">
                         총 {slideCount}개
                       </span>
@@ -500,7 +573,9 @@ export default function AuthoredQualityReview({
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#E3E4E8] p-4">
                     <RadioGroupItem value="current" />
                     <span>
-                      <span className="block text-sm font-semibold">현재 슬라이드</span>
+                      <span className="block text-sm font-semibold">
+                        현재 슬라이드
+                      </span>
                       <span className="mt-1 block text-xs text-gray-500">
                         {currentSlide + 1}번만 빠르게 검수
                       </span>
@@ -509,46 +584,11 @@ export default function AuthoredQualityReview({
                 </RadioGroup>
               </fieldset>
 
-              <fieldset>
-                <legend className="mb-3 text-sm font-semibold text-[#191919]">
-                  처리 방식
-                </legend>
-                <RadioGroup
-                  value={mode}
-                  onValueChange={(value) => setMode(value as ReviewMode)}
-                  className="space-y-3"
-                >
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E3E4E8] p-4">
-                    <RadioGroupItem value="analyze_and_fix" className="mt-0.5" />
-                    <span>
-                      <span className="block text-sm font-semibold">
-                        문제 확인 후 자동 수정
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-gray-500">
-                        문제가 있는 슬라이드만 다시 만들고 결과를 재검증합니다.
-                      </span>
-                    </span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E3E4E8] p-4">
-                    <RadioGroupItem value="analyze_only" className="mt-0.5" />
-                    <span>
-                      <span className="block text-sm font-semibold">
-                        문제만 확인
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-gray-500">
-                        자료를 변경하지 않고 검수 결과만 확인합니다.
-                      </span>
-                    </span>
-                  </label>
-                </RadioGroup>
-              </fieldset>
-
-              {mode === "analyze_and_fix" && (
-                <div className="flex items-center gap-2 rounded-xl bg-[#F6F3FF] px-4 py-3 text-xs text-[#5141E5]">
-                  <History className="h-4 w-4 shrink-0" />
-                  수정 전 상태는 버전 기록에 자동 저장됩니다.
-                </div>
-              )}
+              <div className="flex items-center gap-2 rounded-xl bg-[#F6F3FF] px-4 py-3 text-xs text-[#5141E5]">
+                <History className="h-4 w-4 shrink-0" />
+                문제를 검토한 뒤 자동으로 수정하며, 수정 전 상태는 버전 기록에
+                저장됩니다.
+              </div>
             </>
           )}
         </div>
@@ -587,11 +627,7 @@ export default function AuthoredQualityReview({
                 onClick={startReview}
               >
                 {isReviewing && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isReviewing
-                  ? "검수 중"
-                  : mode === "analyze_and_fix"
-                    ? "검수하고 수정하기"
-                    : "검수 시작"}
+                {isReviewing ? "검수 중" : "검수하고 자동 수정하기"}
               </Button>
             </>
           )}

@@ -102,7 +102,9 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
         "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
         "start_presentation_generation_dispatcher",
+        "start_workspace_cleanup_maintenance",
         "check_llm_and_image_provider_api_or_model_availability",
+        "stop_workspace_cleanup_maintenance",
         "stop_presentation_generation_dispatcher",
         "stop_export_retention_sweeper",
         "stop_template_v2_private_source_cleanup",
@@ -130,6 +132,68 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     bootstrap_admin.assert_awaited_once_with()
     lifespan.start_export_retention_sweeper.assert_awaited_once_with()
     lifespan.stop_export_retention_sweeper.assert_awaited_once_with()
+    lifespan.start_workspace_cleanup_maintenance.assert_awaited_once_with()
+    lifespan.stop_workspace_cleanup_maintenance.assert_awaited_once_with()
+
+
+def test_cleanup_maintenance_runs_when_chat_first_is_disabled(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        lifespan,
+        "get_structured_template_policy",
+        lambda: SimpleNamespace(creation_enabled=False, allowed_template_ids=()),
+    )
+    monkeypatch.setattr(lifespan, "workspace_commands_enabled", lambda: False)
+    monkeypatch.setattr(
+        lifespan,
+        "validate_chat_first_workspace_rollout",
+        lambda *_args, **_kwargs: SimpleNamespace(enabled=False),
+    )
+    monkeypatch.setattr(
+        lifespan,
+        "require_workspace_asset_malware_scan_safety",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(lifespan, "get_app_data_directory_env", lambda: str(tmp_path))
+
+    common_steps = (
+        "migrate_database_on_startup",
+        "create_db_and_tables",
+        "log_template_v2_operational_health",
+        "start_template_v2_private_source_cleanup",
+        "start_export_retention_sweeper",
+        "start_presentation_generation_dispatcher",
+        "start_workspace_cleanup_maintenance",
+        "bootstrap_database_admin",
+        "check_llm_and_image_provider_api_or_model_availability",
+        "stop_workspace_cleanup_maintenance",
+        "stop_presentation_generation_dispatcher",
+        "stop_export_retention_sweeper",
+        "stop_template_v2_private_source_cleanup",
+        "dispose_engines",
+    )
+    workspace_only_steps = (
+        "start_workspace_operation_outbox_dispatcher",
+        "start_workspace_operation_runner",
+        "start_workspace_asset_maintenance",
+        "start_workspace_event_retention",
+        "stop_workspace_event_retention",
+        "stop_workspace_asset_maintenance",
+        "stop_workspace_operation_runner",
+        "stop_workspace_operation_outbox_dispatcher",
+    )
+    for name in (*common_steps, *workspace_only_steps):
+        monkeypatch.setattr(lifespan, name, AsyncMock())
+
+    async def enter_lifespan() -> None:
+        async with lifespan.app_lifespan(FastAPI()):
+            pass
+
+    asyncio.run(enter_lifespan())
+
+    lifespan.start_workspace_cleanup_maintenance.assert_awaited_once_with()
+    lifespan.stop_workspace_cleanup_maintenance.assert_awaited_once_with()
+    for name in workspace_only_steps:
+        getattr(lifespan, name).assert_not_awaited()
 
 
 def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_path):
@@ -175,11 +239,13 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
         monkeypatch.setattr(lifespan, name, AsyncMock())
 
     for name in (
+        "start_workspace_cleanup_maintenance",
         "start_workspace_operation_outbox_dispatcher",
         "start_workspace_operation_runner",
         "start_workspace_asset_maintenance",
         "start_workspace_event_retention",
         "stop_workspace_event_retention",
+        "stop_workspace_cleanup_maintenance",
         "stop_workspace_asset_maintenance",
         "stop_workspace_operation_runner",
         "stop_workspace_operation_outbox_dispatcher",
@@ -197,11 +263,13 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
     asyncio.run(enter_lifespan())
 
     assert calls == [
+        "start_workspace_cleanup_maintenance",
         "start_workspace_operation_outbox_dispatcher",
         "start_workspace_operation_runner",
         "start_workspace_asset_maintenance",
         "start_workspace_event_retention",
         "stop_workspace_event_retention",
+        "stop_workspace_cleanup_maintenance",
         "stop_workspace_asset_maintenance",
         "stop_workspace_operation_runner",
         "stop_workspace_operation_outbox_dispatcher",

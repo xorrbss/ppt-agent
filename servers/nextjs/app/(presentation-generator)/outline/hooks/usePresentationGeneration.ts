@@ -118,7 +118,8 @@ export const usePresentationGeneration = (
   const language = generationConfig?.language ?? null;
   const hasRolloutOverride = typeof options.chatFirstEnabled === "boolean";
   const chatFirstRollout = useChatFirstWorkbenchRollout(
-    hasRolloutOverride ? false : undefined
+    hasRolloutOverride ? false : undefined,
+    presentationId ?? undefined,
   );
   // The explicit option is retained for isolated hook tests. Product callers
   // always use the authenticated shared runtime decision.
