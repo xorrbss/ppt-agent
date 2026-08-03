@@ -144,6 +144,7 @@ def test_job_api_safe_failure_does_not_expose_internal_converter_details(
             "code": "DOCUMENT_CONVERSION_FAILED",
             "message": "Unable to convert 'photo.jpg'.",
             "filename": "photo.jpg",
+            "request_id": body["job_id"],
             "retryable": False,
         }
         assert "private" not in failed.text

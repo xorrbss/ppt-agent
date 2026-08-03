@@ -26,7 +26,10 @@ import SupportingDoc, {
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { notify } from "@/components/ui/sonner";
-import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import {
+  isAbortError,
+  PresentationGenerationApi,
+} from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
@@ -62,6 +65,14 @@ interface LoadingState {
   progressLabel?: string;
   extra_info?: string;
 }
+
+const abortDocumentProcessing = (controller: AbortController | null) => {
+  if (!controller || controller.signal.aborted) return;
+
+  controller.abort(
+    new DOMException("Document processing was cancelled", "AbortError"),
+  );
+};
 
 const getFileExtension = (fileName: string): string => {
   const index = fileName.lastIndexOf(".");
@@ -233,7 +244,7 @@ const UploadPage = () => {
   // A queued decomposition keeps running on FastAPI until it is explicitly
   // cancelled. Abort it when this upload screen unmounts (navigation/close).
   useEffect(() => {
-    return () => decomposeAbortControllerRef.current?.abort();
+    return () => abortDocumentProcessing(decomposeAbortControllerRef.current);
   }, []);
 
   const getUploadSnapshotProps = () => {
@@ -530,6 +541,19 @@ const UploadPage = () => {
    * Handles errors during presentation generation
    */
   const handleGenerationError = (error: any) => {
+    // Aborts are expected when the user cancels, leaves this screen, or a
+    // development refresh remounts it. Reset the local loader without
+    // presenting the cancellation as a failed presentation generation.
+    if (isAbortError(error)) {
+      setLoadingState({
+        isLoading: false,
+        message: "",
+        duration: 0,
+        showProgress: false,
+      });
+      return;
+    }
+
     console.error("Error in upload page", error);
     setLoadingState({
       isLoading: false,
@@ -555,7 +579,8 @@ const UploadPage = () => {
         extra_info={loadingState.extra_info}
         onCancel={
           canCancelDocumentProcessing
-            ? () => decomposeAbortControllerRef.current?.abort()
+            ? () =>
+                abortDocumentProcessing(decomposeAbortControllerRef.current)
             : undefined
         }
       />

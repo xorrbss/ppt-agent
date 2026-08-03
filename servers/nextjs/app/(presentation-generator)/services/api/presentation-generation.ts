@@ -19,12 +19,7 @@ export type BlankPresentationResponse = {
 };
 
 export type GenerationStage =
-  | "author"
-  | "illustrate"
-  | "render"
-  | "persist"
-  | "finalize"
-  | "completed";
+  "author" | "illustrate" | "render" | "persist" | "finalize" | "completed";
 
 export type GenerationProgress = {
   completed_slides: number;
@@ -115,6 +110,15 @@ function abortError() {
   return new DOMException("Document processing was cancelled", "AbortError");
 }
 
+export function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
 function waitForDecomposePoll(delayMs: number, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
@@ -169,9 +173,7 @@ const generationPreferencesPayload = (body: GenerationPreferences) => ({
   ...(body.include_title_slide !== undefined
     ? { include_title_slide: body.include_title_slide }
     : {}),
-  ...(body.web_search !== undefined
-    ? { web_search: body.web_search }
-    : {}),
+  ...(body.web_search !== undefined ? { web_search: body.web_search } : {}),
 });
 
 export class PresentationGenerationApi {
@@ -190,10 +192,13 @@ export class PresentationGenerationApi {
           headers: getHeaderForFormData(),
           body: formData,
           cache: "no-cache",
-        }
+        },
       );
 
-      return await ApiResponseHandler.handleResponse(response, "Failed to upload documents");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to upload documents",
+      );
     } catch (error) {
       console.error("Upload error:", error);
       throw error;
@@ -247,9 +252,15 @@ export class PresentationGenerationApi {
         job.error,
         "Failed to decompose documents",
         422,
+        job.job_id,
       );
     } catch (error) {
-      console.error("Error in Decompose Files", error);
+      // Navigation, an explicit cancel, and development refreshes all abort the
+      // polling request intentionally. Logging that expected control flow with
+      // console.error makes Next.js render a misleading runtime-error overlay.
+      if (!isAbortError(error)) {
+        console.error("Error in Decompose Files", error);
+      }
       throw error;
     } finally {
       options.signal?.removeEventListener("abort", cancelOnAbort);
@@ -276,6 +287,39 @@ export class PresentationGenerationApi {
       cache: "no-store",
       signal: options.signal,
     });
+
+    // A desktop/web frontend can briefly be newer than the non-reloading
+    // FastAPI process after an update. Older backends do not expose the async
+    // job endpoint, but they can still decompose the same uploaded documents
+    // through the legacy synchronous route. Keep uploads working during that
+    // version-skew window instead of surfacing a raw 404 in the UI.
+    if (response.status === 404) {
+      const fallbackResponse = await fetch("/api/decompose-documents", {
+        method: "POST",
+        headers: getHeader(),
+        body: JSON.stringify({
+          file_paths: documentKeys,
+          language: language ?? null,
+        }),
+        cache: "no-store",
+        signal: options.signal,
+      });
+      const result = (await ApiResponseHandler.handleResponse(
+        fallbackResponse,
+        "Failed to decompose documents",
+      )) as DecomposedDocument[];
+      return {
+        job_id: "legacy-sync",
+        status: "succeeded",
+        progress: {
+          completed_files: documentKeys.length,
+          total_files: documentKeys.length,
+        },
+        result,
+        error: null,
+      };
+    }
+
     return (await ApiResponseHandler.handleResponse(
       response,
       "Failed to start document processing",
@@ -371,12 +415,12 @@ export class PresentationGenerationApi {
             theme,
           }),
           cache: "no-cache",
-        }
+        },
       );
 
       return await ApiResponseHandler.handleResponse(
         response,
-        "Failed to create presentation"
+        "Failed to create presentation",
       );
     } catch (error) {
       console.error("error in presentation creation", error);
@@ -392,11 +436,11 @@ export class PresentationGenerationApi {
           method: "POST",
           headers: getHeader(),
           cache: "no-cache",
-        }
+        },
       );
       const presentation = (await ApiResponseHandler.handleResponse(
         response,
-        "Failed to create blank presentation"
+        "Failed to create blank presentation",
       )) as BlankPresentationResponse;
 
       if (!presentation || typeof presentation.id !== "string") {
@@ -410,25 +454,22 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async editSlide(
-    slide_id: string,
-    prompt: string
-  ) {
+  static async editSlide(slide_id: string, prompt: string) {
     try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/slide/edit`),
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify({
-            id: slide_id,
-            prompt,
-          }),
-          cache: "no-cache",
-        }
-      );
+      const response = await fetch(getApiUrl(`/api/v1/ppt/slide/edit`), {
+        method: "POST",
+        headers: getHeader(),
+        body: JSON.stringify({
+          id: slide_id,
+          prompt,
+        }),
+        cache: "no-cache",
+      });
 
-      return await ApiResponseHandler.handleResponse(response, "Failed to update slide");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to update slide",
+      );
     } catch (error) {
       console.error("error in slide update", error);
       throw error;
@@ -444,10 +485,13 @@ export class PresentationGenerationApi {
           headers: getHeader(),
           body: JSON.stringify(body),
           cache: "no-cache",
-        }
+        },
       );
-      
-      return await ApiResponseHandler.handleResponse(response, "Failed to update presentation content");
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to update presentation content",
+      );
     } catch (error) {
       console.error("error in presentation content update", error);
       throw error;
@@ -462,30 +506,39 @@ export class PresentationGenerationApi {
           method: "GET",
           headers: getHeader(),
           cache: "no-cache",
-        }
+        },
       );
 
-      return await ApiResponseHandler.handleResponse(response, "Failed to load version history");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to load version history",
+      );
     } catch (error) {
       console.error("error loading presentation versions", error);
       throw error;
     }
   }
 
-  static async restorePresentationVersion(presentationId: string, versionId: string) {
+  static async restorePresentationVersion(
+    presentationId: string,
+    versionId: string,
+  ) {
     try {
       const response = await fetch(
         getApiUrl(
-          `/api/v1/ppt/presentation/${presentationId}/versions/${versionId}/restore`
+          `/api/v1/ppt/presentation/${presentationId}/versions/${versionId}/restore`,
         ),
         {
           method: "POST",
           headers: getHeader(),
           cache: "no-cache",
-        }
+        },
       );
 
-      return await ApiResponseHandler.handleResponse(response, "Failed to restore version");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to restore version",
+      );
     } catch (error) {
       console.error("error restoring presentation version", error);
       throw error;
@@ -496,9 +549,12 @@ export class PresentationGenerationApi {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/${presentationId}/share`),
-        { method: "GET", headers: getHeader(), cache: "no-cache" }
+        { method: "GET", headers: getHeader(), cache: "no-cache" },
       );
-      return await ApiResponseHandler.handleResponse(response, "Failed to load share status");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to load share status",
+      );
     } catch (error) {
       console.error("error loading share status", error);
       throw error;
@@ -509,11 +565,14 @@ export class PresentationGenerationApi {
     try {
       const response = await fetch(
         getApiUrl(
-          `/api/v1/ppt/presentation/${presentationId}/share${regenerate ? "?regenerate=true" : ""}`
+          `/api/v1/ppt/presentation/${presentationId}/share${regenerate ? "?regenerate=true" : ""}`,
         ),
-        { method: "POST", headers: getHeader(), cache: "no-cache" }
+        { method: "POST", headers: getHeader(), cache: "no-cache" },
       );
-      return await ApiResponseHandler.handleResponse(response, "Failed to enable sharing");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to enable sharing",
+      );
     } catch (error) {
       console.error("error enabling share", error);
       throw error;
@@ -524,9 +583,12 @@ export class PresentationGenerationApi {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/${presentationId}/share`),
-        { method: "DELETE", headers: getHeader(), cache: "no-cache" }
+        { method: "DELETE", headers: getHeader(), cache: "no-cache" },
       );
-      return await ApiResponseHandler.handleResponse(response, "Failed to disable sharing");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to disable sharing",
+      );
     } catch (error) {
       console.error("error disabling share", error);
       throw error;
@@ -538,14 +600,16 @@ export class PresentationGenerationApi {
   // it runs through the async generate endpoint (minutes-long) and is polled to
   // completion. The reviewed outline is passed as slides_markdown so the user's edits
   // are honoured. Returns the async task ({ id, status, ... }).
-  static async generateAuthoredAsync(body: GenerationPreferences & {
-    presentation_id: string;
-    content: string;
-    slides_markdown: string[];
-    vision_qa?: boolean;
-    authored_style?: string;
-    idempotency_key?: string;
-  }): Promise<StartGenerationResponse> {
+  static async generateAuthoredAsync(
+    body: GenerationPreferences & {
+      presentation_id: string;
+      content: string;
+      slides_markdown: string[];
+      vision_qa?: boolean;
+      authored_style?: string;
+      idempotency_key?: string;
+    },
+  ): Promise<StartGenerationResponse> {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
@@ -572,17 +636,19 @@ export class PresentationGenerationApi {
             authored_style: body.authored_style ?? "default",
           }),
           cache: "no-cache",
-        }
+        },
       );
 
       const result = await ApiResponseHandler.handleResponse(
         response,
-        "Failed to start authored generation"
+        "Failed to start authored generation",
       );
       return {
         ...result,
         request_id:
-          result?.request_id || response.headers.get("x-request-id") || undefined,
+          result?.request_id ||
+          response.headers.get("x-request-id") ||
+          undefined,
       };
     } catch (error) {
       console.warn("error starting authored generation", error);
@@ -590,14 +656,16 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async generateTemplateV2Async(body: GenerationPreferences & {
-    presentation_id: string;
-    content: string;
-    slides_markdown: string[];
-    template_v2_id: string;
-    template_v2_revision: number;
-    idempotency_key?: string;
-  }): Promise<StartGenerationResponse> {
+  static async generateTemplateV2Async(
+    body: GenerationPreferences & {
+      presentation_id: string;
+      content: string;
+      slides_markdown: string[];
+      template_v2_id: string;
+      template_v2_revision: number;
+      idempotency_key?: string;
+    },
+  ): Promise<StartGenerationResponse> {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
@@ -620,17 +688,19 @@ export class PresentationGenerationApi {
             export_as: "pptx",
           }),
           cache: "no-cache",
-        }
+        },
       );
 
       const result = await ApiResponseHandler.handleResponse(
         response,
-        "Failed to start structured-template generation"
+        "Failed to start structured-template generation",
       );
       return {
         ...result,
         request_id:
-          result?.request_id || response.headers.get("x-request-id") || undefined,
+          result?.request_id ||
+          response.headers.get("x-request-id") ||
+          undefined,
       };
     } catch (error) {
       console.warn("error starting structured-template generation", error);
@@ -638,13 +708,15 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async generateStandardAsync(body: GenerationPreferences & {
-    presentation_id: string;
-    content: string;
-    slides_markdown: string[];
-    template: string;
-    idempotency_key?: string;
-  }): Promise<StartGenerationResponse> {
+  static async generateStandardAsync(
+    body: GenerationPreferences & {
+      presentation_id: string;
+      content: string;
+      slides_markdown: string[];
+      template: string;
+      idempotency_key?: string;
+    },
+  ): Promise<StartGenerationResponse> {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
@@ -666,17 +738,19 @@ export class PresentationGenerationApi {
             export_as: "pptx",
           }),
           cache: "no-cache",
-        }
+        },
       );
 
       const result = await ApiResponseHandler.handleResponse(
         response,
-        "Failed to start presentation generation"
+        "Failed to start presentation generation",
       );
       return {
         ...result,
         request_id:
-          result?.request_id || response.headers.get("x-request-id") || undefined,
+          result?.request_id ||
+          response.headers.get("x-request-id") ||
+          undefined,
       };
     } catch (error) {
       console.warn("error starting presentation generation", error);
@@ -685,7 +759,7 @@ export class PresentationGenerationApi {
   }
 
   static async getGenerationStatus(
-    taskId: string
+    taskId: string,
   ): Promise<GenerationStatusResponse> {
     try {
       const response = await fetch(
@@ -694,17 +768,19 @@ export class PresentationGenerationApi {
           method: "GET",
           headers: getHeader(),
           cache: "no-cache",
-        }
+        },
       );
 
       const result = await ApiResponseHandler.handleResponse(
         response,
-        "Failed to get generation status"
+        "Failed to get generation status",
       );
       return {
         ...result,
         request_id:
-          result?.request_id || response.headers.get("x-request-id") || undefined,
+          result?.request_id ||
+          response.headers.get("x-request-id") ||
+          undefined,
       };
     } catch (error) {
       console.warn("error polling generation status", error);
@@ -718,11 +794,11 @@ export class PresentationGenerationApi {
       {
         method: "POST",
         headers: getHeader(),
-      }
+      },
     );
     return ApiResponseHandler.handleResponse(
       response,
-      "Failed to cancel generation"
+      "Failed to cancel generation",
     );
   }
 
@@ -735,10 +811,13 @@ export class PresentationGenerationApi {
           headers: getHeader(),
           body: JSON.stringify(presentationData),
           cache: "no-cache",
-        }
+        },
       );
-      
-      return await ApiResponseHandler.handleResponse(response, "Failed to prepare presentation");
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to prepare presentation",
+      );
     } catch (error) {
       // The caller renders a user-facing notification. Logging a handled ApiError
       // with console.error makes the Next.js development overlay cover that UI.
@@ -749,7 +828,7 @@ export class PresentationGenerationApi {
 
   static async retemplateAuthoredPresentation(
     presentationId: string,
-    presentationData: { authored_style: string; vision_qa?: boolean }
+    presentationData: { authored_style: string; vision_qa?: boolean },
   ) {
     try {
       const response = await fetch(
@@ -759,12 +838,12 @@ export class PresentationGenerationApi {
           headers: getHeader(),
           body: JSON.stringify(presentationData),
           cache: "no-cache",
-        }
+        },
       );
 
       return await ApiResponseHandler.handleResponse(
         response,
-        "Failed to change presentation template"
+        "Failed to change presentation template",
       );
     } catch (error) {
       console.error("error changing authored presentation template", error);
@@ -777,34 +856,34 @@ export class PresentationGenerationApi {
     reviewData: {
       scope: "all" | "current" | "subset";
       slide_indices?: number[];
-    }
+    },
   ) {
     try {
       const response = await fetch(
-        getApiUrl(
-          `/api/v1/ppt/presentation/${presentationId}/quality-review`
-        ),
+        getApiUrl(`/api/v1/ppt/presentation/${presentationId}/quality-review`),
         {
           method: "POST",
           headers: getHeader(),
           body: JSON.stringify({ ...reviewData, mode: "analyze_and_fix" }),
           cache: "no-cache",
-        }
+        },
       );
 
       return await ApiResponseHandler.handleResponse(
         response,
-        "Failed to start high-quality review"
+        "Failed to start high-quality review",
       );
     } catch (error) {
-      console.error("error starting authored presentation quality review", error);
+      console.error(
+        "error starting authored presentation quality review",
+        error,
+      );
       throw error;
     }
   }
-  
+
   // IMAGE AND ICON SEARCH
-  
-  
+
   static async generateImage(imageGenerate: ImageGenerate) {
     try {
       const response = await fetch(
@@ -813,33 +892,38 @@ export class PresentationGenerationApi {
           method: "GET",
           headers: getHeader(),
           cache: "no-cache",
-        }
+        },
       );
-      
-      return await ApiResponseHandler.handleResponse(response, "Failed to generate image");
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to generate image",
+      );
     } catch (error) {
       console.error("error in image generation", error);
       throw error;
     }
   }
 
-  static getPreviousGeneratedImages = async (): Promise<PreviousGeneratedImagesResponse[]> => {
+  static getPreviousGeneratedImages = async (): Promise<
+    PreviousGeneratedImagesResponse[]
+  > => {
     try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/images/generated`),
-        {
-          method: "GET",
-          headers: getHeader(),
-        }
+      const response = await fetch(getApiUrl(`/api/v1/ppt/images/generated`), {
+        method: "GET",
+        headers: getHeader(),
+      });
+
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to get previous generated images",
       );
-      
-      return await ApiResponseHandler.handleResponse(response, "Failed to get previous generated images");
     } catch (error) {
       console.error("error in getting previous generated images", error);
       throw error;
     }
-  }
-  
+  };
+
   static async searchIcons(iconSearch: IconSearch) {
     try {
       const params = new URLSearchParams({
@@ -855,13 +939,16 @@ export class PresentationGenerationApi {
           method: "GET",
           headers: getHeader(),
           cache: "no-cache",
-        }
+        },
       );
-      
-      const icons = await ApiResponseHandler.handleResponse(response, "Failed to search icons");
+
+      const icons = await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to search icons",
+      );
       return Array.isArray(icons)
         ? icons.map((icon) =>
-            typeof icon === "string" ? resolveBackendAssetUrl(icon) : icon
+            typeof icon === "string" ? resolveBackendAssetUrl(icon) : icon,
           )
         : icons;
     } catch (error) {
@@ -869,5 +956,4 @@ export class PresentationGenerationApi {
       throw error;
     }
   }
-
 }

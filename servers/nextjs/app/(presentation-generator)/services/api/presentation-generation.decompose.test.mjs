@@ -19,9 +19,10 @@ const headerUrl = dataModule(`
 `);
 const paramsUrl = dataModule("export {};\n");
 const errorHandlerUrl = dataModule(`
-  export const apiErrorFromPayload = (payload, fallback) => {
+  export const apiErrorFromPayload = (payload, fallback, _status, requestId) => {
     const error = new Error(payload?.message || fallback);
     error.code = payload?.code;
+    error.requestId = payload?.request_id || requestId;
     return error;
   };
   export const ApiResponseHandler = {
@@ -52,13 +53,13 @@ async function loadApi() {
   );
 }
 
-async function withFetch(fakeFetch, callback) {
+async function withFetch(fakeFetch, callback, { onConsoleError = () => {} } = {}) {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   const originalConsoleError = console.error;
   globalThis.fetch = fakeFetch;
   globalThis.window = { setTimeout, clearTimeout };
-  console.error = () => {};
+  console.error = (...args) => onConsoleError(...args);
   try {
     return await callback();
   } finally {
@@ -105,10 +106,91 @@ test("decomposeDocuments starts a job and polls it to its result", async () => {
   });
 });
 
+test("decomposeDocuments falls back to the synchronous route when jobs are unavailable", async () => {
+  const { PresentationGenerationApi } = await loadApi();
+  const calls = [];
+  await withFetch(async (url, init) => {
+    calls.push([url, init?.method, init?.body]);
+    if (url === "/api/decompose-documents/jobs") {
+      return new Response(JSON.stringify({ detail: "Not Found" }), {
+        status: 404,
+      });
+    }
+    return new Response(JSON.stringify([
+      { name: "source.pdf", file_path: "/tmp/source.txt" },
+    ]), { status: 200 });
+  }, async () => {
+    const progress = [];
+    const result = await PresentationGenerationApi.decomposeDocuments(
+      ["source.pdf"],
+      "ko",
+      { onProgress: (job) => progress.push(job.status) },
+    );
+    assert.deepEqual(result, [
+      { name: "source.pdf", file_path: "/tmp/source.txt" },
+    ]);
+    assert.deepEqual(progress, ["succeeded"]);
+  });
+  assert.deepEqual(calls, [
+    [
+      "/api/decompose-documents/jobs",
+      "POST",
+      JSON.stringify({ file_paths: ["source.pdf"], language: "ko" }),
+    ],
+    [
+      "/api/decompose-documents",
+      "POST",
+      JSON.stringify({ file_paths: ["source.pdf"], language: "ko" }),
+    ],
+  ]);
+});
+
+test("decomposeDocuments exposes the failed job id as a safe diagnostic reference", async () => {
+  const { PresentationGenerationApi } = await loadApi();
+  await withFetch(async (_url, init) => {
+    if (init?.method === "POST") {
+      return new Response(JSON.stringify({
+        job_id: "job-failed-47",
+        status: "queued",
+        progress: { completed_files: 0, total_files: 1 },
+        result: null,
+        error: null,
+      }), { status: 202 });
+    }
+    return new Response(JSON.stringify({
+      job_id: "job-failed-47",
+      status: "failed",
+      progress: {
+        completed_files: 0,
+        total_files: 1,
+        current_file: "broken.pdf",
+      },
+      result: null,
+      error: {
+        code: "DOCUMENT_DECOMPOSE_FAILED",
+        message: "Document processing failed. Please try again.",
+        filename: "broken.pdf",
+      },
+    }), { status: 200 });
+  }, async () => {
+    await assert.rejects(
+      PresentationGenerationApi.decomposeDocuments(["broken.pdf"], null, {
+        pollIntervalMs: 0,
+      }),
+      (error) => {
+        assert.equal(error.message, "Document processing failed. Please try again.");
+        assert.equal(error.requestId, "job-failed-47");
+        return true;
+      },
+    );
+  });
+});
+
 test("decomposeDocuments cancels its server job when its signal is aborted", async () => {
   const { PresentationGenerationApi } = await loadApi();
   const controller = new AbortController();
   const calls = [];
+  const consoleErrors = [];
   await withFetch(async (url, init) => {
     calls.push([url, init?.method]);
     if (init?.method === "POST") {
@@ -135,9 +217,10 @@ test("decomposeDocuments cancels its server job when its signal is aborted", asy
       }),
       { name: "AbortError" },
     );
-  });
+  }, { onConsoleError: (...args) => consoleErrors.push(args) });
   assert.deepEqual(calls, [
     ["/api/decompose-documents/jobs", "POST"],
     ["/api/decompose-documents/jobs/job-cancel", "DELETE"],
   ]);
+  assert.deepEqual(consoleErrors, []);
 });

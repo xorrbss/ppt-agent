@@ -27,6 +27,7 @@ class DecomposeJobError(BaseModel):
     code: str
     message: str
     filename: Optional[str] = None
+    request_id: Optional[str] = None
     retryable: bool = False
 
 

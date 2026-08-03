@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -201,10 +202,82 @@ def test_conversion_failure_exposes_safe_error_and_keeps_details_in_logs(
         assert failed.status == "failed"
         assert failed.error.code == "DOCUMENT_CONVERSION_FAILED"
         assert failed.error.filename == "photo.jpg"
+        assert failed.error.request_id == str(created.job_id)
         assert failed.error.message == "Unable to convert 'photo.jpg'."
         assert "secret" not in failed.error.message
         assert "secret" in caplog.text
+        assert failed.progress.current_file == "photo.jpg"
         async with service._lock:
-            assert service._jobs[created.job_id].temp_dir is None
+            record = service._jobs[created.job_id]
+            retained_dir = Path(record.temp_dir)
+            record.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+        diagnostics = json.loads(
+            (retained_dir / "failure-diagnostics.json").read_text(encoding="utf-8")
+        )
+        assert diagnostics["job_id"] == str(created.job_id)
+        assert diagnostics["current_file"] == "photo.jpg"
+        assert diagnostics["exception"]["type"] == "DocumentConversionError"
+        assert "token=private" in diagnostics["exception"]["message"]
+        assert retained_dir.is_dir()
+
+        assert await service.cleanup_expired() == 1
+        assert not retained_dir.exists()
+
+    asyncio.run(scenario())
+
+
+def test_unexpected_failure_retains_artifacts_and_logs_structured_context(
+    monkeypatch, tmp_path, caplog
+):
+    async def scenario():
+        _install_temp_service(monkeypatch, tmp_path)
+
+        class FailingLoader:
+            def __init__(self, file_paths, presentation_language=None):
+                self.documents = []
+
+            async def load_documents(self, temp_dir):
+                Path(temp_dir, "converter-output.tmp").write_text(
+                    "partial output", encoding="utf-8"
+                )
+                raise RuntimeError("converter crashed at internal-stage-47")
+
+        monkeypatch.setattr(job_module, "DocumentsLoader", FailingLoader)
+        service = DecomposeJobService(result_ttl_seconds=60)
+        created, _ = await service.create_job(
+            owner_key="owner-a",
+            file_paths=[str(tmp_path / "broken.pdf")],
+            language=None,
+            idempotency_key=None,
+        )
+
+        failed = await _wait_for_terminal(service, "owner-a", created.job_id)
+        assert failed.status == "failed"
+        assert failed.error.code == "DOCUMENT_DECOMPOSE_FAILED"
+        assert failed.error.message == "Document processing failed. Please try again."
+        assert "internal-stage-47" not in failed.error.message
+        assert failed.error.filename == "broken.pdf"
+        assert failed.error.request_id == str(created.job_id)
+        assert failed.progress.current_file == "broken.pdf"
+
+        async with service._lock:
+            record = service._jobs[created.job_id]
+            retained_dir = Path(record.temp_dir)
+            record.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+        assert (retained_dir / "converter-output.tmp").is_file()
+        diagnostics = json.loads(
+            (retained_dir / "failure-diagnostics.json").read_text(encoding="utf-8")
+        )
+        assert diagnostics["exception"]["type"] == "RuntimeError"
+        assert "internal-stage-47" in diagnostics["exception"]["traceback"]
+        assert f"job_id={created.job_id}" in caplog.text
+        assert "exception_type=RuntimeError" in caplog.text
+        assert "current_file='broken.pdf'" in caplog.text
+        assert "internal-stage-47" in caplog.text
+
+        assert await service.cleanup_expired() == 1
+        assert not retained_dir.exists()
 
     asyncio.run(scenario())

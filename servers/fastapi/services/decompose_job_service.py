@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import shutil
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -314,24 +315,18 @@ class DecomposeJobService:
                 except asyncio.CancelledError:
                     await self._mark_cancelled(job_id)
                 except DocumentConversionError as exc:
-                    LOGGER.exception(
-                        "Document conversion job failed job_id=%s code=%s",
-                        job_id,
-                        exc.code,
-                    )
                     await self._mark_failed(
                         job_id,
                         self._safe_conversion_error(exc),
+                        cause=exc,
                     )
                 except HTTPException as exc:
-                    LOGGER.exception(
-                        "Document decomposition HTTP failure job_id=%s status=%s",
+                    await self._mark_failed(
                         job_id,
-                        exc.status_code,
+                        self._safe_http_error(exc),
+                        cause=exc,
                     )
-                    await self._mark_failed(job_id, self._safe_http_error(exc))
-                except Exception:
-                    LOGGER.exception("Document decomposition job failed job_id=%s", job_id)
+                except Exception as exc:
                     await self._mark_failed(
                         job_id,
                         DecomposeJobError(
@@ -339,6 +334,7 @@ class DecomposeJobService:
                             message="Document processing failed. Please try again.",
                             retryable=False,
                         ),
+                        cause=exc,
                     )
         except asyncio.CancelledError:
             # Application shutdown can cancel a task while it is waiting for
@@ -399,26 +395,148 @@ class DecomposeJobService:
             self._cleanup_temp_dir(cleanup_path)
 
     async def _mark_failed(
-        self, job_id: uuid.UUID, error: DecomposeJobError
+        self,
+        job_id: uuid.UUID,
+        error: DecomposeJobError,
+        *,
+        cause: BaseException,
     ) -> None:
         cleanup_path: Optional[str] = None
+        diagnostic_path: Optional[str] = None
+        current_file: Optional[str] = None
+        completed_files = 0
+        total_files = 0
+        expires_at: Optional[datetime] = None
+        cancelled = False
+        diagnostics_file: Optional[str] = None
         async with self._lock:
             record = self._jobs.get(job_id)
             if record is None:
                 return
             now = datetime.now(timezone.utc)
             cancelled = record.cancel_requested
+            current_file = record.current_file
+            completed_files = record.completed_files
+            total_files = len(record.file_paths)
             record.status = "cancelled" if cancelled else "failed"
-            record.error = None if cancelled else error
+            if cancelled:
+                record.error = None
+            else:
+                record.error = error.model_copy(
+                    update={
+                        "filename": error.filename or current_file,
+                        "request_id": str(job_id),
+                    }
+                )
             record.result = None
-            record.current_file = None
+            # Keep the failing filename visible in the terminal snapshot. It is
+            # essential context when a multi-file request fails part-way through.
+            if cancelled:
+                record.current_file = None
             record.updated_at = now
             record.expires_at = now + timedelta(seconds=self.result_ttl_seconds)
+            expires_at = record.expires_at
             self._schedule_expiry(record)
-            cleanup_path = record.temp_dir
-            record.temp_dir = None
+            if cancelled:
+                cleanup_path = record.temp_dir
+                record.temp_dir = None
+            else:
+                diagnostic_path = record.temp_dir
+                if diagnostic_path and expires_at is not None:
+                    # Write diagnostics before releasing the lock so a terminal
+                    # snapshot is never observable before its evidence exists.
+                    diagnostics_file = self._write_failure_diagnostics(
+                        temp_dir=diagnostic_path,
+                        job_id=job_id,
+                        error=error,
+                        cause=cause,
+                        current_file=current_file,
+                        completed_files=completed_files,
+                        total_files=total_files,
+                        failed_at=now,
+                        expires_at=expires_at,
+                    )
+
+        log_message = (
+            "document_decompose_failed job_id=%s error_code=%s "
+            "exception_type=%s current_file=%r completed_files=%s "
+            "total_files=%s cancelled=%s diagnostic_dir=%r "
+            "diagnostics_file=%r retained_until=%s"
+        )
+        LOGGER.error(
+            log_message,
+            job_id,
+            error.code,
+            type(cause).__name__,
+            current_file,
+            completed_files,
+            total_files,
+            cancelled,
+            diagnostic_path,
+            diagnostics_file,
+            expires_at.isoformat() if expires_at else None,
+            exc_info=(type(cause), cause, cause.__traceback__),
+        )
         if cleanup_path:
             self._cleanup_temp_dir(cleanup_path)
+
+    @staticmethod
+    def _write_failure_diagnostics(
+        *,
+        temp_dir: str,
+        job_id: uuid.UUID,
+        error: DecomposeJobError,
+        cause: BaseException,
+        current_file: Optional[str],
+        completed_files: int,
+        total_files: int,
+        failed_at: datetime,
+        expires_at: datetime,
+    ) -> Optional[str]:
+        """Persist internal-only failure details beside retained job artifacts."""
+
+        try:
+            root = os.path.realpath(TEMP_FILE_SERVICE.base_dir)
+            target = os.path.realpath(temp_dir)
+            if target == root or os.path.commonpath((root, target)) != root:
+                LOGGER.error(
+                    "Refusing unsafe decompose diagnostics target=%s job_id=%s",
+                    target,
+                    job_id,
+                )
+                return None
+
+            diagnostics_path = Path(target) / "failure-diagnostics.json"
+            payload = {
+                "job_id": str(job_id),
+                "error_code": error.code,
+                "current_file": current_file,
+                "completed_files": completed_files,
+                "total_files": total_files,
+                "failed_at": failed_at.isoformat(),
+                "retained_until": expires_at.isoformat(),
+                "exception": {
+                    "type": type(cause).__name__,
+                    "message": str(cause),
+                    "traceback": "".join(
+                        traceback.format_exception(
+                            type(cause), cause, cause.__traceback__
+                        )
+                    ),
+                },
+            }
+            diagnostics_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            return str(diagnostics_path)
+        except (OSError, ValueError):
+            LOGGER.exception(
+                "Failed to persist decompose diagnostics job_id=%s temp_dir=%s",
+                job_id,
+                temp_dir,
+            )
+            return None
 
     async def _mark_cancelled(self, job_id: uuid.UUID) -> None:
         cleanup_path: Optional[str] = None
