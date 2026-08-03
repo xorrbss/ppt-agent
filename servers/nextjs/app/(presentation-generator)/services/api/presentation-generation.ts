@@ -1,6 +1,10 @@
 import { getHeader, getHeaderForFormData } from "./header";
-import { IconSearch, ImageGenerate, PreviousGeneratedImagesResponse } from "./params";
-import { ApiResponseHandler } from "./api-error-handler";
+import {
+  IconSearch,
+  ImageGenerate,
+  PreviousGeneratedImagesResponse,
+} from "./params";
+import { apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
 import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
 import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
 
@@ -61,6 +65,75 @@ export type StartGenerationResponse = {
   status?: string;
   request_id?: string;
 };
+
+export type DocumentDecomposeProgress = {
+  completed_files: number;
+  total_files: number;
+  current_file?: string | null;
+};
+
+export type DocumentDecomposeFailure = {
+  code?: string;
+  message?: string;
+  filename?: string;
+  retryable?: boolean;
+};
+
+export type DecomposedDocument = {
+  name: string;
+  file_path: string;
+  [key: string]: unknown;
+};
+
+export type DocumentDecomposeJob = {
+  job_id: string;
+  status:
+    | "queued"
+    | "running"
+    | "cancelling"
+    | "succeeded"
+    | "failed"
+    | "cancelled";
+  progress: DocumentDecomposeProgress;
+  result: DecomposedDocument[] | null;
+  error: DocumentDecomposeFailure | null;
+  created_at?: string;
+  updated_at?: string;
+  expires_at?: string;
+};
+
+export type DecomposeDocumentsOptions = {
+  signal?: AbortSignal;
+  onProgress?: (job: DocumentDecomposeJob) => void;
+  pollIntervalMs?: number;
+  idempotencyKey?: string;
+};
+
+const DOCUMENT_DECOMPOSE_POLL_INTERVAL_MS = 1_000;
+
+function abortError() {
+  return new DOMException("Document processing was cancelled", "AbortError");
+}
+
+function waitForDecomposePoll(delayMs: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
+    const cleanup = () => signal?.removeEventListener("abort", onAbort);
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      window.clearTimeout(timeout);
+      cleanup();
+      reject(abortError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 export type PresentationThemePayload = {
   id: string;
@@ -129,26 +202,121 @@ export class PresentationGenerationApi {
 
   static async decomposeDocuments(
     documentKeys: string[],
-    language?: string | null
+    language?: string | null,
+    options: DecomposeDocumentsOptions = {},
   ) {
-    try {
-      // Document conversion/OCR can take longer than Next's rewrite proxy allows.
-      // Use the route handler that forwards the request with no short proxy timeout.
-      const response = await fetch("/api/decompose-documents", {
-        method: "POST",
-        headers: getHeader(),
-        body: JSON.stringify({
-          file_paths: documentKeys,
-          language: language ?? null,
-        }),
-        cache: "no-cache",
-      });
+    let jobId: string | undefined;
+    const cancelOnAbort = () => {
+      if (jobId) {
+        void PresentationGenerationApi.cancelDecomposeDocuments(jobId).catch(
+          (error) => console.warn("Failed to cancel document processing", error),
+        );
+      }
+    };
+    options.signal?.addEventListener("abort", cancelOnAbort, { once: true });
 
-      return await ApiResponseHandler.handleResponse(response, "Failed to decompose documents");
+    try {
+      const started = await PresentationGenerationApi.startDecomposeDocuments(
+        documentKeys,
+        language,
+        options,
+      );
+      jobId = started.job_id;
+      options.onProgress?.(started);
+
+      let job = started;
+      while (job.status === "queued" || job.status === "running" || job.status === "cancelling") {
+        await waitForDecomposePoll(
+          options.pollIntervalMs ?? DOCUMENT_DECOMPOSE_POLL_INTERVAL_MS,
+          options.signal,
+        );
+        job = await PresentationGenerationApi.getDecomposeDocumentsJob(
+          jobId,
+          options.signal,
+        );
+        options.onProgress?.(job);
+      }
+
+      if (job.status === "succeeded" && Array.isArray(job.result)) {
+        return job.result;
+      }
+      if (job.status === "cancelled") {
+        throw abortError();
+      }
+      throw apiErrorFromPayload(
+        job.error,
+        "Failed to decompose documents",
+        422,
+      );
     } catch (error) {
       console.error("Error in Decompose Files", error);
       throw error;
+    } finally {
+      options.signal?.removeEventListener("abort", cancelOnAbort);
     }
+  }
+
+  static async startDecomposeDocuments(
+    documentKeys: string[],
+    language?: string | null,
+    options: Pick<DecomposeDocumentsOptions, "signal" | "idempotencyKey"> = {},
+  ): Promise<DocumentDecomposeJob> {
+    const response = await fetch("/api/decompose-documents/jobs", {
+      method: "POST",
+      headers: {
+        ...getHeader(),
+        ...(options.idempotencyKey
+          ? { "Idempotency-Key": options.idempotencyKey }
+          : {}),
+      },
+      body: JSON.stringify({
+        file_paths: documentKeys,
+        language: language ?? null,
+      }),
+      cache: "no-store",
+      signal: options.signal,
+    });
+    return (await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to start document processing",
+    )) as DocumentDecomposeJob;
+  }
+
+  static async getDecomposeDocumentsJob(
+    jobId: string,
+    signal?: AbortSignal,
+  ): Promise<DocumentDecomposeJob> {
+    const response = await fetch(
+      `/api/decompose-documents/jobs/${encodeURIComponent(jobId)}`,
+      {
+        method: "GET",
+        headers: getHeader(),
+        cache: "no-store",
+        signal,
+      },
+    );
+    return (await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to get document processing status",
+    )) as DocumentDecomposeJob;
+  }
+
+  static async cancelDecomposeDocuments(
+    jobId: string,
+  ): Promise<DocumentDecomposeJob> {
+    const response = await fetch(
+      `/api/decompose-documents/jobs/${encodeURIComponent(jobId)}`,
+      {
+        method: "DELETE",
+        headers: getHeader(),
+        cache: "no-store",
+        keepalive: true,
+      },
+    );
+    return (await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to cancel document processing",
+    )) as DocumentDecomposeJob;
   }
   static async createPresentation({
     presentation_id,

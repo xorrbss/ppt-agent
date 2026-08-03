@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Agent } from "undici";
 
 import {
   getFastApiAuthHeaders,
@@ -7,7 +8,75 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 600;
+
+// Keep this order when changing the document service deadline:
+// FastAPI DECOMPOSE_TIMEOUT_SECONDS (600s) < proxy timeout (630s) < route
+// maxDuration (660s). The dedicated dispatcher avoids Undici's 300s default
+// headers timeout while FastAPI is converting/OCRing large documents.
+const FASTAPI_DECOMPOSE_TIMEOUT_MS = 600_000;
+const PROXY_DECOMPOSE_TIMEOUT_MS = FASTAPI_DECOMPOSE_TIMEOUT_MS + 30_000;
+export const maxDuration = 660;
+
+const documentServiceDispatcher = new Agent({
+  headersTimeout: PROXY_DECOMPOSE_TIMEOUT_MS,
+  bodyTimeout: PROXY_DECOMPOSE_TIMEOUT_MS,
+});
+
+type NodeFetchInit = RequestInit & { dispatcher: Agent };
+
+function fetchWithDispatcher(
+  input: RequestInfo | URL,
+  init?: NodeFetchInit,
+): Promise<Response> {
+  const nodeFetch = fetch as unknown as (
+    request: RequestInfo | URL,
+    options?: NodeFetchInit,
+  ) => Promise<Response>;
+  return nodeFetch(input, init);
+}
+
+const TIMEOUT_ERROR_CODES = new Set([
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
+function isUpstreamTimeout(error: unknown, signal: AbortSignal): boolean {
+  if (signal.aborted) return true;
+  if (!(error instanceof Error)) return false;
+  if (error.name === "AbortError") return true;
+
+  const cause = error.cause;
+  return (
+    typeof cause === "object" &&
+    cause !== null &&
+    "code" in cause &&
+    typeof cause.code === "string" &&
+    TIMEOUT_ERROR_CODES.has(cause.code)
+  );
+}
+
+function upstreamFailureResponse(status: 502 | 504) {
+  const timedOut = status === 504;
+  const message = timedOut
+    ? "Document processing timed out"
+    : "Document processing service is unavailable";
+
+  return NextResponse.json(
+    {
+      detail: message,
+      error: {
+        code: timedOut
+          ? "DOCUMENT_DECOMPOSE_TIMEOUT"
+          : "DOCUMENT_SERVICE_UNAVAILABLE",
+        message,
+        status_code: status,
+        retryable: false,
+      },
+    },
+    { status },
+  );
+}
 
 export async function POST(request: NextRequest) {
   const headers = new Headers(getFastApiAuthHeaders());
@@ -20,14 +89,24 @@ export async function POST(request: NextRequest) {
   if (cookie) headers.set("Cookie", cookie);
   if (authorization) headers.set("Authorization", authorization);
 
+  const controller = new AbortController();
+  const deadline = setTimeout(
+    () => controller.abort(),
+    PROXY_DECOMPOSE_TIMEOUT_MS,
+  );
+
   try {
-    const response = await fetch(
+    const response = await fetchWithDispatcher(
       `${getFastApiBaseUrl()}/api/v1/ppt/files/decompose`,
       {
         method: "POST",
         headers,
         body: await request.text(),
         cache: "no-store",
+        signal: controller.signal,
+        // This POST can create temporary conversion artifacts. Do not add a
+        // retry policy here unless the backend provides an idempotency key.
+        dispatcher: documentServiceDispatcher,
       },
     );
 
@@ -44,13 +123,13 @@ export async function POST(request: NextRequest) {
       headers: responseHeaders,
     });
   } catch (error) {
+    const status = isUpstreamTimeout(error, controller.signal) ? 504 : 502;
     console.error(
-      "[decompose-documents] Failed to reach the document service",
+      `[decompose-documents] Document service request failed (${status})`,
       error,
     );
-    return NextResponse.json(
-      { detail: "Document processing service is unavailable" },
-      { status: 502 },
-    );
+    return upstreamFailureResponse(status);
+  } finally {
+    clearTimeout(deadline);
   }
 }

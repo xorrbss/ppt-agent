@@ -115,7 +115,7 @@ async def decompose_files(
     except DocumentConversionError as exc:
         # Unconvertible/unsupported document — surface an actionable message
         # instead of a raw 500 (the frontend shows `detail` directly).
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=exc.to_detail()) from exc
     parsed_documents = documents_loader.documents
 
     response = []

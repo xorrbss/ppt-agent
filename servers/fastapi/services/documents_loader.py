@@ -42,6 +42,13 @@ LOGGER = logging.getLogger(__name__)
 _MAX_TEXT_BYTES_PER_CHARACTER = 4
 _TEXT_BOM_ALLOWANCE_BYTES = 4
 
+# The Node bridge decodes these bounded raster formats with sharp and sends a
+# normalized PNG buffer straight to OCR. SVG remains on the converter path
+# because it is active markup rather than an ordinary raster input.
+_LITEPARSE_NATIVE_IMAGE_EXTENSIONS = frozenset(
+    {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+)
+
 
 def _normalize_text_newlines(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
@@ -249,26 +256,39 @@ class DocumentsLoader:
                 extension,
             )
 
-            if extension in PDF_EXTENSIONS:
-                document, imgs = await self.load_pdf(
-                    file_path, load_text, load_images, temp_dir
-                )
-            elif extension in TEXT_EXTENSIONS:
-                document = await self.load_text(file_path)
-            elif extension in OFFICE_EXTENSIONS:
-                document = await asyncio.to_thread(
-                    self.load_office_document,
-                    file_path,
-                    temp_dir,
-                )
-            elif extension in IMAGE_EXTENSIONS:
-                document = await asyncio.to_thread(
-                    self.load_image,
-                    file_path,
-                    temp_dir,
-                )
-            else:
-                document = await asyncio.to_thread(self._parse_with_liteparse, file_path)
+            try:
+                if extension in PDF_EXTENSIONS:
+                    document, imgs = await self.load_pdf(
+                        file_path, load_text, load_images, temp_dir
+                    )
+                elif extension in TEXT_EXTENSIONS:
+                    document = await self.load_text(file_path)
+                elif extension in OFFICE_EXTENSIONS:
+                    document = await asyncio.to_thread(
+                        self.load_office_document,
+                        file_path,
+                        temp_dir,
+                    )
+                elif extension in IMAGE_EXTENSIONS:
+                    document = await asyncio.to_thread(
+                        self.load_image,
+                        file_path,
+                        temp_dir,
+                    )
+                else:
+                    document = await asyncio.to_thread(
+                        self._parse_with_liteparse, file_path
+                    )
+            except DocumentConversionError as exc:
+                if exc.filename:
+                    raise
+                raise DocumentConversionError(
+                    str(exc),
+                    code=exc.code,
+                    filename=os.path.basename(file_path),
+                    retryable=exc.retryable,
+                    public_message=exc.public_message,
+                ) from exc
 
             if extension not in TEXT_EXTENSIONS:
                 document = clean_extracted_document_text(document)
@@ -291,7 +311,12 @@ class DocumentsLoader:
         if load_text:
             is_scanned = await asyncio.to_thread(self._is_scanned_pdf, file_path)
             dpi = 300 if is_scanned else None
-            document = await asyncio.to_thread(self._parse_with_liteparse, file_path, dpi)
+            document = await asyncio.to_thread(
+                self._parse_with_liteparse,
+                file_path,
+                dpi,
+                is_scanned,
+            )
 
         if load_images:
             if temp_dir is None:
@@ -371,6 +396,7 @@ class DocumentsLoader:
                 return self._parse_with_liteparse(
                     converted_path,
                     dpi=300 if is_scanned else None,
+                    ocr_enabled=is_scanned,
                 )
 
             with tempfile.TemporaryDirectory(prefix="office-convert-") as conversion_dir:
@@ -385,6 +411,7 @@ class DocumentsLoader:
                 return self._parse_with_liteparse(
                     converted_path,
                     dpi=300 if is_scanned else None,
+                    ocr_enabled=is_scanned,
                 )
         except DocumentConversionError as conversion_error:
             if self.document_service is None:
@@ -414,6 +441,15 @@ class DocumentsLoader:
             return document
 
     def load_image(self, file_path: str, temp_dir: Optional[str] = None) -> str:
+        extension = Path(file_path).suffix.lower()
+        if extension in _LITEPARSE_NATIVE_IMAGE_EXTENSIONS:
+            LOGGER.info(
+                "[DocumentsLoader] Using native image without conversion file=%s extension=%s",
+                file_path,
+                extension,
+            )
+            return self._parse_with_liteparse(file_path, dpi=300)
+
         if temp_dir:
             converted_path = self.document_conversion_service.convert_image_to_png(
                 file_path,
@@ -430,12 +466,17 @@ class DocumentsLoader:
             )
             return self._parse_with_liteparse(converted_path, dpi=300)
 
-    def _parse_with_liteparse(self, file_path: str, dpi: int = None) -> str:
+    def _parse_with_liteparse(
+        self,
+        file_path: str,
+        dpi: int = None,
+        ocr_enabled: bool = True,
+    ) -> str:
         try:
             LOGGER.info("[DocumentsLoader] LiteParse start file=%s", file_path)
             return self.liteparse_service.parse_to_markdown(
                 file_path,
-                ocr_enabled=True,
+                ocr_enabled=ocr_enabled,
                 ocr_language=self._ocr_language,
                 dpi=dpi,
             )

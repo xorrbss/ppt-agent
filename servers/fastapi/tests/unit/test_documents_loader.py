@@ -1,6 +1,7 @@
 import asyncio
 import codecs
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -193,6 +194,136 @@ def test_load_office_keeps_conversion_error_when_native_fallback_also_fails(
         loader.load_office_document(str(source), str(tmp_path))
 
     assert exc.value is conversion_error
+
+
+@pytest.mark.parametrize("suffix", [".png", ".jpg", ".jpeg", ".webp", ".bmp"])
+def test_load_image_parses_raster_without_calling_imagemagick(
+    tmp_path, monkeypatch, suffix
+):
+    """The Node bridge sends common raster images straight to OCR."""
+    source = tmp_path / f"native-image{suffix}"
+    source.write_bytes(b"image")
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    convert_image = MagicMock(
+        side_effect=AssertionError("PNG must not be sent to ImageMagick")
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_image_to_png",
+        convert_image,
+    )
+    monkeypatch.setattr(
+        loader,
+        "_parse_with_liteparse",
+        lambda file_path, dpi=None: f"parsed:{Path(file_path).name}:{dpi}",
+    )
+
+    assert loader.load_image(str(source), str(tmp_path)) == f"parsed:{source.name}:300"
+    convert_image.assert_not_called()
+
+
+def test_load_documents_preserves_mixed_batch_without_raster_conversion(
+    tmp_path, monkeypatch
+):
+    """Native raster inputs in a mixed batch must not invoke ImageMagick."""
+    first_text = tmp_path / "first.txt"
+    first_text.write_text("first body", encoding="utf-8")
+    png = tmp_path / "diagram.png"
+    png.write_bytes(b"png")
+    jpeg = tmp_path / "photo.jpg"
+    jpeg.write_bytes(b"jpeg")
+    final_text = tmp_path / "final.txt"
+    final_text.write_text("final body", encoding="utf-8")
+    loader = DocumentsLoader(
+        file_paths=[str(first_text), str(png), str(jpeg), str(final_text)]
+    )
+    convert_image = MagicMock(
+        side_effect=AssertionError("native raster images must bypass ImageMagick")
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_image_to_png",
+        convert_image,
+    )
+    monkeypatch.setattr(
+        loader,
+        "_parse_with_liteparse",
+        lambda file_path, dpi=None: f"parsed:{Path(file_path).name}",
+    )
+
+    asyncio.run(loader.load_documents(temp_dir=str(tmp_path)))
+
+    assert loader.documents == [
+        "first body",
+        "parsed:diagram.png",
+        "parsed:photo.jpg",
+        "final body",
+    ]
+    assert loader.images == [[], [], [], []]
+    convert_image.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("is_scanned", "expected_dpi", "expected_ocr_enabled"),
+    [(False, None, False), (True, 300, True)],
+)
+def test_load_pdf_enables_ocr_only_for_scanned_documents(
+    tmp_path, monkeypatch, is_scanned, expected_dpi, expected_ocr_enabled
+):
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"pdf")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    parse = MagicMock(return_value="parsed")
+    monkeypatch.setattr(loader, "_is_scanned_pdf", lambda _path: is_scanned)
+    monkeypatch.setattr(loader, "_parse_with_liteparse", parse)
+
+    document, images = asyncio.run(
+        loader.load_pdf(
+            file_path=str(source),
+            load_text=True,
+            load_images=False,
+            temp_dir=None,
+        )
+    )
+
+    assert document == "parsed"
+    assert images == []
+    parse.assert_called_once_with(str(source), expected_dpi, expected_ocr_enabled)
+
+
+@pytest.mark.parametrize(
+    ("is_scanned", "expected_dpi", "expected_ocr_enabled"),
+    [(False, None, False), (True, 300, True)],
+)
+def test_load_office_enables_ocr_only_when_converted_pdf_is_scanned(
+    tmp_path, monkeypatch, is_scanned, expected_dpi, expected_ocr_enabled
+):
+    source = tmp_path / "source.docx"
+    source.write_bytes(b"office")
+    converted = tmp_path / "source.pdf"
+    converted.write_bytes(b"pdf")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    parse = MagicMock(return_value="parsed")
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "is_soffice_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_office_to_pdf",
+        MagicMock(return_value=str(converted)),
+    )
+    monkeypatch.setattr(loader, "_is_scanned_pdf", lambda _path: is_scanned)
+    monkeypatch.setattr(loader, "_parse_with_liteparse", parse)
+
+    assert loader.load_office_document(str(source), str(tmp_path)) == "parsed"
+    parse.assert_called_once_with(
+        str(converted),
+        dpi=expected_dpi,
+        ocr_enabled=expected_ocr_enabled,
+    )
 
 
 @pytest.mark.parametrize(

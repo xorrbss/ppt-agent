@@ -4,6 +4,7 @@ interface StructuredApiError {
   detail?: unknown;
   code?: string;
   message?: string;
+  filename?: string;
   request_id?: string | null;
   stage?: string;
   slide_number?: number;
@@ -22,6 +23,7 @@ interface ApiErrorResponse {
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
+  readonly filename?: string;
   readonly requestId?: string;
   readonly detail?: unknown;
   readonly stage?: string;
@@ -36,6 +38,7 @@ export class ApiError extends Error {
     options: {
       status?: number;
       code?: string;
+      filename?: string;
       requestId?: string | null;
       detail?: unknown;
       stage?: string;
@@ -50,6 +53,7 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = options.status ?? 0;
     this.code = options.code;
+    this.filename = options.filename;
     this.requestId = options.requestId || undefined;
     this.detail = options.detail;
     this.stage = options.stage;
@@ -136,6 +140,7 @@ export function apiErrorFromPayload(
   return new ApiError(error?.message || detailMessage || fallbackMessage, {
     status: error?.status_code ?? fallbackStatus,
     code: error?.code || detailMessage,
+    filename: error?.filename,
     requestId: error?.request_id || fallbackRequestId,
     detail,
     stage: error?.stage,
@@ -216,6 +221,29 @@ export function getRetryablePresentationGenerationMessage(error: unknown): strin
 
 // API Response Handler Utility
 export class ApiResponseHandler {
+  private static structuredErrorDetail(
+    detail: unknown,
+  ): StructuredApiError | undefined {
+    if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+      return undefined;
+    }
+    const candidate = detail as StructuredApiError;
+    return typeof candidate.message === "string" ||
+      typeof candidate.code === "string"
+        ? candidate
+        : undefined;
+  }
+
+  private static readableStructuredDetail(
+    error: StructuredApiError | undefined,
+  ): string | null {
+    if (!error?.message) return null;
+    if (!error.filename || error.message.includes(error.filename)) {
+      return error.message;
+    }
+    return `${error.filename}: ${error.message}`;
+  }
+
   private static normalizeErrorDetail(detail: unknown): string | null {
     if (!detail) return null;
 
@@ -289,9 +317,13 @@ export class ApiResponseHandler {
         errorData.error && typeof errorData.error === "object"
           ? errorData.error
           : undefined;
+      const detailError = this.structuredErrorDetail(errorData.detail);
+      const errorMetadata = structuredError ?? detailError;
       
       // Extract error message in order of preference
-      const normalizedDetail = this.normalizeErrorDetail(errorData.detail);
+      const normalizedDetail =
+        this.readableStructuredDetail(detailError) ??
+        this.normalizeErrorDetail(errorData.detail);
       if (normalizedDetail) {
         errorMessage = normalizedDetail;
       } else if (errorData.message) {
@@ -303,19 +335,20 @@ export class ApiResponseHandler {
       }
 
       throw new ApiError(errorMessage, {
-        status: structuredError?.status_code ?? response.status,
-        code: structuredError?.code,
+        status: errorMetadata?.status_code ?? response.status,
+        code: errorMetadata?.code,
+        filename: errorMetadata?.filename,
         requestId:
-          structuredError?.request_id ||
+          errorMetadata?.request_id ||
           errorData.request_id ||
           response.headers.get("x-request-id") ||
           response.headers.get("x-correlation-id"),
-        detail: structuredError?.detail ?? errorData.detail,
-        stage: structuredError?.stage,
-        slideNumber: structuredError?.slide_number,
-        retryable: structuredError?.retryable,
-        exceptionType: structuredError?.exception_type,
-        fingerprint: structuredError?.fingerprint,
+        detail: errorMetadata?.detail ?? errorData.detail,
+        stage: errorMetadata?.stage,
+        slideNumber: errorMetadata?.slide_number,
+        retryable: errorMetadata?.retryable,
+        exceptionType: errorMetadata?.exception_type,
+        fingerprint: errorMetadata?.fingerprint,
         workspaceProjected,
       });
     } catch (error) {
@@ -356,9 +389,12 @@ export class ApiResponseHandler {
           errorData.error && typeof errorData.error === "object"
             ? errorData.error
             : undefined;
+        const detailError = this.structuredErrorDetail(errorData.detail);
         
         // Extract error message in order of preference
-        const normalizedDetail = this.normalizeErrorDetail(errorData.detail);
+        const normalizedDetail =
+          this.readableStructuredDetail(detailError) ??
+          this.normalizeErrorDetail(errorData.detail);
         if (normalizedDetail) {
           errorMessage = normalizedDetail;
         } else if (errorData.message) {

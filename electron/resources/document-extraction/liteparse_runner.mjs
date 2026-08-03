@@ -15,7 +15,22 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { LiteParse } from "@llamaindex/liteparse";
+
+// LiteParse converts every image to PDF through ImageMagick before OCR. Raster
+// images can be decoded by sharp and recognized by the same OCR backends
+// directly, so keep them off that conversion path. SVG deliberately stays on
+// the document conversion path because it is active markup rather than a
+// bounded raster input.
+const DIRECT_OCR_IMAGE_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".bmp",
+  ".tif",
+  ".tiff",
+]);
 
 function readArg(name) {
   const idx = process.argv.indexOf(name);
@@ -72,6 +87,77 @@ function bridgeError(message, exitCode) {
     process.exit(exitCode);
   }
   emit({ ok: false, error: message }, exitCode);
+}
+
+async function normalizeRasterImage(filePath) {
+  const { default: sharp } = await import("sharp");
+  return sharp(filePath, {
+    animated: false,
+    failOn: "error",
+    pages: 1,
+  })
+    .rotate()
+    .png()
+    .toBuffer();
+}
+
+async function recognizeWithHttpOcr(image, serverUrl, language) {
+  const formData = new FormData();
+  formData.append("file", new Blob([image], { type: "image/png" }), "image.png");
+  formData.append("language", language);
+
+  const response = await fetch(serverUrl, {
+    method: "POST",
+    body: formData,
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!response.ok) {
+    throw new Error(`OCR server request failed with HTTP ${response.status}`);
+  }
+
+  const payload = await response.json();
+  if (!Array.isArray(payload?.results)) {
+    throw new Error("OCR server response is missing a results array");
+  }
+
+  return payload.results
+    .map((item) => String(item?.text ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+async function recognizeWithTesseract(image, language, localTessdataPath) {
+  const { createWorker } = await import("tesseract.js");
+  const workerOptions = {
+    // Prevent worker-thread failures from writing unstructured output to
+    // stdout. createWorker still rejects and the bridge reports the failure.
+    errorHandler: () => {},
+  };
+  if (localTessdataPath) {
+    workerOptions.langPath = localTessdataPath;
+    workerOptions.cachePath = localTessdataPath;
+    workerOptions.gzip = false;
+  }
+
+  const worker = await createWorker(language, 1, workerOptions);
+  try {
+    const result = await worker.recognize(image, { rotateAuto: true });
+    return result?.data?.text ?? "";
+  } finally {
+    await worker.terminate();
+  }
+}
+
+async function parseRasterImageDirectly(filePath, options) {
+  if (!options.ocrEnabled) {
+    return { text: "", pages: [{ page: 1 }] };
+  }
+
+  const image = await normalizeRasterImage(filePath);
+  const text = options.ocrServerUrl
+    ? await recognizeWithHttpOcr(image, options.ocrServerUrl, options.ocrLanguage)
+    : await recognizeWithTesseract(image, options.ocrLanguage, options.tessdataPath);
+  return { text, pages: [{ page: 1 }] };
 }
 
 const filePath = readArg("--file");
@@ -131,9 +217,17 @@ try {
     config.tessdataPath = tessdataPath;
   }
 
-  const parser = new LiteParse(config);
-
-  const result = await parser.parse(resolvedPath, true);
+  const extension = path.extname(resolvedPath).toLowerCase();
+  let result;
+  if (DIRECT_OCR_IMAGE_EXTENSIONS.has(extension)) {
+    result = await parseRasterImageDirectly(resolvedPath, config);
+  } else {
+    // Delay loading LiteParse until a document actually needs its PDF/Office
+    // pipeline. Direct image OCR is therefore independent of ImageMagick.
+    const { LiteParse } = await import("@llamaindex/liteparse");
+    const parser = new LiteParse(config);
+    result = await parser.parse(resolvedPath, true);
+  }
   const text = result?.text ?? "";
   if (pyBridge === "plain") {
     process.stdout.write(text);

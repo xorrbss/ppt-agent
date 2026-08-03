@@ -10,7 +10,7 @@
  */
 
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
@@ -58,6 +58,8 @@ interface LoadingState {
   message: string;
   duration?: number;
   showProgress?: boolean;
+  progress?: number;
+  progressLabel?: string;
   extra_info?: string;
 }
 
@@ -224,6 +226,15 @@ const UploadPage = () => {
     showProgress: false,
     extra_info: "",
   });
+  const decomposeAbortControllerRef = useRef<AbortController | null>(null);
+  const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
+    useState(false);
+
+  // A queued decomposition keeps running on FastAPI until it is explicitly
+  // cancelled. Abort it when this upload screen unmounts (navigation/close).
+  useEffect(() => {
+    return () => decomposeAbortControllerRef.current?.abort();
+  }, []);
 
   const getUploadSnapshotProps = () => {
     const trimmedPrompt = config.prompt.trim();
@@ -367,6 +378,8 @@ const UploadPage = () => {
       message: "문서를 처리하는 중…",
       showProgress: true,
       duration: 90,
+      progress: 0,
+      progressLabel: `0/${files.length}`,
       extra_info: files.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
     });
 
@@ -382,14 +395,40 @@ const UploadPage = () => {
     const promises: Promise<any>[] = [];
 
     if (documents.length > 0) {
+      const decomposeController = new AbortController();
+      decomposeAbortControllerRef.current = decomposeController;
+      setCanCancelDocumentProcessing(true);
       promises.push(
         PresentationGenerationApi.decomposeDocuments(
           documents,
-          selectedLanguage
+          selectedLanguage,
+          {
+            signal: decomposeController.signal,
+            onProgress: (job) => {
+              const completed = job.progress?.completed_files ?? 0;
+              const total = job.progress?.total_files ?? documents.length;
+              setLoadingState((previous) => ({
+                ...previous,
+                progress: total > 0 ? (completed / total) * 100 : undefined,
+                progressLabel:
+                  total > 0 ? `${completed}/${total}` : undefined,
+                extra_info:
+                  total > 0
+                    ? `${completed}/${total}개 파일 처리 완료`
+                    : previous.extra_info,
+              }));
+            },
+          },
         )
       );
     }
-    const responses = await Promise.all(promises);
+    let responses: any[];
+    try {
+      responses = await Promise.all(promises);
+    } finally {
+      decomposeAbortControllerRef.current = null;
+      setCanCancelDocumentProcessing(false);
+    }
     dispatch(setPptGenUploadState({
       config,
       files: responses,
@@ -511,7 +550,14 @@ const UploadPage = () => {
         text={loadingState.message}
         showProgress={loadingState.showProgress}
         duration={loadingState.duration}
+        progress={loadingState.progress}
+        progressLabel={loadingState.progressLabel}
         extra_info={loadingState.extra_info}
+        onCancel={
+          canCancelDocumentProcessing
+            ? () => decomposeAbortControllerRef.current?.abort()
+            : undefined
+        }
       />
       <div className="flex flex-col items-center pt-6 md:pt-10">
         <h1 className="text-center text-2xl md:text-[32px] font-semibold tracking-[-0.02em] text-[#101828] font-syne">

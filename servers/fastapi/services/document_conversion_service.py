@@ -9,7 +9,41 @@ from utils.runtime_limits import log_memory
 
 
 class DocumentConversionError(Exception):
-    pass
+    """Actionable document conversion failure safe to expose to API clients.
+
+    The optional metadata keeps legacy ``DocumentConversionError(message)``
+    call sites working while allowing the upload endpoint to return a stable,
+    file-scoped error contract.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "DOCUMENT_CONVERSION_FAILED",
+        filename: Optional[str] = None,
+        retryable: bool = False,
+        public_message: Optional[str] = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.filename = filename
+        self.retryable = retryable
+        self.public_message = public_message
+
+    def to_detail(self) -> Dict[str, object]:
+        detail: Dict[str, object] = {
+            "code": self.code,
+            # Exception text can contain subprocess stderr/stdout, commands, or
+            # local paths. Only an explicitly reviewed public message crosses
+            # the API boundary.
+            "message": self.public_message
+            or "Document conversion failed. Check the file and try again.",
+            "retryable": self.retryable,
+        }
+        if self.filename:
+            detail["filename"] = self.filename
+        return detail
 
 
 LOGGER = logging.getLogger(__name__)
@@ -47,6 +81,10 @@ class DocumentConversionService:
         self.imagemagick_binary = self._resolve_imagemagick_binary()
         self._soffice_available: Optional[bool] = None
 
+    def is_imagemagick_available(self) -> bool:
+        """Whether a verified ImageMagick executable was found at startup."""
+        return self.imagemagick_binary is not None
+
     def is_soffice_available(self) -> bool:
         """Whether the LibreOffice ``soffice`` binary can be found (cached).
 
@@ -82,16 +120,24 @@ class DocumentConversionService:
         except Exception:
             return False
 
-    def _resolve_imagemagick_binary(self) -> str:
+    def _resolve_imagemagick_binary(self) -> Optional[str]:
         configured = (os.getenv("IMAGEMAGICK_BINARY") or "").strip()
         if configured:
-            return configured
+            resolved = shutil.which(configured)
+            if resolved and self._can_execute(resolved, ["-version"]):
+                return resolved
+            LOGGER.warning(
+                "[DocumentConversion] Configured ImageMagick executable is unavailable: %s",
+                configured,
+            )
+            return None
 
         for candidate in ["magick", "convert"]:
-            if self._can_execute(candidate, ["-version"]):
-                return candidate
+            resolved = shutil.which(candidate)
+            if resolved and self._can_execute(resolved, ["-version"]):
+                return resolved
 
-        return "magick" if os.name == "nt" else "convert"
+        return None
 
     def convert_office_to_pdf(
         self,
@@ -192,6 +238,21 @@ class DocumentConversionService:
 
         output_path = Path(output_dir) / f"{Path(file_path).stem}_converted.png"
 
+        if not self.is_imagemagick_available():
+            filename = os.path.basename(file_path)
+            raise DocumentConversionError(
+                f"Image conversion is unavailable for '{filename}' because ImageMagick "
+                "is not installed or IMAGEMAGICK_BINARY is invalid.",
+                code="IMAGE_CONVERTER_UNAVAILABLE",
+                filename=filename,
+                public_message=(
+                    "Image conversion is unavailable. Install ImageMagick or configure "
+                    "IMAGEMAGICK_BINARY, then try again."
+                ),
+            )
+
+        # Guarded above, so the optional value is a verified executable here.
+        assert self.imagemagick_binary is not None
         command = [self.imagemagick_binary, file_path, str(output_path)]
 
         try:
@@ -223,7 +284,9 @@ class DocumentConversionService:
                 _command_str(exc.cmd if isinstance(exc.cmd, list) else [str(exc.cmd)]),
             )
             raise DocumentConversionError(
-                f"ImageMagick conversion timed out for {os.path.basename(file_path)}"
+                f"ImageMagick conversion timed out for {os.path.basename(file_path)}",
+                filename=os.path.basename(file_path),
+                retryable=True,
             ) from exc
         except subprocess.CalledProcessError as exc:
             stderr = (exc.stderr or "").strip()
@@ -238,17 +301,20 @@ class DocumentConversionService:
             )
             raise DocumentConversionError(
                 f"ImageMagick conversion failed for {os.path.basename(file_path)}: {details} "
-                f"(stderr={_snippet(stderr)}; stdout={_snippet(stdout)})"
+                f"(stderr={_snippet(stderr)}; stdout={_snippet(stdout)})",
+                filename=os.path.basename(file_path),
             ) from exc
         except Exception as exc:
             LOGGER.exception("[DocumentConversion] ImageMagick conversion unexpected error")
             raise DocumentConversionError(
-                f"ImageMagick conversion failed for {os.path.basename(file_path)}: {exc}"
+                f"ImageMagick conversion failed for {os.path.basename(file_path)}: {exc}",
+                filename=os.path.basename(file_path),
             ) from exc
 
         if not output_path.is_file():
             raise DocumentConversionError(
-                f"ImageMagick did not create a PNG for {os.path.basename(file_path)}"
+                f"ImageMagick did not create a PNG for {os.path.basename(file_path)}",
+                filename=os.path.basename(file_path),
             )
 
         return str(output_path)
