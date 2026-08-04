@@ -282,7 +282,11 @@ def test_rejected_local_patch_gets_one_bounded_full_fallback(
             await session.commit()
             await quality_service.run_authored_quality_review(
                 presentation.id,
-                AuthoredQualityReviewRequest(scope="all", mode="analyze_and_fix"),
+                AuthoredQualityReviewRequest(
+                    scope="all",
+                    mode="analyze_and_fix",
+                    slidespec_opt_in=False,
+                ),
                 task,
                 session,
             )

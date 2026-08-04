@@ -231,7 +231,7 @@ describe("AuthoredQualityReview result details", () => {
       .should("contain.text", "OCR 실행 불가")
       .and("contain.text", "사유: OCR service unavailable");
     cy.get('[data-testid="quality-review-slide-5"]')
-      .should("contain.text", "시도했으나 미채택")
+      .should("contain.text", "검증 거부")
       .and("contain.text", "미채택 사유: OCR candidate regressed")
       .and("contain.text", "미채택 후보")
       .and("contain.text", "실제 슬라이드에 적용되지 않은 미채택 후보")
@@ -380,6 +380,71 @@ describe("AuthoredQualityReview result details", () => {
       fallback_succeeded: 0,
       fallback_failed: 1,
     });
+  });
+
+  it("renders bounded SlideSpec solver, candidate, rollback, and kill-switch telemetry", () => {
+    cy.clock();
+    cy.stub(PresentationGenerationApi, "reviewAuthoredPresentation")
+      .resolves({ id: "quality-telemetry-task" });
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").resolves({
+      status: "completed",
+      data: {
+        reviewed_count: 1,
+        issue_slide_count: 1,
+        fixed_count: 0,
+        fixed_slide_indices: [],
+        remaining_issue_count: 1,
+        remaining_slide_indices: [0],
+        metrics: {
+          solver: {
+            elapsed_ms: 48,
+            branches: 17,
+            unknown: 2,
+            unsat_core_size: 3,
+            search_complete: false,
+          },
+          candidates: { proposed: 4, rendered: 3, accepted: 1, rejected: 2 },
+          transaction: { rollback_count: 1 },
+          rollout: { kill_switch_enabled: true },
+        },
+      },
+    });
+
+    cy.mount(
+      <AuthoredQualityReview
+        presentationId="deck-telemetry"
+        slideCount={1}
+        currentSlide={0}
+      />,
+    );
+
+    cy.get('[data-testid="quality-review-trigger"]').click();
+    cy.get('[data-testid="quality-review-confirm"]').click();
+    cy.tick(2_000);
+    cy.get('[data-testid="quality-review-metrics"]')
+      .should("contain.text", "Solver 48ms")
+      .and("contain.text", "SlideSpec kill switch active");
+    cy.get('[data-testid="quality-solver-branches"]').should(
+      "contain.text",
+      "17",
+    );
+    cy.get('[data-testid="quality-solver-unknown"]').should(
+      "contain.text",
+      "2",
+    );
+    cy.get('[data-testid="quality-solver-unsat-core"]').should(
+      "contain.text",
+      "3",
+    );
+    cy.get('[data-testid="quality-solver-search-state"]').should(
+      "contain.text",
+      "bounded",
+    );
+    cy.get('[data-testid="quality-candidate-count"]').should("contain.text", "4");
+    cy.get('[data-testid="quality-candidate-rendered"]').should("contain.text", "3");
+    cy.get('[data-testid="quality-candidate-accepted"]').should("contain.text", "1");
+    cy.get('[data-testid="quality-candidate-rejected"]').should("contain.text", "2");
+    cy.get('[data-testid="quality-rollback-count"]').should("contain.text", "1");
   });
 
   it("normalizes the privacy-safe backend OCR contract", () => {

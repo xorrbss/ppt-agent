@@ -53,6 +53,30 @@ _NON_RENDERED_TAGS = {
     "symbol",
     "clipPath".lower(),
 }
+# Most HTML void elements do not own editable content.  ``img`` is the deliberate
+# exception: it is a first-class visual target for fit/crop repair, while still
+# never being pushed onto the text parser stack.  In particular, treating ``br``
+# as a normal opening tag would make following text belong to a phantom break.
+# Keep this local copy rather than importing the patch engine: DOM inspection is a
+# one-way dependency used by the patch trust boundary.
+_VOID_TAGS = frozenset(
+    {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+)
 _WS = re.compile(r"\s+")
 _NUMBER_OR_SYMBOL = re.compile(r"(?:\d+(?:[,.]\d+)*%?|[$€£¥₩]|[→←↑↓↔±×÷#@&])")
 _HEX_COLOR = re.compile(r"^#(?P<value>[0-9a-fA-F]{3,8})$")
@@ -209,7 +233,7 @@ def _attrs_dict(attrs: Iterable[tuple[str, str | None]]) -> dict[str, str]:
 
 def _is_edit_target(tag: str, attrs: Mapping[str, str]) -> bool:
     """Avoid document plumbing but include every visible element that a patch may target."""
-    if tag in _NON_RENDERED_TAGS or tag in {
+    if tag in _NON_RENDERED_TAGS or (tag in _VOID_TAGS and tag != "img") or tag in {
         "g",
         "path",
         "rect",
@@ -219,6 +243,12 @@ def _is_edit_target(tag: str, attrs: Mapping[str, str]) -> bool:
         "polyline",
     }:
         return False
+    if attrs.get("aria-hidden", "").lower() == "true" or "data-qid-ignore" in attrs:
+        return False
+    # Preserve the historical migration contract: qid-less images are passive.
+    # An explicitly addressed image is safe to expose for fit/crop operations.
+    if tag == "img":
+        return bool(attrs.get("data-qid", "").strip())
     return not (
         attrs.get("aria-hidden", "").lower() == "true" or "data-qid-ignore" in attrs
     )
@@ -405,6 +435,8 @@ def build_compact_dom_map(
                     "position",
                     "zIndex",
                     "overflow",
+                    "overflowX",
+                    "overflowY",
                     "textAlign",
                 }
             }
@@ -464,6 +496,12 @@ def normalize_browser_metrics(metrics: Mapping[str, Any] | None) -> dict[str, An
             "scroll_height",
             "font_size",
             "contrast_ratio",
+            "occluded_fraction",
+            "continuous_occluded_fraction",
+            "occlusion_sample_step_px",
+            "occlusion_unknown_fraction",
+            "rotation_degrees",
+            "effective_z_index",
         ):
             aliases = {
                 "client_width": "clientWidth",
@@ -472,8 +510,25 @@ def normalize_browser_metrics(metrics: Mapping[str, Any] | None) -> dict[str, An
                 "scroll_height": "scrollHeight",
                 "font_size": "fontSize",
                 "contrast_ratio": "contrastRatio",
+                "occluded_fraction": "occludedFraction",
+                "continuous_occluded_fraction": "continuousOccludedFraction",
+                "occlusion_sample_step_px": "occlusionSampleStepPx",
+                "occlusion_unknown_fraction": "occlusionUnknownFraction",
+                "rotation_degrees": "rotationDegrees",
+                "effective_z_index": "effectiveZIndex",
             }
-            normalized_item[key] = _coerce_number(item.get(key, item.get(aliases[key])))
+            raw_value = item.get(key, item.get(aliases[key]))
+            if raw_value is None and key in {
+                "contrast_ratio",
+                "occluded_fraction",
+                "continuous_occluded_fraction",
+                "occlusion_sample_step_px",
+                "occlusion_unknown_fraction",
+                "rotation_degrees",
+            }:
+                normalized_item[key] = None
+            else:
+                normalized_item[key] = _coerce_number(raw_value)
         normalized["elements"].append(normalized_item)
     return normalized
 
@@ -500,10 +555,11 @@ def _telemetry_status(
     reported_qids = [
         str(item.get("qid", "")).strip() for item in normalized["elements"]
     ]
+    reported_editable_qids = [qid for qid in reported_qids if qid in expected_qids]
     if (
         len(reported_qids) != len(raw_elements)
-        or len(reported_qids) != len(set(reported_qids))
-        or set(reported_qids) != expected_qids
+        or len(reported_editable_qids) != len(set(reported_editable_qids))
+        or set(reported_editable_qids) != expected_qids
     ):
         return "incomplete"
     return "available"
@@ -516,21 +572,27 @@ class _TextByQidParser(HTMLParser):
         self.text: dict[str, list[str]] = {}
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
         attr_map = _attrs_dict(attrs)
         qid = (
             attr_map.get("data-qid", "").strip()
-            if _is_edit_target(tag.lower(), attr_map)
+            if _is_edit_target(tag, attr_map)
             else ""
         )
-        self.stack.append((tag.lower(), qid or None))
+        # HTMLParser does not synthesize an end tag for ordinary HTML void
+        # syntax (``<br>``).  Never push one, otherwise later text leaks into a
+        # phantom stack frame.
+        if tag not in _VOID_TAGS:
+            self.stack.append((tag, qid or None))
         if qid:
             self.text.setdefault(qid, [])
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
         attr_map = _attrs_dict(attrs)
         qid = (
             attr_map.get("data-qid", "").strip()
-            if _is_edit_target(tag.lower(), attr_map)
+            if _is_edit_target(tag, attr_map)
             else ""
         )
         if qid:
@@ -641,6 +703,31 @@ def inspect_authored_dom(
     width = normalized["viewport"]["width"] or 1280
     height = normalized["viewport"]["height"] or 720
     elements = normalized["elements"]
+    item_by_qid = {str(item.get("qid")): item for item in elements}
+    parent_by_qid = {
+        str(item.get("qid")): str(item.get("parent_qid") or "") for item in elements
+    }
+
+    def clipped_by_authored_parent(item: Mapping[str, Any]) -> bool:
+        """Recognize intentionally cropped absolute artwork without hiding flow bugs."""
+
+        if str(item.get("computed_style", {}).get("position", "")) != "absolute":
+            return False
+        current = parent_by_qid.get(str(item.get("qid")), "")
+        seen: set[str] = set()
+        while current and current not in seen:
+            seen.add(current)
+            parent = item_by_qid.get(current)
+            if parent is None:
+                break
+            style = parent.get("computed_style", parent.get("style", {}))
+            if isinstance(style, Mapping) and str(style.get("overflow", "")).lower() in {
+                "hidden",
+                "clip",
+            }:
+                return True
+            current = parent_by_qid.get(current, "")
+        return False
     if not normalized["fonts_ready"]:
         issues.append(
             DomQualityIssue(
@@ -680,13 +767,37 @@ def inspect_authored_dom(
                         "image", "high", "image failed to load", (qid,), mode
                     )
                 )
-        horizontal_overflow = (
+        horizontal_scroll_excess = (
             item["client_width"] > 0 and item["scroll_width"] > item["client_width"] + 1
         )
-        vertical_overflow = (
+        vertical_scroll_excess = (
             item["client_height"] > 0
             and item["scroll_height"] > item["client_height"] + 1
         )
+        style = item.get("computed_style", item.get("style", {}))
+        style = style if isinstance(style, Mapping) else {}
+
+        def overflow_axis_is_actionable(axis: str) -> bool:
+            """Do not confuse visible text ink/line-box variance with clipping.
+
+            Chromium commonly reports a few extra scrollHeight pixels for glyph
+            ascenders, line boxes, and transformed static containers.  When CSS
+            explicitly keeps that axis visible, the content is not clipped; real
+            visual harm is covered by sibling-overlap, off-canvas, and VQA checks.
+            Missing style stays actionable for older/external probe payloads.
+            """
+
+            axis_key = "overflowX" if axis == "x" else "overflowY"
+            mode_value = style.get(axis_key, style.get("overflow"))
+            if mode_value is None or not str(mode_value).strip():
+                return True
+            if str(mode_value).strip().lower() != "visible":
+                return True
+            position = str(style.get("position", "static")).strip().lower()
+            return position in {"absolute", "fixed", "sticky"}
+
+        horizontal_overflow = horizontal_scroll_excess and overflow_axis_is_actionable("x")
+        vertical_overflow = vertical_scroll_excess and overflow_axis_is_actionable("y")
         if horizontal_overflow or vertical_overflow:
             severity = (
                 "high"
@@ -720,6 +831,7 @@ def inspect_authored_dom(
                 or box.bottom > height + 1
             )
             and not intentional
+            and not clipped_by_authored_parent(item)
         ):
             issues.append(
                 DomQualityIssue(
@@ -740,6 +852,28 @@ def inspect_authored_dom(
                     "clipping",
                     "medium",
                     "browser reports clipped visible content",
+                    (qid,),
+                    mode,
+                )
+            )
+        occluded_fraction = item.get("occluded_fraction")
+        continuous_occluded_fraction = item.get("continuous_occluded_fraction")
+        if (
+            geometry_is_actionable
+            and not intentional
+            and (
+                (occluded_fraction is not None and occluded_fraction > 0.2)
+                or (
+                    continuous_occluded_fraction is not None
+                    and continuous_occluded_fraction > 0.12
+                )
+            )
+        ):
+            issues.append(
+                DomQualityIssue(
+                    "overlap",
+                    "high" if (occluded_fraction or 0) > 0.5 else "medium",
+                    "browser pixel-area probe reports a continuous occluding layer",
                     (qid,),
                     mode,
                 )
@@ -777,28 +911,44 @@ def inspect_authored_dom(
                 )
         style = item.get("computed_style", item.get("style", {}))
         if isinstance(style, Mapping):
-            ratio = item["contrast_ratio"] or _contrast_ratio(
-                style.get("color"),
-                style.get("backgroundColor", style.get("background_color")),
+            measurement = item.get("measurement")
+            pixel_contrast_unavailable = (
+                item["contrast_ratio"] is None
+                and bool(item.get("requires_pixel_contrast"))
+                and isinstance(measurement, Mapping)
+                and measurement.get("contrast") is False
             )
-            font_size = item["font_size"]
-            threshold = (
-                3.0 if bool(item.get("large_text", False)) or font_size >= 24 else 4.5
-            )
-            if ratio is not None and ratio < threshold:
+            if pixel_contrast_unavailable:
                 issues.append(
                     DomQualityIssue(
                         "contrast",
-                        "medium" if ratio >= 2 else "high",
-                        f"text contrast ratio {ratio:.2f} is below {threshold:.1f}",
+                        "high",
+                        "browser could not establish pixel contrast for complex painted text",
                         (qid,),
                         mode,
                     )
                 )
-
-    parent_by_qid = {
-        str(item.get("qid")): str(item.get("parent_qid") or "") for item in elements
-    }
+            else:
+                ratio = item["contrast_ratio"] or _contrast_ratio(
+                    style.get("color"),
+                    style.get("backgroundColor", style.get("background_color")),
+                )
+                font_size = item["font_size"]
+                threshold = (
+                    3.0
+                    if bool(item.get("large_text", False)) or font_size >= 24
+                    else 4.5
+                )
+                if ratio is not None and ratio < threshold:
+                    issues.append(
+                        DomQualityIssue(
+                            "contrast",
+                            "medium" if ratio >= 2 else "high",
+                            f"text contrast ratio {ratio:.2f} is below {threshold:.1f}",
+                            (qid,),
+                            mode,
+                        )
+                    )
 
     def related_by_ancestry(first_qid: str, second_qid: str) -> bool:
         current = parent_by_qid.get(first_qid, "")
@@ -813,6 +963,48 @@ def inspect_authored_dom(
             current = parent_by_qid.get(current, "")
         return False
 
+    box_by_qid = {qid: box for qid, box, _item in boxes}
+
+    def rendered_text_is_visible_or_unknown(item: Mapping[str, Any]) -> bool:
+        keys = ("rendered_text", "text", "text_content")
+        if not any(key in item for key in keys):
+            return True
+        return bool(
+            _normal_text(
+                item.get("rendered_text", item.get("text", item.get("text_content", ""))),
+                limit=2000,
+            )
+        )
+
+    def canonical_overlap_pair(first_qid: str, second_qid: str) -> tuple[str, str]:
+        """Collapse descendant collision noise to the two sibling layout branches."""
+
+        def lineage(qid: str) -> list[str]:
+            result = [qid]
+            current = parent_by_qid.get(qid, "")
+            seen = {qid}
+            while current and current not in seen:
+                seen.add(current)
+                result.append(current)
+                current = parent_by_qid.get(current, "")
+            return result
+
+        first_lineage = lineage(first_qid)
+        second_lineage = lineage(second_qid)
+        second_ancestors = set(second_lineage)
+        common = next(
+            (qid for qid in first_lineage[1:] if qid in second_ancestors), None
+        )
+        if common is None:
+            return tuple(sorted((first_qid, second_qid)))
+
+        def branch(line: Sequence[str]) -> str:
+            common_index = line.index(common)
+            return line[max(0, common_index - 1)]
+
+        return tuple(sorted((branch(first_lineage), branch(second_lineage))))
+
+    overlap_pairs: set[tuple[str, str]] = set()
     for index, (qid, box, item) in enumerate(boxes):
         if bool(item.get("intentional", item.get("allow_overlap", False))):
             continue
@@ -833,16 +1025,32 @@ def inspect_authored_dom(
             area = _intersection_area(box, other_box)
             smallest = min(box.width * box.height, other_box.width * other_box.height)
             if smallest > 0 and area / smallest >= 0.12:
+                pair = canonical_overlap_pair(qid, other_qid)
+                if pair[0] == pair[1] or pair in overlap_pairs:
+                    continue
+                pair_items = (item_by_qid.get(pair[0]), item_by_qid.get(pair[1]))
+                pair_boxes = (box_by_qid.get(pair[0]), box_by_qid.get(pair[1]))
+                if any(value is None for value in (*pair_items, *pair_boxes)):
+                    continue
+                if not all(rendered_text_is_visible_or_unknown(value) for value in pair_items):
+                    continue
+                canonical_area = _intersection_area(pair_boxes[0], pair_boxes[1])
+                canonical_smallest = min(
+                    pair_boxes[0].width * pair_boxes[0].height,
+                    pair_boxes[1].width * pair_boxes[1].height,
+                )
+                if canonical_smallest <= 0 or canonical_area / canonical_smallest < 0.12:
+                    continue
+                overlap_pairs.add(pair)
                 issues.append(
                     DomQualityIssue(
                         "overlap",
                         "medium",
                         "visible element boxes substantially overlap",
-                        tuple(sorted((qid, other_qid))),
+                        pair,
                         mode,
                     )
                 )
-
     # Coalesce same category/target reports while retaining deterministic ordering.
     unique = {(issue.category, issue.qids, issue.detail): issue for issue in issues}
     ordered = tuple(

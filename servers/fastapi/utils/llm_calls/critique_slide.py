@@ -45,6 +45,33 @@ class SlideCritique(BaseModel):
     issues: List[CritiqueIssue] = Field(default_factory=list, max_length=8)
 
 
+ComparisonVerdict = Literal["candidate", "tie", "baseline", "indeterminate"]
+ComparisonDimension = Literal[
+    "target-defect",
+    "content",
+    "readability",
+    "hierarchy",
+    "alignment",
+    "spacing",
+    "style",
+]
+
+
+class StyleComparisonDimension(BaseModel):
+    dimension: ComparisonDimension
+    verdict: Literal["better", "same", "worse", "indeterminate"]
+    detail: str = Field(max_length=200)
+
+
+class StyleComparisonCritique(SlideCritique):
+    """Paired visual evidence that can prove improvement, not only no regression."""
+
+    preference: ComparisonVerdict
+    target_improved: bool
+    confidence: float = Field(ge=0.0, le=1.0)
+    dimensions: List[StyleComparisonDimension] = Field(min_length=7, max_length=7)
+
+
 _SYSTEM = (
     "You are a meticulous presentation design reviewer. Inspect the rendered slide "
     "IMAGE and report only REAL, visible problems: text overflow or clipping, element "
@@ -89,7 +116,14 @@ _STYLE_COMPARISON_SYSTEM = (
     "by the "
     "candidate must have detail starting exactly with "
     f"'{STYLE_COMPARISON_REGRESSION_PREFIX}'. Other real "
-    "candidate defects need no such prefix. If resolution, blur, occlusion, or another "
+    "candidate defects need no such prefix. Return a verdict for every required "
+    "dimension: target-defect, content, readability, hierarchy, alignment, spacing, "
+    "and style. Set preference='candidate' only when the intended target defect is "
+    "clearly improved, no protected dimension is worse or indeterminate, and the "
+    "confidence is at least 0.75. Use preference='tie' when there is no material "
+    "improvement, 'baseline' when the candidate is worse, and 'indeterminate' when "
+    "the evidence is uncertain. target_improved must be true only for a visible, "
+    "material improvement. If resolution, blur, occlusion, or another "
     "image limitation makes a material comparison genuinely impossible, do not guess: "
     "return needs_fix=true with one high-severity other issue whose detail starts with "
     "'INDETERMINATE:'. If the candidate is clean and readable and has no regression, "
@@ -99,7 +133,7 @@ _STYLE_COMPARISON_SYSTEM = (
 STYLE_REFERENCE = "style_reference"
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 CRITIQUE_PROMPT_VERSION = "slide-critique-v3"
-STYLE_COMPARISON_PROMPT_VERSION = "slide-style-comparison-v1"
+STYLE_COMPARISON_PROMPT_VERSION = "slide-style-comparison-v2"
 
 
 def _image_mime_type(image: bytes) -> str:
@@ -238,12 +272,12 @@ async def critique_slide_style_comparison(
     *,
     baseline_mime_type: str = "image/png",
     candidate_mime_type: str = "image/png",
-) -> SlideCritique:
+) -> StyleComparisonCritique:
     """Review one post-fix candidate against its non-authoritative pre-fix baseline."""
     client = get_client(config=get_llm_config())
     model = get_model()
     schema = prepare_schema_for_validation(
-        SlideCritique.model_json_schema(), strict=False
+        StyleComparisonCritique.model_json_schema(), strict=False
     )
     response_format = JSONSchemaResponse(
         name="critique", json_schema=schema, strict=False
@@ -265,6 +299,6 @@ async def critique_slide_style_comparison(
             strict=False,
             validate_schema=True,
         )
-        return SlideCritique(**content)
+        return StyleComparisonCritique(**content)
     except Exception as e:
         raise handle_llm_client_exceptions(e)

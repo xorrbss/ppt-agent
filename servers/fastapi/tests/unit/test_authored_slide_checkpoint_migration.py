@@ -227,7 +227,7 @@ def test_schema_inference_distinguishes_previous_complete_and_partial_heads(
             tables = set(inspector.get_table_names())
             assert migrations._infer_revision_from_schema(
                 inspector, tables, "future-head"
-            ) == migrations.REVISION_ACCOUNT_DELETION_FENCE
+            ) == migrations.REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS
 
         with engine.begin() as connection:
             connection.execute(text("DROP TABLE authored_slide_checkpoints"))

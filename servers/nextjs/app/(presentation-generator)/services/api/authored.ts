@@ -60,6 +60,12 @@ export interface AuthoredQualityReviewSlideResult {
   attempted: boolean;
   /** The evaluated repair was retained in the saved presentation. */
   applied: boolean;
+  /** The candidate passed validation; this is not evidence that it was published. */
+  accepted: boolean;
+  apply_status: string;
+  publish_status: string;
+  post_verify_status: string;
+  rolled_back: boolean;
   /** Why an attempted repair was not retained, when supplied by the backend. */
   rejection_reason?: string | null;
   element_changes: AuthoredQualityReviewElementChange[];
@@ -73,6 +79,11 @@ export interface AuthoredQualityReviewMetrics {
   stage_timings_ms: Record<string, number>;
   total_ms?: number;
   cache_hits?: number;
+  cache_misses?: number;
+  llm_calls?: number;
+  llm_candidates?: number;
+  render_calls?: number;
+  dom_calls?: number;
   vqa_calls?: number;
   patch_count?: number;
   fallback_count?: number;
@@ -82,6 +93,28 @@ export interface AuthoredQualityReviewMetrics {
   fallback_attempted?: number;
   fallback_succeeded?: number;
   fallback_failed?: number;
+  candidate_proposed?: number;
+  candidate_rendered?: number;
+  candidate_accepted?: number;
+  validation_passed?: number;
+  validation_rejected?: number;
+  validation_inconclusive?: number;
+  apply_committed?: number;
+  publish_active?: number;
+  postverify_passed?: number;
+  applied?: number;
+  rolled_back?: number;
+  legacy_preserved?: number;
+  /** Low-cardinality deterministic layout solver telemetry. */
+  solver_total_ms?: number;
+  solver_branches_evaluated?: number;
+  solver_unknown_hard?: number;
+  solver_unsat_core_size?: number;
+  solver_search_complete?: boolean;
+  /** True only when the server-side SlideSpec rollback switch routed to legacy. */
+  kill_switch_active?: boolean;
+  deterministic_resolved?: number;
+  llm_resolved?: number;
   ocr_executed?: boolean;
   ocr_calls?: number;
   ocr_cache_hits?: number;
@@ -453,6 +486,7 @@ function normalizeSlideResult(
     typeof value.attempted === "boolean"
       ? value.attempted
       : path !== "none" || rawChanges.length > 0 || rejectionReason !== null;
+  const accepted = value.accepted === true;
   const changes = rawChanges.flatMap((change) => {
     const normalized = normalizeElementChange(change, applied);
     return normalized ? [normalized] : [];
@@ -460,7 +494,19 @@ function normalizeSlideResult(
   return {
     slide_index: slideIndex,
     attempted,
+    accepted,
     applied,
+    apply_status:
+      typeof value.apply_status === "string" ? value.apply_status : "not_started",
+    publish_status:
+      typeof value.publish_status === "string"
+        ? value.publish_status
+        : "not_started",
+    post_verify_status:
+      typeof value.post_verify_status === "string"
+        ? value.post_verify_status
+        : "not_started",
+    rolled_back: value.rolled_back === true,
     ...(rejectionReason === null ? {} : { rejection_reason: rejectionReason }),
     element_changes: changes,
     resolved_issues: normalizeIssueList(value.resolved_issues),
@@ -526,6 +572,29 @@ export function normalizeAuthoredQualityReviewResult(
     : isRecord(payload.telemetry)
       ? payload.telemetry
       : {};
+  // SlideSpec's server contract groups low-cardinality operational counters.
+  // Preserve the compact legacy fields above as the public compatibility layer,
+  // rather than making the UI depend on a particular pipeline implementation.
+  const solverMetrics = isRecord(metricsSource.solver)
+    ? metricsSource.solver
+    : isRecord(payload.solver)
+      ? payload.solver
+      : {};
+  const candidateMetrics = isRecord(metricsSource.candidates)
+    ? metricsSource.candidates
+    : isRecord(payload.candidates)
+      ? payload.candidates
+      : {};
+  const transactionMetrics = isRecord(metricsSource.transaction)
+    ? metricsSource.transaction
+    : isRecord(payload.transaction)
+      ? payload.transaction
+      : {};
+  const rolloutMetrics = isRecord(metricsSource.rollout)
+    ? metricsSource.rollout
+    : isRecord(payload.rollout)
+      ? payload.rollout
+      : {};
   const stageTimings = normalizeStageTimings(
     metricsSource.stage_timings_ms ??
       metricsSource.stage_timings ??
@@ -537,6 +606,11 @@ export function normalizeAuthoredQualityReviewResult(
   const metricAliases = {
     total_ms: [],
     cache_hits: [],
+    cache_misses: [],
+    llm_calls: [],
+    llm_candidates: [],
+    render_calls: [],
+    dom_calls: [],
     vqa_calls: [],
     patch_count: [],
     fallback_count: [],
@@ -546,6 +620,24 @@ export function normalizeAuthoredQualityReviewResult(
     fallback_attempted: ["fallback_attempts"],
     fallback_succeeded: ["fallback_successes"],
     fallback_failed: ["fallback_failures"],
+    candidate_proposed: [],
+    candidate_rendered: [],
+    candidate_accepted: [],
+    validation_passed: [],
+    validation_rejected: [],
+    validation_inconclusive: [],
+    apply_committed: [],
+    publish_active: [],
+    postverify_passed: [],
+    applied: [],
+    rolled_back: [],
+    legacy_preserved: [],
+    solver_total_ms: ["solver_ms", "solver_duration_ms"],
+    solver_branches_evaluated: ["solver_branches", "branches_evaluated"],
+    solver_unknown_hard: ["solver_unknown_count", "unknown_hard_count"],
+    solver_unsat_core_size: ["unsat_core_size"],
+    deterministic_resolved: [],
+    llm_resolved: [],
   } as const;
   for (const [key, aliases] of Object.entries(metricAliases) as Array<
     [keyof typeof metricAliases, readonly string[]]
@@ -556,6 +648,77 @@ export function normalizeAuthoredQualityReviewResult(
       .find((candidate) => candidate !== undefined);
     const normalized = normalizeNumber(raw);
     if (normalized !== undefined) metrics[key] = normalized;
+  }
+  const assignNestedMetric = (
+    key:
+      | "solver_total_ms"
+      | "solver_branches_evaluated"
+      | "solver_unknown_hard"
+      | "solver_unsat_core_size"
+      | "candidate_proposed"
+      | "candidate_rendered"
+      | "candidate_accepted"
+      | "validation_rejected"
+      | "rolled_back",
+    value: unknown,
+  ) => {
+    const normalized = normalizeNumber(value);
+    if (normalized !== undefined) metrics[key] = normalized;
+  };
+  assignNestedMetric(
+    "solver_total_ms",
+    firstDefined(metrics.solver_total_ms, solverMetrics.elapsed_ms),
+  );
+  assignNestedMetric(
+    "solver_branches_evaluated",
+    firstDefined(metrics.solver_branches_evaluated, solverMetrics.branches),
+  );
+  assignNestedMetric(
+    "solver_unknown_hard",
+    firstDefined(metrics.solver_unknown_hard, solverMetrics.unknown),
+  );
+  assignNestedMetric(
+    "solver_unsat_core_size",
+    firstDefined(metrics.solver_unsat_core_size, solverMetrics.unsat_core_size),
+  );
+  assignNestedMetric(
+    "candidate_proposed",
+    firstDefined(metrics.candidate_proposed, candidateMetrics.proposed),
+  );
+  assignNestedMetric(
+    "candidate_rendered",
+    firstDefined(metrics.candidate_rendered, candidateMetrics.rendered),
+  );
+  assignNestedMetric(
+    "candidate_accepted",
+    firstDefined(metrics.candidate_accepted, candidateMetrics.accepted),
+  );
+  assignNestedMetric(
+    "validation_rejected",
+    firstDefined(metrics.validation_rejected, candidateMetrics.rejected),
+  );
+  assignNestedMetric(
+    "rolled_back",
+    firstDefined(metrics.rolled_back, transactionMetrics.rollback_count),
+  );
+  const killSwitchActive = normalizeBoolean(
+    firstDefined(
+      metricsSource.kill_switch_active,
+      payload.kill_switch_active,
+      rolloutMetrics.kill_switch_enabled,
+      isRecord(payload.routing) ? payload.routing.kill_switch_active : undefined,
+    ),
+  );
+  if (killSwitchActive !== undefined) metrics.kill_switch_active = killSwitchActive;
+  const solverSearchComplete = normalizeBoolean(
+    firstDefined(
+      metricsSource.solver_search_complete,
+      payload.solver_search_complete,
+      solverMetrics.search_complete,
+    ),
+  );
+  if (solverSearchComplete !== undefined) {
+    metrics.solver_search_complete = solverSearchComplete;
   }
   const ocrExecuted = normalizeBoolean(
     firstDefined(metricsSource.ocr_executed, payload.ocr_executed),
@@ -606,7 +769,12 @@ export function normalizeAuthoredQualityReviewResult(
     slideResults.push({
       slide_index: slideIndex,
       attempted: false,
+      accepted: false,
       applied: false,
+      apply_status: "not_started",
+      publish_status: "not_started",
+      post_verify_status: "not_started",
+      rolled_back: false,
       element_changes: [],
       resolved_issues: [],
       remaining_issues: [],

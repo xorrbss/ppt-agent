@@ -37,6 +37,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     ".next/**",
     ".next-build/**",
+    ".next-slidespec-dev/**",
     ".next-workspace-e2e/**",
     "out/**",
     "build/**",

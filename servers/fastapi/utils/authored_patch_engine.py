@@ -71,6 +71,7 @@ _LENGTH = re.compile(r"^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:px|pt|em|rem|%)$", re.IGN
 _NUMBER = re.compile(r"^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$")
 _COLOR_FUNCTION = re.compile(r"^(?:rgb|rgba|hsl|hsla)\([\d\s.,%+-]+\)$", re.IGNORECASE)
 _FONT_FAMILY = re.compile(r"^[\w\s,'\".-]+$", re.UNICODE)
+_CAMEL_CASE_STYLE_KEY = re.compile(r"(?<=[a-z0-9])([A-Z])")
 
 _STYLE_PROPERTIES = frozenset(
     {
@@ -87,6 +88,9 @@ _STYLE_PROPERTIES = frozenset(
         "font-style",
         "font-weight",
         "gap",
+        "grid-column",
+        "grid-row",
+        "grid-template-columns",
         "justify-content",
         "letter-spacing",
         "line-height",
@@ -106,6 +110,7 @@ _STYLE_PROPERTIES = frozenset(
         "row-gap",
         "text-align",
         "text-overflow",
+        "transform",
         "white-space",
         "word-break",
         "z-index",
@@ -686,6 +691,22 @@ def _validate_css_value(property_name: str, value: str) -> str:
         valid = value in {"normal", "break-all", "keep-all", "break-word"}
     elif prop == "text-overflow":
         valid = value in {"clip", "ellipsis"}
+    elif prop == "transform":
+        # Keep this deliberately narrower than general CSS transforms.  The
+        # SlideSpec source projector uses only a two-axis paint translation for
+        # a measured, transform-free static element; matrices, functions,
+        # percentages and chained transforms remain fail closed.
+        match = re.fullmatch(
+            r"translate\(\s*([^,()]+)\s*,\s*([^,()]+)\s*\)", value,
+            re.IGNORECASE,
+        )
+        valid = bool(
+            match
+            and _is_length(match.group(1))
+            and _is_length(match.group(2))
+            and match.group(1).strip().lower().endswith("px")
+            and match.group(2).strip().lower().endswith("px")
+        )
     elif prop == "opacity":
         valid = bool(_NUMBER.fullmatch(value)) and 0 <= float(value) <= 1
     elif prop == "border-style":
@@ -703,9 +724,32 @@ def _validate_css_value(property_name: str, value: str) -> str:
             "space-around",
             "space-evenly",
         }
+    elif prop == "grid-template-columns":
+        parts = value.split()
+        valid = 1 <= len(parts) <= 16 and all(
+            part == "auto"
+            or (
+                bool(re.fullmatch(r"(?:\d+(?:\.\d+)?|\.\d+)(?:fr|px|%)", part))
+                and float(re.match(r"(?:\d+(?:\.\d+)?|\.\d+)", part).group()) > 0
+            )
+            for part in parts
+        )
+    elif prop in {"grid-column", "grid-row"}:
+        valid = bool(re.fullmatch(r"\d+\s*/\s*span\s+\d+", value))
     if not valid:
         raise ValueError(f"unsupported CSS value {value!r} for {prop}")
     return value
+
+
+def _canonical_style_property_name(value: str) -> str:
+    """Accept browser ``computedStyle`` camelCase keys at the patch boundary.
+
+    Model prompts receive browser-native keys such as ``fontSize`` and
+    ``marginTop``.  Store only kebab-case after validation so inline CSS output,
+    duplicate detection, and the allowlist continue to use one representation.
+    """
+    name = value.strip()
+    return _CAMEL_CASE_STYLE_KEY.sub(r"-\1", name).lower()
 
 
 def _validate_position(value: str) -> str:
@@ -742,10 +786,10 @@ def validate_patch_plan(
         if isinstance(action, SetStyleAction):
             normalized: dict[str, str] = {}
             for name, value in action.styles.items():
-                lowered = name.strip().lower()
-                if lowered in normalized:
-                    raise ValueError(f"duplicate CSS property {lowered!r}")
-                normalized[lowered] = _validate_css_value(lowered, value)
+                canonical = _canonical_style_property_name(name)
+                if canonical in normalized:
+                    raise ValueError(f"duplicate CSS property {canonical!r}")
+                normalized[canonical] = _validate_css_value(canonical, value)
             action.styles = normalized
         elif isinstance(action, MoveAction):
             for value in (action.left, action.top):
@@ -827,7 +871,9 @@ def apply_authored_patch(
                     raise PermissionError(
                         "setText would remove descendant data-qid values"
                     )
-                if any(node.tag not in _VOID_TAGS for node in descendants):
+                if any(node.tag == "br" for node in descendants):
+                    raise PermissionError("setText cannot remove hard line breaks")
+                if descendants:
                     raise PermissionError("setText is restricted to leaf text elements")
                 before = {"text": _text_content(target)}
                 target.children = [_TextNode(action.text)]

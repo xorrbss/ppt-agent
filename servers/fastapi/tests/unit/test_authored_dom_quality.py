@@ -22,7 +22,7 @@ def test_qid_migration_is_deterministic_idempotent_and_preserves_existing_identi
     assert 'id="title"' in first
     assert 'id="logo"' in first
     assert 'data-qid="body-copy"' in first
-    assert first.count("data-qid=") == 3
+    assert first.count("data-qid=") == 2
 
 
 def test_qid_migration_makes_duplicate_existing_qids_unique_without_touching_html_id():
@@ -43,7 +43,7 @@ def test_qid_migration_replaces_invalid_duplicate_and_missing_qids_with_patchabl
     qids = [node.qid for node in build_compact_dom_map(migrated)]
 
     assert migrated == ensure_authored_qids(migrated)
-    assert len(qids) == len(set(qids)) == 4
+    assert len(qids) == len(set(qids)) == 3
     assert all(is_valid_authored_qid(qid) for qid in qids)
 
 
@@ -134,10 +134,39 @@ def test_present_empty_collector_payload_is_available_for_a_truly_empty_slide():
     assert not report.needs_attention
 
 
+def test_non_editable_qid_telemetry_does_not_hide_complete_editable_coverage():
+    html = (
+        '<html><body><p data-qid="body">Covered</p>'
+        '<br data-qid="legacy-break"></body></html>'
+    )
+    report = inspect_authored_dom(
+        html,
+        {
+            "elements": [
+                {
+                    "qid": "body",
+                    "bbox": {"x": 10, "y": 10, "width": 100, "height": 20},
+                    "client_width": 100,
+                    "client_height": 20,
+                    "scroll_width": 100,
+                    "scroll_height": 20,
+                    "text": "Covered",
+                },
+                {
+                    "qid": "legacy-break",
+                    "bbox": {"x": 0, "y": 0, "width": 0, "height": 0},
+                },
+            ]
+        },
+    )
+
+    assert report.telemetry_status == "available"
+
+
 def test_local_inspector_classifies_fast_browser_signals_and_content_tokens():
     html = ensure_authored_qids(HTML)
     nodes = build_compact_dom_map(html)
-    title, body, image = nodes
+    title, body = nodes
     report = inspect_authored_dom(
         html,
         {
@@ -163,12 +192,6 @@ def test_local_inspector_classifies_fast_browser_signals_and_content_tokens():
                     "rendered_text": "Revenue",
                     "computed_style": {"color": "#111", "backgroundColor": "#fff"},
                 },
-                {
-                    "qid": image.qid,
-                    "tag": "img",
-                    "bbox": {"x": 30, "y": 25, "width": 80, "height": 20},
-                    "image": {"src": "logo.png", "complete": False, "naturalWidth": 0},
-                },
             ],
         },
     )
@@ -181,10 +204,45 @@ def test_local_inspector_classifies_fast_browser_signals_and_content_tokens():
         "content",
         "contrast",
         "clipping",
-        "image",
         "overlap",
     } <= categories
     assert report.needs_attention
+
+
+def test_visible_static_text_scroll_overhang_is_not_treated_as_clipping():
+    html = '<h1 data-qid="title">Rendered title</h1>'
+    base = {
+        "qid": "title",
+        "tag": "h1",
+        "bbox": {"x": 40, "y": 40, "width": 400, "height": 56},
+        "clientWidth": 400,
+        "clientHeight": 56,
+        "scrollWidth": 400,
+        "scrollHeight": 62,
+        "rendered_text": "Rendered title",
+        "computed_style": {
+            "position": "static",
+            "overflow": "visible",
+            "overflowX": "visible",
+            "overflowY": "visible",
+        },
+    }
+
+    visible_flow = inspect_authored_dom(html, {"elements": [base]})
+    positioned_box = inspect_authored_dom(
+        html,
+        {
+            "elements": [
+                {
+                    **base,
+                    "computed_style": {**base["computed_style"], "position": "absolute"},
+                }
+            ]
+        },
+    )
+
+    assert not any(issue.category == "overflow" for issue in visible_flow.issues)
+    assert any(issue.category == "overflow" for issue in positioned_box.issues)
 
 
 def test_reference_mode_keeps_explicitly_intentional_geometry_out_of_local_defects():
@@ -246,6 +304,71 @@ def test_nested_parent_and_child_boxes_are_not_reported_as_colliding():
     )
 
     assert not any(issue.category == "overlap" for issue in report.issues)
+
+
+def test_nested_collision_is_coalesced_to_visible_sibling_layout_branches():
+    html = (
+        '<main data-qid="platform"><div data-qid="flow">'
+        '<div data-qid="card">Card 4</div></div>'
+        '<footer data-qid="footer"><span data-qid="ready">READY</span></footer>'
+        '</main>'
+    )
+    report = inspect_authored_dom(
+        html,
+        {
+            "elements": [
+                {"qid": "platform", "bbox": {"x": 0, "y": 0, "width": 340, "height": 530}, "rendered_text": "Card 4 READY"},
+                {"qid": "flow", "parent_qid": "platform", "bbox": {"x": 20, "y": 300, "width": 280, "height": 240}, "rendered_text": "Card 4"},
+                {"qid": "card", "parent_qid": "flow", "bbox": {"x": 20, "y": 450, "width": 280, "height": 90}, "rendered_text": "Card 4"},
+                {"qid": "footer", "parent_qid": "platform", "bbox": {"x": 20, "y": 480, "width": 280, "height": 45}, "rendered_text": "READY"},
+                {"qid": "ready", "parent_qid": "footer", "bbox": {"x": 240, "y": 490, "width": 50, "height": 20}, "rendered_text": "READY"},
+            ]
+        },
+    )
+
+    overlaps = [issue for issue in report.issues if issue.category == "overlap"]
+    assert [issue.qids for issue in overlaps] == [("flow", "footer")]
+
+
+def test_empty_absolute_decoration_overlap_and_parent_clipped_offcanvas_are_ignored():
+    html = (
+        '<aside data-qid="aside"><div data-qid="glow"></div>'
+        '<section data-qid="content">Visible content</section></aside>'
+    )
+    report = inspect_authored_dom(
+        html,
+        {
+            "width": 1280,
+            "height": 720,
+            "elements": [
+                {
+                    "qid": "aside",
+                    "bbox": {"x": 650, "y": 0, "width": 630, "height": 720},
+                    "rendered_text": "Visible content",
+                    "computed_style": {"position": "relative", "overflow": "hidden"},
+                },
+                {
+                    "qid": "glow",
+                    "parent_qid": "aside",
+                    "bbox": {"x": 900, "y": 500, "width": 500, "height": 500},
+                    "rendered_text": "",
+                    "computed_style": {"position": "absolute"},
+                },
+                {
+                    "qid": "content",
+                    "parent_qid": "aside",
+                    "bbox": {"x": 880, "y": 100, "width": 340, "height": 530},
+                    "rendered_text": "Visible content",
+                    "computed_style": {"position": "absolute"},
+                },
+            ],
+        },
+    )
+
+    assert not any(
+        issue.category in {"overlap", "off_canvas"} and "glow" in issue.qids
+        for issue in report.issues
+    )
 
 
 def test_exact_geometry_is_deferred_to_source_vqa_unless_explicitly_unintentional():

@@ -126,6 +126,79 @@ def test_windows_acl_timeout_fails_closed(monkeypatch, tmp_path):
     assert user_config_store._secure_config_file(str(config_path)) is False
 
 
+def test_windows_hardening_accepts_verified_private_legacy_acl(
+    monkeypatch, tmp_path
+):
+    """An admin-owned file need not be mutated when its DACL is already safe."""
+    config_path = tmp_path / "userConfig.json"
+    config_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(user_config_store.os, "name", "nt")
+    monkeypatch.setattr(
+        user_config_store,
+        "_windows_current_user_sid",
+        lambda: "S-1-5-21-1000",
+    )
+    monkeypatch.setattr(
+        user_config_store,
+        "_windows_acl_snapshot",
+        lambda _path: {
+            "owner": "BUILTIN\\Administrators",
+            "protected": True,
+            "rules": [
+                {
+                    "sid": "S-1-5-21-1000",
+                    "type": "Allow",
+                    "inherited": False,
+                },
+                {"sid": "S-1-5-18", "type": "Allow", "inherited": False},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        user_config_store.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=5),
+    )
+
+    assert user_config_store._secure_config_file(str(config_path)) is True
+
+
+def test_windows_hardening_rejects_unexpected_allowed_principal(
+    monkeypatch, tmp_path
+):
+    config_path = tmp_path / "userConfig.json"
+    config_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(user_config_store.os, "name", "nt")
+    monkeypatch.setattr(
+        user_config_store,
+        "_windows_current_user_sid",
+        lambda: "S-1-5-21-1000",
+    )
+    monkeypatch.setattr(
+        user_config_store,
+        "_windows_acl_snapshot",
+        lambda _path: {
+            "protected": True,
+            "rules": [
+                {
+                    "sid": "S-1-5-21-1000",
+                    "type": "Allow",
+                    "inherited": False,
+                },
+                {"sid": "S-1-5-18", "type": "Allow", "inherited": False},
+                {"sid": "S-1-1-0", "type": "Allow", "inherited": False},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        user_config_store.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=5),
+    )
+
+    assert user_config_store._secure_config_file(str(config_path)) is False
+
+
 def test_atomic_write_never_serializes_credentials_when_acl_hardening_fails(
     monkeypatch, tmp_path
 ):

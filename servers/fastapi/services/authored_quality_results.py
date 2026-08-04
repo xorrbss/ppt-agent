@@ -166,11 +166,13 @@ def build_slide_results(
             decision is not None
             or any(detail.get("attempted", True) for detail in slide_repairs)
         )
-        applied = bool(
-            (decision or {}).get("applied", (decision or {}).get("accepted", False))
-        )
+        # Validation success is deliberately not an apply receipt.  Older callers
+        # omitted ``applied`` and therefore accidentally exposed an accepted or
+        # merely rendered candidate as live.  Missing publication evidence now
+        # fails closed.
+        applied = bool((decision or {}).get("applied", False))
         rejection_reason = None
-        if attempted and not applied:
+        if attempted and not applied and not bool((decision or {}).get("accepted")):
             failure_detail = (repair or {}).get("failure_detail") or {}
             rejection_reason = str(
                 (decision or {}).get("rejection_reason")
@@ -214,7 +216,18 @@ def build_slide_results(
                 "slide_index": position,
                 "path": path,
                 "attempted": attempted,
+                "accepted": bool((decision or {}).get("accepted", False)),
                 "applied": applied,
+                "apply_status": str(
+                    (decision or {}).get("apply_status") or "not_started"
+                ),
+                "publish_status": str(
+                    (decision or {}).get("publish_status") or "not_started"
+                ),
+                "post_verify_status": str(
+                    (decision or {}).get("post_verify_status") or "not_started"
+                ),
+                "rolled_back": bool((decision or {}).get("rolled_back", False)),
                 "rejection_reason": rejection_reason,
                 "resolved_issues": resolved,
                 "remaining_issues": remaining,
