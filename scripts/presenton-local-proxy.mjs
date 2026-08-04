@@ -24,6 +24,8 @@ function syncStandaloneAssets() {
   const serverRoot = path.join(standaloneRoot, "servers", "nextjs");
   const staticSource = path.join(NEXTJS_DIR, ".next-build", "static");
   const staticDestination = path.join(serverRoot, ".next-build", "static");
+  const publicSource = path.join(NEXTJS_DIR, "public");
+  const publicDestination = path.join(serverRoot, "public");
 
   if (!fs.existsSync(path.join(serverRoot, "server.js"))) {
     return;
@@ -34,6 +36,9 @@ function syncStandaloneAssets() {
 
   fs.mkdirSync(path.dirname(staticDestination), { recursive: true });
   fs.cpSync(staticSource, staticDestination, { recursive: true, force: true });
+  if (fs.existsSync(publicSource)) {
+    fs.cpSync(publicSource, publicDestination, { recursive: true, force: true });
+  }
 }
 
 syncStandaloneAssets();
