@@ -55,6 +55,8 @@ REVISION_CHAT_FIRST_WORKSPACE = "d6f8a1c3e5b7"
 REVISION_ASYNC_PRESENTATION_TASK_TZ = "e7a9c2d4f6b8"
 REVISION_DURABLE_DELETION = "f8b0d3e5a7c9"
 REVISION_ACCOUNT_DELETION_FENCE = "fa1b2c3d4e5f"
+REVISION_SLIDESPEC_ARTIFACT_BUNDLES = "fb2c4d6e8a0b"
+REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS = "fc3d5e7f9a1b"
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {
@@ -340,6 +342,40 @@ ACCOUNT_DELETION_USER_CHECKS = {
     "ck_user_deletion_marker",
 }
 ACCOUNT_DELETION_USER_INDEXES = {"ix_user_deletion_state_requested_at"}
+SLIDESPEC_ARTIFACT_BUNDLE_COLUMNS = {
+    "id",
+    "presentation_id",
+    "slide_id",
+    "slide_index",
+    "spec_revision",
+    "route",
+    "status",
+    "base_spec_hash",
+    "candidate_spec_hash",
+    "render_input_hash",
+    "html_hash",
+    "render_hash",
+    "image_hash",
+    "spec",
+    "repair_plan",
+    "acceptance",
+    "evidence",
+    "manifest",
+    "publication_receipt",
+    "html",
+    "created_at",
+}
+SLIDESPEC_PUBLICATION_ATTEMPT_COLUMNS = {
+    "id",
+    "attempt_id",
+    "artifact_bundle_id",
+    "presentation_id",
+    "slide_id",
+    "state",
+    "reason_code",
+    "evidence",
+    "created_at",
+}
 DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -654,7 +690,80 @@ def _account_deletion_schema_revision(
         "deletion_requested_at",
     ) or bool(deletion_index.get("unique")):
         raise RuntimeError("Account deletion fence index is incompatible")
-    return REVISION_ACCOUNT_DELETION_FENCE
+    return _slidespec_schema_revision(
+        inspector,
+        tables,
+        REVISION_ACCOUNT_DELETION_FENCE,
+    )
+
+
+def _slidespec_schema_revision(
+    inspector,
+    tables: set[str],
+    previous_revision: str,
+) -> str:
+    """Recognize only complete SlideSpec persistence revisions.
+
+    These tables hold activation evidence, so a partial schema must never be
+    stamped past a migration that can repair it.
+    """
+
+    artifact_table = "slidespec_artifact_bundles"
+    publication_table = "slidespec_publication_attempts"
+    has_artifacts = artifact_table in tables
+    has_publications = publication_table in tables
+    if not has_artifacts and not has_publications:
+        return previous_revision
+    if has_publications and not has_artifacts:
+        raise RuntimeError(
+            "SlideSpec publication attempts exist without artifact bundles"
+        )
+    if previous_revision != REVISION_ACCOUNT_DELETION_FENCE:
+        raise RuntimeError(
+            "SlideSpec artifact schema exists without persistence prerequisites"
+        )
+
+    artifact_columns = {
+        column["name"] for column in inspector.get_columns(artifact_table)
+    }
+    if artifact_columns != SLIDESPEC_ARTIFACT_BUNDLE_COLUMNS:
+        raise RuntimeError(
+            "SlideSpec artifact bundle schema is only partially applied"
+        )
+    artifact_indexes = {
+        index.get("name"): index for index in inspector.get_indexes(artifact_table)
+    }
+    artifact_index = artifact_indexes.get(
+        "ix_slidespec_artifact_bundles_presentation_slide_created"
+    )
+    if artifact_index is None or tuple(
+        artifact_index.get("column_names") or ()
+    ) != ("presentation_id", "slide_index", "created_at") or bool(
+        artifact_index.get("unique")
+    ):
+        raise RuntimeError("SlideSpec artifact bundle index is incompatible")
+    if not has_publications:
+        return REVISION_SLIDESPEC_ARTIFACT_BUNDLES
+
+    publication_columns = {
+        column["name"] for column in inspector.get_columns(publication_table)
+    }
+    if publication_columns != SLIDESPEC_PUBLICATION_ATTEMPT_COLUMNS:
+        raise RuntimeError(
+            "SlideSpec publication attempt schema is only partially applied"
+        )
+    publication_indexes = {
+        index.get("name"): index
+        for index in inspector.get_indexes(publication_table)
+    }
+    publication_index = publication_indexes.get(
+        "ix_slidespec_publication_attempts_slide_created"
+    )
+    if publication_index is None or tuple(
+        publication_index.get("column_names") or ()
+    ) != ("slide_id", "created_at") or bool(publication_index.get("unique")):
+        raise RuntimeError("SlideSpec publication attempt index is incompatible")
+    return REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS
 
 
 def _durable_deletion_schema_revision(

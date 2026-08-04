@@ -208,6 +208,16 @@ def test_quality_review_result_sanitizer_keeps_only_user_visible_summary():
                 "attempted": True,
                 "applied": True,
                 "resolved_issues": ["low-contrast"],
+                "candidate_rejections": [
+                    {
+                        "plan_id": "rp-safe",
+                        "source": "deterministic",
+                        "render_status": "rendered",
+                        "validation_status": "rejected",
+                        "reason_codes": ["dom.unintended_overlap"],
+                        "private_dom": "must-not-persist",
+                    }
+                ],
                 "before": "private slide HTML",
                 "after": "private fixed HTML",
                 "element_changes": [{"dom": "private DOM"}],
@@ -249,6 +259,15 @@ def test_quality_review_result_sanitizer_keeps_only_user_visible_summary():
                 "applied": True,
                 "fix_action": "automatic-layout-fix",
                 "resolved_issues": ["low-contrast"],
+                "candidate_rejections": [
+                    {
+                        "plan_id": "rp-safe",
+                        "source": "deterministic",
+                        "render_status": "rendered",
+                        "validation_status": "rejected",
+                        "reason_codes": ["dom.unintended_overlap"],
+                    }
+                ],
             }
         ],
         "version_saved": True,

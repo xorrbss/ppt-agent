@@ -36,6 +36,12 @@ from models.sql.presentation_layout_code import (  # noqa: F401, E402
     PresentationLayoutCodeModel,
 )
 from models.sql.slide import SlideModel  # noqa: F401, E402
+from models.sql.slidespec_artifact_bundle import (  # noqa: F401, E402
+    SlideSpecArtifactBundle,
+)
+from models.sql.slidespec_publication_attempt import (  # noqa: F401, E402
+    SlideSpecPublicationAttempt,
+)
 from models.sql.template import TemplateModel  # noqa: F401, E402
 from models.sql.template_v2 import TemplateV2  # noqa: F401, E402
 from models.sql.template_v2_local_state import (  # noqa: F401, E402

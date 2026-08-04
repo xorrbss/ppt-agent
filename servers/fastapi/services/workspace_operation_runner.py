@@ -283,6 +283,37 @@ def _sanitize_quality_review_slide_results(value: Any) -> list[dict[str, Any]]:
             item["rejection_reason"] = rejection_reason.strip()[
                 :_MAX_QUALITY_REVIEW_MESSAGE_LENGTH
             ]
+        raw_rejections = raw_result.get("candidate_rejections")
+        if isinstance(raw_rejections, Sequence) and not isinstance(
+            raw_rejections, (str, bytes, bytearray)
+        ):
+            candidate_rejections: list[dict[str, Any]] = []
+            for raw_rejection in raw_rejections[:16]:
+                if not isinstance(raw_rejection, Mapping):
+                    continue
+                rejection: dict[str, Any] = {}
+                for key in (
+                    "plan_id",
+                    "source",
+                    "render_status",
+                    "validation_status",
+                ):
+                    candidate = raw_rejection.get(key)
+                    if isinstance(candidate, str) and candidate.strip():
+                        rejection[key] = candidate.strip()[:128]
+                reason_codes = raw_rejection.get("reason_codes")
+                if isinstance(reason_codes, Sequence) and not isinstance(
+                    reason_codes, (str, bytes, bytearray)
+                ):
+                    rejection["reason_codes"] = [
+                        code.strip()[:128]
+                        for code in reason_codes
+                        if isinstance(code, str) and code.strip()
+                    ][:16]
+                if rejection:
+                    candidate_rejections.append(rejection)
+            if candidate_rejections:
+                item["candidate_rejections"] = candidate_rejections
         for key in (
             "resolved_issues",
             "remaining_issues",

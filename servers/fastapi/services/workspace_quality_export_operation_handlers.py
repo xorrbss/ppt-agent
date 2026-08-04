@@ -137,15 +137,17 @@ class WorkspaceQualityReviewOperationHandler:
             raise NonRetryableWorkspaceOperationError("quality_review_request_invalid")
         scope = command_context.get("scope", "all")
         slide_indices = command_context.get("slide_indices", [])
+        slidespec_opt_in = command_context.get("slidespec_opt_in", True)
         if scope not in {"all", "current", "subset"} or not isinstance(
             slide_indices, list
-        ):
+        ) or not isinstance(slidespec_opt_in, bool):
             raise NonRetryableWorkspaceOperationError("quality_review_request_invalid")
         try:
             request = AuthoredQualityReviewRequest(
                 scope=scope,
                 slide_indices=slide_indices,
                 mode="analyze_and_fix",
+                slidespec_opt_in=slidespec_opt_in,
             )
         except ValueError as error:
             raise NonRetryableWorkspaceOperationError(

@@ -30,6 +30,7 @@ from models.sql.template_v2_revision import TemplateV2Revision
 from models.sql.template_v2_pptx_import import TemplateV2PptxImport
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
+from models.sql.slidespec_artifact_bundle import SlideSpecArtifactBundle
 from models.sql.webhook_subscription import WebhookSubscription
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -184,6 +185,7 @@ async def create_db_and_tables():
                         AuthoredSlideCheckpoint.__table__,
                         PresentationVersionModel.__table__,
                         SlideModel.__table__,
+                        SlideSpecArtifactBundle.__table__,
                         KeyValueSqlModel.__table__,
                         ChatHistoryMessageModel.__table__,
                         ImageAsset.__table__,
