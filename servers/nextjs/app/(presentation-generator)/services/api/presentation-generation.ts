@@ -856,6 +856,8 @@ export class PresentationGenerationApi {
     reviewData: {
       scope: "all" | "current" | "subset";
       slide_indices?: number[];
+      /** Explicit request gate; backend rollout flags and kill switch still win. */
+      slidespec_opt_in?: boolean;
     },
   ) {
     try {

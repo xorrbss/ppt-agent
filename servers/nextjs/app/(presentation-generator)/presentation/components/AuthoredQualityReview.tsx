@@ -35,6 +35,10 @@ const POLL_INTERVAL_MS = 2_000;
 const REVIEW_TIMEOUT_MS = 30 * 60 * 1_000;
 const MAX_POLL_ERRORS = 4;
 const REVIEW_TASK_STORAGE_PREFIX = "presenton:authored-quality-review:task:";
+const SLIDESPEC_CANARY_UI_ENABLED =
+  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false";
+const SLIDESPEC_ALL_SLIDES_ENABLED =
+  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
 
 type ReviewScope = "all" | "current";
 
@@ -49,10 +53,15 @@ function reviewPathLabel(path: AuthoredReviewRepairPath) {
   return "변경 없음";
 }
 
-function reviewOutcomeLabel(attempted: boolean, applied: boolean) {
+function reviewOutcomeLabel(
+  attempted: boolean,
+  accepted: boolean,
+  applied: boolean,
+) {
   if (applied) return "실제 적용됨";
-  if (attempted) return "시도했으나 미채택";
-  return "변경 없음";
+  if (accepted) return "검증 통과 · 미적용";
+  if (attempted) return "검증 거부";
+  return "후보 없음";
 }
 
 function ocrStatusLabel(ocr: AuthoredQualityReviewOcrCheck) {
@@ -93,6 +102,9 @@ export default function AuthoredQualityReview({
 }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<ReviewScope>("all");
+  const [slidespecOptIn, setSlidespecOptIn] = useState(
+    SLIDESPEC_ALL_SLIDES_ENABLED,
+  );
   const [isReviewing, setIsReviewing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [result, setResult] = useState<AuthoredQualityReviewResult | null>(
@@ -145,6 +157,7 @@ export default function AuthoredQualityReview({
           {
             scope,
             slide_indices: scope === "current" ? [currentSlide] : [],
+            slidespec_opt_in: SLIDESPEC_CANARY_UI_ENABLED && slidespecOptIn,
           },
         );
       const taskId = started?.id;
@@ -295,6 +308,9 @@ export default function AuthoredQualityReview({
               {(result.metrics.total_ms !== undefined ||
                 Object.keys(result.metrics.stage_timings_ms).length > 0 ||
                 result.metrics.cache_hits !== undefined ||
+                result.metrics.cache_misses !== undefined ||
+                result.metrics.llm_calls !== undefined ||
+                result.metrics.deterministic_resolved !== undefined ||
                 result.metrics.vqa_calls !== undefined ||
                 result.metrics.patch_count !== undefined ||
                 result.metrics.fallback_count !== undefined ||
@@ -304,6 +320,23 @@ export default function AuthoredQualityReview({
                 result.metrics.fallback_attempted !== undefined ||
                 result.metrics.fallback_succeeded !== undefined ||
                 result.metrics.fallback_failed !== undefined ||
+                result.metrics.candidate_proposed !== undefined ||
+                result.metrics.candidate_rendered !== undefined ||
+                result.metrics.candidate_accepted !== undefined ||
+                result.metrics.validation_passed !== undefined ||
+                result.metrics.validation_rejected !== undefined ||
+                result.metrics.validation_inconclusive !== undefined ||
+                result.metrics.apply_committed !== undefined ||
+                result.metrics.publish_active !== undefined ||
+                result.metrics.postverify_passed !== undefined ||
+                result.metrics.applied !== undefined ||
+                result.metrics.rolled_back !== undefined ||
+                result.metrics.solver_total_ms !== undefined ||
+                result.metrics.solver_branches_evaluated !== undefined ||
+                result.metrics.solver_unknown_hard !== undefined ||
+                result.metrics.solver_unsat_core_size !== undefined ||
+                result.metrics.solver_search_complete !== undefined ||
+                result.metrics.kill_switch_active !== undefined ||
                 result.metrics.ocr_executed !== undefined ||
                 result.metrics.ocr_calls !== undefined ||
                 result.metrics.ocr_cache_hits !== undefined ||
@@ -319,6 +352,17 @@ export default function AuthoredQualityReview({
                     )}
                     {result.metrics.cache_hits !== undefined && (
                       <span>캐시 적중 {result.metrics.cache_hits}</span>
+                    )}
+                    {result.metrics.cache_misses !== undefined && (
+                      <span>캐시 미스 {result.metrics.cache_misses}</span>
+                    )}
+                    {result.metrics.llm_calls !== undefined && (
+                      <span>LLM 호출 {result.metrics.llm_calls}</span>
+                    )}
+                    {result.metrics.deterministic_resolved !== undefined && (
+                      <span>
+                        결정론적 해결 {result.metrics.deterministic_resolved}
+                      </span>
                     )}
                     {result.metrics.vqa_calls !== undefined && (
                       <span>VQA 호출 {result.metrics.vqa_calls}</span>
@@ -336,7 +380,7 @@ export default function AuthoredQualityReview({
                     )}
                     {result.metrics.patch_succeeded !== undefined && (
                       <span>
-                        국소 패치 성공 {result.metrics.patch_succeeded}
+                        국소 후보 생성 {result.metrics.patch_succeeded}
                       </span>
                     )}
                     {result.metrics.patch_failed !== undefined && (
@@ -349,12 +393,95 @@ export default function AuthoredQualityReview({
                     )}
                     {result.metrics.fallback_succeeded !== undefined && (
                       <span>
-                        전체 재작성 성공 {result.metrics.fallback_succeeded}
+                        전체 재작성 후보 생성 {result.metrics.fallback_succeeded}
                       </span>
                     )}
                     {result.metrics.fallback_failed !== undefined && (
                       <span>
                         전체 재작성 실패 {result.metrics.fallback_failed}
+                      </span>
+                    )}
+                    {result.metrics.candidate_proposed !== undefined && (
+                      <span data-testid="quality-candidate-count">
+                        후보 {result.metrics.candidate_proposed}
+                      </span>
+                    )}
+                    {result.metrics.candidate_rendered !== undefined && (
+                      <span data-testid="quality-candidate-rendered">
+                        후보 렌더 {result.metrics.candidate_rendered}
+                      </span>
+                    )}
+                    {result.metrics.candidate_accepted !== undefined && (
+                      <span data-testid="quality-candidate-accepted">
+                        후보 채택 {result.metrics.candidate_accepted}
+                      </span>
+                    )}
+                    {result.metrics.validation_passed !== undefined && (
+                      <span data-testid="quality-accepted-count">
+                        검증 통과 {result.metrics.validation_passed}
+                      </span>
+                    )}
+                    {result.metrics.validation_rejected !== undefined && (
+                      <span data-testid="quality-candidate-rejected">
+                        후보 거부 {result.metrics.validation_rejected}
+                      </span>
+                    )}
+                    {result.metrics.validation_inconclusive !== undefined && (
+                      <span data-testid="quality-candidate-inconclusive">
+                        검증 보류 {result.metrics.validation_inconclusive}
+                      </span>
+                    )}
+                    {result.metrics.apply_committed !== undefined && (
+                      <span>커밋 {result.metrics.apply_committed}</span>
+                    )}
+                    {result.metrics.publish_active !== undefined && (
+                      <span>활성 발행 {result.metrics.publish_active}</span>
+                    )}
+                    {result.metrics.postverify_passed !== undefined && (
+                      <span>사후 검증 {result.metrics.postverify_passed}</span>
+                    )}
+                    {result.metrics.applied !== undefined && (
+                      <span data-testid="quality-applied-count">
+                        실제 적용 {result.metrics.applied}
+                      </span>
+                    )}
+                    {result.metrics.rolled_back !== undefined && (
+                      <span data-testid="quality-rollback-count">
+                        롤백 {result.metrics.rolled_back}
+                      </span>
+                    )}
+                    {result.metrics.solver_total_ms !== undefined && (
+                      <span data-testid="quality-solver-elapsed">
+                        Solver {formatDuration(result.metrics.solver_total_ms)}
+                      </span>
+                    )}
+                    {result.metrics.solver_branches_evaluated !== undefined && (
+                      <span data-testid="quality-solver-branches">
+                        Solver branches {result.metrics.solver_branches_evaluated}
+                      </span>
+                    )}
+                    {result.metrics.solver_unknown_hard !== undefined && (
+                      <span data-testid="quality-solver-unknown">
+                        Solver unknown {result.metrics.solver_unknown_hard}
+                      </span>
+                    )}
+                    {result.metrics.solver_unsat_core_size !== undefined && (
+                      <span data-testid="quality-solver-unsat-core">
+                        UNSAT core {result.metrics.solver_unsat_core_size}
+                      </span>
+                    )}
+                    {result.metrics.solver_search_complete !== undefined && (
+                      <span data-testid="quality-solver-search-state">
+                        {result.metrics.solver_search_complete
+                          ? "Solver search complete"
+                          : "Solver search bounded"}
+                      </span>
+                    )}
+                    {result.metrics.kill_switch_active !== undefined && (
+                      <span data-testid="quality-kill-switch-state">
+                        {result.metrics.kill_switch_active
+                          ? "SlideSpec kill switch active"
+                          : "SlideSpec kill switch inactive"}
                       </span>
                     )}
                     {result.metrics.ocr_executed !== undefined && (
@@ -406,13 +533,18 @@ export default function AuthoredQualityReview({
                     >
                       <summary className="cursor-pointer font-medium text-[#191919]">
                         <span className="mr-1 font-semibold">
-                          {reviewOutcomeLabel(slide.attempted, slide.applied)} ·
+                          {reviewOutcomeLabel(
+                            slide.attempted,
+                            slide.accepted,
+                            slide.applied,
+                          )} ·
                         </span>
                         {slide.slide_index + 1}번 슬라이드 ·{" "}
                         {reviewPathLabel(slide.path)}
                       </summary>
                       <div className="mt-3 space-y-2 text-xs text-gray-700">
                         {slide.attempted &&
+                          !slide.accepted &&
                           !slide.applied &&
                           slide.rejection_reason && (
                             <p className="text-amber-700">
@@ -583,6 +715,30 @@ export default function AuthoredQualityReview({
                   </label>
                 </RadioGroup>
               </fieldset>
+
+              {SLIDESPEC_CANARY_UI_ENABLED && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={slidespecOptIn}
+                    onChange={(event) => setSlidespecOptIn(event.target.checked)}
+                    data-testid="slidespec-canary-opt-in"
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span>
+                    <span className="block font-semibold text-amber-950">
+                      {SLIDESPEC_ALL_SLIDES_ENABLED
+                        ? "SlideSpec 전체 슬라이드 적용"
+                        : "SlideSpec 11페이지 canary 참여"}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-amber-800">
+                      {SLIDESPEC_ALL_SLIDES_ENABLED
+                        ? "체크하면 선택한 검수 범위의 모든 슬라이드에 적용됩니다. 체크를 끄면 기존 검수 경로와 비교할 수 있습니다."
+                        : "서버 canary와 적용 플래그가 모두 허용할 때만 11페이지에 적용됩니다. 선택하지 않으면 기존 검수 경로를 유지합니다."}
+                    </span>
+                  </span>
+                </label>
+              )}
 
               <div className="flex items-center gap-2 rounded-xl bg-[#F6F3FF] px-4 py-3 text-xs text-[#5141E5]">
                 <History className="h-4 w-4 shrink-0" />

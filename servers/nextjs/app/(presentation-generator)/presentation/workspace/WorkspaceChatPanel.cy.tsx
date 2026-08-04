@@ -1845,6 +1845,10 @@ describe("WorkspaceChatPanel", () => {
         scope: "subset",
         slide_indices: [2, 4, 5, 6, 7, 11],
         mode: "analyze_and_fix",
+        ...(process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
+        process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false"
+          ? { slidespec_opt_in: true }
+          : {}),
         current_slide: 2,
       });
     });

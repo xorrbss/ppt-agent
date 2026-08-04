@@ -27,6 +27,10 @@ import {
 } from "../../services/api/dashboard";
 import { withGenerationContext } from "./generationContext";
 
+const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
+  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
+  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
+
 interface WorkspaceChatPanelProps {
   presentationId: string;
   currentSlide?: number;
@@ -286,6 +290,9 @@ export default function WorkspaceChatPanel({
               : "all",
           slide_indices: slideIndices,
           mode: "analyze_and_fix",
+          ...(SLIDESPEC_WORKSPACE_REPAIR_ENABLED
+            ? { slidespec_opt_in: true }
+            : {}),
           ...(selectedSlide === undefined
             ? {}
             : { current_slide: selectedSlide }),
