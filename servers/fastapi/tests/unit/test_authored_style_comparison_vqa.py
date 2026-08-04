@@ -4,10 +4,43 @@ import asyncio
 
 import pytest
 
+from services.authored_quality_acceptance import (
+    style_comparison_improvement_decision,
+    style_comparison_quality_gain,
+)
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls import critique_slide as critique_slide_mod
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
-from utils.llm_calls.critique_slide import SlideCritique
+from utils.llm_calls.critique_slide import (
+    SlideCritique,
+    StyleComparisonCritique,
+)
+
+
+def _comparison_payload(*, preference="candidate", target_improved=True, confidence=0.99):
+    return {
+        "needs_fix": False,
+        "issues": [],
+        "preference": preference,
+        "target_improved": target_improved,
+        "confidence": confidence,
+        "dimensions": [
+            {
+                "dimension": dimension,
+                "verdict": "better" if dimension == "target-defect" else "same",
+                "detail": "paired comparison",
+            }
+            for dimension in (
+                "target-defect",
+                "content",
+                "readability",
+                "hierarchy",
+                "alignment",
+                "spacing",
+                "style",
+            )
+        ],
+    }
 
 
 def _run(coro):
@@ -60,7 +93,7 @@ def test_low_level_style_comparison_makes_one_structured_model_call(monkeypatch)
 
     async def fake_generate(client, model, **kwargs):
         calls.append((client, model, kwargs))
-        return {"needs_fix": False, "issues": []}
+        return _comparison_payload()
 
     client = object()
     monkeypatch.setattr(critique_slide_mod, "get_llm_config", lambda: "config")
@@ -84,11 +117,58 @@ def test_low_level_style_comparison_makes_one_structured_model_call(monkeypatch)
         )
     )
 
-    assert critique == SlideCritique(needs_fix=False)
+    assert isinstance(critique, StyleComparisonCritique)
+    assert critique.preference == "candidate"
+    assert critique.target_improved is True
     assert len(calls) == 1
     assert calls[0][0:2] == (client, "review-model")
     content = calls[0][2]["messages"][1].content
     assert [content[1].data, content[3].data] == [b"baseline", b"candidate"]
+
+
+def test_paired_improvement_decision_rejects_ties_and_legacy_payloads():
+    improved = StyleComparisonCritique.model_validate(_comparison_payload())
+    tie = StyleComparisonCritique.model_validate(
+        _comparison_payload(preference="tie", target_improved=False)
+    )
+
+    assert style_comparison_improvement_decision(improved) == (
+        True,
+        "vqa.improved",
+        True,
+    )
+    assert style_comparison_improvement_decision(tie) == (
+        False,
+        "vqa.not_improved",
+        True,
+    )
+    assert style_comparison_improvement_decision(SlideCritique(needs_fix=False)) == (
+        False,
+        "vqa.improvement_unavailable",
+        False,
+    )
+    assert style_comparison_quality_gain(improved) == pytest.approx(0.396)
+    assert style_comparison_quality_gain(tie) is None
+
+
+def test_paired_improvement_decision_fails_closed_on_uncertainty_or_regression():
+    low_confidence = StyleComparisonCritique.model_validate(
+        _comparison_payload(confidence=0.5)
+    )
+    regressed_payload = _comparison_payload(preference="baseline")
+    regressed_payload["dimensions"][2]["verdict"] = "worse"
+    regressed = StyleComparisonCritique.model_validate(regressed_payload)
+
+    assert style_comparison_improvement_decision(low_confidence) == (
+        False,
+        "vqa.indeterminate",
+        False,
+    )
+    assert style_comparison_improvement_decision(regressed) == (
+        False,
+        "vqa.visual_regression",
+        True,
+    )
 
 
 def test_style_comparison_batch_uses_dedicated_call_shape_and_cache(monkeypatch):

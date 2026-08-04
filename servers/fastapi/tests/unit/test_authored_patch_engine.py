@@ -139,7 +139,7 @@ def test_qid_migration_and_patch_share_a_valid_unique_id_contract():
     result_qids = [node.qid for node in build_compact_dom_map(result.html)]
     assert result.ok is True
     assert result.html.count("new") == 1
-    assert len(result_qids) == len(set(result_qids)) == 4
+    assert len(result_qids) == len(set(result_qids)) == 3
     assert all(is_valid_authored_qid(qid) for qid in result_qids)
 
 

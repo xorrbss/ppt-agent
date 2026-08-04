@@ -338,6 +338,7 @@ async def _style_scenario(
             presentation.id,
             AuthoredQualityReviewRequest(
                 scope="all",
+                slidespec_opt_in=False,
             ),
             task,
             session,

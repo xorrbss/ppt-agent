@@ -11,6 +11,7 @@ the existing presentation version history.
 # ruff: noqa: F401
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -143,7 +144,7 @@ from utils.llm_calls.author_vision_qa import (
     critique_authored_style_comparison,
     revise_authored_deck,
 )
-from utils.llm_calls.critique_slide import SlideCritique
+from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.slide_capture import (
     get_cached_browser_metrics,
     render_html_to_png,
@@ -163,6 +164,54 @@ _OCR_DETAIL_SIGNAL = re.compile(
     r"텍스트|제목|레이블|문자|숫자|기호|누락|생략|잘림|내용)",
     re.IGNORECASE,
 )
+
+
+def _merge_dom_repair_triggers(
+    critiques: list[SlideCritique | None],
+    local_reports: list[DomQualityReport],
+) -> list[SlideCritique | None]:
+    """Make required geometry defects start repair independently from VQA.
+
+    VQA remains useful evidence, but it cannot veto deterministic clipping,
+    off-canvas, overflow, or unintended-overlap telemetry.  Only medium/high
+    geometry defects are promoted; unavailable telemetry stays fail-closed and
+    does not fabricate a repair target.
+    """
+
+    geometry_categories = {"clipping", "off_canvas", "overflow", "overlap"}
+    merged = list(critiques)
+    for index, report in enumerate(local_reports):
+        promoted = [
+            issue
+            for issue in report.issues
+            if issue.category in geometry_categories
+            and issue.severity in {"high", "medium"}
+        ]
+        if not promoted:
+            continue
+        critique = merged[index] if index < len(merged) else None
+        existing = list(critique.issues) if critique is not None else []
+        existing_keys = {(issue.type, issue.severity, issue.detail) for issue in existing}
+        for issue in promoted:
+            issue_type = (
+                issue.category
+                if issue.category in {"overflow", "overlap"}
+                else "other"
+            )
+            detail = f"DOM_{issue.category.upper()}: {issue.detail}"[:200]
+            key = (issue_type, issue.severity, detail)
+            if key in existing_keys:
+                continue
+            existing.append(
+                CritiqueIssue(
+                    type=issue_type,
+                    severity=issue.severity,
+                    detail=detail,
+                )
+            )
+            existing_keys.add(key)
+        merged[index] = SlideCritique(needs_fix=True, issues=existing[:8])
+    return merged
 
 
 async def _execute_sqlalchemy(session: AsyncSession, statement: Any) -> Any:
@@ -428,7 +477,7 @@ def _write_reviewed_png(
     return publish_reviewed_png(presentation_id, slide_position, png)
 
 
-async def _run_authored_quality_review_unlocked(
+async def _run_legacy_authored_quality_review_unlocked(
     presentation_id: uuid.UUID,
     request: AuthoredQualityReviewRequest,
     task: AsyncPresentationGenerationTaskModel,
@@ -663,6 +712,10 @@ async def _run_authored_quality_review_unlocked(
                 : len(targets)
             ]
         initial_critique_ms = (time.perf_counter() - initial_critique_started_at) * 1000
+    initial_critiques = _merge_dom_repair_triggers(
+        initial_critiques,
+        local_reports,
+    )
     initial_indeterminate_count = sum(
         _critique_unusable_reason(critique) == "indeterminate"
         for critique in initial_critiques
@@ -802,6 +855,17 @@ async def _run_authored_quality_review_unlocked(
                     "fallback_attempted": 0,
                     "fallback_succeeded": 0,
                     "fallback_failed": 0,
+                    "candidate_proposed": 0,
+                    "candidate_rendered": 0,
+                    "validation_passed": 0,
+                    "validation_rejected": 0,
+                    "validation_inconclusive": 0,
+                    "apply_committed": 0,
+                    "publish_active": 0,
+                    "postverify_passed": 0,
+                    "applied": 0,
+                    "rolled_back": 0,
+                    "legacy_preserved": len(targets),
                     **ocr_summary,
                 },
             },
@@ -971,7 +1035,14 @@ async def _run_authored_quality_review_unlocked(
                         "accepted": accepted,
                         "reason": reason,
                         "attempted": True,
-                        "applied": accepted,
+                        "candidate_proposed": True,
+                        "candidate_rendered": True,
+                        "validation_status": "passed" if accepted else "rejected",
+                        "apply_status": "not_started",
+                        "publish_status": "not_started",
+                        "post_verify_status": "not_started",
+                        "applied": False,
+                        "rolled_back": False,
                         "rejection_reason": None if accepted else reason,
                         "path": path,
                     }
@@ -1095,7 +1166,14 @@ async def _run_authored_quality_review_unlocked(
                         "accepted": accepted,
                         "reason": reason,
                         "attempted": True,
-                        "applied": accepted,
+                        "candidate_proposed": True,
+                        "candidate_rendered": True,
+                        "validation_status": "passed" if accepted else "rejected",
+                        "apply_status": "not_started",
+                        "publish_status": "not_started",
+                        "post_verify_status": "not_started",
+                        "applied": False,
+                        "rolled_back": False,
                         "rejection_reason": None if accepted else reason,
                         "path": path,
                     }
@@ -1327,7 +1405,14 @@ async def _run_authored_quality_review_unlocked(
                         "accepted": accepted,
                         "reason": reason,
                         "attempted": True,
-                        "applied": accepted,
+                        "candidate_proposed": True,
+                        "candidate_rendered": local_index in fallback_candidate_indices,
+                        "validation_status": "passed" if accepted else "rejected",
+                        "apply_status": "not_started",
+                        "publish_status": "not_started",
+                        "post_verify_status": "not_started",
+                        "applied": False,
+                        "rolled_back": False,
                         "rejection_reason": None if accepted else reason,
                         "path": "full_fallback",
                         "initial_rejection_reason": initial_rejection_reason,
@@ -1465,6 +1550,41 @@ async def _run_authored_quality_review_unlocked(
         # resume marker, so a crash cannot leave applied fixes without the data
         # needed to publish the revision exactly once.
         await session.flush()
+        expected_by_id = {
+            targets[local_index].id: (revised_html, revised_content, revised_properties)
+            for local_index, revised_html, revised_content, revised_properties in pending_updates
+        }
+        readback = await _execute_sqlalchemy(
+            session,
+            select(
+                SlideModel.id,
+                SlideModel.html_content,
+                SlideModel.content,
+                SlideModel.properties,
+            ).where(SlideModel.id.in_(tuple(expected_by_id))),
+        )
+        readback_by_id = {
+            row.id: (row.html_content, row.content, row.properties)
+            for row in readback.all()
+        }
+        if readback_by_id != expected_by_id:
+            await session.rollback()
+            raise RuntimeError("Published authored slide read-back did not match")
+        fixed_position_set = set(fixed_positions)
+        for decision in candidate_decisions:
+            if decision.get("slide_index") not in fixed_position_set:
+                continue
+            html = revised_htmls[positions.index(decision["slide_index"])]
+            decision.update(
+                {
+                    "apply_status": "committed",
+                    "publish_status": "active",
+                    "post_verify_status": "passed",
+                    "html_hash": "sha256:"
+                    + hashlib.sha256(html.encode("utf-8")).hexdigest(),
+                    "applied": True,
+                }
+            )
         persist_ms = (time.perf_counter() - persist_started_at) * 1000
 
     task_rejection_reasons: Counter[str] = Counter(
@@ -1507,6 +1627,46 @@ async def _run_authored_quality_review_unlocked(
         if isinstance(detail, Mapping)
     )
     ocr_summary = ocr_runtime.summary()
+    funnel_metrics = {
+        "candidate_proposed": sum(
+            bool(decision.get("candidate_proposed"))
+            for decision in candidate_decisions
+        ),
+        "candidate_rendered": sum(
+            bool(decision.get("candidate_rendered"))
+            for decision in candidate_decisions
+        ),
+        "validation_passed": sum(
+            decision.get("validation_status") == "passed"
+            for decision in candidate_decisions
+        ),
+        "validation_rejected": sum(
+            decision.get("validation_status") == "rejected"
+            for decision in candidate_decisions
+        ),
+        "validation_inconclusive": sum(
+            decision.get("validation_status") == "inconclusive"
+            for decision in candidate_decisions
+        ),
+        "apply_committed": sum(
+            decision.get("apply_status") == "committed"
+            for decision in candidate_decisions
+        ),
+        "publish_active": sum(
+            decision.get("publish_status") == "active"
+            for decision in candidate_decisions
+        ),
+        "postverify_passed": sum(
+            decision.get("post_verify_status") == "passed"
+            for decision in candidate_decisions
+        ),
+        "applied": sum(bool(decision.get("applied")) for decision in candidate_decisions),
+        "rolled_back": sum(
+            bool(decision.get("rolled_back")) for decision in candidate_decisions
+        ),
+        "legacy_preserved": len(targets)
+        - sum(bool(decision.get("applied")) for decision in candidate_decisions),
+    }
     total_ms = (time.perf_counter() - review_started_at) * 1000
     final_local_reports = list(local_reports)
     for local_index in fixed_local_indices:
@@ -1632,9 +1792,280 @@ async def _run_authored_quality_review_unlocked(
                 "fallback_attempted": fallback_attempts,
                 "fallback_succeeded": fallback_successes,
                 "fallback_failed": max(0, fallback_attempts - fallback_successes),
+                **funnel_metrics,
                 **ocr_summary,
             },
         },
+    )
+
+
+_CANONICAL_METRIC_FLAT_ALIASES: dict[str, dict[str, str]] = {
+    "solver": {
+        "elapsed_ms": "solver_elapsed_ms",
+        "branches": "solver_branches",
+        "unknown": "solver_unknown",
+        "unsat_core_size": "solver_unsat_core_size",
+        "search_complete": "solver_search_complete",
+    },
+    "candidates": {
+        "proposed": "candidate_proposed",
+        "rendered": "candidate_rendered",
+        "accepted": "candidate_accepted",
+        "rejected": "candidate_rejected",
+    },
+    "transaction": {"rollback_count": "rollback_count"},
+    "rollout": {"kill_switch_enabled": "kill_switch_enabled"},
+}
+
+
+def _canonical_metrics_with_flat_aliases(metrics: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep canonical telemetry queryable by existing summary consumers.
+
+    The nested shape is the source of truth, while the flat aliases let mixed
+    legacy/canonical review runs add the same counter at the deck-summary seam.
+    A producer-provided flat value always wins so a future producer cannot be
+    silently double-counted.
+    """
+
+    normalized = dict(metrics)
+    for group, aliases in _CANONICAL_METRIC_FLAT_ALIASES.items():
+        values = metrics.get(group)
+        if not isinstance(values, Mapping):
+            continue
+        for nested_key, flat_key in aliases.items():
+            if nested_key in values:
+                normalized.setdefault(flat_key, values[nested_key])
+    return normalized
+
+
+def _merge_canonical_metric_group(
+    previous: Any, value: Mapping[str, Any], *, group: str
+) -> dict[str, Any]:
+    """Aggregate canonical counters without weakening bounded/fail-closed flags."""
+
+    merged = dict(previous) if isinstance(previous, Mapping) else {}
+    for key, item in value.items():
+        prior = merged.get(key)
+        if (
+            isinstance(prior, (int, float))
+            and not isinstance(prior, bool)
+            and isinstance(item, (int, float))
+            and not isinstance(item, bool)
+        ):
+            merged[str(key)] = prior + item
+        elif group == "solver" and key == "search_complete" and isinstance(item, bool):
+            # One bounded solver result makes the deck-level search bounded.
+            merged[str(key)] = bool(prior) and item if prior is not None else item
+        elif group == "rollout" and key == "kill_switch_enabled" and isinstance(item, bool):
+            # A kill switch on any owned slide must remain visible to operators.
+            merged[str(key)] = bool(prior) or item
+        else:
+            merged[str(key)] = item
+    return merged
+
+
+def _merge_slidespec_review_data(
+    *,
+    presentation_id: uuid.UUID,
+    request: AuthoredQualityReviewRequest,
+    legacy: Mapping[str, Any] | None,
+    canonical: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Merge disjoint per-slide owners without changing the legacy contract."""
+
+    result = dict(legacy or {})
+    result.setdefault("presentation_id", str(presentation_id))
+    result.setdefault("mode", request.mode)
+    result.setdefault("scope", request.scope)
+    additive = (
+        "reviewed_count",
+        "issue_slide_count",
+        "fixed_count",
+        "candidate_count",
+        "accepted_candidate_count",
+        "rejected_candidate_count",
+        "remaining_issue_count",
+    )
+    for key in additive:
+        result[key] = int(result.get(key, 0)) + int(canonical.get(key, 0))
+    for key in ("issues", "remaining_issues", "slide_results"):
+        result[key] = list(result.get(key, [])) + list(canonical.get(key, []))
+    result["candidate_decisions"] = list(result.get("candidate_decisions", [])) + list(
+        canonical.get("candidate_decisions", [])
+    )
+    rejection_reasons = dict(result.get("rejection_reasons") or {})
+    for code, count in (canonical.get("rejection_reasons") or {}).items():
+        rejection_reasons[str(code)] = rejection_reasons.get(str(code), 0) + int(count)
+    result["rejection_reasons"] = rejection_reasons
+    for key in ("fixed_slide_indices", "remaining_slide_indices"):
+        canonical_key = (
+            "remaining_issue_indices" if key == "remaining_slide_indices" else key
+        )
+        result[key] = sorted(
+            set(result.get(key, [])) | set(canonical.get(canonical_key, []))
+        )
+    result["version_saved"] = bool(
+        result.get("version_saved") or canonical.get("version_saved")
+    )
+    routing = dict(result.get("routing") or {})
+    routing.update(canonical.get("routing") or {})
+    result["routing"] = routing
+    metrics = dict(result.get("metrics") or {})
+    canonical_metrics = _canonical_metrics_with_flat_aliases(
+        canonical.get("metrics") or {}
+    )
+    for key, value in canonical_metrics.items():
+        previous = metrics.get(key)
+        if key == "stage_timings_ms" and isinstance(value, Mapping):
+            merged_timings = dict(previous) if isinstance(previous, Mapping) else {}
+            for stage, duration in value.items():
+                prior_duration = merged_timings.get(stage, 0)
+                if isinstance(duration, (int, float)) and not isinstance(
+                    duration, bool
+                ):
+                    merged_timings[str(stage)] = float(prior_duration) + float(duration)
+            metrics[key] = merged_timings
+            continue
+        if key in _CANONICAL_METRIC_FLAT_ALIASES and isinstance(value, Mapping):
+            metrics[key] = _merge_canonical_metric_group(previous, value, group=key)
+            continue
+        if (
+            isinstance(previous, (int, float))
+            and not isinstance(previous, bool)
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+        ):
+            metrics[key] = previous + value
+        else:
+            metrics[key] = value
+    result["metrics"] = metrics
+    result["slide_results"] = sorted(
+        result["slide_results"], key=lambda item: int(item.get("slide_index", 0))
+    )
+    return result
+
+
+async def _run_authored_quality_review_unlocked(
+    presentation_id: uuid.UUID,
+    request: AuthoredQualityReviewRequest,
+    task: AsyncPresentationGenerationTaskModel,
+    session: AsyncSession,
+) -> None:
+    """Import eligible authored slides, then route canonical owners to SlideSpec."""
+
+    presentation = await session.get(PresentationModel, presentation_id)
+    if presentation is None:
+        raise ValueError("Presentation not found")
+    outline = presentation.get_presentation_outline()
+    if outline is None or not outline.slides:
+        raise ValueError("The saved AI-authored outline is missing")
+    slide_rows = await _execute_sqlalchemy(
+        session,
+        select(SlideModel)
+        .where(SlideModel.presentation == presentation_id)
+        .order_by(SlideModel.index),
+    )
+    slides = list(slide_rows.scalars().all())
+    if (
+        not slides
+        or not presentation.is_authored()
+        or not all(_is_authored_slide(slide) for slide in slides)
+    ):
+        raise ValueError("High-quality review supports AI-authored presentations only")
+    if len(outline.slides) != len(slides):
+        raise ValueError("Saved outline and slide counts do not match")
+    positions = _resolve_positions(request, len(slides))
+    if any(not slides[position].html_content for position in positions):
+        raise ValueError("One or more slides are missing their editable authored HTML")
+
+    from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
+    from services.slidespec_authored_importer import ensure_authored_slidespec_imports
+
+    imported = await ensure_authored_slidespec_imports(
+        presentation_id=presentation_id,
+        slides=slides,
+        positions=positions,
+        opt_in=request.slidespec_opt_in,
+        owner_id=getattr(presentation, "owner_id", None),
+        session=session,
+    )
+    slides = list(imported.slides)
+
+    claimed_hint = {
+        position
+        for position in positions
+        if isinstance(slides[position].properties, Mapping)
+        and ACTIVE_POINTER_KEY in slides[position].properties
+    }
+    if not claimed_hint:
+        await _run_legacy_authored_quality_review_unlocked(
+            presentation_id, request, task, session
+        )
+        return
+
+    # Run legacy owners first.  It may commit; canonical publication then takes a
+    # fresh snapshot and CASes only its disjoint pointer-backed slides.  This avoids
+    # reporting a failed mixed-deck task after a canonical mutation already landed.
+    legacy_positions = [position for position in positions if position not in claimed_hint]
+    legacy_data: Mapping[str, Any] | None = None
+    if legacy_positions:
+        legacy_request = AuthoredQualityReviewRequest(
+            scope="subset",
+            slide_indices=legacy_positions,
+            mode=request.mode,
+            slidespec_opt_in=False,
+        )
+        await _run_legacy_authored_quality_review_unlocked(
+            presentation_id, legacy_request, task, session
+        )
+        legacy_data = task.data if isinstance(task.data, Mapping) else None
+
+        refreshed_rows = await _execute_sqlalchemy(
+            session,
+            select(SlideModel)
+            .where(SlideModel.presentation == presentation_id)
+            .order_by(SlideModel.index)
+            .execution_options(populate_existing=True),
+        )
+        slides = list(refreshed_rows.scalars().all())
+
+    from services.slidespec_authored_executor import execute_slidespec_authored_review
+
+    canonical = await execute_slidespec_authored_review(
+        presentation_id=presentation_id,
+        slides=slides,
+        positions=sorted(claimed_hint),
+        opt_in=request.slidespec_opt_in,
+        owner_id=getattr(presentation, "owner_id", None),
+        session=session,
+    )
+    claimed = set(canonical.claimed_positions)
+    if claimed != claimed_hint:
+        await session.rollback()
+        raise RuntimeError("SlideSpec ownership changed during authored review")
+
+    routing = canonical.data.setdefault("routing", {})
+    routing["imported_positions"] = list(imported.imported_positions)
+    routing["import_failures"] = {
+        str(position): code for position, code in imported.failures.items()
+    }
+
+    data = _merge_slidespec_review_data(
+        presentation_id=presentation_id,
+        request=request,
+        legacy=legacy_data,
+        canonical=canonical.data,
+    )
+    await _set_status(
+        session,
+        task,
+        status="completed",
+        message=(
+            f"검수가 완료되었습니다. {data['fixed_count']}개 슬라이드를 수정했습니다."
+            if data["fixed_count"]
+            else "검수는 완료되었지만 자동 수정으로 확정된 변경은 없습니다."
+        ),
+        data=data,
     )
 
 

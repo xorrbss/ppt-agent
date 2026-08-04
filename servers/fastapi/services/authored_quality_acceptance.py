@@ -2,7 +2,7 @@
 
 from utils.authored_dom_quality import DomQualityReport, has_dom_quality_regression
 from utils.llm_calls import author_vision_qa
-from utils.llm_calls.critique_slide import SlideCritique
+from utils.llm_calls.critique_slide import SlideCritique, StyleComparisonCritique
 
 _INDETERMINATE_PREFIX = "INDETERMINATE:"
 
@@ -67,6 +67,87 @@ def style_comparison_has_regression(critique: SlideCritique | None) -> bool:
     return any(
         issue.detail.lstrip().upper().startswith(prefix) for issue in critique.issues
     )
+
+
+def style_comparison_improvement_decision(
+    critique: SlideCritique | None,
+) -> tuple[bool, str, bool]:
+    """Return (accepted, reason, conclusive) for paired visual evidence.
+
+    Legacy comparison payloads prove only absence of a named regression. They do not
+    prove that the candidate is better, so SlideSpec publication treats them as
+    inconclusive instead of silently accepting a tie.
+    """
+    unusable = critique_unusable_reason(critique)
+    if unusable is not None:
+        return False, f"vqa.{unusable}", False
+    if not isinstance(critique, StyleComparisonCritique):
+        return False, "vqa.improvement_unavailable", False
+
+    required = {
+        "target-defect",
+        "content",
+        "readability",
+        "hierarchy",
+        "alignment",
+        "spacing",
+        "style",
+    }
+    dimensions = {item.dimension: item.verdict for item in critique.dimensions}
+    if set(dimensions) != required or len(critique.dimensions) != len(required):
+        return False, "vqa.improvement_unavailable", False
+    if style_comparison_has_regression(critique) or critique.preference == "baseline":
+        return False, "vqa.visual_regression", True
+    if any(verdict == "worse" for verdict in dimensions.values()):
+        return False, "vqa.visual_regression", True
+    if (
+        critique.preference == "indeterminate"
+        or critique.confidence < 0.75
+        or any(verdict == "indeterminate" for verdict in dimensions.values())
+    ):
+        return False, "vqa.indeterminate", False
+    if critique.preference != "candidate" or not critique.target_improved:
+        return False, "vqa.not_improved", True
+    if dimensions["target-defect"] != "better":
+        return False, "vqa.not_improved", True
+    return True, "vqa.improved", True
+
+
+def style_comparison_quality_gain(critique: SlideCritique | None) -> float | None:
+    """Return a conservative, normalized gain for an accepted paired comparison.
+
+    The score is deliberately unavailable for a tie, regression, incomplete
+    evidence, or a legacy payload.  This prevents candidate selection from turning
+    uncertainty into an apparent improvement.
+    """
+    accepted, _reason, _conclusive = style_comparison_improvement_decision(critique)
+    if not accepted or not isinstance(critique, StyleComparisonCritique):
+        return None
+    weights = {
+        "target-defect": 0.40,
+        "content": 0.05,
+        "readability": 0.15,
+        "hierarchy": 0.10,
+        "alignment": 0.10,
+        "spacing": 0.10,
+        "style": 0.10,
+    }
+    verdicts = {item.dimension: item.verdict for item in critique.dimensions}
+    raw = sum(weight for name, weight in weights.items() if verdicts[name] == "better")
+    return round(raw * critique.confidence, 6)
+
+
+def style_comparison_quality_interval(
+    critique: SlideCritique | None,
+) -> tuple[float, float] | None:
+    """Return a deterministic confidence interval for paired-VQA quality gain."""
+
+    gain = style_comparison_quality_gain(critique)
+    if gain is None or not isinstance(critique, StyleComparisonCritique):
+        return None
+    raw = gain / critique.confidence if critique.confidence > 0 else 0
+    uncertainty = raw * (1 - critique.confidence)
+    return round(max(0, gain - uncertainty), 6), round(min(1, gain + uncertainty), 6)
 
 
 def style_acceptance_decision(

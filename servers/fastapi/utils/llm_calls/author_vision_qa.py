@@ -39,6 +39,7 @@ from utils.llm_calls.critique_slide import (
     STYLE_COMPARISON_PROMPT_VERSION,
     STYLE_COMPARISON_REGRESSION_PREFIX as _STYLE_COMPARISON_REGRESSION_PREFIX,
     SlideCritique,
+    StyleComparisonCritique,
     critique_slide_image,
     critique_slide_style_comparison,
 )
@@ -93,12 +94,12 @@ VQA_CACHE_SIZE = _env_nonnegative_int("AUTHORED_VQA_CACHE_SIZE", 64)
 _VQA_PROMPT_VERSION = f"authored-vqa-v2:{CRITIQUE_PROMPT_VERSION}"
 STYLE_COMPARISON_REGRESSION_PREFIX = _STYLE_COMPARISON_REGRESSION_PREFIX
 STYLE_COMPARISON_VQA_PROMPT_VERSION = (
-    f"authored-style-comparison-v1:{STYLE_COMPARISON_PROMPT_VERSION}"
+    f"authored-style-comparison-v2:{STYLE_COMPARISON_PROMPT_VERSION}"
 )
 _vqa_cache: "OrderedDict[str, SlideCritique]" = OrderedDict()
 _vqa_inflight: Dict[str, "asyncio.Task[SlideCritique]"] = {}
-_style_comparison_vqa_cache: "OrderedDict[str, SlideCritique]" = OrderedDict()
-_style_comparison_vqa_inflight: Dict[str, "asyncio.Task[SlideCritique]"] = {}
+_style_comparison_vqa_cache: "OrderedDict[str, StyleComparisonCritique]" = OrderedDict()
+_style_comparison_vqa_inflight: Dict[str, "asyncio.Task[StyleComparisonCritique]"] = {}
 
 
 def _get_vqa_sem() -> asyncio.Semaphore:
@@ -142,13 +143,13 @@ async def _critique_cached(
     *,
     source_image: Optional[bytes] = None,
     reference_mode: str = STYLE_REFERENCE,
-) -> Optional[SlideCritique]:
+) -> Optional[StyleComparisonCritique]:
     """Return one best-effort critique, caching only successful model responses."""
     mode = normalize_reference_mode(reference_mode)
     if mode == EXACT_RECONSTRUCTION and source_image is None:
         raise ValueError("Exact reconstruction critique requires a source image")
 
-    async def invoke() -> SlideCritique:
+    async def invoke() -> StyleComparisonCritique:
         async with _get_vqa_sem():
             if mode == EXACT_RECONSTRUCTION:
                 return await critique_slide_image(
@@ -291,7 +292,7 @@ async def critique_authored_style_comparison(
     contexts: Optional[List[Optional[str]]] = None,
     *,
     reference_mode: str = STYLE_REFERENCE,
-) -> List[Optional[SlideCritique]]:
+) -> List[Optional[StyleComparisonCritique]]:
     """Compare post-fix authored renders with non-authoritative pre-fix baselines.
 
     Returns ``None`` for a candidate whose single model call failed. Empty batches are
@@ -309,7 +310,7 @@ async def critique_authored_style_comparison(
 
     ctx = contexts or []
 
-    async def review(i: int) -> Optional[SlideCritique]:
+    async def review(i: int) -> Optional[StyleComparisonCritique]:
         context = ctx[i] if i < len(ctx) else None
         return await _style_comparison_cached(
             baseline_pngs[i],
