@@ -127,6 +127,9 @@ describe("AuthoredPageRemake", () => {
       .click();
     cy.contains("5페이지만 새 레이아웃으로 다시 만듭니다.").should("be.visible");
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
 
     cy.get("@previewRequest").should("have.been.calledOnceWith", "deck-1", 4);
@@ -145,6 +148,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
 
     cy.get('[data-testid="page-remake-preview"]').should(
@@ -174,6 +180,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
     cy.then(() => expect(publish).not.to.have.been.called);
     cy.get('[data-testid="page-remake-publish"]').click();
@@ -222,6 +231,9 @@ describe("AuthoredPageRemake", () => {
     );
 
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
     cy.get('[data-testid="page-remake-publish"]').click();
 
@@ -251,6 +263,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
 
     cy.get('[data-testid="page-remake-preview"]').should("be.visible");
@@ -304,6 +319,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
     cy.get('[data-testid="page-remake-publish"]').click();
 
@@ -325,6 +343,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
 
     cy.get('[data-testid="page-remake-preview"]').should("be.visible");
@@ -353,6 +374,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
     cy.get('[data-testid="page-remake-regenerate"]').click();
 
@@ -413,6 +437,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
 
     cy.get('[data-testid="page-remake-error"] p')
@@ -439,6 +466,9 @@ describe("AuthoredPageRemake", () => {
 
     cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
+    // The poll loop registers its timer only after the start request settles.
+    // Ticking before that boundary fires nothing and the run stalls forever.
+    cy.get("@previewRequest").should("have.been.called");
     cy.tick(2_000);
 
     cy.get('[data-testid="page-remake-error"] p')
