@@ -15,7 +15,8 @@ from dataclasses import dataclass
 import hashlib
 import json
 import threading
-from typing import Generic, TypeVar
+import time
+from typing import Generic, Literal, TypeVar
 
 from models.slidespec_v1 import RepairPlan
 from services.slidespec_repair import repair_cost
@@ -24,6 +25,18 @@ from services.slidespec_repair import repair_cost
 PROPOSAL_CACHE_VERSION = "slidespec-proposal-negative/1"
 INSPECTION_CACHE_VERSION = "slidespec-incremental-inspection/1"
 PIPELINE_CAPABILITY_VERSION = "slidespec-projection-capability/1"
+EVIDENCE_ATOM_CACHE_VERSION = "slidespec-evidence-atom/1"
+
+EvidenceAtomState = Literal[
+    "proven_clean",
+    "proven_issue",
+    "unknown",
+    "not_applicable",
+]
+_EVIDENCE_ATOM_STATES = frozenset(
+    {"proven_clean", "proven_issue", "unknown", "not_applicable"}
+)
+T = TypeVar("T")
 
 
 def _canonical_digest(value: object) -> str:
@@ -55,10 +68,27 @@ def dom_evidence_digest(evidence: object) -> str:
         )
         for item in defects
     )
+    atoms = getattr(evidence, "atoms", ())
+    canonical_atoms = sorted(
+        (
+            str(getattr(atom, "sensor", "")),
+            str(getattr(atom, "metric", "")),
+            str(getattr(atom, "state", "unknown")),
+            str(getattr(atom, "stage", "")),
+            str(getattr(atom, "qid", "") or ""),
+            str(getattr(atom, "semantic_id", "") or ""),
+            str(getattr(atom, "constraint_id", "") or ""),
+            tuple(sorted(str(value) for value in getattr(atom, "dependency_refs", ()))),
+            str(getattr(atom, "reason_code", "") or ""),
+            bool(getattr(atom, "global_scope", False)),
+            _canonical_digest(getattr(atom, "diagnostics", {})),
+        )
+        for atom in atoms
+    )
     return digest_parts(
-        "dom-evidence/1",
-        bool(getattr(evidence, "telemetry_complete", False)),
+        "dom-evidence/2",
         canonical,
+        canonical_atoms,
     )
 
 
@@ -111,6 +141,163 @@ class NegativeProposalCache:
 
 
 DEFAULT_NEGATIVE_PROPOSAL_CACHE = NegativeProposalCache()
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceAtomCacheKey:
+    """Identity for one sensor measurement, never for a whole-slide verdict.
+
+    Both source and render digests are intentional.  Source changes invalidate
+    imported semantic ownership while render changes invalidate geometry even
+    when source bytes are unchanged.  QID and metric keep an unrelated footer
+    miss from poisoning a confirmed overlap on another element.
+    """
+
+    qid: str
+    metric: str
+    sensor_version: str
+    source_digest: str
+    render_digest: str
+
+    def __post_init__(self) -> None:
+        for name in (
+            "qid",
+            "metric",
+            "sensor_version",
+            "source_digest",
+            "render_digest",
+        ):
+            if not str(getattr(self, name)).strip():
+                raise ValueError(f"evidence atom cache key requires {name}")
+
+    @property
+    def digest(self) -> str:
+        return digest_parts(
+            EVIDENCE_ATOM_CACHE_VERSION,
+            self.qid,
+            self.metric,
+            self.sensor_version,
+            self.source_digest,
+            self.render_digest,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CachedEvidenceAtom(Generic[T]):
+    state: EvidenceAtomState
+    value: T
+    expires_at: float | None = None
+
+
+class EvidenceAtomCache(Generic[T]):
+    """Bounded atom cache with fail-safe unknown handling.
+
+    Unknown measurements are excluded by default.  Deployments may opt into a
+    short TTL to absorb repeated transient sensor failures, but an unknown (or a
+    lower-confidence state) never overwrites a cached proven issue for the same
+    exact evidence identity.
+    """
+
+    _STATE_RANK: Mapping[str, int] = {
+        "not_applicable": 0,
+        "unknown": 1,
+        "proven_clean": 2,
+        "proven_issue": 3,
+    }
+
+    def __init__(
+        self,
+        max_entries: int = 2048,
+        *,
+        unknown_ttl_seconds: float = 0.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.max_entries = max(0, max_entries)
+        self.unknown_ttl_seconds = max(0.0, float(unknown_ttl_seconds))
+        self._clock = clock
+        self._entries: OrderedDict[str, CachedEvidenceAtom[T]] = OrderedDict()
+        self._lock = threading.Lock()
+        self._counters = {
+            "hits": 0,
+            "misses": 0,
+            "writes": 0,
+            "unknown_skipped": 0,
+            "expired": 0,
+            "monotonic_rejections": 0,
+        }
+
+    def get(self, key: EvidenceAtomCacheKey) -> CachedEvidenceAtom[T] | None:
+        digest = key.digest
+        with self._lock:
+            entry = self._entries.get(digest)
+            if entry is None:
+                self._counters["misses"] += 1
+                return None
+            if entry.expires_at is not None and entry.expires_at <= self._clock():
+                self._entries.pop(digest, None)
+                self._counters["expired"] += 1
+                self._counters["misses"] += 1
+                return None
+            self._entries.move_to_end(digest)
+            self._counters["hits"] += 1
+            return entry
+
+    def put(
+        self,
+        key: EvidenceAtomCacheKey,
+        *,
+        state: EvidenceAtomState,
+        value: T,
+    ) -> bool:
+        if state not in _EVIDENCE_ATOM_STATES:
+            raise ValueError(f"unsupported evidence atom state: {state}")
+        if self.max_entries == 0:
+            return False
+        now = self._clock()
+        expires_at = None
+        if state == "unknown":
+            if self.unknown_ttl_seconds <= 0:
+                with self._lock:
+                    self._counters["unknown_skipped"] += 1
+                return False
+            expires_at = now + self.unknown_ttl_seconds
+
+        digest = key.digest
+        with self._lock:
+            previous = self._entries.get(digest)
+            if (
+                previous is not None
+                and (previous.expires_at is None or previous.expires_at > now)
+                and self._STATE_RANK[previous.state] > self._STATE_RANK[state]
+            ):
+                self._entries.move_to_end(digest)
+                self._counters["monotonic_rejections"] += 1
+                return False
+            self._entries[digest] = CachedEvidenceAtom(
+                state=state,
+                value=value,
+                expires_at=expires_at,
+            )
+            self._entries.move_to_end(digest)
+            self._counters["writes"] += 1
+            while len(self._entries) > self.max_entries:
+                self._entries.popitem(last=False)
+            return True
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+    def snapshot_counters(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self._counters)
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._entries)
+
+
+DEFAULT_EVIDENCE_ATOM_CACHE: EvidenceAtomCache[object] = EvidenceAtomCache()
 
 
 class PipelinePerformanceWindow:
@@ -176,9 +363,6 @@ class PipelinePerformanceWindow:
 
 
 PIPELINE_PERFORMANCE_WINDOW = PipelinePerformanceWindow()
-
-
-T = TypeVar("T")
 
 
 class IncrementalInspectionCache(Generic[T]):
@@ -412,7 +596,13 @@ class BoundedSlideScheduler:
 
 __all__ = [
     "BoundedSlideScheduler",
+    "CachedEvidenceAtom",
+    "DEFAULT_EVIDENCE_ATOM_CACHE",
     "DEFAULT_NEGATIVE_PROPOSAL_CACHE",
+    "EVIDENCE_ATOM_CACHE_VERSION",
+    "EvidenceAtomCache",
+    "EvidenceAtomCacheKey",
+    "EvidenceAtomState",
     "INSPECTION_CACHE_VERSION",
     "IncrementalInspectionCache",
     "NegativeProposalCache",

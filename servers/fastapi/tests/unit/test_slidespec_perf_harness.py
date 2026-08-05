@@ -81,7 +81,10 @@ def test_seeded_mixed_non_overlap_solver_regression_thresholds() -> None:
     assert summary["feasible_ratio"] == 1.0
     assert summary["unknown_ratio"] == 0.0
     assert summary["bounded_optimality_ratio"] == 0.5
-    assert 0 < summary["multi_branch_ratio"] <= 0.75
+    # Largest-slack ordering makes every case in this fixed corpus choose a
+    # compatible separation on the first deterministic branch.  Requiring a
+    # multi-branch case here would preserve the former avoidable tail latency.
+    assert summary["multi_branch_ratio"] == 0.0
     # Loose wall-clock thresholds catch exponential regressions while allowing
     # shared Windows CI noise.  Branch thresholds are deterministic and carry
     # the stronger algorithmic regression signal.
@@ -89,5 +92,5 @@ def test_seeded_mixed_non_overlap_solver_regression_thresholds() -> None:
     assert summary["duration_ms"]["p95"] < 400
     assert summary["duration_ms"]["p99"] < 700
     assert summary["branches"]["p50"] <= 1
-    assert summary["branches"]["p95"] <= 4
-    assert summary["branches"]["p99"] <= 4
+    assert summary["branches"]["p95"] == 1
+    assert summary["branches"]["p99"] == 1

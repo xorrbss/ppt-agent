@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1.0">
+<title>분석 단계: 요구를 검증 가능한 이슈로 구조화</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:#FFFFFF}
+  body{font-family:"Noto Sans KR","Malgun Gothic",sans-serif;color:#173A63;word-break:keep-all;overflow-wrap:anywhere}
+  .slide{position:relative;width:1280px;height:720px;background:#FFFFFF;overflow:hidden}
+  .top-rule{position:absolute;left:0;top:0;width:1280px;height:8px;background:#173A63}
+  .top-accent{position:absolute;left:0;top:0;width:235px;height:8px;background:#0879B7}
+
+  .content{position:absolute;left:64px;right:64px;top:34px;bottom:72px;display:flex;flex-direction:column}
+  .header{display:flex;flex-direction:column;gap:8px}
+  .eyebrow{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:#0879B7;letter-spacing:.05em}
+  .eyebrow-bar{width:28px;height:3px;background:#0879B7}
+  h1{margin:0;font-size:30px;line-height:1.28;font-weight:800;letter-spacing:-.035em;color:#173A63}
+  .subtitle{margin:0;font-size:15px;line-height:1.55;font-weight:400;color:#53677D}
+  .subtitle strong{color:#0879B7;font-weight:700}
+
+  .architecture{margin-top:20px;height:384px;border:1px solid #C9DCE9;background:#F8FBFD;display:grid;grid-template-columns:235px 1fr 400px;position:relative}
+  .zone{position:relative;min-width:0}
+  .zone + .zone{border-left:1px solid #D7E3EC}
+  .zone-label{height:39px;display:flex;align-items:center;padding:0 16px;background:#EAF4FA;color:#173A63;font-size:13px;font-weight:800;letter-spacing:.01em}
+  .zone-label.dark{background:#173A63;color:#FFFFFF}
+  .zone-label.blue{background:#0879B7;color:#FFFFFF}
+
+  .source-list{padding:16px 16px 12px;display:flex;flex-direction:column;gap:9px}
+  .source-item{min-height:47px;border:1px solid #C9DCE9;background:#FFFFFF;padding:8px 10px;display:grid;grid-template-columns:30px 1fr;gap:8px;align-items:center}
+  .source-no{font-family:"IBM Plex Mono","Consolas",monospace;font-size:12px;font-weight:700;color:#0879B7}
+  .source-text{font-size:13px;line-height:1.32;font-weight:700;color:#294863}
+  .source-foot{margin:3px 16px 0;padding:9px 10px;border-left:3px solid #E7352A;background:#FFF4F2;color:#7E3831;font-size:12px;line-height:1.4;font-weight:700}
+
+  .core{padding:17px 18px 12px;display:flex;flex-direction:column;align-items:center}
+  .flow-arrow{position:absolute;left:219px;top:179px;width:24px;height:2px;background:#0879B7}
+  .flow-arrow-tip{position:absolute;left:237px;top:173px;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:8px solid #0879B7}
+  .issue-card{width:316px;background:#173A63;color:#FFFFFF;border:3px solid #0879B7;padding:14px 17px 13px;box-shadow:0 7px 18px rgba(23,58,99,.12)}
+  .issue-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+  .issue-id{font-family:"IBM Plex Mono","Consolas",monospace;font-size:12px;font-weight:700;color:#A9D9F1}
+  .issue-status{font-size:12px;font-weight:700;color:#FFFFFF;border:1px solid #71B6D9;padding:3px 8px}
+  .issue-title{font-size:19px;line-height:1.35;font-weight:800;margin-bottom:11px}
+  .issue-row{display:grid;grid-template-columns:72px 1fr;gap:8px;padding:5px 0;border-top:1px solid rgba(255,255,255,.17)}
+  .issue-key{font-size:12px;color:#A9D9F1;font-weight:700}
+  .issue-value{font-size:12px;line-height:1.4;color:#FFFFFF;font-weight:500}
+  .criteria{width:100%;margin-top:14px}
+  .criteria-title{font-size:13px;font-weight:800;color:#173A63;margin-bottom:7px}
+  .criteria-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .criterion{height:42px;border:1px solid #BBD7E8;background:#FFFFFF;display:flex;align-items:center;justify-content:center;text-align:center;padding:5px;font-size:12px;line-height:1.25;font-weight:700;color:#31526E}
+  .core-note{margin-top:10px;font-size:12px;line-height:1.35;color:#5E7184;text-align:center}
+
+  .trace{padding:16px 17px 12px}
+  .trace-intro{font-size:13px;line-height:1.4;color:#48647C;margin-bottom:11px}
+  .trace-rail{position:absolute;left:45px;top:104px;width:2px;height:222px;background:#87B9D5}
+  .trace-step{position:relative;min-height:54px;display:grid;grid-template-columns:38px 1fr;align-items:start}
+  .node{width:24px;height:24px;margin-top:1px;background:#0879B7;border:4px solid #DCECF6;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono","Consolas",monospace;font-size:12px;font-weight:700;z-index:2}
+  .trace-copy{padding-bottom:8px}
+  .trace-name{font-size:14px;line-height:1.25;font-weight:800;color:#173A63}
+  .trace-desc{margin-top:2px;font-size:12px;line-height:1.35;color:#637789}
+  .approval{margin-top:1px;background:#DCECF6;border-left:4px solid #0879B7;padding:9px 11px;font-size:12px;line-height:1.4;color:#294863;font-weight:700}
+
+  .bottom{margin-top:14px;height:82px;display:grid;grid-template-columns:275px 1fr;gap:16px}
+  .effort{background:#173A63;color:#FFFFFF;display:flex;align-items:center;padding:12px 18px}
+  .effort-label{width:92px;font-size:13px;line-height:1.35;font-weight:700;color:#C6E3F2}
+  .effort-values{display:flex;align-items:center;gap:11px}
+  .mm-old,.mm-new{font-family:"IBM Plex Mono","Consolas",monospace;font-weight:700}
+  .mm-old{font-size:22px;color:#A7BAC8;text-decoration:line-through}
+  .mm-arrow{font-size:20px;color:#71C0E7}
+  .mm-new{font-size:30px;color:#FFFFFF}
+  .implication{border:1px solid #BBD7E8;background:#EAF4FA;padding:11px 17px;display:flex;align-items:center;gap:18px}
+  .implication-tag{flex:0 0 126px;color:#0879B7;font-size:13px;font-weight:800;border-right:1px solid #A7CADD;padding-right:17px}
+  .implication-text{font-size:15px;line-height:1.48;font-weight:700;color:#173A63}
+  .implication-text strong{color:#0879B7}
+
+  .page{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-family:"Noto Sans KR","Malgun Gothic",sans-serif;font-size:12px;font-weight:500;line-height:16px;color:#A7ACB3}
+</style>
+</head>
+<body>
+<div class="slide" data-qid="q-div-f18d7f4bae9b">
+  <div class="top-rule" data-qid="q-div-dcf34389bcbf"></div>
+  <div class="top-accent" data-qid="q-div-d776f7cad345"></div>
+
+  <main class="content" data-qid="q-main-26687018ddf0">
+    <header class="header" data-qid="q-header-898919f5ec18">
+      <div class="eyebrow" data-qid="q-div-16db2223612a"><span class="eyebrow-bar" data-qid="q-span-c07f2dff5bda"></span><span data-qid="q-span-f32986c526a1">분석 단계</span></div>
+      <h1 data-qid="q-h1-94f712e4878d">요구를 공식 이슈로 전환해 설계·코드·테스트·승인을 하나의 식별번호로 연결합니다</h1>
+      <p class="subtitle" data-qid="q-p-c9f1985aa1c3">원문 의도와 시스템 목표를 분리하고 범위·예외·의존성을 선확정하여, <strong data-qid="q-strong-663977331dde">요구의 모호성이 개발 단계로 이월되는 구조를 차단</strong>합니다.</p>
+    </header>
+
+    <section class="architecture" data-qid="q-section-06103d044b87">
+      <div class="flow-arrow" data-qid="q-div-502df5a3ff33"></div>
+      <div class="flow-arrow-tip" data-qid="q-div-a8d3c12e1158"></div>
+
+      <div class="zone" data-qid="q-div-a21dd64b078e">
+        <div class="zone-label" data-qid="q-div-f03616d67f41">01　요구 원문 보존</div>
+        <div class="source-list" data-qid="q-div-2ab5be436171">
+          <div class="source-item" data-qid="q-div-c04d45b97527">
+            <div class="source-no" data-qid="q-div-2071a03a1a91">가</div>
+            <div class="source-text" data-qid="q-div-d05a5fe9947f">현업 인터뷰·정책 표현</div>
+          </div>
+          <div class="source-item" data-qid="q-div-c4af8909859c">
+            <div class="source-no" data-qid="q-div-45fe935484d6">나</div>
+            <div class="source-text" data-qid="q-div-01fa826e4c3b">대상 업무·화면·관리 기능</div>
+          </div>
+          <div class="source-item" data-qid="q-div-4134257c7856">
+            <div class="source-no" data-qid="q-div-478dcaedc9f4">다</div>
+            <div class="source-text" data-qid="q-div-c3c2df7be261">인증·세션·전문·연계 조건</div>
+          </div>
+          <div class="source-item" data-qid="q-div-73a51f885e77">
+            <div class="source-no" data-qid="q-div-9afb1c569405">라</div>
+            <div class="source-text" data-qid="q-div-859a2ad9faa6">보안·승인·데이터 제약</div>
+          </div>
+        </div>
+        <div class="source-foot" data-qid="q-div-215fec9a7bca">주의　원문과 해석 목표를 같은 문장에 혼재하지 않음</div>
+      </div>
+
+      <div class="zone" data-qid="q-div-c7fec14dd0bb">
+        <div class="zone-label dark" data-qid="q-div-feca6cbf7f01">02　데브에이엑스 공식 이슈</div>
+        <div class="core" data-qid="q-div-d176e11a8962">
+          <div class="issue-card" data-qid="q-div-a6afef7118a5">
+            <div class="issue-top" data-qid="q-div-8ce68e829962">
+              <span class="issue-id" data-qid="q-span-1a5c7dde4658">요구-1042</span>
+              <span class="issue-status" data-qid="q-span-0accbfaecede">합의 대기</span>
+            </div>
+            <div class="issue-title" data-qid="q-div-5e940f8b42b1">예금 조회 실패 시 고객 안내와 재시도 정책 확정</div>
+            <div class="issue-row" data-qid="q-div-e9ffdf168898">
+              <div class="issue-key" data-qid="q-div-ee43d44cc2ef">정리 목표</div>
+              <div class="issue-value" data-qid="q-div-ac8d5923ed58">조회 실패 원인별 처리 기준을 일관되게 적용</div>
+            </div>
+            <div class="issue-row" data-qid="q-div-b5535b14cf47">
+              <div class="issue-key" data-qid="q-div-da289ae6b218">범위</div>
+              <div class="issue-value" data-qid="q-div-13a5b09bfb42">인터넷뱅킹 예금 조회·계정계 전문</div>
+            </div>
+            <div class="issue-row" data-qid="q-div-5df09ef03a59">
+              <div class="issue-key" data-qid="q-div-bd59095c3d17">의존성</div>
+              <div class="issue-value" data-qid="q-div-fe404857e5ed">공통 프레임워크·보안 솔루션·대외계 승인</div>
+            </div>
+          </div>
+
+          <div class="criteria" data-qid="q-div-8e987d8ae86a">
+            <div class="criteria-title" data-qid="q-div-3f4cb1622bc3">수용 기준을 완료 판정 조건으로 명시</div>
+            <div class="criteria-grid" data-qid="q-div-1eed58ea4e63">
+              <div class="criterion" data-qid="q-div-7c7663202143">정상 처리</div>
+              <div class="criterion" data-qid="q-div-b27326c7cd38">입력 오류·권한 부족</div>
+              <div class="criterion" data-qid="q-div-f3b5891acb09">결과 없음</div>
+              <div class="criterion" data-qid="q-div-75a8cc368b1a">타임아웃</div>
+              <div class="criterion" data-qid="q-div-b925896ad97e">재시도 정책</div>
+              <div class="criterion" data-qid="q-div-377b136f8629">현업 승인</div>
+            </div>
+          </div>
+          <div class="core-note" data-qid="q-div-b8f9938f1a7c">착수 2주 내 재사용·적응·신규 생성 후보 초안도 동일 이슈 체계로 관리</div>
+        </div>
+      </div>
+
+      <div class="zone" data-qid="q-div-a5e60eae5ff4">
+        <div class="zone-label blue" data-qid="q-div-0dfa9ca29879">03　식별번호 기반 추적</div>
+        <div class="trace" data-qid="q-div-110201c5d907">
+          <div class="trace-intro" data-qid="q-div-cb9337da91f9">동일 식별번호가 산출물과 변경 이력을 끝까지 관통합니다.</div>
+          <div class="trace-rail" data-qid="q-div-a7fff61c8387"></div>
+
+          <div class="trace-step" data-qid="q-div-7b884f01c320">
+            <div class="node" data-qid="q-div-956b9abdf526">1</div>
+            <div class="trace-copy" data-qid="q-div-5c3347515775">
+              <div class="trace-name" data-qid="q-div-c51be38df9bc">설계 화면</div>
+              <div class="trace-desc" data-qid="q-div-03cc67aa8dde">정책·상태·예외 흐름 연결</div>
+            </div>
+          </div>
+          <div class="trace-step" data-qid="q-div-c53436ee3407">
+            <div class="node" data-qid="q-div-761ee8778d46">2</div>
+            <div class="trace-copy" data-qid="q-div-4b3d34d07f29">
+              <div class="trace-name" data-qid="q-div-06716b50fa5d">코드 변경</div>
+              <div class="trace-desc" data-qid="q-div-60b0c985de09">구현 범위와 형상 이력 연결</div>
+            </div>
+          </div>
+          <div class="trace-step" data-qid="q-div-c3166e76dee4">
+            <div class="node" data-qid="q-div-d05a86cb5969">3</div>
+            <div class="trace-copy" data-qid="q-div-af8066e67eb6">
+              <div class="trace-name" data-qid="q-div-0abb6bda83b1">테스트 결과</div>
+              <div class="trace-desc" data-qid="q-div-4780b741ba8d">수용 기준별 통과 증적 연결</div>
+            </div>
+          </div>
+          <div class="trace-step" data-qid="q-div-18aefee84516">
+            <div class="node" data-qid="q-div-6edaa20ac2ad">4</div>
+            <div class="trace-copy" data-qid="q-div-c1e3e4b1e3c1">
+              <div class="trace-name" data-qid="q-div-da9201a7fe65">현업 승인·형상 반영</div>
+              <div class="trace-desc" data-qid="q-div-f01b423d7b8b">최종 판정과 배포 기준 연결</div>
+            </div>
+          </div>
+
+          <div class="approval" data-qid="q-div-c2271d6cd239">누락·해석 차이·변경 영향도를 식별번호 단위로 즉시 확인</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bottom" data-qid="q-section-297ef609bd46">
+      <div class="effort" data-qid="q-div-0c43a9307bee">
+        <div class="effort-label" data-qid="q-div-3a9aafb91995">분석 공수<br data-qid="q-br-c84392c4ccac">제안 기준</div>
+        <div class="effort-values" data-qid="q-div-ac0103eb034f">
+          <span class="mm-old" data-qid="q-span-ef178c8a21f5">8 인월</span>
+          <span class="mm-arrow" data-qid="q-span-ff18619ae4aa">→</span>
+          <span class="mm-new" data-qid="q-span-62930829e739">6 인월</span>
+        </div>
+      </div>
+      <div class="implication" data-qid="q-div-f17e611a8d0f">
+        <div class="implication-tag" data-qid="q-div-63a4d3c2e6c7">운영 원칙</div>
+        <div class="implication-text" data-qid="q-div-655134fc7990">플랫폼은 문서 정리와 반복 대조를 지원하고, 업무 분석가와 현업은 <strong data-qid="q-strong-f213b54d7db8">정책 판단·범위 확정·예외 승인</strong>에 집중합니다.</div>
+      </div>
+    </section>
+  </main>
+
+  <div class="page" data-qid="q-div-c6f2820b2605">04</div>
+</div>
+</body>
+</html>

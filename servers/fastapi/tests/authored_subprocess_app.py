@@ -122,9 +122,12 @@ llm_provider.get_llm_provider = lambda: SimpleNamespace(
 llm_provider.get_model = lambda: "stub-model"
 
 # A short lease makes a hard-killed attempt recoverable without slowing the
-# regression test. The heartbeat remains longer than the forced-crash window.
+# regression test. Keep the live worker heartbeat comfortably inside that
+# lease so a contended Windows host cannot expire a healthy attempt before it
+# reaches the forced-crash checkpoint. Once the process tree is killed, no
+# heartbeat remains and the existing 2.5-second wait still proves expiry.
 jobs.GENERATION_JOB_LEASE_SECONDS = 2
-jobs.GENERATION_JOB_HEARTBEAT_SECONDS = 60
+jobs.GENERATION_JOB_HEARTBEAT_SECONDS = 0.5
 jobs.GENERATION_JOB_DISPATCH_SECONDS = 0.05
 
 

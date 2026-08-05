@@ -383,17 +383,18 @@ class _Problem:
                 _HalfSpace(tuple(sorted(self._combine(self.expression(right, "bottom"), 1, self.expression(left, "top"), -1).items())), -clearance, owner),
             )
             # Prefer a separation direction already satisfied by the authored
-            # geometry.  Absolute edge distance alone cannot distinguish an
-            # overlapping axis from a separated axis when their magnitudes tie,
-            # which previously put an invalid direction first and triggered up
-            # to 1024 expensive projections for an already-valid layout.
+            # geometry.  Among satisfied directions, prefer the one with the
+            # largest slack.  Choosing a nearly-touching direction first can
+            # become infeasible after another pair moves within its mutation
+            # envelope, forcing 2048 projection sweeps before the same physical
+            # separation is tried on the axis that already has ample clearance.
             choices.append(
                 tuple(
                     sorted(
                         options,
                         key=lambda option: (
                             max(0.0, option.residual(self.initial)),
-                            abs(option.residual(self.initial)),
+                            option.residual(self.initial),
                             option.coefficients,
                         ),
                     )

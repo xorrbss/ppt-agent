@@ -575,6 +575,16 @@ def _ancestor_promotions(
     )
     for field, expected_qids, ancestor in ordered:
         if ancestor.get("coordinatedOwnerOnly") is True:
+            physical_owner_failure = _mapping(
+                ancestor.get("physicalOwnerFailure")
+            )
+            if physical_owner_failure:
+                reasons.append(
+                    str(
+                        physical_owner_failure.get("reasonCode")
+                        or "repair.geometry.ancestor.physical_owner_proof_invalid"
+                    )
+                )
             continue
         layout_id = str(ancestor.get("layoutId", ""))
         qid = str(ancestor.get("qid", ""))
@@ -631,6 +641,58 @@ def _ancestor_promotions(
                 or (abs(dx) <= _EPSILON and abs(dy) <= _EPSILON)
             ):
                 continue
+            physical_proof = _mapping(delta.get("physicalOwnerProof"))
+            if physical_proof:
+                owner_px = _pixel_bounds(physical_proof.get("ownerBoundsPx"))
+                candidate_px = _pixel_bounds(
+                    physical_proof.get("candidateOwnerBoundsPx")
+                )
+                delta_px = _mapping(delta.get("deltaPx"))
+                blocker_bounds = _mapping(
+                    physical_proof.get("blockerBoundsPx")
+                )
+                boundary_y = _number(
+                    physical_proof.get("lowerBoundaryYPx"), float("nan")
+                )
+                exact_candidate = (
+                    owner_px is not None
+                    and candidate_px is not None
+                    and abs(candidate_px[0] - owner_px[0] - _number(delta_px.get("x")))
+                    <= 1e-6
+                    and abs(candidate_px[1] - owner_px[1] - _number(delta_px.get("y")))
+                    <= 1e-6
+                    and abs(candidate_px[2] - owner_px[2]) <= 1e-6
+                    and abs(candidate_px[3] - owner_px[3]) <= 1e-6
+                )
+                candidate_rect = (
+                    _Rect(*candidate_px) if candidate_px is not None else None
+                )
+                blockers = tuple(
+                    _Rect(*bounds)
+                    for value in blocker_bounds.values()
+                    if (bounds := _pixel_bounds(value)) is not None
+                )
+                physical_proof_valid = (
+                    str(physical_proof.get("ownerQid", "")) == qid
+                    and physical_proof.get("allTargetsOwned") is True
+                    and physical_proof.get("candidateSeparatesBlockers") is True
+                    and physical_proof.get("candidateContained") is True
+                    and bool(_sequence(physical_proof.get("ownedTargetQids")))
+                    and exact_candidate
+                    and candidate_rect is not None
+                    and bool(blockers)
+                    and all(
+                        _rects_do_not_overlap(candidate_rect, blocker)
+                        for blocker in blockers
+                    )
+                    and math.isfinite(boundary_y)
+                    and candidate_rect.bottom <= boundary_y + 1e-6
+                )
+                if not physical_proof_valid:
+                    reasons.append(
+                        "repair.geometry.ancestor.physical_owner_proof_invalid"
+                    )
+                    continue
             valid_delta_seen = True
             moved = current.moved(dx, dy)
             if not _inside(moved, container):

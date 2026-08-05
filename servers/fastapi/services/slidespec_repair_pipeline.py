@@ -27,6 +27,104 @@ from services.slidespec_rollout_policy import SlideSpecRepairRolloutDecision
 
 
 ReasonCode = str
+EvidenceState = Literal[
+    "proven_clean", "proven_issue", "unknown", "not_applicable"
+]
+
+_EVIDENCE_STATE_RANK: dict[EvidenceState, int] = {
+    "not_applicable": 0,
+    "unknown": 1,
+    "proven_clean": 2,
+    "proven_issue": 3,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceAtom:
+    """One independently mergeable sensor observation.
+
+    ``dependency_refs`` names the smallest known element/constraint/stacking
+    dependency cone for the observation.  It deliberately excludes a slide-wide
+    ancestor: two elements sharing only the slide root are not publication
+    dependencies of one another.
+    """
+
+    sensor: str
+    metric: str
+    state: EvidenceState
+    stage: str = "detection"
+    qid: str | None = None
+    semantic_id: str | None = None
+    constraint_id: str | None = None
+    dependency_refs: tuple[str, ...] = ()
+    reason_code: ReasonCode | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
+    global_scope: bool = False
+
+    @property
+    def key(self) -> tuple[str, str, str, str | None, str | None, str | None]:
+        return (
+            self.sensor,
+            self.metric,
+            self.stage,
+            self.qid,
+            self.semantic_id,
+            self.constraint_id,
+        )
+
+    @property
+    def references(self) -> frozenset[str]:
+        refs = set(self.dependency_refs)
+        if self.qid:
+            refs.update((self.qid, f"qid:{self.qid}"))
+        if self.semantic_id:
+            refs.update((self.semantic_id, f"semantic:{self.semantic_id}"))
+        if self.constraint_id:
+            refs.update(
+                (self.constraint_id, f"constraint:{self.constraint_id}")
+            )
+        return frozenset(refs)
+
+
+def merge_evidence_atoms(
+    *groups: Sequence[EvidenceAtom],
+) -> tuple[EvidenceAtom, ...]:
+    """Join evidence monotonically; weaker/unknown data cannot erase proof."""
+
+    merged: dict[
+        tuple[str, str, str, str | None, str | None, str | None], EvidenceAtom
+    ] = {}
+    for group in groups:
+        for atom in group:
+            current = merged.get(atom.key)
+            if current is None:
+                merged[atom.key] = atom
+                continue
+            current_rank = _EVIDENCE_STATE_RANK[current.state]
+            atom_rank = _EVIDENCE_STATE_RANK[atom.state]
+            if atom_rank > current_rank:
+                merged[atom.key] = atom
+                continue
+            if atom_rank < current_rank:
+                continue
+            # Equal-state joins retain the union of dependency proof and stable,
+            # deterministic diagnostics.  The state itself never moves backward.
+            merged[atom.key] = EvidenceAtom(
+                sensor=current.sensor,
+                metric=current.metric,
+                state=current.state,
+                stage=current.stage,
+                qid=current.qid,
+                semantic_id=current.semantic_id,
+                constraint_id=current.constraint_id,
+                dependency_refs=tuple(
+                    sorted(set(current.dependency_refs) | set(atom.dependency_refs))
+                ),
+                reason_code=current.reason_code or atom.reason_code,
+                diagnostics={**dict(atom.diagnostics), **dict(current.diagnostics)},
+                global_scope=current.global_scope or atom.global_scope,
+            )
+    return tuple(merged[key] for key in sorted(merged, key=lambda item: tuple(str(v) for v in item)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,12 +160,66 @@ class DomDefect:
     related_semantic_ids: tuple[str, ...] = ()
     qid: str | None = None
     diagnostics: Mapping[str, object] = field(default_factory=dict)
+    physical_issue_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DomEvidence:
     defects: tuple[DomDefect, ...] = ()
-    telemetry_complete: bool = True
+    telemetry_complete: bool | None = None
+    atoms: tuple[EvidenceAtom, ...] = ()
+
+    def __post_init__(self) -> None:
+        issue_atoms = tuple(
+            EvidenceAtom(
+                sensor="dom" if defect.code.startswith("dom.") else "constraint",
+                metric=defect.code,
+                state="proven_issue",
+                qid=defect.qid,
+                semantic_id=defect.semantic_id,
+                constraint_id=(
+                    defect.related_semantic_ids[0]
+                    if defect.code == "constraint.evidence.missing"
+                    and defect.related_semantic_ids
+                    else None
+                ),
+                dependency_refs=tuple(defect.related_semantic_ids),
+                diagnostics={
+                    **dict(defect.diagnostics),
+                    **(
+                        {"physical_issue_id": defect.physical_issue_id}
+                        if defect.physical_issue_id
+                        else {}
+                    ),
+                },
+            )
+            for defect in self.defects
+            if defect.code != "constraint.evidence.missing"
+        )
+        atoms = merge_evidence_atoms(self.atoms, issue_atoms)
+        if self.telemetry_complete is False and not any(
+            atom.state == "unknown" for atom in atoms
+        ):
+            # Legacy callers supplied only the global boolean.  Preserve their
+            # fail-closed behavior until they provide a scoped atom.
+            atoms = merge_evidence_atoms(
+                atoms,
+                (
+                    EvidenceAtom(
+                        sensor="legacy_dom",
+                        metric="telemetry_complete",
+                        state="unknown",
+                        reason_code="dom.telemetry_incomplete",
+                        global_scope=True,
+                    ),
+                ),
+            )
+        object.__setattr__(self, "atoms", atoms)
+        object.__setattr__(
+            self,
+            "telemetry_complete",
+            not any(atom.state == "unknown" for atom in atoms),
+        )
 
     @property
     def required_geometry_defect(self) -> bool:
@@ -82,13 +234,72 @@ class DomEvidence:
                 }
                 or defect.code.startswith("constraint.")
             )
+            and defect.code != "constraint.evidence.missing"
             and defect.severity in {"high", "medium"}
             for defect in self.defects
         )
 
     @property
     def hard_failure(self) -> bool:
-        return not self.telemetry_complete or self.required_geometry_defect
+        return bool(self.blocking_unknown_atoms()) or self.required_geometry_defect
+
+    @property
+    def unknown_atoms(self) -> tuple[EvidenceAtom, ...]:
+        return tuple(atom for atom in self.atoms if atom.state == "unknown")
+
+    @property
+    def confirmed_issue_count(self) -> int:
+        physical = {
+            defect.physical_issue_id
+            or ":".join(
+                (
+                    defect.code,
+                    defect.semantic_id,
+                    defect.qid or "unavailable",
+                )
+            )
+            for defect in self.defects
+            if defect.code != "constraint.evidence.missing"
+            and defect.severity in {"high", "medium"}
+        }
+        return len(physical)
+
+    @property
+    def incomplete_measurement_count(self) -> int:
+        return len(self.unknown_atoms)
+
+    @property
+    def clean_slide_count(self) -> int:
+        return int(
+            self.confirmed_issue_count == 0
+            and self.incomplete_measurement_count == 0
+        )
+
+    @staticmethod
+    def _plan_references(plan: RepairPlan | None) -> frozenset[str]:
+        if plan is None:
+            return frozenset()
+        references = set(plan.scope) | set(plan.diagnostic_refs)
+        references.update(operation.target for operation in plan.operations)
+        for value in tuple(references):
+            if value.startswith(("qid:", "semantic:", "constraint:")):
+                references.add(value.split(":", 1)[1])
+        return frozenset(references)
+
+    def blocking_unknown_atoms(
+        self, plan: RepairPlan | None = None
+    ) -> tuple[EvidenceAtom, ...]:
+        """Return only unknowns that can affect this mutation/publication."""
+
+        unknown = self.unknown_atoms
+        if plan is None:
+            return tuple(atom for atom in unknown if atom.global_scope)
+        references = self._plan_references(plan)
+        return tuple(
+            atom
+            for atom in unknown
+            if atom.global_scope or bool(atom.references.intersection(references))
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,6 +474,10 @@ class RepairPipelineResult:
     reason_codes: tuple[ReasonCode, ...]
     telemetry: PipelineTelemetry = field(default_factory=PipelineTelemetry)
     kill_switch_enabled: bool = False
+    confirmed_issue_count: int = 0
+    incomplete_measurement_count: int = 0
+    unresolved_confirmed_issue_count: int = 0
+    clean_slide_count: int = 0
 
     def metrics(self) -> dict[str, object]:
         """Canonical low-cardinality operational metrics for API/dashboard use."""
@@ -321,12 +536,19 @@ class SlideSpecRepairPipeline:
         rollout: SlideSpecRepairRolloutDecision,
     ) -> RepairPipelineResult:
         if not rollout.should_run_repair:
-            return self._preserved(rollout, rollout.reason_code or "legacy_preserved.disabled")
-        if not baseline_dom.telemetry_complete:
-            return self._preserved(rollout, "dom.telemetry_incomplete")
+            return self._preserved(
+                rollout,
+                rollout.reason_code or "legacy_preserved.disabled",
+                baseline_dom,
+            )
         # This is intentionally independent of VQA: a DOM clipping report starts repair.
         if not baseline_dom.required_geometry_defect:
-            return self._preserved(rollout, "legacy_preserved.no_geometry_trigger")
+            reason = (
+                "dom.telemetry_incomplete"
+                if baseline_dom.incomplete_measurement_count
+                else "legacy_preserved.no_geometry_trigger"
+            )
+            return self._preserved(rollout, reason, baseline_dom)
 
         state = _MutableFunnel()
         outcomes: list[CandidateOutcome] = []
@@ -334,14 +556,18 @@ class SlideSpecRepairPipeline:
         deterministic = tuple(await self._dependencies.deterministic_cascade(spec, baseline_dom))
         state.add_timing("deterministic_cascade", started)
         outcome = await self._try_plans(
-            spec, deterministic, rollout, state, outcomes
+            spec, deterministic, rollout, state, outcomes, baseline_dom
         )
         if outcome == "accepted":
-            return self._result(rollout, outcomes, state, ())
+            return self._result(rollout, outcomes, state, (), baseline_dom)
         if outcome == "inconclusive":
             state.legacy_preserved += 1
             return self._result(
-                rollout, outcomes, state, ("acceptance.inconclusive", "legacy_preserved")
+                rollout,
+                outcomes,
+                state,
+                ("acceptance.inconclusive", "legacy_preserved"),
+                baseline_dom,
             )
 
         if self._dependencies.propose is not None:
@@ -363,6 +589,7 @@ class SlideSpecRepairPipeline:
                                 preflight.reason_code or "proposal.preflight_inconclusive",
                                 "legacy_preserved",
                             ),
+                            baseline_dom,
                         )
                     state.proposal_preflight_skips += 1
                     state.legacy_preserved += 1
@@ -375,6 +602,7 @@ class SlideSpecRepairPipeline:
                             or "proposal.projection_unavailable",
                             "legacy_preserved",
                         ),
+                        baseline_dom,
                     )
 
             proposal_cache = (
@@ -396,6 +624,7 @@ class SlideSpecRepairPipeline:
                     outcomes,
                     state,
                     ("proposal.negative_cache_hit", "legacy_preserved"),
+                    baseline_dom,
                 )
             state.proposal_cache_misses += 1
             try:
@@ -414,7 +643,11 @@ class SlideSpecRepairPipeline:
                     else "proposal.provider_unavailable"
                 )
                 return self._result(
-                    rollout, outcomes, state, (reason, "legacy_preserved")
+                    rollout,
+                    outcomes,
+                    state,
+                    (reason, "legacy_preserved"),
+                    baseline_dom,
                 )
             # A proposer cannot smuggle a deterministic path into this phase.
             proposed = tuple(
@@ -422,20 +655,29 @@ class SlideSpecRepairPipeline:
             )
             proposed = deterministic_candidate_order(proposed)[:2]
             state.llm_candidates += len(proposed)
-            if not proposed:
+            if not proposed and baseline_dom.incomplete_measurement_count == 0:
                 proposal_cache.put(proposal_key)
-            outcome = await self._try_plans(spec, proposed, rollout, state, outcomes)
+            outcome = await self._try_plans(
+                spec, proposed, rollout, state, outcomes, baseline_dom
+            )
             if outcome == "accepted":
-                return self._result(rollout, outcomes, state, ())
+                return self._result(rollout, outcomes, state, (), baseline_dom)
             if outcome == "inconclusive":
                 state.legacy_preserved += 1
                 return self._result(
                     rollout, outcomes, state,
                     ("acceptance.inconclusive", "legacy_preserved"),
+                    baseline_dom,
                 )
 
         state.legacy_preserved += 1
-        return self._result(rollout, outcomes, state, ("acceptance.required_gate_failed", "legacy_preserved"))
+        return self._result(
+            rollout,
+            outcomes,
+            state,
+            ("acceptance.required_gate_failed", "legacy_preserved"),
+            baseline_dom,
+        )
 
     async def _try_plans(
         self,
@@ -444,9 +686,11 @@ class SlideSpecRepairPipeline:
         rollout: SlideSpecRepairRolloutDecision,
         state: "_MutableFunnel",
         outcomes: list[CandidateOutcome],
+        baseline_dom: DomEvidence,
     ) -> Literal["accepted", "exhausted", "inconclusive"]:
         accepted_candidates: list[_AcceptedCandidate] = []
         accepted_insert_at: int | None = None
+        dependency_inconclusive = False
         validated: list[RepairPlan] = []
         for candidate in deterministic_candidate_order(plans):
             plan = candidate
@@ -492,66 +736,16 @@ class SlideSpecRepairPipeline:
             dom = await self._dependencies.inspect_dom(artifact)
             state.add_timing("dom", started)
             # DOM is cheap and authoritative for geometry; don't spend OCR/VQA on it.
-            if dom.hard_failure:
-                # A directly measured defect conclusively rejects this candidate
-                # even when an unrelated constraint observation is unavailable.
-                # Preserve fail-closed behavior for a candidate whose *only* hard
-                # signal is missing evidence, but do not let that uncertainty hide
-                # a concrete failure or prevent evaluation of the next candidate.
-                failing_defect = next(
-                    (
-                        defect
-                        for defect in dom.defects
-                        if defect.severity in {"high", "medium"}
-                        and defect.code != "constraint.evidence.missing"
-                    ),
-                    None,
-                )
-                if failing_defect is None and not dom.telemetry_complete:
-                    missing_evidence = [
-                        {
-                            "code": defect.code,
-                            "severity": defect.severity,
-                            "semantic_id": defect.semantic_id,
-                            "qid": defect.qid,
-                            "related_semantic_ids": list(
-                                defect.related_semantic_ids
-                            ),
-                            "diagnostics": dict(defect.diagnostics),
-                        }
-                        for defect in dom.defects
-                        if defect.code == "constraint.evidence.missing"
-                        or defect.diagnostics
-                    ]
-                    state.inconclusive += 1
-                    outcomes.append(
-                        self._outcome(
-                            plan,
-                            "succeeded",
-                            "inconclusive",
-                            "dom.telemetry_incomplete",
-                            diagnostics={
-                                "dom_telemetry": {
-                                    "complete": False,
-                                    "missing_evidence": missing_evidence,
-                                }
-                            },
-                        )
-                    )
-                    return "inconclusive"
-                if failing_defect is None:
-                    # Defensive fallback: DomEvidence.hard_failure should imply a
-                    # concrete defect or incomplete telemetry.
-                    state.inconclusive += 1
-                    outcomes.append(
-                        self._outcome(
-                            plan,
-                            "succeeded",
-                            "inconclusive",
-                            "dom.telemetry_incomplete",
-                        )
-                    )
-                    return "inconclusive"
+            failing_defect = next(
+                (
+                    defect
+                    for defect in dom.defects
+                    if defect.severity in {"high", "medium"}
+                    and defect.code != "constraint.evidence.missing"
+                ),
+                None,
+            )
+            if failing_defect is not None:
                 state.rejected += 1
                 outcomes.append(
                     self._outcome(
@@ -568,6 +762,74 @@ class SlideSpecRepairPipeline:
                                 **dict(failing_defect.diagnostics),
                             }
                         },
+                    )
+                )
+                continue
+
+            dependency_unknown = merge_evidence_atoms(
+                baseline_dom.blocking_unknown_atoms(plan),
+                dom.blocking_unknown_atoms(plan),
+            )
+            if dependency_unknown:
+                dependency_inconclusive = True
+                state.inconclusive += 1
+                legacy_unknown = all(
+                    atom.sensor == "legacy_dom" and atom.global_scope
+                    for atom in dependency_unknown
+                )
+                if legacy_unknown:
+                    missing_evidence = [
+                        {
+                            "code": defect.code,
+                            "severity": defect.severity,
+                            "semantic_id": defect.semantic_id,
+                            "qid": defect.qid,
+                            "related_semantic_ids": list(
+                                defect.related_semantic_ids
+                            ),
+                            "diagnostics": dict(defect.diagnostics),
+                        }
+                        for defect in dom.defects
+                        if defect.code == "constraint.evidence.missing"
+                        or defect.diagnostics
+                    ]
+                    diagnostics: Mapping[str, object] = {
+                        "dom_telemetry": {
+                            "complete": False,
+                            "missing_evidence": missing_evidence,
+                        }
+                    }
+                    reason = "dom.telemetry_incomplete"
+                else:
+                    diagnostics = {
+                        "dom_telemetry": {
+                            "complete": False,
+                            "dependency_blockers": [
+                                {
+                                    "sensor": atom.sensor,
+                                    "metric": atom.metric,
+                                    "stage": atom.stage,
+                                    "qid": atom.qid,
+                                    "semantic_id": atom.semantic_id,
+                                    "constraint_id": atom.constraint_id,
+                                    "reason_code": atom.reason_code,
+                                    "dependency_refs": list(
+                                        atom.dependency_refs
+                                    ),
+                                    "diagnostics": dict(atom.diagnostics),
+                                }
+                                for atom in dependency_unknown
+                            ],
+                        }
+                    }
+                    reason = "dom.dependency_telemetry_incomplete"
+                outcomes.append(
+                    self._outcome(
+                        plan,
+                        "succeeded",
+                        "inconclusive",
+                        reason,
+                        diagnostics=diagnostics,
                     )
                 )
                 continue
@@ -683,6 +945,8 @@ class SlideSpecRepairPipeline:
             for plan in pruned
         )
 
+        if not accepted_candidates and dependency_inconclusive:
+            return "inconclusive"
         if not accepted_candidates:
             return "exhausted"
 
@@ -837,11 +1101,21 @@ class SlideSpecRepairPipeline:
         )
 
     @staticmethod
-    def _preserved(rollout: SlideSpecRepairRolloutDecision, reason: ReasonCode) -> RepairPipelineResult:
+    def _preserved(
+        rollout: SlideSpecRepairRolloutDecision,
+        reason: ReasonCode,
+        evidence: DomEvidence,
+    ) -> RepairPipelineResult:
         return RepairPipelineResult(
-            route=rollout.route, trigger=None, outcomes=(),
+            route=rollout.route,
+            trigger="geometry" if evidence.required_geometry_defect else None,
+            outcomes=(),
             funnel=RepairFunnel(legacy_preserved=1), reason_codes=(reason,),
             kill_switch_enabled=rollout.kill_switch_active,
+            confirmed_issue_count=evidence.confirmed_issue_count,
+            incomplete_measurement_count=evidence.incomplete_measurement_count,
+            unresolved_confirmed_issue_count=evidence.confirmed_issue_count,
+            clean_slide_count=evidence.clean_slide_count,
         )
 
     @staticmethod
@@ -850,11 +1124,19 @@ class SlideSpecRepairPipeline:
         outcomes: list[CandidateOutcome],
         state: "_MutableFunnel",
         reasons: tuple[ReasonCode, ...],
+        evidence: DomEvidence,
     ) -> RepairPipelineResult:
+        funnel = state.freeze()
         return RepairPipelineResult(
             route=rollout.route, trigger="geometry", outcomes=tuple(outcomes),
-            funnel=state.freeze(), reason_codes=reasons, telemetry=state.telemetry(),
+            funnel=funnel, reason_codes=reasons, telemetry=state.telemetry(),
             kill_switch_enabled=rollout.kill_switch_active,
+            confirmed_issue_count=evidence.confirmed_issue_count,
+            incomplete_measurement_count=evidence.incomplete_measurement_count,
+            unresolved_confirmed_issue_count=(
+                0 if funnel.applied else evidence.confirmed_issue_count
+            ),
+            clean_slide_count=evidence.clean_slide_count,
         )
 
 

@@ -80,16 +80,60 @@ _METRICS_PATTERN = re.compile(
 )
 
 
+def _source_render_digests(html: str) -> tuple[str, str]:
+    """Return distinct source and qid-enriched render identities.
+
+    DOM evidence is only reusable when both the imported source and the exact
+    render projection are unchanged.  Keeping the two digests explicit avoids
+    treating a source-preserving instrumentation change as equivalent evidence.
+    """
+
+    source = hashlib.sha256(html.encode("utf-8")).hexdigest()
+    rendered = hashlib.sha256(ensure_authored_qids(html).encode("utf-8")).hexdigest()
+    return f"sha256:{source}", f"sha256:{rendered}"
+
+
+def _metric_evidence_cache_key(
+    html: str, *, qid: str = "*", metric: str = "*"
+) -> str:
+    """Build the scoped identity used by browser metric caches/evidence atoms."""
+
+    source_digest, render_digest = _source_render_digests(html)
+    return _metric_evidence_cache_key_from_digests(
+        source_digest, render_digest, qid=qid, metric=metric
+    )
+
+
+def _metric_evidence_cache_key_from_digests(
+    source_digest: str,
+    render_digest: str,
+    *,
+    qid: str = "*",
+    metric: str = "*",
+) -> str:
+    payload = "\0".join(
+        (
+            DOM_METRICS_VERSION,
+            OCCLUSION_SENSOR_VERSION,
+            qid,
+            metric,
+            source_digest,
+            render_digest,
+        )
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def _metrics_cache_key(html: str) -> str:
-    return hashlib.sha256(
-        f"{DOM_METRICS_VERSION}\0{html}".encode("utf-8")
-    ).hexdigest()
+    return _metric_evidence_cache_key(html)
 
 
 def _instrument_authored_html(html: str) -> tuple[str, str]:
     """Add stable edit ids and an invisible, same-render browser probe."""
     enriched = ensure_authored_qids(html)
-    key = _metrics_cache_key(html)
+    source_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    render_digest = "sha256:" + hashlib.sha256(enriched.encode("utf-8")).hexdigest()
+    key = _metric_evidence_cache_key_from_digests(source_digest, render_digest)
     if _METRICS_ELEMENT_ID in enriched:
         return enriched, key
     script = rf"""<script data-codex-dom-probe>
@@ -358,27 +402,85 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
       return inside;
     }};
     const occlusion = (node, rect, points, textRects, surfaceRects) => {{
-      if (rect.width <= 0 || rect.height <= 0) return {{fraction: 1, continuous: 1, step: 0, unknown: 0, occluderQids: [], unbound: 0}};
-      const ownedPaintRects = [...surfaceRects, ...textRects];
-      if (!ownedPaintRects.length) return {{fraction: 0, continuous: 0, step: 0, unknown: 0, occluderQids: [], unbound: 0}};
-      // At most 40x40 samples per target, but never coarser than roughly 4 CSS
-      // pixels on ordinary slide objects.  This catches thin continuous covers
-      // that the former fixed 5x5 probe could miss completely.
+      const qid = node.getAttribute('data-qid');
+      const sensorVersion = '{OCCLUSION_SENSOR_VERSION}';
+      const evidence = (status, reason, details = {{}}) => ({{
+        qid, metric: 'occlusion', sensor_version: sensorVersion,
+        source_digest: '{source_digest}', render_digest: '{render_digest}',
+        cache_key: [qid, 'occlusion', sensorVersion, '{source_digest}', '{render_digest}'].join('\u0000'),
+        stage: 'chrome.owned_paint_sampling', status, reason, ...details
+      }});
+      const empty = (values, status, reason) => ({{
+        fraction: values.fraction, continuous: values.continuous,
+        step: values.step, unknown: values.unknown,
+        sampled: 0, known: 0, coarseSampled: 0, ownedRectSampled: 0,
+        covered: values.covered || 0, occluderQids: [], unbound: 0,
+        evidence: evidence(status, reason, {{sampled: 0, known: 0, covered: values.covered || 0}})
+      }});
+      if (rect.width <= 0 || rect.height <= 0) return empty(
+        {{fraction: 1, continuous: 1, step: 0, unknown: 0, covered: 0}},
+        'measured', 'degenerate_target_bbox_assumed_occluded');
+      const ownedPaintRects = [
+        ...surfaceRects.map((paintRect, index) => ({{paintRect, group: `surface:${{index}}`}})),
+        ...textRects.map((paintRect, index) => ({{paintRect, group: `text:${{index}}`}}))
+      ];
+      if (!ownedPaintRects.length) return empty(
+        {{fraction: 0, continuous: 0, step: 0, unknown: 0}},
+        'not_applicable', 'no_owned_paint');
+      // Preserve the parent grid for broad/continuous-cover estimates.  Then
+      // independently seed every owned surface and every text fragment.  A
+      // full-width footer with a 14px page-number glyph can therefore no longer
+      // fall between all 40 parent-grid columns and become sampled=0.
       const cols = Math.max(5, Math.min(40, Math.ceil(rect.width / 4)));
       const rows = Math.max(5, Math.min(40, Math.ceil(rect.height / 4)));
       const cells = Array.from({{length: rows}}, () => Array(cols).fill(-1));
-      let covered = 0, sampled = 0, unknown = 0, unbound = 0;
-      const occluderQids = new Set();
+      const samples = [];
+      const addSample = (x, y, group, origin) => {{
+        if (!pointInPolygon(x, y, points)) return false;
+        const row = Math.max(0, Math.min(rows - 1, Math.floor((y - rect.top) / rect.height * rows)));
+        const col = Math.max(0, Math.min(cols - 1, Math.floor((x - rect.left) / rect.width * cols)));
+        samples.push({{x, y, row, col, group, origin, state: -1}});
+        return true;
+      }};
       for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {{
         const x = rect.left + rect.width * (col + .5) / cols;
         const y = rect.top + rect.height * (row + .5) / rows;
-        if (!pointInPolygon(x, y, points)) continue;
-        if (!ownedPaintRects.some((paintRect) => pointInRect(x, y, paintRect))) continue;
-        sampled += 1;
-        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) {{ cells[row][col] = 1; covered += 1; continue; }}
+        if (!ownedPaintRects.some((item) => pointInRect(x, y, item.paintRect))) continue;
+        addSample(x, y, null, 'coarse');
+      }}
+      for (const {{paintRect, group}} of ownedPaintRects) {{
+        const localCols = Math.max(1, Math.min(3, Math.ceil(paintRect.width / 4)));
+        const localRows = Math.max(1, Math.min(3, Math.ceil(paintRect.height / 4)));
+        let added = false;
+        for (let row = 0; row < localRows; row++) for (let col = 0; col < localCols; col++) {{
+          const x = paintRect.x + paintRect.width * (col + .5) / localCols;
+          const y = paintRect.y + paintRect.height * (row + .5) / localRows;
+          added = addSample(x, y, group, 'owned-rect') || added;
+        }}
+        // Rotated fragment bounding boxes can put every local grid point just
+        // outside the owner quad.  Try the physical rect center explicitly and
+        // keep a concrete no-sample reason if even that is outside.
+        if (!added) addSample(
+          paintRect.x + paintRect.width / 2,
+          paintRect.y + paintRect.height / 2,
+          group, 'owned-rect-center');
+      }}
+      let covered = 0, unknown = 0, unbound = 0;
+      const occluderQids = new Set();
+      const groupCovered = new Map();
+      for (const sample of samples) {{
+        const {{x, y, row, col, group}} = sample;
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) {{
+          sample.state = 1; cells[row][col] = 1; covered += 1;
+          if (group !== null) groupCovered.set(group, (groupCovered.get(group) || 0) + 1);
+          continue;
+        }}
         const stack = document.elementsFromPoint(x, y);
         const owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
-        if (owner < 0) {{ cells[row][col] = -2; unknown += 1; continue; }}
+        if (owner < 0) {{
+          sample.state = -2; if (cells[row][col] === -1) cells[row][col] = -2;
+          unknown += 1; continue;
+        }}
         const occluders = stack.slice(0, owner).filter((candidate) =>
           candidate !== node && !node.contains(candidate) && candidatePaintsAt(candidate, x, y));
         const isCovered = occluders.length > 0;
@@ -387,10 +489,32 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
           const ownerQid = ownerNode?.getAttribute('data-qid');
           if (ownerQid) occluderQids.add(ownerQid); else unbound += 1;
         }}
-        cells[row][col] = isCovered ? 1 : 0;
-        if (isCovered) covered += 1;
+        sample.state = isCovered ? 1 : 0;
+        if (isCovered) {{
+          cells[row][col] = 1; covered += 1;
+          if (group !== null) groupCovered.set(group, (groupCovered.get(group) || 0) + 1);
+        }} else if (cells[row][col] !== 1) cells[row][col] = 0;
       }}
-      if (!sampled || unknown / sampled > .05) return {{fraction: null, continuous: null, step: Math.max(rect.width / cols, rect.height / rows), unknown: sampled ? unknown / sampled : 1, occluderQids: Array.from(occluderQids).sort(), unbound}};
+      const sampled = samples.length;
+      const known = sampled - unknown;
+      const coarseSampled = samples.filter((sample) => sample.origin === 'coarse').length;
+      const ownedRectSampled = sampled - coarseSampled;
+      const common = {{
+        step: Math.max(rect.width / cols, rect.height / rows),
+        unknown: sampled ? unknown / sampled : 1,
+        sampled, known, coarseSampled, ownedRectSampled, covered,
+        occluderQids: Array.from(occluderQids).sort(), unbound
+      }};
+      if (!sampled) return {{
+        fraction: null, continuous: null, ...common,
+        evidence: evidence('unknown', 'no_sample_on_owned_paint', {{sampled, known, covered}})
+      }};
+      if (!known || unknown / sampled > .05) return {{
+        fraction: null, continuous: null, ...common,
+        evidence: evidence('unknown', !known ? 'owner_absent_from_hit_test' : 'excessive_unknown_hit_test', {{
+          sampled, known, covered, known_occluded_fraction: known ? covered / known : null
+        }})
+      }};
       let largest = 0;
       const seen = new Set();
       for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {{
@@ -406,7 +530,12 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
         }}
         largest = Math.max(largest, size);
       }}
-      return {{fraction: covered / (sampled - unknown), continuous: largest / (sampled - unknown), step: Math.max(rect.width / cols, rect.height / rows), unknown: unknown / sampled, occluderQids: Array.from(occluderQids).sort(), unbound}};
+      const largestOwnedGroup = Math.max(0, ...groupCovered.values());
+      const fraction = covered / known;
+      return {{
+        fraction, continuous: Math.max(largest, largestOwnedGroup) / known, ...common,
+        evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction}})
+      }};
     }};
     const elements = allQids.map((node, domIndex) => {{
       const rect = node.getBoundingClientRect();
@@ -464,8 +593,19 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
         occluded_fraction: occultation.fraction,
         continuous_occluded_fraction: occultation.continuous,
         occlusion_sample_step_px: occultation.step,
+        occlusion_sample_count: occultation.sampled,
+        occlusion_known_sample_count: occultation.known,
+        occlusion_coarse_sample_count: occultation.coarseSampled,
+        occlusion_owned_rect_sample_count: occultation.ownedRectSampled,
+        occlusion_confirmed_covered_sample_count: occultation.covered,
         occlusion_unknown_fraction: occultation.unknown,
-        occlusion_probe_version: 'owned-paint-v3',
+        // Compatibility contract consumed by existing detectors.  The concrete
+        // sensor revision is separate so caches invalidate without making the
+        // proven owned-paint-v3 payload shape unreadable during rollout.
+        occlusion_probe_version: '{OCCLUSION_PROBE_CONTRACT_VERSION}',
+        occlusion_sensor_version: '{OCCLUSION_SENSOR_VERSION}',
+        occlusion_measurement_evidence: occultation.evidence,
+        occlusion_measurement_error: occultation.fraction === null ? occultation.evidence.reason : null,
         occlusion_occluder_qids: occultation.occluderQids,
         occlusion_unbound_count: occultation.unbound,
         effective_z_index: (Number.isFinite(explicitZ) ? explicitZ * 100000 : 0) + domIndex,
@@ -509,7 +649,9 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
     }});
     const payload = {{
       width: window.innerWidth, height: window.innerHeight,
-      fonts_ready: !document.fonts || document.fonts.status === 'loaded', elements
+      fonts_ready: !document.fonts || document.fonts.status === 'loaded',
+      source_digest: '{source_digest}', render_digest: '{render_digest}',
+      dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', elements
     }};
     let marker = document.getElementById('{_METRICS_ELEMENT_ID}');
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
@@ -1528,7 +1670,9 @@ RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
 RENDER_CACHE_VERSION = "authored-render-v8-owned-paint-cdp"
 _render_cache: "OrderedDict[str, bytes]" = OrderedDict()
 _render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
-DOM_METRICS_VERSION = "authored-dom-metrics-v11-offset-parent-proof"
+OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
+OCCLUSION_SENSOR_VERSION = "owned-paint-v4-per-rect-minimum"
+DOM_METRICS_VERSION = "authored-dom-metrics-v12-owned-paint-atoms"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 _browser_metrics_cache: "OrderedDict[str, Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[str, "asyncio.Task[Mapping[str, Any] | None]"] = {}

@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import json
 import logging
 import math
@@ -75,12 +75,14 @@ from services.slidespec_pipeline_performance import (
 from services.slidespec_repair_pipeline import (
     DomDefect,
     DomEvidence,
+    EvidenceAtom,
     PublicationReceipt,
     RenderedCandidate,
     SensorResult,
     SlideSpecInput,
     SlideSpecRepairDependencies,
     SlideSpecRepairPipeline,
+    merge_evidence_atoms,
 )
 from services.slidespec_rollout_policy import resolve_slidespec_repair_rollout
 from utils.authored_dom_quality import (
@@ -366,11 +368,58 @@ def _dom_evidence(
                 return qid
         return None
 
-    # One browser issue can be repeated through nested DOM nodes.  Keep a single,
-    # strongest defect per canonical target so noisy authored markup cannot create
-    # an over-budget repair plan.
+    # One browser issue can be repeated through nested DOM nodes.  Keep one user
+    # defect per physical overlap, while retaining each raw target observation as
+    # a separate evidence atom for audit/replay.
     ranked = {"medium": 1, "high": 2}
     defects_by_key: dict[tuple[str, str, str], DomDefect] = {}
+    overlap_clusters: list[dict[str, Any]] = []
+    raw_atoms: list[EvidenceAtom] = []
+
+    def overlap_occluders(target_qid: str, issue_qids: Sequence[str]) -> tuple[str, ...]:
+        metric = metric_by_qid.get(target_qid, {})
+        raw = metric.get("occlusion_occluder_qids", ())
+        measured = (
+            tuple(str(value) for value in raw)
+            if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes))
+            else ()
+        )
+        return tuple(
+            dict.fromkeys(
+                (*measured, *(qid for qid in issue_qids if qid != target_qid))
+            )
+        )
+
+    def same_physical_overlap(
+        target_qid: str,
+        occluder_qids: Sequence[str],
+        cluster: Mapping[str, Any],
+    ) -> bool:
+        targets = tuple(str(value) for value in cluster["target_qids"])
+        occluders = tuple(str(value) for value in cluster["occluder_qids"])
+        target_related = any(
+            related_by_ancestry(target_qid, other) for other in targets
+        )
+        occluder_related = any(
+            related_by_ancestry(first, second)
+            for first in occluder_qids
+            for second in occluders
+        )
+        # A single painted overlay can cover sibling text fragments as well as
+        # nested descendants.  The shared/ancestrally-related occluder is the
+        # physical identity proof; target ancestry is the fallback when an older
+        # sensor omitted occluder qids.
+        return occluder_related if occluder_qids and occluders else target_related
+
+    def metric_area(qid: str) -> float:
+        bbox = metric_by_qid.get(qid, {}).get("bbox", {})
+        if not isinstance(bbox, Mapping):
+            return 0.0
+        try:
+            return float(bbox.get("width", 0)) * float(bbox.get("height", 0))
+        except (TypeError, ValueError):
+            return 0.0
+
     for issue in report.issues:
         code = _DOM_CODE.get(issue.category)
         if code is None or issue.severity not in {"high", "medium"}:
@@ -402,17 +451,69 @@ def _dom_evidence(
                 (value for value in issue_qids if qids.get(value) == semantic_id),
                 "",
             )
-            key = (code, semantic_id, qid)
-            current = defects_by_key.get(key)
-            candidate = DomDefect(
-                code,
-                issue.severity,
-                semantic_id,
-                tuple(related),
-                qid or None,
+            occluders = overlap_occluders(qid, issue_qids)
+            raw_finding = {
+                "category": issue.category,
+                "severity": issue.severity,
+                "qids": list(issue_qids),
+                "target_qid": qid,
+                "occluder_qids": list(occluders),
+            }
+            raw_atoms.append(
+                EvidenceAtom(
+                    sensor="chrome_dom",
+                    metric="occlusion",
+                    state="proven_issue",
+                    qid=qid or None,
+                    semantic_id=semantic_id,
+                    dependency_refs=tuple(
+                        dict.fromkeys(
+                            (
+                                semantic_id,
+                                f"semantic:{semantic_id}",
+                                *(value for value in occluders),
+                                *(f"qid:{value}" for value in occluders),
+                            )
+                        )
+                    ),
+                    diagnostics={"raw_finding": raw_finding},
+                )
             )
-            if current is None or ranked[issue.severity] > ranked[current.severity]:
-                defects_by_key[key] = candidate
+            cluster = next(
+                (
+                    item
+                    for item in overlap_clusters
+                    if same_physical_overlap(qid, occluders, item)
+                ),
+                None,
+            )
+            if cluster is None:
+                overlap_clusters.append(
+                    {
+                        "target_qids": [qid],
+                        "occluder_qids": list(occluders),
+                        "semantic_ids": [semantic_id, *related],
+                        "severity": issue.severity,
+                        "representative_qid": qid,
+                        "raw_findings": [raw_finding],
+                    }
+                )
+            else:
+                cluster["target_qids"] = list(
+                    dict.fromkeys((*cluster["target_qids"], qid))
+                )
+                cluster["occluder_qids"] = list(
+                    dict.fromkeys((*cluster["occluder_qids"], *occluders))
+                )
+                cluster["semantic_ids"] = list(
+                    dict.fromkeys((*cluster["semantic_ids"], semantic_id, *related))
+                )
+                cluster["raw_findings"].append(raw_finding)
+                if ranked[issue.severity] > ranked[str(cluster["severity"])]:
+                    cluster["severity"] = issue.severity
+                current_qid = str(cluster["representative_qid"])
+                if metric_area(qid) > metric_area(current_qid):
+                    cluster["representative_qid"] = qid
             continue
         for semantic_id in semantic_ids:
             qid = next(
@@ -425,9 +526,127 @@ def _dom_evidence(
                 defects_by_key[key] = DomDefect(
                     code, issue.severity, semantic_id, qid=qid or None
                 )
+    overlap_defects: list[DomDefect] = []
+    for cluster in overlap_clusters:
+        representative_qid = str(cluster["representative_qid"])
+        semantic_ids = tuple(str(value) for value in cluster["semantic_ids"])
+        semantic_id = qids.get(
+            representative_qid,
+            semantic_ids[0] if semantic_ids else representative_qid,
+        )
+        related = tuple(value for value in semantic_ids if value != semantic_id)
+        physical_issue_id = "dom.unintended_overlap:" + ":".join(
+            (
+                min(str(value) for value in cluster["target_qids"]),
+                min(
+                    (str(value) for value in cluster["occluder_qids"]),
+                    default="unavailable",
+                ),
+            )
+        )
+        overlap_defects.append(
+            DomDefect(
+                "dom.unintended_overlap",
+                str(cluster["severity"]),
+                semantic_id,
+                related,
+                representative_qid,
+                diagnostics={
+                    "physical_overlap": {
+                        "physical_issue_id": physical_issue_id,
+                        "target_qids": list(cluster["target_qids"]),
+                        "occluder_qids": list(cluster["occluder_qids"]),
+                        "raw_findings": list(cluster["raw_findings"]),
+                    }
+                },
+                physical_issue_id=physical_issue_id,
+            )
+        )
+
+    measurement_atoms: list[EvidenceAtom] = []
+    raw_issue_qids = {
+        atom.qid for atom in raw_atoms if atom.qid is not None
+    }
+    # ``browser_metrics=None`` means that the caller only supplied the legacy
+    # quality report.  The report's own telemetry status remains authoritative;
+    # absence of an optional, richer metric envelope is not evidence that every
+    # mapped element is missing.  When the envelope is present, however, missing
+    # or unsampled elements become explicit scoped unknown atoms.
+    if browser_metrics is not None:
+        for qid, semantic_id in sorted(qids.items()):
+            metric = metric_by_qid.get(qid)
+            if metric is None:
+                measurement_atoms.append(
+                    EvidenceAtom(
+                        sensor="chrome_dom",
+                        metric="element_presence",
+                        state="unknown",
+                        qid=qid,
+                        semantic_id=semantic_id,
+                        dependency_refs=(semantic_id, f"semantic:{semantic_id}"),
+                        reason_code="dom.telemetry.element_missing",
+                    )
+                )
+                continue
+            occluded = metric.get("occluded_fraction")
+            continuous = metric.get("continuous_occluded_fraction")
+            if occluded is None and continuous is None:
+                reason = str(
+                    metric.get("occlusion_unknown_reason")
+                    or metric.get("occlusion_reason")
+                    or "dom.occlusion.measurement_unavailable"
+                )
+                measurement_atoms.append(
+                    EvidenceAtom(
+                        sensor="chrome_occlusion",
+                        metric="occlusion",
+                        state="unknown",
+                        qid=qid,
+                        semantic_id=semantic_id,
+                        dependency_refs=(semantic_id, f"semantic:{semantic_id}"),
+                        reason_code=reason,
+                        diagnostics={
+                            "sampled": metric.get("occlusion_sample_count"),
+                            "unknown_fraction": metric.get(
+                                "occlusion_unknown_fraction"
+                            ),
+                        },
+                    )
+                )
+            else:
+                measurement_atoms.append(
+                    EvidenceAtom(
+                        sensor="chrome_occlusion",
+                        metric="occlusion",
+                        state=(
+                            "proven_issue"
+                            if qid in raw_issue_qids
+                            else "proven_clean"
+                        ),
+                        qid=qid,
+                        semantic_id=semantic_id,
+                        dependency_refs=(semantic_id, f"semantic:{semantic_id}"),
+                    )
+                )
+    atoms = merge_evidence_atoms(raw_atoms, measurement_atoms)
+    if report.telemetry_status != "available" and not any(
+        atom.state == "unknown" for atom in atoms
+    ):
+        atoms = merge_evidence_atoms(
+            atoms,
+            (
+                EvidenceAtom(
+                    sensor="chrome_dom",
+                    metric="element_inventory",
+                    state="unknown",
+                    reason_code=f"dom.telemetry.{report.telemetry_status}",
+                    global_scope=True,
+                ),
+            ),
+        )
     return DomEvidence(
-        defects=tuple(defects_by_key.values()),
-        telemetry_complete=report.telemetry_status == "available",
+        defects=tuple((*defects_by_key.values(), *overlap_defects)),
+        atoms=atoms,
     )
 
 
@@ -443,8 +662,13 @@ def _constraint_evidence(
         for node in _walk_layout(request.spec.layout)
         if node.contentSemanticId is not None
     }
+    qid_by_layout = {
+        binding.layoutId: binding.qid
+        for binding in (request.source.bindings if request.source is not None else ())
+    }
     fallback_semantic = next(iter(_semantic_text(request.spec)), request.spec.slideId)
     defects: list[DomDefect] = []
+    atoms: list[EvidenceAtom] = []
     for violation in report.violations:
         if violation.strength != "hard":
             continue
@@ -456,24 +680,47 @@ def _constraint_evidence(
             )
         )
         semantic_id = semantic_ids[0] if semantic_ids else fallback_semantic
+        target_qids = tuple(
+            qid_by_layout[target]
+            for target in violation.targets
+            if qid_by_layout.get(target)
+        )
         defects.append(
             DomDefect(
                 violation.code,
                 "high",
                 semantic_id,
                 semantic_ids[1:],
+                qid=target_qids[0] if target_qids else None,
+                diagnostics={
+                    "constraint_violation": {
+                        "constraint_id": violation.constraint_id,
+                        "kind": violation.kind,
+                        "targets": list(violation.targets),
+                        "target_qids": list(target_qids),
+                        "magnitude": violation.magnitude,
+                    }
+                },
             )
         )
     constraint_by_id = {
         constraint.constraintId: constraint for constraint in request.spec.constraints
     }
-    qid_by_layout = {
-        binding.layoutId: binding.qid
-        for binding in (request.source.bindings if request.source is not None else ())
-    }
     for constraint_id in report.unknown_hard:
         constraint = constraint_by_id.get(constraint_id)
         targets = constraint_targets(constraint) if constraint is not None else ()
+        unknown_semantic_ids = tuple(
+            dict.fromkeys(
+                semantic_by_layout[target]
+                for target in targets
+                if target in semantic_by_layout
+            )
+        )
+        unknown_semantic_id = (
+            unknown_semantic_ids[0]
+            if unknown_semantic_ids
+            else fallback_semantic
+        )
         missing_targets = [
             target
             for target in targets
@@ -500,7 +747,7 @@ def _constraint_evidence(
             DomDefect(
                 "constraint.evidence.missing",
                 "high",
-                fallback_semantic,
+                unknown_semantic_id,
                 (constraint_id,),
                 diagnostics={
                     "constraint_observation": {
@@ -517,7 +764,40 @@ def _constraint_evidence(
                 },
             )
         )
-    return DomEvidence(tuple(defects), telemetry_complete=not report.unknown_hard)
+        target_qids = tuple(
+            qid_by_layout[target]
+            for target in targets
+            if qid_by_layout.get(target)
+        )
+        dependency_refs = tuple(
+            dict.fromkeys(
+                (
+                    constraint_id,
+                    f"constraint:{constraint_id}",
+                    *targets,
+                    *target_qids,
+                    *(f"qid:{qid}" for qid in target_qids),
+                )
+            )
+        )
+        atoms.append(
+            EvidenceAtom(
+                sensor="slidespec_constraint",
+                metric=(constraint.kind if constraint is not None else "unknown"),
+                state="unknown",
+                stage="constraint_measurement",
+                qid=target_qids[0] if target_qids else None,
+                semantic_id=unknown_semantic_id,
+                constraint_id=constraint_id,
+                dependency_refs=dependency_refs,
+                reason_code="constraint.evidence.missing",
+                diagnostics={
+                    "missing_targets": missing_targets,
+                    "missing_measurements": missing_measurements,
+                },
+            )
+        )
+    return DomEvidence(tuple(defects), atoms=tuple(atoms))
 
 
 def _soft_constraint_regression_evidence(
@@ -609,20 +889,58 @@ def _soft_constraint_regression_evidence(
 
 
 def _merge_dom_evidence(*items: DomEvidence) -> DomEvidence:
-    defects: dict[tuple[str, str, str | None, tuple[str, ...]], DomDefect] = {}
+    defects: dict[tuple[object, ...], DomDefect] = {}
+    severity_rank = {"low": 0, "medium": 1, "high": 2}
     for item in items:
         for defect in item.defects:
-            defects[
-                (
+            key = (
+                ("physical", defect.physical_issue_id)
+                if defect.physical_issue_id
+                else (
                     defect.code,
                     defect.semantic_id,
                     defect.qid,
                     defect.related_semantic_ids,
                 )
-            ] = defect
+            )
+            current = defects.get(key)
+            if current is None or severity_rank[defect.severity] > severity_rank[
+                current.severity
+            ]:
+                defects[key] = defect
+    physical_by_qid: dict[str, str] = {}
+    physical_by_semantic: dict[str, str] = {}
+    for defect in defects.values():
+        if not defect.physical_issue_id:
+            continue
+        physical_by_semantic[defect.semantic_id] = defect.physical_issue_id
+        physical_by_semantic.update(
+            {
+                semantic_id: defect.physical_issue_id
+                for semantic_id in defect.related_semantic_ids
+            }
+        )
+        physical = defect.diagnostics.get("physical_overlap", {})
+        if isinstance(physical, Mapping):
+            for qid in physical.get("target_qids", ()):
+                physical_by_qid[str(qid)] = defect.physical_issue_id
+    aliased_defects = []
+    for defect in defects.values():
+        physical_issue_id = defect.physical_issue_id
+        if defect.code == "constraint.readability.violated":
+            physical_issue_id = (
+                physical_issue_id
+                or physical_by_qid.get(defect.qid or "")
+                or physical_by_semantic.get(defect.semantic_id)
+            )
+        aliased_defects.append(
+            replace(defect, physical_issue_id=physical_issue_id)
+            if physical_issue_id != defect.physical_issue_id
+            else defect
+        )
     return DomEvidence(
-        defects=tuple(defects.values()),
-        telemetry_complete=all(item.telemetry_complete for item in items),
+        defects=tuple(aliased_defects),
+        atoms=merge_evidence_atoms(*(item.atoms for item in items)),
     )
 
 
@@ -774,6 +1092,8 @@ def _repair_context(
         target_qid: str,
         blocked_qid: str,
         candidate_deltas_px: Sequence[tuple[float, float]],
+        physical_target_qids: Sequence[str] = (),
+        physical_blocker_qids: Sequence[str] = (),
     ) -> tuple[dict[str, Any], ...]:
         """Return browser-proven imported ancestors in nearest-first order."""
 
@@ -812,14 +1132,152 @@ def _repair_context(
                     else {}
                 )
                 deltas: list[dict[str, Any]] = []
-                for dx_px, dy_px in sorted(
-                    set(candidate_deltas_px),
+                proved_deltas: list[tuple[float, float, Mapping[str, Any] | None]] = [
+                    (dx_px, dy_px, None) for dx_px, dy_px in candidate_deltas_px
+                ]
+                physical_owner_failure: dict[str, Any] | None = None
+                owner_metric = metric_by_qid.get(current_qid)
+                owner_bbox = (
+                    owner_metric.get("bbox")
+                    if isinstance(owner_metric, Mapping)
+                    else None
+                )
+                owned_targets = tuple(
+                    dict.fromkeys(str(qid) for qid in physical_target_qids if qid)
+                )
+                blocker_metrics = tuple(
+                    (
+                        str(qid),
+                        metric_by_qid.get(str(qid), {}).get("bbox"),
+                    )
+                    for qid in physical_blocker_qids
+                    if isinstance(metric_by_qid.get(str(qid)), Mapping)
+                )
+                blocker_metrics = tuple(
+                    (qid, bbox)
+                    for qid, bbox in blocker_metrics
+                    if isinstance(bbox, Mapping)
+                )
+                common_physical_owner = (
+                    isinstance(owner_bbox, Mapping)
+                    and owned_targets
+                    and blocker_metrics
+                    and all(
+                        metric_qid_is_ancestor(current_qid, qid)
+                        for qid in owned_targets
+                    )
+                )
+                if common_physical_owner:
+                    # Leaf-separation deltas do not prove that moving this common
+                    # owner clears every raw finding in the physical cluster.
+                    proved_deltas = []
+                    owner_x = finite_number(owner_bbox.get("x"))
+                    owner_y = finite_number(owner_bbox.get("y"))
+                    owner_width = finite_number(owner_bbox.get("width"))
+                    owner_height = finite_number(owner_bbox.get("height"))
+                    blocker_bottom = max(
+                        finite_number(bbox.get("y"))
+                        + finite_number(bbox.get("height"))
+                        for _, bbox in blocker_metrics
+                    )
+                    downward_px = blocker_bottom - owner_y
+                    lower_boundaries = []
+                    for qid, metric in metric_by_qid.items():
+                        bbox = metric.get("bbox")
+                        if (
+                            not isinstance(bbox, Mapping)
+                            or qid in owned_targets
+                            or qid in physical_blocker_qids
+                            or metric_qid_is_ancestor(current_qid, qid)
+                            or metric_qid_is_ancestor(qid, current_qid)
+                        ):
+                            continue
+                        x = finite_number(bbox.get("x"))
+                        y = finite_number(bbox.get("y"))
+                        item_width = finite_number(bbox.get("width"))
+                        horizontal_overlap = min(
+                            owner_x + owner_width, x + item_width
+                        ) - max(owner_x, x)
+                        if y >= owner_y + owner_height - 1e-6 and horizontal_overlap > 0:
+                            lower_boundaries.append((y, qid))
+                    boundary_y, boundary_qid = min(
+                        lower_boundaries,
+                        default=(height, "canvas-bottom"),
+                    )
+                    candidate_owner = {
+                        "x": owner_x,
+                        "y": owner_y + downward_px,
+                        "width": owner_width,
+                        "height": owner_height,
+                    }
+                    separates = all(
+                        candidate_owner["y"]
+                        >= finite_number(bbox.get("y"))
+                        + finite_number(bbox.get("height"))
+                        - 1e-6
+                        for _, bbox in blocker_metrics
+                    )
+                    contained = (
+                        downward_px > 1e-6
+                        and candidate_owner["y"] + owner_height
+                        <= boundary_y + 1e-6
+                        and candidate_owner["y"] + owner_height <= height + 1e-6
+                    )
+                    if separates and contained:
+                        proved_deltas.append(
+                            (
+                                0.0,
+                                downward_px,
+                                {
+                                    "ownerQid": current_qid,
+                                    "ownerBoundsPx": dict(owner_bbox),
+                                    "candidateOwnerBoundsPx": candidate_owner,
+                                    "ownedTargetQids": owned_targets,
+                                    "blockerBoundsPx": {
+                                        qid: dict(bbox)
+                                        for qid, bbox in blocker_metrics
+                                    },
+                                    "lowerBoundaryQid": boundary_qid,
+                                    "lowerBoundaryYPx": boundary_y,
+                                    "allTargetsOwned": True,
+                                    "candidateSeparatesBlockers": True,
+                                    "candidateContained": True,
+                                },
+                            )
+                        )
+                    else:
+                        physical_owner_failure = {
+                            "reasonCode": (
+                                "repair.geometry.ancestor."
+                                "physical_owner_no_safe_translation"
+                            ),
+                            "ownerQid": current_qid,
+                            "ownedTargetQids": owned_targets,
+                            "blockerQids": tuple(qid for qid, _ in blocker_metrics),
+                            "requiredDownPx": downward_px,
+                            "availableDownPx": max(
+                                0.0,
+                                boundary_y - owner_y - owner_height,
+                            ),
+                            "lowerBoundaryQid": boundary_qid,
+                            "lowerBoundaryYPx": boundary_y,
+                            "candidateSeparatesBlockers": separates,
+                            "candidateContained": contained,
+                        }
+                for dx_px, dy_px, physical_proof in sorted(
+                    set(
+                        (dx, dy, json.dumps(proof, sort_keys=True) if proof else "")
+                        for dx, dy, proof in proved_deltas
+                    ),
                     key=lambda value: (
                         abs(value[0]) + abs(value[1]),
                         value[0],
                         value[1],
                     ),
                 ):
+                    physical_proof = (
+                        json.loads(physical_proof) if physical_proof else None
+                    )
                     dx, dy = dx_px / width, dy_px / height
                     if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
                         continue
@@ -840,6 +1298,11 @@ def _repair_context(
                             "telemetryComplete": True,
                             "resolvesIssue": True,
                             "deltaPx": {"x": dx_px, "y": dy_px},
+                            **(
+                                {"physicalOwnerProof": physical_proof}
+                                if physical_proof is not None
+                                else {}
+                            ),
                         }
                     )
                 if deltas or source is not None:
@@ -857,6 +1320,11 @@ def _repair_context(
                             },
                             "mutationEnvelope": envelope,
                             "candidateDeltas": tuple(deltas),
+                            **(
+                                {"physicalOwnerFailure": physical_owner_failure}
+                                if physical_owner_failure is not None
+                                else {}
+                            ),
                             "coordinatedOwnerOnly": not bool(deltas),
                             "depth": depth,
                             "sameCoordinateSpace": True,
@@ -2000,6 +2468,22 @@ def _repair_context(
                 and not isinstance(raw_occluders, (str, bytes))
                 else ()
             )
+            physical_overlap = defect.diagnostics.get("physical_overlap", {})
+            physical_overlap = (
+                physical_overlap
+                if isinstance(physical_overlap, Mapping)
+                else {}
+            )
+            physical_target_qids = tuple(
+                str(value)
+                for value in physical_overlap.get("target_qids", ())
+                if value
+            )
+            physical_blocker_qids = tuple(
+                str(value)
+                for value in physical_overlap.get("occluder_qids", ())
+                if value
+            )
             related_qids = tuple(
                 (
                     semantic_id,
@@ -2101,6 +2585,20 @@ def _repair_context(
                 if value >= 0
             ) if max(horizontal_overlap, vertical_overlap) >= 0 else 0.0
             stable_qids = sorted((target_qid, related_qid or occluder_qid))
+            target_bound_ancestors = bound_ancestor_candidates(
+                target_qid=target_qid,
+                blocked_qid=occluder_qid,
+                candidate_deltas_px=target_deltas_px,
+                physical_target_qids=physical_target_qids,
+                physical_blocker_qids=physical_blocker_qids,
+            )
+            physical_owner_blockers = tuple(
+                failure
+                for ancestor in target_bound_ancestors
+                if isinstance(ancestor, Mapping)
+                for failure in (ancestor.get("physicalOwnerFailure"),)
+                if isinstance(failure, Mapping)
+            )
             geometry_issues.append(
                 {
                     "code": defect.code,
@@ -2132,11 +2630,7 @@ def _repair_context(
                         if other_node.constraints is not None
                         else {}
                     ),
-                    "boundAncestors": bound_ancestor_candidates(
-                        target_qid=target_qid,
-                        blocked_qid=occluder_qid,
-                        candidate_deltas_px=target_deltas_px,
-                    ),
+                    "boundAncestors": target_bound_ancestors,
                     "otherBoundAncestors": bound_ancestor_candidates(
                         target_qid=related_qid or occluder_qid,
                         blocked_qid=target_qid,
@@ -2169,6 +2663,7 @@ def _repair_context(
                         "occluderBoundsPx": dict(occluder_bbox),
                         "minimumDisplacementPx": minimum_displacement,
                         "probeVersion": probe_version,
+                        "physicalOwnerBlockers": physical_owner_blockers,
                     },
                 }
             )
@@ -4090,6 +4585,122 @@ def _target_evidence_payload(
     ]
 
 
+def _confirmed_issue_payload(evidence: DomEvidence) -> list[dict[str, Any]]:
+    """Project physical user issues while retaining every raw defect."""
+
+    grouped: dict[str, list[DomDefect]] = {}
+    for defect in evidence.defects:
+        if defect.code == "constraint.evidence.missing" or defect.severity not in {
+            "high",
+            "medium",
+        }:
+            continue
+        identity = defect.physical_issue_id or ":".join(
+            (defect.code, defect.semantic_id, defect.qid or "unavailable")
+        )
+        grouped.setdefault(identity, []).append(defect)
+    result: list[dict[str, Any]] = []
+    for identity, raw_defects in grouped.items():
+        representative = min(
+            raw_defects,
+            key=lambda item: (
+                0 if item.code.startswith("dom.") else 1,
+                item.code,
+                item.semantic_id,
+                item.qid or "",
+            ),
+        )
+        result.append(
+            {
+                "code": representative.code,
+                "severity": representative.severity,
+                "semantic_id": representative.semantic_id,
+                "qid": representative.qid,
+                "related_semantic_ids": list(
+                    representative.related_semantic_ids
+                ),
+                "physical_issue_id": identity,
+                "diagnostics": dict(representative.diagnostics),
+                "raw_defects": [
+                    {
+                        "code": defect.code,
+                        "severity": defect.severity,
+                        "semantic_id": defect.semantic_id,
+                        "qid": defect.qid,
+                        "related_semantic_ids": list(
+                            defect.related_semantic_ids
+                        ),
+                        "diagnostics": dict(defect.diagnostics),
+                    }
+                    for defect in raw_defects
+                ],
+            }
+        )
+    return result
+
+
+def _evidence_atom_payload(evidence: DomEvidence) -> list[dict[str, Any]]:
+    """Expose actionable atom facts without flooding the review with clean probes."""
+
+    return [
+        {
+            "sensor": atom.sensor,
+            "metric": atom.metric,
+            "stage": atom.stage,
+            "state": atom.state,
+            "qid": atom.qid,
+            "semantic_id": atom.semantic_id,
+            "constraint_id": atom.constraint_id,
+            "reason": atom.reason_code,
+            "reason_code": atom.reason_code,
+            "dependency_refs": list(atom.dependency_refs),
+            "diagnostics": dict(atom.diagnostics),
+        }
+        for atom in evidence.atoms
+        if atom.state in {"proven_issue", "unknown"}
+    ]
+
+
+def _dependency_blocker_payload(
+    outcomes: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Lift scoped fail-closed blockers out of candidate diagnostics for the UI."""
+
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for outcome in outcomes:
+        diagnostics = outcome.get("diagnostics")
+        if not isinstance(diagnostics, Mapping):
+            continue
+        telemetry = diagnostics.get("dom_telemetry")
+        if not isinstance(telemetry, Mapping):
+            continue
+        blockers = telemetry.get("dependency_blockers")
+        if not isinstance(blockers, Sequence) or isinstance(blockers, (str, bytes)):
+            continue
+        for blocker in blockers:
+            if not isinstance(blocker, Mapping):
+                continue
+            reason = blocker.get("reason_code") or "target_dependency_unknown"
+            payload = {
+                "sensor": blocker.get("sensor"),
+                "metric": blocker.get("metric"),
+                "stage": blocker.get("stage"),
+                "qid": blocker.get("qid"),
+                "semantic_id": blocker.get("semantic_id"),
+                "constraint_id": blocker.get("constraint_id"),
+                "reason": reason,
+                "reason_code": reason,
+                "dependency_refs": list(blocker.get("dependency_refs") or ()),
+                "diagnostics": dict(blocker.get("diagnostics") or {}),
+            }
+            identity = json.dumps(payload, sort_keys=True, default=str)
+            if identity not in seen:
+                seen.add(identity)
+                result.append(payload)
+    return result
+
+
 def _candidate_state_key(render_input_hash: str, plan_id: str) -> str:
     """Keep plan-local evidence distinct when two plans render identical HTML."""
 
@@ -4265,6 +4876,42 @@ def _merge_incremental_slide_results(
             for item in passes
             for code in item.get("reason_codes", [])
         )
+    )
+    merged["confirmed_issue_count"] = max(
+        int(item.get("confirmed_issue_count", 0)) for item in passes
+    )
+    merged["incomplete_measurement_count"] = max(
+        int(item.get("incomplete_measurement_count", 0)) for item in passes
+    )
+    merged["unresolved_confirmed_issue_count"] = (
+        0
+        if complete
+        else int(passes[-1].get("unresolved_confirmed_issue_count", 0))
+    )
+    merged["clean_slide_count"] = int(
+        passes[-1].get("clean_slide_count", 0)
+    )
+    confirmed_issues: dict[str, Mapping[str, Any]] = {}
+    for item in passes:
+        for issue in item.get("confirmed_issues", []):
+            if not isinstance(issue, Mapping):
+                continue
+            identity = str(
+                issue.get("physical_issue_id")
+                or ":".join(
+                    (
+                        str(issue.get("code", "")),
+                        str(issue.get("semantic_id", "")),
+                        str(issue.get("qid", "")),
+                    )
+                )
+            )
+            confirmed_issues.setdefault(identity, issue)
+    merged["confirmed_issues"] = [dict(item) for item in confirmed_issues.values()]
+    if confirmed_issues:
+        merged["confirmed_issue_count"] = len(confirmed_issues)
+    merged["incomplete_measurements"] = list(
+        passes[-1].get("incomplete_measurements", [])
     )
     merged["total_ms"] = round(
         sum(float(item.get("total_ms", 0.0)) for item in passes), 3
@@ -5686,12 +6333,42 @@ async def _run_one(
         operational_metrics["candidates"]["rejected"] = int(
             operational_metrics["candidates"].get("rejected", 0)
         ) + canonical_overrides
+    confirmed_issues = _confirmed_issue_payload(baseline_evidence)
     return {
         "slide_index": position,
         "route": result.route,
         "trigger": result.trigger,
         "applied": bool(result.funnel.applied),
         "rolled_back": bool(result.funnel.rolled_back),
+        "confirmed_issue_count": result.confirmed_issue_count,
+        "incomplete_measurement_count": result.incomplete_measurement_count,
+        "unresolved_confirmed_issue_count": (
+            result.unresolved_confirmed_issue_count
+        ),
+        "clean_slide_count": result.clean_slide_count,
+        "confirmed_issues": confirmed_issues,
+        "detected_issues": [
+            str(issue.get("code"))
+            for issue in confirmed_issues
+            if issue.get("code")
+        ],
+        "evidence_atoms": _evidence_atom_payload(baseline_evidence),
+        "incomplete_measurements": [
+            {
+                "sensor": atom.sensor,
+                "metric": atom.metric,
+                "stage": atom.stage,
+                "qid": atom.qid,
+                "semantic_id": atom.semantic_id,
+                "constraint_id": atom.constraint_id,
+                "reason": atom.reason_code,
+                "reason_code": atom.reason_code,
+                "dependency_refs": list(atom.dependency_refs),
+                "diagnostics": dict(atom.diagnostics),
+            }
+            for atom in baseline_evidence.unknown_atoms
+        ],
+        "publish_blockers": _dependency_blocker_payload(serialized_outcomes),
         "reason_codes": reason_codes,
         "shadow_artifact_id": shadow_artifact_id,
         "outcomes": serialized_outcomes,
@@ -5829,6 +6506,13 @@ async def execute_slidespec_authored_review(
         canonical = _canonical_outcome_projection(outcomes_for_slide)
         terminal = canonical["terminal"]
         triggered = bool(result.get("trigger"))
+        confirmed_for_slide = int(result.get("confirmed_issue_count", 0))
+        incomplete_for_slide = int(
+            result.get("incomplete_measurement_count", 0)
+        )
+        unresolved_for_slide = int(
+            result.get("unresolved_confirmed_issue_count", 0)
+        )
         applied_for_slide = bool(result.get("applied"))
         incremental_complete = bool(result.get("incremental_complete", True))
         accepted_for_slide = bool(canonical["accepted"])
@@ -5871,8 +6555,14 @@ async def execute_slidespec_authored_review(
                 "element_changes": canonical["element_changes"],
                 "resolved_issues": ["geometry"] if applied_for_slide else [],
                 "remaining_issues": ["geometry"]
-                if triggered and not incremental_complete
+                if unresolved_for_slide > 0
                 else [],
+                "confirmed_issue_count": confirmed_for_slide,
+                "incomplete_measurement_count": incomplete_for_slide,
+                "unresolved_confirmed_issue_count": unresolved_for_slide,
+                "clean_slide_count": int(
+                    confirmed_for_slide == 0 and incomplete_for_slide == 0
+                ),
                 # Keep the established authored-review API contract so the
                 # frontend can distinguish a canonical SlideSpec patch from a
                 # full-slide fallback instead of normalizing it to ``none``.
@@ -6069,20 +6759,51 @@ async def execute_slidespec_authored_review(
         claimed_positions=claimed,
         data={
             "reviewed_count": len(results),
-            "issue_slide_count": sum(bool(item.get("trigger")) for item in results),
-            "issues": [],
+            "issue_slide_count": sum(
+                int(item.get("confirmed_issue_count", 0)) > 0
+                for item in results
+            ),
+            "confirmed_issue_count": sum(
+                int(item.get("confirmed_issue_count", 0)) for item in results
+            ),
+            "incomplete_measurement_count": sum(
+                int(item.get("incomplete_measurement_count", 0))
+                for item in results
+            ),
+            "unresolved_confirmed_issue_count": sum(
+                int(item.get("unresolved_confirmed_issue_count", 0))
+                for item in results
+            ),
+            "clean_slide_count": sum(
+                int(item.get("clean_slide_count", 0)) for item in results
+            ),
+            "issues": [
+                issue
+                for item in results
+                for issue in item.get("confirmed_issues", [])
+                if isinstance(issue, Mapping)
+            ],
             "fixed_count": len(applied),
             "candidate_count": candidate_count,
             "accepted_candidate_count": accepted_candidate_count,
             "rejected_candidate_count": rejected_candidate_count,
             "fixed_slide_indices": applied,
-            "remaining_issue_count": sum(bool(item.get("remaining_issues")) for item in results),
+            "remaining_issue_count": sum(
+                int(item.get("unresolved_confirmed_issue_count", 0))
+                for item in results
+            ),
             "remaining_issue_indices": [
                 item["slide_index"]
                 for item in results
                 if item.get("remaining_issues")
             ],
-            "remaining_issues": [],
+            "remaining_issues": [
+                issue
+                for item in results
+                if int(item.get("unresolved_confirmed_issue_count", 0)) > 0
+                for issue in item.get("confirmed_issues", [])
+                if isinstance(issue, Mapping)
+            ],
             "candidate_decisions": outcomes,
             "rejection_reasons": rejection_reasons,
             "version_saved": bool(applied),

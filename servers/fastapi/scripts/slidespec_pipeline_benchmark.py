@@ -54,9 +54,52 @@ def _funnel_metric(
     return int(metrics.get(executor_name, metrics.get(public_name, 0)))
 
 
+def _optional_number(*values: object) -> float | None:
+    for value in values:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    return None
+
+
+def _stage_usage(metrics: Mapping[str, Any]) -> dict[str, dict[str, float]]:
+    """Normalize cache/token/cost counters without inventing unavailable usage."""
+
+    raw = metrics.get("stage_usage", {})
+    raw = raw if isinstance(raw, Mapping) else {}
+    normalized: dict[str, dict[str, float]] = {}
+    for stage in ("llm", "chrome", "acceptance", "postverify"):
+        stage_raw = raw.get(stage, {})
+        stage_raw = stage_raw if isinstance(stage_raw, Mapping) else {}
+        values = {
+            str(key): float(value)
+            for key, value in stage_raw.items()
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+        }
+        if stage == "llm":
+            aliases = {
+                "input_tokens": (
+                    metrics.get("llm_input_tokens"),
+                    metrics.get("prompt_tokens"),
+                ),
+                "output_tokens": (
+                    metrics.get("llm_output_tokens"),
+                    metrics.get("completion_tokens"),
+                ),
+                "total_tokens": (metrics.get("llm_total_tokens"),),
+                "cost_usd": (metrics.get("llm_cost_usd"), metrics.get("cost_usd")),
+            }
+            for name, candidates in aliases.items():
+                candidate = _optional_number(values.get(name), *candidates)
+                if candidate is not None:
+                    values[name] = candidate
+        normalized[stage] = values
+    return normalized
+
+
 def _clear_review_caches() -> None:
     from services.slidespec_authored_executor import _BASELINE_INSPECTION_CACHE
     from services.slidespec_pipeline_performance import (
+        DEFAULT_EVIDENCE_ATOM_CACHE,
         DEFAULT_NEGATIVE_PROPOSAL_CACHE,
     )
     from utils import slide_capture
@@ -64,6 +107,7 @@ def _clear_review_caches() -> None:
     from utils.llm_calls import author_vision_qa
 
     _BASELINE_INSPECTION_CACHE.clear()
+    DEFAULT_EVIDENCE_ATOM_CACHE.clear()
     DEFAULT_NEGATIVE_PROPOSAL_CACHE.clear()
     slide_capture.reset_render_runtime(clear_caches=True, retire_session=True)
     DEFAULT_CACHE.entries.clear()
@@ -178,6 +222,38 @@ async def _one_replay(
                 "reason_codes": [str(code) for code in raw.get("reason_codes", ())],
                 "candidate_rejections": list(raw.get("candidate_rejections", ())),
                 "projection_rejections": list(raw.get("projection_rejections", ())),
+                "confirmed_issues": [
+                    {
+                        name: issue.get(name)
+                        for name in (
+                            "code",
+                            "severity",
+                            "semantic_id",
+                            "qid",
+                            "related_semantic_ids",
+                            "physical_issue_id",
+                        )
+                    }
+                    for issue in raw.get("confirmed_issues", ())
+                    if isinstance(issue, Mapping)
+                ],
+                "incomplete_measurements": [
+                    {
+                        name: measurement.get(name)
+                        for name in (
+                            "sensor",
+                            "metric",
+                            "stage",
+                            "qid",
+                            "semantic_id",
+                            "constraint_id",
+                            "reason_code",
+                            "dependency_refs",
+                        )
+                    }
+                    for measurement in raw.get("incomplete_measurements", ())
+                    if isinstance(measurement, Mapping)
+                ],
                 "outcomes": outcomes,
             }
         )
@@ -210,8 +286,35 @@ async def _one_replay(
         ),
         "applied": int(metrics.get("applied", 0)),
         "postverify_passed": int(metrics.get("postverify_passed", 0)),
+        "stage_usage": _stage_usage(metrics),
         "claimed_count": len(execution.claimed_positions),
         "issue_slide_count": int(execution.data.get("issue_slide_count", 0)),
+        "confirmed_issue_count": int(
+            execution.data.get(
+                "confirmed_issue_count",
+                execution.data.get("issue_slide_count", 0),
+            )
+        ),
+        "incomplete_measurement_count": int(
+            execution.data.get("incomplete_measurement_count", 0)
+        ),
+        "unresolved_confirmed_issue_count": int(
+            execution.data.get(
+                "unresolved_confirmed_issue_count",
+                execution.data.get("remaining_issue_count", 0),
+            )
+        ),
+        "clean_slide_count": int(
+            execution.data.get(
+                "clean_slide_count",
+                max(
+                    0,
+                    len(execution.claimed_positions)
+                    - int(execution.data.get("issue_slide_count", 0))
+                    - int(execution.data.get("incomplete_measurement_count", 0)),
+                ),
+            )
+        ),
         "candidate_count": int(execution.data.get("candidate_count", 0)),
         "fixed_count": int(execution.data.get("fixed_count", 0)),
         "diagnostics": {
@@ -250,6 +353,24 @@ def _phase_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "applied",
         "postverify_passed",
     )
+    stage_usage_totals: dict[str, dict[str, float]] = {}
+    stage_usage_coverage: dict[str, dict[str, int]] = {}
+    for run in runs:
+        usage = run.get("stage_usage", {})
+        if not isinstance(usage, Mapping):
+            continue
+        for stage, raw_values in usage.items():
+            if not isinstance(raw_values, Mapping):
+                continue
+            totals = stage_usage_totals.setdefault(str(stage), {})
+            coverage = stage_usage_coverage.setdefault(str(stage), {})
+            for name, value in raw_values.items():
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    continue
+                key = str(name)
+                totals[key] = round(totals.get(key, 0.0) + float(value), 6)
+                coverage[key] = coverage.get(key, 0) + 1
+
     return {
         "run_count": len(runs),
         "deck_wall_ms": _summary([run["deck_wall_ms"] for run in runs]),
@@ -265,6 +386,38 @@ def _phase_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
                 **_summary([float(run.get(name, 0)) for run in runs]),
             }
             for name in operational_names
+        },
+        "funnel": {
+            "branch": {
+                "branches": sum(int(run.get("solver_branches", 0)) for run in runs),
+                "unknown": sum(int(run.get("solver_unknown", 0)) for run in runs),
+            },
+            "candidate": {
+                name: sum(int(run.get(name, 0)) for run in runs)
+                for name in (
+                    "candidate_proposed",
+                    "candidate_rendered",
+                    "candidate_accepted",
+                    "candidate_rejected",
+                    "candidate_inconclusive",
+                )
+            },
+            "review": {
+                name: sum(int(run.get(name, 0)) for run in runs)
+                for name in (
+                    "confirmed_issue_count",
+                    "incomplete_measurement_count",
+                    "unresolved_confirmed_issue_count",
+                    "clean_slide_count",
+                )
+            },
+        },
+        "stage_usage": {
+            stage: {
+                **values,
+                "coverage_runs": stage_usage_coverage.get(stage, {}),
+            }
+            for stage, values in stage_usage_totals.items()
         },
         "totals": {
             key: sum(int(run.get(key, 0)) for run in runs)
@@ -289,6 +442,19 @@ def _phase_summary(runs: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "runs": runs,
     }
+
+
+def _summary_only(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Drop per-candidate diagnostics while preserving every aggregate/SLO field."""
+
+    compact = dict(result)
+    for phase in ("cold", "warm"):
+        raw = compact.get(phase)
+        if isinstance(raw, Mapping):
+            compact[phase] = {
+                str(key): value for key, value in raw.items() if key != "runs"
+            }
+    return compact
 
 
 async def run_benchmark(
@@ -376,7 +542,7 @@ async def run_benchmark(
         raise RuntimeError("dry-run benchmark changed the source presentation")
 
     return {
-        "schema": "slidespec-pipeline-benchmark/1",
+        "schema": "slidespec-pipeline-benchmark/2",
         "presentation_id": str(presentation_id),
         "slide_count": len(original_slides),
         "positions": list(positions) if positions is not None else "all",
@@ -398,6 +564,11 @@ def main() -> None:
         help="Comma-separated zero-based slide positions for a bounded diagnostic replay",
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Omit per-candidate run diagnostics from stdout/output JSON",
+    )
     args = parser.parse_args()
     if args.cold_runs < 0 or args.warm_runs < 0 or args.cold_runs + args.warm_runs < 1:
         parser.error("run counts must be non-negative with at least one replay")
@@ -416,7 +587,8 @@ def main() -> None:
             positions=positions,
         )
     )
-    encoded = json.dumps(result, ensure_ascii=False, indent=2)
+    payload = _summary_only(result) if args.summary_only else result
+    encoded = json.dumps(payload, ensure_ascii=False, indent=2)
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(encoded + "\n", encoding="utf-8")
