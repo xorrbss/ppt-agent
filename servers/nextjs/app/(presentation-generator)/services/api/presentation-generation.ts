@@ -904,6 +904,18 @@ export class PresentationGenerationApi {
     );
   }
 
+  /** Remake activity a reloaded client would otherwise have lost. */
+  static async listAuthoredPageRemakePreviews(presentationId: string) {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${presentationId}/remake/previews`),
+      { method: "GET", headers: getHeader() },
+    );
+    return ApiResponseHandler.handleResponse(
+      response,
+      "Failed to load page remake history",
+    );
+  }
+
   static async publishAuthoredPageRemake(
     presentationId: string,
     slideIndex: number,

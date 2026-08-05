@@ -152,6 +152,10 @@ export const PAGE_REMAKE_PUBLISH_FAILURE_FALLBACK =
   "새 버전을 적용하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
 const FAILURE_MESSAGES: Record<string, string> = {
+  // The legacy write route is fenced off for chat-first decks, which must
+  // publish through the workspace command pipeline instead.
+  chat_first_command_required:
+    "이 발표자료는 작업 대화를 통해서만 적용할 수 있습니다. 화면을 새로고침한 뒤 다시 시도해 주세요.",
   authored_page_remake_generation_failed:
     "새 페이지를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
   authored_page_remake_candidate_render_failed:

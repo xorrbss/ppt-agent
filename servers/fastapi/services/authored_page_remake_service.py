@@ -459,6 +459,24 @@ async def run_authored_page_remake_preview(
         )
 
 
+def _failed_preview_breadcrumb(
+    presentation_id: uuid.UUID, slide_index: int
+) -> dict[str, Any]:
+    """Identify a failed attempt without implying a usable candidate.
+
+    History is listed by reading task payloads, so an attempt that stores nothing
+    is invisible afterwards.  The phase is deliberately not ``preview_ready``:
+    publication validates that field and must keep rejecting this task.
+    """
+
+    return {
+        "kind": PREVIEW_KIND,
+        "phase": "failed",
+        "presentation_id": str(presentation_id),
+        "slide_index": slide_index,
+    }
+
+
 async def _run_preview_background(
     presentation_id: uuid.UUID,
     slide_index: int,
@@ -480,6 +498,7 @@ async def _run_preview_background(
                 task,
                 status="error",
                 message="페이지의 새 버전을 만들지 못했습니다.",
+                data=_failed_preview_breadcrumb(presentation_id, slide_index),
                 error={
                     "detail": error.code,
                     "stage": error.stage,
@@ -497,6 +516,7 @@ async def _run_preview_background(
                 task,
                 status="error",
                 message="페이지의 새 버전을 만들지 못했습니다.",
+                data=_failed_preview_breadcrumb(presentation_id, slide_index),
                 error={
                     "detail": "authored_page_remake_failed",
                     "stage": "unknown",

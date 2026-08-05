@@ -51,6 +51,9 @@ from services.authored_quality_ocr import get_ocr_readiness
 from services.authored_quality_review_service import (
     queue_authored_quality_review,
 )
+from services.authored_page_remake_history import (
+    list_authored_page_remake_previews,
+)
 from services.authored_page_remake_service import (
     AuthoredPageRemakeError,
     publish_authored_page_remake_legacy,
@@ -356,6 +359,20 @@ async def preview_authored_page_remake(
         )
     except AuthoredPageRemakeError as error:
         raise remake_http_error(error) from error
+
+
+@PRESENTATION_ROUTER.get(
+    "/{id}/remake/previews",
+    summary="List recent one-page remake previews for this presentation",
+)
+async def list_authored_page_remake_preview_history(
+    id: uuid.UUID,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Replay the remake activity a reloaded client would otherwise lose."""
+
+    await require_live_presentation(sql_session, id)
+    return await list_authored_page_remake_previews(sql_session, id)
 
 
 @PRESENTATION_ROUTER.post(

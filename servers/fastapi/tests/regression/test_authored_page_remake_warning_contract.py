@@ -410,7 +410,11 @@ async def test_candidate_render_failure_remains_fatal(tmp_path, monkeypatch):
         assert task.error["detail"] == "authored_page_remake_candidate_render_failed"
         assert task.error["stage"] == "candidate_render"
         assert task.error["retryable"] is True
-        assert task.data is None
+        # A failed attempt is identifiable in history but must never look like a
+        # usable candidate, and must carry no candidate material.
+        assert task.data["phase"] == "failed"
+        assert "candidate_html" not in task.data
+        assert "candidate_image" not in task.data
         assert slides[0].html_content.startswith(SOURCE_HTML)
     await engine.dispose()
 
