@@ -545,7 +545,7 @@ async def test_warning_candidate_publishes_only_target_slide(tmp_path, monkeypat
     engine = await _engine(tmp_path / "publish-warning.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation, slides, _pending = await _seed(session, slide_count=2)
-        issues = [_issue(category="spacing", detail="tight gutter").to_dict()]
+        issues = [_issue(category="contrast", detail="low contrast label").to_dict()]
         task = AsyncPresentationGenerationTaskModel(
             status="completed",
             data=_preview_task_data(slides[1], candidate_dom="warning", issues=issues),
@@ -560,7 +560,7 @@ async def test_warning_candidate_publishes_only_target_slide(tmp_path, monkeypat
             task,
             1,
             monkeypatch,
-            _report(issues=(_issue(category="spacing", detail="tight gutter"),)),
+            _report(issues=(_issue(category="contrast", detail="low contrast label"),)),
         )
         await session.refresh(slides[0])
         await session.refresh(slides[1])
