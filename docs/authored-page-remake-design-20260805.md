@@ -14,10 +14,12 @@ cannot start page generation itself.
    live page is unchanged while a candidate is generated.
 3. `미리보기 만들기` starts one bounded LLM full-page re-author operation for
    the exact zero-based slide index.
-4. The server renders and validates the detached candidate. A failed candidate
-   remains unpublished and returns a stable stage/reason code.
-5. A successful candidate is shown as a 16:9 preview with source/candidate
-   digests and validation state.
+4. The server renders and validates the detached candidate. A candidate that
+   cannot be generated or rendered remains unpublished and returns a stable
+   stage/reason code.
+5. A rendered candidate is shown as a 16:9 preview with source/candidate digests
+   and validation state. Deterministic DOM findings are advisory: they are
+   reported as a warning next to the preview, and the user decides.
 6. `이 버전 적용` performs a source-digest CAS, snapshots the deck, removes a
    stale SlideSpec active pointer, publishes the candidate image and HTML, and
    verifies the committed representation. `취소` leaves the live deck intact.
@@ -46,8 +48,12 @@ feature.
   number, and total deck size.
 - Exact-reconstruction decks fail closed unless their immutable source snapshot
   can be verified and supplied to the author.
-- Candidate HTML must be valid, render successfully, and pass local DOM quality
-  validation before it can be offered for publication.
+- Candidate HTML must be valid and render successfully before it can be offered
+  for publication. Local DOM quality inspection is advisory: its findings are
+  surfaced as `validation.candidate_dom = warning` with the issue list and probe
+  coverage (`validation.candidate_dom_telemetry`), never as a silent rejection.
+  Publication re-renders the candidate — a render failure still blocks — and
+  records the same advisory verdict as `post_verify`.
 - Publication compares the current slide id, HTML, content, properties, and
   source digest with the preview source. A mismatch returns a conflict and does
   not publish.
@@ -68,10 +74,14 @@ Terminal failures retain their stage and stable reason:
 - `generation_failed`
 - `candidate_invalid`
 - `candidate_render_failed`
-- `candidate_quality_failed`
 - `source_changed`
 - `publish_cas_conflict`
-- `post_verify_failed`
+- `post_verify_failed` (publication re-render failure only)
+
+Candidate DOM quality is not a terminal state. A renderable candidate always
+reaches `preview_ready` with `validation.candidate_dom` of `passed` or
+`warning`, and a published page records `post_verify` of `passed` or `warning`
+together with its issue summary.
 
 The UI shows generation and publication as distinct states. Closing the dialog
 or rejecting a preview never reports the page as fixed.
@@ -84,6 +94,9 @@ or rejecting a preview never reports the page as fixed.
 - Service tests prove preview is non-mutating, publish snapshots once, CAS
   conflicts preserve the original, and stale SlideSpec pointers are removed only
   when the candidate is committed.
+- Service tests also prove a DOM-warned candidate still completes as a preview
+  with its issue evidence, leaves the live slide untouched, and publishes only
+  after an explicit user approval.
 - Component tests prove the exact button label, current-page request, detached
   preview, explicit publish, cancellation, and reload behavior.
 - Production build and focused browser/component regressions are required before

@@ -371,10 +371,21 @@ async def run_authored_page_remake_preview(
             candidate_metrics,
             reference_mode=reference_mode,
         )
-        if candidate_report.needs_attention:
-            raise AuthoredPageRemakeError(
-                "authored_page_remake_candidate_quality_failed",
-                stage="candidate_validation",
+        # A candidate that generated and rendered is always offered to the user.
+        # Deterministic DOM findings are advisory evidence for that human decision;
+        # hiding a renderable candidate behind a local sensor removes the only way
+        # to judge it.  Telemetry coverage travels with the verdict so a warning
+        # without issues (missing/partial browser probe) stays explainable.
+        candidate_dom_status = (
+            "warning" if candidate_report.needs_attention else "passed"
+        )
+        if candidate_dom_status == "warning":
+            LOGGER.info(
+                "Authored page remake candidate needs attention "
+                "(slide_index=%s, telemetry=%s, issues=%d)",
+                slide_index,
+                candidate_report.telemetry_status,
+                len(candidate_report.issues),
             )
         image_reference = publish_reviewed_png(
             presentation_id, slide_index, verified_png or candidate_png
@@ -403,7 +414,8 @@ async def run_authored_page_remake_preview(
                 "validation": {
                     "source_render": "passed",
                     "candidate_render": "passed",
-                    "candidate_dom": "passed",
+                    "candidate_dom": candidate_dom_status,
+                    "candidate_dom_telemetry": candidate_report.telemetry_status,
                     "reference_mode": reference_mode,
                 },
                 "generation": {
@@ -562,8 +574,9 @@ async def publish_authored_page_remake(
     candidate_html = str(data["candidate_html"])
     candidate_image = str(data["candidate_image"])
 
-    # Re-render immediately before mutation. A preview that no longer passes the
-    # deterministic sensor contract cannot be published even if its task is valid.
+    # Re-render immediately before mutation. A candidate that can no longer be
+    # rendered is never published; deterministic DOM findings stay advisory so an
+    # explicitly approved preview remains applicable.
     try:
         _png, metrics = await _render_review_html(candidate_html)
     except Exception as error:
@@ -579,9 +592,14 @@ async def publish_authored_page_remake(
     post_report = inspect_authored_dom(
         candidate_html, metrics, reference_mode=reference_mode
     )
-    if post_report.needs_attention:
-        raise AuthoredPageRemakeError(
-            "authored_page_remake_post_verify_failed", stage="post_verify"
+    post_verify_status = "warning" if post_report.needs_attention else "passed"
+    if post_verify_status == "warning":
+        LOGGER.info(
+            "Authored page remake publication carries DOM warnings "
+            "(slide_index=%s, telemetry=%s, issues=%d)",
+            slide_index,
+            post_report.telemetry_status,
+            len(post_report.issues),
         )
 
     expected_html = slide.html_content
@@ -647,7 +665,9 @@ async def publish_authored_page_remake(
     next_data["phase"] = "published"
     next_data["publish"] = {
         "status": "published",
-        "post_verify": "passed",
+        "post_verify": post_verify_status,
+        "post_verify_telemetry": post_report.telemetry_status,
+        "post_verify_issues": _issue_summary(post_report),
         "rollback_available": True,
     }
     task.data = next_data
@@ -664,7 +684,7 @@ async def publish_authored_page_remake(
         "preview_task_id": preview_task_id,
         "source_digest": data["source_digest"],
         "candidate_digest": data["candidate_digest"],
-        "post_verify_status": "passed",
+        "post_verify_status": post_verify_status,
         "rollback_available": True,
         "canvas_refresh_required": True,
         "canvas_refresh_slide_index": slide_index,
