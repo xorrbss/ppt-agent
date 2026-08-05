@@ -153,10 +153,16 @@ async def _call_deleted_mutation(
     raise AssertionError(f"unknown mutation: {name}")
 
 
+# The outline stream resolves the deck before deciding, because the staging
+# bootstrap allowance cannot be evaluated without it - rejecting earlier made
+# generating any new presentation impossible. A deleted deck is therefore hidden
+# by `require_live_presentation` (404) instead of the scope preflight (409): one
+# read replaces none, while the properties that matter here are unchanged - no
+# write, no rehydration, and no generation work is reached.
 @pytest.mark.parametrize(
     ("mode", "expected_status", "expected_detail", "expected_reads"),
     (
-        ("full-rollout", 409, CHAT_FIRST_COMMAND_REQUIRED, 0),
+        ("full-rollout", 404, "Presentation not found", 1),
         ("flag-off", 404, "Presentation not found", 1),
         ("kill-switch", 404, "Presentation not found", 1),
     ),
