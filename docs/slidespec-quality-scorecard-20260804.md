@@ -127,3 +127,51 @@
 CI **277 passed**, 관련 Cypress **8 passed**, ESLint와 Next production build/TypeScript
 통과다. 90장 cold 1회와 warm 9회의 deck wall time은 cold **113.734초**,
 warm p50/p95/p99 **11.291/12.472/12.725초**로 운영 목표를 충족했다.
+
+## 2026-08-05 scoped evidence 결함 재평가
+
+새 presentation `50907f60-ea13-404c-90da-57f821404d74`의 5번 슬라이드는
+이전 task에서 `issue0/clean`으로 잘못 완료됐지만, 수정 뒤 historic exact report가
+`confirmed/incomplete/unresolved/clean = 1/1/1/0`으로 재생된다. fresh sensor v4는
+footer 샘플을 확보해 `1/0/1/0`이며, 3개 nested raw finding은 증거를 보존한 채
+물리 이슈 1개로 deduplicate된다.
+
+자동수정 후보 9개는 모두 검증 거부됐다. 물리 owner 이동에 필요한 73.65625px보다
+가용 공간 37.359375px(상위 section은 59.359375px)이 작고 footer 경계 y=690을
+침범하므로 slide 5의 apply/publish/post-verify는 실행하지 않았다. 이는 generic
+unsupported가 아니라 qid/constraint/operation/stage/metric과
+`repair.geometry.ancestor.physical_owner_no_safe_translation`으로 기록된다.
+
+실제 Chrome 20장 검수 task는 실행 당시 confirmed 21, incomplete 77,
+unresolved 20, clean 8을 표시했다. 별개의 안전 후보인 6번 슬라이드 1건만
+apply/CAS publish/post-verify에 성공했고 rollback은 0이다. 최종 live 재검수는
+그 해결을 반영해 confirmed/incomplete/unresolved/clean `20/77/20/9`이며,
+5번은 detected·remaining으로 남고 clean으로 표시되지 않는다.
+
+| 신뢰도 항목 | 배점 | 실측 | 점수 |
+|---|---:|---|---:|
+| proven issue 보존·physical dedupe | 25 | unrelated unknown이 overlap proof를 지우지 않고 exact 1/1/1/0 재현 | 25 |
+| scoped fail-closed·mutation safety | 25 | dependency cone, capacity, containment 근거로 slide 5 publish 차단 | 25 |
+| fresh Chrome·round-trip·UI lifecycle | 20 | baseline, 후보 9개, fresh post-render, 실제 20장 task와 상세 blocker UI 확인 | 20 |
+| 기존 90장 corpus 보존 | 20 | human-labeled release pass: corrected 18, verified 5, pending 0, source 90/90 unchanged | 20 |
+| 독립 외부 human sign-off | 10 | 동일 viewport의 운영자 검증은 완료, 독립 외부 sign-off는 미수행 | 8 |
+| 합계 | 100 | 파이프라인 품질 신뢰도(문서 자체의 무결함 점수가 아님) | **98/100** |
+
+최종 live 90장 dry-run은 cold **266.461초**, warm p50/p95/p99
+**79.604/111.930/114.803초**로 warm p95 210초 운영 SLO 안이다. cold에는
+실패한 model call 7회와 OCR/VQA 67.537초가 포함되어 숨기지 않았다. 새 20장은
+cold **61.520초**, warm **18.048/20.892/21.144초**이고, 5번 집중 replay는
+cold **27.836초**, warm **8.144/8.338/8.356초**다. 원시 sensor finding과
+human-reviewed disposition은 서로 다른 지표로 보존하며, 원시 unknown을 clean이나
+confirmed defect로 임의 변환하지 않는다.
+
+최종 human-labeled 23건 replay는 `release_passed=true`, corrected 18,
+executor-verified 5, pending 0, source 90/90 unchanged를 다시 확인했다. 전체
+FastAPI는 **2468 passed, 16 skipped**(exit 0), 관련 Cypress는 **9 passed**,
+Node/Chrome CI는 **277 passed**이며 ESLint와 Next production build도 통과했다.
+
+slide 6 publish 뒤 presentation-version 복구 흔적으로 20개 active pointer의
+bundle row가 없는 상태를 발견했다. SQLite online backup 뒤 표준 CAS re-import로
+20/20 bundle을 복구했고 HTML/content hash는 전부 동일했다. historic fixture의
+원래 bundle ID는 보존하며, 현재 live slide 5 bundle은
+`e73d7e98-a7c1-4528-a9e6-e2b86fa1576c`이다.
