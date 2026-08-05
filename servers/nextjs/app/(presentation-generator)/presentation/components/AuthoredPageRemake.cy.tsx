@@ -140,6 +140,29 @@ describe("AuthoredPageRemake", () => {
     );
   });
 
+  // The backend persists candidate images as bare, app-data-relative refs. A raw
+  // resolve leaves them relative to the document, so the preview 404s.
+  it("anchors a bare candidate image reference to the backend image root", () => {
+    preparePreview({
+      ...previewData,
+      candidate_image:
+        "users/d74ac154/authored/8a836947/slide_4_47af1196.png",
+    });
+    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+
+    cy.get('[data-testid="page-remake-trigger"]').click();
+    cy.get('[data-testid="page-remake-preview-create"]').click();
+    cy.get("@previewRequest").should("have.been.called");
+    cy.tick(2_000);
+
+    cy.get('[data-testid="page-remake-preview"] img')
+      .should("have.attr", "src")
+      .and(
+        "match",
+        /^\/app_data\/images\/users\/d74ac154\/authored\/8a836947\/slide_4_47af1196\.png$/,
+      );
+  });
+
   it("keeps the passing preview UX free of warning affordances", () => {
     preparePreview();
     cy.mount(

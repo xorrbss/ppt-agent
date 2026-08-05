@@ -15,7 +15,7 @@ import { validate as uuidValidate } from 'uuid';
 import { getLayoutByLayoutId } from "@/app/presentation-templates";
 import { useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { updateSlideContent, updateAdaptiveBlock } from "@/store/slices/presentationGeneration";
-import { resolveBackendAssetUrl } from "@/utils/api";
+import { resolveAuthoredImageUrl } from "@/utils/api";
 import { useDispatch } from "react-redux";
 import { Loader2 } from "lucide-react";
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
@@ -104,13 +104,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
         slide?.content?.__authored__ === true || slide.layout_group === "authored";
     if (isAuthored) {
         const imageRef = slide?.content?.image || slide?.properties?.image;
-        const imagePath =
-            typeof imageRef === "string" && /^(?:[a-z][a-z\d+.-]*:|\/)/i.test(imageRef)
-                ? imageRef
-                : `/app_data/images/${imageRef}`;
-        const src = imageRef
-            ? resolveBackendAssetUrl(imagePath)
-            : "";
+        const src = resolveAuthoredImageUrl(imageRef);
         if (preferAuthoredHtml) {
             return (
                 <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>

@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { notify } from "@/components/ui/sonner";
-import { resolveBackendAssetUrl } from "@/utils/api";
+import { resolveAuthoredImageUrl } from "@/utils/api";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import type { WorkspaceCommandDispatcher } from "../workspace";
 import {
@@ -225,7 +225,7 @@ function PageRemakeFlow({
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             {/* eslint-disable-next-line @next/next/no-img-element -- immutable runtime preview */}
             <img
-              src={resolveBackendAssetUrl(preview.candidate_image)}
+              src={resolveAuthoredImageUrl(preview.candidate_image)}
               alt={`${pageNumber}페이지 새 버전 미리보기`}
               className="aspect-video w-full object-cover"
             />

@@ -223,6 +223,27 @@ export function resolveBackendAssetUrl(path?: string): string {
   return trimmedPath;
 }
 
+/**
+ * Authored slide and remake-candidate images are persisted as bare references
+ * relative to the backend image root (e.g.
+ * `users/<id>/authored/<deck>/slide_4_<hash>.png`). Only a rooted path or an
+ * explicit scheme is resolvable as-is; anything else must be anchored to
+ * `/app_data/images/` first, otherwise the browser resolves it against the
+ * current document and the image 404s.
+ */
+export function resolveAuthoredImageUrl(
+  reference?: string | null
+): string {
+  if (typeof reference !== "string") return "";
+  const trimmed = reference.trim();
+  if (!trimmed) return "";
+
+  const isAlreadyResolvable = /^(?:[a-z][a-z\d+.-]*:|\/)/i.test(trimmed);
+  return resolveBackendAssetUrl(
+    isAlreadyResolvable ? trimmed : `/app_data/images/${trimmed}`
+  );
+}
+
 export type BackendAssetLike = {
   file_url?: string | null;
   path?: string | null;
