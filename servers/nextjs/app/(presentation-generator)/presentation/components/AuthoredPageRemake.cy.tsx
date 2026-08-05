@@ -190,6 +190,22 @@ describe("AuthoredPageRemake", () => {
     cy.get("@notifyError").should("not.have.been.called");
   });
 
+  it("enlarges the preview on click and restores it on a second click", () => {
+    preparePreview();
+    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+
+    cy.get('[data-testid="page-remake-trigger"]').click();
+    cy.get('[data-testid="page-remake-preview-create"]').click();
+    cy.get("@previewRequest").should("have.been.called");
+    cy.tick(2_000);
+
+    cy.get('[data-testid="page-remake-preview-zoom"]').should("not.exist");
+    cy.get('[data-testid="page-remake-preview-zoom-in"]').click();
+    cy.get('[data-testid="page-remake-preview-zoom"]').should("be.visible");
+    cy.get('[data-testid="page-remake-preview-zoom"]').click();
+    cy.get('[data-testid="page-remake-preview-zoom"]').should("not.exist");
+  });
+
   it("keeps the passing preview UX free of warning affordances", () => {
     preparePreview();
     cy.mount(
