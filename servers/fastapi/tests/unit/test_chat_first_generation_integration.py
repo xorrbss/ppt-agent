@@ -159,6 +159,52 @@ def test_create_replay_is_single_turn_and_payload_mismatch_conflicts(
     asyncio.run(scenario())
 
 
+def test_outline_stream_admits_a_staged_deck_at_full_rollout(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """A fully enabled cohort must still be able to generate a new deck.
+
+    ``legacy_write_requires_presentation_scope`` rejects before touching the
+    database once the rollout reaches 100%, so calling it from the outline
+    stream made the staging bootstrap allowance unreachable and left every new
+    presentation stuck with no outline.
+    """
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "outline-full-rollout.db")
+        monkeypatch.setattr(
+            presentation_crud, "_chat_first_create_enabled", lambda: True
+        )
+        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
+        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
+        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT", "100")
+        presentation_id = uuid.uuid4()
+        try:
+            # The preflight the endpoint must not use rejects outright here.
+            with pytest.raises(HTTPException) as preflight:
+                workspace_legacy_write_gate.legacy_write_requires_presentation_scope()
+            assert preflight.value.status_code == 409
+
+            async with maker() as session:
+                presentation = await _create(
+                    session,
+                    presentation_id=presentation_id,
+                    idempotency_key=f"presentation-create:{presentation_id}",
+                )
+                # The guard the endpoint actually relies on still admits it.
+                assert (
+                    await workspace_legacy_write_gate.require_outline_bootstrap_write_path(
+                        session, presentation
+                    )
+                    is None
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_created_staging_deck_admits_outline_only_until_generation_activation(
     tmp_path: Path,
     monkeypatch,

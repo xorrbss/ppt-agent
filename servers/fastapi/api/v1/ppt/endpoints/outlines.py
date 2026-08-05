@@ -24,7 +24,6 @@ from services.mem0_presentation_memory_service import (
 )
 from services.presentation_access_service import require_live_presentation
 from services.workspace_legacy_write_gate import (
-    legacy_write_requires_presentation_scope,
     require_outline_bootstrap_write_path,
 )
 from utils.document_context import (
@@ -58,7 +57,13 @@ async def stream_outlines(
     # This GET endpoint persists its result. During the chat-first migration it
     # may write only to the owner-scoped staging deck whose generation
     # operation is still awaiting activation.
-    legacy_write_requires_presentation_scope()
+    #
+    # That decision needs the deck, so it cannot be pre-empted by the
+    # scope preflight: for a fully enabled cohort the preflight rejects before
+    # any database access, which would make the bootstrap allowance below
+    # unreachable and leave a staged deck with no way to generate its outline.
+    # `require_outline_bootstrap_write_path` performs the same rollout
+    # evaluation and still re-raises unsupported/unavailable runtimes.
     presentation = await require_live_presentation(sql_session, id)
     await require_outline_bootstrap_write_path(sql_session, presentation)
 
