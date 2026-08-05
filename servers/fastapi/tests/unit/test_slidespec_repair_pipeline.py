@@ -225,6 +225,99 @@ def test_dom_hard_failure_skips_expensive_sensors(monkeypatch):
     )
 
 
+def test_incomplete_dom_telemetry_preserves_missing_constraint_diagnostics(
+    monkeypatch,
+):
+    events = []
+    missing = DomEvidence(
+        (
+            DomDefect(
+                "constraint.evidence.missing",
+                "high",
+                "sem:title",
+                ("con:anchor-title",),
+                qid="q-title",
+                diagnostics={"observation": "offset_parent"},
+            ),
+        ),
+        telemetry_complete=False,
+    )
+    result = asyncio.run(
+        SlideSpecRepairPipeline(
+            _dependencies(events, candidate_dom=missing)
+        ).run(
+            spec=_spec(),
+            baseline_dom=_baseline(),
+            rollout=_rollout(monkeypatch),
+        )
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.validation_status == "inconclusive"
+    assert outcome.reason_codes == ("dom.telemetry_incomplete",)
+    assert outcome.diagnostics["dom_telemetry"] == {
+        "complete": False,
+        "missing_evidence": [
+            {
+                "code": "constraint.evidence.missing",
+                "severity": "high",
+                "semantic_id": "sem:title",
+                "qid": "q-title",
+                "related_semantic_ids": ["con:anchor-title"],
+                "diagnostics": {"observation": "offset_parent"},
+            }
+        ],
+    }
+    assert "publish" not in events and "vqa" not in events
+
+
+def test_concrete_dom_failure_wins_over_unrelated_missing_evidence_and_tries_next(
+    monkeypatch,
+):
+    events = []
+    mixed = DomEvidence(
+        (
+            DomDefect("dom.clipping", "medium", "sem:title", qid="q-title"),
+            DomDefect(
+                "constraint.evidence.missing",
+                "high",
+                "sem:title",
+                ("con:unobserved",),
+            ),
+        ),
+        telemetry_complete=False,
+    )
+    dependencies = _dependencies(events, candidate_dom=mixed)
+
+    async def cascade(spec, dom):
+        return [
+            _plan("first"),
+            _plan(
+                "second",
+                operation={
+                    "op": "setSpacing",
+                    "target": "sem:title",
+                    "gap": 8,
+                },
+            ),
+        ]
+
+    dependencies.deterministic_cascade = cascade
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(),
+            baseline_dom=_baseline(),
+            rollout=_rollout(monkeypatch),
+        )
+    )
+
+    assert len(result.outcomes) == 2
+    assert all(item.validation_status == "rejected" for item in result.outcomes)
+    assert all(item.reason_codes == ("dom.clipping",) for item in result.outcomes)
+    assert result.funnel.candidate_inconclusive == 0
+    assert "vqa" not in events
+
+
 def test_inconclusive_sensor_stops_without_trying_another_candidate(monkeypatch):
     events = []
     dependencies = _dependencies(events)

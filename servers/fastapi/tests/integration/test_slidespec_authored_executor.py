@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -17,6 +18,7 @@ from models.slidespec_v1 import (
     FontManifest,
     LayoutNode,
     Provenance,
+    RepairPlan,
     RenderRequest,
     RendererManifest,
     SlideDigests,
@@ -272,6 +274,25 @@ async def _run_executor_canary(
     assert result.data["slide_results"][0]["applied"] is (
         not fail_postcommit_verification
     )
+    if fail_postcommit_verification:
+        assert result.data["slide_results"][0]["publish_status"] == "active"
+        assert result.data["slide_results"][0]["post_verify_status"] == "failed"
+    else:
+        slide_result = result.data["slide_results"][0]
+        assert slide_result["accepted"] is True
+        assert slide_result["apply_status"] == "committed"
+        assert slide_result["publish_status"] == "active"
+        assert slide_result["post_verify_status"] == "passed"
+        assert slide_result["target_evidence"]
+        assert all(
+            item["qid"] and item["constraint_id"]
+            for item in slide_result["target_evidence"]
+        )
+        assert slide_result["element_changes"]
+        assert all(
+            item["target"] and item["operation"]
+            for item in slide_result["element_changes"]
+        )
     assert result.data["slide_results"][0]["telemetry"]["llm_calls"] == 0
     assert result.data["slide_results"][0]["telemetry"]["repair_costs"]
     assert ocr_calls >= 2
@@ -339,3 +360,138 @@ def test_page_11_executor_rolls_back_postcommit_verification_failure(
             fail_postcommit_verification=True,
         )
     )
+
+
+def test_plan_qualified_candidate_state_keys_do_not_alias_identical_renders() -> None:
+    render_hash = "sha256:" + "a" * 64
+    states = {}
+    first = SimpleNamespace(
+        plan=SimpleNamespace(plan_id="rp_rule_one"), decision="accepted"
+    )
+    second = SimpleNamespace(
+        plan=SimpleNamespace(plan_id="rp_rule_two"), decision="rejected"
+    )
+
+    first_key = executor._store_candidate_state(states, render_hash, first)
+    second_key = executor._store_candidate_state(states, render_hash, second)
+
+    assert first_key != second_key
+    assert len(states) == 2
+    assert states[first_key].decision == "accepted"
+    assert states[second_key].decision == "rejected"
+
+
+def test_canonical_terminal_prefers_selected_outcome() -> None:
+    selected = {
+        "plan_id": "rp_rule_selected",
+        "selected": True,
+        "validation_status": "accepted",
+        "apply_status": "committed",
+        "publish_status": "active",
+        "post_verify_status": "passed",
+        "diagnostics": {
+            "target_evidence": [
+                {"qid": "q-target", "constraint_id": "con:target"}
+            ],
+            "repair_operations": [
+                {
+                    "operation": "translateWithinParent",
+                    "target": "lay:target",
+                    "before": {"y": 0.9},
+                    "after": {"y": 0.8},
+                }
+            ],
+        },
+    }
+    rejected = {
+        "plan_id": "rp_rule_rejected",
+        "selected": False,
+        "validation_status": "rejected",
+        "publish_status": "not_started",
+    }
+
+    assert executor._canonical_terminal_outcome((selected, rejected)) is selected
+    projection = executor._canonical_outcome_projection((selected, rejected))
+    assert projection["accepted"] is True
+    assert projection["apply_status"] == "committed"
+    assert projection["publish_status"] == "active"
+    assert projection["post_verify_status"] == "passed"
+    assert projection["target_evidence"] == selected["diagnostics"][
+        "target_evidence"
+    ]
+    assert projection["element_changes"] == selected["diagnostics"][
+        "repair_operations"
+    ]
+
+
+def test_canonical_projection_unions_incremental_selected_evidence() -> None:
+    first = {
+        "selected": True,
+        "validation_status": "accepted",
+        "publish_status": "active",
+        "post_verify_status": "passed",
+        "diagnostics": {
+            "target_evidence": [{"qid": "q-first", "constraint_id": "con:first"}],
+            "repair_operations": [{"operation": "setBounds", "target": "lay:first"}],
+        },
+    }
+    second = {
+        "selected": True,
+        "validation_status": "accepted",
+        "apply_status": "committed",
+        "publish_status": "active",
+        "post_verify_status": "passed",
+        "diagnostics": {
+            "target_evidence": [{"qid": "q-second", "constraint_id": "con:second"}],
+            "repair_operations": [{"operation": "setBounds", "target": "lay:second"}],
+        },
+    }
+
+    projection = executor._canonical_outcome_projection((first, second))
+
+    assert projection["terminal"] is second
+    assert [item["qid"] for item in projection["target_evidence"]] == [
+        "q-first",
+        "q-second",
+    ]
+    assert [item["target"] for item in projection["element_changes"]] == [
+        "lay:first",
+        "lay:second",
+    ]
+
+
+def test_paired_vqa_context_includes_authoritative_chrome_geometry() -> None:
+    request = _request(uuid.uuid4())
+    plan = RepairPlan.model_validate(
+        {
+            "$schema": "urn:ppt-agent:repair-plan:1.0",
+            "planId": "rp_rule_context",
+            "slideId": request.spec.slideId,
+            "baseSpecRevision": request.spec.specRevision,
+            "baseSpecHash": request.spec.digests.spec,
+            "expectedContentDigest": request.spec.digests.content,
+            "strategy": "minimal_change",
+            "operations": [
+                {
+                    "op": "translateWithinParent",
+                    "target": request.spec.layout.children[0].layoutId,
+                    "value": {"x": 0, "y": 0.01},
+                }
+            ],
+            "proposedBy": {
+                "kind": "rule_engine",
+                "policyVersion": "test",
+            },
+        }
+    )
+    context, payload = executor._paired_vqa_context(
+        request,
+        plan,
+        verified_geometry={
+            "sourceProjectionRoundTrip": True,
+            "remainingHighMediumGeometryIssueCount": 0,
+        },
+    )
+
+    assert payload["verifiedGeometry"]["sourceProjectionRoundTrip"] is True
+    assert "Chrome geometry facts are authoritative" in context

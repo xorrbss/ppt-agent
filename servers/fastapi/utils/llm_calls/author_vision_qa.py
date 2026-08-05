@@ -100,6 +100,7 @@ _vqa_cache: "OrderedDict[str, SlideCritique]" = OrderedDict()
 _vqa_inflight: Dict[str, "asyncio.Task[SlideCritique]"] = {}
 _style_comparison_vqa_cache: "OrderedDict[str, StyleComparisonCritique]" = OrderedDict()
 _style_comparison_vqa_inflight: Dict[str, "asyncio.Task[StyleComparisonCritique]"] = {}
+_style_comparison_vqa_failures: "OrderedDict[str, dict[str, object]]" = OrderedDict()
 
 
 def _get_vqa_sem() -> asyncio.Semaphore:
@@ -241,6 +242,24 @@ async def _style_comparison_cached(
     if mode != STYLE_REFERENCE:
         raise ValueError("Authored style comparison only supports style_reference mode")
 
+    key = _style_comparison_cache_key(
+        baseline,
+        candidate,
+        context,
+        reference_mode=mode,
+    )
+
+    def record_failure(error: Exception) -> None:
+        _style_comparison_vqa_failures[key] = {
+            "error_type": type(error).__name__,
+            "reason_code": str(getattr(error, "code", "vqa.provider_failed")),
+            "status_code": getattr(error, "status_code", None),
+        }
+        _style_comparison_vqa_failures.move_to_end(key)
+        limit = max(1, VQA_CACHE_SIZE)
+        while len(_style_comparison_vqa_failures) > limit:
+            _style_comparison_vqa_failures.popitem(last=False)
+
     async def invoke() -> SlideCritique:
         async with _get_vqa_sem():
             return await critique_slide_style_comparison(
@@ -251,16 +270,12 @@ async def _style_comparison_cached(
 
     if VQA_CACHE_SIZE <= 0:
         try:
-            return await invoke()
-        except Exception:
+            critique = await invoke()
+            _style_comparison_vqa_failures.pop(key, None)
+            return critique
+        except Exception as error:
+            record_failure(error)
             return None
-
-    key = _style_comparison_cache_key(
-        baseline,
-        candidate,
-        context,
-        reference_mode=mode,
-    )
     cached = _style_comparison_vqa_cache.get(key)
     if cached is not None:
         _style_comparison_vqa_cache.move_to_end(key)
@@ -273,17 +288,38 @@ async def _style_comparison_cached(
 
     try:
         critique = await asyncio.shield(task)
-    except Exception:
+    except Exception as error:
+        record_failure(error)
         return None
     finally:
         if _style_comparison_vqa_inflight.get(key) is task and task.done():
             _style_comparison_vqa_inflight.pop(key, None)
 
     _style_comparison_vqa_cache[key] = critique
+    _style_comparison_vqa_failures.pop(key, None)
     _style_comparison_vqa_cache.move_to_end(key)
     while len(_style_comparison_vqa_cache) > VQA_CACHE_SIZE:
         _style_comparison_vqa_cache.popitem(last=False)
     return critique
+
+
+def style_comparison_failure_diagnostic(
+    baseline: bytes,
+    candidate: bytes,
+    context: Optional[str],
+    *,
+    reference_mode: str = STYLE_REFERENCE,
+) -> dict[str, object] | None:
+    """Return bounded provider failure evidence for one exact paired request."""
+
+    key = _style_comparison_cache_key(
+        baseline,
+        candidate,
+        context,
+        reference_mode=normalize_reference_mode(reference_mode),
+    )
+    value = _style_comparison_vqa_failures.get(key)
+    return dict(value) if value is not None else None
 
 
 async def critique_authored_style_comparison(

@@ -708,6 +708,77 @@ def inspect_authored_dom(
         str(item.get("qid")): str(item.get("parent_qid") or "") for item in elements
     }
 
+    def related_by_ancestry(first_qid: str, second_qid: str) -> bool:
+        current = parent_by_qid.get(first_qid, "")
+        seen: set[str] = set()
+        while current and current not in seen:
+            if current == second_qid:
+                return True
+            seen.add(current)
+            current = parent_by_qid.get(current, "")
+        current = parent_by_qid.get(second_qid, "")
+        seen.clear()
+        while current and current not in seen:
+            if current == first_qid:
+                return True
+            seen.add(current)
+            current = parent_by_qid.get(current, "")
+        return False
+
+    def browser_proves_owned_content(item: Mapping[str, Any]) -> bool:
+        """Limit local geometry repairs to paint owned by the measured target.
+
+        The v2 Chrome probe distinguishes direct glyph/image/shape ownership from
+        descendant content.  Structural card and label wrappers are still useful
+        layout bindings, but treating their descendants as the wrapper's own
+        clipped/occluded paint duplicates the same defect through every ancestor.
+        Older external payloads keep their historical conservative behaviour.
+        """
+
+        if "has_owned_text" not in item:
+            return True
+        if bool(item.get("has_owned_text")):
+            return True
+        return str(item.get("tag", "")).lower() in {
+            "img",
+            "picture",
+            "svg",
+            "video",
+        }
+
+    def pixel_occlusion_is_proven(item: Mapping[str, Any]) -> bool:
+        probe_version = item.get("occlusion_probe_version")
+        if probe_version not in {"owned-content-v2", "owned-paint-v3"}:
+            return True
+        qid = str(item.get("qid", ""))
+        raw = item.get("occlusion_occluder_qids", ())
+        occluders = (
+            tuple(str(value) for value in raw)
+            if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes))
+            else ()
+        )
+        for occluder_qid in occluders:
+            if not occluder_qid or occluder_qid == qid:
+                continue
+            if related_by_ancestry(qid, occluder_qid):
+                continue
+            occluder = item_by_qid.get(occluder_qid)
+            if occluder is None:
+                continue
+            if bool(occluder.get("intentional", occluder.get("allow_overlap", False))):
+                continue
+            # v3's elementsFromPoint probe has already discarded transparent
+            # layout wrappers.  Requiring the attributed qid to retain owned
+            # paint prevents stale/synthetic payloads from claiming proof, but
+            # an empty absolute element with an opaque background remains a
+            # valid occluder and must fail closed.
+            if probe_version == "owned-paint-v3" and not bool(
+                occluder.get("has_owned_paint", False)
+            ):
+                continue
+            return True
+        return _coerce_number(item.get("occlusion_unbound_count")) > 0
+
     def clipped_by_authored_parent(item: Mapping[str, Any]) -> bool:
         """Recognize intentionally cropped absolute artwork without hiding flow bugs."""
 
@@ -728,6 +799,30 @@ def inspect_authored_dom(
                 return True
             current = parent_by_qid.get(current, "")
         return False
+
+    def off_canvas_owner(qid: str) -> str:
+        """Promote escaped descendant paint to its escaped layout container."""
+
+        owner = qid
+        current = parent_by_qid.get(qid, "")
+        seen: set[str] = set()
+        while current and current not in seen:
+            seen.add(current)
+            ancestor = item_by_qid.get(current)
+            ancestor_box = (
+                _coerce_bbox(ancestor.get("bbox")) if ancestor is not None else None
+            )
+            if ancestor_box is None or not (
+                ancestor_box.x < -1
+                or ancestor_box.y < -1
+                or ancestor_box.right > width + 1
+                or ancestor_box.bottom > height + 1
+            ):
+                break
+            owner = current
+            current = parent_by_qid.get(current, "")
+        return owner
+
     if not normalized["fonts_ready"]:
         issues.append(
             DomQualityIssue(
@@ -743,6 +838,9 @@ def inspect_authored_dom(
         intentional = bool(item.get("intentional", item.get("allow_overlap", False)))
         geometry_is_actionable = mode == STYLE_REFERENCE or bool(
             item.get("unintentional", False)
+        )
+        owned_geometry_is_actionable = geometry_is_actionable and (
+            browser_proves_owned_content(item) or bool(item.get("unintentional", False))
         )
         if bool(item.get("font_loaded", True)) is False:
             issues.append(
@@ -798,7 +896,7 @@ def inspect_authored_dom(
 
         horizontal_overflow = horizontal_scroll_excess and overflow_axis_is_actionable("x")
         vertical_overflow = vertical_scroll_excess and overflow_axis_is_actionable("y")
-        if horizontal_overflow or vertical_overflow:
+        if owned_geometry_is_actionable and (horizontal_overflow or vertical_overflow):
             severity = (
                 "high"
                 if (
@@ -823,7 +921,7 @@ def inspect_authored_dom(
                 )
             )
         if (
-            geometry_is_actionable
+            owned_geometry_is_actionable
             and (
                 box.x < -1
                 or box.y < -1
@@ -838,12 +936,12 @@ def inspect_authored_dom(
                     "off_canvas",
                     "high",
                     "element extends outside the slide canvas",
-                    (qid,),
+                    (off_canvas_owner(qid),),
                     mode,
                 )
             )
         if (
-            geometry_is_actionable
+            owned_geometry_is_actionable
             and bool(item.get("clipped", False))
             and not intentional
         ):
@@ -859,8 +957,9 @@ def inspect_authored_dom(
         occluded_fraction = item.get("occluded_fraction")
         continuous_occluded_fraction = item.get("continuous_occluded_fraction")
         if (
-            geometry_is_actionable
+            owned_geometry_is_actionable
             and not intentional
+            and pixel_occlusion_is_proven(item)
             and (
                 (occluded_fraction is not None and occluded_fraction > 0.2)
                 or (
@@ -950,19 +1049,6 @@ def inspect_authored_dom(
                         )
                     )
 
-    def related_by_ancestry(first_qid: str, second_qid: str) -> bool:
-        current = parent_by_qid.get(first_qid, "")
-        while current:
-            if current == second_qid:
-                return True
-            current = parent_by_qid.get(current, "")
-        current = parent_by_qid.get(second_qid, "")
-        while current:
-            if current == first_qid:
-                return True
-            current = parent_by_qid.get(current, "")
-        return False
-
     box_by_qid = {qid: box for qid, box, _item in boxes}
 
     def rendered_text_is_visible_or_unknown(item: Mapping[str, Any]) -> bool:
@@ -1005,6 +1091,49 @@ def inspect_authored_dom(
         return tuple(sorted((branch(first_lineage), branch(second_lineage))))
 
     overlap_pairs: set[tuple[str, str]] = set()
+
+    def qid_in_branch(qid: str, branch_qid: str) -> bool:
+        return qid == branch_qid or related_by_ancestry(qid, branch_qid)
+
+    def measured_paint_overlap(
+        first_qid: str,
+        first_item: Mapping[str, Any],
+        second_qid: str,
+        second_item: Mapping[str, Any],
+    ) -> bool:
+        """Require Chrome paint ownership for v2 pairwise collision reports."""
+
+        first_version = first_item.get("occlusion_probe_version")
+        second_version = second_item.get("occlusion_probe_version")
+        if first_version not in {"owned-content-v2", "owned-paint-v3"} or second_version not in {
+            "owned-content-v2",
+            "owned-paint-v3",
+        }:
+            return True
+        for target_qid, target, other_qid in (
+            (first_qid, first_item, second_qid),
+            (second_qid, second_item, first_qid),
+        ):
+            if not browser_proves_owned_content(target):
+                continue
+            if target.get("occlusion_probe_version") == "owned-paint-v3" and not bool(
+                target.get("has_owned_paint", False)
+            ):
+                continue
+            fraction = target.get("occluded_fraction")
+            continuous = target.get("continuous_occluded_fraction")
+            if not (
+                (fraction is not None and fraction > 0.2)
+                or (continuous is not None and continuous > 0.12)
+            ):
+                continue
+            raw = target.get("occlusion_occluder_qids", ())
+            if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+                continue
+            if any(qid_in_branch(str(value), other_qid) for value in raw):
+                return True
+        return False
+
     for index, (qid, box, item) in enumerate(boxes):
         if bool(item.get("intentional", item.get("allow_overlap", False))):
             continue
@@ -1025,6 +1154,8 @@ def inspect_authored_dom(
             area = _intersection_area(box, other_box)
             smallest = min(box.width * box.height, other_box.width * other_box.height)
             if smallest > 0 and area / smallest >= 0.12:
+                if not measured_paint_overlap(qid, item, other_qid, other_item):
+                    continue
                 pair = canonical_overlap_pair(qid, other_qid)
                 if pair[0] == pair[1] or pair in overlap_pairs:
                     continue

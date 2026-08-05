@@ -93,7 +93,7 @@ def test_production_shaped_golden_corpus_imports_projects_and_roundtrips(
 
     assert imported_png.startswith(b"\x89PNG")
     assert request.source is not None
-    assert request.source.importerVersion == "authored-html-import/3"
+    assert request.source.importerVersion == "authored-html-import/4"
     assert baseline.html == request.source.html
     assert evidence["render_parity"] == "byte_identical_baseline"
     assert evidence["solver"]["feasible"] is True

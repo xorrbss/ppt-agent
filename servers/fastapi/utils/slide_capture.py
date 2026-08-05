@@ -4,6 +4,8 @@ binary) + a deterministic PIL crop: the /pdf-maker page stacks slides at exactly
 1280x720 with gap 0 / margin 0, so slide i is the box (0, i*720, 1280, (i+1)*720)."""
 
 import asyncio
+import atexit
+import base64
 import hashlib
 import html as html_lib
 import io
@@ -16,10 +18,13 @@ import re
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.parse
 from collections import OrderedDict
 from typing import Any, Dict, List, Mapping, Optional
+
+import aiohttp
 
 from utils.authored_dom_quality import ensure_authored_qids
 
@@ -127,41 +132,96 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
       const first = luminance(paintedForeground), second = luminance(background);
       return (Math.max(first, second) + .05) / (Math.min(first, second) + .05);
     }};
-    const ownedTextRects = (node) => {{
-      const rects = [];
+    const ownedTextNodes = (node) => {{
+      const result = [];
       const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
       for (let text = walker.nextNode(); text; text = walker.nextNode()) {{
         if (!String(text.textContent || '').trim()) continue;
         if (text.parentElement?.closest('[data-qid]') !== node) continue;
+        result.push(text);
+      }}
+      return result;
+    }};
+    const ownedTextRectCache = new WeakMap();
+    const ownedTextRects = (node) => {{
+      const cached = ownedTextRectCache.get(node);
+      if (cached) return cached;
+      const rects = [];
+      for (const text of ownedTextNodes(node)) {{
         const range = document.createRange(); range.selectNodeContents(text);
         for (const rect of range.getClientRects()) {{
           if (rect.width > 0 && rect.height > 0) rects.push({{x: rect.x, y: rect.y, width: rect.width, height: rect.height}});
         }}
       }}
+      ownedTextRectCache.set(node, rects);
       return rects;
+    }};
+    const replacedPaintTags = new Set(['IMG', 'PICTURE', 'SVG', 'CANVAS', 'VIDEO', 'OBJECT', 'EMBED']);
+    const visibleColor = (value) => {{
+      const color = rgba(value);
+      return color !== null && color[3] > .001;
+    }};
+    const ownsSurfacePaint = (node, style = getComputedStyle(node)) => {{
+      if (style.visibility === 'hidden' || Number(style.opacity || 1) <= .001) return false;
+      if (replacedPaintTags.has(node.tagName)) return true;
+      if (style.backgroundImage !== 'none' || visibleColor(style.backgroundColor)) return true;
+      if (style.boxShadow !== 'none' || style.outlineStyle !== 'none') return true;
+      return ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
+        px(style[`border${{side}}Width`]) > 0 &&
+        !['none', 'hidden'].includes(style[`border${{side}}Style`]) &&
+        visibleColor(style[`border${{side}}Color`])
+      );
+    }};
+    const ownedSurfaceRectCache = new WeakMap();
+    const ownedSurfaceRects = (node) => {{
+      const cached = ownedSurfaceRectCache.get(node);
+      if (cached) return cached;
+      const rects = [node, ...Array.from(node.querySelectorAll('*'))]
+        .filter((candidate) => candidate.closest('[data-qid]') === node && ownsSurfacePaint(candidate))
+        .map((candidate) => candidate.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+        .map((rect) => ({{x: rect.x, y: rect.y, width: rect.width, height: rect.height}}));
+      ownedSurfaceRectCache.set(node, rects);
+      return rects;
+    }};
+    const pointInRect = (x, y, rect) =>
+      x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+    const candidatePaintsAt = (candidate, x, y) => {{
+      const style = getComputedStyle(candidate);
+      if (style.visibility === 'hidden' || Number(style.opacity || 1) <= .001) return false;
+      if (ownsSurfacePaint(candidate, style)) return true;
+      const owner = candidate.closest?.('[data-qid]');
+      if (!owner) return false;
+      return ownedTextRects(owner).some((rect) => pointInRect(x, y, rect));
     }};
     const visibleClip = (node) => {{
       let result = {{left: 0, top: 0, right: innerWidth, bottom: innerHeight}};
+      let cause = 'viewport';
       for (let current = node; current; current = current.parentElement) {{
         const style = getComputedStyle(current);
         if (['hidden', 'clip', 'scroll', 'auto'].includes(style.overflowX) || ['hidden', 'clip', 'scroll', 'auto'].includes(style.overflowY)) {{
           const rect = current.getBoundingClientRect();
           result = {{left: Math.max(result.left, rect.left), top: Math.max(result.top, rect.top), right: Math.min(result.right, rect.right), bottom: Math.min(result.bottom, rect.bottom)}};
+          cause = current === node ? 'self' : 'ancestor';
         }}
       }}
-      return result;
+      return {{bounds: result, cause}};
     }};
     const glyphClip = (node) => {{
-      if (!String(node.textContent || '').trim()) return {{glyph: false, line: false}};
-      const range = document.createRange(); range.selectNodeContents(node);
-      const clip = visibleClip(node); const rects = Array.from(range.getClientRects());
-      const outside = (rect) => rect.left < clip.left - .5 || rect.top < clip.top - .5 || rect.right > clip.right + .5 || rect.bottom > clip.bottom + .5;
+      const textNodes = ownedTextNodes(node);
+      if (!textNodes.length) return {{glyph: false, line: false, cause: 'none'}};
+      const clip = visibleClip(node); const rects = [];
+      for (const text of textNodes) {{
+        const range = document.createRange(); range.selectNodeContents(text);
+        rects.push(...Array.from(range.getClientRects()));
+      }}
+      const outside = (rect) => rect.left < clip.bounds.left - .5 || rect.top < clip.bounds.top - .5 || rect.right > clip.bounds.right + .5 || rect.bottom > clip.bounds.bottom + .5;
       // Inline elements legitimately report clientHeight=0 even though their
       // line boxes are fully visible.  The clip intersection already includes
       // every clipping/scrolling ancestor (and the viewport), so use rendered
       // range escape as the sound signal for both glyph and line-box clipping.
       const escaped = rects.some(outside);
-      return {{glyph: escaped, line: escaped}};
+      return {{glyph: escaped, line: escaped, cause: escaped ? clip.cause : 'none'}};
     }};
     const quad = (node, rect) => {{
       try {{
@@ -221,9 +281,32 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
         transformComposable: false, layoutIsolation: false,
         reason: 'static_translation.sibling_limit'
       }};
+      const plainRect = (rect) => ({{x: rect.x, y: rect.y, width: rect.width, height: rect.height}});
       const targetBefore = node.getBoundingClientRect();
       const parentBefore = node.parentElement.getBoundingClientRect();
       const siblingsBefore = siblings.map((item) => item.getBoundingClientRect());
+      let containment = {{left: 0, top: 0, right: innerWidth, bottom: innerHeight}};
+      let unsupportedReason = null;
+      for (let current = node; current; current = current.parentElement) {{
+        const currentStyle = getComputedStyle(current);
+        const mask = currentStyle.maskImage || currentStyle.webkitMaskImage || 'none';
+        if (currentStyle.clipPath !== 'none' || mask !== 'none') unsupportedReason ||= 'repair.static_translation.non_rectangular_clip';
+        if (currentStyle.filter !== 'none' || currentStyle.backdropFilter !== 'none') unsupportedReason ||= 'repair.static_translation.filter_bounds';
+        if (current !== node && currentStyle.transform !== 'none') unsupportedReason ||= 'repair.static_translation.ancestor_transform';
+        if (['hidden', 'clip', 'scroll', 'auto'].includes(currentStyle.overflowX) ||
+            ['hidden', 'clip', 'scroll', 'auto'].includes(currentStyle.overflowY)) {{
+          const rect = current.getBoundingClientRect();
+          containment = {{
+            left: Math.max(containment.left, rect.left), top: Math.max(containment.top, rect.top),
+            right: Math.min(containment.right, rect.right), bottom: Math.min(containment.bottom, rect.bottom)
+          }};
+        }}
+      }}
+      const descendantStacking = Array.from(node.querySelectorAll('*')).some((item) => {{
+        const childStyle = getComputedStyle(item);
+        return childStyle.position !== 'static' && childStyle.zIndex !== 'auto';
+      }});
+      if (descendantStacking) unsupportedReason ||= 'repair.static_translation.descendant_stacking_context';
       const previousValue = node.style.getPropertyValue('transform');
       const previousPriority = node.style.getPropertyPriority('transform');
       let targetAfter, parentAfter, siblingsAfter;
@@ -247,12 +330,22 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
         (largest, item, index) => Math.max(largest, rectDelta(siblingsBefore[index], item)), 0
       );
       const isolated = translationErrorPx <= .25 && flowImpactPx <= .25 && maxSiblingDeltaPx <= .25;
-      const plainRect = (rect) => ({{x: rect.x, y: rect.y, width: rect.width, height: rect.height}});
+      const safeTranslationIntervalPx = {{
+        minX: containment.left - targetBefore.left,
+        maxX: containment.right - targetBefore.right,
+        minY: containment.top - targetBefore.top,
+        maxY: containment.bottom - targetBefore.bottom
+      }};
       return {{
         source: 'chrome', telemetryComplete: true, position: 'static',
-        transformComposable: true, layoutIsolation: isolated,
+        transformComposable: unsupportedReason === null, layoutIsolation: isolated,
         translationErrorPx, flowImpactPx, maxSiblingDeltaPx,
-        targetBoundsPx: plainRect(targetBefore), parentBoundsPx: plainRect(parentBefore)
+        targetBoundsPx: plainRect(targetBefore), parentBoundsPx: plainRect(parentBefore),
+        containmentBoundsPx: {{x: containment.left, y: containment.top, width: Math.max(0, containment.right - containment.left), height: Math.max(0, containment.bottom - containment.top)}},
+        safeTranslationIntervalPx,
+        siblingBoundsPx: siblingsBefore.map(plainRect),
+        stackingStable: !descendantStacking,
+        unsupportedReason
       }};
     }};
     const pointInPolygon = (x, y, points) => {{
@@ -264,29 +357,40 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
       }}
       return inside;
     }};
-    const occlusion = (node, rect, points) => {{
-      if (rect.width <= 0 || rect.height <= 0) return {{fraction: 1, continuous: 1, step: 0, unknown: 0}};
+    const occlusion = (node, rect, points, textRects, surfaceRects) => {{
+      if (rect.width <= 0 || rect.height <= 0) return {{fraction: 1, continuous: 1, step: 0, unknown: 0, occluderQids: [], unbound: 0}};
+      const ownedPaintRects = [...surfaceRects, ...textRects];
+      if (!ownedPaintRects.length) return {{fraction: 0, continuous: 0, step: 0, unknown: 0, occluderQids: [], unbound: 0}};
       // At most 40x40 samples per target, but never coarser than roughly 4 CSS
       // pixels on ordinary slide objects.  This catches thin continuous covers
       // that the former fixed 5x5 probe could miss completely.
       const cols = Math.max(5, Math.min(40, Math.ceil(rect.width / 4)));
       const rows = Math.max(5, Math.min(40, Math.ceil(rect.height / 4)));
       const cells = Array.from({{length: rows}}, () => Array(cols).fill(-1));
-      let covered = 0, sampled = 0, unknown = 0;
+      let covered = 0, sampled = 0, unknown = 0, unbound = 0;
+      const occluderQids = new Set();
       for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {{
         const x = rect.left + rect.width * (col + .5) / cols;
         const y = rect.top + rect.height * (row + .5) / rows;
         if (!pointInPolygon(x, y, points)) continue;
+        if (!ownedPaintRects.some((paintRect) => pointInRect(x, y, paintRect))) continue;
         sampled += 1;
         if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) {{ cells[row][col] = 1; covered += 1; continue; }}
         const stack = document.elementsFromPoint(x, y);
         const owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
         if (owner < 0) {{ cells[row][col] = -2; unknown += 1; continue; }}
-        const isCovered = stack.slice(0, owner).some((candidate) => candidate !== node && !node.contains(candidate));
+        const occluders = stack.slice(0, owner).filter((candidate) =>
+          candidate !== node && !node.contains(candidate) && candidatePaintsAt(candidate, x, y));
+        const isCovered = occluders.length > 0;
+        for (const candidate of occluders) {{
+          const ownerNode = candidate.closest?.('[data-qid]');
+          const ownerQid = ownerNode?.getAttribute('data-qid');
+          if (ownerQid) occluderQids.add(ownerQid); else unbound += 1;
+        }}
         cells[row][col] = isCovered ? 1 : 0;
         if (isCovered) covered += 1;
       }}
-      if (!sampled || unknown / sampled > .05) return {{fraction: null, continuous: null, step: Math.max(rect.width / cols, rect.height / rows), unknown: sampled ? unknown / sampled : 1}};
+      if (!sampled || unknown / sampled > .05) return {{fraction: null, continuous: null, step: Math.max(rect.width / cols, rect.height / rows), unknown: sampled ? unknown / sampled : 1, occluderQids: Array.from(occluderQids).sort(), unbound}};
       let largest = 0;
       const seen = new Set();
       for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {{
@@ -302,17 +406,21 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
         }}
         largest = Math.max(largest, size);
       }}
-      return {{fraction: covered / (sampled - unknown), continuous: largest / (sampled - unknown), step: Math.max(rect.width / cols, rect.height / rows), unknown: unknown / sampled}};
+      return {{fraction: covered / (sampled - unknown), continuous: largest / (sampled - unknown), step: Math.max(rect.width / cols, rect.height / rows), unknown: unknown / sampled, occluderQids: Array.from(occluderQids).sort(), unbound}};
     }};
     const elements = allQids.map((node, domIndex) => {{
       const rect = node.getBoundingClientRect();
       const style = getComputedStyle(node);
+      const offsetParent = node.offsetParent;
+      const offsetParentQid = offsetParent?.getAttribute?.('data-qid') || null;
+      const offsetParentRect = offsetParent?.getBoundingClientRect?.();
       const staticTranslationProbe = staticTransformProbe(node, style);
       const glyph = glyphClip(node);
       const contrast = contrastRatio(node, style);
       const textRects = ownedTextRects(node);
+      const surfaceRects = ownedSurfaceRects(node);
       const q = quad(node, rect);
-      const occultation = occlusion(node, rect, q.points);
+      const occultation = occlusion(node, rect, q.points, textRects, surfaceRects);
       const connector = connectorGeometry(node);
       const effectValues = {{
         transform: style.transform, filter: style.filter, backdropFilter: style.backdropFilter,
@@ -335,14 +443,31 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
         scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight,
         rendered_text: node.innerText || node.textContent || '',
         parent_qid: node.parentElement?.closest('[data-qid]')?.getAttribute('data-qid') || null,
+        offset_parent_qid: offsetParentQid,
+        containing_block_proof: {{
+          source: 'chrome', telemetryComplete: true,
+          exactBoundOffsetParent: Boolean(offsetParent && offsetParentQid),
+          offsetParentQid,
+          offsetParentTag: offsetParent?.tagName?.toLowerCase?.() || null,
+          offsetParentBoundsPx: offsetParentRect ? {{
+            x: offsetParentRect.x, y: offsetParentRect.y,
+            width: offsetParentRect.width, height: offsetParentRect.height
+          }} : null
+        }},
         clipped: glyph.glyph || (['hidden', 'clip'].includes(style.overflowX) && node.scrollWidth > node.clientWidth + 1) ||
           (['hidden', 'clip'].includes(style.overflowY) && node.scrollHeight > node.clientHeight + 1),
         glyph_clipped: glyph.glyph, line_box_clipped: glyph.line,
+        glyph_clip_cause: glyph.cause,
+        has_owned_text: textRects.length > 0,
+        has_owned_paint: surfaceRects.length > 0 || textRects.length > 0,
         quad: q.points, rotation_degrees: q.measured ? rotation(style) : null,
         occluded_fraction: occultation.fraction,
         continuous_occluded_fraction: occultation.continuous,
         occlusion_sample_step_px: occultation.step,
         occlusion_unknown_fraction: occultation.unknown,
+        occlusion_probe_version: 'owned-paint-v3',
+        occlusion_occluder_qids: occultation.occluderQids,
+        occlusion_unbound_count: occultation.unbound,
         effective_z_index: (Number.isFinite(explicitZ) ? explicitZ * 100000 : 0) + domIndex,
         contrast_ratio: contrast,
         text_fragments: textRects,
@@ -364,8 +489,12 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
           textAlign: style.textAlign, overflow: style.overflow,
           overflowX: style.overflowX, overflowY: style.overflowY, objectFit: style.objectFit,
           objectPosition: style.objectPosition, position: style.position,
-          left: style.left, top: style.top, width: style.width, height: style.height,
-          transform: style.transform, display: style.display,
+          left: style.left, top: style.top, right: style.right, bottom: style.bottom,
+          width: style.width, height: style.height,
+          minWidth: style.minWidth, maxWidth: style.maxWidth,
+          minHeight: style.minHeight, maxHeight: style.maxHeight,
+          boxSizing: style.boxSizing, transform: style.transform,
+          transformOrigin: style.transformOrigin, display: style.display,
           visibility: style.visibility, opacity: style.opacity, zIndex: style.zIndex,
           gap: style.gap, rowGap: style.rowGap, columnGap: style.columnGap,
           paddingTop: style.paddingTop, paddingRight: style.paddingRight,
@@ -597,12 +726,19 @@ def _enrich_pixel_contrast(
     return result
 
 
-def get_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
-    """Return metrics captured by the same Chrome invocation as the PNG render."""
+def _peek_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
     key = _metrics_cache_key(html)
     metrics = _browser_metrics_cache.get(key)
     if metrics is not None:
         _browser_metrics_cache.move_to_end(key)
+    return metrics
+
+
+def get_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
+    """Return metrics captured by the same Chrome invocation as the PNG render."""
+    metrics = _peek_cached_browser_metrics(html)
+    if metrics is not None:
+        _count_runtime("metrics_cache_hits")
     return metrics
 
 
@@ -635,7 +771,7 @@ async def ensure_browser_metrics(
     if task is None:
         async def recollect() -> Mapping[str, Any] | None:
             await _render_html_to_png_uncached(html, timeout=timeout)
-            return get_cached_browser_metrics(html)
+            return _peek_cached_browser_metrics(html)
 
         task = asyncio.create_task(recollect())
         _browser_metrics_inflight[key] = task
@@ -660,7 +796,14 @@ async def render_html_to_png_with_metrics(
     This is the preferred API for quality-review callers.  It preserves the legacy
     bytes-only renderer while making cache divergence explicit and recoverable.
     """
+    cached_metrics = _peek_cached_browser_metrics(html)
     png = await render_html_to_png(html, timeout=timeout)
+    if cached_metrics is not None:
+        _count_runtime("metrics_cache_hits")
+        return png, cached_metrics
+    captured_metrics = _peek_cached_browser_metrics(html)
+    if captured_metrics is not None:
+        return png, captured_metrics
     return png, await ensure_browser_metrics(html, timeout=timeout)
 
 
@@ -755,6 +898,190 @@ def find_chrome() -> Optional[str]:
     return None
 
 
+_runtime_counter_lock = threading.Lock()
+_runtime_counters: dict[str, int] = {
+    "requests": 0,
+    "render_cache_hits": 0,
+    "metrics_cache_hits": 0,
+    "chrome_process_launches": 0,
+    "session_reuse_hits": 0,
+    "session_restarts": 0,
+    "page_sessions_opened": 0,
+    "page_sessions_closed": 0,
+}
+_chrome_identity_cache: tuple[str, int, int, str] | None = None
+
+
+def _count_runtime(name: str, amount: int = 1) -> None:
+    with _runtime_counter_lock:
+        _runtime_counters[name] = _runtime_counters.get(name, 0) + amount
+
+
+def get_render_runtime_counters() -> dict[str, int]:
+    """Return a read-only snapshot of cache/process/session activity."""
+
+    with _runtime_counter_lock:
+        return dict(_runtime_counters)
+
+
+def chrome_runtime_digest() -> str:
+    """Digest the resolved Chrome binary identity used by incremental caches."""
+
+    global _chrome_identity_cache
+    chrome = find_chrome()
+    if not chrome:
+        return "sha256:" + hashlib.sha256(b"chrome:unavailable").hexdigest()
+    path = pathlib.Path(chrome).resolve()
+    try:
+        stat = path.stat()
+        size, modified = int(stat.st_size), int(stat.st_mtime_ns)
+    except OSError:
+        size, modified = -1, -1
+    cached = _chrome_identity_cache
+    if cached is not None and cached[:3] == (str(path), size, modified):
+        return cached[3]
+    try:
+        completed = subprocess.run(
+            [str(path), "--version"],
+            capture_output=True,
+            check=False,
+            timeout=10,
+            creationflags=(
+                getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+            ),
+        )
+        version = (completed.stdout or completed.stderr).decode(
+            "utf-8", errors="replace"
+        ).strip()
+    except Exception:
+        version = "version-unavailable"
+    payload = f"{path}\0{size}\0{modified}\0{version}".encode("utf-8")
+    result = "sha256:" + hashlib.sha256(payload).hexdigest()
+    _chrome_identity_cache = (str(path), size, modified, result)
+    return result
+
+
+class _ReusableChromeRuntime:
+    """One isolated Chrome process serving bounded, disposable CDP pages."""
+
+    def __init__(
+        self,
+        process: subprocess.Popen[bytes],
+        profile: tempfile.TemporaryDirectory[str],
+        port: int,
+    ) -> None:
+        self.process = process
+        self.profile = profile
+        self.port = port
+        self.session_count = 0
+
+    @property
+    def base_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}"
+
+    def alive(self) -> bool:
+        return self.process.poll() is None
+
+    def close(self) -> None:
+        if self.process.poll() is None:
+            _kill_process_tree(self.process)
+            try:
+                self.process.communicate(timeout=5)
+            except Exception:
+                pass
+        self.profile.cleanup()
+
+
+_reusable_chrome_lock = threading.Lock()
+_reusable_chrome: _ReusableChromeRuntime | None = None
+
+
+def _launch_reusable_chrome() -> _ReusableChromeRuntime:
+    chrome = find_chrome()
+    if not chrome:
+        raise RuntimeError(
+            "No chrome/chromium found for slide capture (set CHROME_PATH)."
+        )
+    profile = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+    profile_path = pathlib.Path(profile.name)
+    args = [
+        chrome,
+        "--headless=new",
+        "--disable-gpu",
+        "--no-sandbox",
+        "--remote-debugging-port=0",
+        "--remote-allow-origins=*",
+        f"--user-data-dir={profile_path}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--hide-scrollbars",
+        "--force-device-scale-factor=1",
+        "about:blank",
+    ]
+    kwargs: dict[str, Any] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if os.name == "nt":
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    else:
+        kwargs["start_new_session"] = True
+    process = subprocess.Popen(args, **kwargs)
+    port_file = profile_path / "DevToolsActivePort"
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if port_file.is_file():
+            try:
+                port = int(port_file.read_text(encoding="utf-8").splitlines()[0])
+                _count_runtime("chrome_process_launches")
+                return _ReusableChromeRuntime(process, profile, port)
+            except (OSError, ValueError, IndexError):
+                pass
+        if process.poll() is not None:
+            break
+        time.sleep(0.05)
+    if process.poll() is None:
+        _kill_process_tree(process)
+    profile.cleanup()
+    raise RuntimeError("reusable Chrome did not publish DevToolsActivePort")
+
+
+def _get_reusable_chrome_sync() -> _ReusableChromeRuntime:
+    global _reusable_chrome
+    with _reusable_chrome_lock:
+        if _reusable_chrome is not None and _reusable_chrome.alive():
+            _reusable_chrome.session_count += 1
+            _count_runtime("session_reuse_hits")
+            return _reusable_chrome
+        if _reusable_chrome is not None:
+            _count_runtime("session_restarts")
+            _reusable_chrome.close()
+        _reusable_chrome = _launch_reusable_chrome()
+        _reusable_chrome.session_count = 1
+        return _reusable_chrome
+
+
+def _discard_reusable_chrome_sync(runtime: _ReusableChromeRuntime) -> None:
+    global _reusable_chrome
+    with _reusable_chrome_lock:
+        if _reusable_chrome is runtime:
+            _count_runtime("session_restarts")
+            runtime.close()
+            _reusable_chrome = None
+
+
+def _close_reusable_chrome() -> None:
+    global _reusable_chrome
+    with _reusable_chrome_lock:
+        runtime, _reusable_chrome = _reusable_chrome, None
+    if runtime is not None:
+        runtime.close()
+
+
+atexit.register(_close_reusable_chrome)
+
+
 async def capture_slides(
     presentation_id: str,
     n_slides: int,
@@ -814,7 +1141,208 @@ async def capture_slides(
         return slides
 
 
-async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
+async def _cdp_command(
+    websocket: aiohttp.ClientWebSocketResponse,
+    command_id: int,
+    method: str,
+    params: Mapping[str, Any] | None = None,
+) -> Mapping[str, Any]:
+    await websocket.send_json(
+        {"id": command_id, "method": method, "params": dict(params or {})}
+    )
+    while True:
+        message = await websocket.receive()
+        if message.type != aiohttp.WSMsgType.TEXT:
+            raise RuntimeError(f"Chrome DevTools websocket closed during {method}")
+        payload = json.loads(message.data)
+        if payload.get("id") != command_id:
+            continue
+        if "error" in payload:
+            raise RuntimeError(f"Chrome DevTools {method} failed: {payload['error']}")
+        result = payload.get("result", {})
+        return result if isinstance(result, Mapping) else {}
+
+
+def _runtime_value(result: Mapping[str, Any]) -> Any:
+    remote = result.get("result", {})
+    return remote.get("value") if isinstance(remote, Mapping) else None
+
+
+async def _render_html_in_reusable_chrome(
+    html: str, timeout: int
+) -> tuple[bytes, Mapping[str, Any] | None]:
+    """Render through a disposable CDP page in the shared isolated process."""
+
+    from PIL import Image
+
+    runtime = await asyncio.to_thread(_get_reusable_chrome_sync)
+    timeout_config = aiohttp.ClientTimeout(total=max(5, timeout))
+    target_id = ""
+    page_closed = False
+    try:
+        async with aiohttp.ClientSession(timeout=timeout_config) as session:
+            create_url = f"{runtime.base_url}/json/new?{urllib.parse.quote('about:blank', safe='')}"
+            async with session.put(create_url) as response:
+                if response.status != 200:
+                    raise RuntimeError(
+                        f"Chrome DevTools target creation failed: HTTP {response.status}"
+                    )
+                target = await response.json()
+            target_id = str(target.get("id") or "")
+            websocket_url = str(target.get("webSocketDebuggerUrl") or "")
+            if not target_id or not websocket_url:
+                raise RuntimeError("Chrome DevTools target metadata is incomplete")
+            _count_runtime("page_sessions_opened")
+            async with session.ws_connect(websocket_url, max_msg_size=16 * 1024 * 1024) as ws:
+                command_id = 0
+
+                async def command(
+                    method: str, params: Mapping[str, Any] | None = None
+                ) -> Mapping[str, Any]:
+                    nonlocal command_id
+                    command_id += 1
+                    return await _cdp_command(ws, command_id, method, params)
+
+                await command("Page.enable")
+                await command("Runtime.enable")
+                await command(
+                    "Emulation.setDeviceMetricsOverride",
+                    {
+                        "width": SLIDE_W,
+                        "height": SLIDE_H,
+                        "deviceScaleFactor": 1,
+                        "mobile": False,
+                    },
+                )
+                frame_tree = await command("Page.getFrameTree")
+                frame = frame_tree.get("frameTree", {})
+                frame = frame.get("frame", {}) if isinstance(frame, Mapping) else {}
+                frame_id = str(frame.get("id") or "")
+                if not frame_id:
+                    raise RuntimeError("Chrome DevTools frame id is missing")
+                instrumented, _ = _instrument_authored_html(html)
+                await command(
+                    "Page.setDocumentContent", {"frameId": frame_id, "html": instrumented}
+                )
+                metrics_result = await command(
+                    "Runtime.evaluate",
+                    {
+                        "expression": f"""(async () => {{
+                          if (document.fonts && document.fonts.ready) await document.fonts.ready;
+                          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                          const marker = document.getElementById('{_METRICS_ELEMENT_ID}');
+                          return marker ? marker.getAttribute('content') : null;
+                        }})()""",
+                        "awaitPromise": True,
+                        "returnByValue": True,
+                    },
+                )
+                encoded_metrics = _runtime_value(metrics_result)
+                metrics: Mapping[str, Any] | None = None
+                if isinstance(encoded_metrics, str) and encoded_metrics:
+                    try:
+                        decoded = urllib.parse.unquote(html_lib.unescape(encoded_metrics))
+                        parsed = json.loads(decoded)
+                        metrics = parsed if isinstance(parsed, Mapping) else None
+                    except (TypeError, ValueError):
+                        metrics = None
+                screenshot = await command(
+                    "Page.captureScreenshot",
+                    {
+                        "format": "png",
+                        "fromSurface": True,
+                        "captureBeyondViewport": False,
+                    },
+                )
+                image_bytes = base64.b64decode(str(screenshot.get("data") or ""))
+                if not image_bytes:
+                    raise RuntimeError("Chrome DevTools screenshot is empty")
+                image = Image.open(io.BytesIO(image_bytes)).convert("RGB").crop(
+                    (0, 0, SLIDE_W, SLIDE_H)
+                )
+
+                if metrics is not None and any(
+                    isinstance(item, Mapping)
+                    and bool(item.get("requires_pixel_contrast"))
+                    for item in metrics.get("elements", ())
+                ):
+                    await command(
+                        "Emulation.setDeviceMetricsOverride",
+                        {
+                            "width": SLIDE_W,
+                            "height": SLIDE_H * 2,
+                            "deviceScaleFactor": 1,
+                            "mobile": False,
+                        },
+                    )
+                    await command(
+                        "Page.setDocumentContent",
+                        {
+                            "frameId": frame_id,
+                            "html": _pixel_probe_document(html),
+                        },
+                    )
+                    await command(
+                        "Runtime.evaluate",
+                        {
+                            "expression": """(async () => {
+                              const frames = Array.from(document.querySelectorAll('iframe'));
+                              await Promise.all(frames.map(frame => new Promise(resolve => {
+                                if (frame.contentDocument?.readyState === 'complete') resolve();
+                                else frame.addEventListener('load', resolve, {once:true});
+                              })));
+                              await Promise.all(frames.map(frame => frame.contentDocument?.fonts?.ready || Promise.resolve()));
+                              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                              return frames.length;
+                            })()""",
+                            "awaitPromise": True,
+                            "returnByValue": True,
+                        },
+                    )
+                    probe_shot = await command(
+                        "Page.captureScreenshot",
+                        {
+                            "format": "png",
+                            "fromSurface": True,
+                            "captureBeyondViewport": False,
+                        },
+                    )
+                    probe_bytes = base64.b64decode(
+                        str(probe_shot.get("data") or "")
+                    )
+                    probe_image = Image.open(io.BytesIO(probe_bytes)).convert("RGB")
+                    if probe_image.size[0] < SLIDE_W or probe_image.size[1] < SLIDE_H * 2:
+                        raise RuntimeError(
+                            f"Chrome pixel probe has unexpected size {probe_image.size}"
+                        )
+                    metrics = _enrich_pixel_contrast(metrics, image, probe_image)
+                if metrics is not None:
+                    _cache_browser_metrics(html, metrics)
+                output = io.BytesIO()
+                image.save(output, format="PNG")
+
+            close_url = f"{runtime.base_url}/json/close/{target_id}"
+            for _attempt in range(2):
+                try:
+                    async with session.get(close_url) as response:
+                        if response.status == 200:
+                            page_closed = True
+                            break
+                except aiohttp.ClientError:
+                    await asyncio.sleep(0)
+            if not page_closed:
+                raise RuntimeError("Chrome DevTools page cleanup failed")
+            _count_runtime("page_sessions_closed")
+            return output.getvalue(), metrics
+    except Exception:
+        # A protocol failure can leave state behind.  Retire the shared process;
+        # the caller falls back to the proven one-shot renderer and the next
+        # request starts a fresh isolated runtime.
+        await asyncio.to_thread(_discard_reusable_chrome_sync, runtime)
+        raise
+
+
+async def _render_html_to_png_subprocess(html: str, timeout: int = 60) -> bytes:
     """Render a self-contained HTML document to an exact 1280x720 PNG via headless
     chrome. Used by the authored-mode pipeline (the HTML is authored in-memory, not
     served from /pdf-maker). Raises RuntimeError if no chrome is found or the
@@ -859,6 +1387,7 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
                 "--virtual-time-budget=20000",
                 pathlib.Path(html_path).as_uri(),
             ]
+            _count_runtime("chrome_process_launches")
             dumped_dom = await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
             if not await _wait_for_output(out):
                 raise RuntimeError("chrome screenshot produced no output file")
@@ -891,6 +1420,7 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
                         pathlib.Path(probe_html_path).as_uri(),
                     ]
                     try:
+                        _count_runtime("chrome_process_launches")
                         await asyncio.to_thread(
                             _run_chrome_screenshot, probe_args, timeout
                         )
@@ -915,6 +1445,24 @@ async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
             return buf.getvalue()
 
 
+async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
+    """Prefer a reusable isolated Chrome process, preserving one-shot fallback."""
+
+    if CHROME_REUSE_ENABLED:
+        async with _get_render_sem():
+            try:
+                rendered, _metrics = await _render_html_in_reusable_chrome(
+                    html, timeout
+                )
+                return rendered
+            except Exception as error:
+                LOGGER.warning(
+                    "reusable Chrome session failed; using one-shot renderer: %s",
+                    error,
+                )
+    return await _render_html_to_png_subprocess(html, timeout=timeout)
+
+
 async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
     """Render one authored slide, reusing successful identical renders in-process.
 
@@ -922,6 +1470,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
     A small memory-bounded LRU avoids relaunching Chrome, while the in-flight table
     prevents concurrent duplicate requests from doing the same work twice.
     """
+    _count_runtime("requests")
     if RENDER_CACHE_SIZE <= 0:
         return await _render_html_to_png_uncached(html, timeout=timeout)
 
@@ -930,6 +1479,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
     ).hexdigest()
     cached = _render_cache.get(key)
     if cached is not None:
+        _count_runtime("render_cache_hits")
         _render_cache.move_to_end(key)
         return cached
 
@@ -975,15 +1525,43 @@ def _env_nonnegative_int(name: str, default: int) -> int:
 RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
 # This changes whenever rendering semantics change. In particular, v3 prevents
 # Reuse of PNGs created under the former minimum-font rendering policy is unsafe.
-RENDER_CACHE_VERSION = "authored-render-v6-connector-geometry"
+RENDER_CACHE_VERSION = "authored-render-v8-owned-paint-cdp"
 _render_cache: "OrderedDict[str, bytes]" = OrderedDict()
 _render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
-DOM_METRICS_VERSION = "authored-dom-metrics-v8-connector-geometry"
+DOM_METRICS_VERSION = "authored-dom-metrics-v11-offset-parent-proof"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 _browser_metrics_cache: "OrderedDict[str, Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[str, "asyncio.Task[Mapping[str, Any] | None]"] = {}
 RENDER_CONCURRENCY = _env_int("AUTHORED_RENDER_CONCURRENCY", 4)
+CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() not in {
+    "0",
+    "false",
+    "off",
+    "no",
+}
 _render_sem: Optional[asyncio.Semaphore] = None
+
+
+def reset_render_runtime(
+    *, clear_caches: bool = True, retire_session: bool = True
+) -> None:
+    """Reset benchmark-visible render state without resetting lifetime counters.
+
+    Callers must only reset between batches.  Killing a shared Chrome process or
+    clearing an LRU while a render owns it would make the benchmark itself race
+    production work, so an active in-flight request is rejected explicitly.
+    """
+
+    active = any(not task.done() for task in _render_inflight.values()) or any(
+        not task.done() for task in _browser_metrics_inflight.values()
+    )
+    if active:
+        raise RuntimeError("cannot reset authored render runtime while requests are active")
+    if retire_session:
+        _close_reusable_chrome()
+    if clear_caches:
+        _render_cache.clear()
+        _browser_metrics_cache.clear()
 
 
 def _get_render_sem() -> asyncio.Semaphore:

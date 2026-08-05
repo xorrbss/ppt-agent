@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from models.slidespec_v1 import REPAIR_PLAN_SCHEMA, LayoutNode, RepairPlan, SlideSpec
+from services.slidespec_geometry_candidates import (
+    GeometryCandidateRejection,
+    generate_geometry_candidates,
+)
 
 
 CASCADE_POLICY_VERSION = "repair-cascade/1.1"
@@ -50,6 +55,7 @@ class RepairCascadeBuildResult:
 
     plans: tuple[RepairPlan, ...]
     rejections: tuple[RepairProjectionRejection, ...] = ()
+    geometry_rejections: tuple[GeometryCandidateRejection, ...] = ()
 
 
 def _mapping(value: object) -> Mapping[str, Any]:
@@ -113,23 +119,34 @@ class RepairCost:
 
 
 def _bounds_delta(operation: Mapping[str, Any], width: float, height: float) -> float:
+    del width, height  # SlideSpec bounds and translation values are normalized.
     explicit = _number(_get(operation, "normalizedDelta", "normalized_delta"), -1)
     if explicit >= 0:
         return explicit
     op = _get(operation, "op", default="")
     if op == "translateWithinParent":
-        return abs(_number(_get(operation, "dx"))) / width + abs(
-            _number(_get(operation, "dy"))
-        ) / height
+        value = _mapping(_get(operation, "value", default={}))
+        dx = _get(operation, "dx", default=value.get("x"))
+        dy = _get(operation, "dy", default=value.get("y"))
+        return abs(_number(dx)) + abs(_number(dy))
+    precondition = _mapping(_get(operation, "precondition", default={}))
     current = _mapping(
-        _get(operation, "currentBounds", "current_bounds", "precondition", default={})
+        _get(
+            operation,
+            "currentBounds",
+            "current_bounds",
+            default=_get(precondition, "expectedBounds", "currentBounds", default={}),
+        )
     )
+    if op == "resizeWithinBounds" and current:
+        return abs(_number(operation.get("width")) - _number(current.get("width"))) + abs(
+            _number(operation.get("height")) - _number(current.get("height"))
+        )
     proposed = _mapping(_get(operation, "bounds", default={}))
     if not current or not proposed:
         return 0.0
     return sum(
         abs(_number(proposed.get(key)) - _number(current.get(key)))
-        / (width if key in {"x", "width"} else height)
         for key in ("x", "y", "width", "height")
         if key in proposed and key in current
     )
@@ -287,8 +304,31 @@ def _spacing_operations(context: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _container_operations(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    def set_bounds_allowed(envelope: Mapping[str, Any]) -> bool:
+        raw_allowed = envelope.get("allowedOperations")
+        allowed = (
+            {str(value) for value in raw_allowed}
+            if isinstance(raw_allowed, Sequence)
+            and not isinstance(raw_allowed, (str, bytes))
+            else set()
+        )
+        return (
+            envelope.get("locked") is not True
+            and envelope.get("lockSize") is not True
+            and "setBounds" in allowed
+        )
+
     result: list[dict[str, Any]] = []
     for item in _items(context, "containerBounds"):
+        target = str(_get(item, "target", "semanticId", "semantic_id", default=""))
+        imported_envelopes = tuple(
+            _mapping(issue.get("mutationEnvelope"))
+            for issue in _items(context, "geometryIssues")
+            if str(issue.get("target", "")) == target
+            and issue.get("requiresEnvelope") is True
+        )
+        if any(not set_bounds_allowed(envelope) for envelope in imported_envelopes):
+            continue
         result.append(
             _operation(
                 "setBounds",
@@ -471,7 +511,8 @@ def _glyph_font_operations(
         reason = reason or measurement_reason or _roundtrip_supported(item, "font-size")
         if reason is None and (
             measurement.get("fontsReady") is not True
-            or measurement.get("kind") not in {"glyph", "glyph-run", "range-bounds"}
+            or measurement.get("kind")
+            not in {"glyph", "glyph-run", "range-bounds", "owned-text-separation"}
         ):
             reason = "repair.glyph.measurement_unavailable"
 
@@ -492,14 +533,49 @@ def _glyph_font_operations(
             current_scale,
         ) <= 0:
             reason = "repair.glyph.measurement_invalid"
-        ratio = min(
-            1.0,
-            available_width / measured_width if measured_width > 0 else 0.0,
-            available_height / measured_height if measured_height > 0 else 0.0,
-        )
-        scale = round(current_scale * ratio, 6)
+        separation_probe = measurement.get("kind") == "owned-text-separation"
+        requested_scale = _number(item.get("candidateScale"), float("nan"))
+        if separation_probe:
+            target_bounds = _mapping(measurement.get("targetTextBoundsPx"))
+            occluder_bounds = _mapping(measurement.get("occluderTextBoundsPx"))
+            target_x = _number(target_bounds.get("x"), float("nan"))
+            target_width = _number(target_bounds.get("width"), float("nan"))
+            occluder_x = _number(occluder_bounds.get("x"), float("nan"))
+            current_right = target_x + target_width
+            projected_right = target_x + target_width * (
+                requested_scale / current_scale if current_scale > 0 else float("inf")
+            )
+            if reason is None and (
+                not all(
+                    math.isfinite(value)
+                    for value in (
+                        requested_scale,
+                        target_x,
+                        target_width,
+                        occluder_x,
+                        projected_right,
+                    )
+                )
+                or target_width <= 0
+                or current_right <= occluder_x + 0.5
+                or projected_right > occluder_x + 0.5
+                or measurement.get("candidateSeparatesTextPaint") is not True
+            ):
+                reason = "repair.glyph.separation_probe_unproven"
+            scale = round(requested_scale, 6)
+        else:
+            ratio = min(
+                1.0,
+                available_width / measured_width if measured_width > 0 else 0.0,
+                available_height / measured_height if measured_height > 0 else 0.0,
+            )
+            scale = round(current_scale * ratio, 6)
         if reason is None and scale >= current_scale - 1e-9:
-            reason = "repair.glyph.shrink_not_required"
+            # Chrome proved that the glyph ink/line box already fits the owned
+            # container.  A clipping diagnosis in this state is positional
+            # (viewport/ancestor clipping), so font shrink is not an applicable
+            # projection rather than an unproven request.
+            reason = "repair.glyph.size_reduction_not_applicable"
         if reason is None and (
             scale < minimum_scale - 1e-9
             or 1.0 - (scale / current_scale) > max_shrink + 1e-9
@@ -651,24 +727,80 @@ def _static_translation_operations(
             and _number(after.get("x"), -1) + _number(after.get("width"), 2) <= 1
             and _number(after.get("y"), -1) + _number(after.get("height"), 2) <= 1
         )
+        safe_interval = _mapping(measurement.get("safeTranslationIntervalPx"))
+        parent_bounds = _mapping(measurement.get("parentBoundsPx"))
+        target_bounds = _mapping(measurement.get("targetBoundsPx"))
+        parent_width = _number(parent_bounds.get("width"), -1)
+        parent_height = _number(parent_bounds.get("height"), -1)
+        current_in_parent_x = (
+            (_number(target_bounds.get("x")) - _number(parent_bounds.get("x")))
+            / parent_width
+            if parent_width > 0
+            else float("inf")
+        )
+        current_in_parent_y = (
+            (_number(target_bounds.get("y")) - _number(parent_bounds.get("y")))
+            / parent_height
+            if parent_height > 0
+            else float("inf")
+        )
+        dx_px = (
+            (_number(after.get("x"), float("inf")) - current_in_parent_x)
+            * parent_width
+            if parent_width > 0
+            else float("inf")
+        )
+        dy_px = (
+            (_number(after.get("y"), float("inf")) - current_in_parent_y)
+            * parent_height
+            if parent_height > 0
+            else float("inf")
+        )
+        interval_complete = all(
+            key in safe_interval
+            and abs(_number(safe_interval.get(key), float("inf"))) != float("inf")
+            for key in ("minX", "maxX", "minY", "maxY")
+        )
+        within_measured_interval = interval_complete and (
+            _number(safe_interval.get("minX")) - 0.5
+            <= dx_px
+            <= _number(safe_interval.get("maxX")) + 0.5
+            and _number(safe_interval.get("minY")) - 0.5
+            <= dy_px
+            <= _number(safe_interval.get("maxY")) + 0.5
+        )
         if reason is None and (
             measurement.get("position") != "static"
             or measurement.get("layoutIsolation") is not True
             or measurement.get("transformComposable") is not True
+            or measurement.get("stackingStable") is False
             or abs(_number(measurement.get("flowImpactPx"), float("inf"))) > 0.5
             or _number(measurement.get("maxSiblingDeltaPx"), float("inf")) > 0.5
         ):
-            reason = "repair.static_translation.flow_isolation_unproven"
-        if reason is None and (
-            not _normalized_point(delta, signed=True)
-            or (abs(dx) <= 1e-9 and abs(dy) <= 1e-9)
-            or max(abs(dx), abs(dy)) > limit + 1e-9
+            unsupported = str(measurement.get("unsupportedReason") or "").strip()
+            reason = unsupported or "repair.static_translation.flow_isolation_unproven"
+        if reason is None and (abs(dx) <= 1e-9 and abs(dy) <= 1e-9):
+            reason = "repair.static_translation.zero_delta"
+        if reason is None and not _normalized_point(delta, signed=True):
+            reason = "repair.static_translation.outside_envelope"
+        if reason is None and interval_complete and not within_measured_interval:
+            reason = "repair.static_translation.outside_containment_interval"
+        if (
+            reason is None
+            and not interval_complete
+            and max(abs(dx), abs(dy)) > limit + 1e-9
         ):
+            # Backward-compatible fail-closed path for old artifacts that predate
+            # the Chrome-measured containment interval.
             reason = "repair.static_translation.outside_envelope"
         current_bounds = _get(item, "currentBounds")
         if reason is None and not _normalized_bounds(current_bounds):
             reason = "repair.static_translation.precondition_unproven"
-        if reason is None and not contained:
+        if reason is None and not interval_complete and not contained:
+            # Legacy payloads only described containment relative to the
+            # immediate parent.  A current Chrome probe instead intersects the
+            # viewport with every clipping ancestor, so that measured interval
+            # is the stronger coordinate-space proof when overflow is visible.
             reason = "repair.static_translation.containment_unproven"
         if reason is not None:
             rejected.append(_reject(item, feature, reason))
@@ -685,7 +817,10 @@ def _static_translation_operations(
 
 
 def _plan(
-    context: Mapping[str, Any], operations: list[dict[str, Any]]
+    context: Mapping[str, Any],
+    operations: list[dict[str, Any]],
+    *,
+    diagnostic_refs: Sequence[str] | None = None,
 ) -> RepairPlan:
     targets = tuple(dict.fromkeys(str(operation["target"]) for operation in operations))
     refs_by_target = _mapping(context.get("diagnosticRefsByTarget", {}))
@@ -708,7 +843,11 @@ def _plan(
         "baseSpecHash": context.get("baseSpecHash"),
         "expectedContentDigest": context.get("expectedContentDigest"),
         "scope": targets,
-        "diagnosticRefs": list(targeted_refs or context.get("diagnosticRefs", ())),
+        "diagnosticRefs": list(
+            diagnostic_refs
+            if diagnostic_refs is not None
+            else targeted_refs or context.get("diagnosticRefs", ())
+        ),
         "strategy": "deterministic_cascade",
         "operations": operations,
         "limits": dict(context.get("limits", {"maxOperations": 8, "maxAffectedBlocks": 4})),
@@ -742,6 +881,158 @@ def _append_scoped_plans(
         plans.append(_plan(context, operations))
 
 
+def _plan_issue_groups(plan: RepairPlan) -> frozenset[str]:
+    return frozenset(
+        reference.removeprefix("issue-group:")
+        for reference in plan.diagnostic_refs
+        if reference.startswith("issue-group:")
+    )
+
+
+def _compose_plans(
+    context: Mapping[str, Any],
+    composition_id: str,
+    members: Sequence[RepairPlan],
+) -> RepairPlan | None:
+    limits = _mapping(context.get("limits"))
+    max_operations = int(max(1, min(32, _number(limits.get("maxOperations"), 8))))
+    max_affected = int(
+        max(
+            1,
+            min(
+                32,
+                _number(
+                    limits.get(
+                        "maxAffectedBlocks", limits.get("maxTouchedLayoutNodes")
+                    ),
+                    4,
+                ),
+            ),
+        )
+    )
+    operations: list[dict[str, Any]] = []
+    by_target: dict[str, str] = {}
+    for member in members:
+        for operation in member.operations:
+            payload = operation.model_dump(mode="json", by_alias=True, exclude_none=True)
+            target = str(payload.get("target", ""))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+            if target in by_target:
+                if by_target[target] == encoded:
+                    continue
+                return None
+            by_target[target] = encoded
+            operations.append(payload)
+    if (
+        not operations
+        or len(operations) > max_operations
+        or len(by_target) > max_affected
+    ):
+        return None
+    refs = tuple(
+        dict.fromkeys(
+            (
+                f"composition:{composition_id}",
+                *(reference for member in members for reference in member.diagnostic_refs),
+            )
+        )
+    )
+    if len(refs) > 64:
+        return None
+    return _plan(context, operations, diagnostic_refs=refs)
+
+
+def _cross_issue_compositions(
+    context: Mapping[str, Any], plans: Sequence[RepairPlan]
+) -> tuple[RepairPlan, ...]:
+    raw_groups = _mapping(context.get("geometryCompositionGroups"))
+    required = _string_set(context.get("requiredGeometryIssueGroups"))
+    if not raw_groups or not required:
+        return ()
+    beam_width = int(
+        max(1, min(32, _number(context.get("maxGeometryCompositions"), 16)))
+    )
+    atomic_plans = tuple(
+        plan
+        for plan in plans
+        if not any(
+            reference.startswith("composition:")
+            for reference in plan.diagnostic_refs
+        )
+    )
+    by_group = {
+        group_id: tuple(
+            sorted(
+                (plan for plan in atomic_plans if group_id in _plan_issue_groups(plan)),
+                key=lambda plan: repair_cost(plan).sort_key,
+            )[:beam_width]
+        )
+        for group_id in required
+    }
+    result: list[RepairPlan] = []
+    for composition_id, raw_group_ids in sorted(
+        raw_groups.items(), key=lambda item: str(item[0])
+    ):
+        group_ids = tuple(
+            dict.fromkeys(str(value) for value in (
+                raw_group_ids
+                if isinstance(raw_group_ids, Sequence)
+                and not isinstance(raw_group_ids, (str, bytes))
+                else ()
+            ))
+        )
+        if (
+            len(group_ids) < 2
+            or not set(group_ids).issubset(required)
+            or any(not by_group.get(group_id) for group_id in group_ids)
+        ):
+            continue
+        states: list[tuple[RepairPlan, ...]] = [()]
+        for group_id in group_ids:
+            next_states: dict[str, tuple[RepairPlan, ...]] = {}
+            for state in states:
+                if any(group_id in _plan_issue_groups(plan) for plan in state):
+                    options: Sequence[RepairPlan | None] = (None,)
+                else:
+                    options = by_group[group_id]
+                for option in options:
+                    members = state if option is None else (*state, option)
+                    combined = _compose_plans(context, str(composition_id), members)
+                    if combined is None:
+                        continue
+                    signature = json.dumps(
+                        [
+                            operation.model_dump(
+                                mode="json", by_alias=True, exclude_none=True
+                            )
+                            for operation in combined.operations
+                        ],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    next_states.setdefault(signature, members)
+            def state_key(members: tuple[RepairPlan, ...]) -> tuple[Any, ...]:
+                combined = _compose_plans(context, str(composition_id), members)
+                return repair_cost(combined).sort_key if combined is not None else (
+                    2, 33, 2.0, 4.0, 33, "invalid"
+                )
+
+            states = sorted(next_states.values(), key=state_key)[:beam_width]
+            if not states:
+                break
+        for members in states:
+            covered = frozenset(
+                group for plan in members for group in _plan_issue_groups(plan)
+            )
+            combined = _compose_plans(context, str(composition_id), members)
+            if combined is not None and set(group_ids).issubset(covered):
+                result.append(combined)
+    unique = {plan.plan_id: plan for plan in result}
+    return tuple(
+        sorted(unique.values(), key=lambda plan: repair_cost(plan).sort_key)[:beam_width]
+    )
+
+
 def build_deterministic_cascade_report(
     context: Mapping[str, Any],
 ) -> RepairCascadeBuildResult:
@@ -768,7 +1059,20 @@ def build_deterministic_cascade_report(
         operations, builder_rejections = builder(context)
         _append_scoped_plans(plans, context, operations)
         rejected.extend(builder_rejections)
-    return RepairCascadeBuildResult(tuple(plans), tuple(rejected))
+    geometry = generate_geometry_candidates(context)
+    plans.extend(
+        _plan(
+            context,
+            list(candidate.operations),
+            diagnostic_refs=candidate.diagnostic_refs,
+        )
+        for candidate in geometry.candidates
+    )
+    plans.extend(_cross_issue_compositions(context, plans))
+    plans = list({plan.plan_id: plan for plan in plans}.values())
+    return RepairCascadeBuildResult(
+        tuple(plans), tuple(rejected), geometry.rejections
+    )
 
 
 def build_deterministic_cascade(context: Mapping[str, Any]) -> tuple[RepairPlan, ...]:

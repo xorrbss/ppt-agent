@@ -50,6 +50,7 @@ def _run(coro):
 def _reset_comparison_cache():
     author_vision_qa_mod._style_comparison_vqa_cache.clear()
     author_vision_qa_mod._style_comparison_vqa_inflight.clear()
+    author_vision_qa_mod._style_comparison_vqa_failures.clear()
     author_vision_qa_mod._vqa_sem = None
 
 
@@ -280,6 +281,45 @@ def test_style_comparison_model_failure_is_best_effort_and_not_cached(monkeypatc
     assert second == [None]
     assert calls == 2
     assert author_vision_qa_mod._style_comparison_vqa_cache == {}
+    assert author_vision_qa_mod.style_comparison_failure_diagnostic(
+        b"baseline", b"candidate", None
+    ) == {
+        "error_type": "RuntimeError",
+        "reason_code": "vqa.provider_failed",
+        "status_code": None,
+    }
+
+
+def test_style_comparison_failure_diagnostic_survives_disabled_cache(monkeypatch):
+    class ProviderFailure(RuntimeError):
+        code = "vqa.provider_http_error"
+        status_code = 400
+
+    async def failing_compare(*_args, **_kwargs):
+        raise ProviderFailure("credential rejected")
+
+    _reset_comparison_cache()
+    monkeypatch.setattr(author_vision_qa_mod, "VQA_CACHE_SIZE", 0)
+    monkeypatch.setattr(author_vision_qa_mod, "get_model", lambda: "review-model")
+    monkeypatch.setattr(
+        author_vision_qa_mod,
+        "critique_slide_style_comparison",
+        failing_compare,
+    )
+
+    assert _run(
+        author_vision_qa_mod.critique_authored_style_comparison(
+            [b"baseline"], [b"candidate"], ["target-only-context"]
+        )
+    ) == [None]
+    assert author_vision_qa_mod._style_comparison_vqa_cache == {}
+    assert author_vision_qa_mod.style_comparison_failure_diagnostic(
+        b"baseline", b"candidate", "target-only-context"
+    ) == {
+        "error_type": "ProviderFailure",
+        "reason_code": "vqa.provider_http_error",
+        "status_code": 400,
+    }
 
 
 def test_style_comparison_validates_mode_and_images_but_allows_empty_batch(monkeypatch):

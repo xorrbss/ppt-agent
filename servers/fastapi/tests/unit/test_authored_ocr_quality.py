@@ -25,6 +25,50 @@ def test_expected_candidate_requires_expected_relative_improvement() -> None:
     assert set(improved.remaining) >= {"text", "numbers", "symbols"}
 
 
+def test_order_insensitive_comparison_accepts_preserved_reordered_text() -> None:
+    result = ocr.compare_expected_candidate_order_insensitive(
+        "Alpha Beta Gamma Delta 1234",
+        "Alpha Beta Gamma Delta 1234",
+        "Gamma Delta Alpha Beta 1234",
+        source_text_preserved=True,
+    )
+    assert result.accepted
+    assert result.reason == "order_insensitive_content_preserved"
+
+
+def test_order_insensitive_comparison_fails_closed_without_source_proof() -> None:
+    result = ocr.compare_expected_candidate_order_insensitive(
+        "Alpha Beta Gamma Delta 1234",
+        "Alpha Beta Gamma Delta 1234",
+        "Gamma Delta Alpha Beta 1234",
+        source_text_preserved=False,
+    )
+    assert not result.accepted
+    assert result.reason == "source_text_not_preserved"
+
+
+def test_order_insensitive_comparison_rejects_missing_content() -> None:
+    result = ocr.compare_expected_candidate_order_insensitive(
+        "Alpha Beta Gamma Delta Epsilon Zeta 1234",
+        "Alpha Beta Gamma Delta Epsilon Zeta 1234",
+        "Alpha Beta",
+        source_text_preserved=True,
+    )
+    assert not result.accepted
+    assert result.reason in {"insufficient_ocr_coverage", "text_regression"}
+
+
+def test_order_insensitive_comparison_keeps_precision_loss_bounded() -> None:
+    result = ocr.compare_expected_candidate_order_insensitive(
+        "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta",
+        "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta",
+        "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta junk noise extras",
+        source_text_preserved=True,
+    )
+    assert not result.accepted
+    assert "token_precision" in result.regressions
+
+
 def test_two_way_identical_text_is_preserved_not_strict_improvement() -> None:
     result = ocr.compare_authored_ocr("same OCR text", "same OCR text")
     assert result.accepted and result.no_regression

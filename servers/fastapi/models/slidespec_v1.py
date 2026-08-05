@@ -739,6 +739,8 @@ class ImportedHtmlBinding(StrictModel):
     staticTranslationSafe: bool = False
     leftPx: Annotated[float, Field(ge=-65536, le=65536)] | None = None
     topPx: Annotated[float, Field(ge=-65536, le=65536)] | None = None
+    rightPx: Annotated[float, Field(ge=-65536, le=65536)] | None = None
+    bottomPx: Annotated[float, Field(ge=-65536, le=65536)] | None = None
     display: str = "block"
     gapPx: Annotated[float, Field(ge=0, le=4096)] = 0
     paddingTopPx: Annotated[float, Field(ge=0, le=4096)] = 0
@@ -772,8 +774,11 @@ class ImportedHtmlSource(StrictModel):
     viewportHeight: Annotated[float, Field(gt=0, le=16384)]
     bindings: Annotated[tuple[ImportedHtmlBinding, ...], Field(min_length=1, max_length=512)]
     importerVersion: Literal[
-        "authored-html-import/1", "authored-html-import/2", "authored-html-import/3"
-    ] = "authored-html-import/3"
+        "authored-html-import/1",
+        "authored-html-import/2",
+        "authored-html-import/3",
+        "authored-html-import/4",
+    ] = "authored-html-import/4"
 
 class RenderRequest(StrictModel):
     spec: SlideSpec

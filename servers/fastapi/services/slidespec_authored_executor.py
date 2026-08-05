@@ -7,11 +7,14 @@ that fails that boundary remains a safe mixed-deck legacy owner.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass
+import json
 import logging
 import math
+import os
 import re
 import time
 from typing import Any
@@ -38,7 +41,13 @@ from services.authored_quality_acceptance import (
     style_comparison_quality_interval,
     style_comparison_has_regression,
 )
-from services.slidespec_acceptance import AcceptanceEvidence, GateEvidence, decide_acceptance
+from services.slidespec_acceptance import (
+    AcceptanceEvidence,
+    GateEvidence,
+    TargetIssueDelta,
+    TargetIssueIdentity,
+    decide_acceptance,
+)
 from services.slidespec_artifact_store import (
     ACTIVE_POINTER_KEY,
     SlideSpecArtifactError,
@@ -50,8 +59,18 @@ from services.slidespec_artifact_store import (
     rollback_active_slide_cas,
 )
 from services.slidespec_repair import (
+    CASCADE_POLICY_VERSION,
     build_deterministic_cascade_report,
     realized_repair_cost,
+)
+from services.slidespec_pipeline_performance import (
+    BoundedSlideScheduler,
+    IncrementalInspectionCache,
+    PIPELINE_CAPABILITY_VERSION,
+    PIPELINE_PERFORMANCE_WINDOW,
+    adjacent_influence_digests,
+    digest_parts,
+    inspection_cache_digest,
 )
 from services.slidespec_repair_pipeline import (
     DomDefect,
@@ -73,12 +92,26 @@ from utils.authored_dom_quality import (
 from utils.authored_ocr_quality import (
     OcrQualityResult,
     compare_expected_candidate,
+    compare_expected_candidate_order_insensitive,
     inspect_authored_ocr,
     normalize_ocr_text,
 )
-from utils.llm_calls.author_vision_qa import critique_authored_style_comparison
-from utils.llm_calls.propose_slidespec_repair import propose_slidespec_repair
-from utils.slide_capture import render_html_to_png_with_metrics
+from utils.llm_calls.author_vision_qa import (
+    critique_authored_style_comparison,
+    style_comparison_failure_diagnostic,
+)
+from utils.llm_calls.propose_slidespec_repair import (
+    PROMPT_VERSION as PROPOSAL_PROMPT_VERSION,
+    propose_slidespec_repair,
+)
+from utils.llm_provider import get_model
+from utils.slide_capture import (
+    DOM_METRICS_VERSION,
+    RENDER_CACHE_VERSION,
+    chrome_runtime_digest,
+    get_render_runtime_counters,
+    render_html_to_png_with_metrics,
+)
 from utils.slidespec_constraints import (
     ConstraintReport,
     constraint_targets,
@@ -88,7 +121,11 @@ from utils.slidespec_constraints import (
     observations_from_browser_metrics,
 )
 from utils.slidespec_core import SlideSpecError, apply_repair_plan, render_slidespec, validate_slidespec
-from utils.slidespec_solver import build_constraint_repair_plan, solve_constraints
+from utils.slidespec_solver import (
+    FeasibilityResult,
+    build_constraint_repair_plan,
+    solve_constraints,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -126,13 +163,34 @@ class _CandidateState:
     request: RenderRequest
     image: bytes
     dom: DomQualityReport
+    metrics: Mapping[str, Any]
     plan: RepairPlan
     constraints: ConstraintReport
+    observations: Mapping[str, Any]
     decision: AcceptanceDecision | None = None
     ocr_non_regression: bool = False
     token_recall: float = 0.0
     vqa_non_regression: bool = False
     vqa_improved: bool = False
+    required_target_issues: tuple[TargetIssueIdentity, ...] = ()
+    target_issue_deltas: tuple[TargetIssueDelta, ...] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _BaselineInspection:
+    png: bytes
+    metrics: Mapping[str, Any]
+    report: DomQualityReport
+    qids: Mapping[str, str]
+    observations: Mapping[str, Any]
+    constraints: ConstraintReport
+    solver_result: FeasibilityResult
+    solver_elapsed_ms: float
+
+
+_BASELINE_INSPECTION_CACHE: IncrementalInspectionCache[_BaselineInspection] = (
+    IncrementalInspectionCache(max_entries=256)
+)
 
 
 def _render_request(bundle: Any) -> RenderRequest:
@@ -160,6 +218,64 @@ def _expected_text(spec: SlideSpec) -> str:
     return "\n".join(_semantic_text(spec).values())
 
 
+def _paired_vqa_context(
+    request: RenderRequest,
+    plan: RepairPlan,
+    *,
+    verified_geometry: Mapping[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Describe the bounded repair intent without copying authored text."""
+
+    codes = sorted(
+        {
+            ref.removeprefix("code:")
+            for ref in plan.diagnostic_refs
+            if ref.startswith("code:")
+        }
+    )
+    qids = sorted(
+        {
+            ref.removeprefix("qid:")
+            for ref in plan.diagnostic_refs
+            if ref.startswith("qid:")
+        }
+    )
+    qid_by_layout = {
+        binding.layoutId: binding.qid
+        for binding in (request.source.bindings if request.source is not None else ())
+    }
+    payload: dict[str, Any] = {
+        "schema": "slidespec-paired-vqa-context/1",
+        "targetDefects": [
+            {
+                "category": code.removeprefix("dom."),
+                "qid": qid,
+            }
+            for code in codes
+            for qid in qids
+        ],
+        "operations": [
+            {
+                "operation": operation.op,
+                "targetLayoutId": operation.target,
+                "targetQid": qid_by_layout.get(operation.target),
+            }
+            for operation in plan.operations
+        ],
+        "verifiedGeometry": dict(verified_geometry or {}),
+    }
+    context = (
+        "Evaluate whether the POST-FIX candidate visibly resolves the listed "
+        "target defects without regressing protected dimensions. The identifiers "
+        "are opaque and contain no authored text. Chrome geometry facts are "
+        "authoritative for clipping, canvas containment, and glyph clipping; do "
+        "not claim those defects when the supplied facts prove them false. Still "
+        "reject real spacing, hierarchy, readability, or style regressions.\n"
+        + json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    )
+    return context, payload
+
+
 def _important_tokens(spec: SlideSpec) -> tuple[str, ...]:
     values = [str(token.value) for token in spec.tokens if token.important]
     by_name = {token.name: str(token.value) for token in spec.tokens}
@@ -185,42 +301,130 @@ def _dom_evidence(
     qids: Mapping[str, str],
     *,
     diagnostic_refs: Sequence[str] | None = None,
+    browser_metrics: Mapping[str, Any] | None = None,
 ) -> DomEvidence:
     allowed = frozenset(diagnostic_refs) if diagnostic_refs is not None else None
+    normalized_metrics = normalize_browser_metrics(browser_metrics)
+    metric_by_qid = {
+        str(item.get("qid")): item for item in normalized_metrics.get("elements", ())
+    }
+
+    required_qids = frozenset(
+        ref.removeprefix("qid:")
+        for ref in (allowed or ())
+        if ref.startswith("qid:")
+    )
+
+    def qid_is_in_required_subtree(qid: str) -> bool:
+        """Include browser defects owned by a selected ancestor operation.
+
+        Geometry plans can move an imported wrapper while the browser reports the
+        actual clipping/overflow on one of its text descendants.  Filtering only
+        by the wrapper qid would silently erase that required evidence.  Chrome's
+        measured parent chain is the exact ownership proof used here.
+        """
+
+        current = qid
+        visited: set[str] = set()
+        while current and current not in visited:
+            if current in required_qids:
+                return True
+            visited.add(current)
+            item = metric_by_qid.get(current)
+            current = str(item.get("parent_qid", "")) if item is not None else ""
+        return False
+
+    def related_by_ancestry(first: str, second: str) -> bool:
+        for start, target in ((first, second), (second, first)):
+            current = start
+            visited: set[str] = set()
+            while current and current not in visited:
+                if current == target:
+                    return True
+                visited.add(current)
+                item = metric_by_qid.get(current)
+                current = str(item.get("parent_qid", "")) if item is not None else ""
+        return False
+
+    def proven_overlap_target(issue_qids: Sequence[str]) -> str | None:
+        for qid in issue_qids:
+            item = metric_by_qid.get(qid)
+            if item is None:
+                continue
+            raw = item.get("occlusion_occluder_qids", ())
+            occluders = (
+                tuple(str(value) for value in raw)
+                if isinstance(raw, Sequence) and not isinstance(raw, (str, bytes))
+                else ()
+            )
+            if any(
+                related_by_ancestry(occluder, other)
+                for occluder in occluders
+                for other in issue_qids
+                if other != qid
+            ):
+                return qid
+        return None
+
     # One browser issue can be repeated through nested DOM nodes.  Keep a single,
     # strongest defect per canonical target so noisy authored markup cannot create
     # an over-budget repair plan.
     ranked = {"medium": 1, "high": 2}
-    defects_by_key: dict[tuple[str, str], DomDefect] = {}
+    defects_by_key: dict[tuple[str, str, str], DomDefect] = {}
     for issue in report.issues:
         code = _DOM_CODE.get(issue.category)
         if code is None or issue.severity not in {"high", "medium"}:
             continue
-        semantic_ids = tuple(dict.fromkeys(qids[qid] for qid in issue.qids if qid in qids))
+        issue_qids = tuple(qid for qid in issue.qids if qid in qids)
         if allowed is not None:
+            if required_qids:
+                issue_qids = tuple(
+                    qid for qid in issue_qids if qid_is_in_required_subtree(qid)
+                )
+        if code == "dom.unintended_overlap" and len(issue_qids) > 1:
+            proven_qid = proven_overlap_target(issue_qids)
+            if proven_qid is not None:
+                issue_qids = (proven_qid,) + tuple(
+                    qid for qid in issue_qids if qid != proven_qid
+                )
+        semantic_ids = tuple(dict.fromkeys(qids[qid] for qid in issue_qids))
+        if allowed is not None and not required_qids:
+            structured_code = f"code:{code}" in allowed
             semantic_ids = tuple(
                 semantic_id
                 for semantic_id in semantic_ids
                 if f"{code}:{semantic_id}" in allowed
+                or (structured_code and f"semantic:{semantic_id}" in allowed)
             )
         if code == "dom.unintended_overlap" and semantic_ids:
             semantic_id, *related = semantic_ids
-            key = (code, semantic_id)
+            qid = next(
+                (value for value in issue_qids if qids.get(value) == semantic_id),
+                "",
+            )
+            key = (code, semantic_id, qid)
             current = defects_by_key.get(key)
             candidate = DomDefect(
                 code,
                 issue.severity,
                 semantic_id,
                 tuple(related),
+                qid or None,
             )
             if current is None or ranked[issue.severity] > ranked[current.severity]:
                 defects_by_key[key] = candidate
             continue
         for semantic_id in semantic_ids:
-            key = (code, semantic_id)
+            qid = next(
+                (value for value in issue_qids if qids.get(value) == semantic_id),
+                "",
+            )
+            key = (code, semantic_id, qid)
             current = defects_by_key.get(key)
             if current is None or ranked[issue.severity] > ranked[current.severity]:
-                defects_by_key[key] = DomDefect(code, issue.severity, semantic_id)
+                defects_by_key[key] = DomDefect(
+                    code, issue.severity, semantic_id, qid=qid or None
+                )
     return DomEvidence(
         defects=tuple(defects_by_key.values()),
         telemetry_complete=report.telemetry_status == "available",
@@ -230,6 +434,7 @@ def _dom_evidence(
 def _constraint_evidence(
     request: RenderRequest,
     report: ConstraintReport,
+    observations: Mapping[str, Any] | None = None,
 ) -> DomEvidence:
     """Convert hard relational failures into the pipeline's cheap DOM gate."""
 
@@ -259,13 +464,57 @@ def _constraint_evidence(
                 semantic_ids[1:],
             )
         )
+    constraint_by_id = {
+        constraint.constraintId: constraint for constraint in request.spec.constraints
+    }
+    qid_by_layout = {
+        binding.layoutId: binding.qid
+        for binding in (request.source.bindings if request.source is not None else ())
+    }
     for constraint_id in report.unknown_hard:
+        constraint = constraint_by_id.get(constraint_id)
+        targets = constraint_targets(constraint) if constraint is not None else ()
+        missing_targets = [
+            target
+            for target in targets
+            if observations is None or target not in observations
+        ]
+        missing_measurements: dict[str, list[str]] = {}
+        if constraint is not None and constraint.kind == "readability":
+            for target in targets:
+                observation = observations.get(target) if observations else None
+                if observation is None:
+                    continue
+                missing = []
+                if constraint.requireVisible and observation.visible is None:
+                    missing.append("visible")
+                if constraint.requireVisible and observation.occluded_fraction is None:
+                    missing.append("occluded_fraction")
+                if constraint.noTruncation:
+                    for name in ("truncated", "glyph_clipped", "line_box_clipped"):
+                        if getattr(observation, name, None) is None:
+                            missing.append(name)
+                if missing:
+                    missing_measurements[target] = missing
         defects.append(
             DomDefect(
                 "constraint.evidence.missing",
                 "high",
                 fallback_semantic,
                 (constraint_id,),
+                diagnostics={
+                    "constraint_observation": {
+                        "constraint_id": constraint_id,
+                        "kind": constraint.kind if constraint is not None else "unknown",
+                        "targets": list(targets),
+                        "target_qids": {
+                            target: qid_by_layout.get(target)
+                            for target in targets
+                        },
+                        "missing_targets": missing_targets,
+                        "missing_measurements": missing_measurements,
+                    }
+                },
             )
         )
     return DomEvidence(tuple(defects), telemetry_complete=not report.unknown_hard)
@@ -294,6 +543,42 @@ def _soft_constraint_regression_evidence(
         ),
         key=lambda item: (-item.weighted_cost, item.constraint_id),
     )
+    baseline_by_id: dict[str, list[Any]] = {}
+    candidate_by_id: dict[str, list[Any]] = {}
+    for violation in baseline.violations:
+        if violation.strength == "soft":
+            baseline_by_id.setdefault(violation.constraint_id, []).append(violation)
+    for violation in candidate.violations:
+        if violation.strength == "soft":
+            candidate_by_id.setdefault(violation.constraint_id, []).append(violation)
+    deltas: list[dict[str, Any]] = []
+    regressed_ids: list[str] = []
+    for constraint_id in sorted(set(baseline_by_id) | set(candidate_by_id)):
+        before_items = baseline_by_id.get(constraint_id, [])
+        after_items = candidate_by_id.get(constraint_id, [])
+        before_magnitude = sum(item.magnitude for item in before_items)
+        after_magnitude = sum(item.magnitude for item in after_items)
+        before_cost = sum(item.weighted_cost for item in before_items)
+        after_cost = sum(item.weighted_cost for item in after_items)
+        if abs(after_cost - before_cost) <= 1e-6:
+            continue
+        representative = next(iter(after_items or before_items))
+        if after_cost > before_cost + 1e-6:
+            regressed_ids.append(constraint_id)
+        deltas.append(
+            {
+                "constraint_id": constraint_id,
+                "kind": representative.kind,
+                "targets": list(representative.targets),
+                "before_magnitude": before_magnitude,
+                "after_magnitude": after_magnitude,
+                "before_weighted_cost": before_cost,
+                "after_weighted_cost": after_cost,
+                "weighted_cost_delta": after_cost - before_cost,
+                "before_details": [item.detail for item in before_items],
+                "after_details": [item.detail for item in after_items],
+            }
+        )
     semantic_ids = tuple(
         dict.fromkeys(
             semantic_by_layout[target]
@@ -309,16 +594,32 @@ def _soft_constraint_regression_evidence(
                 "high",
                 semantic_ids[0] if semantic_ids else fallback_semantic,
                 tuple(item.constraint_id for item in regressed[:8]),
+                diagnostics={
+                    "soft_constraint_regression": {
+                        "baseline_soft_cost": baseline.soft_cost,
+                        "candidate_soft_cost": candidate.soft_cost,
+                        "soft_cost_delta": candidate.soft_cost - baseline.soft_cost,
+                        "regressed_constraint_ids": regressed_ids,
+                        "constraint_deltas": deltas,
+                    }
+                },
             ),
         )
     )
 
 
 def _merge_dom_evidence(*items: DomEvidence) -> DomEvidence:
-    defects: dict[tuple[str, str, tuple[str, ...]], DomDefect] = {}
+    defects: dict[tuple[str, str, str | None, tuple[str, ...]], DomDefect] = {}
     for item in items:
         for defect in item.defects:
-            defects[(defect.code, defect.semantic_id, defect.related_semantic_ids)] = defect
+            defects[
+                (
+                    defect.code,
+                    defect.semantic_id,
+                    defect.qid,
+                    defect.related_semantic_ids,
+                )
+            ] = defect
     return DomEvidence(
         defects=tuple(defects.values()),
         telemetry_complete=all(item.telemetry_complete for item in items),
@@ -333,10 +634,32 @@ def _constraint_report_payload(report: ConstraintReport) -> dict[str, Any]:
     }
 
 
+def _off_canvas_fraction(
+    metric: Mapping[str, Any], *, canvas_width: float, canvas_height: float
+) -> float:
+    bbox = metric.get("bbox")
+    bbox = bbox if isinstance(bbox, Mapping) else {}
+
+    def number(value: object) -> float:
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return result if math.isfinite(result) else 0.0
+
+    x, y = number(bbox.get("x")), number(bbox.get("y"))
+    width, height = number(bbox.get("width")), number(bbox.get("height"))
+    return max(
+        max(0.0, -x, x + width - canvas_width) / max(1.0, canvas_width),
+        max(0.0, -y, y + height - canvas_height) / max(1.0, canvas_height),
+    )
+
+
 def _repair_context(
     request: RenderRequest | SlideSpec,
     evidence: DomEvidence,
     browser_metrics: Mapping[str, Any] | None = None,
+    constraint_report: ConstraintReport | None = None,
 ) -> dict[str, Any]:
     spec = request.spec if isinstance(request, RenderRequest) else request
     source = request.source if isinstance(request, RenderRequest) else None
@@ -349,6 +672,14 @@ def _repair_context(
     binding_by_semantic = {
         binding.semanticId: binding for binding in (source.bindings if source else ())
     }
+    layout_by_id = {node.layoutId: node for node in _walk_layout(spec.layout)}
+    parent_by_id: dict[str, str | None] = {spec.layout.layoutId: None}
+    stack = [spec.layout]
+    while stack:
+        parent = stack.pop()
+        for child in parent.children:
+            parent_by_id[child.layoutId] = parent.layoutId
+            stack.append(child)
     normalized_metrics = normalize_browser_metrics(browser_metrics)
     metric_by_qid = {
         str(item.get("qid")): item for item in normalized_metrics.get("elements", ())
@@ -359,6 +690,19 @@ def _repair_context(
             entry.semanticId: entry.qid
             for entry in render_slidespec(request).semanticDom
         }
+    semantic_by_qid = {
+        binding.qid: binding.semanticId for binding in (source.bindings if source else ())
+    }
+    semantic_by_qid.update(
+        {qid: semantic_id for semantic_id, qid in native_qid_by_semantic.items()}
+    )
+    def qid_for_semantic(semantic_id: str) -> str | None:
+        imported = binding_by_semantic.get(semantic_id)
+        return (
+            imported.qid
+            if imported is not None
+            else native_qid_by_semantic.get(semantic_id)
+        )
 
     def metric_for_semantic(semantic_id: str) -> Mapping[str, Any] | None:
         imported = binding_by_semantic.get(semantic_id)
@@ -373,23 +717,699 @@ def _repair_context(
             return default
         return number if math.isfinite(number) else default
 
-    def glyph_measurement(
-        metric: Mapping[str, Any], imported: Any
-    ) -> dict[str, Any] | None:
+    def envelope_can_change(raw: object) -> bool:
+        if not isinstance(raw, Mapping) or raw.get("locked") is True:
+            return False
+        allowed = raw.get("allowedOperations")
+        if allowed is None:
+            return True
+        if not isinstance(allowed, Sequence) or isinstance(allowed, (str, bytes)):
+            return False
+        return bool(
+            {
+                "translateWithinParent",
+                "setBounds",
+                "resizeWithinBounds",
+                "setFontScale",
+            }.intersection(str(value) for value in allowed)
+        )
+
+    def metric_qids_related(first: str, second: str) -> bool:
+        for start, target in ((first, second), (second, first)):
+            current = start
+            visited: set[str] = set()
+            while current and current not in visited:
+                if current == target:
+                    return True
+                visited.add(current)
+                item = metric_by_qid.get(current)
+                current = str(item.get("parent_qid", "")) if item is not None else ""
+        return False
+
+    def metric_qid_is_ancestor(ancestor: str, descendant: str) -> bool:
+        current = descendant
+        visited: set[str] = set()
+        while current and current not in visited:
+            if current == ancestor:
+                return True
+            visited.add(current)
+            item = metric_by_qid.get(current)
+            current = str(item.get("parent_qid", "")) if item is not None else ""
+        return False
+
+    def bound_semantic_for_metric_qid(qid: str) -> tuple[str, str] | None:
+        current = qid
+        visited: set[str] = set()
+        while current and current not in visited:
+            semantic_id = semantic_by_qid.get(current)
+            if semantic_id is not None:
+                return semantic_id, current
+            visited.add(current)
+            item = metric_by_qid.get(current)
+            current = str(item.get("parent_qid", "")) if item is not None else ""
+        return None
+
+    def bound_ancestor_candidates(
+        *,
+        target_qid: str,
+        blocked_qid: str,
+        candidate_deltas_px: Sequence[tuple[float, float]],
+    ) -> tuple[dict[str, Any], ...]:
+        """Return browser-proven imported ancestors in nearest-first order."""
+
+        if source is None:
+            return ()
+        width = max(1.0, float(source.viewportWidth))
+        height = max(1.0, float(source.viewportHeight))
+        current_metric = metric_by_qid.get(target_qid)
+        if current_metric is None or current_metric.get(
+            "occlusion_probe_version"
+        ) not in {"owned-content-v2", "owned-paint-v3"}:
+            return ()
+        current_qid = (
+            str(current_metric.get("parent_qid", ""))
+            if current_metric is not None
+            else ""
+        )
+        parent_chain = [target_qid]
+        visited: set[str] = set()
+        result: list[dict[str, Any]] = []
+        depth = 1
+        while current_qid and current_qid not in visited:
+            visited.add(current_qid)
+            parent_chain.append(current_qid)
+            semantic_id = semantic_by_qid.get(current_qid)
+            node = layout_by_semantic.get(semantic_id) if semantic_id else None
+            if (
+                semantic_id is not None
+                and node is not None
+                and node.bounds is not None
+                and not metric_qid_is_ancestor(current_qid, blocked_qid)
+            ):
+                envelope = (
+                    node.constraints.model_dump(mode="json")
+                    if node.constraints is not None
+                    else {}
+                )
+                deltas: list[dict[str, Any]] = []
+                for dx_px, dy_px in sorted(
+                    set(candidate_deltas_px),
+                    key=lambda value: (
+                        abs(value[0]) + abs(value[1]),
+                        value[0],
+                        value[1],
+                    ),
+                ):
+                    dx, dy = dx_px / width, dy_px / height
+                    if abs(dx) <= 1e-12 and abs(dy) <= 1e-12:
+                        continue
+                    moved_x = node.bounds.x + dx
+                    moved_y = node.bounds.y + dy
+                    if (
+                        moved_x < -1e-12
+                        or moved_y < -1e-12
+                        or moved_x + node.bounds.width > 1 + 1e-12
+                        or moved_y + node.bounds.height > 1 + 1e-12
+                    ):
+                        continue
+                    deltas.append(
+                        {
+                            "x": dx,
+                            "y": dy,
+                            "source": "chrome",
+                            "telemetryComplete": True,
+                            "resolvesIssue": True,
+                            "deltaPx": {"x": dx_px, "y": dy_px},
+                        }
+                    )
+                if deltas or source is not None:
+                    result.append(
+                        {
+                            "qid": current_qid,
+                            "semanticId": semantic_id,
+                            "layoutId": node.layoutId,
+                            "bounds": node.bounds.model_dump(mode="json"),
+                            "containerBounds": {
+                                "x": 0.0,
+                                "y": 0.0,
+                                "width": 1.0,
+                                "height": 1.0,
+                            },
+                            "mutationEnvelope": envelope,
+                            "candidateDeltas": tuple(deltas),
+                            "coordinatedOwnerOnly": not bool(deltas),
+                            "depth": depth,
+                            "sameCoordinateSpace": True,
+                            "ownershipProven": True,
+                            "browserProof": {
+                                "source": "chrome",
+                                "telemetryComplete": True,
+                                "targetQid": target_qid,
+                                "ancestorQid": current_qid,
+                                "parentQidChain": tuple(parent_chain),
+                            },
+                        }
+                    )
+            item = metric_by_qid.get(current_qid)
+            current_qid = str(item.get("parent_qid", "")) if item is not None else ""
+            depth += 1
+        return tuple(result)
+
+    def coordinated_pair_for_owners(
+        *,
+        issue_target_qid: str,
+        issue_occluder_qids: Sequence[str],
+        target_qid: str,
+        peer_qid: str,
+        target_node: LayoutNode,
+        peer_node: LayoutNode,
+        target_bbox: Mapping[str, Any],
+        peer_bbox: Mapping[str, Any],
+        target_depth: int,
+        peer_depth: int,
+    ) -> tuple[dict[str, Any], ...]:
+        """Prove bounded two-owner separation using Chrome descendant capacity."""
+
+        if source is None:
+            return ()
+        target_binding = bound_semantic_for_metric_qid(target_qid)
+        peer_binding = bound_semantic_for_metric_qid(peer_qid)
+        if target_binding is None or peer_binding is None:
+            return ()
+        target_metric = metric_by_qid.get(target_qid)
+        peer_metric = metric_by_qid.get(peer_qid)
+        if (
+            target_metric is None
+            or peer_metric is None
+            or target_metric.get("occlusion_probe_version")
+            not in {"owned-content-v2", "owned-paint-v3"}
+            or peer_metric.get("occlusion_probe_version")
+            not in {"owned-content-v2", "owned-paint-v3"}
+        ):
+            return ()
+        viewport = {
+            "x": max(1.0, float(source.viewportWidth)),
+            "y": max(1.0, float(source.viewportHeight)),
+        }
+
+        def envelope_for(node: LayoutNode) -> dict[str, Any]:
+            return (
+                node.constraints.model_dump(mode="json")
+                if node.constraints is not None
+                else {}
+            )
+
+        def capacity(
+            owner_qid: str,
+            node: LayoutNode,
+            axis: str,
+            direction: int,
+        ) -> tuple[float, dict[str, Any]]:
+            envelope = envelope_for(node)
+            if not envelope_can_change(envelope):
+                return 0.0, {}
+            owner_metric = metric_by_qid.get(owner_qid)
+            content_boxes: list[tuple[str, str, tuple[float, float, float, float]]] = []
+            for qid, item in metric_by_qid.items():
+                if not metric_qid_is_ancestor(owner_qid, qid):
+                    continue
+                tag = str(item.get("tag", "")).lower()
+                content_bearing = item.get("has_owned_text") is True or tag in {
+                    "img",
+                    "picture",
+                    "svg",
+                    "video",
+                    "canvas",
+                }
+                if not content_bearing:
+                    continue
+                bbox = item.get("bbox")
+                bbox = bbox if isinstance(bbox, Mapping) else {}
+                box = (
+                    finite_number(bbox.get("x")),
+                    finite_number(bbox.get("y")),
+                    finite_number(bbox.get("width")),
+                    finite_number(bbox.get("height")),
+                )
+                if box[2] > 0 and box[3] > 0:
+                    content_boxes.append(
+                        (
+                            qid,
+                            "owned-text"
+                            if item.get("has_owned_text") is True
+                            else "replaced-media",
+                            box,
+                        )
+                    )
+            if not content_boxes and owner_metric is not None:
+                fallback = owner_metric.get("bbox")
+                fallback = fallback if isinstance(fallback, Mapping) else {}
+                fallback_box = (
+                    finite_number(fallback.get("x")),
+                    finite_number(fallback.get("y")),
+                    finite_number(fallback.get("width")),
+                    finite_number(fallback.get("height")),
+                )
+                if fallback_box[2] > 0 and fallback_box[3] > 0:
+                    content_boxes.append(
+                        (owner_qid, "owner-bbox-fallback", fallback_box)
+                    )
+            boxes = [item[2] for item in content_boxes]
+            if not boxes:
+                return 0.0, {}
+            parent_qid = (
+                str(owner_metric.get("parent_qid", ""))
+                if owner_metric is not None
+                else ""
+            )
+            parent_metric = metric_by_qid.get(parent_qid)
+            parent_bbox = (
+                parent_metric.get("bbox")
+                if parent_metric is not None
+                and isinstance(parent_metric.get("bbox"), Mapping)
+                else None
+            )
+            parent_style = (
+                parent_metric.get("computed_style", parent_metric.get("style", {}))
+                if parent_metric is not None
+                else {}
+            )
+            parent_style = parent_style if isinstance(parent_style, Mapping) else {}
+            overflow_value = str(
+                parent_style.get(
+                    "overflowX" if axis == "x" else "overflowY",
+                    parent_style.get("overflow", "visible"),
+                )
+            ).lower()
+            clips_to_parent = overflow_value in {
+                "hidden",
+                "clip",
+                "scroll",
+                "auto",
+            }
+            if axis == "x":
+                container_start = (
+                    finite_number(parent_bbox.get("x"))
+                    if parent_bbox is not None and clips_to_parent
+                    else 0.0
+                )
+                container_end = (
+                    container_start + finite_number(parent_bbox.get("width"))
+                    if parent_bbox is not None and clips_to_parent
+                    else viewport["x"]
+                )
+                raw_capacity = (
+                    min(box[0] for box in boxes) - container_start
+                    if direction < 0
+                    else container_end - max(box[0] + box[2] for box in boxes)
+                )
+            else:
+                container_start = (
+                    finite_number(parent_bbox.get("y"))
+                    if parent_bbox is not None and clips_to_parent
+                    else 0.0
+                )
+                container_end = (
+                    container_start + finite_number(parent_bbox.get("height"))
+                    if parent_bbox is not None and clips_to_parent
+                    else viewport["y"]
+                )
+                raw_capacity = (
+                    min(box[1] for box in boxes) - container_start
+                    if direction < 0
+                    else container_end - max(box[1] + box[3] for box in boxes)
+                )
+            envelope_capacity = finite_number(
+                envelope.get("maxTranslation"), 0.0
+            ) * viewport[axis]
+            resolved_capacity = max(0.0, min(raw_capacity, envelope_capacity))
+            subtree_bounds = {
+                "x": min(box[0] for box in boxes),
+                "y": min(box[1] for box in boxes),
+                "width": max(box[0] + box[2] for box in boxes)
+                - min(box[0] for box in boxes),
+                "height": max(box[1] + box[3] for box in boxes)
+                - min(box[1] for box in boxes),
+            }
+            boundary_bounds = (
+                dict(parent_bbox)
+                if parent_bbox is not None and clips_to_parent
+                else {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "width": viewport["x"],
+                    "height": viewport["y"],
+                }
+            )
+            return resolved_capacity, {
+                "ownerQid": owner_qid,
+                "axis": axis,
+                "direction": direction,
+                "boundary": {
+                    "source": "chrome",
+                    "kind": "clip-ancestor" if clips_to_parent else "canvas",
+                    "qid": parent_qid if clips_to_parent else None,
+                    "boundsPx": boundary_bounds,
+                    "overflowX": str(parent_style.get("overflowX", overflow_value)),
+                    "overflowY": str(parent_style.get("overflowY", overflow_value)),
+                },
+                "subtreeContentBoundsPx": subtree_bounds,
+                "contentQids": tuple(item[0] for item in content_boxes),
+                "contentKinds": {
+                    item[0]: item[1] for item in content_boxes
+                },
+                "envelopeMaxTranslationPx": envelope_capacity,
+                "capacityPx": resolved_capacity,
+            }
+
+        target_x = finite_number(target_bbox.get("x"))
+        target_y = finite_number(target_bbox.get("y"))
+        target_width = finite_number(target_bbox.get("width"))
+        target_height = finite_number(target_bbox.get("height"))
+        peer_x = finite_number(peer_bbox.get("x"))
+        peer_y = finite_number(peer_bbox.get("y"))
+        peer_width = finite_number(peer_bbox.get("width"))
+        peer_height = finite_number(peer_bbox.get("height"))
+        separations = (
+            ("x", -1, target_x + target_width - peer_x),
+            ("x", 1, peer_x + peer_width - target_x),
+            ("y", -1, target_y + target_height - peer_y),
+            ("y", 1, peer_y + peer_height - target_y),
+        )
+        pairs: list[dict[str, Any]] = []
+        for axis, direction, separation in sorted(
+            separations,
+            key=lambda value: (value[2], value[0], value[1]),
+        ):
+            if separation <= 1e-9:
+                continue
+            target_capacity, target_capacity_evidence = capacity(
+                target_qid, target_node, axis, direction
+            )
+            peer_capacity, peer_capacity_evidence = capacity(
+                peer_qid, peer_node, axis, -direction
+            )
+            if target_capacity + peer_capacity + 1e-6 < separation:
+                continue
+            target_amount = min(separation / 2, target_capacity)
+            peer_amount = separation - target_amount
+            if peer_amount > peer_capacity:
+                peer_amount = peer_capacity
+                target_amount = separation - peer_amount
+            if (
+                target_amount <= 1e-9
+                or peer_amount <= 1e-9
+                or target_amount > target_capacity + 1e-6
+                or peer_amount > peer_capacity + 1e-6
+            ):
+                continue
+            target_delta_px = direction * target_amount
+            peer_delta_px = -direction * peer_amount
+            target_delta = target_delta_px / viewport[axis]
+            peer_delta = peer_delta_px / viewport[axis]
+            target_xy = {
+                "x": target_delta if axis == "x" else 0.0,
+                "y": target_delta if axis == "y" else 0.0,
+            }
+            peer_xy = {
+                "x": peer_delta if axis == "x" else 0.0,
+                "y": peer_delta if axis == "y" else 0.0,
+            }
+            pairs.append(
+                {
+                    "moves": (
+                        {
+                            "qid": target_qid,
+                            "semanticId": target_binding[0],
+                            "layoutId": target_node.layoutId,
+                            "bounds": target_node.bounds.model_dump(mode="json"),
+                            "mutationEnvelope": envelope_for(target_node),
+                            "delta": target_xy,
+                            "deltaPx": {
+                                "x": target_delta_px if axis == "x" else 0.0,
+                                "y": target_delta_px if axis == "y" else 0.0,
+                            },
+                        },
+                        {
+                            "qid": peer_qid,
+                            "semanticId": peer_binding[0],
+                            "layoutId": peer_node.layoutId,
+                            "bounds": peer_node.bounds.model_dump(mode="json"),
+                            "mutationEnvelope": envelope_for(peer_node),
+                            "delta": peer_xy,
+                            "deltaPx": {
+                                "x": peer_delta_px if axis == "x" else 0.0,
+                                "y": peer_delta_px if axis == "y" else 0.0,
+                            },
+                        },
+                    ),
+                    "proof": {
+                        "axis": axis,
+                        "direction": direction,
+                        "separationPx": separation,
+                        "capacityPx": {
+                            "target": target_capacity,
+                            "peer": peer_capacity,
+                        },
+                        "capacityEvidence": {
+                            "target": target_capacity_evidence,
+                            "peer": peer_capacity_evidence,
+                        },
+                        "source": "chrome",
+                        "telemetryComplete": True,
+                        "pairResolvesIssue": True,
+                        "targetQid": target_qid,
+                        "peerQid": peer_qid,
+                        "issueTargetQid": issue_target_qid,
+                        "issueOccluderQids": tuple(issue_occluder_qids),
+                        "ownerDepth": {
+                            "target": target_depth,
+                            "peer": peer_depth,
+                        },
+                    },
+                }
+            )
+        return tuple(pairs)
+
+    def qid_chain_to_owner(qid: str, owner_qid: str) -> tuple[str, ...]:
+        chain: list[str] = []
+        current = qid
+        visited: set[str] = set()
+        while current and current not in visited:
+            chain.append(current)
+            if current == owner_qid:
+                return tuple(chain)
+            visited.add(current)
+            item = metric_by_qid.get(current)
+            current = str(item.get("parent_qid", "")) if item is not None else ""
+        return ()
+
+    def bound_owner_candidates(qid: str) -> tuple[dict[str, Any], ...]:
+        result: list[dict[str, Any]] = []
+        current = qid
+        visited: set[str] = set()
+        depth = 0
+        while current and current not in visited:
+            visited.add(current)
+            semantic_id = semantic_by_qid.get(current)
+            node = layout_by_semantic.get(semantic_id) if semantic_id else None
+            metric = metric_by_qid.get(current)
+            bbox = metric.get("bbox") if metric is not None else None
+            if (
+                semantic_id is not None
+                and node is not None
+                and node.bounds is not None
+                and isinstance(bbox, Mapping)
+            ):
+                result.append(
+                    {
+                        "qid": current,
+                        "semanticId": semantic_id,
+                        "node": node,
+                        "bbox": bbox,
+                        "depth": depth,
+                        "chain": qid_chain_to_owner(qid, current),
+                    }
+                )
+            current = str(metric.get("parent_qid", "")) if metric is not None else ""
+            depth += 1
+        return tuple(result)
+
+    def bbox_intersection_area(
+        first: Mapping[str, Any],
+        second: Mapping[str, Any],
+        *,
+        first_delta: tuple[float, float] = (0.0, 0.0),
+        second_delta: tuple[float, float] = (0.0, 0.0),
+    ) -> float:
+        first_x = finite_number(first.get("x")) + first_delta[0]
+        first_y = finite_number(first.get("y")) + first_delta[1]
+        second_x = finite_number(second.get("x")) + second_delta[0]
+        second_y = finite_number(second.get("y")) + second_delta[1]
+        width = min(
+            first_x + finite_number(first.get("width")),
+            second_x + finite_number(second.get("width")),
+        ) - max(first_x, second_x)
+        height = min(
+            first_y + finite_number(first.get("height")),
+            second_y + finite_number(second.get("height")),
+        ) - max(first_y, second_y)
+        return max(0.0, width) * max(0.0, height)
+
+    def coordinated_owner_pairs(
+        *, target_qid: str, occluder_qids: Sequence[str]
+    ) -> tuple[dict[str, Any], ...]:
+        target_metric = metric_by_qid.get(target_qid)
+        target_paint_bbox = (
+            target_metric.get("bbox") if target_metric is not None else None
+        )
+        if not isinstance(target_paint_bbox, Mapping):
+            return ()
+        occluders = tuple(
+            qid
+            for qid in dict.fromkeys(occluder_qids)
+            if qid != target_qid
+            and qid in metric_by_qid
+            and isinstance(metric_by_qid[qid].get("bbox"), Mapping)
+        )
+        if not occluders:
+            return ()
+        output: list[dict[str, Any]] = []
+        seen_owner_pairs: set[tuple[str, str]] = set()
+        for target_owner in bound_owner_candidates(target_qid):
+            for paint_qid in occluders:
+                for peer_owner in bound_owner_candidates(paint_qid):
+                    owner_pair = (
+                        str(target_owner["qid"]),
+                        str(peer_owner["qid"]),
+                    )
+                    if owner_pair in seen_owner_pairs:
+                        continue
+                    seen_owner_pairs.add(owner_pair)
+                    if (
+                        metric_qid_is_ancestor(owner_pair[0], owner_pair[1])
+                        or metric_qid_is_ancestor(owner_pair[1], owner_pair[0])
+                    ):
+                        continue
+                    pairs = coordinated_pair_for_owners(
+                        issue_target_qid=target_qid,
+                        issue_occluder_qids=occluders,
+                        target_qid=owner_pair[0],
+                        peer_qid=owner_pair[1],
+                        target_node=target_owner["node"],
+                        peer_node=peer_owner["node"],
+                        target_bbox=target_owner["bbox"],
+                        peer_bbox=peer_owner["bbox"],
+                        target_depth=int(target_owner["depth"]),
+                        peer_depth=int(peer_owner["depth"]),
+                    )
+                    for pair in pairs:
+                        first_delta = pair["moves"][0]["deltaPx"]
+                        second_delta = pair["moves"][1]["deltaPx"]
+                        target_delta = (
+                            finite_number(first_delta.get("x")),
+                            finite_number(first_delta.get("y")),
+                        )
+                        peer_delta = (
+                            finite_number(second_delta.get("x")),
+                            finite_number(second_delta.get("y")),
+                        )
+                        peer_owned = tuple(
+                            qid
+                            for qid in occluders
+                            if metric_qid_is_ancestor(owner_pair[1], qid)
+                        )
+                        blocked = tuple(
+                            qid
+                            for qid in occluders
+                            if bbox_intersection_area(
+                                target_paint_bbox,
+                                metric_by_qid[qid]["bbox"],
+                                first_delta=target_delta,
+                                second_delta=(
+                                    peer_delta if qid in peer_owned else (0.0, 0.0)
+                                ),
+                            )
+                            > 1e-6
+                        )
+                        if blocked:
+                            continue
+                        pair["proof"].update(
+                            {
+                                "ownerCoverage": {
+                                    "target": {
+                                        "ownerQid": owner_pair[0],
+                                        "ownedQids": (target_qid,),
+                                        "ancestorQidChains": {
+                                            target_qid: target_owner["chain"]
+                                        },
+                                    },
+                                    "peer": {
+                                        "ownerQid": owner_pair[1],
+                                        "ownedQids": peer_owned,
+                                        "ancestorQidChains": {
+                                            qid: qid_chain_to_owner(qid, owner_pair[1])
+                                            for qid in peer_owned
+                                        },
+                                    },
+                                    "blockedPaintOwnerQids": (),
+                                },
+                                "coversBlockedPaint": True,
+                                "coveredIssueGroupIds": (),
+                            }
+                        )
+                        output.append(pair)
+        return tuple(
+            sorted(
+                output,
+                key=lambda pair: (
+                    -len(pair["proof"]["ownerCoverage"]["peer"]["ownedQids"]),
+                    pair["proof"]["ownerDepth"]["target"]
+                    + pair["proof"]["ownerDepth"]["peer"],
+                    sum(
+                        abs(finite_number(move["deltaPx"].get(axis)))
+                        for move in pair["moves"]
+                        for axis in ("x", "y")
+                    ),
+                    pair["moves"][0]["qid"],
+                    pair["moves"][1]["qid"],
+                ),
+            )
+        )
+
+    def text_fragment_bounds(metric: Mapping[str, Any]) -> dict[str, float] | None:
         fragments = metric.get("text_fragments")
         if not isinstance(fragments, Sequence) or isinstance(fragments, (str, bytes)):
             return None
         rects = [item for item in fragments if isinstance(item, Mapping)]
         if not rects:
             return None
-        ys = [finite_number(rect.get("y")) for rect in rects]
-        bottoms = [y + finite_number(rect.get("height")) for y, rect in zip(ys, rects)]
+        left = min(finite_number(rect.get("x")) for rect in rects)
+        top = min(finite_number(rect.get("y")) for rect in rects)
+        right = max(
+            finite_number(rect.get("x")) + finite_number(rect.get("width"))
+            for rect in rects
+        )
+        bottom = max(
+            finite_number(rect.get("y")) + finite_number(rect.get("height"))
+            for rect in rects
+        )
+        if right <= left or bottom <= top:
+            return None
+        return {"x": left, "y": top, "width": right - left, "height": bottom - top}
+
+    def glyph_measurement(
+        metric: Mapping[str, Any], imported: Any
+    ) -> dict[str, Any] | None:
+        fragment_bounds = text_fragment_bounds(metric)
+        if fragment_bounds is None:
+            return None
         measured_width = max(
-            max((finite_number(rect.get("width")) for rect in rects), default=0.0),
+            fragment_bounds["width"],
             finite_number(metric.get("scroll_width")),
         )
         measured_height = max(
-            max(bottoms, default=0.0) - min(ys, default=0.0),
+            fragment_bounds["height"],
             finite_number(metric.get("scroll_height")),
         )
         available_width = finite_number(metric.get("client_width"))
@@ -959,6 +1979,1842 @@ def _repair_context(
         affected_targets.add(node.layoutId)
         refs.extend(diagnostic_refs)
         refs_by_target.setdefault(node.layoutId, []).extend(diagnostic_refs)
+
+    geometry_issues: list[dict[str, Any]] = []
+    for defect in evidence.defects:
+        if defect.code == "dom.unintended_overlap":
+            node = layout_by_semantic.get(defect.semantic_id)
+            target_qid = defect.qid or qid_for_semantic(defect.semantic_id)
+            metric = metric_by_qid.get(target_qid) if target_qid else None
+            if (
+                node is None
+                or node.bounds is None
+                or target_qid is None
+                or not isinstance(metric, Mapping)
+            ):
+                continue
+            raw_occluders = metric.get("occlusion_occluder_qids", ())
+            occluder_qids = (
+                tuple(str(value) for value in raw_occluders)
+                if isinstance(raw_occluders, Sequence)
+                and not isinstance(raw_occluders, (str, bytes))
+                else ()
+            )
+            related_qids = tuple(
+                (
+                    semantic_id,
+                    qid_for_semantic(semantic_id),
+                )
+                for semantic_id in defect.related_semantic_ids
+            )
+            proven_pair = next(
+                (
+                    (value, semantic_id, related_qid)
+                    for value in occluder_qids
+                    for semantic_id, related_qid in related_qids
+                    if value != target_qid
+                    and value in metric_by_qid
+                    and related_qid is not None
+                    and metric_qids_related(value, related_qid)
+                ),
+                None,
+            )
+            if proven_pair is None:
+                proven_pair = next(
+                    (
+                        (value, bound[0], bound[1])
+                        for value in occluder_qids
+                        if value != target_qid and value in metric_by_qid
+                        for bound in (bound_semantic_for_metric_qid(value),)
+                        if bound is not None
+                        and bound[0] != defect.semantic_id
+                        and bound[0] in layout_by_semantic
+                    ),
+                    None,
+                )
+            occluder_qid = proven_pair[0] if proven_pair is not None else None
+            occluder_semantic = proven_pair[1] if proven_pair is not None else None
+            related_qid = proven_pair[2] if proven_pair is not None else None
+            other_node = (
+                layout_by_semantic.get(occluder_semantic)
+                if occluder_semantic is not None
+                else None
+            )
+            if (
+                occluder_qid is None
+                or other_node is None
+                or other_node.bounds is None
+                or other_node.layoutId == node.layoutId
+            ):
+                continue
+            probe_version = str(metric.get("occlusion_probe_version", ""))
+            magnitude = max(
+                finite_number(metric.get("occluded_fraction")),
+                finite_number(metric.get("continuous_occluded_fraction")),
+            )
+            imported_global_space = (
+                source is not None
+                and defect.semantic_id in binding_by_semantic
+                and occluder_semantic in binding_by_semantic
+            )
+            same_space = imported_global_space or (
+                parent_by_id.get(node.layoutId)
+                == parent_by_id.get(other_node.layoutId)
+            )
+            target_bbox = metric.get("bbox")
+            target_bbox = target_bbox if isinstance(target_bbox, Mapping) else {}
+            occluder_metric = metric_by_qid.get(occluder_qid)
+            occluder_bbox = (
+                occluder_metric.get("bbox")
+                if isinstance(occluder_metric, Mapping)
+                else {}
+            )
+            occluder_bbox = (
+                occluder_bbox if isinstance(occluder_bbox, Mapping) else {}
+            )
+            target_x = finite_number(target_bbox.get("x"))
+            target_y = finite_number(target_bbox.get("y"))
+            target_width = finite_number(target_bbox.get("width"))
+            target_height = finite_number(target_bbox.get("height"))
+            occluder_x = finite_number(occluder_bbox.get("x"))
+            occluder_y = finite_number(occluder_bbox.get("y"))
+            occluder_width = finite_number(occluder_bbox.get("width"))
+            occluder_height = finite_number(occluder_bbox.get("height"))
+            target_deltas_px = (
+                (occluder_x - target_x - target_width, 0.0),
+                (occluder_x + occluder_width - target_x, 0.0),
+                (0.0, occluder_y - target_y - target_height),
+                (0.0, occluder_y + occluder_height - target_y),
+            )
+            other_deltas_px = tuple((-dx, -dy) for dx, dy in target_deltas_px)
+            horizontal_overlap = min(
+                target_x + target_width,
+                occluder_x + occluder_width,
+            ) - max(target_x, occluder_x)
+            vertical_overlap = min(
+                target_y + target_height,
+                occluder_y + occluder_height,
+            ) - max(target_y, occluder_y)
+            minimum_displacement = min(
+                value
+                for value in (horizontal_overlap, vertical_overlap)
+                if value >= 0
+            ) if max(horizontal_overlap, vertical_overlap) >= 0 else 0.0
+            stable_qids = sorted((target_qid, related_qid or occluder_qid))
+            geometry_issues.append(
+                {
+                    "code": defect.code,
+                    "semanticId": defect.semantic_id,
+                    "qid": target_qid,
+                    "constraintId": (
+                        f"dom:{defect.code}:{':'.join(stable_qids)}"
+                    ),
+                    "kind": "nonOverlap",
+                    "target": node.layoutId,
+                    "currentBounds": node.bounds.model_dump(mode="json"),
+                    "otherTarget": other_node.layoutId,
+                    "otherBounds": other_node.bounds.model_dump(mode="json"),
+                    "sameCoordinateSpace": same_space,
+                    "containerBounds": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "width": 1.0,
+                        "height": 1.0,
+                    },
+                    "requiresEnvelope": source is not None,
+                    "mutationEnvelope": (
+                        node.constraints.model_dump(mode="json")
+                        if node.constraints is not None
+                        else {}
+                    ),
+                    "otherMutationEnvelope": (
+                        other_node.constraints.model_dump(mode="json")
+                        if other_node.constraints is not None
+                        else {}
+                    ),
+                    "boundAncestors": bound_ancestor_candidates(
+                        target_qid=target_qid,
+                        blocked_qid=occluder_qid,
+                        candidate_deltas_px=target_deltas_px,
+                    ),
+                    "otherBoundAncestors": bound_ancestor_candidates(
+                        target_qid=related_qid or occluder_qid,
+                        blocked_qid=target_qid,
+                        candidate_deltas_px=other_deltas_px,
+                    ),
+                    "coordinatedAncestorMoves": (
+                        coordinated_owner_pairs(
+                            target_qid=target_qid,
+                            occluder_qids=occluder_qids,
+                        )
+                        if occluder_qids
+                        else ()
+                    ),
+                    "detectorEvidence": {
+                        "confirmed": (
+                            magnitude > 0
+                            and probe_version
+                            in {"owned-content-v2", "owned-paint-v3"}
+                        ),
+                        "independentElements": same_space,
+                        "stage": "dom",
+                        "metric": "owned_content_occluded_fraction",
+                        "value": magnitude,
+                        "threshold": 0.0,
+                        "occluderQid": occluder_qid,
+                        "occluderBindingQid": related_qid,
+                        "browserIssueQidCount": 1
+                        + len(defect.related_semantic_ids),
+                        "targetBoundsPx": dict(target_bbox),
+                        "occluderBoundsPx": dict(occluder_bbox),
+                        "minimumDisplacementPx": minimum_displacement,
+                        "probeVersion": probe_version,
+                    },
+                }
+            )
+            continue
+        if defect.code not in {"dom.clipping", "dom.overflow", "dom.off_canvas"}:
+            continue
+        node = layout_by_semantic.get(defect.semantic_id)
+        qid = defect.qid or qid_for_semantic(defect.semantic_id)
+        metric = metric_by_qid.get(qid) if qid else None
+        if node is None or node.bounds is None or qid is None or metric is None:
+            continue
+        width_basis = source.viewportWidth if source is not None else 1280.0
+        height_basis = source.viewportHeight if source is not None else 720.0
+        magnitude = max(
+            max(
+                0.0,
+                finite_number(metric.get("scroll_width"))
+                - finite_number(metric.get("client_width")),
+            )
+            / max(1.0, width_basis),
+            max(
+                0.0,
+                finite_number(metric.get("scroll_height"))
+                - finite_number(metric.get("client_height")),
+            )
+            / max(1.0, height_basis),
+        )
+        if defect.code == "dom.off_canvas":
+            magnitude = _off_canvas_fraction(
+                metric,
+                canvas_width=width_basis,
+                canvas_height=height_basis,
+            )
+        issue_kind = "containment" if defect.code == "dom.off_canvas" else "overflow"
+        geometry_issues.append(
+            {
+                "code": defect.code,
+                "semanticId": defect.semantic_id,
+                "qid": qid,
+                "constraintId": (
+                    f"dom:{defect.code}:{qid}"
+                    if defect.code == "dom.off_canvas"
+                    else None
+                ),
+                "kind": issue_kind,
+                "target": node.layoutId,
+                "currentBounds": node.bounds.model_dump(mode="json"),
+                "sameCoordinateSpace": True,
+                "containerBounds": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+                "requiresEnvelope": source is not None,
+                "mutationEnvelope": (
+                    node.constraints.model_dump(mode="json")
+                    if node.constraints is not None
+                    else {}
+                ),
+                "detectorEvidence": {
+                    "confirmed": magnitude > 0,
+                    "stage": "dom",
+                    "metric": (
+                        "canvas_overflow_fraction"
+                        if defect.code == "dom.off_canvas"
+                        else "overflow_fraction"
+                    ),
+                    "value": magnitude,
+                    "threshold": 0.0,
+                },
+            }
+        )
+
+    constraint_by_id = {
+        constraint.constraintId: constraint.model_dump(mode="json")
+        for constraint in spec.constraints
+    }
+    semantic_by_layout = {
+        node.layoutId: node.contentSemanticId
+        for node in layout_by_id.values()
+        if node.contentSemanticId is not None
+    }
+    for violation in (constraint_report.violations if constraint_report else ()):
+        if violation.strength != "hard" or not violation.targets:
+            continue
+        target_id = violation.targets[0]
+        target_node = layout_by_id.get(target_id)
+        semantic_id = semantic_by_layout.get(target_id)
+        qid = qid_for_semantic(semantic_id) if semantic_id else None
+        if target_node is None or target_node.bounds is None or not semantic_id or not qid:
+            continue
+        peer_id = next(
+            (item for item in violation.targets[1:] if item in layout_by_id),
+            None,
+        )
+        peer_node = layout_by_id.get(peer_id) if peer_id else None
+        peer_semantic_id = semantic_by_layout.get(peer_id or "")
+        imported_global_space = (
+            source is not None
+            and semantic_id in binding_by_semantic
+            and peer_semantic_id in binding_by_semantic
+        )
+        same_space = peer_node is None or imported_global_space or (
+            parent_by_id.get(target_id) == parent_by_id.get(peer_id)
+        )
+        issue: dict[str, Any] = {
+            **dict(constraint_by_id.get(violation.constraint_id, {})),
+            "code": violation.code,
+            "semanticId": semantic_id,
+            "qid": qid,
+            "constraintId": violation.constraint_id,
+            "kind": violation.kind,
+            "target": target_id,
+            "currentBounds": target_node.bounds.model_dump(mode="json"),
+            "sameCoordinateSpace": same_space,
+            "requiresEnvelope": source is not None,
+            "mutationEnvelope": (
+                target_node.constraints.model_dump(mode="json")
+                if target_node.constraints is not None
+                else {}
+            ),
+            "detectorEvidence": {
+                "confirmed": violation.magnitude > 0,
+                "stage": "invariant",
+                "metric": "constraint_residual",
+                "value": violation.magnitude,
+                "threshold": 0.0,
+                "independentElements": violation.kind != "nonOverlap"
+                or same_space,
+            },
+        }
+        if peer_node is not None and peer_node.bounds is not None:
+            issue.update(
+                {
+                    "otherTarget": peer_id,
+                    "otherBounds": peer_node.bounds.model_dump(mode="json"),
+                    "otherMutationEnvelope": (
+                        peer_node.constraints.model_dump(mode="json")
+                        if peer_node.constraints is not None
+                        else {}
+                    ),
+                }
+            )
+        issue["containerBounds"] = {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1.0,
+            "height": 1.0,
+        }
+        geometry_issues.append(issue)
+
+    geometry_issue_groups: dict[str, list[str]] = {}
+    composition_qids: dict[str, tuple[str, ...]] = {}
+    for issue in geometry_issues:
+        detector = issue.get("detectorEvidence")
+        detector = detector if isinstance(detector, Mapping) else {}
+        group_digest = digest_parts(
+            "geometry-issue-group/1",
+            issue.get("code"),
+            issue.get("qid"),
+            issue.get("constraintId"),
+            detector.get("occluderQid"),
+        ).removeprefix("sha256:")[:16]
+        group_id = f"geometry:{group_digest}"
+        issue["issueGroupId"] = group_id
+        constraint_id = issue.get("constraintId")
+        geometry_issue_groups[group_id] = (
+            [str(constraint_id)] if constraint_id else []
+        )
+        raw_ancestors = (
+            *(
+                issue.get("boundAncestors", ())
+                if isinstance(issue.get("boundAncestors"), Sequence)
+                else ()
+            ),
+            *(
+                issue.get("otherBoundAncestors", ())
+                if isinstance(issue.get("otherBoundAncestors"), Sequence)
+                else ()
+            ),
+        )
+        composition_qids[group_id] = tuple(
+            dict.fromkeys(
+                str(value)
+                for value in (
+                    issue.get("qid"),
+                    detector.get("occluderQid"),
+                    detector.get("occluderBindingQid"),
+                    *(
+                        ancestor.get("qid")
+                        for ancestor in raw_ancestors
+                        if isinstance(ancestor, Mapping)
+                    ),
+                )
+                if value
+            )
+        )
+        target = str(issue.get("target", ""))
+        peer_qid = str(
+            detector.get("occluderBindingQid")
+            or detector.get("occluderQid")
+            or ""
+        )
+        peer_target = str(issue.get("otherTarget", ""))
+        issue_refs = tuple(
+            str(value)
+            for value in (
+                f"issue-group:{group_id}",
+                f"code:{issue.get('code')}",
+                f"semantic:{issue.get('semanticId')}",
+                f"qid:{issue.get('qid')}",
+                f"qid:{peer_qid}" if peer_qid else None,
+                f"constraint:{constraint_id}" if constraint_id else None,
+                f"target:{target}" if target else None,
+                f"target:{peer_target}" if peer_target else None,
+                f"stage:{detector.get('stage')}",
+                f"metric:{detector.get('metric')}",
+            )
+            if value is not None
+        )
+        refs.extend(issue_refs)
+        if target:
+            refs_by_target.setdefault(target, []).extend(issue_refs)
+
+    # A Chrome-proved text-to-text overlap may have no clipping/overflow flag,
+    # yet a bounded font probe can still be the smallest applicable mutation.
+    # Emit only the envelope floor when measured range bounds prove that exact
+    # scale separates the two text paints.  The rendered candidate DOM gate is
+    # still authoritative for final resolution.
+    glyph_targets = {str(item.get("target", "")) for item in glyph_fits}
+    for issue in geometry_issues:
+        detector = issue.get("detectorEvidence")
+        detector = detector if isinstance(detector, Mapping) else {}
+        if (
+            issue.get("kind") != "nonOverlap"
+            or detector.get("confirmed") is not True
+        ):
+            continue
+        semantic_id = str(issue.get("semanticId", ""))
+        target = str(issue.get("target", ""))
+        qid = str(issue.get("qid", ""))
+        occluder_qid = str(
+            detector.get("occluderBindingQid")
+            or detector.get("occluderQid")
+            or ""
+        )
+        node = layout_by_id.get(target)
+        content = content_by_semantic.get(semantic_id)
+        imported = binding_by_semantic.get(semantic_id)
+        target_metric = metric_by_qid.get(qid)
+        occluder_metric = metric_by_qid.get(occluder_qid)
+        if (
+            not target
+            or target in glyph_targets
+            or node is None
+            or content is None
+            or content.kind not in _TEXT_KINDS
+            or imported is None
+            or getattr(imported, "fontSizePx", None) is None
+            or not isinstance(target_metric, Mapping)
+            or not isinstance(occluder_metric, Mapping)
+        ):
+            continue
+        envelope = node.constraints or LayoutConstraints()
+        allowed = set(envelope.allowedOperations or ())
+        current_scale = node.fontScale
+        minimum_scale = max(0.5, envelope.minFontScale)
+        probe_scale = round(
+            max(minimum_scale, current_scale * (1.0 - envelope.maxFontShrink)),
+            6,
+        )
+        if (
+            "setFontScale" not in allowed
+            or not minimum_scale <= probe_scale < current_scale
+        ):
+            continue
+        target_text = text_fragment_bounds(target_metric)
+        occluder_text = text_fragment_bounds(occluder_metric)
+        if target_text is None or occluder_text is None:
+            continue
+        target_right = target_text["x"] + target_text["width"]
+        occluder_left = occluder_text["x"]
+        projected_right = target_text["x"] + target_text["width"] * (
+            probe_scale / current_scale
+        )
+        vertical_overlap = min(
+            target_text["y"] + target_text["height"],
+            occluder_text["y"] + occluder_text["height"],
+        ) - max(target_text["y"], occluder_text["y"])
+        fonts_ready = bool(normalized_metrics.get("fonts_ready")) and (
+            target_metric.get("font_loaded") is True
+            and occluder_metric.get("font_loaded") is True
+        )
+        candidate_separates = (
+            vertical_overlap > 0.5
+            and target_right > occluder_left + 0.5
+            and projected_right <= occluder_left + 0.5
+        )
+        if not fonts_ready or not candidate_separates:
+            continue
+        glyph_fits.append(
+            {
+                "target": target,
+                "currentScale": current_scale,
+                "candidateScale": probe_scale,
+                "minimumScale": minimum_scale,
+                "mutationEnvelope": envelope.model_dump(mode="json"),
+                "measurement": {
+                    "source": "chrome",
+                    "telemetryComplete": True,
+                    "fontsReady": True,
+                    "kind": "owned-text-separation",
+                    "fontSizePx": finite_number(
+                        target_metric.get("font_size"),
+                        finite_number(getattr(imported, "fontSizePx", 0)),
+                    ),
+                    "measuredWidthPx": target_text["width"],
+                    "measuredHeightPx": target_text["height"],
+                    "availableWidthPx": occluder_left - target_text["x"],
+                    "availableHeightPx": target_text["height"],
+                    "targetTextBoundsPx": target_text,
+                    "occluderTextBoundsPx": occluder_text,
+                    "projectedTargetRightPx": projected_right,
+                    "candidateSeparatesTextPaint": True,
+                    "targetQid": qid,
+                    "occluderQid": occluder_qid,
+                    "overlapFraction": finite_number(detector.get("value")),
+                },
+                "roundTrip": {
+                    "supported": True,
+                    "verifiedProperties": ["font-size"],
+                },
+            }
+        )
+        glyph_targets.add(target)
+
+    issue_endpoints = {
+        str(issue["issueGroupId"]): tuple(
+            dict.fromkeys(
+                str(value)
+                for value in (
+                    issue.get("qid"),
+                    (
+                        issue.get("detectorEvidence", {}).get("occluderQid")
+                        if isinstance(issue.get("detectorEvidence"), Mapping)
+                        else None
+                    ),
+                    (
+                        issue.get("detectorEvidence", {}).get(
+                            "occluderBindingQid"
+                        )
+                        if isinstance(issue.get("detectorEvidence"), Mapping)
+                        else None
+                    ),
+                )
+                if value
+            )
+        )
+        for issue in geometry_issues
+    }
+    coverage_signal_endpoints = tuple(
+        tuple(
+            dict.fromkeys(
+                qid
+                for qid in (
+                    defect.qid or qid_for_semantic(defect.semantic_id),
+                    *(
+                        qid_for_semantic(semantic_id)
+                        for semantic_id in defect.related_semantic_ids
+                    ),
+                )
+                if qid
+            )
+        )
+        for defect in evidence.defects
+        if defect.code == "dom.unintended_overlap"
+        and defect.related_semantic_ids
+    )
+
+    def connected_issue_groups(seed: str) -> tuple[str, ...]:
+        remaining_groups = set(issue_endpoints) - {seed}
+        connected = {seed}
+        frontier = [seed]
+        while frontier:
+            current = frontier.pop()
+            neighbors = {
+                candidate
+                for candidate in remaining_groups
+                if any(
+                    metric_qids_related(left, right)
+                    for left in issue_endpoints.get(current, ())
+                    for right in issue_endpoints.get(candidate, ())
+                )
+            }
+            remaining_groups.difference_update(neighbors)
+            connected.update(neighbors)
+            frontier.extend(sorted(neighbors))
+        return tuple(sorted(connected))
+
+    for issue in geometry_issues:
+        raw_pairs = issue.get("coordinatedAncestorMoves", ())
+        if not isinstance(raw_pairs, Sequence) or isinstance(raw_pairs, (str, bytes)):
+            continue
+        for pair in raw_pairs:
+            if not isinstance(pair, Mapping):
+                continue
+            proof = pair.get("proof")
+            proof = proof if isinstance(proof, dict) else None
+            if proof is None:
+                continue
+            coverage = proof.get("ownerCoverage")
+            coverage = coverage if isinstance(coverage, dict) else None
+            if coverage is None:
+                continue
+            target_coverage = coverage.get("target")
+            peer_coverage = coverage.get("peer")
+            target_coverage = (
+                target_coverage if isinstance(target_coverage, dict) else None
+            )
+            peer_coverage = (
+                peer_coverage if isinstance(peer_coverage, dict) else None
+            )
+            if target_coverage is None or peer_coverage is None:
+                continue
+            target_owner = str(target_coverage.get("ownerQid", ""))
+            peer_owner = str(peer_coverage.get("ownerQid", ""))
+            component = connected_issue_groups(str(issue["issueGroupId"]))
+            connected_qids = tuple(
+                dict.fromkeys(
+                    qid
+                    for group_id in component
+                    for qid in issue_endpoints.get(group_id, ())
+                )
+            )
+            closure = set(connected_qids)
+            changed = True
+            while changed:
+                changed = False
+                for signal in coverage_signal_endpoints:
+                    if not any(
+                        metric_qids_related(signal_qid, connected_qid)
+                        for signal_qid in signal
+                        for connected_qid in closure
+                    ):
+                        continue
+                    before = len(closure)
+                    closure.update(signal)
+                    changed = changed or len(closure) != before
+            connected_qids = tuple(sorted(closure))
+            target_owned = tuple(
+                qid
+                for qid in connected_qids
+                if metric_qid_is_ancestor(target_owner, qid)
+            )
+            peer_owned = tuple(
+                qid
+                for qid in connected_qids
+                if metric_qid_is_ancestor(peer_owner, qid)
+            )
+            unowned = tuple(
+                qid
+                for qid in connected_qids
+                if qid not in target_owned and qid not in peer_owned
+            )
+            target_coverage["ownedQids"] = target_owned
+            target_coverage["ancestorQidChains"] = {
+                qid: qid_chain_to_owner(qid, target_owner)
+                for qid in target_owned
+            }
+            peer_coverage["ownedQids"] = peer_owned
+            peer_coverage["ancestorQidChains"] = {
+                qid: qid_chain_to_owner(qid, peer_owner)
+                for qid in peer_owned
+            }
+            coverage["connectedIssueQids"] = connected_qids
+            coverage["unownedConnectedIssueQids"] = unowned
+            covered: list[str] = []
+            for candidate_issue in geometry_issues:
+                candidate_detector = candidate_issue.get("detectorEvidence")
+                candidate_detector = (
+                    candidate_detector
+                    if isinstance(candidate_detector, Mapping)
+                    else {}
+                )
+                candidate_target = str(candidate_issue.get("qid", ""))
+                candidate_peer = str(
+                    candidate_detector.get("occluderQid")
+                    or candidate_detector.get("occluderBindingQid")
+                    or ""
+                )
+                if not candidate_target or not candidate_peer:
+                    continue
+                split_across_owners = (
+                    metric_qid_is_ancestor(target_owner, candidate_target)
+                    and metric_qid_is_ancestor(peer_owner, candidate_peer)
+                ) or (
+                    metric_qid_is_ancestor(peer_owner, candidate_target)
+                    and metric_qid_is_ancestor(target_owner, candidate_peer)
+                )
+                if split_across_owners:
+                    covered.append(str(candidate_issue["issueGroupId"]))
+            proof["coveredIssueGroupIds"] = tuple(dict.fromkeys(sorted(covered)))
+
+    composable_groups = [
+        str(issue["issueGroupId"])
+        for issue in geometry_issues
+        if issue.get("kind") == "nonOverlap"
+        and isinstance(issue.get("detectorEvidence"), Mapping)
+        and issue["detectorEvidence"].get("confirmed") is True
+        and source is not None
+    ]
+
+    def redundant_aggregate_issue(issue: Mapping[str, Any]) -> bool:
+        detector = issue.get("detectorEvidence")
+        detector = detector if isinstance(detector, Mapping) else {}
+        if int(finite_number(detector.get("browserIssueQidCount"), 1)) <= 1:
+            return False
+        endpoints = tuple(
+            str(value)
+            for value in (
+                issue.get("qid"),
+                detector.get("occluderBindingQid"),
+            )
+            if value
+        )
+        if len(endpoints) < 2:
+            return False
+        group_id = str(issue.get("issueGroupId", ""))
+        other_targets = tuple(
+            str(other.get("qid"))
+            for other in geometry_issues
+            if str(other.get("issueGroupId", "")) != group_id
+            and other.get("kind") == "nonOverlap"
+            and isinstance(other.get("detectorEvidence"), Mapping)
+            and other["detectorEvidence"].get("confirmed") is True
+            and other.get("qid")
+        )
+        return all(
+            any(metric_qid_is_ancestor(endpoint, target) for target in other_targets)
+            for endpoint in endpoints
+        )
+
+    required_geometry_issue_groups = tuple(
+        sorted(
+            {
+            str(issue["issueGroupId"])
+            for issue in geometry_issues
+            if issue.get("kind") in {"nonOverlap", "containment"}
+            and isinstance(issue.get("detectorEvidence"), Mapping)
+            and issue["detectorEvidence"].get("confirmed") is True
+            and issue.get("sameCoordinateSpace") is True
+            and bool(issue.get("qid"))
+            and bool(issue.get("target"))
+            and (
+                issue.get("code") == "dom.off_canvas"
+                or not redundant_aggregate_issue(issue)
+            )
+            and (
+                envelope_can_change(issue.get("mutationEnvelope"))
+                or envelope_can_change(issue.get("otherMutationEnvelope"))
+                or bool(issue.get("boundAncestors"))
+                or bool(issue.get("otherBoundAncestors"))
+            )
+            }
+        )
+    )
+    remaining = set(composable_groups)
+    composition_components: list[tuple[str, ...]] = []
+    while remaining:
+        seed = min(remaining)
+        remaining.remove(seed)
+        component = {seed}
+        frontier = [seed]
+        while frontier:
+            current = frontier.pop()
+            connected = {
+                candidate
+                for candidate in remaining
+                if any(
+                    metric_qids_related(left, right)
+                    for left in composition_qids.get(current, ())
+                    for right in composition_qids.get(candidate, ())
+                )
+            }
+            remaining.difference_update(connected)
+            component.update(connected)
+            frontier.extend(sorted(connected))
+        if len(component) > 1:
+            composition_components.append(tuple(sorted(component)))
+    geometry_composition_groups = {
+        (
+            "composition:"
+            + digest_parts("geometry-composition/1", *component)
+            .removeprefix("sha256:")[:16]
+        ): component
+        for component in sorted(composition_components)
+    }
+    if 2 <= len(required_geometry_issue_groups) <= 4:
+        required_composition_id = (
+            "composition:required:"
+            + digest_parts(
+                "geometry-required-composition/1",
+                *required_geometry_issue_groups,
+            ).removeprefix("sha256:")[:16]
+        )
+        geometry_composition_groups[required_composition_id] = (
+            required_geometry_issue_groups
+        )
+    geometry_glyph_compositions: list[dict[str, Any]] = []
+    if source is not None:
+        for issue in geometry_issues:
+            if issue.get("kind") != "nonOverlap":
+                continue
+            group_id = str(issue.get("issueGroupId", ""))
+            detector = issue.get("detectorEvidence")
+            detector = detector if isinstance(detector, Mapping) else {}
+            if not group_id or detector.get("confirmed") is not True:
+                continue
+            owner_qids = tuple(
+                str(ancestor.get("qid", ""))
+                for key in ("boundAncestors", "otherBoundAncestors")
+                for ancestor in (
+                    issue.get(key) if isinstance(issue.get(key), Sequence) else ()
+                )
+                if isinstance(ancestor, Mapping) and ancestor.get("qid")
+            )
+            if not owner_qids:
+                continue
+            for content in spec.content:
+                if content.kind != "title":
+                    continue
+                node = layout_by_semantic.get(content.semanticId)
+                imported = binding_by_semantic.get(content.semanticId)
+                if node is None or imported is None:
+                    continue
+                qid = imported.qid
+                metric = metric_by_qid.get(qid)
+                if (
+                    not isinstance(metric, Mapping)
+                    or metric.get("font_loaded") is not True
+                    or not any(
+                        metric_qid_is_ancestor(owner_qid, qid)
+                        for owner_qid in owner_qids
+                    )
+                ):
+                    continue
+                envelope = node.constraints or LayoutConstraints()
+                allowed = set(envelope.allowedOperations or ())
+                current_scale = node.fontScale
+                minimum_scale = max(0.5, envelope.minFontScale)
+                candidate_scale = round(
+                    max(minimum_scale, current_scale * 0.975), 6
+                )
+                fragments = tuple(
+                    fragment
+                    for fragment in metric.get("text_fragments", ())
+                    if isinstance(fragment, Mapping)
+                )
+                text_bounds = text_fragment_bounds(metric)
+                bbox = metric.get("bbox")
+                bbox = bbox if isinstance(bbox, Mapping) else {}
+                if (
+                    "setFontScale" not in allowed
+                    or getattr(imported, "fontSizePx", None) is None
+                    or not minimum_scale <= candidate_scale < current_scale
+                    or text_bounds is None
+                    or not fragments
+                ):
+                    continue
+                issue_qid = str(issue.get("qid", ""))
+                peer_qid = str(
+                    detector.get("occluderBindingQid")
+                    or detector.get("occluderQid")
+                    or ""
+                )
+                issue_node = layout_by_id.get(str(issue.get("target", "")))
+                issue_semantic = str(issue.get("semanticId", ""))
+                issue_binding = binding_by_semantic.get(issue_semantic)
+                issue_metric = metric_by_qid.get(issue_qid)
+                peer_metric = metric_by_qid.get(peer_qid)
+                raw_ancestors = issue.get("boundAncestors")
+                raw_ancestors = (
+                    raw_ancestors
+                    if isinstance(raw_ancestors, Sequence)
+                    else ()
+                )
+                owner = next(
+                    (
+                        ancestor
+                        for ancestor in raw_ancestors
+                        if isinstance(ancestor, Mapping)
+                        and metric_qid_is_ancestor(
+                            str(ancestor.get("qid", "")), qid
+                        )
+                        and metric_qid_is_ancestor(
+                            str(ancestor.get("qid", "")), issue_qid
+                        )
+                    ),
+                    None,
+                )
+                owner_layout_id = str(owner.get("layoutId", "")) if owner else ""
+                owner_semantic = str(owner.get("semanticId", "")) if owner else ""
+                owner_qid = str(owner.get("qid", "")) if owner else ""
+                owner_node = layout_by_id.get(owner_layout_id)
+                owner_binding = binding_by_semantic.get(owner_semantic)
+                owner_metric = metric_by_qid.get(owner_qid)
+                target_bounds = detector.get("targetBoundsPx")
+                target_bounds = (
+                    target_bounds if isinstance(target_bounds, Mapping) else {}
+                )
+                peer_bounds = detector.get("occluderBoundsPx")
+                peer_bounds = peer_bounds if isinstance(peer_bounds, Mapping) else {}
+                font_size_px = finite_number(
+                    metric.get("font_size"), getattr(imported, "fontSizePx", 0)
+                )
+                target_bottom = finite_number(target_bounds.get("y")) + finite_number(
+                    target_bounds.get("height")
+                )
+                peer_top = finite_number(peer_bounds.get("y"))
+                direct_delta_px = -float(max(1, math.ceil(font_size_px * 0.25)))
+                total_delta_px = -float(
+                    max(1, math.ceil(max(0.0, target_bottom - peer_top) + 3.0))
+                )
+                owner_delta_px = total_delta_px - direct_delta_px
+                issue_envelope = (
+                    issue_node.constraints if issue_node is not None else None
+                )
+                owner_envelope = (
+                    owner_node.constraints if owner_node is not None else None
+                )
+                issue_text_bounds = (
+                    text_fragment_bounds(issue_metric)
+                    if isinstance(issue_metric, Mapping)
+                    else None
+                )
+                peer_text_bounds = (
+                    text_fragment_bounds(peer_metric)
+                    if isinstance(peer_metric, Mapping)
+                    else None
+                )
+                owner_bbox = (
+                    owner_metric.get("bbox")
+                    if isinstance(owner_metric, Mapping)
+                    and isinstance(owner_metric.get("bbox"), Mapping)
+                    else {}
+                )
+                moves_proven = (
+                    owner is not None
+                    and issue_node is not None
+                    and issue_node.bounds is not None
+                    and owner_node is not None
+                    and owner_node.bounds is not None
+                    and issue_binding is not None
+                    and owner_binding is not None
+                    and issue_binding.staticTranslationSafe is True
+                    and owner_binding.staticTranslationSafe is True
+                    and issue_envelope is not None
+                    and owner_envelope is not None
+                    and "translateWithinParent"
+                    in set(issue_envelope.allowedOperations or ())
+                    and "translateWithinParent"
+                    in set(owner_envelope.allowedOperations or ())
+                    and abs(direct_delta_px) / max(1.0, float(source.viewportHeight))
+                    <= issue_envelope.maxTranslation + 1e-9
+                    and abs(owner_delta_px) / max(1.0, float(source.viewportHeight))
+                    <= owner_envelope.maxTranslation + 1e-9
+                    and target_bottom > peer_top
+                    and target_bottom + total_delta_px <= peer_top - 2.5
+                    and finite_number(owner_bbox.get("y")) + owner_delta_px >= 0
+                    and finite_number(owner_bbox.get("y"))
+                    + owner_delta_px
+                    + finite_number(owner_bbox.get("height"))
+                    <= float(source.viewportHeight)
+                )
+                moves: tuple[dict[str, Any], ...] = ()
+                move_proof: dict[str, Any] = {}
+                if moves_proven:
+                    moves = (
+                        {
+                            "role": "owner",
+                            "target": owner_layout_id,
+                            "layoutId": owner_layout_id,
+                            "semanticId": owner_semantic,
+                            "qid": owner_qid,
+                            "currentBounds": owner_node.bounds.model_dump(mode="json"),
+                            "mutationEnvelope": owner_envelope.model_dump(mode="json"),
+                            "precondition": {
+                                "expectedBounds": owner_node.bounds.model_dump(mode="json")
+                            },
+                            "delta": {
+                                "x": 0.0,
+                                "y": owner_delta_px / float(source.viewportHeight),
+                            },
+                            "deltaPx": {"x": 0.0, "y": owner_delta_px},
+                            "staticTranslationSafe": True,
+                            "roundTrip": {
+                                "supported": True,
+                                "verifiedProperties": ["bounds"],
+                            },
+                        },
+                        {
+                            "role": "subtitle",
+                            "target": issue_node.layoutId,
+                            "layoutId": issue_node.layoutId,
+                            "semanticId": issue_semantic,
+                            "qid": issue_qid,
+                            "currentBounds": issue_node.bounds.model_dump(mode="json"),
+                            "mutationEnvelope": issue_envelope.model_dump(mode="json"),
+                            "precondition": {
+                                "expectedBounds": issue_node.bounds.model_dump(mode="json")
+                            },
+                            "delta": {
+                                "x": 0.0,
+                                "y": direct_delta_px / float(source.viewportHeight),
+                            },
+                            "deltaPx": {"x": 0.0, "y": direct_delta_px},
+                            "staticTranslationSafe": True,
+                            "roundTrip": {
+                                "supported": True,
+                                "verifiedProperties": ["bounds"],
+                            },
+                        },
+                    )
+                    move_proof = {
+                        "source": "chrome",
+                        "telemetryComplete": True,
+                        "candidateResolvesIssue": True,
+                        "baselineSubtitleTextBoundsPx": issue_text_bounds,
+                        "candidateSubtitleTextBoundsPx": (
+                            {
+                                **issue_text_bounds,
+                                "y": issue_text_bounds["y"] + total_delta_px,
+                            }
+                            if issue_text_bounds is not None
+                            else None
+                        ),
+                        "occluderTextBoundsPx": peer_text_bounds,
+                        "occluderPaintBoundaryPx": {
+                            "axis": "y",
+                            "value": peer_top,
+                        },
+                        "ownerSubtreeBoundsPx": {
+                            "baseline": dict(owner_bbox),
+                            "candidate": {
+                                **dict(owner_bbox),
+                                "y": finite_number(owner_bbox.get("y"))
+                                + owner_delta_px,
+                            },
+                        },
+                        "canvasCapacity": {
+                            "viewportHeightPx": float(source.viewportHeight),
+                            "topClearancePx": finite_number(owner_bbox.get("y"))
+                            + owner_delta_px,
+                            "bottomClearancePx": float(source.viewportHeight)
+                            - (
+                                finite_number(owner_bbox.get("y"))
+                                + owner_delta_px
+                                + finite_number(owner_bbox.get("height"))
+                            ),
+                        },
+                        "staticTranslationSafe": True,
+                        "roundTrip": {
+                            "supported": True,
+                            "verifiedProperties": ["bounds", "font-size"],
+                        },
+                        # These are required candidate-stage observations, not
+                        # baseline assertions.  The executor's rendered DOM,
+                        # constraint, and source-roundtrip gates must populate
+                        # and prove them before acceptance.
+                        "requiredPostconditions": {
+                            "domNoNewIssue": True,
+                            "hardFailure": False,
+                            "softCostMaximum": (
+                                constraint_report.soft_cost
+                                if constraint_report is not None
+                                else 0.0
+                            ),
+                            "unknownHard": [],
+                            "roundTripErrors": [],
+                        },
+                    }
+                composition_id = (
+                    "composition:glyph:"
+                    + digest_parts(
+                        "geometry-glyph-composition/1",
+                        group_id,
+                        node.layoutId,
+                        str(candidate_scale),
+                    ).removeprefix("sha256:")[:16]
+                )
+                geometry_glyph_compositions.append(
+                    {
+                        "compositionId": composition_id,
+                        "issueGroupIds": (group_id,),
+                        "required": group_id in required_geometry_issue_groups,
+                        "moves": moves,
+                        "proof": move_proof,
+                        "glyph": {
+                            "target": node.layoutId,
+                            "layoutId": node.layoutId,
+                            "semanticId": content.semanticId,
+                            "qid": qid,
+                            "currentScale": current_scale,
+                            "minimumScale": minimum_scale,
+                            "candidateScale": candidate_scale,
+                            "mutationEnvelope": envelope.model_dump(mode="json"),
+                            "precondition": {
+                                "expectedBounds": (
+                                    node.bounds.model_dump(mode="json")
+                                    if node.bounds is not None
+                                    else None
+                                ),
+                                "expectedScale": current_scale,
+                            },
+                            "measurement": {
+                                "source": "chrome",
+                                "telemetryComplete": True,
+                                "fontsReady": True,
+                                "kind": "range-bounds",
+                                "fontSizePx": finite_number(
+                                    metric.get("font_size"),
+                                    getattr(imported, "fontSizePx", 0),
+                                ),
+                                "measuredWidthPx": text_bounds["width"],
+                                "measuredHeightPx": text_bounds["height"],
+                                "availableWidthPx": finite_number(
+                                    bbox.get("width"), text_bounds["width"]
+                                ),
+                                "availableHeightPx": finite_number(
+                                    bbox.get("height"), text_bounds["height"]
+                                ),
+                                "textBoundsPx": text_bounds,
+                                "lineBoundsPx": tuple(dict(item) for item in fragments),
+                            },
+                            "roundTrip": {
+                                "supported": True,
+                                "verifiedProperties": ["font-size"],
+                            },
+                        },
+                    }
+                )
+    geometry_exact_compositions: list[dict[str, Any]] = []
+    geometry_exact_diagnostics: list[dict[str, Any]] = []
+    if source is not None:
+        viewport_width = float(source.viewportWidth)
+        viewport_height = float(source.viewportHeight)
+
+        def exact_vertical_move(
+            qid: str, delta_px: float, role: str
+        ) -> dict[str, Any] | None:
+            semantic_id = semantic_by_qid.get(qid)
+            node = layout_by_semantic.get(semantic_id) if semantic_id else None
+            binding = binding_by_semantic.get(semantic_id) if semantic_id else None
+            metric = metric_by_qid.get(qid)
+            if (
+                node is None
+                or node.bounds is None
+                or binding is None
+                or not isinstance(metric, Mapping)
+                or abs(delta_px) <= 1e-9
+            ):
+                return None
+            envelope = node.constraints or LayoutConstraints()
+            if (
+                envelope.locked
+                or "translateWithinParent"
+                not in set(envelope.allowedOperations or ())
+                or abs(delta_px) / viewport_height
+                > envelope.maxTranslation + 1e-9
+            ):
+                return None
+            projection: dict[str, Any]
+            if binding.position == "static":
+                probe = metric.get("static_translation_probe")
+                probe = probe if isinstance(probe, Mapping) else {}
+                interval = probe.get("safeTranslationIntervalPx")
+                interval = interval if isinstance(interval, Mapping) else {}
+                if (
+                    binding.transform != "none"
+                    or binding.staticTranslationSafe is not True
+                    or probe.get("source") != "chrome"
+                    or probe.get("telemetryComplete") is not True
+                    or probe.get("stackingStable") is not True
+                    or delta_px < finite_number(interval.get("minY")) - 1e-6
+                    or delta_px > finite_number(interval.get("maxY")) + 1e-6
+                ):
+                    return None
+                projection = {
+                    "source": "chrome",
+                    "telemetryComplete": True,
+                    "mechanism": "static-transform",
+                    "staticTranslationSafe": True,
+                    "safeTranslationIntervalPx": dict(interval),
+                }
+            elif binding.position in {"relative", "absolute", "fixed", "sticky"}:
+                proof = metric.get("containing_block_proof")
+                proof = proof if isinstance(proof, Mapping) else {}
+                vertical_anchor = (
+                    "top"
+                    if binding.topPx is not None
+                    else "bottom" if binding.bottomPx is not None else None
+                )
+                if (
+                    vertical_anchor is None
+                    or proof.get("source") != "chrome"
+                    or proof.get("telemetryComplete") is not True
+                    or proof.get("exactBoundOffsetParent") is not True
+                ):
+                    return None
+                projection = {
+                    "source": "chrome",
+                    "telemetryComplete": True,
+                    "mechanism": "position-anchor",
+                    "position": binding.position,
+                    "verticalAnchor": vertical_anchor,
+                    "offsetParentQid": proof.get("offsetParentQid"),
+                }
+            else:
+                return None
+            bbox = metric.get("bbox")
+            if not isinstance(bbox, Mapping):
+                return None
+            return {
+                "op": "translateWithinParent",
+                "role": role,
+                "target": node.layoutId,
+                "layoutId": node.layoutId,
+                "semanticId": semantic_id,
+                "qid": qid,
+                "currentBounds": node.bounds.model_dump(mode="json"),
+                "precondition": {
+                    "expectedBounds": node.bounds.model_dump(mode="json")
+                },
+                "value": {"x": 0.0, "y": delta_px / viewport_height},
+                "valuePx": {"x": 0.0, "y": delta_px},
+                "mutationEnvelope": envelope.model_dump(mode="json"),
+                "projectionProof": projection,
+                "roundTrip": {
+                    "supported": True,
+                    "verifiedProperties": ["bounds"],
+                },
+                "baselineBoundsPx": dict(bbox),
+                "candidateBoundsPx": {
+                    **dict(bbox),
+                    "y": finite_number(bbox.get("y")) + delta_px,
+                },
+            }
+
+        def exact_positioned_bounds(
+            qid: str,
+            candidate_bounds_px: Mapping[str, Any],
+            role: str,
+        ) -> dict[str, Any] | None:
+            """Build a Chrome-anchored exact setBounds operation."""
+
+            semantic_id = semantic_by_qid.get(qid)
+            node = layout_by_semantic.get(semantic_id) if semantic_id else None
+            binding = binding_by_semantic.get(semantic_id) if semantic_id else None
+            metric = metric_by_qid.get(qid)
+            if (
+                node is None
+                or node.bounds is None
+                or binding is None
+                or not isinstance(metric, Mapping)
+                or binding.position not in {"relative", "absolute", "fixed", "sticky"}
+            ):
+                return None
+            envelope = node.constraints or LayoutConstraints()
+            allowed = set(envelope.allowedOperations or ())
+            if envelope.locked or envelope.lockSize or "setBounds" not in allowed:
+                return None
+            proof = metric.get("containing_block_proof")
+            proof = proof if isinstance(proof, Mapping) else {}
+            vertical_anchor = (
+                "top"
+                if binding.topPx is not None
+                else "bottom" if binding.bottomPx is not None else None
+            )
+            horizontal_anchor = (
+                "left"
+                if binding.leftPx is not None
+                else "right" if binding.rightPx is not None else None
+            )
+            if (
+                vertical_anchor is None
+                or horizontal_anchor is None
+                or proof.get("source") != "chrome"
+                or proof.get("telemetryComplete") is not True
+                or proof.get("exactBoundOffsetParent") is not True
+            ):
+                return None
+            bbox = metric.get("bbox")
+            if not isinstance(bbox, Mapping):
+                return None
+            candidate = {
+                "x": finite_number(candidate_bounds_px.get("x")) / viewport_width,
+                "y": finite_number(candidate_bounds_px.get("y")) / viewport_height,
+                "width": finite_number(candidate_bounds_px.get("width"))
+                / viewport_width,
+                "height": finite_number(candidate_bounds_px.get("height"))
+                / viewport_height,
+            }
+            current = node.bounds.model_dump(mode="json")
+            position_delta = max(
+                abs(candidate["x"] - current["x"]),
+                abs(candidate["y"] - current["y"]),
+            )
+            size_delta = max(
+                abs(candidate["width"] - current["width"]),
+                abs(candidate["height"] - current["height"]),
+            )
+            if (
+                position_delta > envelope.maxTranslation + 1e-9
+                or size_delta > envelope.maxResizeDelta + 1e-9
+                or candidate["x"] < 0
+                or candidate["y"] < 0
+                or candidate["x"] + candidate["width"] > 1 + 1e-9
+                or candidate["y"] + candidate["height"] > 1 + 1e-9
+            ):
+                return None
+            return {
+                "op": "setBounds",
+                "role": role,
+                "target": node.layoutId,
+                "layoutId": node.layoutId,
+                "semanticId": semantic_id,
+                "qid": qid,
+                "currentBounds": current,
+                "precondition": {"expectedBounds": current},
+                "bounds": candidate,
+                "boundsPx": dict(candidate_bounds_px),
+                "mutationEnvelope": envelope.model_dump(mode="json"),
+                "projectionProof": {
+                    "source": "chrome",
+                    "telemetryComplete": True,
+                    "mechanism": "position-anchor",
+                    "position": binding.position,
+                    "verticalAnchor": vertical_anchor,
+                    "horizontalAnchor": horizontal_anchor,
+                    "offsetParentQid": proof.get("offsetParentQid"),
+                },
+                "roundTrip": {
+                    "supported": True,
+                    "verifiedProperties": ["bounds"],
+                },
+                "baselineBoundsPx": dict(bbox),
+                "candidateBoundsPx": dict(candidate_bounds_px),
+            }
+
+        required_postconditions = {
+            "domNoNewIssue": True,
+            "hardFailure": False,
+            "softCostMaximum": (
+                constraint_report.soft_cost
+                if constraint_report is not None
+                else 0.0
+            ),
+            "unknownHard": [],
+            "roundTripErrors": [],
+        }
+
+        # Exact bottom-stack repair: an off-canvas bound node and its immediately
+        # preceding bound sibling move together, preserving their measured gap.
+        for issue in geometry_issues:
+            if issue.get("code") != "dom.off_canvas":
+                continue
+            detector = issue.get("detectorEvidence")
+            detector = detector if isinstance(detector, Mapping) else {}
+            target_qid = str(issue.get("qid", ""))
+            target_metric = metric_by_qid.get(target_qid)
+            target_bbox = (
+                target_metric.get("bbox")
+                if isinstance(target_metric, Mapping)
+                and isinstance(target_metric.get("bbox"), Mapping)
+                else None
+            )
+            if detector.get("confirmed") is not True or target_bbox is None:
+                continue
+            overflow_px = finite_number(target_bbox.get("y")) + finite_number(
+                target_bbox.get("height")
+            ) - viewport_height
+            if overflow_px <= 0:
+                continue
+            parent_qid = str(target_metric.get("parent_qid", ""))
+            target_top = finite_number(target_bbox.get("y"))
+            target_width = finite_number(target_bbox.get("width"))
+            predecessors: list[tuple[float, str, Mapping[str, Any]]] = []
+            for candidate_qid, candidate_metric in metric_by_qid.items():
+                if (
+                    candidate_qid == target_qid
+                    or str(candidate_metric.get("parent_qid", "")) != parent_qid
+                    or candidate_qid not in semantic_by_qid
+                ):
+                    continue
+                candidate_bbox = candidate_metric.get("bbox")
+                if not isinstance(candidate_bbox, Mapping):
+                    continue
+                candidate_bottom = finite_number(candidate_bbox.get("y")) + finite_number(
+                    candidate_bbox.get("height")
+                )
+                horizontal_overlap = min(
+                    finite_number(candidate_bbox.get("x"))
+                    + finite_number(candidate_bbox.get("width")),
+                    finite_number(target_bbox.get("x")) + target_width,
+                ) - max(
+                    finite_number(candidate_bbox.get("x")),
+                    finite_number(target_bbox.get("x")),
+                )
+                if (
+                    candidate_bottom <= target_top + 0.5
+                    and horizontal_overlap >= 0.8 * min(
+                        finite_number(candidate_bbox.get("width")), target_width
+                    )
+                ):
+                    predecessors.append((candidate_bottom, candidate_qid, candidate_bbox))
+            if not predecessors:
+                continue
+            predecessor_bottom, predecessor_qid, predecessor_bbox = max(predecessors)
+            if target_top - predecessor_bottom > 2.0:
+                continue
+            delta_px = -float(math.ceil(overflow_px - 1e-9))
+            moves = tuple(
+                move
+                for move in (
+                    exact_vertical_move(predecessor_qid, delta_px, "preceding-sibling"),
+                    exact_vertical_move(target_qid, delta_px, "off-canvas-target"),
+                )
+                if move is not None
+            )
+            if len(moves) != 2:
+                continue
+            candidate_target = moves[1]["candidateBoundsPx"]
+            candidate_predecessor = moves[0]["candidateBoundsPx"]
+            if (
+                finite_number(candidate_target.get("y"))
+                + finite_number(candidate_target.get("height"))
+                > viewport_height + 1e-6
+            ):
+                continue
+            group_ids = tuple(
+                sorted(
+                    {
+                    str(candidate["issueGroupId"])
+                    for candidate in geometry_issues
+                    if candidate.get("issueGroupId")
+                    and (
+                        str(candidate.get("qid", "")) == target_qid
+                        or metric_qid_is_ancestor(
+                            target_qid, str(candidate.get("qid", ""))
+                        )
+                    )
+                    }
+                )
+            )
+            diagnostic_refs = tuple(
+                dict.fromkeys(
+                    ref
+                    for candidate in geometry_issues
+                    if str(candidate.get("issueGroupId", "")) in group_ids
+                    for ref in refs_by_target.get(str(candidate.get("target", "")), ())
+                )
+            )
+            composition_id = (
+                "composition:exact:"
+                + digest_parts(
+                    "geometry-exact-bottom-stack/1",
+                    target_qid,
+                    predecessor_qid,
+                    str(delta_px),
+                ).removeprefix("sha256:")[:16]
+            )
+            geometry_exact_compositions.append(
+                {
+                    "compositionId": composition_id,
+                    "issueGroupIds": group_ids,
+                    # Exact off-canvas containment is itself a required target
+                    # identity even though the legacy required-group list is
+                    # limited to non-overlap compositions.
+                    "required": True,
+                    "diagnosticRefs": diagnostic_refs,
+                    "operations": moves,
+                    "proof": {
+                        "source": "chrome",
+                        "telemetryComplete": True,
+                        "candidateResolvesIssue": True,
+                        "baselineBoundsPx": {
+                            predecessor_qid: dict(predecessor_bbox),
+                            target_qid: dict(target_bbox),
+                        },
+                        "candidateBoundsPx": {
+                            move["qid"]: move["candidateBoundsPx"] for move in moves
+                        },
+                        "relationships": (
+                            {
+                                "kind": "adjacency",
+                                "axis": "y",
+                                "firstQid": predecessor_qid,
+                                "secondQid": target_qid,
+                                "baselineGapPx": target_top - predecessor_bottom,
+                                "candidateGapPx": target_top - predecessor_bottom,
+                            },
+                            {
+                                "kind": "canvasContainment",
+                                "axis": "y",
+                                "firstQid": target_qid,
+                                "boundaryPx": viewport_height,
+                            },
+                        ),
+                        "requiredPostconditions": required_postconditions,
+                    },
+                }
+            )
+
+        # Exact vertical packing repair: two or more independently diagnosed
+        # descendants share a bound warning owner and the same bound occluder.
+        overlap_clusters: dict[str, list[Mapping[str, Any]]] = {}
+        for issue in geometry_issues:
+            detector = issue.get("detectorEvidence")
+            detector = detector if isinstance(detector, Mapping) else {}
+            occluder_qid = str(
+                detector.get("occluderBindingQid")
+                or detector.get("occluderQid")
+                or ""
+            )
+            raw_other_owners = issue.get("otherBoundAncestors")
+            raw_other_owners = (
+                raw_other_owners
+                if isinstance(raw_other_owners, Sequence)
+                else ()
+            )
+            occluder_qid = next(
+                (
+                    str(owner.get("qid", ""))
+                    for owner in raw_other_owners
+                    if isinstance(owner, Mapping)
+                    and str(owner.get("qid", "")) in semantic_by_qid
+                ),
+                occluder_qid,
+            )
+            if (
+                issue.get("kind") == "nonOverlap"
+                and detector.get("confirmed") is True
+                and occluder_qid in semantic_by_qid
+            ):
+                overlap_clusters.setdefault(occluder_qid, []).append(issue)
+        for occluder_qid, cluster in overlap_clusters.items():
+            target_qids = tuple(
+                dict.fromkeys(str(item.get("qid", "")) for item in cluster if item.get("qid"))
+            )
+            if len(target_qids) < 2:
+                geometry_exact_diagnostics.append(
+                    {"stage": "cluster", "reason": "insufficient_targets", "occluderQid": occluder_qid}
+                )
+                continue
+            common_owners = [
+                candidate_qid
+                for candidate_qid in semantic_by_qid
+                if all(
+                    metric_qid_is_ancestor(candidate_qid, target_qid)
+                    for target_qid in target_qids
+                )
+                and not metric_qid_is_ancestor(candidate_qid, occluder_qid)
+            ]
+            common_owners.sort(
+                key=lambda candidate_qid: max(
+                    len(qid_chain_to_owner(target_qid, candidate_qid))
+                    for target_qid in target_qids
+                )
+            )
+            warning_qid = next(
+                (
+                    candidate_qid
+                    for candidate_qid in common_owners
+                    if isinstance(metric_by_qid.get(candidate_qid), Mapping)
+                    and metric_by_qid[candidate_qid].get("has_owned_paint") is True
+                ),
+                None,
+            )
+            warning_metric = metric_by_qid.get(warning_qid or "")
+            occluder_metric = metric_by_qid.get(occluder_qid)
+            if not isinstance(warning_metric, Mapping) or not isinstance(
+                occluder_metric, Mapping
+            ):
+                geometry_exact_diagnostics.append(
+                    {"stage": "owners", "reason": "bound_owner_missing", "occluderQid": occluder_qid, "warningQid": warning_qid}
+                )
+                continue
+            warning_bbox = warning_metric.get("bbox")
+            occluder_bbox = occluder_metric.get("bbox")
+            if not isinstance(warning_bbox, Mapping) or not isinstance(
+                occluder_bbox, Mapping
+            ):
+                geometry_exact_diagnostics.append(
+                    {"stage": "owners", "reason": "bbox_missing", "occluderQid": occluder_qid, "warningQid": warning_qid}
+                )
+                continue
+            parent_qid = str(warning_metric.get("parent_qid", ""))
+            siblings: list[tuple[float, str, Mapping[str, Any]]] = []
+            for sibling_qid, sibling_metric in metric_by_qid.items():
+                sibling_bbox = sibling_metric.get("bbox")
+                if (
+                    str(sibling_metric.get("parent_qid", "")) != parent_qid
+                    or sibling_qid not in semantic_by_qid
+                    or not isinstance(sibling_bbox, Mapping)
+                ):
+                    continue
+                if (
+                    abs(finite_number(sibling_bbox.get("x")) - finite_number(warning_bbox.get("x"))) <= 1
+                    and abs(finite_number(sibling_bbox.get("width")) - finite_number(warning_bbox.get("width"))) <= 1
+                    and finite_number(sibling_bbox.get("y"))
+                    <= finite_number(warning_bbox.get("y"))
+                ):
+                    siblings.append(
+                        (finite_number(sibling_bbox.get("y")), sibling_qid, sibling_bbox)
+                    )
+            siblings.sort()
+            sibling_qids = [item[1] for item in siblings]
+            if warning_qid not in sibling_qids or sibling_qids.index(warning_qid) < 2:
+                geometry_exact_diagnostics.append(
+                    {"stage": "packing", "reason": "preceding_stack_unproven", "occluderQid": occluder_qid, "warningQid": warning_qid, "siblingQids": tuple(sibling_qids)}
+                )
+                continue
+            stack_items = siblings[sibling_qids.index(warning_qid) - 2 : sibling_qids.index(warning_qid) + 1]
+            probe = occluder_metric.get("static_translation_probe")
+            probe = probe if isinstance(probe, Mapping) else {}
+            containment = probe.get("containmentBoundsPx")
+            containment = containment if isinstance(containment, Mapping) else {}
+            interval = probe.get("safeTranslationIntervalPx")
+            interval = interval if isinstance(interval, Mapping) else {}
+            containment_source_ok = (
+                probe.get("source") == "chrome"
+                and probe.get("telemetryComplete") is True
+            )
+            if not containment:
+                containing_block = occluder_metric.get("containing_block_proof")
+                containing_block = (
+                    containing_block
+                    if isinstance(containing_block, Mapping)
+                    else {}
+                )
+                raw_bounds = containing_block.get("offsetParentBoundsPx")
+                containment = raw_bounds if isinstance(raw_bounds, Mapping) else {}
+                containment_source_ok = (
+                    containing_block.get("source") == "chrome"
+                    and containing_block.get("telemetryComplete") is True
+                    and containing_block.get("exactBoundOffsetParent") is True
+                )
+            boundary_bottom = finite_number(containment.get("y")) + finite_number(
+                containment.get("height")
+            )
+            occluder_bottom = finite_number(occluder_bbox.get("y")) + finite_number(
+                occluder_bbox.get("height")
+            )
+            occluder_width = finite_number(occluder_bbox.get("width"))
+            occluder_height = finite_number(occluder_bbox.get("height"))
+            # Wide responsibility bands can safely trade unused vertical chrome
+            # for the hidden warning while preserving their original bottom
+            # inset.  The exact candidate still has to pass Chrome DOM,
+            # round-trip, OCR, and VQA; narrower/taller blocks remain fail closed.
+            if (
+                occluder_height < 48.0
+                or occluder_height > 96.0
+                or occluder_width / max(1.0, occluder_height) < 8.0
+            ):
+                geometry_exact_diagnostics.append(
+                    {
+                        "stage": "capacity",
+                        "reason": "compact_band_shape_unproven",
+                        "occluderQid": occluder_qid,
+                    }
+                )
+                continue
+            compact_height = max(
+                40.0,
+                float(math.ceil(occluder_height * 2.0 / 3.0)),
+            )
+            compact_height = min(compact_height, occluder_height - 1.0)
+            occluder_candidate_top = occluder_bottom - compact_height
+            occluder_delta = occluder_candidate_top - finite_number(
+                occluder_bbox.get("y")
+            )
+            if (
+                not containment_source_ok
+                or occluder_delta <= 0
+                or (
+                    interval
+                    and occluder_delta
+                    > finite_number(interval.get("maxY")) + 1e-6
+                )
+            ):
+                geometry_exact_diagnostics.append(
+                    {"stage": "capacity", "reason": "occluder_capacity_unproven", "occluderQid": occluder_qid, "deltaPx": occluder_delta, "containmentSourceOk": containment_source_ok, "interval": dict(interval)}
+                )
+                continue
+            warning_bottom = finite_number(warning_bbox.get("y")) + finite_number(
+                warning_bbox.get("height")
+            )
+            minimum_stack_gap_px = 1.0
+            deltas: dict[str, float] = {
+                str(warning_qid): (
+                    occluder_candidate_top
+                    - minimum_stack_gap_px
+                    - warning_bottom
+                )
+            }
+            below_candidate_top = finite_number(warning_bbox.get("y")) + deltas[str(warning_qid)]
+            for _y, sibling_qid, sibling_bbox in reversed(stack_items[:-1]):
+                sibling_bottom = finite_number(sibling_bbox.get("y")) + finite_number(
+                    sibling_bbox.get("height")
+                )
+                delta = -float(
+                    math.ceil(
+                        max(
+                            0.0,
+                            sibling_bottom
+                            + minimum_stack_gap_px
+                            - below_candidate_top,
+                        )
+                    )
+                )
+                deltas[sibling_qid] = delta
+                below_candidate_top = finite_number(sibling_bbox.get("y")) + delta
+            ordered_move_data = [
+                (stack_items[0][1], deltas[stack_items[0][1]], "upper-stack"),
+                (stack_items[1][1], deltas[stack_items[1][1]], "middle-stack"),
+                (str(warning_qid), deltas[str(warning_qid)], "warning-owner"),
+            ]
+            translated_moves = tuple(
+                move
+                for qid, delta, role in ordered_move_data
+                for move in (exact_vertical_move(qid, delta, role),)
+                if move is not None
+            )
+            compact_band = exact_positioned_bounds(
+                occluder_qid,
+                {
+                    "x": finite_number(occluder_bbox.get("x")),
+                    "y": occluder_candidate_top,
+                    "width": occluder_width,
+                    "height": compact_height,
+                },
+                "occluder-band",
+            )
+            moves = (
+                *translated_moves,
+                *((compact_band,) if compact_band is not None else ()),
+            )
+            if len(moves) != 4:
+                geometry_exact_diagnostics.append(
+                    {"stage": "projection", "reason": "move_proof_incomplete", "occluderQid": occluder_qid, "provedQids": tuple(move["qid"] for move in moves), "requested": tuple((qid, delta) for qid, delta, _role in ordered_move_data)}
+                )
+                continue
+            candidate_bounds = {
+                move["qid"]: move["candidateBoundsPx"] for move in moves
+            }
+            relationships: list[dict[str, Any]] = []
+            for first, second in zip(moves, moves[1:3]):
+                first_box = first["candidateBoundsPx"]
+                second_box = second["candidateBoundsPx"]
+                gap = finite_number(second_box.get("y")) - (
+                    finite_number(first_box.get("y"))
+                    + finite_number(first_box.get("height"))
+                )
+                if gap < -1e-6:
+                    break
+                relationships.append(
+                    {
+                        "kind": "nonOverlap",
+                        "axis": "y",
+                        "firstQid": first["qid"],
+                        "secondQid": second["qid"],
+                        "candidateGapPx": gap,
+                    }
+                )
+            else:
+                warning_candidate = moves[2]["candidateBoundsPx"]
+                band_candidate = moves[3]["candidateBoundsPx"]
+                warning_band_gap = finite_number(band_candidate.get("y")) - (
+                    finite_number(warning_candidate.get("y"))
+                    + finite_number(warning_candidate.get("height"))
+                )
+                if warning_band_gap < -1e-6:
+                    continue
+                relationships.extend(
+                    (
+                        {
+                            "kind": "nonOverlap",
+                            "axis": "y",
+                            "firstQid": moves[2]["qid"],
+                            "secondQid": moves[3]["qid"],
+                            "candidateGapPx": warning_band_gap,
+                        },
+                        {
+                            "kind": "canvasContainment",
+                            "axis": "y",
+                            "firstQid": moves[3]["qid"],
+                            "boundaryPx": boundary_bottom,
+                        },
+                    )
+                )
+                group_ids = tuple(
+                    sorted(
+                        {
+                        str(item["issueGroupId"])
+                        for item in cluster
+                        if item.get("issueGroupId")
+                        }
+                    )
+                )
+                diagnostic_refs = tuple(
+                    dict.fromkeys(
+                        ref
+                        for item in cluster
+                        for ref in refs_by_target.get(str(item.get("target", "")), ())
+                    )
+                )
+                composition_id = (
+                    "composition:exact:"
+                    + digest_parts(
+                        "geometry-exact-vertical-pack/1",
+                        *group_ids,
+                        *(f"{qid}:{delta}" for qid, delta, _role in ordered_move_data),
+                        f"{occluder_qid}:{occluder_candidate_top}:{compact_height}",
+                    ).removeprefix("sha256:")[:16]
+                )
+                geometry_exact_compositions.append(
+                    {
+                        "compositionId": composition_id,
+                        "issueGroupIds": group_ids,
+                        "required": bool(
+                            set(group_ids).intersection(required_geometry_issue_groups)
+                        ),
+                        "diagnosticRefs": diagnostic_refs,
+                        "operations": moves,
+                        "proof": {
+                            "source": "chrome",
+                            "telemetryComplete": True,
+                            "candidateResolvesIssue": True,
+                            "baselineBoundsPx": {
+                                move["qid"]: move["baselineBoundsPx"] for move in moves
+                            },
+                            "candidateBoundsPx": candidate_bounds,
+                            "relationships": tuple(relationships),
+                            "requiredPostconditions": required_postconditions,
+                            "preservedBottomInsetPx": boundary_bottom
+                            - occluder_bottom,
+                            "minimumStackGapPx": minimum_stack_gap_px,
+                        },
+                    }
+                )
     return {
         "slideId": spec.slideId,
         "baseSpecRevision": spec.specRevision,
@@ -975,6 +3831,14 @@ def _repair_context(
         "imageCrop": image_crops,
         "staticTranslation": static_translations,
         "connectorRoute": connector_routes,
+        "geometryIssues": geometry_issues,
+        "geometryIssueGroups": geometry_issue_groups,
+        "geometryCompositionGroups": geometry_composition_groups,
+        "geometryGlyphCompositions": tuple(geometry_glyph_compositions),
+        "geometryExactCompositions": tuple(geometry_exact_compositions),
+        "geometryExactDiagnostics": tuple(geometry_exact_diagnostics),
+        "requiredGeometryIssueGroups": required_geometry_issue_groups,
+        "maxGeometryCompositions": 4,
         "relationalConstraints": tuple(
             constraint.model_dump(mode="json")
             for constraint in spec.constraints
@@ -995,6 +3859,537 @@ def _token_recall(tokens: Sequence[str], text: str | None) -> float:
     return found / len(tokens)
 
 
+def _target_issue_evidence(
+    *,
+    request: RenderRequest,
+    plan: RepairPlan,
+    baseline_dom: DomEvidence,
+    candidate_dom: DomEvidence,
+    baseline_constraints: ConstraintReport,
+    candidate_constraints: ConstraintReport,
+) -> tuple[tuple[TargetIssueIdentity, ...], tuple[TargetIssueDelta, ...] | None]:
+    """Build exact before/after evidence for only the selected plan's targets."""
+
+    layout_by_id = {node.layoutId: node for node in _walk_layout(request.spec.layout)}
+    parent_by_id: dict[str, str] = {}
+
+    def record_parents(node: LayoutNode) -> None:
+        for child in node.children:
+            parent_by_id[child.layoutId] = node.layoutId
+            record_parents(child)
+
+    record_parents(request.spec.layout)
+    semantic_by_layout = {
+        node.layoutId: node.contentSemanticId
+        for node in layout_by_id.values()
+        if node.contentSemanticId is not None
+    }
+    layout_by_semantic = {
+        semantic_id: layout_id for layout_id, semantic_id in semantic_by_layout.items()
+    }
+    semantic_parent = {
+        node.semanticId: parent
+        for node in request.spec.content
+        if (parent := getattr(node, "parentSemanticId", None)) is not None
+    }
+    qid_by_semantic = _qid_to_semantic(request)
+    qid_by_semantic = {semantic: qid for qid, semantic in qid_by_semantic.items()}
+    scope = set(plan.scope)
+    references = set(plan.diagnostic_refs)
+    required: list[TargetIssueIdentity] = []
+    deltas: list[TargetIssueDelta] = []
+    severity = {"medium": 1.0, "high": 2.0}
+
+    def layout_is_in_scope(
+        layout_id: str | None, semantic_id: str | None = None
+    ) -> bool:
+        """Treat layout/content descendants of an owner as exact target scope."""
+
+        current = layout_id or ""
+        visited: set[str] = set()
+        while current and current not in visited:
+            if current in scope:
+                return True
+            visited.add(current)
+            current = parent_by_id.get(current, "")
+        current_semantic = semantic_id or semantic_by_layout.get(layout_id or "") or ""
+        visited_semantics: set[str] = set()
+        while current_semantic and current_semantic not in visited_semantics:
+            owner_layout = layout_by_semantic.get(current_semantic)
+            if owner_layout in scope:
+                return True
+            visited_semantics.add(current_semantic)
+            current_semantic = semantic_parent.get(current_semantic, "")
+        return False
+
+    candidate_defects = {
+        (item.code, item.semantic_id, item.qid): item
+        for item in candidate_dom.defects
+    }
+    for defect in baseline_dom.defects:
+        layout_id = next(
+            (
+                item
+                for item, semantic in semantic_by_layout.items()
+                if semantic == defect.semantic_id
+            ),
+            None,
+        )
+        targeted = layout_is_in_scope(layout_id, defect.semantic_id) or (
+            f"{defect.code}:{defect.semantic_id}" in references
+        ) or (
+            f"code:{defect.code}" in references
+            and f"semantic:{defect.semantic_id}" in references
+        )
+        if not targeted:
+            continue
+        qid = defect.qid or qid_by_semantic.get(defect.semantic_id)
+        if qid is None:
+            identity = TargetIssueIdentity(
+                "dom",
+                defect.code,
+                defect.semantic_id,
+                "unavailable",
+                f"dom:{defect.code}:unavailable",
+            )
+            required.append(identity)
+            deltas.append(TargetIssueDelta(identity, before=None, after=None))
+            continue
+        related_qids = tuple(
+            value
+            for semantic_id in defect.related_semantic_ids
+            if (value := qid_by_semantic.get(semantic_id)) is not None
+        )
+        stable_qids = tuple(sorted(dict.fromkeys((qid, *related_qids))))
+        identity = TargetIssueIdentity(
+            "dom",
+            defect.code,
+            defect.semantic_id,
+            qid,
+            f"dom:{defect.code}:{':'.join(stable_qids)}",
+        )
+        after_defect = candidate_defects.get(
+            (defect.code, defect.semantic_id, qid)
+        )
+        identity_drift = any(
+            code == defect.code
+            and semantic_id == defect.semantic_id
+            and candidate_qid != qid
+            for code, semantic_id, candidate_qid in candidate_defects
+        )
+        required.append(identity)
+        deltas.append(
+            TargetIssueDelta(
+                identity,
+                before=severity.get(defect.severity),
+                after=(
+                    severity.get(after_defect.severity, 0.0)
+                    if after_defect is not None
+                    else None
+                    if identity_drift
+                    else 0.0
+                ),
+            )
+        )
+
+    candidate_violations = {
+        (item.constraint_id, item.code): item
+        for item in candidate_constraints.violations
+        if item.strength == "hard"
+    }
+    for violation in baseline_constraints.violations:
+        if violation.strength != "hard":
+            continue
+        targeted_layout = next(
+            (item for item in violation.targets if layout_is_in_scope(item)),
+            None,
+        )
+        if targeted_layout is None and f"constraint:{violation.constraint_id}" not in references:
+            continue
+        targeted_layout = targeted_layout or next(
+            (item for item in violation.targets if item in semantic_by_layout),
+            None,
+        )
+        semantic_id = semantic_by_layout.get(targeted_layout or "")
+        qid = qid_by_semantic.get(semantic_id or "")
+        identity = TargetIssueIdentity(
+            "invariant",
+            violation.code,
+            semantic_id or "unavailable",
+            qid or "unavailable",
+            violation.constraint_id,
+        )
+        after_violation = candidate_violations.get(
+            (violation.constraint_id, violation.code)
+        )
+        required.append(identity)
+        deltas.append(
+            TargetIssueDelta(
+                identity,
+                before=violation.magnitude,
+                after=after_violation.magnitude if after_violation is not None else 0.0,
+            )
+        )
+
+    if required:
+        merged: dict[TargetIssueIdentity, TargetIssueDelta] = {}
+        for delta in deltas:
+            current = merged.get(delta.identity)
+            if current is None:
+                merged[delta.identity] = delta
+                continue
+
+            def conservative_max(
+                left: float | None, right: float | None
+            ) -> float | None:
+                return None if left is None or right is None else max(left, right)
+
+            merged[delta.identity] = TargetIssueDelta(
+                delta.identity,
+                before=conservative_max(current.before, delta.before),
+                after=conservative_max(current.after, delta.after),
+                resolution_threshold=max(
+                    current.resolution_threshold, delta.resolution_threshold
+                ),
+                tolerance=min(current.tolerance, delta.tolerance),
+                direction=delta.direction,
+            )
+        return tuple(merged), tuple(merged.values())
+
+    if plan.diagnostic_refs:
+        identity = TargetIssueIdentity(
+            "dom",
+            "acceptance.target_issue_delta_unavailable",
+            next(iter(request.spec.content)).semanticId,
+            "unavailable",
+            "dom:acceptance.target_issue_delta_unavailable:unavailable",
+        )
+        return (identity,), (TargetIssueDelta(identity, before=None, after=None),)
+    return (), None
+
+
+def _target_evidence_payload(
+    deltas: Sequence[TargetIssueDelta] | None,
+) -> list[dict[str, Any]]:
+    """Return the canonical, text-free evidence shape consumed by replay."""
+
+    return [
+        {
+            "stage": delta.identity.stage,
+            "code": delta.identity.code,
+            "semantic_id": delta.identity.semantic_id,
+            "qid": delta.identity.qid,
+            "constraint_id": delta.identity.constraint_id,
+            "before": delta.before,
+            "after": delta.after,
+            "resolution_threshold": delta.resolution_threshold,
+            "tolerance": delta.tolerance,
+            "direction": delta.direction,
+        }
+        for delta in (deltas or ())
+    ]
+
+
+def _candidate_state_key(render_input_hash: str, plan_id: str) -> str:
+    """Keep plan-local evidence distinct when two plans render identical HTML."""
+
+    return f"{render_input_hash}:{plan_id}"
+
+
+def _store_candidate_state(
+    candidates: dict[str, _CandidateState],
+    render_input_hash: str,
+    state: _CandidateState,
+) -> str:
+    """Store one rendered state without aliasing another plan's evidence."""
+
+    candidate_key = _candidate_state_key(render_input_hash, state.plan.plan_id)
+    candidates[candidate_key] = state
+    return candidate_key
+
+
+def _operation_change_payload(plan: RepairPlan) -> list[dict[str, Any]]:
+    """Serialize text-free, replayable attributes changed by a repair plan."""
+
+    changes: list[dict[str, Any]] = []
+    for operation in plan.operations:
+        raw = operation.model_dump(mode="json", by_alias=True, exclude_none=True)
+        op_name = str(raw.get("op", ""))
+        target = str(raw.get("target", ""))
+        precondition = raw.get("precondition")
+        before: Any = None
+        expected_bounds: Mapping[str, Any] | None = None
+        if isinstance(precondition, Mapping):
+            candidate_bounds = precondition.get("expectedBounds")
+            if isinstance(candidate_bounds, Mapping):
+                expected_bounds = candidate_bounds
+                before = dict(candidate_bounds)
+            elif "expectedValue" in precondition:
+                before = precondition.get("expectedValue")
+
+        attribute = op_name
+        after: Any = None
+        if op_name == "translateWithinParent":
+            attribute = "bounds"
+            delta = raw.get("value")
+            if expected_bounds is not None and isinstance(delta, Mapping):
+                after = dict(expected_bounds)
+                after["x"] = float(expected_bounds.get("x", 0.0)) + float(
+                    delta.get("x", 0.0)
+                )
+                after["y"] = float(expected_bounds.get("y", 0.0)) + float(
+                    delta.get("y", 0.0)
+                )
+            else:
+                after = delta
+        elif op_name == "setBounds":
+            attribute = "bounds"
+            after = raw.get("bounds")
+        elif op_name == "resizeWithinBounds":
+            attribute = "bounds"
+            after = dict(expected_bounds or {})
+            after.update(
+                {
+                    "width": raw.get("width"),
+                    "height": raw.get("height"),
+                }
+            )
+        elif op_name == "setFontScale":
+            attribute = "fontScale"
+            after = raw.get("scale")
+        elif op_name == "setSpacing":
+            attribute = "gap"
+            after = raw.get("gap")
+        elif op_name == "setPadding":
+            attribute = "padding"
+            after = raw.get("padding")
+        else:
+            after = raw.get("value")
+
+        changes.append(
+            {
+                "operation": op_name,
+                "target": target,
+                "attribute": attribute,
+                "before": before,
+                "after": after,
+            }
+        )
+    return changes
+
+
+def _canonical_terminal_outcome(
+    outcomes: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any]:
+    """Return the pipeline-selected outcome, falling back only for old payloads."""
+
+    return next(
+        (
+            outcome
+            for outcome in reversed(outcomes)
+            if outcome.get("selected") is True
+        ),
+        outcomes[-1] if outcomes else {},
+    )
+
+
+def _canonical_outcome_projection(
+    outcomes: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Project lifecycle and proof from every accepted incremental selection."""
+
+    terminal = _canonical_terminal_outcome(outcomes)
+    selected = [
+        outcome
+        for outcome in outcomes
+        if outcome.get("selected") is True
+        and outcome.get("validation_status") == "accepted"
+    ]
+    if not selected and terminal:
+        selected = [terminal]
+    target_evidence: list[Any] = []
+    element_changes: list[Any] = []
+    for outcome in selected:
+        diagnostics = outcome.get("diagnostics", {})
+        diagnostics = diagnostics if isinstance(diagnostics, Mapping) else {}
+        evidence = diagnostics.get("target_evidence", [])
+        changes = diagnostics.get("repair_operations", [])
+        if isinstance(evidence, list):
+            target_evidence.extend(evidence)
+        if isinstance(changes, list):
+            element_changes.extend(changes)
+    return {
+        "terminal": terminal,
+        "accepted": terminal.get("validation_status") == "accepted",
+        "apply_status": terminal.get("apply_status", "not_started"),
+        "publish_status": terminal.get("publish_status", "not_started"),
+        "post_verify_status": terminal.get("post_verify_status", "not_started"),
+        "target_evidence": target_evidence,
+        "element_changes": element_changes,
+    }
+
+
+def _merge_incremental_slide_results(
+    passes: Sequence[Mapping[str, Any]],
+    *,
+    complete: bool,
+) -> dict[str, Any]:
+    """Merge one slide's bounded CAS repair chain without losing provenance."""
+
+    if not passes:
+        raise ValueError("incremental repair requires at least one inspection pass")
+    merged = dict(passes[-1])
+    merged["trigger"] = next(
+        (item.get("trigger") for item in passes if item.get("trigger")), None
+    )
+    merged["applied"] = any(bool(item.get("applied")) for item in passes)
+    merged["rolled_back"] = any(bool(item.get("rolled_back")) for item in passes)
+    merged["outcomes"] = [
+        outcome
+        for item in passes
+        for outcome in item.get("outcomes", [])
+        if isinstance(outcome, Mapping)
+    ]
+    merged["candidate_count"] = sum(
+        int(item.get("candidate_count", 0)) for item in passes
+    )
+    merged["projection_rejections"] = [
+        rejection
+        for item in passes
+        for rejection in item.get("projection_rejections", [])
+    ]
+    merged["no_candidate"] = list(passes[-1].get("no_candidate", []))
+    merged["reason_codes"] = list(
+        dict.fromkeys(
+            str(code)
+            for item in passes
+            for code in item.get("reason_codes", [])
+        )
+    )
+    merged["total_ms"] = round(
+        sum(float(item.get("total_ms", 0.0)) for item in passes), 3
+    )
+
+    telemetry: dict[str, Any] = {}
+    for item in passes:
+        current = item.get("telemetry", {})
+        if not isinstance(current, Mapping):
+            continue
+        for key, value in current.items():
+            if key == "stage_timings_ms" and isinstance(value, Mapping):
+                stages = telemetry.setdefault(key, {})
+                for stage, duration in value.items():
+                    stages[str(stage)] = stages.get(str(stage), 0.0) + float(duration)
+            elif key == "repair_costs" and isinstance(value, list):
+                telemetry.setdefault(key, []).extend(value)
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                telemetry[key] = telemetry.get(key, 0) + value
+            else:
+                telemetry[key] = value
+    merged["telemetry"] = telemetry
+
+    funnel: dict[str, int] = {}
+    for item in passes:
+        current = item.get("funnel", {})
+        if not isinstance(current, Mapping):
+            continue
+        for key, value in current.items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                funnel[str(key)] = funnel.get(str(key), 0) + int(value)
+    merged["funnel"] = funnel
+
+    metrics = {
+        "solver": {
+            "elapsed_ms": 0.0,
+            "branches": 0,
+            "unknown": 0,
+            "unsat_core_size": 0,
+            "search_complete": True,
+        },
+        "candidates": {
+            "proposed": 0,
+            "rendered": 0,
+            "accepted": 0,
+            "rejected": 0,
+            "projection_rejected": 0,
+        },
+        "transaction": {"rollback_count": 0},
+        "rollout": {"kill_switch_enabled": False},
+    }
+    for item in passes:
+        current = item.get("metrics", {})
+        if not isinstance(current, Mapping):
+            continue
+        solver = current.get("solver", {})
+        if isinstance(solver, Mapping):
+            for key in ("elapsed_ms", "branches", "unknown", "unsat_core_size"):
+                metrics["solver"][key] += float(solver.get(key, 0) or 0)
+            metrics["solver"]["search_complete"] = bool(
+                metrics["solver"]["search_complete"]
+            ) and bool(solver.get("search_complete", False))
+        candidates = current.get("candidates", {})
+        if isinstance(candidates, Mapping):
+            for key in metrics["candidates"]:
+                metrics["candidates"][key] += int(candidates.get(key, 0) or 0)
+        transaction = current.get("transaction", {})
+        if isinstance(transaction, Mapping):
+            metrics["transaction"]["rollback_count"] += int(
+                transaction.get("rollback_count", 0) or 0
+            )
+        rollout = current.get("rollout", {})
+        if isinstance(rollout, Mapping):
+            metrics["rollout"]["kill_switch_enabled"] = bool(
+                metrics["rollout"]["kill_switch_enabled"]
+            ) or bool(rollout.get("kill_switch_enabled"))
+    merged["metrics"] = metrics
+    merged["incremental_passes"] = len(passes)
+    merged["incremental_complete"] = complete
+    return merged
+
+
+def _target_issue_failure_code(
+    required: Sequence[TargetIssueIdentity],
+    deltas: Sequence[TargetIssueDelta] | None,
+) -> str | None:
+    """Fail closed on missing, drifting, or unresolved exact target evidence."""
+
+    if not required:
+        return None
+    if deltas is None:
+        return "acceptance.target_issue_delta_unavailable"
+    by_identity: dict[TargetIssueIdentity, TargetIssueDelta] = {}
+    for delta in deltas:
+        if delta.identity in by_identity:
+            return "acceptance.target_issue_delta_ambiguous"
+        by_identity[delta.identity] = delta
+    for identity in required:
+        delta = by_identity.get(identity)
+        if delta is None:
+            return "acceptance.target_issue_identity_mismatch"
+        if (
+            delta.before is None
+            or delta.after is None
+            or not math.isfinite(delta.before)
+            or not math.isfinite(delta.after)
+        ):
+            return "acceptance.target_issue_delta_unavailable"
+        if delta.direction == "decrease":
+            if delta.before <= delta.resolution_threshold + delta.tolerance:
+                return "acceptance.target_issue_baseline_unproven"
+            if delta.after >= delta.before - delta.tolerance:
+                return "acceptance.target_issue_not_improved"
+            if delta.after > delta.resolution_threshold + delta.tolerance:
+                return "acceptance.target_issue_not_resolved"
+        else:
+            if delta.before >= delta.resolution_threshold - delta.tolerance:
+                return "acceptance.target_issue_baseline_unproven"
+            if delta.after <= delta.before + delta.tolerance:
+                return "acceptance.target_issue_not_improved"
+            if delta.after < delta.resolution_threshold - delta.tolerance:
+                return "acceptance.target_issue_not_resolved"
+    return None
+
+
 def _passed_evidence(
     *,
     baseline_dom: DomQualityReport,
@@ -1006,6 +4401,7 @@ def _passed_evidence(
     target_resolved: bool,
     constraint_report: ConstraintReport | None = None,
     constraint_non_regression: bool = True,
+    target_issue_deltas: tuple[TargetIssueDelta, ...] | None = None,
 ) -> AcceptanceEvidence:
     severity_rank = {"low": 1, "medium": 2, "high": 3}
 
@@ -1028,8 +4424,19 @@ def _passed_evidence(
             candidate_rank > baseline_rank
             for candidate_rank, baseline_rank in zip(candidate_ranks, baseline_ranks)
         )
-    dom_improved, _dom_reason = local_acceptance_decision(
-        baseline_dom, candidate_dom
+    exact_target_resolved = (
+        _target_issue_failure_code(
+            tuple(delta.identity for delta in target_issue_deltas),
+            target_issue_deltas,
+        )
+        is None
+        if target_issue_deltas is not None
+        else None
+    )
+    dom_improved = (
+        exact_target_resolved
+        if exact_target_resolved is not None
+        else local_acceptance_decision(baseline_dom, candidate_dom)[0]
     )
     return AcceptanceEvidence(
         schema=GateEvidence("passed", evidence_ref="candidate.spec"),
@@ -1081,6 +4488,7 @@ def _passed_evidence(
             improved=vqa_improved,
             non_regression=vqa_non_regression,
         ),
+        target_issue_deltas=target_issue_deltas,
     )
 
 
@@ -1093,6 +4501,9 @@ async def _run_one(
     opt_in: bool,
     owner_id: object | None,
     session: AsyncSession,
+    adjacent_digest: str = "",
+    publish_gate: asyncio.Lock | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     # Keep the identifier outside SQLAlchemy's expiration lifecycle.  A rollback
@@ -1143,26 +4554,73 @@ async def _run_one(
             "metrics": empty_metrics(),
         }
 
-    try:
-        baseline_png, baseline_metrics = await render_html_to_png_with_metrics(bundle.html)
-        baseline_report = inspect_authored_dom(bundle.html, baseline_metrics)
-    except Exception:  # renderer boundary is deliberately fail closed
-        return {"slide_index": position, "route": rollout.route, "applied": False,
-                "reason_codes": ["render.failed", "legacy_preserved"], "metrics": empty_metrics()}
+    source_digest = (
+        request.source.htmlHash
+        if request.source is not None
+        else digest_parts("native-html/1", bundle.html)
+    )
+    baseline_cache_key = inspection_cache_digest(
+        spec_digest=request.spec.digests.spec,
+        content_digest=request.spec.digests.content,
+        source_digest=source_digest,
+        font_digest=digest_parts(
+            request.fonts.model_dump(mode="json", by_alias=True)
+        ),
+        browser_digest=digest_parts(
+            RENDER_CACHE_VERSION,
+            DOM_METRICS_VERSION,
+            chrome_runtime_digest(),
+            request.renderer.model_dump(mode="json", by_alias=True),
+        ),
+        adjacent_digest=adjacent_digest,
+    )
+    cached_inspection = _BASELINE_INSPECTION_CACHE.get(baseline_cache_key)
+    inspection_cache_hit = cached_inspection is not None
+    if cached_inspection is None:
+        try:
+            baseline_png, baseline_metrics = await render_html_to_png_with_metrics(
+                bundle.html
+            )
+            baseline_report = inspect_authored_dom(bundle.html, baseline_metrics)
+        except Exception:  # renderer boundary is deliberately fail closed
+            return {"slide_index": position, "route": rollout.route, "applied": False,
+                    "reason_codes": ["render.failed", "legacy_preserved"], "metrics": empty_metrics()}
 
-    qids = _qid_to_semantic(request)
-    baseline_observations = observations_from_browser_metrics(
-        request, baseline_metrics
-    )
-    baseline_constraints = evaluate_constraints(
-        request.spec,
-        observations=baseline_observations,
-        baseline_observations=baseline_observations,
-        source=request.source,
-    )
-    solver_started = time.perf_counter()
-    solver_result = solve_constraints(request.spec)
-    solver_elapsed_ms = round((time.perf_counter() - solver_started) * 1000, 3)
+        qids = _qid_to_semantic(request)
+        baseline_observations = observations_from_browser_metrics(
+            request, baseline_metrics
+        )
+        baseline_constraints = evaluate_constraints(
+            request.spec,
+            observations=baseline_observations,
+            baseline_observations=baseline_observations,
+            source=request.source,
+        )
+        solver_started = time.perf_counter()
+        solver_result = solve_constraints(request.spec)
+        solver_elapsed_ms = round((time.perf_counter() - solver_started) * 1000, 3)
+        _BASELINE_INSPECTION_CACHE.put(
+            baseline_cache_key,
+            _BaselineInspection(
+                baseline_png,
+                baseline_metrics,
+                baseline_report,
+                qids,
+                baseline_observations,
+                baseline_constraints,
+                solver_result,
+                solver_elapsed_ms,
+            ),
+        )
+    else:
+        baseline_png = cached_inspection.png
+        baseline_metrics = cached_inspection.metrics
+        baseline_report = cached_inspection.report
+        qids = cached_inspection.qids
+        baseline_observations = cached_inspection.observations
+        baseline_constraints = cached_inspection.constraints
+        solver_result = cached_inspection.solver_result
+        solver_elapsed_ms = 0.0
     solver_metrics: dict[str, Any] = {
         **solver_result.metrics(),
         "elapsed_ms": solver_elapsed_ms,
@@ -1170,8 +4628,10 @@ async def _run_one(
         "unknown": int(not solver_result.search_complete),
     }
     baseline_evidence = _merge_dom_evidence(
-        _dom_evidence(baseline_report, qids),
-        _constraint_evidence(request, baseline_constraints),
+        _dom_evidence(baseline_report, qids, browser_metrics=baseline_metrics),
+            _constraint_evidence(
+                request, baseline_constraints, baseline_observations
+            ),
     )
     expected = _expected_text(request.spec)
     tokens = _important_tokens(request.spec)
@@ -1184,9 +4644,17 @@ async def _run_one(
             request.spec, feasibility=solver_result
         )
         cascade = build_deterministic_cascade_report(
-            _repair_context(request, dom, baseline_metrics)
+            _repair_context(
+                request,
+                dom,
+                baseline_metrics,
+                constraint_report=baseline_constraints,
+            )
         )
-        projection_rejections[:] = [asdict(item) for item in cascade.rejections]
+        projection_rejections[:] = [
+            *(asdict(item) for item in cascade.rejections),
+            *(asdict(item) for item in cascade.geometry_rejections),
+        ]
         return ((solver_plan,) if solver_plan is not None else ()) + cascade.plans
 
     async def validate(_spec: SlideSpecInput, plan: RepairPlan) -> SensorResult:
@@ -1212,17 +4680,29 @@ async def _run_one(
                 ",".join(projection_errors[:8]),
             )
         report = inspect_authored_dom(rendered.html, metrics)
+        candidate_observations = observations_from_browser_metrics(
+            candidate_request, metrics
+        )
         constraint_report = evaluate_constraints(
             candidate_request.spec,
-            observations=observations_from_browser_metrics(candidate_request, metrics),
+            observations=candidate_observations,
             baseline_observations=baseline_observations,
             source=candidate_request.source,
         )
-        candidates[rendered.renderInputHash] = _CandidateState(
-            candidate_request, image, report, plan, constraint_report
+        state = _CandidateState(
+            candidate_request,
+            image,
+            report,
+            metrics,
+            plan,
+            constraint_report,
+            candidate_observations,
+        )
+        candidate_key = _store_candidate_state(
+            candidates, rendered.renderInputHash, state
         )
         return RenderedCandidate(
-            rendered.renderInputHash,
+            candidate_key,
             rendered.renderInputHash,
             realized_repair_cost(request.spec, applied.spec, plan).sort_key,
             constraint_report.soft_cost,
@@ -1230,16 +4710,56 @@ async def _run_one(
 
     async def inspect_dom(candidate: RenderedCandidate) -> DomEvidence:
         state = candidates[candidate.html_hash]
+        candidate_target_dom = _dom_evidence(
+            state.dom,
+            _qid_to_semantic(state.request),
+            diagnostic_refs=state.plan.diagnostic_refs,
+            browser_metrics=state.metrics,
+        )
+        required, deltas = _target_issue_evidence(
+            request=request,
+            plan=state.plan,
+            baseline_dom=baseline_evidence,
+            candidate_dom=candidate_target_dom,
+            baseline_constraints=baseline_constraints,
+            candidate_constraints=state.constraints,
+        )
+        state.required_target_issues = required
+        state.target_issue_deltas = deltas
+        target_failure = _target_issue_failure_code(required, deltas)
+        dom_regression = has_dom_quality_regression(baseline_report, state.dom)
+        exact_gate = DomEvidence()
+        if target_failure is not None or dom_regression:
+            semantic_id = (
+                required[0].semantic_id
+                if required
+                else next(iter(_semantic_text(request.spec)), request.spec.slideId)
+            )
+            exact_gate = DomEvidence(
+                (
+                    DomDefect(
+                        "constraint.target_issue_evidence_failed",
+                        "high",
+                        semantic_id,
+                        diagnostics={
+                            "target_issue_evidence": {
+                                "reason_code": target_failure
+                                or "dom.local_regression",
+                                "target_evidence": _target_evidence_payload(deltas),
+                            }
+                        },
+                    ),
+                )
+            )
         return _merge_dom_evidence(
-            _dom_evidence(
-                state.dom,
-                _qid_to_semantic(state.request),
-                diagnostic_refs=state.plan.diagnostic_refs,
+            candidate_target_dom,
+            _constraint_evidence(
+                state.request, state.constraints, state.observations
             ),
-            _constraint_evidence(state.request, state.constraints),
             _soft_constraint_regression_evidence(
                 state.request, baseline_constraints, state.constraints
             ),
+            exact_gate,
         )
 
     async def run_ocr(candidate: RenderedCandidate, _inventory: Any) -> SensorResult:
@@ -1251,6 +4771,15 @@ async def _run_one(
         if not baseline_ocr.available or not result.available or baseline_ocr.text is None or result.text is None:
             return SensorResult(False, "ocr.unavailable", conclusive=False)
         comparison = compare_expected_candidate(expected, baseline_ocr, result)
+        if not comparison.no_regression:
+            comparison = compare_expected_candidate_order_insensitive(
+                expected,
+                baseline_ocr,
+                result,
+                source_text_preserved=(
+                    _semantic_text(state.request.spec) == _semantic_text(request.spec)
+                ),
+            )
         recall = _token_recall(tokens, result.text)
         state.ocr_non_regression = comparison.no_regression
         state.token_recall = recall
@@ -1262,27 +4791,209 @@ async def _run_one(
 
     async def run_vqa(candidate: RenderedCandidate) -> SensorResult:
         state = candidates[candidate.html_hash]
+        qid_by_layout = {
+            binding.layoutId: binding.qid
+            for binding in (
+                state.request.source.bindings
+                if state.request.source is not None
+                else ()
+            )
+        }
+        metric_by_qid = {
+            str(item.get("qid", "")): item
+            for item in state.metrics.get("elements", ())
+            if isinstance(item, Mapping) and item.get("qid")
+        }
+        changed_targets: list[dict[str, Any]] = []
+        for operation in state.plan.operations:
+            qid = qid_by_layout.get(operation.target)
+            metric = metric_by_qid.get(qid or "")
+            if qid is None or not isinstance(metric, Mapping):
+                continue
+            bbox = metric.get("bbox")
+            bbox = bbox if isinstance(bbox, Mapping) else {}
+            proof = metric.get("containing_block_proof")
+            proof = proof if isinstance(proof, Mapping) else {}
+            container = proof.get("offsetParentBoundsPx")
+            container = container if isinstance(container, Mapping) else {}
+            bottom_inset = None
+            if bbox and container:
+                bottom_inset = (
+                    float(container.get("y", 0))
+                    + float(container.get("height", 0))
+                    - float(bbox.get("y", 0))
+                    - float(bbox.get("height", 0))
+                )
+            changed_targets.append(
+                {
+                    "qid": qid,
+                    "operation": operation.op,
+                    "bboxPx": dict(bbox),
+                    "containingBlockPx": dict(container),
+                    "bottomInsetPx": (
+                        round(bottom_inset, 3)
+                        if bottom_inset is not None
+                        else None
+                    ),
+                    "glyphClipped": bool(metric.get("glyph_clipped", False)),
+                    "occludedFraction": float(
+                        metric.get("occluded_fraction", 0) or 0
+                    ),
+                }
+            )
+        geometry_issues = [
+            issue
+            for issue in state.dom.issues
+            if issue.category in {"overlap", "clipping", "overflow"}
+            and issue.severity in {"high", "medium"}
+        ]
+        prompt_context, context_payload = _paired_vqa_context(
+            request,
+            state.plan,
+            verified_geometry={
+                "sourceProjectionRoundTrip": True,
+                "newDomRegression": has_dom_quality_regression(
+                    baseline_report, state.dom
+                ),
+                "remainingHighMediumGeometryIssueCount": len(geometry_issues),
+                "changedTargets": changed_targets,
+            },
+        )
         critiques = await critique_authored_style_comparison(
-            [baseline_png], [state.image], contexts=[expected]
+            [baseline_png], [state.image], contexts=[prompt_context]
         )
         critique = critiques[0] if critiques else None
-        accepted, _reason, conclusive = style_comparison_improvement_decision(critique)
+        reviewed = [critique]
+        accepted, decision_reason, conclusive = style_comparison_improvement_decision(
+            critique
+        )
+
+        def protected_regression(value: Any) -> bool:
+            if value is None:
+                return True
+            return any(
+                dimension.dimension
+                in {"content", "readability", "hierarchy", "style"}
+                and dimension.verdict in {"worse", "indeterminate"}
+                for dimension in value.dimensions
+            )
+
+        # A single multimodal review can misread a frame edge even when Chrome
+        # has already proved exact containment.  Adjudicate only the narrow
+        # boundary case where the first reviewer agrees that the target improved
+        # and finds no protected content/readability/hierarchy/style regression.
+        # Two rejects still fail closed immediately; acceptance requires two
+        # independent positive reviews.
+        if (
+            not accepted
+            and critique is not None
+            and critique.target_improved
+            and not protected_regression(critique)
+        ):
+            accept_votes = 0
+            reject_votes = 1
+            for pass_number in (2, 3):
+                if accept_votes >= 2 or reject_votes >= 2:
+                    break
+                adjudication_context = (
+                    prompt_context
+                    + f"\nIndependent adjudication pass {pass_number}/3. Reassess "
+                    "the same evidence without deferring to another reviewer."
+                )
+                result = await critique_authored_style_comparison(
+                    [baseline_png],
+                    [state.image],
+                    contexts=[adjudication_context],
+                )
+                adjudication = result[0] if result else None
+                reviewed.append(adjudication)
+                vote, _reason, _conclusive = style_comparison_improvement_decision(
+                    adjudication
+                )
+                if vote:
+                    accept_votes += 1
+                else:
+                    reject_votes += 1
+            if accept_votes >= 2:
+                accepted = True
+                decision_reason = "vqa.adjudicated_improved"
+                conclusive = True
+                critique = next(
+                    (
+                        value
+                        for value in reviewed
+                        if style_comparison_improvement_decision(value)[0]
+                    ),
+                    critique,
+                )
+            elif reject_votes >= 2:
+                accepted = False
+                decision_reason = "vqa.adjudicated_regression"
+                conclusive = True
+            else:
+                accepted = False
+                decision_reason = "vqa.adjudication_inconclusive"
+                conclusive = False
         state.vqa_non_regression = (
-            critique is not None and not style_comparison_has_regression(critique)
+            accepted
+            and critique is not None
+            and not style_comparison_has_regression(critique)
         )
         state.vqa_improved = accepted
         return SensorResult(
-            state.vqa_non_regression,
-            None if state.vqa_non_regression else "vqa.regressed",
+            accepted,
+            None if accepted else decision_reason,
             conclusive=conclusive,
             quality_gain=style_comparison_quality_gain(critique),
             quality_gain_interval=style_comparison_quality_interval(critique),
+            diagnostics={
+                "prompt_context": context_payload,
+                "critique": (
+                    critique.model_dump(mode="json")
+                    if critique is not None
+                    else None
+                ),
+                "adjudication_critiques": [
+                    value.model_dump(mode="json") if value is not None else None
+                    for value in reviewed
+                ],
+                "provider_failure": (
+                    style_comparison_failure_diagnostic(
+                        baseline_png,
+                        state.image,
+                        prompt_context,
+                    )
+                    if critique is None
+                    else None
+                ),
+                "decision": {
+                    "accepted": accepted,
+                    "reason_code": decision_reason,
+                    "conclusive": conclusive,
+                    "non_regression": state.vqa_non_regression,
+                },
+            },
         )
 
-    async def publish(
-        _spec: SlideSpecInput, plan: RepairPlan, candidate: RenderedCandidate
-    ) -> PublicationReceipt:
-        state = candidates[candidate.html_hash]
+    def acceptance_for_state(state: _CandidateState) -> AcceptanceDecision:
+        """Evaluate and retain the same canonical decision in every rollout mode."""
+
+        candidate_target_dom = _dom_evidence(
+            state.dom,
+            _qid_to_semantic(state.request),
+            diagnostic_refs=state.plan.diagnostic_refs,
+            browser_metrics=state.metrics,
+        )
+        required_target_issues, target_issue_deltas = _target_issue_evidence(
+            request=request,
+            plan=state.plan,
+            baseline_dom=baseline_evidence,
+            candidate_dom=candidate_target_dom,
+            baseline_constraints=baseline_constraints,
+            candidate_constraints=state.constraints,
+        )
+        state.required_target_issues = required_target_issues
+        state.target_issue_deltas = target_issue_deltas
         evidence = _passed_evidence(
             baseline_dom=baseline_report,
             candidate_dom=state.dom,
@@ -1290,26 +5001,49 @@ async def _run_one(
             token_recall=state.token_recall,
             vqa_non_regression=state.vqa_non_regression,
             vqa_improved=state.vqa_improved,
-            target_resolved=not _dom_evidence(
-                state.dom, _qid_to_semantic(state.request),
-                diagnostic_refs=plan.diagnostic_refs,
-            ).required_geometry_defect
+            target_resolved=not candidate_target_dom.required_geometry_defect
             and not state.constraints.hard_failure,
             constraint_report=state.constraints,
             constraint_non_regression=not has_soft_constraint_regression(
                 baseline_constraints, state.constraints
             ),
+            target_issue_deltas=target_issue_deltas,
         )
         decision = decide_acceptance(
-            "geometry", evidence, base_spec_hash=request.spec.digests.spec,
+            "geometry",
+            evidence,
+            base_spec_hash=request.spec.digests.spec,
             candidate_spec_hash=state.request.spec.digests.spec,
-            decision_id=f"decision:{plan.plan_id}", plan_id=plan.plan_id,
+            decision_id=f"decision:{state.plan.plan_id}",
+            plan_id=state.plan.plan_id,
             base_spec_revision=request.spec.specRevision,
+            required_target_issues=required_target_issues,
         )
         state.decision = decision
+        return decision
+
+    async def publish_unlocked(
+        _spec: SlideSpecInput, plan: RepairPlan, candidate: RenderedCandidate
+    ) -> PublicationReceipt:
+        state = candidates[candidate.html_hash]
+        decision = acceptance_for_state(state)
+        if decision.outcome != "accepted":
+            return PublicationReceipt(
+                False,
+                False,
+                False,
+                reason_code=(
+                    decision.reason_codes[0]
+                    if decision.reason_codes
+                    else "acceptance.target_issue_delta_unavailable"
+                ),
+            )
         evidence_payload = {
             "baseline_dom": baseline_report.to_dict(),
             "candidate_dom": state.dom.to_dict(),
+            "target_evidence": _target_evidence_payload(
+                state.target_issue_deltas
+            ),
             "baseline_constraints": _constraint_report_payload(
                 baseline_constraints
             ),
@@ -1578,6 +5312,119 @@ async def _run_one(
             reason_code=recovery_reason,
         )
 
+    async def publish(
+        spec_input: SlideSpecInput,
+        plan: RepairPlan,
+        candidate: RenderedCandidate,
+    ) -> PublicationReceipt:
+        if publish_gate is None:
+            return await publish_unlocked(spec_input, plan, candidate)
+        async with publish_gate:
+            return await publish_unlocked(spec_input, plan, candidate)
+
+    async def proposal_preflight(
+        _spec: SlideSpecInput, dom: DomEvidence
+    ) -> SensorResult:
+        """Skip the model only when every diagnosed imported target is immutable.
+
+        Native SlideSpecs remain model-eligible.  For authored imports, this is a
+        conservative capability check over the already imported binding and closed
+        mutation envelope; it does not attempt to reproduce projection logic.
+        """
+
+        if request.source is None:
+            return SensorResult(True)
+        nodes_by_semantic = {
+            node.contentSemanticId: node
+            for node in _walk_layout(request.spec.layout)
+            if node.contentSemanticId is not None
+        }
+        bindings_by_semantic = {
+            binding.semanticId: binding for binding in request.source.bindings
+        }
+        all_operations = {
+            "setSpacing",
+            "setPadding",
+            "setFlow",
+            "setTracks",
+            "setColumnRatio",
+            "setGridPlacement",
+            "setBounds",
+            "translateWithinParent",
+            "resizeWithinBounds",
+            "setFontScale",
+            "setLineHeightToken",
+            "setTextFitPolicy",
+            "setImageFit",
+            "setCropFocalPoint",
+        }
+        for defect in dom.defects:
+            for semantic_id in (defect.semantic_id, *defect.related_semantic_ids):
+                node = nodes_by_semantic.get(semantic_id)
+                binding = bindings_by_semantic.get(semantic_id)
+                if node is None or binding is None:
+                    continue
+                envelope = node.constraints or LayoutConstraints()
+                if envelope.locked:
+                    continue
+                allowed = (
+                    set(envelope.allowedOperations)
+                    if envelope.allowedOperations is not None
+                    else set(all_operations)
+                )
+                projectable: set[str] = set()
+                if defect.code in {"dom.clipping", "dom.overflow"}:
+                    if binding.position != "static":
+                        projectable.update({"setBounds", "resizeWithinBounds"})
+                    if binding.fontSizePx is not None:
+                        projectable.update(
+                            {"setFontScale", "setLineHeightToken", "setTextFitPolicy"}
+                        )
+                    if binding.tag == "img":
+                        projectable.update({"setImageFit", "setCropFocalPoint"})
+                elif defect.code in {
+                    "dom.off_canvas",
+                    "constraint.containment.violated",
+                }:
+                    if binding.position != "static":
+                        projectable.update({"setBounds", "translateWithinParent"})
+                    elif binding.staticTranslationSafe and binding.transform == "none":
+                        projectable.add("translateWithinParent")
+                elif defect.code in {
+                    "constraint.gap.violated",
+                    "constraint.alignment.violated",
+                    "constraint.order.violated",
+                }:
+                    if binding.display in {
+                        "flex",
+                        "inline-flex",
+                        "grid",
+                        "inline-grid",
+                    }:
+                        projectable.update({"setSpacing", "setFlow", "setPadding"})
+                    if binding.position != "static":
+                        projectable.update({"setBounds", "translateWithinParent"})
+                elif defect.code in {
+                    "dom.unintended_overlap",
+                    "constraint.non_overlap.violated",
+                }:
+                    # Imported connector topology has no round-trip mutation
+                    # contract.  Non-connectors need an explicitly projectable
+                    # position change; arbitrary flow relayout remains blocked.
+                    if binding.tag != "svg" and binding.position != "static":
+                        projectable.update({"setBounds", "translateWithinParent"})
+                if allowed.intersection(projectable):
+                    return SensorResult(True)
+        reason = (
+            "proposal.mutation_envelope_unavailable"
+            if any(
+                item.get("reason_code", "").startswith("repair.mutation_envelope")
+                for item in projection_rejections
+            )
+            else "proposal.projection_unavailable"
+        )
+        return SensorResult(False, reason)
+
     async def propose(spec_input: SlideSpecInput, dom: DomEvidence) -> Sequence[RepairPlan]:
         diagnostics = [
             {"code": defect.code, "severity": defect.severity, "semanticId": defect.semantic_id}
@@ -1593,8 +5440,32 @@ async def _run_one(
         if not result.ok:
             if "proposal.model_timeout" in result.reason_codes:
                 raise TimeoutError("proposal.model_timeout")
+            if "system.internal_error" in result.reason_codes:
+                # Provider/configuration failures are transient and must never
+                # become a conclusive empty-result cache entry.
+                raise RuntimeError("proposal.provider_unavailable")
             return ()
         return result.plans
+
+    capability_digest = digest_parts(
+        PIPELINE_CAPABILITY_VERSION,
+        CASCADE_POLICY_VERSION,
+        request.source.importerVersion if request.source is not None else "native",
+        [
+            (
+                node.layoutId,
+                node.constraints.model_dump(mode="json")
+                if node.constraints is not None
+                else None,
+            )
+            for node in _walk_layout(request.spec.layout)
+        ],
+    )
+    try:
+        proposal_model = str(get_model() or "")
+    except Exception:
+        proposal_model = "unconfigured"
+    model_digest = digest_parts(PROPOSAL_PROMPT_VERSION, proposal_model)
 
     pipeline = SlideSpecRepairPipeline(
         SlideSpecRepairDependencies(
@@ -1606,6 +5477,9 @@ async def _run_one(
             run_vqa=run_vqa,
             publish=publish,
             propose=propose,
+            proposal_preflight=proposal_preflight,
+            proposal_capability_digest=capability_digest,
+            proposal_model_digest=model_digest,
         )
     )
     spec_input = SlideSpecInput(
@@ -1648,7 +5522,7 @@ async def _run_one(
 
     shadow_artifact_id: str | None = None
     shadow_error: str | None = None
-    if rollout.shadow_mode:
+    if rollout.shadow_mode and not dry_run:
         accepted = next(
             (
                 outcome
@@ -1667,6 +5541,20 @@ async def _run_one(
             None,
         )
         if accepted is not None and state is not None:
+            candidate_target_dom = _dom_evidence(
+                state.dom,
+                _qid_to_semantic(state.request),
+                diagnostic_refs=state.plan.diagnostic_refs,
+                browser_metrics=state.metrics,
+            )
+            required_target_issues, target_issue_deltas = _target_issue_evidence(
+                request=request,
+                plan=state.plan,
+                baseline_dom=baseline_evidence,
+                candidate_dom=candidate_target_dom,
+                baseline_constraints=baseline_constraints,
+                candidate_constraints=state.constraints,
+            )
             evidence = _passed_evidence(
                 baseline_dom=baseline_report,
                 candidate_dom=state.dom,
@@ -1674,16 +5562,13 @@ async def _run_one(
                 token_recall=state.token_recall,
                 vqa_non_regression=state.vqa_non_regression,
                 vqa_improved=state.vqa_improved,
-                target_resolved=not _dom_evidence(
-                    state.dom,
-                    _qid_to_semantic(state.request),
-                    diagnostic_refs=state.plan.diagnostic_refs,
-                ).required_geometry_defect
+                target_resolved=not candidate_target_dom.required_geometry_defect
                 and not state.constraints.hard_failure,
                 constraint_report=state.constraints,
                 constraint_non_regression=not has_soft_constraint_regression(
                     baseline_constraints, state.constraints
                 ),
+                target_issue_deltas=target_issue_deltas,
             )
             decision = decide_acceptance(
                 "geometry",
@@ -1693,6 +5578,7 @@ async def _run_one(
                 decision_id=f"decision:{state.plan.plan_id}",
                 plan_id=state.plan.plan_id,
                 base_spec_revision=request.spec.specRevision,
+                required_target_issues=required_target_issues,
             )
             state.decision = decision
             artifact = build_slidespec_artifact_bundle(
@@ -1750,6 +5636,56 @@ async def _run_one(
     operational_metrics["candidates"]["projection_rejected"] = len(
         projection_rejections
     )
+    states_by_plan_id = {state.plan.plan_id: state for state in candidates.values()}
+    serialized_outcomes: list[dict[str, Any]] = []
+    canonical_overrides = 0
+    for outcome in result.outcomes:
+        payload = asdict(outcome)
+        state = states_by_plan_id.get(outcome.plan_id)
+        if state is not None:
+            diagnostics = dict(payload.get("diagnostics", {}))
+            diagnostics["target_evidence"] = _target_evidence_payload(
+                state.target_issue_deltas
+            )
+            diagnostics["constraint_evidence"] = {
+                "baseline_soft_cost": baseline_constraints.soft_cost,
+                "candidate_soft_cost": state.constraints.soft_cost,
+                "soft_regression": has_soft_constraint_regression(
+                    baseline_constraints, state.constraints
+                ),
+                "hard_failure": state.constraints.hard_failure,
+                "unknown_hard": list(state.constraints.unknown_hard),
+            }
+            diagnostics["source_projection_roundtrip"] = {
+                "passed": True,
+                "errors": [],
+            }
+            diagnostics["repair_operations"] = _operation_change_payload(state.plan)
+            if outcome.selected and outcome.validation_status == "accepted":
+                decision = state.decision or acceptance_for_state(state)
+                diagnostics["acceptance_decision"] = decision.model_dump(
+                    mode="json", by_alias=True
+                )
+                if decision.outcome != "accepted":
+                    canonical_overrides += 1
+                    payload["validation_status"] = decision.outcome
+                    payload["reason_codes"] = list(decision.reason_codes)
+            payload["diagnostics"] = diagnostics
+        serialized_outcomes.append(payload)
+    funnel_payload = result.funnel.metrics()
+    if canonical_overrides:
+        funnel_payload["candidate_accepted"] = max(
+            0, funnel_payload["candidate_accepted"] - canonical_overrides
+        )
+        funnel_payload["validation_rejected"] += canonical_overrides
+        operational_metrics["candidates"]["accepted"] = max(
+            0,
+            int(operational_metrics["candidates"].get("accepted", 0))
+            - canonical_overrides,
+        )
+        operational_metrics["candidates"]["rejected"] = int(
+            operational_metrics["candidates"].get("rejected", 0)
+        ) + canonical_overrides
     return {
         "slide_index": position,
         "route": result.route,
@@ -1758,9 +5694,11 @@ async def _run_one(
         "rolled_back": bool(result.funnel.rolled_back),
         "reason_codes": reason_codes,
         "shadow_artifact_id": shadow_artifact_id,
-        "outcomes": [asdict(outcome) for outcome in result.outcomes],
+        "outcomes": serialized_outcomes,
+        "candidate_count": int(result.funnel.candidate_proposed),
         "projection_rejections": projection_rejections,
-        "funnel": result.funnel.metrics(),
+        "no_candidate": projection_rejections if not result.outcomes else [],
+        "funnel": funnel_payload,
         "metrics": operational_metrics,
         "telemetry": {
             "stage_timings_ms": dict(result.telemetry.stage_timings_ms),
@@ -1772,6 +5710,12 @@ async def _run_one(
             "vqa_calls": result.telemetry.vqa_calls,
             "cache_hits": result.telemetry.cache_hits,
             "cache_misses": result.telemetry.cache_misses,
+            "inspection_cache_hits": int(inspection_cache_hit),
+            "inspection_cache_misses": int(not inspection_cache_hit),
+            "proposal_cache_hits": result.telemetry.proposal_cache_hits,
+            "proposal_cache_misses": result.telemetry.proposal_cache_misses,
+            "proposal_preflight_skips": result.telemetry.proposal_preflight_skips,
+            "pareto_pruned": result.telemetry.pareto_pruned,
             "repair_costs": [list(cost) for cost in result.telemetry.repair_costs],
         },
         "total_ms": round((time.perf_counter() - started) * 1000, 3),
@@ -1786,8 +5730,12 @@ async def execute_slidespec_authored_review(
     opt_in: bool,
     owner_id: object | None,
     session: AsyncSession,
+    dry_run: bool = False,
 ) -> CanonicalReviewExecution:
     """Claim and execute pointer-backed slides, leaving all others to legacy."""
+
+    deck_started = time.perf_counter()
+    render_counters_before = get_render_runtime_counters()
 
     claimed = tuple(
         position
@@ -1797,42 +5745,93 @@ async def execute_slidespec_authored_review(
     )
     slide_ids = {position: slides[position].id for position in claimed}
     deck_snapshot = tuple(slide.model_dump(mode="json") for slide in slides)
-    results = []
-    for position in claimed:
-        slide = await session.get(
+    adjacency = adjacent_influence_digests(deck_snapshot)
+    try:
+        slide_concurrency = max(
+            1,
+            min(8, int(os.getenv("SLIDESPEC_SLIDE_CONCURRENCY", "3"))),
+        )
+    except ValueError:
+        slide_concurrency = 3
+    scheduler = BoundedSlideScheduler(slide_concurrency)
+    publish_gate = asyncio.Lock()
+
+    async def run_position(
+        position: int, worker_session: AsyncSession
+    ) -> dict[str, Any]:
+        slide = await worker_session.get(
             SlideModel, slide_ids[position], populate_existing=True
         )
         if slide is None:
-            results.append(
-                {
-                    "slide_index": position,
-                    "route": "slidespec_active",
-                    "applied": False,
-                    "reason_codes": ["slide.missing", "legacy_preserved"],
-                }
-            )
-            continue
-        result = await _run_one(
+            return {
+                "slide_index": position,
+                "route": "slidespec_active",
+                "applied": False,
+                "reason_codes": ["slide.missing", "legacy_preserved"],
+            }
+        passes: list[dict[str, Any]] = []
+        accepted_repairs = 0
+        complete = False
+        while accepted_repairs <= 4:
+            current = await _run_one(
                 presentation_id=presentation_id,
                 slide=slide,
                 deck_snapshot=deck_snapshot,
                 position=position,
                 opt_in=opt_in,
                 owner_id=owner_id,
-                session=session,
+                session=worker_session,
+                adjacent_digest=adjacency[position],
+                publish_gate=publish_gate,
+                dry_run=dry_run,
             )
+            passes.append(current)
+            if not current.get("applied") or dry_run:
+                complete = not bool(current.get("trigger"))
+                break
+            accepted_repairs += 1
+            if accepted_repairs >= 4:
+                current.setdefault("reason_codes", []).append(
+                    "incremental_repair_limit_reached"
+                )
+                break
+            slide = await worker_session.get(
+                SlideModel,
+                slide_ids[position],
+                populate_existing=True,
+            )
+            if slide is None:
+                current.setdefault("reason_codes", []).append("slide.missing_after_publish")
+                break
+        return _merge_incremental_slide_results(passes, complete=complete)
+
+    bind = session.bind
+    if len(claimed) > 1 and bind is not None:
+        worker_sessions = async_sessionmaker(bind, expire_on_commit=False)
+
+        async def isolated(position: int) -> dict[str, Any]:
+            async with worker_sessions() as worker_session:
+                return await run_position(position, worker_session)
+
+        raw_results = await scheduler.map(claimed, isolated)
+    else:
+        raw_results = tuple(
+            [await run_position(position, session) for position in claimed]
+        )
+
+    results = []
+    for result in raw_results:
         outcomes_for_slide = [
             outcome
             for outcome in result.get("outcomes", [])
             if isinstance(outcome, Mapping)
         ]
-        terminal = outcomes_for_slide[-1] if outcomes_for_slide else {}
+        canonical = _canonical_outcome_projection(outcomes_for_slide)
+        terminal = canonical["terminal"]
         triggered = bool(result.get("trigger"))
         applied_for_slide = bool(result.get("applied"))
-        accepted_for_slide = any(
-            outcome.get("validation_status") == "accepted"
-            for outcome in outcomes_for_slide
-        )
+        incremental_complete = bool(result.get("incremental_complete", True))
+        accepted_for_slide = bool(canonical["accepted"])
         reasons = [str(code) for code in result.get("reason_codes", [])]
         terminal_reasons = [
             str(code) for code in terminal.get("reason_codes", []) if str(code)
@@ -1846,6 +5845,9 @@ async def execute_slidespec_authored_review(
                 "reason_codes": [
                     str(code) for code in outcome.get("reason_codes", []) if str(code)
                 ],
+                "diagnostics": dict(outcome.get("diagnostics", {}))
+                if isinstance(outcome.get("diagnostics"), Mapping)
+                else {},
             }
             for outcome in outcomes_for_slide
             if outcome.get("validation_status") in {"rejected", "inconclusive"}
@@ -1854,11 +5856,9 @@ async def execute_slidespec_authored_review(
             {
                 "attempted": triggered or bool(outcomes_for_slide),
                 "accepted": accepted_for_slide,
-                "apply_status": terminal.get("apply_status", "not_started"),
-                "publish_status": terminal.get("publish_status", "not_started"),
-                "post_verify_status": terminal.get(
-                    "post_verify_status", "not_started"
-                ),
+                "apply_status": canonical["apply_status"],
+                "publish_status": canonical["publish_status"],
+                "post_verify_status": canonical["post_verify_status"],
                 "rejection_reason": None
                 if applied_for_slide
                 else (
@@ -1867,10 +5867,11 @@ async def execute_slidespec_authored_review(
                     else (reasons[0] if reasons else None)
                 ),
                 "candidate_rejections": candidate_rejections,
-                "element_changes": [],
+                "target_evidence": canonical["target_evidence"],
+                "element_changes": canonical["element_changes"],
                 "resolved_issues": ["geometry"] if applied_for_slide else [],
                 "remaining_issues": ["geometry"]
-                if triggered and not applied_for_slide
+                if triggered and not incremental_complete
                 else [],
                 # Keep the established authored-review API contract so the
                 # frontend can distinguish a canonical SlideSpec patch from a
@@ -1892,6 +5893,12 @@ async def execute_slidespec_authored_review(
         "vqa_calls",
         "cache_hits",
         "cache_misses",
+        "inspection_cache_hits",
+        "inspection_cache_misses",
+        "proposal_cache_hits",
+        "proposal_cache_misses",
+        "proposal_preflight_skips",
+        "pareto_pruned",
     )
     for key in telemetry_keys:
         funnel[key] = sum(
@@ -1911,6 +5918,7 @@ async def execute_slidespec_authored_review(
     funnel["total_ms"] = round(
         sum(float(result.get("total_ms", 0.0)) for result in results), 3
     )
+    funnel["slide_concurrency"] = slide_concurrency
     funnel["deterministic_resolved"] = sum(
         bool(result.get("applied"))
         and any(
@@ -2012,6 +6020,51 @@ async def execute_slidespec_authored_review(
     for outcome in outcomes:
         for code in outcome.get("reason_codes", []):
             rejection_reasons[str(code)] = rejection_reasons.get(str(code), 0) + 1
+    funnel["deck_wall_ms"] = round(
+        (time.perf_counter() - deck_started) * 1000,
+        3,
+    )
+    performance_mode = (
+        "warm"
+        if results
+        and funnel.get("inspection_cache_hits", 0) == len(results)
+        else "cold"
+    )
+    PIPELINE_PERFORMANCE_WINDOW.record(
+        performance_mode,
+        {"deck_total": funnel["deck_wall_ms"], **funnel["stage_timings_ms"]},
+    )
+    render_counters_after = get_render_runtime_counters()
+    chrome_hits = (
+        int(render_counters_after.get("render_cache_hits", 0))
+        - int(render_counters_before.get("render_cache_hits", 0))
+        + int(render_counters_after.get("metrics_cache_hits", 0))
+        - int(render_counters_before.get("metrics_cache_hits", 0))
+        + int(render_counters_after.get("session_reuse_hits", 0))
+        - int(render_counters_before.get("session_reuse_hits", 0))
+    )
+    chrome_misses = int(render_counters_after.get("chrome_process_launches", 0)) - int(
+        render_counters_before.get("chrome_process_launches", 0)
+    )
+    funnel["latency_percentiles"] = PIPELINE_PERFORMANCE_WINDOW.snapshot()
+    funnel["stage_usage"] = {
+        "llm": {
+            "cache_hits": int(funnel.get("proposal_cache_hits", 0)),
+            "cache_misses": int(funnel.get("proposal_cache_misses", 0)),
+        },
+        "chrome": {
+            "cache_hits": max(0, chrome_hits),
+            "cache_misses": max(0, chrome_misses),
+        },
+        "acceptance": {
+            "cache_hits": int(funnel.get("cache_hits", 0)),
+            "cache_misses": int(funnel.get("cache_misses", 0)),
+        },
+        "postverify": {
+            "cache_hits": 0,
+            "cache_misses": int(funnel.get("postverify_passed", 0)),
+        },
+    }
     return CanonicalReviewExecution(
         claimed_positions=claimed,
         data={
@@ -2023,13 +6076,11 @@ async def execute_slidespec_authored_review(
             "accepted_candidate_count": accepted_candidate_count,
             "rejected_candidate_count": rejected_candidate_count,
             "fixed_slide_indices": applied,
-            "remaining_issue_count": sum(
-                bool(item.get("trigger")) and not item.get("applied") for item in results
-            ),
+            "remaining_issue_count": sum(bool(item.get("remaining_issues")) for item in results),
             "remaining_issue_indices": [
                 item["slide_index"]
                 for item in results
-                if item.get("trigger") and not item.get("applied")
+                if item.get("remaining_issues")
             ],
             "remaining_issues": [],
             "candidate_decisions": outcomes,

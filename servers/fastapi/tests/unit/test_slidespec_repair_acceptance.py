@@ -5,6 +5,8 @@ import asyncio
 from services.slidespec_acceptance import (
     AcceptanceEvidence,
     GateEvidence,
+    TargetIssueDelta,
+    TargetIssueIdentity,
     decide_acceptance,
 )
 from services.slidespec_repair import (
@@ -86,6 +88,121 @@ def test_geometry_acceptance_requires_dom_resolution_and_all_non_regressions():
         "dom.clipping",
         "acceptance.required_gate_failed",
     )
+
+
+def test_geometry_acceptance_requires_exact_target_issue_delta_to_resolve():
+    identity = TargetIssueIdentity(
+        stage="dom",
+        code="dom.unintended_overlap",
+        semantic_id="sem:card-a",
+        qid="card-a",
+        constraint_id="constraint:cards:no-overlap",
+    )
+    evidence = _evidence(
+        target_issue_deltas=(TargetIssueDelta(identity, before=0.12, after=0.0),)
+    )
+
+    accepted = decide_acceptance(
+        "geometry",
+        evidence,
+        base_spec_hash=_BASE_HASH,
+        candidate_spec_hash=_CANDIDATE_HASH,
+        required_target_issues=(identity,),
+    )
+
+    assert accepted.outcome == "accepted"
+
+
+def test_geometry_acceptance_rejects_aggregate_gain_when_exact_issue_remains():
+    identity = TargetIssueIdentity(
+        stage="dom",
+        code="dom.overflow",
+        semantic_id="sem:title",
+        qid="title",
+    )
+    evidence = _evidence(
+        target_issue_deltas=(
+            TargetIssueDelta(
+                identity,
+                before=0.2,
+                after=0.04,
+                resolution_threshold=0.01,
+            ),
+        )
+    )
+
+    decision = decide_acceptance(
+        "geometry",
+        evidence,
+        base_spec_hash=_BASE_HASH,
+        candidate_spec_hash=_CANDIDATE_HASH,
+        required_target_issues=(identity,),
+    )
+
+    assert decision.outcome == "rejected"
+    assert decision.reason_codes == (
+        "acceptance.target_issue_not_resolved",
+        "acceptance.required_gate_failed",
+    )
+
+
+def test_geometry_acceptance_fails_closed_on_qid_or_constraint_identity_drift():
+    required = TargetIssueIdentity(
+        stage="dom",
+        code="dom.unintended_overlap",
+        semantic_id="sem:card-a",
+        qid="card-a",
+        constraint_id="constraint:cards:no-overlap",
+    )
+    drifted = TargetIssueIdentity(
+        stage="dom",
+        code=required.code,
+        semantic_id=required.semantic_id,
+        qid="nested-span",
+        constraint_id="constraint:other",
+    )
+    evidence = _evidence(
+        target_issue_deltas=(TargetIssueDelta(drifted, before=0.12, after=0.0),)
+    )
+
+    decision = decide_acceptance(
+        "geometry",
+        evidence,
+        base_spec_hash=_BASE_HASH,
+        candidate_spec_hash=_CANDIDATE_HASH,
+        required_target_issues=(required,),
+    )
+
+    assert decision.outcome == "inconclusive"
+    assert decision.reason_codes == (
+        "acceptance.target_issue_identity_mismatch",
+        "acceptance.inconclusive",
+    )
+
+
+def test_constraint_delta_is_bound_to_the_same_constraint_and_element_identity():
+    identity = TargetIssueIdentity(
+        stage="invariant",
+        code="constraint.gap.violated",
+        semantic_id="sem:card-b",
+        qid="card-b",
+        constraint_id="constraint:cards:gap",
+    )
+    evidence = _evidence(
+        target_issue_deltas=(
+            TargetIssueDelta(identity, before=0.08, after=0.0, tolerance=1e-5),
+        )
+    )
+
+    decision = decide_acceptance(
+        "geometry",
+        evidence,
+        base_spec_hash=_BASE_HASH,
+        candidate_spec_hash=_CANDIDATE_HASH,
+        required_target_issues=(identity,),
+    )
+
+    assert decision.outcome == "accepted"
 
 
 def test_vqa_improvement_cannot_override_dom_or_ocr_hard_failure():

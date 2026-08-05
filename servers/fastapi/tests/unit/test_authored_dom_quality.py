@@ -371,6 +371,109 @@ def test_empty_absolute_decoration_overlap_and_parent_clipped_offcanvas_are_igno
     )
 
 
+def test_owned_paint_probe_does_not_promote_wrapper_or_decoration_geometry():
+    html = (
+        '<section data-qid="card"><p data-qid="copy">Visible copy</p></section>'
+        '<div data-qid="rail"></div>'
+    )
+    metrics = {
+        "elements": [
+            {
+                "qid": "card",
+                "tag": "section",
+                "bbox": {"x": 10, "y": 10, "width": 300, "height": 180},
+                "clipped": True,
+                "has_owned_text": False,
+                "occluded_fraction": 0.8,
+                "continuous_occluded_fraction": 0.8,
+                "occlusion_probe_version": "owned-content-v2",
+                "occlusion_occluder_qids": ["rail"],
+                "occlusion_unbound_count": 0,
+                "computed_style": {"position": "relative", "overflow": "hidden"},
+            },
+            {
+                "qid": "copy",
+                "parent_qid": "card",
+                "tag": "p",
+                "bbox": {"x": 30, "y": 30, "width": 240, "height": 50},
+                "rendered_text": "Visible copy",
+                "has_owned_text": True,
+                "glyph_clipped": False,
+                "clipped": False,
+                "occluded_fraction": 0,
+                "continuous_occluded_fraction": 0,
+                "occlusion_probe_version": "owned-content-v2",
+                "occlusion_occluder_qids": [],
+                "occlusion_unbound_count": 0,
+            },
+            {
+                "qid": "rail",
+                "tag": "div",
+                "bbox": {"x": 0, "y": 0, "width": 40, "height": 720},
+                "rendered_text": "",
+                "has_owned_text": False,
+                "occluded_fraction": 0,
+                "continuous_occluded_fraction": 0,
+                "occlusion_probe_version": "owned-content-v2",
+                "occlusion_occluder_qids": [],
+                "occlusion_unbound_count": 0,
+                "computed_style": {"position": "absolute"},
+            },
+        ]
+    }
+
+    report = inspect_authored_dom(html, metrics)
+
+    assert not {issue.category for issue in report.issues} & {
+        "clipping",
+        "off_canvas",
+        "overflow",
+        "overlap",
+    }
+
+
+def test_owned_paint_probe_requires_matching_non_decorative_occluder():
+    html = (
+        '<p data-qid="behind">Behind</p>'
+        '<p data-qid="cover">Cover</p>'
+    )
+    base = {
+        "tag": "p",
+        "bbox": {"x": 100, "y": 100, "width": 200, "height": 50},
+        "has_owned_text": True,
+        "occlusion_probe_version": "owned-content-v2",
+        "occlusion_unbound_count": 0,
+    }
+    report = inspect_authored_dom(
+        html,
+        {
+            "elements": [
+                {
+                    **base,
+                    "qid": "behind",
+                    "rendered_text": "Behind",
+                    "occluded_fraction": 0.9,
+                    "continuous_occluded_fraction": 0.9,
+                    "occlusion_occluder_qids": ["cover"],
+                },
+                {
+                    **base,
+                    "qid": "cover",
+                    "rendered_text": "Cover",
+                    "occluded_fraction": 0,
+                    "continuous_occluded_fraction": 0,
+                    "occlusion_occluder_qids": [],
+                },
+            ]
+        },
+    )
+
+    assert any(
+        issue.category == "overlap" and "behind" in issue.qids
+        for issue in report.issues
+    )
+
+
 def test_exact_geometry_is_deferred_to_source_vqa_unless_explicitly_unintentional():
     html = ensure_authored_qids("<html><body><div>source geometry</div></body></html>")
     node = build_compact_dom_map(html)[0]
@@ -398,6 +501,44 @@ def test_exact_geometry_is_deferred_to_source_vqa_unless_explicitly_unintentiona
     }
     assert {"off_canvas", "clipping"} <= {issue.category for issue in style.issues}
     assert {"off_canvas", "clipping"} <= {issue.category for issue in explicit.issues}
+
+
+def test_off_canvas_text_is_attributed_to_the_escaped_layout_container():
+    html = """<html><body><footer data-qid="footer">
+      <span data-qid="copy">Footer copy</span>
+    </footer></body></html>"""
+    report = inspect_authored_dom(
+        html,
+        {
+            "width": 1280,
+            "height": 720,
+            "elements": [
+                {
+                    "qid": "footer",
+                    "tag": "footer",
+                    "bbox": {"x": 48, "y": 714, "width": 1184, "height": 20},
+                    "has_owned_text": False,
+                },
+                {
+                    "qid": "copy",
+                    "tag": "span",
+                    "parent_qid": "footer",
+                    "bbox": {"x": 48, "y": 721, "width": 120, "height": 13},
+                    "has_owned_text": True,
+                },
+            ],
+        },
+        reference_mode=STYLE_REFERENCE,
+    )
+
+    assert any(
+        issue.category == "off_canvas" and issue.qids == ("footer",)
+        for issue in report.issues
+    )
+    assert not any(
+        issue.category == "off_canvas" and issue.qids == ("copy",)
+        for issue in report.issues
+    )
 
 
 def test_transparent_background_does_not_create_false_contrast_failure():

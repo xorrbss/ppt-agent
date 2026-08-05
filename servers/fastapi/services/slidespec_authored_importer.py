@@ -25,7 +25,6 @@ from models.slidespec_v1 import (
     FontManifest,
     FocalPoint,
     GapConstraint,
-    GroupConstraint,
     GridPlacement,
     ImportedHtmlBinding,
     ImportedHtmlSource,
@@ -70,6 +69,7 @@ _VOID_TAGS = frozenset(
 )
 _PX = re.compile(r"^\s*(-?(?:\d+(?:\.\d*)?|\.\d+))px\s*$", re.IGNORECASE)
 _GRID_LINE = re.compile(r"^\s*(\d+)\s*(?:/\s*(?:span\s+)?(\d+))?\s*$", re.IGNORECASE)
+IMPORTER_VERSION = "authored-html-import/4"
 
 
 class SlideSpecImportError(RuntimeError):
@@ -297,12 +297,27 @@ def _infer_relational_constraints(
     bindings: Sequence[ImportedHtmlBinding],
     metric_by_qid: Mapping[str, Any],
     intentional_overlap: set[str],
+    defect_qids: set[str],
+    occluder_qids: set[str],
+    tainted_branch_qids: set[str],
     viewport_width: float,
     viewport_height: float,
-) -> tuple[Any, ...]:
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Infer only baseline-supported relationships from browser telemetry."""
 
     constraints: list[Any] = []
+    inference_evidence: dict[str, Any] = {
+        "defect_qid_count": len(defect_qids),
+        "occluder_qid_count": len(occluder_qids),
+        "tainted_branch_qid_count": len(tainted_branch_qids),
+        "omitted": {
+            "implicit_group_without_explicit_evidence": 0,
+            "anchor_without_bound_offset_parent_proof": 0,
+            "anchor_on_defective_branch": 0,
+            "alignment_on_defective_branch": 0,
+            "preferred_gap_on_defective_branch": 0,
+        },
+    }
     binding_by_qid = {binding.qid: binding for binding in bindings}
     layout_by_semantic = {
         binding.semanticId: binding.layoutId for binding in bindings
@@ -412,16 +427,15 @@ def _infer_relational_constraints(
         if len(siblings) < 2:
             continue
         members = tuple(binding.layoutId for binding in siblings[:128])
-        append_relationship(
-            GroupConstraint(
-                constraintId=_constraint_id(slide_id, "group", parent_qid),
-                kind="group",
-                members=members,
-                strength="soft",
-                priority=70,
-                confidence=0.85,
-                source="imported",
-            )
+        # A shared DOM parent already exists in the imported layout hierarchy.
+        # It is not evidence that ordinary siblings form an atomic transform,
+        # scale, or rotation group, so do not synthesize a GroupConstraint.
+        inference_evidence["omitted"][
+            "implicit_group_without_explicit_evidence"
+        ] += 1
+        defective_branch = (
+            parent_qid in tainted_branch_qids
+            or any(binding.qid in tainted_branch_qids for binding in siblings)
         )
         for edge, values in (
             ("left", [binding.sourceBoundsPx.x for binding in siblings]),
@@ -429,6 +443,11 @@ def _infer_relational_constraints(
         ):
             scale = viewport_width if edge == "left" else viewport_height
             if max(values) - min(values) <= 2 and len(values) >= 2:
+                if defective_branch:
+                    inference_evidence["omitted"][
+                        "alignment_on_defective_branch"
+                    ] += 1
+                    continue
                 append_relationship(
                     AlignmentConstraint(
                         constraintId=_constraint_id(
@@ -448,7 +467,47 @@ def _infer_relational_constraints(
         for binding in siblings:
             if binding.position not in {"absolute", "fixed", "sticky"}:
                 continue
-            if binding.leftPx is not None and 0 <= binding.bounds.x <= 1:
+            metric = metric_by_qid.get(binding.qid)
+            proof = (
+                metric.get("containing_block_proof", {})
+                if isinstance(metric, Mapping)
+                else {}
+            )
+            proof = proof if isinstance(proof, Mapping) else {}
+            offset_parent_qid = (
+                str(metric.get("offset_parent_qid") or "").strip()
+                if isinstance(metric, Mapping)
+                else ""
+            )
+            offset_parent = binding_by_qid.get(offset_parent_qid)
+            if (
+                binding.qid in tainted_branch_qids
+                or offset_parent_qid in tainted_branch_qids
+            ):
+                inference_evidence["omitted"][
+                    "anchor_on_defective_branch"
+                ] += 1
+                continue
+            if (
+                proof.get("source") != "chrome"
+                or proof.get("telemetryComplete") is not True
+                or proof.get("exactBoundOffsetParent") is not True
+                or str(proof.get("offsetParentQid") or "").strip()
+                != offset_parent_qid
+                or offset_parent is None
+            ):
+                inference_evidence["omitted"][
+                    "anchor_without_bound_offset_parent_proof"
+                ] += 1
+                continue
+            anchor_container = offset_parent.layoutId
+            anchor_x = binding.bounds.x - (
+                offset_parent.bounds.x
+            )
+            anchor_y = binding.bounds.y - (
+                offset_parent.bounds.y
+            )
+            if binding.leftPx is not None and -1 <= anchor_x <= 1:
                 append_relationship(
                     AnchorConstraint(
                         constraintId=_constraint_id(
@@ -456,10 +515,10 @@ def _infer_relational_constraints(
                         ),
                         kind="anchor",
                         target=binding.layoutId,
-                        container=root_layout_id,
+                        container=anchor_container,
                         targetEdge="left",
                         containerEdge="left",
-                        offset=binding.bounds.x,
+                        offset=anchor_x,
                         tolerance=max(0.002, 2 / viewport_width),
                         strength="soft",
                         priority=75,
@@ -467,7 +526,7 @@ def _infer_relational_constraints(
                         source="imported",
                     )
                 )
-            if binding.topPx is not None and 0 <= binding.bounds.y <= 1:
+            if binding.topPx is not None and -1 <= anchor_y <= 1:
                 append_relationship(
                     AnchorConstraint(
                         constraintId=_constraint_id(
@@ -475,10 +534,10 @@ def _infer_relational_constraints(
                         ),
                         kind="anchor",
                         target=binding.layoutId,
-                        container=root_layout_id,
+                        container=anchor_container,
                         targetEdge="top",
                         containerEdge="top",
-                        offset=binding.bounds.y,
+                        offset=anchor_y,
                         tolerance=max(0.002, 2 / viewport_height),
                         strength="soft",
                         priority=75,
@@ -559,6 +618,14 @@ def _infer_relational_constraints(
                     )
                 )
                 normalized_gap = gap_px / scale
+                if defective_branch or (
+                    leading.qid in tainted_branch_qids
+                    or trailing.qid in tainted_branch_qids
+                ):
+                    inference_evidence["omitted"][
+                        "preferred_gap_on_defective_branch"
+                    ] += 1
+                    continue
                 append_relationship(
                     GapConstraint(
                         constraintId=_constraint_id(slide_id, "gap", *pair),
@@ -577,7 +644,12 @@ def _infer_relational_constraints(
                     )
                 )
 
-    return tuple(constraints[:1024])
+    bounded = tuple(constraints[:1024])
+    emitted_by_kind: dict[str, int] = {}
+    for constraint in bounded:
+        emitted_by_kind[constraint.kind] = emitted_by_kind.get(constraint.kind, 0) + 1
+    inference_evidence["emitted_by_kind"] = emitted_by_kind
+    return bounded, inference_evidence
 
 
 async def build_authored_import_request(
@@ -643,6 +715,7 @@ async def build_authored_import_request(
     layouts: list[LayoutNode] = []
     bindings: list[ImportedHtmlBinding] = []
     font_families: set[str] = set()
+    projection_rejections: list[dict[str, Any]] = []
 
     for order, node in enumerate(nodes):
         metric = metric_by_qid.get(node.qid)
@@ -718,12 +791,41 @@ async def build_authored_import_request(
         if object_fit not in {"contain", "cover", "fill"}:
             object_fit = "fill"
         focal_x, focal_y = _focal_point(style.get("objectPosition"))
-        allowed_operations = [
-            "setBounds",
-            "translateWithinParent",
-            "resizeWithinBounds",
-            "setPadding",
-        ]
+        # A preferred width/height on an in-flow flex/grid child is not an exact
+        # rendered bound: the parent may shrink or stretch it and reflow every
+        # sibling.  Until Chrome supplies a resize-isolation proof, do not grant
+        # a size mutation that cannot satisfy the imported round-trip contract.
+        # Position-only translation remains available under its existing proof.
+        resize_flow_unproven = (
+            parent_display in {"flex", "inline-flex", "grid", "inline-grid"}
+            and position not in {"absolute", "fixed"}
+        )
+        allowed_operations = (
+            ["translateWithinParent", "setPadding"]
+            if resize_flow_unproven
+            else [
+                "setBounds",
+                "translateWithinParent",
+                "resizeWithinBounds",
+                "setPadding",
+            ]
+        )
+        if resize_flow_unproven:
+            projection_rejections.append(
+                {
+                    "reason_code": "repair.mutation_disallowed.resize_flow_unproven",
+                    "element": {
+                        "semantic_id": semantic_by_qid[node.qid],
+                        "qid": node.qid,
+                        "layout_id": layout_by_qid[node.qid],
+                    },
+                    "stage": "import_preflight",
+                    "metric": "resize_isolation",
+                    "value": "unproven",
+                    "parent_display": parent_display,
+                    "position": position,
+                }
+            )
         if display in {"flex", "inline-flex", "grid", "inline-grid"}:
             allowed_operations.extend(
                 ("setSpacing", "setAlignment", "setJustification")
@@ -777,6 +879,7 @@ async def build_authored_import_request(
                 ),
                 constraints=LayoutConstraints(
                     allowedOperations=tuple(allowed_operations),
+                    lockSize=resize_flow_unproven,
                     preserveAspectRatio=kind in {"image", "shape"},
                     minWidth=max(1e-6, bounds.width * 0.5),
                     minHeight=max(1e-6, bounds.height * 0.5),
@@ -803,6 +906,8 @@ async def build_authored_import_request(
                 staticTranslationSafe=static_translation_safe,
                 leftPx=_px(style.get("left")),
                 topPx=_px(style.get("top")),
+                rightPx=_px(style.get("right")),
+                bottomPx=_px(style.get("bottom")),
                 display=display,
                 gapPx=gap_px,
                 paddingTopPx=padding_top,
@@ -829,13 +934,55 @@ async def build_authored_import_request(
         )
 
     root_layout_id = _stable_id("lay:", slide.id, "$root")
-    relational_constraints = _infer_relational_constraints(
+    defect_qids = {
+        qid
+        for issue in report.issues
+        if issue.severity in {"high", "medium"}
+        and issue.category in {"overlap", "clipping", "off_canvas", "overflow"}
+        for qid in issue.qids
+    }
+    occluder_qids = {
+        str(occluder).strip()
+        for qid in defect_qids
+        if isinstance(metric_by_qid.get(qid), Mapping)
+        for occluder in metric_by_qid[qid].get("occlusion_occluder_qids", ())
+        if str(occluder).strip()
+    }
+    inference_seeds = defect_qids | occluder_qids
+    parent_by_qid = {
+        qid: str(metric.get("parent_qid") or "").strip()
+        for qid, metric in metric_by_qid.items()
+        if isinstance(metric, Mapping)
+    }
+
+    def ancestors(qid: str) -> set[str]:
+        result: set[str] = set()
+        current = parent_by_qid.get(qid, "")
+        while current and current not in result:
+            result.add(current)
+            current = parent_by_qid.get(current, "")
+        return result
+
+    seed_ancestors = {
+        ancestor for qid in inference_seeds for ancestor in ancestors(qid)
+    }
+    tainted_branch_qids = {
+        qid
+        for qid in metric_by_qid
+        if qid in inference_seeds
+        or qid in seed_ancestors
+        or bool(ancestors(qid).intersection(inference_seeds))
+    }
+    relational_constraints, constraint_inference = _infer_relational_constraints(
         slide_id=slide.id,
         root_layout_id=root_layout_id,
         contents=contents,
         bindings=bindings,
         metric_by_qid=metric_by_qid,
         intentional_overlap=parser.intentional_overlap,
+        defect_qids=defect_qids,
+        occluder_qids=occluder_qids,
+        tainted_branch_qids=tainted_branch_qids,
         viewport_width=viewport_width,
         viewport_height=viewport_height,
     )
@@ -853,7 +1000,7 @@ async def build_authored_import_request(
             constraints=relational_constraints,
             provenance=Provenance(
                 source="authored-html-import",
-                adapterVersion="authored-html-import/3",
+                adapterVersion=IMPORTER_VERSION,
             ),
             digests=SlideDigests(
                 content=ZERO_DIGEST,
@@ -872,7 +1019,7 @@ async def build_authored_import_request(
         viewportWidth=viewport_width,
         viewportHeight=viewport_height,
         bindings=tuple(bindings),
-        importerVersion="authored-html-import/3",
+        importerVersion=IMPORTER_VERSION,
     )
     request = RenderRequest(
         spec=spec,
@@ -894,6 +1041,8 @@ async def build_authored_import_request(
         "render_parity": "byte_identical_baseline",
         "constraint_count": len(relational_constraints),
         "constraint_kinds": constraint_kinds,
+        "constraint_inference": constraint_inference,
+        "projection_rejections": projection_rejections,
         "solver": solver_result.metrics(),
     }
 
@@ -926,7 +1075,7 @@ async def ensure_authored_slidespec_imports(
                 if (
                     isinstance(source_manifest, Mapping)
                     and source_manifest.get("importerVersion")
-                    == "authored-html-import/3"
+                    == IMPORTER_VERSION
                 ):
                     continue
             except SlideSpecArtifactError as error:

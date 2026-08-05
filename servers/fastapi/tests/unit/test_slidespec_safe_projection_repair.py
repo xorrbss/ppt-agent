@@ -131,6 +131,93 @@ def test_advanced_projection_builds_only_from_explicit_safety_proofs():
     assert report.plans[1].operations[0].scale == 0.9
 
 
+def test_owned_text_separation_probe_emits_exact_bounded_font_scale():
+    context = _context(
+        glyphFit={
+            "target": "lay:h3",
+            "currentScale": 1.0,
+            "candidateScale": 0.9,
+            "minimumScale": 0.9,
+            "mutationEnvelope": _envelope(
+                "setFontScale", minFontScale=0.9, maxFontShrink=0.1
+            ),
+            "measurement": _chrome(
+                kind="owned-text-separation",
+                fontsReady=True,
+                fontSizePx=16,
+                measuredWidthPx=149.234375,
+                measuredHeightPx=24,
+                availableWidthPx=135.390625,
+                availableHeightPx=24,
+                targetTextBoundsPx={
+                    "x": 1027,
+                    "y": 430,
+                    "width": 149.234375,
+                    "height": 24,
+                },
+                occluderTextBoundsPx={
+                    "x": 1162.390625,
+                    "y": 436,
+                    "width": 41.609375,
+                    "height": 15,
+                },
+                candidateSeparatesTextPaint=True,
+            ),
+            "roundTrip": _roundtrip("font-size"),
+        }
+    )
+
+    report = build_deterministic_cascade_report(context)
+
+    assert report.rejections == ()
+    assert len(report.plans) == 1
+    assert report.plans[0].operations[0].op == "setFontScale"
+    assert report.plans[0].operations[0].scale == 0.9
+
+
+def test_owned_text_separation_probe_rejects_scale_that_leaves_overlap():
+    context = _context(
+        glyphFit={
+            "target": "lay:h3",
+            "currentScale": 1.0,
+            "candidateScale": 0.95,
+            "minimumScale": 0.9,
+            "mutationEnvelope": _envelope(
+                "setFontScale", minFontScale=0.9, maxFontShrink=0.1
+            ),
+            "measurement": _chrome(
+                kind="owned-text-separation",
+                fontsReady=True,
+                measuredWidthPx=149.234375,
+                measuredHeightPx=24,
+                availableWidthPx=135.390625,
+                availableHeightPx=24,
+                targetTextBoundsPx={
+                    "x": 1027,
+                    "y": 430,
+                    "width": 149.234375,
+                    "height": 24,
+                },
+                occluderTextBoundsPx={
+                    "x": 1162.390625,
+                    "y": 436,
+                    "width": 41.609375,
+                    "height": 15,
+                },
+                candidateSeparatesTextPaint=True,
+            ),
+            "roundTrip": _roundtrip("font-size"),
+        }
+    )
+
+    report = build_deterministic_cascade_report(context)
+
+    assert report.plans == ()
+    assert report.rejections[0].reason_code == (
+        "repair.glyph.separation_probe_unproven"
+    )
+
+
 def test_advanced_projection_is_deterministic_idempotent_and_schema_roundtrips():
     context = _context(glyphFit={
         "target": "sem:copy",
@@ -313,4 +400,122 @@ def test_malformed_advanced_geometry_is_rejected_before_plan_validation():
     assert {item.reason_code for item in report.rejections} == {
         "repair.connector.route_invalid",
         "repair.static_translation.precondition_unproven",
+    }
+
+
+def test_static_translation_uses_chrome_containment_interval_not_fixed_ratio_cap():
+    context = _context(staticTranslation={
+        "target": "sem:footer",
+        "currentBounds": {"x": 0.04, "y": 0.99, "width": 0.92, "height": 0.01},
+        "delta": {"x": 0, "y": -0.12},
+        "mutationEnvelope": _envelope(
+            "translateWithinParent", maxTranslation=0.08
+        ),
+        "measurement": _chrome(
+            position="static",
+            layoutIsolation=True,
+            transformComposable=True,
+            stackingStable=True,
+            flowImpactPx=0,
+            maxSiblingDeltaPx=0,
+            targetBoundsPx={"x": 48, "y": 714, "width": 1184, "height": 20},
+            parentBoundsPx={"x": 0, "y": 0, "width": 1280, "height": 720},
+            safeTranslationIntervalPx={
+                "minX": -48,
+                "maxX": 48,
+                "minY": -714,
+                "maxY": -14,
+            },
+            candidateBoundsInParent={
+                "x": 0.0375,
+                "y": 0.8722222222,
+                "width": 0.925,
+                "height": 0.0277777778,
+            },
+        ),
+        "roundTrip": _roundtrip("transform"),
+    })
+
+    report = build_deterministic_cascade_report(context)
+
+    assert report.rejections == ()
+    assert report.plans[0].operations[0].op == "translateWithinParent"
+
+
+def test_static_translation_can_leave_visible_overflow_parent_inside_chrome_interval():
+    context = _context(staticTranslation={
+        "target": "sem:footer-copy",
+        "currentBounds": {"x": 0.04, "y": 0.98, "width": 0.2, "height": 0.018},
+        "delta": {"x": 0, "y": -0.02},
+        "mutationEnvelope": _envelope("translateWithinParent", maxTranslation=0.08),
+        "measurement": _chrome(
+            position="static",
+            layoutIsolation=True,
+            transformComposable=True,
+            stackingStable=True,
+            flowImpactPx=0,
+            maxSiblingDeltaPx=0,
+            targetBoundsPx={"x": 48, "y": 721, "width": 142, "height": 13},
+            parentBoundsPx={"x": 48, "y": 714, "width": 1184, "height": 20},
+            safeTranslationIntervalPx={
+                "minX": -48,
+                "maxX": 1090,
+                "minY": -721,
+                "maxY": -14,
+            },
+            candidateBoundsInParent={
+                "x": 0,
+                "y": -0.37,
+                "width": 0.12,
+                "height": 0.65,
+            },
+        ),
+        "roundTrip": _roundtrip("transform"),
+    })
+
+    report = build_deterministic_cascade_report(context)
+
+    assert report.rejections == ()
+    assert report.plans[0].operations[0].op == "translateWithinParent"
+
+
+def test_static_translation_and_glyph_non_applicability_are_precisely_classified():
+    report = build_deterministic_cascade_report(_context(
+        glyphFit={
+            "target": "sem:footer-label",
+            "currentScale": 1,
+            "minimumScale": 0.85,
+            "mutationEnvelope": _envelope("setFontScale", maxFontShrink=0.15),
+            "measurement": _chrome(
+                kind="range-bounds",
+                fontsReady=True,
+                measuredWidthPx=80,
+                measuredHeightPx=13,
+                availableWidthPx=80,
+                availableHeightPx=13,
+            ),
+            "roundTrip": _roundtrip("font-size"),
+        },
+        staticTranslation={
+            "target": "sem:wrapper",
+            "currentBounds": {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.2},
+            "delta": {"x": 0, "y": 0},
+            "mutationEnvelope": _envelope("translateWithinParent"),
+            "measurement": _chrome(
+                position="static",
+                layoutIsolation=True,
+                transformComposable=True,
+                stackingStable=True,
+                flowImpactPx=0,
+                maxSiblingDeltaPx=0,
+                candidateBoundsInParent={"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.2},
+            ),
+            "roundTrip": _roundtrip("transform"),
+        },
+    ))
+
+    assert report.plans == ()
+    assert {item.reason_code for item in report.rejections} == {
+        "repair.glyph.size_reduction_not_applicable",
+        "repair.static_translation.zero_delta",
     }

@@ -1056,6 +1056,12 @@ def imported_projection_roundtrip_errors(
         if isinstance(item, Mapping) and str(item.get("qid", ""))
     }
     layout = {node.layoutId: node for node in _walk_layout(request.spec.layout)}
+    binding_by_semantic = {
+        binding.semanticId: binding for binding in source.bindings
+    }
+    content_by_semantic = {
+        content.semanticId: content for content in request.spec.content
+    }
     errors: list[str] = []
 
     def css_px(value: object) -> float | None:
@@ -1077,7 +1083,134 @@ def imported_projection_roundtrip_errors(
             "stretch": "stretch",
             "space-between": "space-between",
         }
-        return aliases.get(normalized, normalized)
+        # The importer deliberately projects CSS values outside SlideSpec's
+        # closed flow vocabulary to its safe schema defaults.  Round-trip must
+        # use the identical normalization or untouched values such as
+        # ``align-items: baseline`` become false candidate failures.
+        return aliases.get(normalized, "stretch" if alignment else "start")
+
+    def ancestor_translation_px(binding: Any) -> tuple[float, float]:
+        """Return inherited paint translation from changed authored ancestors."""
+
+        dx = dy = 0.0
+        content = content_by_semantic.get(binding.semanticId)
+        parent_semantic_id = content.parentSemanticId if content is not None else None
+        seen: set[str] = set()
+        while parent_semantic_id and parent_semantic_id not in seen:
+            seen.add(parent_semantic_id)
+            parent_binding = binding_by_semantic.get(parent_semantic_id)
+            if parent_binding is None:
+                break
+            parent_node = layout.get(parent_binding.layoutId)
+            if parent_node is None or parent_node.bounds is None:
+                break
+            dx += (
+                parent_node.bounds.x - parent_binding.bounds.x
+            ) * source.viewportWidth
+            dy += (
+                parent_node.bounds.y - parent_binding.bounds.y
+            ) * source.viewportHeight
+            parent_content = content_by_semantic.get(parent_semantic_id)
+            parent_semantic_id = (
+                parent_content.parentSemanticId
+                if parent_content is not None
+                else None
+            )
+        return dx, dy
+
+    def safe_resized_ancestor_reflow(
+        binding: Any,
+        actual: tuple[float | None, ...],
+        expected: tuple[float, ...],
+    ) -> bool:
+        """Accept only size-preserving child reflow under an exact resized ancestor."""
+
+        if any(value is None for value in actual):
+            return False
+        actual_box = tuple(float(value) for value in actual if value is not None)
+        if len(actual_box) != 4 or any(
+            abs(actual_box[index] - expected[index]) > pixel_tolerance
+            for index in (2, 3)
+        ):
+            # Wrapping or glyph-box size changes remain fail closed.
+            return False
+        content = content_by_semantic.get(binding.semanticId)
+        parent_semantic_id = content.parentSemanticId if content is not None else None
+        seen: set[str] = set()
+        metric_parent_qid = str(by_qid.get(binding.qid, {}).get("parent_qid", ""))
+        metric_chain: set[str] = set()
+        while metric_parent_qid and metric_parent_qid not in metric_chain:
+            metric_chain.add(metric_parent_qid)
+            parent_metric = by_qid.get(metric_parent_qid)
+            metric_parent_qid = (
+                str(parent_metric.get("parent_qid", ""))
+                if isinstance(parent_metric, Mapping)
+                else ""
+            )
+        while parent_semantic_id and parent_semantic_id not in seen:
+            seen.add(parent_semantic_id)
+            parent_binding = binding_by_semantic.get(parent_semantic_id)
+            if parent_binding is None:
+                return False
+            parent_node = layout.get(parent_binding.layoutId)
+            parent_item = by_qid.get(parent_binding.qid)
+            parent_bbox = (
+                parent_item.get("bbox")
+                if isinstance(parent_item, Mapping)
+                else None
+            )
+            resized = bool(
+                parent_node is not None
+                and parent_node.bounds is not None
+                and (
+                    abs(parent_node.bounds.width - parent_binding.bounds.width)
+                    > 1e-9
+                    or abs(parent_node.bounds.height - parent_binding.bounds.height)
+                    > 1e-9
+                )
+            )
+            if resized:
+                envelope = parent_node.constraints
+                allowed = set(envelope.allowedOperations or ()) if envelope else set()
+                if (
+                    parent_binding.qid not in metric_chain
+                    or envelope is None
+                    or envelope.locked
+                    or envelope.lockSize
+                    or "setBounds" not in allowed
+                    or not isinstance(parent_bbox, Mapping)
+                ):
+                    return False
+                parent_actual = tuple(
+                    _number(parent_bbox.get(key))
+                    for key in ("x", "y", "width", "height")
+                )
+                if any(value is None for value in parent_actual):
+                    return False
+                px, py, pw, ph = (
+                    float(value) for value in parent_actual if value is not None
+                )
+                ax, ay, aw, ah = actual_box
+                item = by_qid.get(binding.qid, {})
+                glyph_clipped = bool(
+                    item.get("glyph_clipped")
+                    if isinstance(item, Mapping)
+                    else True
+                )
+                return bool(
+                    not glyph_clipped
+                    and ax >= px - pixel_tolerance
+                    and ay >= py - pixel_tolerance
+                    and ax + aw <= px + pw + pixel_tolerance
+                    and ay + ah <= py + ph + pixel_tolerance
+                )
+            parent_content = content_by_semantic.get(parent_semantic_id)
+            parent_semantic_id = (
+                parent_content.parentSemanticId
+                if parent_content is not None
+                else None
+            )
+        return False
 
     def track_ratios(value: object) -> tuple[float, ...] | None:
         parts = str(value or "").strip().split()
@@ -1107,19 +1240,34 @@ def imported_projection_roundtrip_errors(
         if not isinstance(bbox, Mapping):
             errors.append(f"projection.bounds.missing:{binding.qid}")
             continue
+        inherited_x, inherited_y = ancestor_translation_px(binding)
+        # Imported bounds are normalized/clamped to the canvas, while the source
+        # binding retains the exact Chrome rectangle (including a deliberate
+        # footer overhang).  Apply only the canonical delta to that exact source
+        # rectangle; comparing every candidate to the clamped baseline creates
+        # false mismatches and double-counts parent translations on descendants.
         expected = (
-            node.bounds.x * source.viewportWidth,
-            node.bounds.y * source.viewportHeight,
-            node.bounds.width * source.viewportWidth,
-            node.bounds.height * source.viewportHeight,
+            binding.sourceBoundsPx.x
+            + (node.bounds.x - binding.bounds.x) * source.viewportWidth
+            + inherited_x,
+            binding.sourceBoundsPx.y
+            + (node.bounds.y - binding.bounds.y) * source.viewportHeight
+            + inherited_y,
+            binding.sourceBoundsPx.width
+            + (node.bounds.width - binding.bounds.width) * source.viewportWidth,
+            binding.sourceBoundsPx.height
+            + (node.bounds.height - binding.bounds.height) * source.viewportHeight,
         )
         actual = tuple(
             _number(bbox.get(key)) for key in ("x", "y", "width", "height")
         )
-        if any(value is None for value in actual) or any(
+        bounds_mismatch = any(value is None for value in actual) or any(
             abs(float(got) - wanted) > pixel_tolerance
             for got, wanted in zip(actual, expected, strict=True)
             if got is not None
+        )
+        if bounds_mismatch and not safe_resized_ancestor_reflow(
+            binding, actual, expected
         ):
             errors.append(f"projection.bounds.mismatch:{binding.qid}")
         style = item.get("computed_style", item.get("style", {}))

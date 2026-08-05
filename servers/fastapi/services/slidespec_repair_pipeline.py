@@ -14,7 +14,15 @@ import time
 from typing import Literal
 
 from models.slidespec_v1 import RepairPlan
-from services.slidespec_repair import repair_cost, sort_candidates
+from services.slidespec_pipeline_performance import (
+    DEFAULT_NEGATIVE_PROPOSAL_CACHE,
+    NegativeProposalCache,
+    ProposalCacheKey,
+    deterministic_candidate_order,
+    dom_evidence_digest,
+    pareto_prune_plans,
+)
+from services.slidespec_repair import repair_cost
 from services.slidespec_rollout_policy import SlideSpecRepairRolloutDecision
 
 
@@ -52,6 +60,8 @@ class DomDefect:
     severity: Literal["high", "medium", "low"]
     semantic_id: str
     related_semantic_ids: tuple[str, ...] = ()
+    qid: str | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +107,7 @@ class SensorResult:
     cache_hit: bool = False
     quality_gain: float | None = None
     quality_gain_interval: tuple[float, float] | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +137,7 @@ class CandidateOutcome:
     quality_gain_interval: tuple[float, float] | None = None
     realized_cost: tuple[int, int, float, float, int, str] | None = None
     selected: bool = False
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +185,10 @@ class PipelineTelemetry:
     vqa_calls: int = 0
     cache_hits: int = 0
     cache_misses: int = 0
+    proposal_cache_hits: int = 0
+    proposal_cache_misses: int = 0
+    proposal_preflight_skips: int = 0
+    pareto_pruned: int = 0
     repair_costs: tuple[tuple[int, int, float, float, int, str], ...] = ()
     realized_repair_costs: tuple[tuple[int, int, float, float, int, str], ...] = ()
     quality_gains: tuple[float, ...] = ()
@@ -188,6 +204,7 @@ class _AcceptedCandidate:
     quality_gain_interval: tuple[float, float]
     constraint_cost: float
     realized_cost: tuple[int, int, float, float, int, str]
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 def _select_accepted_candidate(
@@ -271,6 +288,7 @@ PublishCandidate = Callable[
     [SlideSpecInput, RepairPlan, RenderedCandidate], Awaitable[PublicationReceipt]
 ]
 PlanFactory = Callable[[SlideSpecInput, DomEvidence], Awaitable[Sequence[RepairPlan]]]
+ProposalPreflight = Callable[[SlideSpecInput, DomEvidence], Awaitable[SensorResult]]
 
 
 @dataclass(slots=True)
@@ -283,6 +301,10 @@ class SlideSpecRepairDependencies:
     run_vqa: RunVqa
     publish: PublishCandidate
     propose: PlanFactory | None = None
+    proposal_preflight: ProposalPreflight | None = None
+    proposal_capability_digest: str = "projection-capability:unknown"
+    proposal_model_digest: str = "model:unknown"
+    proposal_cache: NegativeProposalCache | None = None
 
 
 class SlideSpecRepairPipeline:
@@ -323,21 +345,85 @@ class SlideSpecRepairPipeline:
             )
 
         if self._dependencies.propose is not None:
+            if self._dependencies.proposal_preflight is not None:
+                started = time.perf_counter()
+                preflight = await self._dependencies.proposal_preflight(
+                    spec, baseline_dom
+                )
+                state.add_timing("proposal_preflight", started)
+                if not preflight.passed:
+                    if not preflight.conclusive:
+                        state.inconclusive += 1
+                        state.legacy_preserved += 1
+                        return self._result(
+                            rollout,
+                            outcomes,
+                            state,
+                            (
+                                preflight.reason_code or "proposal.preflight_inconclusive",
+                                "legacy_preserved",
+                            ),
+                        )
+                    state.proposal_preflight_skips += 1
+                    state.legacy_preserved += 1
+                    return self._result(
+                        rollout,
+                        outcomes,
+                        state,
+                        (
+                            preflight.reason_code
+                            or "proposal.projection_unavailable",
+                            "legacy_preserved",
+                        ),
+                    )
+
+            proposal_cache = (
+                self._dependencies.proposal_cache
+                if self._dependencies.proposal_cache is not None
+                else DEFAULT_NEGATIVE_PROPOSAL_CACHE
+            )
+            proposal_key = ProposalCacheKey(
+                spec_digest=spec.spec_hash,
+                dom_digest=dom_evidence_digest(baseline_dom),
+                capability_digest=self._dependencies.proposal_capability_digest,
+                model_digest=self._dependencies.proposal_model_digest,
+            )
+            if proposal_cache.contains(proposal_key):
+                state.proposal_cache_hits += 1
+                state.legacy_preserved += 1
+                return self._result(
+                    rollout,
+                    outcomes,
+                    state,
+                    ("proposal.negative_cache_hit", "legacy_preserved"),
+                )
+            state.proposal_cache_misses += 1
             try:
                 state.llm_calls += 1
                 started = time.perf_counter()
-                proposed = tuple((await self._dependencies.propose(spec, baseline_dom))[:2])
+                proposed = tuple(await self._dependencies.propose(spec, baseline_dom))
                 state.add_timing("llm_proposal", started)
-                state.llm_candidates += len(proposed)
-            except Exception:
+            except Exception as error:
                 state.inconclusive += 1
+                state.legacy_preserved += 1
+                reason = (
+                    "proposal.model_timeout"
+                    if isinstance(error, (TimeoutError, asyncio.TimeoutError))
+                    else str(error)
+                    if str(error).startswith("proposal.")
+                    else "proposal.provider_unavailable"
+                )
                 return self._result(
-                    rollout, outcomes, state, ("proposal.model_timeout", "legacy_preserved")
+                    rollout, outcomes, state, (reason, "legacy_preserved")
                 )
             # A proposer cannot smuggle a deterministic path into this phase.
             proposed = tuple(
                 plan for plan in proposed if plan.provenance.source == "llm"
             )
+            proposed = deterministic_candidate_order(proposed)[:2]
+            state.llm_candidates += len(proposed)
+            if not proposed:
+                proposal_cache.put(proposal_key)
             outcome = await self._try_plans(spec, proposed, rollout, state, outcomes)
             if outcome == "accepted":
                 return self._result(rollout, outcomes, state, ())
@@ -361,9 +447,9 @@ class SlideSpecRepairPipeline:
     ) -> Literal["accepted", "exhausted", "inconclusive"]:
         accepted_candidates: list[_AcceptedCandidate] = []
         accepted_insert_at: int | None = None
-        for candidate in sort_candidates(plans):
+        validated: list[RepairPlan] = []
+        for candidate in deterministic_candidate_order(plans):
             plan = candidate
-            assert isinstance(plan, RepairPlan)
             state.proposed += 1
             state.repair_costs.append(repair_cost(plan).sort_key)
             started = time.perf_counter()
@@ -377,6 +463,13 @@ class SlideSpecRepairPipeline:
                 state.rejected += 1
                 outcomes.append(self._outcome(plan, "not_started", "rejected", validation.reason_code or "schema.invalid_value"))
                 continue
+            validated.append(plan)
+
+        renderable, pruned = pareto_prune_plans(validated)
+        state.pareto_pruned += len(pruned)
+        state.rejected += len(pruned)
+
+        for plan in renderable:
             try:
                 state.render_calls += 1
                 started = time.perf_counter()
@@ -400,19 +493,83 @@ class SlideSpecRepairPipeline:
             state.add_timing("dom", started)
             # DOM is cheap and authoritative for geometry; don't spend OCR/VQA on it.
             if dom.hard_failure:
-                if not dom.telemetry_complete:
+                # A directly measured defect conclusively rejects this candidate
+                # even when an unrelated constraint observation is unavailable.
+                # Preserve fail-closed behavior for a candidate whose *only* hard
+                # signal is missing evidence, but do not let that uncertainty hide
+                # a concrete failure or prevent evaluation of the next candidate.
+                failing_defect = next(
+                    (
+                        defect
+                        for defect in dom.defects
+                        if defect.severity in {"high", "medium"}
+                        and defect.code != "constraint.evidence.missing"
+                    ),
+                    None,
+                )
+                if failing_defect is None and not dom.telemetry_complete:
+                    missing_evidence = [
+                        {
+                            "code": defect.code,
+                            "severity": defect.severity,
+                            "semantic_id": defect.semantic_id,
+                            "qid": defect.qid,
+                            "related_semantic_ids": list(
+                                defect.related_semantic_ids
+                            ),
+                            "diagnostics": dict(defect.diagnostics),
+                        }
+                        for defect in dom.defects
+                        if defect.code == "constraint.evidence.missing"
+                        or defect.diagnostics
+                    ]
                     state.inconclusive += 1
                     outcomes.append(
-                        self._outcome(plan, "succeeded", "inconclusive", "dom.telemetry_incomplete")
+                        self._outcome(
+                            plan,
+                            "succeeded",
+                            "inconclusive",
+                            "dom.telemetry_incomplete",
+                            diagnostics={
+                                "dom_telemetry": {
+                                    "complete": False,
+                                    "missing_evidence": missing_evidence,
+                                }
+                            },
+                        )
+                    )
+                    return "inconclusive"
+                if failing_defect is None:
+                    # Defensive fallback: DomEvidence.hard_failure should imply a
+                    # concrete defect or incomplete telemetry.
+                    state.inconclusive += 1
+                    outcomes.append(
+                        self._outcome(
+                            plan,
+                            "succeeded",
+                            "inconclusive",
+                            "dom.telemetry_incomplete",
+                        )
                     )
                     return "inconclusive"
                 state.rejected += 1
-                code = next(
-                    defect.code
-                    for defect in dom.defects
-                    if defect.severity in {"high", "medium"}
+                outcomes.append(
+                    self._outcome(
+                        plan,
+                        "succeeded",
+                        "rejected",
+                        failing_defect.code,
+                        diagnostics={
+                            "dom_failure": {
+                                "code": failing_defect.code,
+                                "severity": failing_defect.severity,
+                                "semantic_id": failing_defect.semantic_id,
+                                "qid": failing_defect.qid,
+                                **dict(failing_defect.diagnostics),
+                            }
+                        },
+                    )
                 )
-                outcomes.append(self._outcome(plan, "succeeded", "rejected", code))
                 continue
 
             inventory = canonical_ocr_inventory(spec)
@@ -449,6 +606,10 @@ class SlideSpecRepairPipeline:
                             ocr.reason_code
                             or vqa.reason_code
                             or "acceptance.inconclusive",
+                            diagnostics={
+                                "ocr": dict(ocr.diagnostics),
+                                "vqa": dict(vqa.diagnostics),
+                            },
                         )
                     )
                     return "inconclusive"
@@ -460,6 +621,10 @@ class SlideSpecRepairPipeline:
                         "rejected",
                         conclusive_failure.reason_code
                         or "acceptance.required_gate_failed",
+                        diagnostics={
+                            "ocr": dict(ocr.diagnostics),
+                            "vqa": dict(vqa.diagnostics),
+                        },
                     )
                 )
                 continue
@@ -476,6 +641,7 @@ class SlideSpecRepairPipeline:
                         "succeeded",
                         "inconclusive",
                         "vqa.improvement_unavailable",
+                        diagnostics={"vqa": dict(vqa.diagnostics)},
                     )
                 )
                 return "inconclusive"
@@ -500,8 +666,22 @@ class SlideSpecRepairPipeline:
                     quality_gain_interval,
                     artifact.constraint_cost,
                     realized_cost,
+                    {
+                        "ocr": dict(ocr.diagnostics),
+                        "vqa": dict(vqa.diagnostics),
+                    },
                 )
             )
+
+        outcomes.extend(
+            self._outcome(
+                plan,
+                "not_started",
+                "rejected",
+                "candidate.pareto_dominated",
+            )
+            for plan in pruned
+        )
 
         if not accepted_candidates:
             return "exhausted"
@@ -521,6 +701,7 @@ class SlideSpecRepairPipeline:
                     quality_gain=candidate.quality_gain,
                     quality_gain_interval=candidate.quality_gain_interval,
                     realized_cost=candidate.realized_cost,
+                    diagnostics=candidate.diagnostics,
                 )
             )
         assert accepted_insert_at is not None
@@ -545,6 +726,7 @@ class SlideSpecRepairPipeline:
                     quality_gain_interval=selected.quality_gain_interval,
                     realized_cost=selected.realized_cost,
                     selected=True,
+                    diagnostics=selected.diagnostics,
                 )
             )
             return "accepted"
@@ -566,6 +748,7 @@ class SlideSpecRepairPipeline:
                     quality_gain_interval=selected.quality_gain_interval,
                     realized_cost=selected.realized_cost,
                     selected=True,
+                    diagnostics=selected.diagnostics,
                 )
             )
             return "accepted"
@@ -590,6 +773,7 @@ class SlideSpecRepairPipeline:
                     quality_gain_interval=selected.quality_gain_interval,
                     realized_cost=selected.realized_cost,
                     selected=True,
+                    diagnostics=selected.diagnostics,
                 )
             )
             return "accepted"
@@ -613,6 +797,7 @@ class SlideSpecRepairPipeline:
                 quality_gain_interval=selected.quality_gain_interval,
                 realized_cost=selected.realized_cost,
                 selected=True,
+                diagnostics=selected.diagnostics,
             )
         )
         return "accepted"
@@ -633,6 +818,7 @@ class SlideSpecRepairPipeline:
         quality_gain_interval: tuple[float, float] | None = None,
         realized_cost: tuple[int, int, float, float, int, str] | None = None,
         selected: bool = False,
+        diagnostics: Mapping[str, object] | None = None,
     ) -> CandidateOutcome:
         committed = apply_status or ("committed" if applied else "not_started")
         published = publish_status or ("active" if applied else "not_started")
@@ -647,6 +833,7 @@ class SlideSpecRepairPipeline:
             quality_gain_interval=quality_gain_interval,
             realized_cost=realized_cost,
             selected=selected,
+            diagnostics=dict(diagnostics or {}),
         )
 
     @staticmethod
@@ -693,6 +880,10 @@ class _MutableFunnel:
     vqa_calls: int = 0
     cache_hits: int = 0
     cache_misses: int = 0
+    proposal_cache_hits: int = 0
+    proposal_cache_misses: int = 0
+    proposal_preflight_skips: int = 0
+    pareto_pruned: int = 0
     timings: dict[str, float] = field(default_factory=dict)
     repair_costs: list[tuple[int, int, float, float, int, str]] = field(
         default_factory=list
@@ -721,6 +912,10 @@ class _MutableFunnel:
             vqa_calls=self.vqa_calls,
             cache_hits=self.cache_hits,
             cache_misses=self.cache_misses,
+            proposal_cache_hits=self.proposal_cache_hits,
+            proposal_cache_misses=self.proposal_cache_misses,
+            proposal_preflight_skips=self.proposal_preflight_skips,
+            pareto_pruned=self.pareto_pruned,
             repair_costs=tuple(self.repair_costs),
             realized_repair_costs=tuple(self.realized_repair_costs),
             quality_gains=tuple(self.quality_gains),

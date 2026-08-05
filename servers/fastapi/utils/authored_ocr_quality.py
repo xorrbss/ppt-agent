@@ -17,7 +17,7 @@ import tempfile
 import threading
 import time
 import unicodedata
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -816,4 +816,135 @@ def compare_expected_candidate(
         remaining,
         regressions,
         {"baseline": base, "candidate": trial},
+    )
+
+
+def compare_expected_candidate_order_insensitive(
+    expected: str,
+    baseline: OcrQualityResult | str,
+    candidate: OcrQualityResult | str,
+    *,
+    source_text_preserved: bool,
+    metric_tolerance: float = 0.025,
+    precision_tolerance: float = 0.04,
+    min_character_recall: float = 0.75,
+    min_token_recall: float = 0.65,
+) -> OcrComparison:
+    """Prove OCR non-regression when geometry changes visual reading order.
+
+    Sequence CER is intentionally the primary gate.  This fallback is only
+    available when the caller has independently proved that the semantic source
+    text is byte-for-byte unchanged.  It then compares character and word-token
+    multisets, so translations may change reading order but cannot hide lost
+    content.  Recall and precision must both remain within a small tolerance and
+    absolute coverage floors keep weak OCR from becoming conclusive.
+    """
+
+    baseline_text = baseline.text if isinstance(baseline, OcrQualityResult) else baseline
+    candidate_text = candidate.text if isinstance(candidate, OcrQualityResult) else candidate
+    if not source_text_preserved:
+        return OcrComparison(
+            False,
+            "source_text_not_preserved",
+            False,
+            False,
+            {},
+            {},
+            {"source_text": 1.0},
+            {"source_text_preserved": False},
+        )
+    if baseline_text is None or candidate_text is None:
+        return OcrComparison(False, "ocr_unavailable", False, False, {}, {}, {}, {})
+
+    def character_bag(text: str) -> Counter[str]:
+        return Counter(
+            character
+            for character in normalize_ocr_text(text).lower()
+            if not character.isspace()
+        )
+
+    def token_bag(text: str) -> Counter[str]:
+        return Counter(
+            re.findall(r"[0-9a-z\uac00-\ud7a3]{2,}", normalize_ocr_text(text).lower())
+        )
+
+    def coverage(reference: Counter[str], observed: Counter[str]) -> dict[str, float]:
+        matched = sum((reference & observed).values())
+        reference_count = sum(reference.values())
+        observed_count = sum(observed.values())
+        return {
+            "recall": matched / max(1, reference_count),
+            "precision": matched / max(1, observed_count),
+            "matched": float(matched),
+            "expected": float(reference_count),
+            "observed": float(observed_count),
+        }
+
+    expected_characters = character_bag(expected)
+    expected_tokens = token_bag(expected)
+    baseline_character = coverage(expected_characters, character_bag(baseline_text))
+    candidate_character = coverage(expected_characters, character_bag(candidate_text))
+    baseline_token = coverage(expected_tokens, token_bag(baseline_text))
+    candidate_token = coverage(expected_tokens, token_bag(candidate_text))
+    metrics = {
+        "source_text_preserved": True,
+        "tolerance": metric_tolerance,
+        "precision_tolerance": precision_tolerance,
+        "minimums": {
+            "character_recall": min_character_recall,
+            "token_recall": min_token_recall,
+        },
+        "baseline": {"character": baseline_character, "token": baseline_token},
+        "candidate": {"character": candidate_character, "token": candidate_token},
+    }
+    dimensions = (
+        (
+            "character_recall",
+            baseline_character["recall"],
+            candidate_character["recall"],
+            metric_tolerance,
+        ),
+        (
+            "character_precision",
+            baseline_character["precision"],
+            candidate_character["precision"],
+            precision_tolerance,
+        ),
+        (
+            "token_recall",
+            baseline_token["recall"],
+            candidate_token["recall"],
+            metric_tolerance,
+        ),
+        (
+            "token_precision",
+            baseline_token["precision"],
+            candidate_token["precision"],
+            precision_tolerance,
+        ),
+    )
+    regressions = {
+        name: before - after
+        for name, before, after, tolerance in dimensions
+        if after + tolerance < before
+    }
+    floors_met = (
+        candidate_character["recall"] >= min_character_recall
+        and candidate_token["recall"] >= min_token_recall
+    )
+    accepted = floors_met and not regressions
+    return OcrComparison(
+        accepted,
+        "order_insensitive_content_preserved"
+        if accepted
+        else ("insufficient_ocr_coverage" if not floors_met else "text_regression"),
+        False,
+        accepted,
+        {},
+        {
+            "character_recall": candidate_character["recall"],
+            "token_recall": candidate_token["recall"],
+        },
+        regressions,
+        metrics,
     )

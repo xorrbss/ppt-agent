@@ -7,6 +7,7 @@ without re-deciding it at the publication boundary.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -21,6 +22,7 @@ POLICY_VERSION = "slidespec-acceptance/1.1"
 TriggerType = Literal["geometry", "content_visibility", "visual_quality"]
 GateStatus = Literal["passed", "failed", "unavailable", "timeout", "incomplete"]
 Outcome = Literal["accepted", "rejected", "inconclusive"]
+TargetIssueStage = Literal["invariant", "dom"]
 
 _INCONCLUSIVE_STATUSES = frozenset({"unavailable", "timeout", "incomplete"})
 _REQUIRED_GATES = ("schema", "invariant", "render", "dom", "ocr", "vqa")
@@ -46,6 +48,48 @@ class GateEvidence:
     new_high_medium_defects: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class TargetIssueIdentity:
+    """Stable identity shared by detector baseline and candidate evidence."""
+
+    stage: TargetIssueStage
+    code: str
+    semantic_id: str
+    qid: str
+    constraint_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.code or not self.semantic_id or not self.qid:
+            raise ValueError("target issue identity requires code, semantic_id, and qid")
+        if self.stage == "invariant" and not self.constraint_id:
+            raise ValueError("invariant target issue identity requires constraint_id")
+
+
+@dataclass(frozen=True, slots=True)
+class TargetIssueDelta:
+    """Before/after severity for exactly one detector target issue.
+
+    Geometry and constraint metrics use ``decrease`` (overlap area, overflow,
+    constraint residual).  ``increase`` supports recall/visibility metrics while
+    retaining the same exact identity gate.
+    """
+
+    identity: TargetIssueIdentity
+    before: float | None
+    after: float | None
+    resolution_threshold: float = 0.0
+    tolerance: float = 1e-6
+    direction: Literal["decrease", "increase"] = "decrease"
+
+    def __post_init__(self) -> None:
+        if self.direction not in {"decrease", "increase"}:
+            raise ValueError("target issue delta direction is unsupported")
+        if not math.isfinite(self.resolution_threshold):
+            raise ValueError("target issue resolution threshold must be finite")
+        if not math.isfinite(self.tolerance) or self.tolerance < 0:
+            raise ValueError("target issue tolerance must be finite and non-negative")
+
+
 @dataclass(frozen=True)
 class AcceptanceEvidence:
     schema: GateEvidence
@@ -54,6 +98,7 @@ class AcceptanceEvidence:
     dom: GateEvidence
     ocr: GateEvidence
     vqa: GateEvidence
+    target_issue_deltas: tuple[TargetIssueDelta, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -147,17 +192,97 @@ def _base_gate_result(name: str, gate: GateEvidence) -> _PolicyResult | None:
     return None
 
 
+def _target_issue_result(
+    stage: TargetIssueStage,
+    evidence: AcceptanceEvidence,
+    required: tuple[TargetIssueIdentity, ...],
+) -> _PolicyResult | None:
+    """Require an exact target identity to resolve, not an aggregate score.
+
+    ``required`` is normally derived from the selected plan's diagnostic refs.
+    When a caller supplies deltas without a separate requirement list, every
+    supplied delta becomes required.  Legacy callers that supply neither retain
+    the 1.1 aggregate gate until their detector bridge is migrated.
+    """
+
+    deltas = evidence.target_issue_deltas
+    stage_required = tuple(identity for identity in required if identity.stage == stage)
+    if not stage_required and deltas is not None:
+        stage_required = tuple(
+            delta.identity for delta in deltas if delta.identity.stage == stage
+        )
+    if not stage_required:
+        return None
+    if deltas is None:
+        return _inconclusive(stage, "acceptance.target_issue_delta_unavailable")
+
+    by_identity: dict[TargetIssueIdentity, TargetIssueDelta] = {}
+    for delta in deltas:
+        if delta.identity.stage != stage:
+            continue
+        if delta.identity in by_identity:
+            return _inconclusive(stage, "acceptance.target_issue_delta_ambiguous")
+        by_identity[delta.identity] = delta
+
+    for identity in stage_required:
+        delta = by_identity.get(identity)
+        if delta is None:
+            return _inconclusive(stage, "acceptance.target_issue_identity_mismatch")
+        if (
+            delta.before is None
+            or delta.after is None
+            or not math.isfinite(delta.before)
+            or not math.isfinite(delta.after)
+            or not math.isfinite(delta.resolution_threshold)
+            or not math.isfinite(delta.tolerance)
+            or delta.tolerance < 0
+        ):
+            return _inconclusive(stage, "acceptance.target_issue_delta_unavailable")
+
+        threshold = delta.resolution_threshold
+        tolerance = delta.tolerance
+        if delta.direction == "decrease":
+            if delta.before <= threshold + tolerance:
+                return _inconclusive(
+                    stage, "acceptance.target_issue_baseline_unproven"
+                )
+            if delta.after >= delta.before - tolerance:
+                return _rejected(stage, "acceptance.target_issue_not_improved")
+            if delta.after > threshold + tolerance:
+                return _rejected(stage, "acceptance.target_issue_not_resolved")
+        else:
+            if delta.before >= threshold - tolerance:
+                return _inconclusive(
+                    stage, "acceptance.target_issue_baseline_unproven"
+                )
+            if delta.after <= delta.before + tolerance:
+                return _rejected(stage, "acceptance.target_issue_not_improved")
+            if delta.after < threshold - tolerance:
+                return _rejected(stage, "acceptance.target_issue_not_resolved")
+    return None
+
+
 def _evaluate_policy(
-    trigger_type: TriggerType, evidence: AcceptanceEvidence
+    trigger_type: TriggerType,
+    evidence: AcceptanceEvidence,
+    required_target_issues: tuple[TargetIssueIdentity, ...],
 ) -> _PolicyResult:
     # Cheap hard gates are evaluated in execution order.  A caller may omit later
     # expensive evidence after an earlier rejection without changing that rejection.
     for name, gate in (
         ("schema", evidence.schema),
         ("invariant", evidence.invariant),
-        ("render", evidence.render),
-        ("dom", evidence.dom),
     ):
+        if result := _base_gate_result(name, gate):
+            return result
+    if trigger_type == "geometry" and (
+        result := _target_issue_result(
+            "invariant", evidence, required_target_issues
+        )
+    ):
+        return result
+
+    for name, gate in (("render", evidence.render), ("dom", evidence.dom)):
         if result := _base_gate_result(name, gate):
             return result
 
@@ -170,6 +295,10 @@ def _evaluate_policy(
         return _rejected("dom", *dom.reason_codes, "dom.unintended_overlap")
     if dom.non_regression is None:
         return _inconclusive("dom", "dom.telemetry_incomplete")
+    if trigger_type == "geometry" and (
+        result := _target_issue_result("dom", evidence, required_target_issues)
+    ):
+        return result
 
     if result := _base_gate_result("ocr", evidence.ocr):
         return result
@@ -234,10 +363,11 @@ def decide_acceptance(
     decision_id: str | None = None,
     plan_id: str | None = None,
     base_spec_revision: int | None = None,
+    required_target_issues: tuple[TargetIssueIdentity, ...] = (),
 ) -> AcceptanceDecision:
     """Return a deterministic, DB-write-free decision for one candidate."""
 
-    result = _evaluate_policy(trigger_type, evidence)
+    result = _evaluate_policy(trigger_type, evidence, required_target_issues)
     return AcceptanceDecision(
         **{"$schema": ACCEPTANCE_SCHEMA},
         decisionId=decision_id,
@@ -258,5 +388,7 @@ __all__ = [
     "AcceptanceEvidence",
     "GateEvidence",
     "StageDecision",
+    "TargetIssueDelta",
+    "TargetIssueIdentity",
     "decide_acceptance",
 ]
