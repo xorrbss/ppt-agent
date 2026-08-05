@@ -480,4 +480,158 @@ describe("AuthoredQualityReview result details", () => {
       symbols: 0,
     });
   });
+
+  it("separates repair lifecycle evidence and renders measured operations telemetry", () => {
+    cy.clock();
+    cy.stub(PresentationGenerationApi, "reviewAuthoredPresentation")
+      .resolves({ id: "quality-operations-task" });
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").resolves({
+      status: "completed",
+      data: {
+        reviewed_count: 4,
+        issue_slide_count: 4,
+        fixed_count: 1,
+        fixed_slide_indices: [0],
+        remaining_issue_count: 2,
+        remaining_slide_indices: [1, 3],
+        slide_results: [
+          {
+            slide_index: 0,
+            attempted: true,
+            candidate_count: 1,
+            accepted: true,
+            applied: true,
+            apply_status: "committed",
+            publish_status: "active",
+            post_verify_status: "passed",
+            rolled_back: false,
+            detected_issues: ["text overflow"],
+            resolved_issues: ["text overflow"],
+            element_changes: [{
+              element_id: "title",
+              before: "font-size: 42px",
+              after: "font-size: 38px",
+              changed_properties: ["font-size", "line-height"],
+              applied: true,
+              resolved_issues: ["text overflow"],
+              remaining_issues: [],
+              path: "local_patch",
+            }],
+            path: "local_patch",
+          },
+          {
+            slide_index: 1,
+            attempted: true,
+            candidate_count: 1,
+            accepted: false,
+            applied: false,
+            rejection_reason: "target issue not resolved",
+            detected_issues: ["overlap"],
+            remaining_issues: ["overlap"],
+            path: "local_patch",
+          },
+          {
+            slide_index: 2,
+            attempted: false,
+            accepted: false,
+            applied: false,
+            corrected_false_positive: true,
+            correction_reason: "intentional overlap; source unchanged",
+            detected_issues: ["protected image crop"],
+            remaining_issues: [],
+            path: "none",
+          },
+          {
+            slide_index: 3,
+            attempted: true,
+            accepted: false,
+            applied: false,
+            rejection_reason: "proposal preflight unavailable",
+            detected_issues: ["unmeasured geometry"],
+            remaining_issues: ["unmeasured geometry"],
+            path: "none",
+          },
+        ],
+        metrics: {
+          latency_percentiles: {
+            cold: { deck_total: { p50_ms: 120, p95_ms: 180, p99_ms: 220 } },
+            warm: { deck_total: { p50_ms: 40, p95_ms: 60, p99_ms: 75 } },
+          },
+          stage_usage: {
+            llm: { input_tokens: 120, output_tokens: 30, total_tokens: 150, cost_usd: 0.0123, cache_hits: 1, cache_misses: 2 },
+            chrome: { cache_hits: 3, cache_misses: 1 },
+            acceptance: { total_tokens: 20, cost_usd: 0.001 },
+            postverify: { cache_hits: 1, cache_misses: 0 },
+          },
+          corrected_false_positives: 18,
+          true_positive_executor_verified: 0,
+          true_positive_pending: 5,
+        },
+      },
+    });
+
+    cy.mount(<AuthoredQualityReview presentationId="deck-operations" slideCount={3} />);
+    cy.get('[data-testid="quality-review-trigger"]').click();
+    cy.get('[data-testid="quality-review-confirm"]').click();
+    cy.tick(2_000);
+
+    cy.get('[data-testid="quality-lifecycle-detected"]').should("contain.text", "4");
+    cy.get('[data-testid="quality-lifecycle-candidates"]').should("contain.text", "2");
+    cy.get('[data-testid="quality-lifecycle-rejected"]').should("contain.text", "target issue not resolved");
+    cy.get('[data-testid="quality-lifecycle-no-candidate"]')
+      .should("contain.text", "Slide 4")
+      .and("contain.text", "proposal preflight unavailable");
+    cy.get('[data-testid="quality-lifecycle-applied"]').should("contain.text", "Slide 1");
+    cy.get('[data-testid="quality-lifecycle-remaining"]').should("contain.text", "Slide 2");
+    cy.get('[data-testid="quality-lifecycle-corrected-false-positives"]')
+      .should("contain.text", "intentional overlap; source unchanged");
+    cy.get('[data-testid="quality-review-slide-2"]')
+      .should("contain.text", "Corrected detector false positive")
+      .and("contain.text", "source unchanged");
+    cy.get('[data-testid="quality-review-slide-0"]')
+      .should("contain.text", "Apply: committed")
+      .and("contain.text", "Rollback: no")
+      .and("contain.text", "Changed properties: font-size, line-height");
+    cy.get('[data-testid="quality-corrected-false-positive-count"]')
+      .should("contain.text", "18");
+    cy.get('[data-testid="quality-true-positive-verified-count"]')
+      .should("contain.text", "0");
+    cy.get('[data-testid="quality-true-positive-pending-count"]')
+      .should("contain.text", "5");
+    cy.get('[data-testid="quality-operations-dashboard"]')
+      .should("contain.text", "Cold p99")
+      .and("contain.text", "220ms")
+      .and("contain.text", "Warm p50")
+      .and("contain.text", "LLM / Chrome / acceptance / post-verify usage")
+      .and("contain.text", "150")
+      .and("contain.text", "$0.0123");
+  });
+
+  it("keeps a true-positive repair unresolved until canonical executor evidence exists", () => {
+    const result = normalizeAuthoredQualityReviewResult({
+      slide_results: [{
+        slide_index: 18,
+        attempted: false,
+        accepted: false,
+        applied: false,
+        corrected_false_positive: false,
+        apply_status: "not_started",
+        publish_status: "not_started",
+        post_verify_status: "not_started",
+        rolled_back: false,
+        detected_issues: ["element extends outside the slide canvas"],
+        remaining_issues: ["footer glyph clipping"],
+        path: "none",
+      }],
+    });
+
+    expect(result.slide_results[0]).to.include({
+      corrected_false_positive: false,
+      applied: false,
+      post_verify_status: "not_started",
+    });
+    expect(result.slide_results[0].remaining_issues).to.deep.equal([
+      "footer glyph clipping",
+    ]);
+  });
 });

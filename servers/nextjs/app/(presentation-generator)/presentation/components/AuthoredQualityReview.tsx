@@ -27,6 +27,7 @@ import {
   normalizeAuthoredQualityReviewResult,
   type AuthoredQualityReviewOcrCheck,
   type AuthoredQualityReviewOcrOmissions,
+  type AuthoredQualityReviewMetrics,
   type AuthoredQualityReviewResult,
   type AuthoredReviewRepairPath,
 } from "../../services/api/authored";
@@ -74,6 +75,175 @@ function ocrStatusLabel(ocr: AuthoredQualityReviewOcrCheck) {
 
 function ocrOmissionLabel(omissions: AuthoredQualityReviewOcrOmissions) {
   return `텍스트 ${omissions.text} · 숫자 ${omissions.numbers} · 기호 ${omissions.symbols}`;
+}
+
+function lifecycleSlides(result: AuthoredQualityReviewResult) {
+  const hasDetectedIssue = (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+    slide.detected_issues.length > 0 ||
+    slide.resolved_issues.length > 0 ||
+    slide.remaining_issues.length > 0 ||
+    slide.attempted;
+  return [
+    {
+      id: "detected",
+      label: "Detected",
+      slides: result.slide_results.filter(hasDetectedIssue),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        slide.detected_issues.join(", ") ||
+        slide.remaining_issues.join(", ") ||
+        slide.resolved_issues.join(", ") ||
+        "Detector reported an issue; exact reason was not supplied.",
+    },
+    {
+      id: "corrected-false-positives",
+      label: "Corrected false positives",
+      slides: result.slide_results.filter((slide) => slide.corrected_false_positive),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        slide.correction_reason || "Human review marked this detector hit as not requiring a repair.",
+    },
+    {
+      id: "candidates",
+      label: "Candidates",
+      slides: result.slide_results.filter((slide) => slide.candidate_count > 0),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        `${reviewPathLabel(slide.path)} · ${slide.accepted ? "accepted" : "awaiting or rejected"}`,
+    },
+    {
+      id: "rejected",
+      label: "Rejected",
+      slides: result.slide_results.filter(
+        (slide) => slide.candidate_count > 0 && (slide.candidate_rejection_reasons.length > 0 || (!slide.accepted && !!slide.rejection_reason)),
+      ),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        slide.candidate_rejection_reasons.join(", ") || slide.rejection_reason || "Candidate did not pass acceptance.",
+    },
+    {
+      id: "no-candidate",
+      label: "No candidate / preflight",
+      slides: result.slide_results.filter(
+        (slide) => slide.attempted && slide.candidate_count === 0 && !slide.corrected_false_positive,
+      ),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        slide.rejection_reason || "Preflight or proposal generation produced no candidate.",
+    },
+    {
+      id: "applied",
+      label: "Applied",
+      slides: result.slide_results.filter((slide) => slide.applied),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        `${slide.apply_status} · publish ${slide.publish_status} · post-verify ${slide.post_verify_status}${slide.rolled_back ? " · rolled back" : ""}`,
+    },
+    {
+      id: "remaining",
+      label: "Remaining",
+      slides: result.slide_results.filter(
+        (slide) =>
+          slide.remaining_issues.length > 0 ||
+          (hasDetectedIssue(slide) && !slide.applied && !slide.accepted),
+      ),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        slide.remaining_issues.join(", ") ||
+        slide.rejection_reason ||
+        "No accepted, applied repair is recorded for this detected issue.",
+    },
+  ];
+}
+
+function OpsDashboard({ metrics }: { metrics: AuthoredQualityReviewMetrics }) {
+  const latency = metrics.latency_percentiles;
+  const usage = metrics.stage_usage;
+  const latencyStages = [
+    ...new Set([
+      ...Object.keys(latency?.cold ?? {}),
+      ...Object.keys(latency?.warm ?? {}),
+    ]),
+  ];
+  const usageStages = Object.keys(usage ?? {});
+  if (!latencyStages.length && !usageStages.length) return null;
+
+  const formatPercentile = (value?: number) =>
+    value === undefined ? "—" : formatDuration(value) ?? "—";
+  const formatUsage = (value?: number) =>
+    value === undefined ? "—" : value.toLocaleString("en-US");
+  const formatCost = (value?: number) =>
+    value === undefined ? "—" : `$${value.toFixed(4)}`;
+
+  return (
+    <section
+      data-testid="quality-operations-dashboard"
+      className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-700"
+    >
+      <div>
+        <p className="font-semibold text-slate-900">Operations dashboard</p>
+        <p className="mt-1 text-slate-600">
+          Percentiles are shown only when the backend supplies measured replay samples.
+        </p>
+      </div>
+      {latencyStages.length > 0 && (
+        <div className="overflow-x-auto">
+          <p className="mb-2 font-medium text-slate-900">Cold / warm latency</p>
+          <table className="w-full min-w-[620px] text-left">
+            <thead className="border-b text-slate-500">
+              <tr>
+                <th className="pb-1 pr-3">Stage</th>
+                <th className="pb-1 pr-3">Cold p50</th>
+                <th className="pb-1 pr-3">Cold p95</th>
+                <th className="pb-1 pr-3">Cold p99</th>
+                <th className="pb-1 pr-3">Warm p50</th>
+                <th className="pb-1 pr-3">Warm p95</th>
+                <th className="pb-1">Warm p99</th>
+              </tr>
+            </thead>
+            <tbody>
+              {latencyStages.map((stage) => (
+                <tr key={stage} className="border-b last:border-0">
+                  <td className="py-1.5 pr-3 font-medium">{stage}</td>
+                  <td className="py-1.5 pr-3">{formatPercentile(latency?.cold?.[stage]?.p50_ms)}</td>
+                  <td className="py-1.5 pr-3">{formatPercentile(latency?.cold?.[stage]?.p95_ms)}</td>
+                  <td className="py-1.5 pr-3">{formatPercentile(latency?.cold?.[stage]?.p99_ms)}</td>
+                  <td className="py-1.5 pr-3">{formatPercentile(latency?.warm?.[stage]?.p50_ms)}</td>
+                  <td className="py-1.5 pr-3">{formatPercentile(latency?.warm?.[stage]?.p95_ms)}</td>
+                  <td className="py-1.5">{formatPercentile(latency?.warm?.[stage]?.p99_ms)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {usageStages.length > 0 && (
+        <div className="overflow-x-auto">
+          <p className="mb-2 font-medium text-slate-900">LLM / Chrome / acceptance / post-verify usage</p>
+          <table className="w-full min-w-[620px] text-left">
+            <thead className="border-b text-slate-500">
+              <tr>
+                <th className="pb-1 pr-3">Stage</th>
+                <th className="pb-1 pr-3">Input tokens</th>
+                <th className="pb-1 pr-3">Output tokens</th>
+                <th className="pb-1 pr-3">Total tokens</th>
+                <th className="pb-1 pr-3">Cost</th>
+                <th className="pb-1">Cache hits / misses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usageStages.map((stage) => {
+                const row = usage?.[stage];
+                return (
+                  <tr key={stage} className="border-b last:border-0">
+                    <td className="py-1.5 pr-3 font-medium">{stage}</td>
+                    <td className="py-1.5 pr-3">{formatUsage(row?.input_tokens)}</td>
+                    <td className="py-1.5 pr-3">{formatUsage(row?.output_tokens)}</td>
+                    <td className="py-1.5 pr-3">{formatUsage(row?.total_tokens)}</td>
+                    <td className="py-1.5 pr-3">{formatCost(row?.cost_usd)}</td>
+                    <td className="py-1.5">{formatUsage(row?.cache_hits)} / {formatUsage(row?.cache_misses)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function formatDuration(milliseconds?: number) {
@@ -340,7 +510,12 @@ export default function AuthoredQualityReview({
                 result.metrics.ocr_executed !== undefined ||
                 result.metrics.ocr_calls !== undefined ||
                 result.metrics.ocr_cache_hits !== undefined ||
-                result.metrics.ocr_total_ms !== undefined) && (
+                result.metrics.ocr_total_ms !== undefined ||
+                result.metrics.corrected_false_positives !== undefined ||
+                result.metrics.true_positive_executor_verified !== undefined ||
+                result.metrics.true_positive_pending !== undefined ||
+                result.metrics.latency_percentiles !== undefined ||
+                result.metrics.stage_usage !== undefined) && (
                 <section
                   data-testid="quality-review-metrics"
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700"
@@ -450,6 +625,21 @@ export default function AuthoredQualityReview({
                         롤백 {result.metrics.rolled_back}
                       </span>
                     )}
+                    {result.metrics.corrected_false_positives !== undefined && (
+                      <span data-testid="quality-corrected-false-positive-count">
+                        Corrected false positives {result.metrics.corrected_false_positives}
+                      </span>
+                    )}
+                    {result.metrics.true_positive_executor_verified !== undefined && (
+                      <span data-testid="quality-true-positive-verified-count">
+                        Executor-verified true positives {result.metrics.true_positive_executor_verified}
+                      </span>
+                    )}
+                    {result.metrics.true_positive_pending !== undefined && (
+                      <span data-testid="quality-true-positive-pending-count">
+                        True positives pending evidence {result.metrics.true_positive_pending}
+                      </span>
+                    )}
                     {result.metrics.solver_total_ms !== undefined && (
                       <span data-testid="quality-solver-elapsed">
                         Solver {formatDuration(result.metrics.solver_total_ms)}
@@ -516,6 +706,36 @@ export default function AuthoredQualityReview({
                   )}
                 </section>
               )}
+              <OpsDashboard metrics={result.metrics} />
+              {result.slide_results.length > 0 && (
+                <section
+                  data-testid="quality-review-lifecycle"
+                  className="grid gap-2 sm:grid-cols-2"
+                >
+                  {lifecycleSlides(result).map((stage) => (
+                    <div
+                      key={stage.id}
+                      data-testid={`quality-lifecycle-${stage.id}`}
+                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"
+                    >
+                      <p className="font-semibold text-slate-900">
+                        {stage.label} <span className="text-slate-500">{stage.slides.length}</span>
+                      </p>
+                      {stage.slides.length > 0 ? (
+                        <ul className="mt-1 space-y-1 text-slate-700">
+                          {stage.slides.map((slide) => (
+                            <li key={slide.slide_index}>
+                              Slide {slide.slide_index + 1}: {stage.description(slide)}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-slate-500">None</p>
+                      )}
+                    </div>
+                  ))}
+                </section>
+              )}
               {result.slide_results.length > 0 && (
                 <section
                   data-testid="quality-review-details"
@@ -543,6 +763,20 @@ export default function AuthoredQualityReview({
                         {reviewPathLabel(slide.path)}
                       </summary>
                       <div className="mt-3 space-y-2 text-xs text-gray-700">
+                        <p className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-700">
+                          Apply: {slide.apply_status} · Publish: {slide.publish_status} · Post-verify: {slide.post_verify_status} · Rollback: {slide.rolled_back ? "yes" : "no"}
+                        </p>
+                        {slide.detected_issues.length > 0 && (
+                          <p className="text-slate-700">
+                            Detected: {slide.detected_issues.join(" · ")}
+                          </p>
+                        )}
+                        {slide.corrected_false_positive && (
+                          <p className="rounded-lg border border-sky-200 bg-sky-50 p-2 text-sky-900">
+                            Corrected detector false positive — source unchanged.
+                            {slide.correction_reason ? ` ${slide.correction_reason}` : ""}
+                          </p>
+                        )}
                         {slide.attempted &&
                           !slide.accepted &&
                           !slide.applied &&
@@ -650,6 +884,11 @@ export default function AuthoredQualityReview({
                               <p className="mt-1 break-words">
                                 전: {change.before ?? "—"} → 후:{" "}
                                 {change.after ?? "—"}
+                              </p>
+                            )}
+                            {change.changed_properties.length > 0 && (
+                              <p className="mt-1 text-slate-600">
+                                Changed properties: {change.changed_properties.join(", ")}
                               </p>
                             )}
                             {change.resolved_issues.length > 0 && (

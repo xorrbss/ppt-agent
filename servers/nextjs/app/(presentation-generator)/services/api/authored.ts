@@ -23,6 +23,8 @@ export interface AuthoredQualityReviewElementChange {
   resolved_issues: string[];
   remaining_issues: string[];
   path: AuthoredReviewRepairPath;
+  /** Exact presentation properties changed by this candidate, when available. */
+  changed_properties: string[];
 }
 
 export type AuthoredOcrStatus =
@@ -68,11 +70,36 @@ export interface AuthoredQualityReviewSlideResult {
   rolled_back: boolean;
   /** Why an attempted repair was not retained, when supplied by the backend. */
   rejection_reason?: string | null;
+  /** Count of plans actually proposed; trigger/attempted alone is not a candidate. */
+  candidate_count: number;
+  /** Candidate-specific rejection codes, excluding preflight/no-candidate exits. */
+  candidate_rejection_reasons: string[];
+  /** Human review corrected a detector hit; source content was intentionally unchanged. */
+  corrected_false_positive: boolean;
+  correction_reason?: string | null;
+  /** Issues reported by the detector before proposal generation. */
+  detected_issues: string[];
   element_changes: AuthoredQualityReviewElementChange[];
   resolved_issues: string[];
   remaining_issues: string[];
   path: AuthoredReviewRepairPath;
   ocr?: AuthoredQualityReviewOcrCheck;
+}
+
+export interface AuthoredQualityReviewPercentiles {
+  p50_ms?: number;
+  p95_ms?: number;
+  p99_ms?: number;
+  samples?: number;
+}
+
+export interface AuthoredQualityReviewStageUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  cost_usd?: number;
+  cache_hits?: number;
+  cache_misses?: number;
 }
 
 export interface AuthoredQualityReviewMetrics {
@@ -105,6 +132,11 @@ export interface AuthoredQualityReviewMetrics {
   applied?: number;
   rolled_back?: number;
   legacy_preserved?: number;
+  corrected_false_positives?: number;
+  /** True positives proven by canonical executor evidence (not UI inference). */
+  true_positive_executor_verified?: number;
+  /** True positives that remain unresolved because canonical evidence is absent or incomplete. */
+  true_positive_pending?: number;
   /** Low-cardinality deterministic layout solver telemetry. */
   solver_total_ms?: number;
   solver_branches_evaluated?: number;
@@ -119,6 +151,13 @@ export interface AuthoredQualityReviewMetrics {
   ocr_calls?: number;
   ocr_cache_hits?: number;
   ocr_total_ms?: number;
+  /** Per-stage percentile snapshots, separated by cold and warm replay runs. */
+  latency_percentiles?: {
+    cold?: Record<string, AuthoredQualityReviewPercentiles>;
+    warm?: Record<string, AuthoredQualityReviewPercentiles>;
+  };
+  /** Token, cost, and cache accounting by pipeline stage. */
+  stage_usage?: Record<string, AuthoredQualityReviewStageUsage>;
 }
 
 export interface AuthoredQualityReviewResult {
@@ -440,15 +479,20 @@ function normalizeElementChange(
     resolved_issues: normalizeIssueList(value.resolved_issues),
     remaining_issues: normalizeIssueList(value.remaining_issues),
     path,
+    changed_properties: [],
   };
   const elementId = value.element_id ?? value.elementId ?? value.qid;
   const before = normalizeDisplayValue(value.before);
   const after = normalizeDisplayValue(value.after);
+  const changedProperties = normalizeStringList(
+    firstDefined(value.changed_properties, value.changedProperties, value.properties),
+  );
   if (typeof elementId === "string" && elementId.trim()) {
     change.element_id = elementId.trim();
   }
   if (before !== undefined) change.before = before;
   if (after !== undefined) change.after = after;
+  change.changed_properties = changedProperties;
   return change;
 }
 
@@ -475,6 +519,32 @@ function normalizeSlideResult(
       ? value.changes
       : [];
   const rejectionReason = normalizeOptionalString(value.rejection_reason);
+  const correctionReason = normalizeOptionalString(
+    value.correction_reason ?? value.false_positive_reason,
+  );
+  const candidateMetrics = isRecord(value.metrics) && isRecord(value.metrics.candidates)
+    ? value.metrics.candidates
+    : {};
+  const rawOutcomes = Array.isArray(value.outcomes) ? value.outcomes : [];
+  const candidateCount = normalizeNumber(
+    firstDefined(
+      value.candidate_count,
+      value.candidate_proposed,
+      candidateMetrics.proposed,
+    ),
+  ) ?? rawOutcomes.filter((outcome) => isRecord(outcome) && outcome.proposal_status === "proposed").length;
+  const candidateRejectionReasons = [
+    ...rawOutcomes.flatMap((outcome) =>
+      isRecord(outcome) && outcome.validation_status === "rejected"
+        ? normalizeIssueList(outcome.reason_codes)
+        : [],
+    ),
+  ];
+  if (Array.isArray(value.candidate_rejections)) {
+    for (const rejection of value.candidate_rejections) {
+      if (isRecord(rejection)) candidateRejectionReasons.push(...normalizeIssueList(rejection.reason_codes));
+    }
+  }
   // Older payloads did not expose acceptance. Only a fixed-slide index is
   // reliable evidence of a saved change; path alone may describe a rejected
   // candidate.
@@ -508,6 +578,15 @@ function normalizeSlideResult(
         : "not_started",
     rolled_back: value.rolled_back === true,
     ...(rejectionReason === null ? {} : { rejection_reason: rejectionReason }),
+    candidate_count: candidateCount,
+    candidate_rejection_reasons: [...new Set(candidateRejectionReasons)],
+    corrected_false_positive:
+      value.corrected_false_positive === true ||
+      value.detector_disposition === "false_positive",
+    ...(correctionReason === null ? {} : { correction_reason: correctionReason }),
+    detected_issues: normalizeIssueList(
+      value.detected_issues ?? value.detected ?? value.issues_before,
+    ),
     element_changes: changes,
     resolved_issues: normalizeIssueList(value.resolved_issues),
     remaining_issues: normalizeIssueList(
@@ -526,6 +605,81 @@ function normalizeStageTimings(value: unknown): Record<string, number> {
       return normalized === undefined ? [] : [[stage, normalized]];
     }),
   );
+}
+
+function normalizePercentiles(
+  value: unknown,
+): AuthoredQualityReviewPercentiles | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: AuthoredQualityReviewPercentiles = {};
+  const aliases = {
+    p50_ms: ["p50", "p50Ms"],
+    p95_ms: ["p95", "p95Ms"],
+    p99_ms: ["p99", "p99Ms"],
+    samples: ["count", "sample_count"],
+  } as const;
+  for (const [key, candidates] of Object.entries(aliases) as Array<
+    [keyof AuthoredQualityReviewPercentiles, readonly string[]]
+  >) {
+    const normalized = normalizeNumber(
+      [key, ...candidates]
+        .map((candidate) => value[candidate])
+        .find((candidate) => candidate !== undefined),
+    );
+    if (normalized !== undefined) result[key] = normalized;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeLatencyPercentiles(
+  value: unknown,
+): AuthoredQualityReviewMetrics["latency_percentiles"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const normalizeRun = (run: unknown) => {
+    if (!isRecord(run)) return undefined;
+    const stages = Object.fromEntries(
+      Object.entries(run).flatMap(([stage, percentiles]) => {
+        const normalized = normalizePercentiles(percentiles);
+        return normalized ? [[stage, normalized]] : [];
+      }),
+    );
+    return Object.keys(stages).length > 0 ? stages : undefined;
+  };
+  const cold = normalizeRun(value.cold);
+  const warm = normalizeRun(value.warm);
+  return cold || warm ? { ...(cold ? { cold } : {}), ...(warm ? { warm } : {}) } : undefined;
+}
+
+function normalizeStageUsage(
+  value: unknown,
+): Record<string, AuthoredQualityReviewStageUsage> | undefined {
+  if (!isRecord(value)) return undefined;
+  const metricAliases = {
+    input_tokens: ["prompt_tokens"],
+    output_tokens: ["completion_tokens"],
+    total_tokens: ["tokens"],
+    cost_usd: ["usd", "cost"],
+    cache_hits: [],
+    cache_misses: [],
+  } as const;
+  const stages = Object.fromEntries(
+    Object.entries(value).flatMap(([stage, rawUsage]) => {
+      if (!isRecord(rawUsage)) return [];
+      const usage: AuthoredQualityReviewStageUsage = {};
+      for (const [key, aliases] of Object.entries(metricAliases) as Array<
+        [keyof AuthoredQualityReviewStageUsage, readonly string[]]
+      >) {
+        const normalized = normalizeNumber(
+          [key, ...aliases]
+            .map((candidate) => rawUsage[candidate])
+            .find((candidate) => candidate !== undefined),
+        );
+        if (normalized !== undefined) usage[key] = normalized;
+      }
+      return Object.keys(usage).length > 0 ? [[stage, usage]] : [];
+    }),
+  );
+  return Object.keys(stages).length > 0 ? stages : undefined;
 }
 
 function normalizeSlideOcr(
@@ -603,6 +757,22 @@ export function normalizeAuthoredQualityReviewResult(
   const metrics: AuthoredQualityReviewMetrics = {
     stage_timings_ms: stageTimings,
   };
+  const latencyPercentiles = normalizeLatencyPercentiles(
+    firstDefined(
+      metricsSource.latency_percentiles,
+      metricsSource.percentiles,
+      payload.latency_percentiles,
+    ),
+  );
+  if (latencyPercentiles) metrics.latency_percentiles = latencyPercentiles;
+  const stageUsage = normalizeStageUsage(
+    firstDefined(
+      metricsSource.stage_usage,
+      metricsSource.usage_by_stage,
+      payload.stage_usage,
+    ),
+  );
+  if (stageUsage) metrics.stage_usage = stageUsage;
   const metricAliases = {
     total_ms: [],
     cache_hits: [],
@@ -632,6 +802,9 @@ export function normalizeAuthoredQualityReviewResult(
     applied: [],
     rolled_back: [],
     legacy_preserved: [],
+    corrected_false_positives: ["corrected_false_positive_count"],
+    true_positive_executor_verified: [],
+    true_positive_pending: [],
     solver_total_ms: ["solver_ms", "solver_duration_ms"],
     solver_branches_evaluated: ["solver_branches", "branches_evaluated"],
     solver_unknown_hard: ["solver_unknown_count", "unknown_hard_count"],
@@ -775,6 +948,10 @@ export function normalizeAuthoredQualityReviewResult(
       publish_status: "not_started",
       post_verify_status: "not_started",
       rolled_back: false,
+      candidate_count: 0,
+      candidate_rejection_reasons: [],
+      corrected_false_positive: false,
+      detected_issues: [],
       element_changes: [],
       resolved_issues: [],
       remaining_issues: [],
