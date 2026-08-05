@@ -58,9 +58,13 @@ function reviewOutcomeLabel(
   attempted: boolean,
   accepted: boolean,
   applied: boolean,
+  incomplete = false,
+  rejected = false,
 ) {
   if (applied) return "실제 적용됨";
   if (accepted) return "검증 통과 · 미적용";
+  if (rejected) return "검증 거부";
+  if (incomplete) return "측정 불완전";
   if (attempted) return "검증 거부";
   return "후보 없음";
 }
@@ -77,11 +81,35 @@ function ocrOmissionLabel(omissions: AuthoredQualityReviewOcrOmissions) {
   return `텍스트 ${omissions.text} · 숫자 ${omissions.numbers} · 기호 ${omissions.symbols}`;
 }
 
+function measurementLabel(
+  measurement: { qid?: string; constraint_id?: string; metric?: string; stage?: string; reason: string },
+) {
+  const scope = [
+    measurement.qid,
+    measurement.constraint_id,
+    measurement.metric,
+    measurement.stage,
+  ].filter(Boolean).join(" · ");
+  return `${scope ? `${scope}: ` : ""}${measurement.reason}`;
+}
+
+function isCleanReviewResult(result: AuthoredQualityReviewResult) {
+  return result.remaining_issue_count === 0 &&
+    result.unresolved_confirmed_issue_count === 0 &&
+    result.incomplete_measurement_count === 0;
+}
+
 function lifecycleSlides(result: AuthoredQualityReviewResult) {
   const hasDetectedIssue = (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
     slide.detected_issues.length > 0 ||
+    slide.confirmed_issue_count > 0 ||
     slide.resolved_issues.length > 0 ||
     slide.remaining_issues.length > 0 ||
+    slide.incomplete_measurements.length > 0 ||
+    slide.publish_blockers.length > 0 ||
+    slide.repair_blockers.length > 0 ||
+    slide.candidate_rejection_reasons.length > 0 ||
+    !!slide.rejection_reason ||
     slide.attempted;
   return [
     {
@@ -90,6 +118,9 @@ function lifecycleSlides(result: AuthoredQualityReviewResult) {
       slides: result.slide_results.filter(hasDetectedIssue),
       description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
         slide.detected_issues.join(", ") ||
+        (slide.confirmed_issue_count > 0
+          ? `Confirmed physical issues: ${slide.confirmed_issue_count}`
+          : "") ||
         slide.remaining_issues.join(", ") ||
         slide.resolved_issues.join(", ") ||
         "Detector reported an issue; exact reason was not supplied.",
@@ -102,6 +133,20 @@ function lifecycleSlides(result: AuthoredQualityReviewResult) {
         slide.correction_reason || "Human review marked this detector hit as not requiring a repair.",
     },
     {
+      id: "incomplete",
+      label: "Incomplete measurement",
+      slides: result.slide_results.filter(
+        (slide) =>
+          slide.incomplete_measurements.length > 0 ||
+          slide.publish_blockers.length > 0,
+      ),
+      description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
+        [
+          ...slide.incomplete_measurements,
+          ...slide.publish_blockers,
+        ].map(measurementLabel).join(", ") || "Scoped measurement is incomplete.",
+    },
+    {
       id: "candidates",
       label: "Candidates",
       slides: result.slide_results.filter((slide) => slide.candidate_count > 0),
@@ -112,10 +157,10 @@ function lifecycleSlides(result: AuthoredQualityReviewResult) {
       id: "rejected",
       label: "Rejected",
       slides: result.slide_results.filter(
-        (slide) => slide.candidate_count > 0 && (slide.candidate_rejection_reasons.length > 0 || (!slide.accepted && !!slide.rejection_reason)),
+        (slide) => slide.candidate_count > 0 && (slide.repair_blockers.length > 0 || slide.candidate_rejection_reasons.length > 0 || (!slide.accepted && !!slide.rejection_reason)),
       ),
       description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
-        slide.candidate_rejection_reasons.join(", ") || slide.rejection_reason || "Candidate did not pass acceptance.",
+        slide.repair_blockers.join(", ") || slide.candidate_rejection_reasons.join(", ") || slide.rejection_reason || "Candidate did not pass acceptance.",
     },
     {
       id: "no-candidate",
@@ -124,7 +169,7 @@ function lifecycleSlides(result: AuthoredQualityReviewResult) {
         (slide) => slide.attempted && slide.candidate_count === 0 && !slide.corrected_false_positive,
       ),
       description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
-        slide.rejection_reason || "Preflight or proposal generation produced no candidate.",
+        slide.repair_blockers.join(", ") || slide.rejection_reason || "Preflight or proposal generation produced no candidate.",
     },
     {
       id: "applied",
@@ -139,10 +184,14 @@ function lifecycleSlides(result: AuthoredQualityReviewResult) {
       slides: result.slide_results.filter(
         (slide) =>
           slide.remaining_issues.length > 0 ||
+          slide.unresolved_confirmed_issue_count > 0 ||
           (hasDetectedIssue(slide) && !slide.applied && !slide.accepted),
       ),
       description: (slide: AuthoredQualityReviewResult["slide_results"][number]) =>
         slide.remaining_issues.join(", ") ||
+        (slide.unresolved_confirmed_issue_count > 0
+          ? `Unresolved confirmed issues: ${slide.unresolved_confirmed_issue_count}`
+          : "") ||
         slide.rejection_reason ||
         "No accepted, applied repair is recorded for this detected issue.",
     },
@@ -436,15 +485,31 @@ export default function AuthoredQualityReview({
             </div>
           ) : result ? (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              <div
+                data-testid="quality-review-summary"
+                className={`flex items-start gap-3 rounded-2xl border p-4 ${
+                  isCleanReviewResult(result)
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-amber-200 bg-amber-50"
+                }`}
+              >
+                {isCleanReviewResult(result) ? (
+                  <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                )}
                 <div>
-                  <p className="font-semibold text-emerald-950">검수 완료</p>
-                  <p className="mt-1 text-sm leading-6 text-emerald-900">
+                  <p className={`font-semibold ${isCleanReviewResult(result) ? "text-emerald-950" : "text-amber-950"}`}>
+                    {isCleanReviewResult(result) ? "검수 완료 · clean" : "검수 완료 · 후속 조치 필요"}
+                  </p>
+                  <p className={`mt-1 text-sm leading-6 ${isCleanReviewResult(result) ? "text-emerald-900" : "text-amber-900"}`}>
                     {result.reviewed_count}개 슬라이드를 검사했고{" "}
                     {result.issue_slide_count}개에서 문제를 확인했습니다.
                     {result.fixed_count > 0 &&
                       ` ${result.fixed_count}개를 자동 수정했습니다.`}
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Confirmed {result.confirmed_issue_count} · Incomplete measurements {result.incomplete_measurement_count} · Unresolved confirmed {result.unresolved_confirmed_issue_count} · Clean slides {result.clean_slide_count}
                   </p>
                 </div>
               </div>
@@ -770,6 +835,54 @@ export default function AuthoredQualityReview({
                           <p className="text-slate-700">
                             Detected: {slide.detected_issues.join(" · ")}
                           </p>
+                        )}
+                        {slide.confirmed_issue_count > 0 && (
+                          <p data-testid={`quality-confirmed-issues-${slide.slide_index}`} className="text-amber-800">
+                            Confirmed physical issues: {slide.confirmed_issue_count} · unresolved: {slide.unresolved_confirmed_issue_count}
+                          </p>
+                        )}
+                        {slide.evidence_atoms.length > 0 && (
+                          <p className="break-words text-slate-600">
+                            Evidence: {slide.evidence_atoms.map((atom) =>
+                              [atom.qid, atom.constraint_id, atom.metric, atom.stage, atom.state]
+                                .filter(Boolean)
+                                .join(" · "),
+                            ).join(" | ")}
+                          </p>
+                        )}
+                        {slide.incomplete_measurements.length > 0 && (
+                          <div data-testid={`quality-incomplete-${slide.slide_index}`} className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-950">
+                            <p className="font-medium">Incomplete measurement</p>
+                            <ul className="mt-1 list-disc space-y-1 pl-4">
+                              {slide.incomplete_measurements.map((measurement, index) => (
+                                <li key={`${measurementLabel(measurement)}-${index}`}>
+                                  {measurementLabel(measurement)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {slide.publish_blockers.length > 0 && (
+                          <div data-testid={`quality-publish-blocker-${slide.slide_index}`} className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-rose-950">
+                            <p className="font-medium">Publish blocked by dependency-cone evidence</p>
+                            <ul className="mt-1 list-disc space-y-1 pl-4">
+                              {slide.publish_blockers.map((blocker, index) => (
+                                <li key={`${measurementLabel(blocker)}-${index}`}>
+                                  {measurementLabel(blocker)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {slide.repair_blockers.length > 0 && (
+                          <div data-testid={`quality-repair-blocker-${slide.slide_index}`} className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-rose-950">
+                            <p className="font-medium">Repair blocked by scoped geometry evidence</p>
+                            <ul className="mt-1 list-disc space-y-1 pl-4">
+                              {slide.repair_blockers.map((blocker) => (
+                                <li key={blocker}>{blocker}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                         {slide.corrected_false_positive && (
                           <p className="rounded-lg border border-sky-200 bg-sky-50 p-2 text-sky-900">

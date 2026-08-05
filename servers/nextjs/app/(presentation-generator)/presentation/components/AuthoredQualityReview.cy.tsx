@@ -634,4 +634,106 @@ describe("AuthoredQualityReview result details", () => {
       "footer glyph clipping",
     ]);
   });
+
+  it("separates confirmed overlap, incomplete footer telemetry, and dependency-cone publish blocking", () => {
+    cy.clock();
+    cy.stub(PresentationGenerationApi, "reviewAuthoredPresentation")
+      .resolves({ id: "quality-scoped-evidence-task" });
+    cy.stub(PresentationGenerationApi, "getGenerationStatus").resolves({
+      status: "completed",
+      data: {
+        reviewed_count: 20,
+        issue_slide_count: 1,
+        fixed_count: 0,
+        remaining_issue_count: 1,
+        remaining_slide_indices: [4],
+        confirmed_issue_count: 1,
+        incomplete_measurement_count: 1,
+        unresolved_confirmed_issue_count: 1,
+        clean_slide_count: 19,
+        slide_results: [{
+          slide_index: 4,
+          attempted: false,
+          accepted: false,
+          applied: false,
+          path: "none",
+          detected_issues: ["bottom implication band occludes content"],
+          remaining_issues: ["bottom implication band occludes content"],
+          confirmed_issue_count: 1,
+          unresolved_confirmed_issue_count: 1,
+          evidence_atoms: [
+            { qid: "q-div-63a4d3c2e6c7", metric: "occluded_fraction", stage: "chrome_occlusion", state: "proven_issue" },
+            { qid: "q-div-655134fc7990", metric: "occluded_fraction", stage: "chrome_occlusion", state: "proven_issue" },
+            { qid: "q-strong-f213b54d7db8", metric: "occluded_fraction", stage: "chrome_occlusion", state: "proven_issue" },
+          ],
+          incomplete_measurements: [{
+            qid: "q-div-c6f2820b2605",
+            metric: "occluded_fraction",
+            stage: "chrome_occlusion",
+            reason: "no_sample_on_owned_paint",
+          }],
+          publish_blockers: [{
+            qid: "q-div-655134fc7990",
+            constraint_id: "constraint:implication-band",
+            metric: "occluded_fraction",
+            stage: "publish_safety",
+            reason: "target_dependency_unknown",
+          }],
+          projection_rejections: [{
+            issue_code: "dom.unintended_overlap",
+            element: { qid: "q-div-655134fc7990" },
+            constraint_id: "dom:physical-overlap",
+            operation: "ancestor_promotion",
+            stage: "candidate_generation",
+            metric: "owned_content_occluded_fraction",
+            reason_code: "repair.geometry.ancestor.physical_owner_no_safe_translation",
+            detector_evidence: {
+              physicalOwnerBlockers: [{
+                ownerQid: "q-div-f17e611a8d0f",
+                requiredDownPx: 73.65625,
+                availableDownPx: 37.359375,
+                lowerBoundaryQid: "q-div-c6f2820b2605",
+                lowerBoundaryYPx: 690,
+                candidateContained: false,
+              }],
+            },
+          }],
+        }],
+      },
+    });
+
+    cy.mount(<AuthoredQualityReview presentationId="deck-scoped-evidence" slideCount={20} currentSlide={4} />);
+    cy.get('[data-testid="quality-review-trigger"]').click();
+    cy.get('[data-testid="quality-review-confirm"]').click();
+    cy.tick(2_000);
+
+    cy.get('[data-testid="quality-review-summary"]')
+      .should("contain.text", "후속 조치 필요")
+      .and("contain.text", "Confirmed 1")
+      .and("contain.text", "Incomplete measurements 1")
+      .and("contain.text", "Unresolved confirmed 1")
+      .and("not.contain.text", "검수 완료 · clean");
+    cy.get('[data-testid="quality-lifecycle-detected"]').should("contain.text", "Slide 5");
+    cy.get('[data-testid="quality-lifecycle-incomplete"]')
+      .should("contain.text", "q-div-c6f2820b2605")
+      .and("contain.text", "no_sample_on_owned_paint");
+    cy.get('[data-testid="quality-lifecycle-remaining"]')
+      .should("contain.text", "bottom implication band occludes content");
+    cy.get('[data-testid="quality-confirmed-issues-4"]')
+      .should("contain.text", "Confirmed physical issues: 1");
+    cy.get('[data-testid="quality-incomplete-4"]')
+      .should("contain.text", "q-div-c6f2820b2605")
+      .and("contain.text", "chrome_occlusion")
+      .and("contain.text", "no_sample_on_owned_paint");
+    cy.get('[data-testid="quality-publish-blocker-4"]')
+      .should("contain.text", "constraint:implication-band")
+      .and("contain.text", "target_dependency_unknown");
+    cy.get('[data-testid="quality-repair-blocker-4"]')
+      .should("contain.text", "repair.geometry.ancestor.physical_owner_no_safe_translation")
+      .and("contain.text", "owner=q-div-f17e611a8d0f")
+      .and("contain.text", "requiredDownPx=73.65625")
+      .and("contain.text", "availableDownPx=37.359375")
+      .and("contain.text", "lowerBoundary=q-div-c6f2820b2605")
+      .and("contain.text", "candidateContained=false");
+  });
 });

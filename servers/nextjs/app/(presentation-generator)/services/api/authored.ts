@@ -27,6 +27,31 @@ export interface AuthoredQualityReviewElementChange {
   changed_properties: string[];
 }
 
+/** A single measurement fact. Unknown facts never negate a proven issue. */
+export type AuthoredQualityEvidenceState =
+  | "proven_clean"
+  | "proven_issue"
+  | "unknown"
+  | "not_applicable";
+
+export interface AuthoredQualityEvidenceAtom {
+  qid?: string;
+  constraint_id?: string;
+  metric?: string;
+  stage?: string;
+  state: AuthoredQualityEvidenceState;
+  reason?: string;
+}
+
+/** A scoped sensor failure shown independently from detected issues. */
+export interface AuthoredQualityIncompleteMeasurement {
+  qid?: string;
+  constraint_id?: string;
+  metric?: string;
+  stage?: string;
+  reason: string;
+}
+
 export type AuthoredOcrStatus =
   "executed" | "routed_skip" | "unavailable" | "timeout" | "unknown";
 
@@ -74,11 +99,21 @@ export interface AuthoredQualityReviewSlideResult {
   candidate_count: number;
   /** Candidate-specific rejection codes, excluding preflight/no-candidate exits. */
   candidate_rejection_reasons: string[];
+  /** Scoped candidate-generation blockers with element/constraint/sensor detail. */
+  repair_blockers: string[];
   /** Human review corrected a detector hit; source content was intentionally unchanged. */
   corrected_false_positive: boolean;
   correction_reason?: string | null;
   /** Issues reported by the detector before proposal generation. */
   detected_issues: string[];
+  /** Per-element/constraint evidence; compatibility telemetry fields are derived server-side. */
+  evidence_atoms: AuthoredQualityEvidenceAtom[];
+  /** Scoped measurement gaps. These do not erase proven issue evidence. */
+  incomplete_measurements: AuthoredQualityIncompleteMeasurement[];
+  /** Unknown evidence in the mutation target's dependency cone that blocked publication. */
+  publish_blockers: AuthoredQualityIncompleteMeasurement[];
+  confirmed_issue_count: number;
+  unresolved_confirmed_issue_count: number;
   element_changes: AuthoredQualityReviewElementChange[];
   resolved_issues: string[];
   remaining_issues: string[];
@@ -171,6 +206,10 @@ export interface AuthoredQualityReviewResult {
   remaining_issue_count: number;
   remaining_slide_indices: number[];
   version_saved: boolean;
+  confirmed_issue_count: number;
+  incomplete_measurement_count: number;
+  unresolved_confirmed_issue_count: number;
+  clean_slide_count: number;
   slide_results: AuthoredQualityReviewSlideResult[];
   metrics: AuthoredQualityReviewMetrics;
 }
@@ -468,6 +507,135 @@ function normalizeDisplayValue(value: unknown): string | undefined {
   return undefined;
 }
 
+function normalizeEvidenceState(value: unknown): AuthoredQualityEvidenceState | null {
+  switch (value) {
+    case "proven_clean":
+    case "proven_issue":
+    case "unknown":
+    case "not_applicable":
+      return value;
+    default:
+      return null;
+  }
+}
+
+function normalizeEvidenceAtoms(value: unknown): AuthoredQualityEvidenceAtom[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const state = normalizeEvidenceState(item.state);
+    if (!state) return [];
+    const atom: AuthoredQualityEvidenceAtom = { state };
+    for (const key of ["qid", "constraint_id", "metric", "stage", "reason"] as const) {
+      const normalized = normalizeOptionalString(
+        key === "reason" ? firstDefined(item.reason, item.reason_code) : item[key],
+      );
+      if (normalized) atom[key] = normalized;
+    }
+    return [atom];
+  });
+}
+
+function normalizeIncompleteMeasurements(
+  value: unknown,
+): AuthoredQualityIncompleteMeasurement[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const reason = normalizeOptionalString(
+      firstDefined(item.reason, item.reason_code, item.code, item.message),
+    );
+    if (!reason) return [];
+    const measurement: AuthoredQualityIncompleteMeasurement = { reason };
+    for (const key of ["qid", "constraint_id", "metric", "stage"] as const) {
+      const normalized = normalizeOptionalString(item[key]);
+      if (normalized) measurement[key] = normalized;
+    }
+    const identity = [
+      measurement.qid,
+      measurement.constraint_id,
+      measurement.metric,
+      measurement.stage,
+      measurement.reason,
+    ].join("\\u0000");
+    if (seen.has(identity)) return [];
+    seen.add(identity);
+    return [measurement];
+  });
+}
+
+function normalizeRepairBlockers(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const blockers: string[] = [];
+  const seen = new Set<string>();
+  const append = (parts: Array<string | null | undefined>) => {
+    const label = parts.filter(Boolean).join(" · ");
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    blockers.push(label);
+  };
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const element = isRecord(item.element) ? item.element : {};
+    const detector = isRecord(item.detector_evidence)
+      ? item.detector_evidence
+      : {};
+    const base = [
+      normalizeOptionalString(
+        firstDefined(item.reason_code, item.reason, item.code, item.message),
+      ),
+      normalizeDisplayValue(firstDefined(element.qid, item.qid))
+        ? `qid=${normalizeDisplayValue(firstDefined(element.qid, item.qid))}`
+        : undefined,
+      normalizeDisplayValue(item.constraint_id)
+        ? `constraint=${normalizeDisplayValue(item.constraint_id)}`
+        : undefined,
+      normalizeDisplayValue(item.operation)
+        ? `operation=${normalizeDisplayValue(item.operation)}`
+        : undefined,
+      normalizeDisplayValue(item.stage)
+        ? `stage=${normalizeDisplayValue(item.stage)}`
+        : undefined,
+      normalizeDisplayValue(item.metric)
+        ? `metric=${normalizeDisplayValue(item.metric)}`
+        : undefined,
+    ];
+    const physicalOwners = Array.isArray(detector.physicalOwnerBlockers)
+      ? detector.physicalOwnerBlockers
+      : [];
+    if (physicalOwners.length === 0) {
+      append(base);
+      continue;
+    }
+    for (const rawOwner of physicalOwners) {
+      if (!isRecord(rawOwner)) continue;
+      append([
+        ...base,
+        normalizeDisplayValue(rawOwner.ownerQid)
+          ? `owner=${normalizeDisplayValue(rawOwner.ownerQid)}`
+          : undefined,
+        normalizeDisplayValue(rawOwner.requiredDownPx)
+          ? `requiredDownPx=${normalizeDisplayValue(rawOwner.requiredDownPx)}`
+          : undefined,
+        normalizeDisplayValue(rawOwner.availableDownPx)
+          ? `availableDownPx=${normalizeDisplayValue(rawOwner.availableDownPx)}`
+          : undefined,
+        normalizeDisplayValue(rawOwner.lowerBoundaryQid)
+          ? `lowerBoundary=${normalizeDisplayValue(rawOwner.lowerBoundaryQid)}`
+          : undefined,
+        normalizeDisplayValue(rawOwner.lowerBoundaryYPx)
+          ? `lowerBoundaryYPx=${normalizeDisplayValue(rawOwner.lowerBoundaryYPx)}`
+          : undefined,
+        normalizeDisplayValue(rawOwner.candidateContained)
+          ? `candidateContained=${normalizeDisplayValue(rawOwner.candidateContained)}`
+          : undefined,
+      ]);
+    }
+  }
+  return blockers;
+}
+
 function normalizeElementChange(
   value: unknown,
   legacyApplied: boolean,
@@ -545,6 +713,17 @@ function normalizeSlideResult(
       if (isRecord(rejection)) candidateRejectionReasons.push(...normalizeIssueList(rejection.reason_codes));
     }
   }
+  if (Array.isArray(value.projection_rejections)) {
+    for (const rejection of value.projection_rejections) {
+      if (!isRecord(rejection)) continue;
+      candidateRejectionReasons.push(...normalizeIssueList(rejection.reason_codes));
+      const projectionReason = normalizeOptionalString(rejection.reason_code);
+      if (projectionReason) candidateRejectionReasons.push(projectionReason);
+    }
+  }
+  const repairBlockers = normalizeRepairBlockers(
+    firstDefined(value.projection_rejections, value.repair_blockers),
+  );
   // Older payloads did not expose acceptance. Only a fixed-slide index is
   // reliable evidence of a saved change; path alone may describe a rejected
   // candidate.
@@ -561,6 +740,24 @@ function normalizeSlideResult(
     const normalized = normalizeElementChange(change, applied);
     return normalized ? [normalized] : [];
   });
+  const evidenceAtoms = normalizeEvidenceAtoms(
+    firstDefined(value.evidence_atoms, value.evidenceAtoms, value.dom_evidence_atoms),
+  );
+  const incompleteMeasurements = normalizeIncompleteMeasurements(
+    firstDefined(
+      value.incomplete_measurements,
+      value.incompleteMeasurements,
+      value.measurement_gaps,
+    ),
+  );
+  const publishBlockers = normalizeIncompleteMeasurements(
+    firstDefined(value.publish_blockers, value.publishBlockers),
+  );
+  const confirmedIssueCount = normalizeNumber(value.confirmed_issue_count) ??
+    evidenceAtoms.filter((atom) => atom.state === "proven_issue").length;
+  const unresolvedConfirmedIssueCount = normalizeNumber(
+    value.unresolved_confirmed_issue_count,
+  ) ?? Math.max(0, confirmedIssueCount - normalizeIssueList(value.resolved_issues).length);
   return {
     slide_index: slideIndex,
     attempted,
@@ -580,6 +777,7 @@ function normalizeSlideResult(
     ...(rejectionReason === null ? {} : { rejection_reason: rejectionReason }),
     candidate_count: candidateCount,
     candidate_rejection_reasons: [...new Set(candidateRejectionReasons)],
+    repair_blockers: repairBlockers,
     corrected_false_positive:
       value.corrected_false_positive === true ||
       value.detector_disposition === "false_positive",
@@ -587,6 +785,11 @@ function normalizeSlideResult(
     detected_issues: normalizeIssueList(
       value.detected_issues ?? value.detected ?? value.issues_before,
     ),
+    evidence_atoms: evidenceAtoms,
+    incomplete_measurements: incompleteMeasurements,
+    publish_blockers: publishBlockers,
+    confirmed_issue_count: confirmedIssueCount,
+    unresolved_confirmed_issue_count: unresolvedConfirmedIssueCount,
     element_changes: changes,
     resolved_issues: normalizeIssueList(value.resolved_issues),
     remaining_issues: normalizeIssueList(
@@ -950,8 +1153,14 @@ export function normalizeAuthoredQualityReviewResult(
       rolled_back: false,
       candidate_count: 0,
       candidate_rejection_reasons: [],
+      repair_blockers: [],
       corrected_false_positive: false,
       detected_issues: [],
+      evidence_atoms: [],
+      incomplete_measurements: [],
+      publish_blockers: [],
+      confirmed_issue_count: 0,
+      unresolved_confirmed_issue_count: 0,
       element_changes: [],
       resolved_issues: [],
       remaining_issues: [],
@@ -960,6 +1169,30 @@ export function normalizeAuthoredQualityReviewResult(
     });
   }
   slideResults.sort((left, right) => left.slide_index - right.slide_index);
+  const confirmedIssueCount = normalizeNumber(payload.confirmed_issue_count) ??
+    slideResults.reduce((total, slide) => total + slide.confirmed_issue_count, 0);
+  const incompleteMeasurementCount = normalizeNumber(
+    payload.incomplete_measurement_count,
+  ) ?? slideResults.reduce(
+    (total, slide) => total + slide.incomplete_measurements.length,
+    0,
+  );
+  const unresolvedConfirmedIssueCount = normalizeNumber(
+    payload.unresolved_confirmed_issue_count,
+  ) ?? slideResults.reduce(
+    (total, slide) => total + slide.unresolved_confirmed_issue_count,
+    0,
+  );
+  const cleanSlideCount = normalizeNumber(payload.clean_slide_count) ??
+    Math.max(0, (normalizeNumber(payload.reviewed_count) ?? 0) - new Set(
+      slideResults
+        .filter((slide) =>
+          slide.confirmed_issue_count > 0 ||
+          slide.incomplete_measurements.length > 0 ||
+          slide.remaining_issues.length > 0,
+        )
+        .map((slide) => slide.slide_index),
+    ).size);
   return {
     presentation_id:
       typeof payload.presentation_id === "string"
@@ -981,6 +1214,10 @@ export function normalizeAuthoredQualityReviewResult(
       payload.remaining_slide_indices,
     ),
     version_saved: payload.version_saved === true,
+    confirmed_issue_count: confirmedIssueCount,
+    incomplete_measurement_count: incompleteMeasurementCount,
+    unresolved_confirmed_issue_count: unresolvedConfirmedIssueCount,
+    clean_slide_count: cleanSlideCount,
     slide_results: slideResults,
     metrics,
   };
