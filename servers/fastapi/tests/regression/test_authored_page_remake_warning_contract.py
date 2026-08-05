@@ -7,6 +7,7 @@ against that contract independently of the service implementation.
 """
 
 import asyncio
+import json
 import uuid
 from functools import wraps
 from pathlib import Path
@@ -436,23 +437,91 @@ async def test_generation_failure_remains_fatal(tmp_path, monkeypatch):
 
 
 @async_test
-async def test_unchanged_candidate_html_remains_invalid(tmp_path, monkeypatch):
+async def test_identical_candidate_is_reported_not_hidden(tmp_path, monkeypatch):
+    """An already-remade page can legitimately re-author to the same HTML.
+
+    That is a result the user should see and judge, not a failure: the flow must
+    complete and label the outcome instead of discarding the candidate.
+    """
+
     engine = await _engine(tmp_path / "identical.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation, slides, task = await _seed(session)
         source_html = slides[0].html_content
 
         async def echo_revise(*_args, **_kwargs):
-            return ([source_html], [b"png"], [0], [{}])
+            return ([source_html], [b"png"], [0], [{"attempted": True,
+                                                    "succeeded": True}])
 
         _install_preview_stubs(
-            monkeypatch, session, reports=(_report(),), revise=echo_revise
+            monkeypatch,
+            session,
+            reports=(_report(), _report()),
+            revise=echo_revise,
+        )
+
+        await _run_preview(session, presentation, task)
+
+        assert task.status == "completed"
+        assert task.data["phase"] == "preview_ready"
+        assert task.data["validation"]["candidate_change"] == "unchanged"
+        assert task.data["candidate_html"] == source_html
+        assert task.data["candidate_image"]
+    await engine.dispose()
+
+
+@async_test
+async def test_changed_candidate_is_labelled_changed(tmp_path, monkeypatch):
+    engine = await _engine(tmp_path / "changed.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation, _slides, task = await _seed(session)
+        _install_preview_stubs(
+            monkeypatch, session, reports=(_report(), _report())
+        )
+
+        await _run_preview(session, presentation, task)
+
+        assert task.status == "completed"
+        assert task.data["validation"]["candidate_change"] == "changed"
+    await engine.dispose()
+
+
+@async_test
+async def test_swallowed_model_failure_is_retryable_not_invalid(
+    tmp_path, monkeypatch
+):
+    """A transport/model outage must not read as a permanently bad candidate.
+
+    revise_authored_deck catches the failure and returns the source unchanged
+    with changed=[]; that is transient and the user should be told to retry.
+    """
+
+    engine = await _engine(tmp_path / "outage.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation, slides, task = await _seed(session)
+        source_html = slides[0].html_content
+
+        async def failed_revise(*_args, **_kwargs):
+            return (
+                [source_html],
+                [b"png"],
+                [],
+                [{"attempted": True, "succeeded": False,
+                  "failure_detail": "LLMConnectionError: 503"}],
+            )
+
+        _install_preview_stubs(
+            monkeypatch, session, reports=(_report(),), revise=failed_revise
         )
 
         await _run_preview(session, presentation, task)
 
         assert task.status == "error"
-        assert task.error["detail"] == "authored_page_remake_candidate_invalid"
+        assert task.error["detail"] == "authored_page_remake_generation_failed"
+        assert task.error["stage"] == "generation"
+        assert task.error["retryable"] is True
+        # The upstream failure text must never reach the client payload.
+        assert "LLMConnectionError" not in json.dumps(task.error)
     await engine.dispose()
 
 

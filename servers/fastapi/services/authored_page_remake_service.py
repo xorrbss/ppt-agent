@@ -352,12 +352,40 @@ async def run_authored_page_remake_preview(
                 "authored_page_remake_candidate_invalid", stage="generation"
             )
         htmls, pngs, changed, details = result
-        if changed != [0] or not htmls or not pngs or htmls[0] == source_html:
+        detail_payload = details[0] if details and isinstance(details[0], dict) else {}
+        if not htmls or not pngs:
             raise AuthoredPageRemakeError(
                 "authored_page_remake_candidate_invalid", stage="generation"
             )
+        # The reviser swallows model and transport failures and hands the source
+        # back unchanged, so "no new page was produced" must not be read as "the
+        # page is bad".  A failed attempt is transient and worth retrying; a page
+        # that simply came back identical is a real result the user can judge.
+        attempt_failed = changed != [0] or (
+            bool(detail_payload.get("attempted"))
+            and not detail_payload.get("succeeded")
+        )
+        if attempt_failed:
+            LOGGER.warning(
+                "Authored page remake generation attempt failed "
+                "(slide_index=%s, path=%s, detail=%s)",
+                slide_index,
+                detail_payload.get("path"),
+                detail_payload.get("failure_detail"),
+            )
+            raise AuthoredPageRemakeError(
+                "authored_page_remake_generation_failed",
+                stage="generation",
+                retryable=True,
+            )
         candidate_html = str(htmls[0])
         candidate_png = bytes(pngs[0])
+        # An identical re-author is a legitimate outcome, not a defect: it happens
+        # naturally when the page was already remade.  Report it so the user can
+        # decide whether to keep it or retry, rather than hiding the result.
+        candidate_change = (
+            "unchanged" if candidate_html == source_html else "changed"
+        )
         try:
             verified_png, candidate_metrics = await _render_review_html(candidate_html)
         except Exception as error:
@@ -393,7 +421,6 @@ async def run_authored_page_remake_preview(
         candidate_digest = _canonical_digest(
             {"html": candidate_html, "image": image_reference}
         )
-        detail_payload = details[0] if details and isinstance(details[0], dict) else {}
         await _set_task(
             session,
             task,
@@ -416,6 +443,7 @@ async def run_authored_page_remake_preview(
                     "candidate_render": "passed",
                     "candidate_dom": candidate_dom_status,
                     "candidate_dom_telemetry": candidate_report.telemetry_status,
+                    "candidate_change": candidate_change,
                     "reference_mode": reference_mode,
                 },
                 "generation": {

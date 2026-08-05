@@ -71,8 +71,8 @@ feature.
 Terminal failures retain their stage and stable reason:
 
 - `source_validation_failed`
-- `generation_failed`
-- `candidate_invalid`
+- `generation_failed` (retryable; also covers an attempt the reviser aborted)
+- `candidate_invalid` (no candidate HTML or PNG was produced at all)
 - `candidate_render_failed`
 - `source_changed`
 - `publish_cas_conflict`
@@ -82,6 +82,15 @@ Candidate DOM quality is not a terminal state. A renderable candidate always
 reaches `preview_ready` with `validation.candidate_dom` of `passed` or
 `warning`, and a published page records `post_verify` of `passed` or `warning`
 together with its issue summary.
+
+Neither is an identical result. Re-authoring a page that was already remade can
+legitimately return the same HTML, so the outcome is reported as
+`validation.candidate_change` of `changed` or `unchanged` and the candidate is
+still shown for the user to judge. `revise_authored_deck` swallows model and
+transport failures and hands the source back unchanged, so that case is
+separated by the attempt's own outcome (`attempted` without `succeeded`, or no
+reported change) and raised as the retryable `generation_failed` rather than
+being misreported as a defective candidate.
 
 The UI shows generation and publication as distinct states. Closing the dialog
 or rejecting a preview never reports the page as fixed.

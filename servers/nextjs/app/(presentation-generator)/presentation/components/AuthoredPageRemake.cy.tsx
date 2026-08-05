@@ -163,6 +163,33 @@ describe("AuthoredPageRemake", () => {
       );
   });
 
+  // Re-authoring an already-remade page can legitimately return the same HTML.
+  // That is a result to report, not a failure to hide.
+  it("reports an unchanged candidate as a result with a retry action", () => {
+    preparePreview({
+      ...previewData,
+      validation: { candidate_dom: "passed", candidate_change: "unchanged" },
+    });
+    cy.mount(<AuthoredPageRemake presentationId="deck-1" currentSlide={4} />);
+
+    cy.get('[data-testid="page-remake-trigger"]').click();
+    cy.get('[data-testid="page-remake-preview-create"]').click();
+    cy.get("@previewRequest").should("have.been.called");
+    cy.tick(2_000);
+
+    cy.get('[data-testid="page-remake-preview"]').should("be.visible");
+    cy.get('[data-testid="page-remake-unchanged"]')
+      .should("be.visible")
+      .and("contain.text", "새 페이지가 기존 페이지와 동일합니다");
+    cy.get('[data-testid="page-remake-regenerate"]').should(
+      "contain.text",
+      "다시 만들기",
+    );
+    cy.get('[data-testid="page-remake-publish"]').should("be.visible");
+    cy.get('[data-testid="page-remake-error"]').should("not.exist");
+    cy.get("@notifyError").should("not.have.been.called");
+  });
+
   it("keeps the passing preview UX free of warning affordances", () => {
     preparePreview();
     cy.mount(

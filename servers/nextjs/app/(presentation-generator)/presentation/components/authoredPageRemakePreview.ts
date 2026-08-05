@@ -30,6 +30,7 @@ export type PageRemakePreview = {
     candidate_render?: string;
     candidate_dom?: string;
     candidate_dom_telemetry?: string;
+    candidate_change?: string;
     reference_mode?: string;
   };
   generation?: { elapsed_ms?: number; llm_scope?: string };
@@ -42,6 +43,19 @@ export type PageRemakePreview = {
 export function hasQualityWarning(preview: PageRemakePreview) {
   return preview.validation?.candidate_dom === "warning";
 }
+
+/**
+ * An identical re-author is an ordinary outcome once a page has already been
+ * remade. It is a result to report, not an error to hide.
+ */
+export function isUnchangedCandidate(preview: PageRemakePreview) {
+  return preview.validation?.candidate_change === "unchanged";
+}
+
+export const PAGE_REMAKE_UNCHANGED_HEADLINE =
+  "새 페이지가 기존 페이지와 동일합니다";
+export const PAGE_REMAKE_UNCHANGED_BODY =
+  "다시 만든 결과가 현재 페이지와 같습니다. 이미 정리된 페이지일 수 있습니다. 그대로 두거나 다시 만들어 보세요.";
 
 export type PageRemakeIssueGroup = {
   category: string;

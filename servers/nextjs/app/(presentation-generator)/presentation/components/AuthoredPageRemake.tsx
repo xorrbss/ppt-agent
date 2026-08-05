@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Info,
   Loader2,
   RefreshCw,
   ShieldCheck,
@@ -25,10 +26,13 @@ import type { WorkspaceCommandDispatcher } from "../workspace";
 import {
   describePageRemakeFailure,
   hasQualityWarning,
+  isUnchangedCandidate,
   pageRemakeTelemetryNote,
   summarizePageRemakeIssues,
   PAGE_REMAKE_PREVIEW_FAILURE_FALLBACK,
   PAGE_REMAKE_PUBLISH_FAILURE_FALLBACK,
+  PAGE_REMAKE_UNCHANGED_BODY,
+  PAGE_REMAKE_UNCHANGED_HEADLINE,
   type PageRemakeFailure,
   type PageRemakePreview,
 } from "./authoredPageRemakePreview";
@@ -62,6 +66,7 @@ function PageRemakeFlow({
   const runIdRef = useRef(0);
   const pageNumber = currentSlide + 1;
   const qualityWarning = preview ? hasQualityWarning(preview) : false;
+  const unchangedCandidate = preview ? isUnchangedCandidate(preview) : false;
   const issueGroups = qualityWarning
     ? summarizePageRemakeIssues(preview?.candidate_issues)
     : [];
@@ -115,6 +120,11 @@ function PageRemakeFlow({
             notify.warning(
               "새 페이지를 만들었습니다",
               "자동 검사에서 확인할 항목이 발견되었습니다. 미리보기를 확인해 주세요.",
+            );
+          } else if (isUnchangedCandidate(data)) {
+            notify.success(
+              PAGE_REMAKE_UNCHANGED_HEADLINE,
+              "변경할 부분을 찾지 못했습니다. 다시 만들 수 있습니다.",
             );
           } else {
             notify.success("새 페이지 미리보기가 준비되었습니다.");
@@ -268,6 +278,19 @@ function PageRemakeFlow({
                 </p>
               </div>
             </div>
+          ) : unchangedCandidate ? (
+            <div
+              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-900"
+              data-testid="page-remake-unchanged"
+            >
+              <Info className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+              <div>
+                <p className="font-semibold">
+                  {PAGE_REMAKE_UNCHANGED_HEADLINE}
+                </p>
+                <p>{PAGE_REMAKE_UNCHANGED_BODY}</p>
+              </div>
+            </div>
           ) : (
             <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
@@ -322,7 +345,7 @@ function PageRemakeFlow({
           </Button>
         ) : (
           <>
-            {qualityWarning && (
+            {(qualityWarning || unchangedCandidate) && (
               <Button
                 type="button"
                 variant="outline"
