@@ -2,7 +2,7 @@ import re
 import uuid
 from typing import Annotated, List, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 ReviewScope = Literal["all", "current", "subset"]
@@ -82,3 +82,21 @@ class AuthoredQualityReviewRequest(BaseModel):
         elif not self.slide_indices:
             raise ValueError("Subset review requires at least one slide index")
         return self
+
+
+class AuthoredPageRemakePreviewRequest(BaseModel):
+    """Create one detached full-page candidate without mutating the live deck."""
+
+    # Reserved for a future user-authored note. Keeping the request explicit
+    # prevents clients from smuggling an all/subset scope into this one-page API.
+    instruction: str | None = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class AuthoredPageRemakePublishRequest(BaseModel):
+    """Publish one completed preview task for the exact path-level slide."""
+
+    preview_task_id: str = Field(min_length=6, max_length=160)
+
+    model_config = ConfigDict(extra="forbid", strict=True)

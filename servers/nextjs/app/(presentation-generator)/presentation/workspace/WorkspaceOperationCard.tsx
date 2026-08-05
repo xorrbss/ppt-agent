@@ -74,7 +74,7 @@ const OPERATION_ACTIVITY_LABELS: Record<string, string> = {
   "presentation.edit": "프레젠테이션 편집",
   "presentation.delete": "프레젠테이션 삭제",
   "slide.edit": "슬라이드 편집",
-  "slide.regenerate": "슬라이드 재생성",
+  "slide.regenerate": "페이지 다시 만들기",
   "slide.delete": "슬라이드 삭제",
   "version.restore": "버전 복원",
   "template.apply": "AI 저작 템플릿 생성",

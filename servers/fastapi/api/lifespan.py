@@ -56,6 +56,9 @@ from services.workspace_cleanup_journal_service import (
 from services.workspace_quality_export_operation_handlers import (
     register_workspace_quality_export_operation_handlers,
 )
+from services.workspace_page_remake_operation_handler import (
+    register_workspace_page_remake_operation_handler,
+)
 from services.workspace_authored_template_operation_handler import (
     register_workspace_authored_template_operation_handler,
 )
@@ -151,6 +154,7 @@ async def app_lifespan(_: FastAPI):
             register_presentation_generation_operation_handler(replace=True)
             register_presentation_deletion_operation_handler(replace=True)
             register_presentation_chat_operation_handlers(replace=True)
+            register_workspace_page_remake_operation_handler(replace=True)
             register_workspace_quality_export_operation_handlers(replace=True)
             register_workspace_authored_template_operation_handler(replace=True)
             await start_workspace_operation_outbox_dispatcher()

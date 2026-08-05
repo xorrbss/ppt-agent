@@ -23,6 +23,8 @@ from sqlmodel import select
 from models.presentation_and_path import PresentationPathAndEditPath
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_from_template import (
+    AuthoredPageRemakePreviewRequest,
+    AuthoredPageRemakePublishRequest,
     AuthoredQualityReviewRequest,
     EditPresentationRequest,
     RetemplatePresentationRequest,
@@ -48,6 +50,12 @@ from services.authored_exact_source_snapshot import (
 from services.authored_quality_ocr import get_ocr_readiness
 from services.authored_quality_review_service import (
     queue_authored_quality_review,
+)
+from services.authored_page_remake_service import (
+    AuthoredPageRemakeError,
+    publish_authored_page_remake_legacy,
+    queue_authored_page_remake_preview,
+    remake_http_error,
 )
 from services.database import get_async_session
 from services.generation_pipeline import build_template_structure
@@ -325,6 +333,54 @@ async def quality_review_authored_presentation(
     return await queue_authored_quality_review(
         id, request, background_tasks, sql_session
     )
+
+
+@PRESENTATION_ROUTER.post(
+    "/{id}/slides/{slide_index}/remake/preview",
+    response_model=AsyncPresentationGenerationTaskModel,
+    summary="Create a detached AI-authored replacement for one page",
+)
+async def preview_authored_page_remake(
+    id: uuid.UUID,
+    slide_index: int,
+    request: AuthoredPageRemakePreviewRequest,
+    background_tasks: BackgroundTasks,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Generate exactly one page candidate without mutating the presentation."""
+
+    await require_live_presentation(sql_session, id)
+    try:
+        return await queue_authored_page_remake_preview(
+            id, slide_index, request, background_tasks, sql_session
+        )
+    except AuthoredPageRemakeError as error:
+        raise remake_http_error(error) from error
+
+
+@PRESENTATION_ROUTER.post(
+    "/{id}/slides/{slide_index}/remake/publish",
+    summary="Publish an approved one-page remake candidate",
+)
+async def publish_authored_page_remake_candidate(
+    id: uuid.UUID,
+    slide_index: int,
+    request: AuthoredPageRemakePublishRequest,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    """Publish only the exact detached candidate approved by the user."""
+
+    require_legacy_presentation_write_path(id)
+    await require_live_presentation(sql_session, id)
+    try:
+        return await publish_authored_page_remake_legacy(
+            session=sql_session,
+            presentation_id=id,
+            slide_index=slide_index,
+            preview_task_id=request.preview_task_id,
+        )
+    except AuthoredPageRemakeError as error:
+        raise remake_http_error(error) from error
 
 
 @PRESENTATION_ROUTER.post(

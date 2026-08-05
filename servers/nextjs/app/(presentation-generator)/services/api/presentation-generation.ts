@@ -884,6 +884,47 @@ export class PresentationGenerationApi {
     }
   }
 
+  static async previewAuthoredPageRemake(
+    presentationId: string,
+    slideIndex: number,
+  ) {
+    const response = await fetch(
+      getApiUrl(
+        `/api/v1/ppt/presentation/${presentationId}/slides/${slideIndex}/remake/preview`,
+      ),
+      {
+        method: "POST",
+        headers: getHeader(),
+        body: JSON.stringify({}),
+      },
+    );
+    return ApiResponseHandler.handleResponse(
+      response,
+      "Failed to start page remake preview",
+    );
+  }
+
+  static async publishAuthoredPageRemake(
+    presentationId: string,
+    slideIndex: number,
+    previewTaskId: string,
+  ) {
+    const response = await fetch(
+      getApiUrl(
+        `/api/v1/ppt/presentation/${presentationId}/slides/${slideIndex}/remake/publish`,
+      ),
+      {
+        method: "POST",
+        headers: getHeader(),
+        body: JSON.stringify({ preview_task_id: previewTaskId }),
+      },
+    );
+    return ApiResponseHandler.handleResponse(
+      response,
+      "Failed to publish page remake",
+    );
+  }
+
   // IMAGE AND ICON SEARCH
 
   static async generateImage(imageGenerate: ImageGenerate) {

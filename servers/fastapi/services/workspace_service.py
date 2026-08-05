@@ -1062,7 +1062,7 @@ def _operation_title(kind: str) -> str:
         "presentation.generate": "프레젠테이션 생성",
         "presentation.edit": "프레젠테이션 수정",
         "slide.edit": "슬라이드 수정",
-        "slide.regenerate": "슬라이드 다시 생성",
+        "slide.regenerate": "페이지 다시 만들기",
         "slide.delete": "슬라이드 삭제",
         "version.restore": "버전 복원",
         "template.apply": "AI 저작 템플릿 변경",

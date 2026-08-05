@@ -56,6 +56,7 @@ import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
 import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
 import AuthoredQualityReview from "./AuthoredQualityReview";
+import AuthoredPageRemake from "./AuthoredPageRemake";
 import {
   formatAuthoredHybridExportSummary,
   type AuthoredHybridExportMetadata,
@@ -749,6 +750,12 @@ const PresentationHeader = ({
                 disabled={isStreaming || isPresentationSaving}
                 onReload={onReload}
               />
+              <AuthoredPageRemake
+                presentationId={presentation_id}
+                currentSlide={currentSlide}
+                disabled={isStreaming || isPresentationSaving}
+                onReload={onReload}
+              />
             </>
           ) : mutationsEnabled ? (
             presentationData?.slides &&
@@ -772,6 +779,20 @@ const PresentationHeader = ({
                   isPresentationSaving
                 }
                 onWorkspaceCommand={onWorkspaceCommand}
+              />
+              <AuthoredPageRemake
+                presentationId={presentation_id}
+                currentSlide={currentSlide}
+                disabled={
+                  !workspaceCommandsEnabled ||
+                  !onWorkspaceCommand ||
+                  isStreaming === true ||
+                  isPresentationSaving
+                }
+                chatFirstEnabled
+                workspaceCommandsEnabled={workspaceCommandsEnabled}
+                onWorkspaceCommand={onWorkspaceCommand}
+                onReload={onReload}
               />
               <Button
                 type="button"
