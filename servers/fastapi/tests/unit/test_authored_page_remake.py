@@ -404,6 +404,8 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
         assert "slidespec_active" not in slide.properties
         assert task.data["phase"] == "published"
         assert task.data["publish"]["rollback_available"] is True
+        assert result["post_verify_status"] == "passed"
+        assert task.data["publish"]["post_verify"] == result["post_verify_status"]
         assert len(snapshots) == 1
         assert snapshots[0][0][0]["html_content"] == SOURCE_HTML
     await engine.dispose()
@@ -526,16 +528,17 @@ async def test_candidate_dom_issues_warn_without_hiding_the_preview(
     await engine.dispose()
 
 
+@pytest.mark.parametrize("telemetry", ("unavailable", "incomplete"))
 @async_test
-async def test_unavailable_candidate_telemetry_warns_and_stays_explainable(
-    tmp_path, monkeypatch
+async def test_issue_free_telemetry_warning_stays_explainable(
+    tmp_path, monkeypatch, telemetry
 ):
-    engine = await _engine(tmp_path / "telemetry.sqlite")
+    engine = await _engine(tmp_path / f"telemetry-{telemetry}.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation, _slide_row, task = await _seed_preview(session)
         _patch_preview(
             monkeypatch,
-            candidate_report=_report(issue=False, telemetry="unavailable"),
+            candidate_report=_report(issue=False, telemetry=telemetry),
         )
 
         await remake.run_authored_page_remake_preview(
@@ -547,10 +550,14 @@ async def test_unavailable_candidate_telemetry_warns_and_stays_explainable(
         )
         await session.refresh(task)
 
+        # A probe-coverage warning has no issues; the telemetry field is the only
+        # thing that can explain it to the user.
         assert task.status == "completed"
+        assert task.data["phase"] == "preview_ready"
         assert task.data["validation"]["candidate_dom"] == "warning"
-        assert task.data["validation"]["candidate_dom_telemetry"] == "unavailable"
+        assert task.data["validation"]["candidate_dom_telemetry"] == telemetry
         assert task.data["candidate_issues"] == []
+        assert task.data["candidate_html"] == CANDIDATE_HTML
     await engine.dispose()
 
 
@@ -659,7 +666,10 @@ async def test_warned_preview_publishes_after_explicit_approval(tmp_path, monkey
         assert slide.html_content == CANDIDATE_HTML
         assert slide.properties["image"] == "/app_data/images/remake.png"
         assert task.data["phase"] == "published"
-        assert task.data["publish"]["post_verify"] == "warning"
+        assert task.data["publish"]["status"] == "published"
+        assert task.data["publish"]["rollback_available"] is True
+        # The stored verdict and the returned verdict must never diverge.
+        assert task.data["publish"]["post_verify"] == result["post_verify_status"]
         assert task.data["publish"]["post_verify_issues"][0]["category"] == "overlap"
         assert task.data["publish"]["post_verify_telemetry"] == "available"
     await engine.dispose()
