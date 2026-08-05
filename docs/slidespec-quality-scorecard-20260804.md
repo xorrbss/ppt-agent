@@ -104,3 +104,26 @@
 - corpus는 실제 고객 원문이 아니라 비식별 production-shaped fixture다. 고객 데이터 반입 없이 회귀 가능하도록 의도한 경계다.
 
 세부 실행·서비스·migration·작업트리 증거는 `docs/slidespec-operations-evidence-20260804.md`에 기록한다.
+
+## 2026-08-05 실문서 운영 품질 재평가
+
+이 절은 위의 production-shaped corpus 점수와 별개로, presentation
+`15f91f1d-66d7-491d-abbb-c02481358b96`의 실제 90장에 publish한 결과를 평가한다.
+
+| 신뢰도 항목 | 배점 | 실측 | 점수 |
+|---|---:|---|---:|
+| 23건 사람 라벨과 결과 완결성 | 25 | true positive 5건, detector false positive/intentional overlap 18건을 fixture에 고정했고 23/23 상태가 결정적이다. | 25 |
+| 실제 수정 lifecycle | 25 | 5/5가 후보 생성, acceptance, CAS publish, active read-back, fresh Chrome post-render를 통과했고 target constraint delta가 모두 0이 됐다. | 25 |
+| 원본·정상 슬라이드 비악화 | 20 | authored source 변경은 9·19·26·47·72번뿐이다. 정상 67장은 67/67, false-positive 18장은 18/18 byte-identical이고 hard/soft regression은 0이다. | 20 |
+| 동일 viewport 시각 검증 | 20 | 1280×720 before/after 5쌍을 직접 대조해 겹침·잘림 해소와 계층·가독성·프레임 보존을 확인했다. 독립된 외부 사람 sign-off는 없으므로 2점을 유보한다. | 18 |
+| 재현성·운영 검증 | 10 | 23장 10회에서 230/230 상태가 동일했고, 90장 10회 dry-run에서 source unchanged, remaining 0, solver unknown 0, LLM 0이었다. | 10 |
+| 합계 | 100 | 실문서 품질 신뢰도 | **98/100** |
+
+실제 적용 재생은 `release_passed=true`, verified true positive 5, corrected false positive
+18, unresolved 0이다. 적용 뒤 90장 전체 dry-run도 `issue_slide_count=0`과
+`remaining_issue_count=0`을 반환했다.
+
+최종 전체 회귀는 FastAPI **2437 passed, 16 skipped**(exit 0), Next Node/Chrome
+CI **277 passed**, 관련 Cypress **8 passed**, ESLint와 Next production build/TypeScript
+통과다. 90장 cold 1회와 warm 9회의 deck wall time은 cold **113.734초**,
+warm p50/p95/p99 **11.291/12.472/12.725초**로 운영 목표를 충족했다.
