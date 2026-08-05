@@ -1,7 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,27 +22,19 @@ import { notify } from "@/components/ui/sonner";
 import { resolveBackendAssetUrl } from "@/utils/api";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import type { WorkspaceCommandDispatcher } from "../workspace";
+import {
+  describePageRemakeFailure,
+  hasQualityWarning,
+  pageRemakeTelemetryNote,
+  summarizePageRemakeIssues,
+  PAGE_REMAKE_PREVIEW_FAILURE_FALLBACK,
+  PAGE_REMAKE_PUBLISH_FAILURE_FALLBACK,
+  type PageRemakeFailure,
+  type PageRemakePreview,
+} from "./authoredPageRemakePreview";
 
 const POLL_INTERVAL_MS = 2_000;
 const PREVIEW_TIMEOUT_MS = 15 * 60 * 1_000;
-
-type PageRemakePreview = {
-  kind: "authored_page_remake_preview";
-  phase: "preview_ready" | "published";
-  slide_index: number;
-  candidate_image: string;
-  candidate_digest: string;
-  source_digest: string;
-  baseline_issues?: Array<{ category?: string; detail?: string }>;
-  candidate_issues?: Array<{ category?: string; detail?: string }>;
-  validation?: Record<string, string>;
-  generation?: { elapsed_ms?: number; llm_scope?: string };
-};
-
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
-}
 
 function PageRemakeFlow({
   presentationId,
@@ -56,21 +54,37 @@ function PageRemakeFlow({
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [preview, setPreview] = useState<PageRemakePreview | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const [failure, setFailure] = useState<PageRemakeFailure | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  // Every start claims a new run id; unmount, cancel and regenerate invalidate
+  // the previous one so an in-flight polling loop stops touching state.
+  const runIdRef = useRef(0);
   const pageNumber = currentSlide + 1;
+  const qualityWarning = preview ? hasQualityWarning(preview) : false;
+  const issueGroups = qualityWarning
+    ? summarizePageRemakeIssues(preview?.candidate_issues)
+    : [];
+
+  useEffect(() => () => {
+    runIdRef.current += 1;
+  }, []);
 
   const createPreview = async () => {
-    if (isGenerating || disabled) return;
+    if (isGenerating || isPublishing || disabled) return;
+    const runId = ++runIdRef.current;
     setIsGenerating(true);
     setPreview(null);
     setPreviewTaskId(null);
+    setFailure(null);
     setStatusMessage(`${pageNumber}페이지의 새 버전을 만들고 있습니다.`);
+    let failureCode: string | undefined;
     try {
       const started = await PresentationGenerationApi.previewAuthoredPageRemake(
         presentationId,
         currentSlide,
       );
+      if (runIdRef.current !== runId) return;
       const taskId = started?.id;
       if (!taskId) throw new Error("페이지 다시 만들기 작업을 시작하지 못했습니다.");
       setPreviewTaskId(taskId);
@@ -80,7 +94,9 @@ function PageRemakeFlow({
         await new Promise((resolve) =>
           window.setTimeout(resolve, POLL_INTERVAL_MS),
         );
+        if (runIdRef.current !== runId) return;
         const task = await PresentationGenerationApi.getGenerationStatus(taskId);
+        if (runIdRef.current !== runId) return;
         if (task?.message) setStatusMessage(task.message);
         if (task?.status === "completed") {
           const data = task.data as PageRemakePreview | undefined;
@@ -95,35 +111,58 @@ function PageRemakeFlow({
             );
           }
           setPreview(data);
-          notify.success("새 페이지 미리보기가 준비되었습니다.");
+          if (hasQualityWarning(data)) {
+            notify.warning(
+              "새 페이지를 만들었습니다",
+              "자동 검사에서 확인할 항목이 발견되었습니다. 미리보기를 확인해 주세요.",
+            );
+          } else {
+            notify.success("새 페이지 미리보기가 준비되었습니다.");
+          }
           return;
         }
         if (task?.status === "error") {
-          const detail = task?.error?.detail;
-          throw new Error(
-            typeof detail === "string"
-              ? detail
-              : "페이지를 다시 만들지 못했습니다.",
+          const described = describePageRemakeFailure(
+            task?.error?.detail,
+            PAGE_REMAKE_PREVIEW_FAILURE_FALLBACK,
           );
+          failureCode = described.code;
+          throw new Error(described.message);
         }
       }
       throw new Error(
         "페이지 생성 시간이 초과되었습니다. 다시 시도해 주세요.",
       );
     } catch (error) {
-      notify.error(
-        "페이지 다시 만들기 실패",
-        errorMessage(error, "페이지를 다시 만드는 중 오류가 발생했습니다."),
+      if (runIdRef.current !== runId) return;
+      const described = describePageRemakeFailure(
+        error,
+        PAGE_REMAKE_PREVIEW_FAILURE_FALLBACK,
       );
+      const nextFailure = {
+        message: described.message,
+        code: described.code ?? failureCode,
+      };
+      notify.error("페이지 다시 만들기 실패", nextFailure.message);
+      setFailure(nextFailure);
       setStatusMessage("");
     } finally {
-      setIsGenerating(false);
+      if (runIdRef.current === runId) setIsGenerating(false);
     }
   };
 
+  const dismissFlow = () => {
+    runIdRef.current += 1;
+    onDismiss();
+  };
+
   const publishPreview = async () => {
-    if (!preview || !previewTaskId || isPublishing || disabled) return;
+    if (!preview || !previewTaskId || isPublishing || isGenerating || disabled) {
+      return;
+    }
+    const runId = ++runIdRef.current;
     setIsPublishing(true);
+    setFailure(null);
     setStatusMessage(`${pageNumber}페이지의 새 버전을 적용하고 있습니다.`);
     try {
       if (onWorkspaceCommand) {
@@ -147,16 +186,16 @@ function PageRemakeFlow({
       }
       onDismiss();
     } catch (error) {
-      notify.error(
-        "페이지 적용 실패",
-        errorMessage(
-          error,
-          "원본이 변경되었거나 새 버전을 적용하지 못했습니다.",
-        ),
+      if (runIdRef.current !== runId) return;
+      const described = describePageRemakeFailure(
+        error,
+        PAGE_REMAKE_PUBLISH_FAILURE_FALLBACK,
       );
+      notify.error("페이지 적용 실패", described.message);
+      setFailure(described);
       setStatusMessage("");
     } finally {
-      setIsPublishing(false);
+      if (runIdRef.current === runId) setIsPublishing(false);
     }
   };
 
@@ -191,16 +230,74 @@ function PageRemakeFlow({
               className="aspect-video w-full object-cover"
             />
           </div>
-          <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-            <div>
-              <p className="font-semibold">미리보기 검증 완료</p>
-              <p>
-                렌더링과 DOM 안전 검사를 통과했습니다. 원본은 아직 변경되지
-                않았습니다.
-              </p>
+          {qualityWarning ? (
+            <div
+              className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+              data-testid="page-remake-warning"
+              role="status"
+            >
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="space-y-2">
+                <p className="font-semibold">확인이 필요한 항목이 있습니다</p>
+                <p>
+                  새 페이지는 생성되었지만 자동 검사에서 확인할 항목이
+                  발견되었습니다.
+                </p>
+                {issueGroups.length > 0 ? (
+                  <ul
+                    className="list-disc space-y-1 pl-5"
+                    data-testid="page-remake-warning-issues"
+                  >
+                    {issueGroups.map((group) => (
+                      <li key={group.category}>
+                        {group.label} {group.count}건
+                        {group.severityLabel ? ` · ${group.severityLabel}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p data-testid="page-remake-warning-issues">
+                    {pageRemakeTelemetryNote(
+                      preview.validation?.candidate_dom_telemetry,
+                    )}
+                  </p>
+                )}
+                <p>
+                  원본 페이지는 아직 변경되지 않았습니다. 미리보기를 확인한 뒤
+                  이 버전을 적용하거나 다시 만들 수 있습니다.
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-semibold">미리보기 검증 완료</p>
+                <p>
+                  렌더링과 DOM 안전 검사를 통과했습니다. 원본은 아직 변경되지
+                  않았습니다.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {failure && (
+        <div
+          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950"
+          data-testid="page-remake-error"
+          role="alert"
+        >
+          <p className="font-semibold">{failure.message}</p>
+          {failure.code && (
+            <p
+              className="mt-1 text-xs text-rose-700"
+              data-testid="page-remake-error-code"
+            >
+              오류 코드: {failure.code}
+            </p>
+          )}
         </div>
       )}
 
@@ -209,14 +306,14 @@ function PageRemakeFlow({
           type="button"
           variant="ghost"
           disabled={isGenerating || isPublishing}
-          onClick={onDismiss}
+          onClick={dismissFlow}
         >
           취소
         </Button>
         {!preview ? (
           <Button
             type="button"
-            disabled={isGenerating || disabled}
+            disabled={isGenerating || isPublishing || disabled}
             onClick={createPreview}
             data-testid="page-remake-preview-create"
           >
@@ -224,15 +321,29 @@ function PageRemakeFlow({
             {isGenerating ? "미리보기 만드는 중" : "미리보기 만들기"}
           </Button>
         ) : (
-          <Button
-            type="button"
-            disabled={isPublishing || disabled}
-            onClick={publishPreview}
-            data-testid="page-remake-publish"
-          >
-            {isPublishing && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isPublishing ? "적용 중" : "이 버전 적용"}
-          </Button>
+          <>
+            {qualityWarning && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isGenerating || isPublishing || disabled}
+                onClick={createPreview}
+                data-testid="page-remake-regenerate"
+              >
+                <RefreshCw className="h-4 w-4" />
+                다시 만들기
+              </Button>
+            )}
+            <Button
+              type="button"
+              disabled={isGenerating || isPublishing || disabled}
+              onClick={publishPreview}
+              data-testid="page-remake-publish"
+            >
+              {isPublishing && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPublishing ? "적용 중" : "이 버전 적용"}
+            </Button>
+          </>
         )}
       </div>
     </>
