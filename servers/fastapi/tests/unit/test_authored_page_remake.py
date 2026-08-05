@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
@@ -84,7 +85,7 @@ def _slide(presentation_id) -> SlideModel:
     )
 
 
-def _report(*, issue: bool) -> DomQualityReport:
+def _report(*, issue: bool, telemetry: str = "available") -> DomQualityReport:
     return DomQualityReport(
         reference_mode=STYLE_REFERENCE,
         issues=(
@@ -101,8 +102,108 @@ def _report(*, issue: bool) -> DomQualityReport:
         ),
         compact_dom=(),
         inspected_elements=2,
-        telemetry_status="available",
+        telemetry_status=telemetry,
     )
+
+
+class _SessionFactory:
+    """Give the background preview runner the test-owned session."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def __call__(self) -> "_SessionFactory":
+        return self
+
+    async def __aenter__(self) -> AsyncSession:
+        return self._session
+
+    async def __aexit__(self, *_exc_info) -> bool:
+        return False
+
+
+async def _seed_preview(session: AsyncSession):
+    presentation = _presentation()
+    session.add(presentation)
+    await session.flush()
+    slide = _slide(presentation.id)
+    task = AsyncPresentationGenerationTaskModel(status="pending")
+    session.add_all((slide, task))
+    await session.commit()
+    return presentation, slide, task
+
+
+def _patch_preview(
+    monkeypatch,
+    *,
+    candidate_report: DomQualityReport,
+    candidate_render_error: Exception | None = None,
+    generation_error: Exception | None = None,
+) -> None:
+    """Stub rendering, DOM inspection, generation and asset publication."""
+
+    async def fake_context(_session, _presentation, _slides):
+        return (
+            SimpleNamespace(
+                roles=("content",),
+                brand=SimpleNamespace(),
+                design_system="design",
+                reference_images=((),),
+            ),
+            None,
+            STYLE_REFERENCE,
+            None,
+        )
+
+    renders = {"count": 0}
+
+    async def fake_render(_html):
+        renders["count"] += 1
+        if candidate_render_error is not None and renders["count"] > 1:
+            raise candidate_render_error
+        return b"png", {"telemetry_status": "available"}
+
+    async def fake_revise(*_args, **_kwargs):
+        if generation_error is not None:
+            raise generation_error
+        return (
+            [CANDIDATE_HTML],
+            [b"candidate-png"],
+            [0],
+            [{"path": "full_fallback", "succeeded": True}],
+        )
+
+    reports = iter((_report(issue=True), candidate_report))
+    monkeypatch.setattr(remake, "_authoring_context", fake_context)
+    monkeypatch.setattr(remake, "_render_review_html", fake_render)
+    monkeypatch.setattr(remake, "inspect_authored_dom", lambda *_a, **_k: next(reports))
+    monkeypatch.setattr(remake, "revise_authored_deck", fake_revise)
+    monkeypatch.setattr(
+        remake,
+        "publish_reviewed_png",
+        lambda *_a, **_k: "/app_data/images/remake.png",
+    )
+
+
+def _preview_task_data(presentation, slide, *, candidate_dom: str) -> dict:
+    return {
+        "kind": remake.PREVIEW_KIND,
+        "phase": "preview_ready",
+        "presentation_id": str(presentation.id),
+        "slide_id": str(slide.id),
+        "slide_index": 0,
+        "source_digest": remake.authored_page_source_digest(slide),
+        "candidate_digest": "sha256:candidate",
+        "candidate_html": CANDIDATE_HTML,
+        "candidate_image": "/app_data/images/remake.png",
+        "validation": {
+            "source_render": "passed",
+            "candidate_render": "passed",
+            "candidate_dom": candidate_dom,
+            "candidate_dom_telemetry": "available",
+            "reference_mode": STYLE_REFERENCE,
+        },
+    }
 
 
 def test_page_remake_contract_has_no_deck_scope():
@@ -352,6 +453,250 @@ async def test_publish_rejects_stale_source_before_snapshot(tmp_path, monkeypatc
                 preview_task_id=task.id,
             )
         assert snapshot_called is False
+        await session.refresh(slide)
+        assert slide.html_content == SOURCE_HTML
+    await engine.dispose()
+
+
+@async_test
+async def test_clean_candidate_reports_passed_dom_validation(tmp_path, monkeypatch):
+    engine = await _engine(tmp_path / "clean.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation, _slide_row, task = await _seed_preview(session)
+        _patch_preview(monkeypatch, candidate_report=_report(issue=False))
+
+        await remake.run_authored_page_remake_preview(
+            presentation.id,
+            0,
+            AuthoredPageRemakePreviewRequest(),
+            task,
+            session,
+        )
+        await session.refresh(task)
+
+        assert task.status == "completed"
+        assert task.data["validation"]["candidate_dom"] == "passed"
+        assert task.data["validation"]["candidate_dom_telemetry"] == "available"
+        assert task.data["candidate_issues"] == []
+    await engine.dispose()
+
+
+@async_test
+async def test_candidate_dom_issues_warn_without_hiding_the_preview(
+    tmp_path, monkeypatch
+):
+    engine = await _engine(tmp_path / "warning.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation, slide, task = await _seed_preview(session)
+        _patch_preview(monkeypatch, candidate_report=_report(issue=True))
+
+        await remake.run_authored_page_remake_preview(
+            presentation.id,
+            0,
+            AuthoredPageRemakePreviewRequest(),
+            task,
+            session,
+        )
+        await session.refresh(task)
+
+        assert task.status == "completed"
+        assert task.error is None
+        assert task.data["phase"] == "preview_ready"
+        assert task.data["validation"]["candidate_dom"] == "warning"
+        assert task.data["validation"]["candidate_render"] == "passed"
+        assert task.data["candidate_html"] == CANDIDATE_HTML
+        assert task.data["candidate_image"] == "/app_data/images/remake.png"
+        assert task.data["candidate_issues"], "issue evidence must be preserved"
+        assert task.data["candidate_issues"][0]["category"] == "overlap"
+        assert task.data["publish"] == {
+            "status": "not_started",
+            "rollback_available": False,
+        }
+
+        # Requirement: a warned preview stays detached until an explicit publish.
+        stored = (
+            await session.execute(
+                select(SlideModel.html_content, SlideModel.properties).where(
+                    SlideModel.id == slide.id
+                )
+            )
+        ).one()
+        assert stored.html_content == SOURCE_HTML
+        assert stored.properties["image"] == "old.png"
+    await engine.dispose()
+
+
+@async_test
+async def test_unavailable_candidate_telemetry_warns_and_stays_explainable(
+    tmp_path, monkeypatch
+):
+    engine = await _engine(tmp_path / "telemetry.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation, _slide_row, task = await _seed_preview(session)
+        _patch_preview(
+            monkeypatch,
+            candidate_report=_report(issue=False, telemetry="unavailable"),
+        )
+
+        await remake.run_authored_page_remake_preview(
+            presentation.id,
+            0,
+            AuthoredPageRemakePreviewRequest(),
+            task,
+            session,
+        )
+        await session.refresh(task)
+
+        assert task.status == "completed"
+        assert task.data["validation"]["candidate_dom"] == "warning"
+        assert task.data["validation"]["candidate_dom_telemetry"] == "unavailable"
+        assert task.data["candidate_issues"] == []
+    await engine.dispose()
+
+
+@async_test
+async def test_candidate_render_failure_still_fails_the_task(tmp_path, monkeypatch):
+    engine = await _engine(tmp_path / "render-failed.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation, slide, task = await _seed_preview(session)
+        _patch_preview(
+            monkeypatch,
+            candidate_report=_report(issue=False),
+            candidate_render_error=RuntimeError("chromium crashed"),
+        )
+        monkeypatch.setattr(remake, "async_session_maker", _SessionFactory(session))
+
+        await remake._run_preview_background(
+            presentation.id,
+            0,
+            AuthoredPageRemakePreviewRequest(),
+            task.id,
+        )
+        await session.refresh(task)
+
+        assert task.status == "error"
+        assert task.error["detail"] == "authored_page_remake_candidate_render_failed"
+        assert task.error["stage"] == "candidate_render"
+        assert set(task.error) == {"detail", "stage", "retryable"}
+        await session.refresh(slide)
+        assert slide.html_content == SOURCE_HTML
+    await engine.dispose()
+
+
+@async_test
+async def test_generation_failure_still_fails_the_task(tmp_path, monkeypatch):
+    engine = await _engine(tmp_path / "generation-failed.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation, slide, task = await _seed_preview(session)
+        _patch_preview(
+            monkeypatch,
+            candidate_report=_report(issue=False),
+            generation_error=RuntimeError("model unavailable"),
+        )
+        monkeypatch.setattr(remake, "async_session_maker", _SessionFactory(session))
+
+        await remake._run_preview_background(
+            presentation.id,
+            0,
+            AuthoredPageRemakePreviewRequest(),
+            task.id,
+        )
+        await session.refresh(task)
+
+        assert task.status == "error"
+        assert task.error["detail"] == "authored_page_remake_generation_failed"
+        assert task.error["stage"] == "generation"
+        await session.refresh(slide)
+        assert slide.html_content == SOURCE_HTML
+    await engine.dispose()
+
+
+@async_test
+async def test_warned_preview_publishes_after_explicit_approval(tmp_path, monkeypatch):
+    engine = await _engine(tmp_path / "publish-warning.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation = _presentation()
+        session.add(presentation)
+        await session.flush()
+        slide = _slide(presentation.id)
+        session.add(slide)
+        await session.flush()
+        task = AsyncPresentationGenerationTaskModel(
+            status="completed",
+            data=_preview_task_data(presentation, slide, candidate_dom="warning"),
+        )
+        session.add(task)
+        await session.commit()
+
+        async def fake_snapshot(*_args, **_kwargs):
+            return None
+
+        async def fake_context(_session, _presentation, _slides):
+            return SimpleNamespace(), None, STYLE_REFERENCE, None
+
+        async def fake_render(_html):
+            return b"png", {"telemetry_status": "available"}
+
+        monkeypatch.setattr(remake.version_service, "snapshot_slides", fake_snapshot)
+        monkeypatch.setattr(remake, "_render_review_html", fake_render)
+        monkeypatch.setattr(remake, "_authoring_context", fake_context)
+        monkeypatch.setattr(
+            remake, "inspect_authored_dom", lambda *_a, **_k: _report(issue=True)
+        )
+
+        result = await remake.publish_authored_page_remake(
+            session=session,
+            presentation_id=presentation.id,
+            slide_index=0,
+            preview_task_id=task.id,
+        )
+        await session.commit()
+        await session.refresh(slide)
+        await session.refresh(task)
+
+        assert result["status"] == "published"
+        assert result["post_verify_status"] == "warning"
+        assert slide.html_content == CANDIDATE_HTML
+        assert slide.properties["image"] == "/app_data/images/remake.png"
+        assert task.data["phase"] == "published"
+        assert task.data["publish"]["post_verify"] == "warning"
+        assert task.data["publish"]["post_verify_issues"][0]["category"] == "overlap"
+        assert task.data["publish"]["post_verify_telemetry"] == "available"
+    await engine.dispose()
+
+
+@async_test
+async def test_warned_preview_still_rejects_a_stale_source_digest(
+    tmp_path, monkeypatch
+):
+    engine = await _engine(tmp_path / "publish-warning-stale.sqlite")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        presentation = _presentation()
+        session.add(presentation)
+        await session.flush()
+        slide = _slide(presentation.id)
+        session.add(slide)
+        await session.flush()
+        data = _preview_task_data(presentation, slide, candidate_dom="warning")
+        data["source_digest"] = "sha256:stale"
+        task = AsyncPresentationGenerationTaskModel(status="completed", data=data)
+        session.add(task)
+        await session.commit()
+
+        async def fake_snapshot(*_args, **_kwargs):
+            raise AssertionError("stale preview must not snapshot")
+
+        monkeypatch.setattr(remake.version_service, "snapshot_slides", fake_snapshot)
+        with pytest.raises(
+            remake.AuthoredPageRemakeError,
+            match="authored_page_remake_source_changed",
+        ):
+            await remake.publish_authored_page_remake(
+                session=session,
+                presentation_id=presentation.id,
+                slide_index=0,
+                preview_task_id=task.id,
+            )
         await session.refresh(slide)
         assert slide.html_content == SOURCE_HTML
     await engine.dispose()
