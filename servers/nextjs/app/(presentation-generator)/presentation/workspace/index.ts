@@ -7,5 +7,6 @@ export type {
   WorkspacePresentationChange,
   WorkspacePresentationChangedHandler,
   WorkspacePresentationRefreshState,
+  WorkspacePageRemakeRequester,
   WorkspaceQualityReviewRequester,
 } from "./types";

@@ -256,6 +256,8 @@ export type WorkspaceQualityReviewRequester = (
   currentSlide?: number,
 ) => void;
 
+export type WorkspacePageRemakeRequester = (currentSlide: number) => void;
+
 export interface WorkspaceOperationActionRequest {
   action: "retry" | "cancel" | "approve" | "reject" | "undo";
   idempotencyKey: string;

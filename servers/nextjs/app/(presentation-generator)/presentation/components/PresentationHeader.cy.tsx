@@ -15,6 +15,7 @@ import {
 import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
 import type {
   WorkspaceCommandDispatcher,
+  WorkspacePageRemakeRequester,
   WorkspaceQualityReviewRequester,
 } from "../workspace";
 
@@ -25,6 +26,7 @@ const mountHeader = (
     enabled: boolean;
     command: WorkspaceCommandDispatcher;
     qualityReview?: WorkspaceQualityReviewRequester;
+    pageRemake?: WorkspacePageRemakeRequester;
   },
 ) => {
   store.dispatch(
@@ -58,12 +60,14 @@ const mountHeader = (
           <PresentationHeader
             presentation_id="deck-1"
             isPresentationSaving={false}
+            currentSlide={workspace?.pageRemake ? 0 : undefined}
             isAuthoredDeck={isAuthoredDeck}
             mutationsEnabled={mutationsEnabled}
             chatFirstEnabled={workspace !== undefined}
             workspaceCommandsEnabled={workspace?.enabled ?? false}
             onWorkspaceCommand={workspace?.command}
             onWorkspaceQualityReviewRequest={workspace?.qualityReview}
+            onWorkspacePageRemakeRequest={workspace?.pageRemake}
           />
         </Provider>
       </PathnameContext.Provider>
@@ -354,18 +358,24 @@ describe("PresentationHeader authored export", () => {
     cy.get('[data-testid="export-trigger"]').should("not.be.disabled");
   });
 
-  it("dispatches quality and export through chat-first operations without invoking legacy export", () => {
+  it("routes page remake and quality into chat-first UI without a legacy dialog", () => {
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
     const qualityReview = cy.stub().as("qualityReview");
+    const pageRemake = cy.stub().as("pageRemake");
     mountHeader(true, false, {
       enabled: true,
       command: workspaceCommand,
       qualityReview,
+      pageRemake,
     });
+
+    cy.get('[data-testid="page-remake-trigger"]').click();
+    cy.get("@pageRemake").should("have.been.calledOnceWith", 0);
+    cy.get('[role="dialog"]').should("not.exist");
 
     cy.get('[data-testid="workspace-quality-review"]').click();
     cy.wrap(null).then(() => {
-      expect(qualityReview).to.have.been.calledOnceWith(undefined);
+      expect(qualityReview).to.have.been.calledOnceWith(0);
       expect(workspaceCommand).not.to.have.been.called;
     });
 

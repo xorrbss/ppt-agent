@@ -14,6 +14,7 @@ import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
 import { useWorkspaceTimeline } from "./useWorkspace";
 import type {
   WorkspaceCommandDispatcher,
+  WorkspacePageRemakeRequester,
   WorkspacePresentationChangedHandler,
   WorkspaceQualityReviewRequester,
 } from "./types";
@@ -26,6 +27,7 @@ import {
   type PresentationGenerationInfo,
 } from "../../services/api/dashboard";
 import { withGenerationContext } from "./generationContext";
+import { WorkspacePageRemakePrompt } from "../components/AuthoredPageRemake";
 
 const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
@@ -42,6 +44,9 @@ interface WorkspaceChatPanelProps {
   ) => void;
   onQualityReviewRequesterReady?: (
     requester: WorkspaceQualityReviewRequester | null,
+  ) => void;
+  onPageRemakeRequesterReady?: (
+    requester: WorkspacePageRemakeRequester | null,
   ) => void;
 }
 
@@ -119,6 +124,7 @@ export default function WorkspaceChatPanel({
   onSlideFocus,
   onCommandDispatcherReady,
   onQualityReviewRequesterReady,
+  onPageRemakeRequesterReady,
 }: WorkspaceChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +133,9 @@ export default function WorkspaceChatPanel({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [qualityReviewPrompt, setQualityReviewPrompt] = useState<{
     currentSlide?: number;
+  } | null>(null);
+  const [pageRemakePrompt, setPageRemakePrompt] = useState<{
+    currentSlide: number;
   } | null>(null);
   const [qualityReviewScope, setQualityReviewScope] =
     useState<QualityReviewScope>("all");
@@ -219,6 +228,7 @@ export default function WorkspaceChatPanel({
 
   const qualityReviewRequester = useCallback<WorkspaceQualityReviewRequester>(
     (requestedSlide) => {
+      setPageRemakePrompt(null);
       setQualityReviewScope("all");
       setQualityReviewRangeInput("");
       setQualityReviewRange(null);
@@ -236,6 +246,20 @@ export default function WorkspaceChatPanel({
     return () => onQualityReviewRequesterReady?.(null);
   }, [onQualityReviewRequesterReady, qualityReviewRequester]);
 
+  const pageRemakeRequester = useCallback<WorkspacePageRemakeRequester>(
+    (requestedSlide) => {
+      setQualityReviewPrompt(null);
+      setPageRemakePrompt({ currentSlide: requestedSlide });
+      shouldFollowLatestRef.current = true;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    onPageRemakeRequesterReady?.(pageRemakeRequester);
+    return () => onPageRemakeRequesterReady?.(null);
+  }, [onPageRemakeRequesterReady, pageRemakeRequester]);
+
   useLayoutEffect(() => {
     hasInitialScrollRef.current = false;
     shouldFollowLatestRef.current = true;
@@ -246,15 +270,16 @@ export default function WorkspaceChatPanel({
     setPendingAssets([]);
     setUploadError(null);
     setQualityReviewPrompt(null);
+    setPageRemakePrompt(null);
     setQualityReviewRangeInput("");
     setQualityReviewRange(null);
     setQualityReviewRangeError(null);
   }, [presentationId]);
 
   useLayoutEffect(() => {
-    if (!qualityReviewPrompt || !scrollRef.current) return;
+    if ((!qualityReviewPrompt && !pageRemakePrompt) || !scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [qualityReviewPrompt]);
+  }, [pageRemakePrompt, qualityReviewPrompt]);
 
   const handleQualityReviewSubmit = useCallback(async () => {
     if (!qualityReviewPrompt) return;
@@ -476,6 +501,7 @@ export default function WorkspaceChatPanel({
           !generationInfoLoading &&
           timelineItems.length === 0 &&
           !qualityReviewPrompt &&
+          !pageRemakePrompt &&
           !historyError && (
             <p className="py-8 text-center text-sm text-slate-500">
               아직 기록된 대화가 없습니다.
@@ -696,6 +722,15 @@ export default function WorkspaceChatPanel({
                 </button>
               </div>
             </article>
+          )}
+          {pageRemakePrompt && (
+            <WorkspacePageRemakePrompt
+              presentationId={presentationId}
+              currentSlide={pageRemakePrompt.currentSlide}
+              disabled={submitting || !writesEnabled}
+              onWorkspaceCommand={commandDispatcher}
+              onDismiss={() => setPageRemakePrompt(null)}
+            />
           )}
         </div>
         {historyError && (

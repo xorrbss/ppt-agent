@@ -65,6 +65,7 @@ import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import { buildSafeExportFileName } from "../utils/buildSafeExportFileName";
 import type {
   WorkspaceCommandDispatcher,
+  WorkspacePageRemakeRequester,
   WorkspaceQualityReviewRequester,
 } from "../workspace";
 
@@ -108,6 +109,7 @@ const PresentationHeader = ({
   workspaceCommandsEnabled = false,
   onWorkspaceCommand,
   onWorkspaceQualityReviewRequest,
+  onWorkspacePageRemakeRequest,
 }: {
   presentation_id: string;
   isPresentationSaving: boolean;
@@ -120,6 +122,7 @@ const PresentationHeader = ({
   workspaceCommandsEnabled?: boolean;
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
+  onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
 }) => {
   const [open, setOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
@@ -791,8 +794,7 @@ const PresentationHeader = ({
                 }
                 chatFirstEnabled
                 workspaceCommandsEnabled={workspaceCommandsEnabled}
-                onWorkspaceCommand={onWorkspaceCommand}
-                onReload={onReload}
+                onWorkspacePageRemakeRequest={onWorkspacePageRemakeRequest}
               />
               <Button
                 type="button"

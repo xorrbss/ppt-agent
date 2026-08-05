@@ -123,6 +123,7 @@ const SlideContent = ({
     <>
       <div
         id={`slide-${slide.index}`}
+        data-slide-position={index}
         data-mutations-enabled={mutationsEnabled ? "true" : "false"}
         className=" w-full  main-slide flex items-center max-md:mb-4  justify-center relative"
       >

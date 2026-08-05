@@ -35,11 +35,13 @@ import Chat from "./Chat";
 import {
   WorkspaceChatPanel,
   type WorkspaceCommandDispatcher,
+  type WorkspacePageRemakeRequester,
   type WorkspacePresentationChange,
   type WorkspaceQualityReviewRequester,
 } from "../workspace";
 import { useChatFirstWorkbenchRollout } from "@/lib/use-chat-first-workbench-rollout";
 import { canReadChatFirstWorkspace } from "@/lib/chat-first-workbench";
+import { findMostVisibleSlideIndex } from "../utils/slideScrollSync";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
@@ -64,6 +66,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     "chat" | "history"
   >("chat");
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const slideScrollSyncFrameRef = useRef<number | null>(null);
   const router = useRouter();
   const chatFirstRollout = useChatFirstWorkbenchRollout(undefined, presentation_id);
   const chatFirstEnabled = chatFirstRollout.mode === "chat";
@@ -77,11 +80,21 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     useState<WorkspaceCommandDispatcher | null>(null);
   const [workspaceQualityReviewRequester, setWorkspaceQualityReviewRequester] =
     useState<WorkspaceQualityReviewRequester | null>(null);
+  const [workspacePageRemakeRequester, setWorkspacePageRemakeRequester] =
+    useState<WorkspacePageRemakeRequester | null>(null);
   const handleWorkspaceCommandDispatcherReady = useCallback(
     (dispatcher: WorkspaceCommandDispatcher | null) => {
       setWorkspaceCommandDispatcher(() => dispatcher);
     },
     [],
+  );
+  const handleWorkspacePageRemakeRequest = useCallback(
+    (slideIndex: number) => {
+      setCompactWorkspacePane("chat");
+      setWorkspaceDrawerOpen(true);
+      workspacePageRemakeRequester?.(slideIndex);
+    },
+    [workspacePageRemakeRequester],
   );
 
   useEffect(() => {
@@ -257,6 +270,38 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     [chatTargetedSlides]
   );
 
+  const handleSlidesScroll = useCallback(() => {
+    if (slideScrollSyncFrameRef.current !== null) return;
+    slideScrollSyncFrameRef.current = window.requestAnimationFrame(() => {
+      slideScrollSyncFrameRef.current = null;
+      const container = slidesScrollContainerRef.current;
+      if (!container) return;
+      const viewport = container.getBoundingClientRect();
+      const candidates = Array.from(
+        container.querySelectorAll<HTMLElement>("[data-slide-position]"),
+      ).flatMap((element) => {
+        const index = Number(element.dataset.slidePosition);
+        if (!Number.isInteger(index)) return [];
+        const rect = element.getBoundingClientRect();
+        return [{ index, top: rect.top, bottom: rect.bottom }];
+      });
+      const visibleIndex = findMostVisibleSlideIndex(viewport, candidates);
+      if (visibleIndex === null) return;
+      setSelectedSlide((current) =>
+        current === visibleIndex ? current : visibleIndex,
+      );
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (slideScrollSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(slideScrollSyncFrameRef.current);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!isFollowModeEnabled || !isChatSending || totalSlides <= 0) {
       return;
@@ -389,6 +434,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           onWorkspaceQualityReviewRequest={
             workspaceQualityReviewRequester ?? undefined
           }
+          onWorkspacePageRemakeRequest={
+            workspacePageRemakeRequester
+              ? handleWorkspacePageRemakeRequest
+              : undefined
+          }
         />
         {isAuthoredDeck && (
           <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
@@ -472,6 +522,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           <div className="w-full min-w-0 h-full flex-1 pt-[18px]">
             <div
               ref={slidesScrollContainerRef}
+              data-testid="slides-scroll-container"
+              onScroll={handleSlidesScroll}
               className="font-inter h-full overflow-y-auto hide-scrollbar scroll-pt-[18px]"
             >
               <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
@@ -582,6 +634,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 onCommandDispatcherReady={handleWorkspaceCommandDispatcherReady}
                 onQualityReviewRequesterReady={(requester) =>
                   setWorkspaceQualityReviewRequester(() => requester)
+                }
+                onPageRemakeRequesterReady={(requester) =>
+                  setWorkspacePageRemakeRequester(() => requester)
                 }
               />
             ) : chatFirstRollout.mode === "checking" ? (

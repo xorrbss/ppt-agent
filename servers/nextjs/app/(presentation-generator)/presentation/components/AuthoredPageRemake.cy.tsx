@@ -1,6 +1,8 @@
 import React from "react";
 
-import AuthoredPageRemake from "./AuthoredPageRemake";
+import AuthoredPageRemake, {
+  WorkspacePageRemakePrompt,
+} from "./AuthoredPageRemake";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 
 const previewData = {
@@ -81,7 +83,25 @@ describe("AuthoredPageRemake", () => {
     cy.get("@reload").should("have.been.calledOnce");
   });
 
-  it("publishes through the fenced workspace operation in chat-first mode", () => {
+  it("routes chat-first mode into the workspace without opening a legacy dialog", () => {
+    const requestWorkspacePrompt = cy.stub().as("workspacePrompt");
+    cy.mount(
+      <AuthoredPageRemake
+        presentationId="deck-1"
+        currentSlide={4}
+        chatFirstEnabled
+        workspaceCommandsEnabled
+        onWorkspacePageRemakeRequest={requestWorkspacePrompt}
+      />,
+    );
+
+    cy.get('[data-testid="page-remake-trigger"]').click();
+    cy.get("@workspacePrompt").should("have.been.calledOnceWith", 4);
+    cy.get('[role="dialog"]').should("not.exist");
+    cy.get('[data-testid="page-remake-preview-create"]').should("not.exist");
+  });
+
+  it("publishes an inline workspace preview through the fenced operation", () => {
     preparePreview();
     const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
     const directPublish = cy
@@ -89,16 +109,14 @@ describe("AuthoredPageRemake", () => {
       .as("directPublish")
       .resolves({ status: "published" });
     cy.mount(
-      <AuthoredPageRemake
+      <WorkspacePageRemakePrompt
         presentationId="deck-1"
         currentSlide={4}
-        chatFirstEnabled
-        workspaceCommandsEnabled
         onWorkspaceCommand={workspaceCommand}
+        onDismiss={cy.stub().as("dismiss")}
       />,
     );
 
-    cy.get('[data-testid="page-remake-trigger"]').click();
     cy.get('[data-testid="page-remake-preview-create"]').click();
     cy.tick(2_000);
     cy.get('[data-testid="page-remake-publish"]').click();
@@ -118,5 +136,6 @@ describe("AuthoredPageRemake", () => {
         },
       ]);
     });
+    cy.get("@dismiss").should("have.been.calledOnce");
   });
 });

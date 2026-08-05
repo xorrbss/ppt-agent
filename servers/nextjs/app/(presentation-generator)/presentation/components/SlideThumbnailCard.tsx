@@ -17,6 +17,7 @@ export const SlideThumbnailCard = forwardRef<
   return (
     <div
       ref={ref}
+      data-slide-thumbnail-index={index}
       style={{
         backgroundColor: "var(--card-color, #ffffff)",
         borderColor: selected ? "#5141e5" : "var(--stroke, #e5e7eb)",

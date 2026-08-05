@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
@@ -37,6 +37,7 @@ import {
   isTemplateFreePresentation,
 } from "../../_shared/blank-slide";
 import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
+import { getThumbnailScrollTarget } from "../utils/slideScrollSync";
 
 interface SidePanelProps {
   selectedSlide: number;
@@ -55,6 +56,7 @@ const SidePanel = ({
 }: SidePanelProps) => {
   const pathname = usePathname();
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
+  const thumbnailScrollRef = useRef<HTMLDivElement | null>(null);
 
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration,
@@ -69,6 +71,28 @@ const SidePanel = ({
     ? presentationData.slides[lastSlideIndex].layout.split(":")[0]
     : "";
   const isTemplateFree = isTemplateFreePresentation(presentationData);
+
+  useEffect(() => {
+    const container = thumbnailScrollRef.current;
+    if (!container) return;
+    const thumbnail = container.querySelector<HTMLElement>(
+      `[data-slide-thumbnail-index="${selectedSlide}"]`,
+    );
+    if (!thumbnail) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const thumbnailRect = thumbnail.getBoundingClientRect();
+    const targetTop =
+      thumbnailRect.top - containerRect.top + container.scrollTop;
+    const target = getThumbnailScrollTarget({
+      scrollTop: container.scrollTop,
+      clientHeight: container.clientHeight,
+      targetTop,
+      targetBottom: targetTop + thumbnailRect.height,
+    });
+    if (target === null) return;
+    container.scrollTo({ top: target, behavior: "smooth" });
+  }, [presentationData?.slides?.length, selectedSlide]);
 
   const handleAddSlideClick = () => {
     if (!mutationsEnabled || !presentationData?.slides?.length || isStreaming) {
@@ -225,7 +249,11 @@ const SidePanel = ({
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <div className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5">
+            <div
+              ref={thumbnailScrollRef}
+              data-testid="slide-thumbnail-scroll"
+              className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5"
+            >
               {isStreaming || !mutationsEnabled ? (
                 presentationData &&
                 presentationData?.slides.map((slide: any, index: number) => (
