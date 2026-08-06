@@ -333,6 +333,15 @@ class PresentationChatOperationHandler:
                         if error.status_code == 429 or error.status_code >= 500
                         else NonRetryableWorkspaceOperationError
                     )
+                    # An unmapped detail collapses to the generic code, which on
+                    # its own says nothing about what actually went wrong.
+                    LOGGER.warning(
+                        "Chat turn failed for operation %s (HTTP %s -> %s)",
+                        claim.operation_id,
+                        error.status_code,
+                        code,
+                        exc_info=True,
+                    )
                     raise error_type(code) from error
                 if isinstance(
                     error,
@@ -350,6 +359,17 @@ class PresentationChatOperationHandler:
                     raise RetryableWorkspaceOperationError(error.code) from error
                 # SQL changes have not crossed the publication boundary. The
                 # runner may safely retry without exposing a partial revision.
+                #
+                # The public code is deliberately generic, so log the cause here
+                # or the turn dead-letters after its retries with nothing to
+                # diagnose it by. The command text is not logged.
+                LOGGER.warning(
+                    "Chat turn failed for operation %s (%s: %s)",
+                    claim.operation_id,
+                    type(error).__name__,
+                    error,
+                    exc_info=True,
+                )
                 raise RetryableWorkspaceOperationError(
                     "presentation_edit_failed"
                 ) from error

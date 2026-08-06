@@ -1,37 +1,30 @@
-"""Every `strict` chat tool must satisfy the provider's strict-schema rules.
+"""Every tool registered as `strict` must satisfy the provider's strict rules.
 
 `llmai.shared.schema.get_schema_as_dict` discards its `strict` argument and
-forwards the raw Pydantic schema, so nothing downstream repairs a tool schema.
-A property that is optional in the model is therefore omitted from `required`
-and the provider rejects the whole request with a 400 — which surfaces to the
-user as a chat turn that silently fails.
+forwards the raw Pydantic schema, so nothing downstream repairs a tool
+definition. A single invalid tool makes the provider reject the entire request
+with a 400, which surfaces to the user as a chat turn that silently does
+nothing — not as a problem with that one tool.
+
+Strict mode requires every object to list all of its properties in `required`
+and to set `additionalProperties: false`. A free-form mapping cannot express
+that, so a tool taking one must be registered non-strict instead.
 """
 
-import pytest
-from pydantic import BaseModel
+from types import SimpleNamespace
 
-from services.chat import schemas as chat_schemas
+from services.chat.schemas import SaveSlideInput
+from services.chat.tools import ChatTools
 
 
-def _strict_tool_models() -> list[type[BaseModel]]:
-    models: list[type[BaseModel]] = []
-    for name in dir(chat_schemas):
-        candidate = getattr(chat_schemas, name)
-        if not isinstance(candidate, type) or not issubclass(candidate, BaseModel):
-            continue
-        if candidate.__name__ in {
-            "BaseModel",
-            "StrictSchemaModel",
-            "OpenAIStrictSchemaModel",
-        }:
-            continue
-        models.append(candidate)
-    return models
+def _tools():
+    memory = SimpleNamespace(sql_session=None, presentation_id=None)
+    return ChatTools(memory).get_tool_definitions()
 
 
 def _objects(schema: object):
     if isinstance(schema, dict):
-        if schema.get("type") == "object" or "properties" in schema:
+        if schema.get("type") == "object":
             yield schema
         for key, value in schema.items():
             if key in {"properties", "$defs"} and isinstance(value, dict):
@@ -44,29 +37,50 @@ def _objects(schema: object):
             yield from _objects(value)
 
 
-@pytest.mark.parametrize(
-    "model", _strict_tool_models(), ids=lambda model: model.__name__
-)
-def test_strict_tool_schema_requires_every_property(model: type[BaseModel]) -> None:
-    for node in _objects(model.model_json_schema()):
+def _strict_violations(schema: dict) -> list[str]:
+    problems: list[str] = []
+    for node in _objects(schema):
         properties = set(node.get("properties", {}))
-        if not properties:
-            continue
         optional = properties - set(node.get("required", []))
-        assert not optional, (
-            f"{model.__name__} leaves {sorted(optional)} out of `required`; "
-            "declare it `T | None = Field(...)` on OpenAIStrictSchemaModel "
-            "instead of giving it a default."
+        if optional:
+            problems.append(f"{sorted(optional)} missing from `required`")
+        if node.get("additionalProperties") is not False:
+            problems.append("object without additionalProperties=false")
+    return problems
+
+
+def test_registered_strict_tools_have_strict_valid_schemas():
+    offenders: dict[str, list[str]] = {}
+    for tool in _tools():
+        if not getattr(tool, "strict", False):
+            continue
+        schema = tool.input_schema
+        schema = (
+            schema.model_json_schema()
+            if hasattr(schema, "model_json_schema")
+            else dict(schema or {})
         )
-        assert node.get("additionalProperties") is False, (
-            f"{model.__name__} must forbid additional properties."
-        )
+        problems = _strict_violations(schema)
+        if problems:
+            offenders[tool.name] = sorted(set(problems))
+
+    assert not offenders, (
+        "strict tools with provider-invalid schemas: "
+        f"{offenders}. Give the field a concrete shape, or register the tool "
+        "with strict=False if it genuinely takes free-form JSON."
+    )
 
 
-def test_save_slide_input_accepts_an_omitted_expected_revision() -> None:
-    """The model may leave the nullable field out; validation fills it in."""
+def test_the_tool_set_is_not_accidentally_empty():
+    """A registry that returns nothing would make the check above vacuous."""
 
-    parsed = chat_schemas.SaveSlideInput.model_validate(
+    assert len(_tools()) > 5
+
+
+def test_save_slide_accepts_an_omitted_nullable_field():
+    """`expectedRevision` is required in the schema but may be sent as null."""
+
+    parsed = SaveSlideInput.model_validate(
         {
             "content": '{"title": "제목"}',
             "layoutId": "authored:content",
@@ -76,9 +90,7 @@ def test_save_slide_input_accepts_an_omitted_expected_revision() -> None:
     )
     assert parsed.expected_revision is None
 
-
-def test_save_slide_input_still_reads_an_explicit_expected_revision() -> None:
-    parsed = chat_schemas.SaveSlideInput.model_validate(
+    supplied = SaveSlideInput.model_validate(
         {
             "content": '{"title": "제목"}',
             "layoutId": "authored:content",
@@ -87,4 +99,4 @@ def test_save_slide_input_still_reads_an_explicit_expected_revision() -> None:
             "expectedRevision": "7",
         }
     )
-    assert parsed.expected_revision == "7"
+    assert supplied.expected_revision == "7"

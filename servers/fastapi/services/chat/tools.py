@@ -180,20 +180,27 @@ class ChatTools:
             ),
         ]
         tools.extend(
+            # Not strict: these accept free-form JSON payloads, and a strict
+            # function schema must enumerate every property of every object with
+            # additionalProperties=false. Declaring strict here made the provider
+            # reject the whole request, so no chat turn could run at all. The
+            # input is still validated server-side by the Pydantic model.
             Tool(
                 name=name,
                 description=f"Presentation-scoped Chat operation: {name}.",
                 schema=ChatContextToolInput,
-                strict=True,
+                strict=False,
             )
             for name in self._context_tool_names()
         )
         tools.extend(
+            # Not strict, for the same reason as the context tools above: the UI
+            # payloads (ui/element/style/position/size) are free-form objects.
             Tool(
                 name=name,
                 description=f"Revision-checked native slide UI operation: {name}.",
                 schema=SlideUIToolInput,
-                strict=True,
+                strict=False,
             )
             for name in self._ui_tool_names()
         )
