@@ -190,20 +190,33 @@ function PageRemakeHistoryCard({
 
           <div className="mt-3 space-y-2 text-sm">
             {warned ? (
-              <p
+              <div
                 className="flex items-start gap-2 text-amber-900"
                 data-testid="page-remake-history-warning"
               >
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>
-                  자동 검사에서 확인할 항목이 발견되었습니다
-                  {issueGroups.length > 0 &&
-                    ` (${issueGroups
-                      .map((group) => `${group.label} ${group.count}건`)
-                      .join(", ")})`}
-                  .
-                </span>
-              </p>
+                <div className="space-y-1">
+                  <p>
+                    자동 검사에서 확인할 항목이 발견되었습니다
+                    {issueGroups.length > 0 &&
+                      ` (${issueGroups
+                        .map((group) => `${group.label} ${group.count}건`)
+                        .join(", ")})`}
+                    .
+                  </p>
+                  {/* The counts alone prompted "what is this?", so explain them. */}
+                  {issueGroups.map((group) => (
+                    <p
+                      key={group.category}
+                      className="text-xs leading-5 text-amber-800"
+                      data-testid={`page-remake-issue-help-${group.category}`}
+                    >
+                      <span className="font-medium">{group.label}</span> —{" "}
+                      {group.description}
+                    </p>
+                  ))}
+                </div>
+              </div>
             ) : (
               <p className="flex items-start gap-2 text-emerald-900">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />

@@ -50,6 +50,16 @@ describe("PageRemakeHistory", () => {
       .should("contain.text", "확인할 항목이 발견되었습니다")
       .and("contain.text", "명암 대비 2건")
       .and("contain.text", "잘림 1건");
+    // A count alone left the user asking what it meant, so each one explains
+    // itself in the panel instead of needing to be looked up.
+    cy.get('[data-testid="page-remake-issue-help-contrast"]').should(
+      "contain.text",
+      "명도 대비가 권장 기준(4.5:1)보다 낮아",
+    );
+    cy.get('[data-testid="page-remake-issue-help-clipping"]').should(
+      "contain.text",
+      "영역 밖으로 넘쳐 잘려",
+    );
 
     cy.get('[data-testid="page-remake-history-apply-4"]').click();
     cy.then(() => {

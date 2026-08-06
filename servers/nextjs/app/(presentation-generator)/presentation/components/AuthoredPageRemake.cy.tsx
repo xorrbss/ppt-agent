@@ -349,6 +349,11 @@ describe("AuthoredPageRemake", () => {
       .should("contain.text", "겹침 2건")
       .and("contain.text", "중요도 높음")
       .and("contain.text", "잘림 1건");
+    // Each finding explains what it means, so the count is not the whole answer.
+    cy.get('[data-testid="page-remake-issue-help-overlap"]').should(
+      "contain.text",
+      "요소끼리 겹쳐서",
+    );
     cy.get('[data-testid="page-remake-warning-issues"]').should(
       "not.contain.text",
       "overlaps",

@@ -256,8 +256,19 @@ function PageRemakeFlow({
                   >
                     {issueGroups.map((group) => (
                       <li key={group.category}>
-                        {group.label} {group.count}건
-                        {group.severityLabel ? ` · ${group.severityLabel}` : ""}
+                        <span>
+                          {group.label} {group.count}건
+                          {group.severityLabel
+                            ? ` · ${group.severityLabel}`
+                            : ""}
+                        </span>
+                        {/* A count alone does not say whether it matters. */}
+                        <span
+                          className="block text-xs leading-5 text-amber-800"
+                          data-testid={`page-remake-issue-help-${group.category}`}
+                        >
+                          {group.description}
+                        </span>
                       </li>
                     ))}
                   </ul>
