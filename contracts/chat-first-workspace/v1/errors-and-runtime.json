@@ -577,6 +577,18 @@
       "retryable": true
     },
     {
+      "code": "page_remake_request_invalid",
+      "status_code": 400,
+      "safe_message": "This page remake request is missing its page or preview.",
+      "retryable": false
+    },
+    {
+      "code": "page_remake_publish_failed",
+      "status_code": 500,
+      "safe_message": "The new page version could not be applied. Try again.",
+      "retryable": true
+    },
+    {
       "code": "presentation_generation_job_missing",
       "status_code": 503,
       "safe_message": "The presentation generation job is being recovered. Try again.",
