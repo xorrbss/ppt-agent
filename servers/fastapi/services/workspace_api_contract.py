@@ -166,14 +166,6 @@ def _operation_card_context(
 def _project_event(value: Mapping[str, Any]) -> dict[str, Any]:
     event = dict(value)
     event["schema_version"] = 1
-    # Runner events record their outcome as `state`, but the public contract
-    # carries it as `status` and that is the only field a client applies to its
-    # operation card. Without this the terminal event announces a version bump
-    # and nothing else, leaving a finished operation displayed as still queued.
-    if event.get("status") is None:
-        state = event.get("state")
-        if isinstance(state, str) and state:
-            event["status"] = state
     # Never reflect a private/internal message supplied by the durable event.
     # Public text is derived only from the central allow-listed registry.
     event["safe_message"] = None
