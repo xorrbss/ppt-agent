@@ -13,12 +13,14 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import inspect
 import json
+import logging
 import os
 import secrets
 from typing import Any
 import uuid
 
 from sqlalchemy import and_, exists, func, or_, select, text, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
@@ -64,6 +66,8 @@ from utils.owner_context import (
 )
 from models.sql.workspace import get_workspace_owner_scope
 
+
+LOGGER = logging.getLogger(__name__)
 
 WORKSPACE_OPERATION_LEASE_SECONDS = 300
 WORKSPACE_OPERATION_HEARTBEAT_SECONDS = 30
@@ -1864,20 +1868,36 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
             "total": total,
             "percent": percent,
         }
-        async with self._session_factory() as session:
-            event = await append_operation_event(
-                session,
-                operation_id=self.claim.operation_id,
-                event_type="operation.progress",
-                payload={"state": "running", **progress},
-                attempt_token=self.claim.attempt_token,
-                allowed_states=("running",),
-                projection_values={"progress": sanitize_workspace_event_payload(progress)},
+        try:
+            async with self._session_factory() as session:
+                event = await append_operation_event(
+                    session,
+                    operation_id=self.claim.operation_id,
+                    event_type="operation.progress",
+                    payload={"state": "running", **progress},
+                    attempt_token=self.claim.attempt_token,
+                    allowed_states=("running",),
+                    projection_values={
+                        "progress": sanitize_workspace_event_payload(progress)
+                    },
+                )
+                if event is None:
+                    await session.rollback()
+                    return False
+                await session.commit()
+                return True
+        except OperationalError:
+            # Progress is advisory telemetry written from its own session, so a
+            # long-running handler that holds the write lock can time it out.
+            # Losing a progress row must not destroy an otherwise healthy
+            # attempt: only `event is None` means the lease was actually taken,
+            # and publication still enforces fencing on the attempt token.
+            LOGGER.warning(
+                "Progress not recorded for operation %s at stage %s",
+                self.claim.operation_id,
+                stage,
+                exc_info=True,
             )
-            if event is None:
-                await session.rollback()
-                return False
-            await session.commit()
             return True
 
     async def cancellation_requested(self) -> bool:
