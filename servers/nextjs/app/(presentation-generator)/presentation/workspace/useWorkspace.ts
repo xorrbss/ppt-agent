@@ -49,6 +49,25 @@ export interface WorkspaceRetryIntent {
   action?: WorkspaceOperationActionRequest["action"];
 }
 
+/** States an operation cannot leave, so its committed result is final. */
+const TERMINAL_OPERATION_STATUSES = new Set([
+  "succeeded",
+  "failed",
+  "cancelled",
+  "dead_letter",
+]);
+
+function isTerminalWorkspaceEvent(event: {
+  type?: string;
+  status?: string;
+}): boolean {
+  return (
+    event.type === "operation.result" ||
+    (event.status !== undefined &&
+      TERMINAL_OPERATION_STATUSES.has(event.status))
+  );
+}
+
 const EMPTY_CAPABILITY: WorkspaceCapability = {
   supported: false,
   timeline: false,
@@ -307,7 +326,13 @@ export function useWorkspaceTimeline({
       const next = commitProjection((current) =>
         applyOperationEvents(current, page),
       );
-      return next.rebaseRequired ? recoverProjection() : Promise.resolve();
+      if (next.rebaseRequired) return recoverProjection();
+      // A terminal event reports the outcome but deliberately carries no result
+      // payload: raw provider output is excluded from the durable event log.
+      // Pull the committed result from the timeline so a finished operation
+      // shows its answer without waiting for a reload.
+      if (page.events.some(isTerminalWorkspaceEvent)) return recoverProjection();
+      return Promise.resolve();
     };
 
     const applyPage = async () => {
