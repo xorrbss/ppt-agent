@@ -69,22 +69,20 @@ def _seconds_since(created) -> float:
 
 
 async def _prune(session: AsyncSession, presentation_id: uuid.UUID) -> None:
-    stale_ids = list(
+    stale = list(
         await _scalar_result(
             session,
-            select(PresentationVersionModel.id)
+            select(PresentationVersionModel)
             .where(PresentationVersionModel.presentation_id == presentation_id)
             .order_by(PresentationVersionModel.created_at.desc())
             .offset(MAX_VERSIONS_PER_PRESENTATION)
         )
     )
-    if stale_ids:
-        await _execute(
-            session,
-            delete(PresentationVersionModel).where(
-                PresentationVersionModel.id.in_(stale_ids)
-            )
-        )
+    # Delete through the unit of work.  A bulk DELETE executes immediately, and
+    # a chat turn calls this while buffering its mutations across the model
+    # call - the statement would hold SQLite's single writer lock for minutes.
+    for version in stale:
+        await session.delete(version)
 
 
 async def snapshot_slides(
@@ -115,7 +113,9 @@ async def snapshot_slides(
         label=label,
     )
     session.add(version)
-    # Autoflush before the prune SELECT includes the row just added.
+    # The prune SELECT sees the row just added only when autoflush is on.  A
+    # buffered chat turn disables it, so pruning there retains one extra
+    # version until the next snapshot - a storage detail, not a correctness one.
     await _prune(session, presentation_id)
     return version
 

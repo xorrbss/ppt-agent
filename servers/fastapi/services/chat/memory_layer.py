@@ -18,6 +18,7 @@ from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
+from services.chat.pending_slides import reconcile_pending_slides, slide_at_index
 from services.chat.slide_ui_query import slide_ui_revision
 from services.chat.template_v2_hydration import (
     apply_hydrated_template_v2_state,
@@ -568,11 +569,11 @@ class PresentationChatMemoryLayer:
         image_generation_service = ImageGenerationService(get_images_directory())
 
         if replace_old_slide_at_index:
-            existing_slide = await self._sql_session.scalar(
-                select(SlideModel).where(
-                    SlideModel.presentation == self._presentation_id,
-                    SlideModel.index == target_index,
-                )
+            # Address the slide through the reconciled view: a WHERE on `index`
+            # would match the database's pre-edit position once this turn has
+            # already inserted or removed a slide.
+            existing_slide = slide_at_index(
+                await self._owned_slides(), target_index
             )
             if not existing_slide:
                 return {
@@ -1009,7 +1010,11 @@ class PresentationChatMemoryLayer:
                 if owner_id is None
                 else SlideModel.owner_id == owner_id
             )
-        return list(await self._sql_session.scalars(statement))
+        return reconcile_pending_slides(
+            self._sql_session,
+            self._presentation_id,
+            await self._sql_session.scalars(statement),
+        )
 
     async def _template_v2_for_presentation(self) -> TemplateV2 | None:
         statement = (

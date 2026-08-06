@@ -6,7 +6,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import delete as sa_delete
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -105,13 +104,18 @@ async def replace_messages(
     conversation_id: uuid.UUID,
     messages: list[dict[str, str]],
 ) -> None:
-    await session.execute(
-        sa_delete(ChatHistoryMessageModel).where(
+    # Delete through the unit of work.  A bulk DELETE executes immediately and
+    # would hold the writer lock for the rest of a buffered chat turn, which on
+    # SQLite blocks the runner's independent lease heartbeat.
+    superseded = await session.scalars(
+        select(ChatHistoryMessageModel).where(
             ChatHistoryMessageModel.presentation_id == presentation_id,
             ChatHistoryMessageModel.conversation_id == conversation_id,
             ChatHistoryMessageModel.owner_id == get_current_owner_id(),
         )
     )
+    for message in list(superseded):
+        await session.delete(message)
 
     next_position = 1
     base_time = get_current_utc_datetime()
@@ -137,7 +141,6 @@ async def replace_messages(
             )
         )
         next_position += 1
-    await session.flush()
 
 
 async def append_turn(
@@ -179,7 +182,6 @@ async def append_turn(
             tool_calls=tool_calls or None,
         )
     )
-    await session.flush()
 
 
 async def list_conversations(

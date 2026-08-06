@@ -16,7 +16,6 @@ import re
 import uuid
 from typing import Any, Protocol
 
-from sqlalchemy import update
 from sqlmodel import select
 
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
@@ -25,6 +24,7 @@ from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.template_v2_local_state import TemplateV2LocalState
+from services.chat.pending_slides import reconcile_pending_slides
 from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
 from services.temp_file_service import TEMP_FILE_SERVICE
@@ -188,19 +188,13 @@ class OutlineTemplateContext:
             properties=None,
         )
         try:
-            # A bulk statement avoids transient duplicate indices in databases
-            # that enforce an index uniqueness policy outside the ORM metadata.
-            if shifted:
-                await self._sql_session.execute(
-                    update(SlideModel)
-                    .where(
-                        SlideModel.presentation == self._presentation_id,
-                        SlideModel.index >= target,
-                    )
-                    .values(index=SlideModel.index + 1)
-                )
-                for slide in shifted:
-                    slide.index += 1
+            # Shift through the unit of work rather than a bulk UPDATE: the
+            # statement would execute immediately and hold the writer lock for
+            # the rest of the turn.  `ix_slides_presentation` is non-unique, so
+            # a transient duplicate index before flush violates no constraint.
+            for slide in shifted:
+                slide.index += 1
+                self._sql_session.add(slide)
             self._sql_session.add(new_slide)
             presentation.n_slides = len(slides) + 1
             self._sql_session.add(presentation)
@@ -429,7 +423,13 @@ class OutlineTemplateContext:
             .where(SlideModel.presentation == self._presentation_id)
             .order_by(SlideModel.index)
         )
-        return [slide for slide in result if self._is_owner_scoped(slide)]
+        return [
+            slide
+            for slide in reconcile_pending_slides(
+                self._sql_session, self._presentation_id, result
+            )
+            if self._is_owner_scoped(slide)
+        ]
 
     async def _save_outline(self, presentation: PresentationModel, slides: list[str]) -> None:
         original_outlines = copy.deepcopy(presentation.outlines)

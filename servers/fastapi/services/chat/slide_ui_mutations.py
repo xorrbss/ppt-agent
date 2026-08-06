@@ -12,6 +12,7 @@ from sqlmodel import select
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from services.chat.pending_slides import reconcile_pending_slides, slide_at_index
 from services.chat.slide_ui_content import update_element
 from services.chat.slide_ui_geometry import (
     normalized_position,
@@ -457,17 +458,9 @@ class SlideUIMutationService:
         return await self._sql_session.scalar(statement)
 
     async def _owned_slide(self, index: int) -> SlideModel | None:
-        statement = select(SlideModel).where(
-            SlideModel.presentation == self._presentation_id,
-            SlideModel.index == index,
-        )
-        owner_id = get_current_owner_id()
-        if not get_current_owner_is_admin():
-            if owner_id is None:
-                statement = statement.where(SlideModel.owner_id.is_(None))
-            else:
-                statement = statement.where(SlideModel.owner_id == owner_id)
-        return await self._sql_session.scalar(statement)
+        # A WHERE on `index` would address the database's pre-edit position
+        # while a buffered turn holds unpublished index shifts.
+        return slide_at_index(await self._slides(), index)
 
     async def _slides(self) -> list[SlideModel]:
         statement = (
@@ -482,8 +475,11 @@ class SlideUIMutationService:
                 if owner_id is None
                 else SlideModel.owner_id == owner_id
             )
-        result = await self._sql_session.scalars(statement)
-        return list(result)
+        return reconcile_pending_slides(
+            self._sql_session,
+            self._presentation_id,
+            await self._sql_session.scalars(statement),
+        )
 
     @staticmethod
     def _components(ui: dict[str, Any]) -> list[dict[str, Any]]:

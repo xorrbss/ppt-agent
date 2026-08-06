@@ -19,6 +19,10 @@ class _Session:
         self.presentation = presentation
         self.scalar_results = list(scalar_results or [])
         self.added: list[Any] = []
+        # Slide reads reconcile against the session's pending unit of work, so
+        # the double has to model it rather than only record calls.
+        self.new: list[Any] = []
+        self.deleted: list[Any] = []
         self.commit_count = 0
         self.rollback_count = 0
 
@@ -35,12 +39,21 @@ class _Session:
 
     def add(self, value):
         self.added.append(value)
+        if value not in self.new:
+            self.new.append(value)
+
+    async def delete(self, value):
+        self.deleted.append(value)
 
     async def commit(self):
         self.commit_count += 1
+        self.new.clear()
+        self.deleted.clear()
 
     async def rollback(self):
         self.rollback_count += 1
+        self.new.clear()
+        self.deleted.clear()
 
     async def refresh(self, _value):
         return None
@@ -155,7 +168,19 @@ async def test_layout_slide_uses_existing_save_path_and_max_slide_guard():
 
     context, _, memory = _context(
         presentation,
-        scalar_results=[[object()] * MAX_NUMBER_OF_SLIDES],
+        scalar_results=[
+            [
+                SlideModel(
+                    presentation=presentation.id,
+                    layout_group="deck",
+                    layout="title",
+                    index=position,
+                    content={},
+                    properties=None,
+                )
+                for position in range(MAX_NUMBER_OF_SLIDES)
+            ]
+        ],
     )
     blocked = await context.add_new_slide_layout(
         content={}, layout_id="title", index=None

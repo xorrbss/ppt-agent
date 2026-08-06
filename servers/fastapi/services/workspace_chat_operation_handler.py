@@ -3,8 +3,9 @@
 The legacy chat tools historically commit after each tool call.  Workspace
 operations need a stronger boundary: all SQL mutations from a command remain
 provisional until the operation fence and presentation revision are published
-in one final commit.  ``FlushOnlyAsyncSession`` preserves the existing tool
-surface while turning intermediate commits into flushes.
+in one final commit.  ``BufferedAsyncSession`` preserves the existing tool
+surface while turning intermediate commits into pure buffering, so the writer
+lock is taken once - after the provider responds - rather than held across it.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from typing import Any, cast
 from fastapi import HTTPException
 from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.sql.expression import UpdateBase
 
 from services.chat import PresentationChatService
 from services.chat import memory_layer as chat_memory_layer
@@ -61,12 +63,23 @@ LOGGER = logging.getLogger(__name__)
 _CHAT_IMAGE_DIRECTORY_LOCK = asyncio.Lock()
 
 
-class FlushOnlyAsyncSession:
-    """Delegate an ``AsyncSession`` but defer every inner commit.
+class BufferedAsyncSession:
+    """Delegate an ``AsyncSession`` while emitting no SQL of its own.
+
+    Tool mutations must land atomically with the revision bump, so the session
+    cannot commit until the model turn ends.  It must not *flush* either: the
+    first flush acquires SQLite's single writer lock and holds it for the whole
+    provider call, blocking every other writer - including the runner's
+    independent lease heartbeat, which then kills the operation.
+
+    So inner commits and flushes become pure buffering, and the unit of work is
+    written once, in one short transaction, after the provider responds.  Reads
+    stay consistent because :mod:`services.chat.pending_slides` reconciles slide
+    queries against this pending state.
 
     A real rollback is deliberately retained.  An inner mutation failure must
     invalidate the whole operation transaction rather than leave a partially
-    flushed unit of work available for publication.
+    buffered unit of work available for publication.
     """
 
     def __init__(self, delegate: AsyncSession) -> None:
@@ -100,7 +113,23 @@ class FlushOnlyAsyncSession:
         )
         for instance in self._delegate.new.union(self._delegate.dirty):
             retained[id(instance)] = instance
-        await self._delegate.flush()
+
+    async def flush(self) -> None:
+        """Buffer instead of writing; see the class docstring."""
+
+    async def refresh(self, *_args: Any, **_kwargs: Any) -> None:
+        """A reload would force a flush; buffered state is already authoritative."""
+
+    async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> Any:
+        # INSERT/UPDATE/DELETE statements bypass the unit of work and reach the
+        # connection immediately, reopening the long writer lock this class
+        # exists to prevent.  Fail loudly rather than silently regress.
+        if isinstance(statement, UpdateBase):
+            raise RuntimeError(
+                "workspace_chat_turn_immediate_dml: route this write through "
+                "the ORM unit of work (session.add/session.delete)"
+            )
+        return await self._delegate.execute(statement, *args, **kwargs)
 
     async def rollback(self) -> None:
         await self._delegate.rollback()
@@ -204,7 +233,7 @@ class PresentationChatOperationHandler:
         await context.progress(stage="reading_presentation", percent=5)
 
         async with self._session_factory() as session:
-            deferred = cast(AsyncSession, FlushOnlyAsyncSession(session))
+            deferred = cast(AsyncSession, BufferedAsyncSession(session))
             staging = None
             promoted = PromotedWorkspaceChatArtifacts(artifacts=(), replacements={})
             result_payload: dict[str, object] | None = None
@@ -226,49 +255,39 @@ class PresentationChatOperationHandler:
                     conversation_id=claim.conversation_id,
                 )
                 await context.progress(stage="applying_command", percent=20)
-                # PresentationContextStore imports this helper directly. Keep
-                # the narrow module override serialized so another coroutine
-                # can never inherit this operation's owner/fence directory.
-                async with _CHAT_IMAGE_DIRECTORY_LOCK:
-                    original_images_directory = (
-                        chat_memory_layer.get_images_directory
-                    )
-                    chat_memory_layer.get_images_directory = (
-                        lambda: str(staging.staging_directory)
-                    )
-                    try:
-                        turn = await service.generate_reply(command.strip())
-                    finally:
-                        chat_memory_layer.get_images_directory = (
-                            original_images_directory
+                # Autoflush would defeat the buffer: any read the tools issue
+                # after their first mutation would flush it to the connection
+                # and take the writer lock for the rest of the provider call.
+                with session.sync_session.no_autoflush:
+                    # PresentationContextStore imports this helper directly. Keep
+                    # the narrow module override serialized so another coroutine
+                    # can never inherit this operation's owner/fence directory.
+                    async with _CHAT_IMAGE_DIRECTORY_LOCK:
+                        original_images_directory = (
+                            chat_memory_layer.get_images_directory
                         )
+                        chat_memory_layer.get_images_directory = (
+                            lambda: str(staging.staging_directory)
+                        )
+                        try:
+                            turn = await service.generate_reply(command.strip())
+                        finally:
+                            chat_memory_layer.get_images_directory = (
+                                original_images_directory
+                            )
                 await context.raise_if_cancelled()
+                # Announce the stage while the turn is still buffered.  Artifact
+                # promotion flushes, which is where this transaction finally
+                # takes the writer lock, and this progress write comes from an
+                # independent session.  Everything from here to the commit is
+                # local work, so that lock is held for milliseconds rather than
+                # across the provider call.
+                await context.progress(stage="publishing_revision", percent=90)
                 promoted = await promote_workspace_chat_image_artifacts(
                     session,
                     staging,
                 )
                 _rewrite_pending_artifact_paths(session, promoted.replacements)
-                # This stage is never recorded on SQLite. `generate_reply` writes
-                # the turn through the deferred session, so a write transaction
-                # is already open by the time the model answers, and SQLite
-                # admits one writer per database - the runner's independent
-                # progress write cannot land until this session commits.
-                # Reordering it ahead of the promotion writes does not help; it
-                # was measured, and the stage is still lost.
-                #
-                # TODO: [BLOCKED]
-                #   violated: 구조 무결성 (a write transaction spans a network call)
-                #   reason: tool mutations must land atomically with the revision
-                #     bump, so the session cannot commit before the model turn
-                #     ends. That holds SQLite's single write lock for the whole
-                #     call, blocking every other writer including this operation's
-                #     own progress. PostgreSQL would hide it (row-level locks) but
-                #     trade it for idle-in-transaction termination and pool
-                #     exhaustion.
-                #   required_change: buffer the turn's mutations instead of
-                #     flushing them, then apply and publish them inside one short
-                #     transaction after the provider responds.
-                await context.progress(stage="publishing_revision", percent=90)
 
                 # TODO: [BLOCKED]
                 #   violated: 구조 무결성 (a question is recorded as an edit)
