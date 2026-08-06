@@ -248,6 +248,26 @@ class PresentationChatOperationHandler:
                     staging,
                 )
                 _rewrite_pending_artifact_paths(session, promoted.replacements)
+                # This stage is never recorded on SQLite. `generate_reply` writes
+                # the turn through the deferred session, so a write transaction
+                # is already open by the time the model answers, and SQLite
+                # admits one writer per database - the runner's independent
+                # progress write cannot land until this session commits.
+                # Reordering it ahead of the promotion writes does not help; it
+                # was measured, and the stage is still lost.
+                #
+                # TODO: [BLOCKED]
+                #   violated: 구조 무결성 (a write transaction spans a network call)
+                #   reason: tool mutations must land atomically with the revision
+                #     bump, so the session cannot commit before the model turn
+                #     ends. That holds SQLite's single write lock for the whole
+                #     call, blocking every other writer including this operation's
+                #     own progress. PostgreSQL would hide it (row-level locks) but
+                #     trade it for idle-in-transaction termination and pool
+                #     exhaustion.
+                #   required_change: buffer the turn's mutations instead of
+                #     flushing them, then apply and publish them inside one short
+                #     transaction after the provider responds.
                 await context.progress(stage="publishing_revision", percent=90)
 
                 # TODO: [BLOCKED]
