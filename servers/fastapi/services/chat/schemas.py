@@ -68,7 +68,7 @@ class GenerateAssetsInput(StrictSchemaModel):
     assets: list[GenerateAssetItemInput] = Field(min_length=1, max_length=12)
 
 
-class SaveSlideInput(StrictSchemaModel):
+class SaveSlideInput(OpenAIStrictSchemaModel):
     content: str = Field(
         min_length=2,
         max_length=200000,
@@ -80,8 +80,11 @@ class SaveSlideInput(StrictSchemaModel):
     layout_id: str = Field(alias="layoutId", min_length=1, max_length=200)
     index: int = Field(ge=0, le=1000)
     replace_old_slide_at_index: bool = Field(alias="replaceOldSlideAtIndex")
+    # Declared nullable-but-required, like every other strict tool input: the
+    # provider rejects a `strict` function whose `required` omits a property,
+    # and OpenAIStrictSchemaModel supplies None when the model leaves it out.
     expected_revision: str | None = Field(
-        default=None, alias="expectedRevision", min_length=1, max_length=128
+        ..., alias="expectedRevision", min_length=1, max_length=128
     )
 
     model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
