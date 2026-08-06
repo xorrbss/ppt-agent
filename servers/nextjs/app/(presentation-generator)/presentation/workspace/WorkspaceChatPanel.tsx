@@ -434,6 +434,10 @@ export default function WorkspaceChatPanel({
     loadingOlder,
     projection.eventHighWatermark,
     timelineItems.length,
+    // Remake history resolves after the first paint and renders above the
+    // transcript, so its arrival moves the bottom out from under a reader who
+    // was pinned to it.
+    pageRemakeHistory.length,
   ]);
 
   const handleTimelineScroll = useCallback(() => {
@@ -519,6 +523,27 @@ export default function WorkspaceChatPanel({
               아직 기록된 대화가 없습니다.
             </p>
           )}
+        {/* Remake previews carry no conversation position, so they sit above
+            the transcript. Rendering them after it put them between the newest
+            turn and the composer, which pushed a just-sent message out of
+            view. */}
+        <PageRemakeHistory
+          presentationId={presentationId}
+          entries={pageRemakeHistory}
+          disabled={submitting || !writesEnabled}
+          onWorkspaceCommand={commandDispatcher}
+          onApplied={(slideIndex) => {
+            setPageRemakeHistoryToken((token) => token + 1);
+            onPresentationChanged?.({
+              operationId: `page-remake-history-${slideIndex}`,
+              operationType: "slide.regenerate",
+              fixedSlideIndexes: [slideIndex],
+            });
+          }}
+          onRegenerate={(slideIndex) =>
+            setPageRemakePrompt({ currentSlide: slideIndex })
+          }
+        />
         <div className="space-y-3">
           {timelineItems.map((item) => {
             if (item.anchorType === "message") {
@@ -735,25 +760,6 @@ export default function WorkspaceChatPanel({
               </div>
             </article>
           )}
-          <PageRemakeHistory
-            presentationId={presentationId}
-            entries={pageRemakeHistory}
-            disabled={submitting || !writesEnabled}
-            onWorkspaceCommand={commandDispatcher}
-            onApplied={(slideIndex) => {
-              setPageRemakeHistoryToken((token) => token + 1);
-              // Applied outside the operation pipeline, so the canvas is told
-              // directly which page changed.
-              onPresentationChanged?.({
-                operationId: `page-remake-history-${slideIndex}`,
-                operationType: "slide.regenerate",
-                fixedSlideIndexes: [slideIndex],
-              });
-            }}
-            onRegenerate={(slideIndex) =>
-              setPageRemakePrompt({ currentSlide: slideIndex })
-            }
-          />
           {pageRemakePrompt && (
             <WorkspacePageRemakePrompt
               presentationId={presentationId}
@@ -840,6 +846,11 @@ export default function WorkspaceChatPanel({
             );
           }}
           onSend={async (command) => {
+            // Follow-latest switches off as soon as the reader scrolls up, but
+            // a turn the user just sent must always come into view - otherwise
+            // their message and its progress card land below the fold and the
+            // send looks like it did nothing.
+            shouldFollowLatestRef.current = true;
             await sendCommand(command, {
               context: { current_slide: currentSlide },
               assetIds: pendingAssets.map((asset) => asset.assetId),
