@@ -250,6 +250,18 @@ class PresentationChatOperationHandler:
                 _rewrite_pending_artifact_paths(session, promoted.replacements)
                 await context.progress(stage="publishing_revision", percent=90)
 
+                # TODO: [BLOCKED]
+                #   violated: 구조 무결성 (a question is recorded as an edit)
+                #   reason: a turn that only answers still publishes a new
+                #     revision, because publish_presentation_revision marks the
+                #     operation succeeded and advances the publication token in
+                #     one fenced CAS, and the same call delivers the result
+                #     payload carrying the answer. Skipping the increment for a
+                #     read-only turn would split that fence.
+                #   required_change: separate "record this attempt's result"
+                #     from "advance the publication token", so a turn that
+                #     invoked no mutating tool can report its answer without
+                #     invalidating every other client's expected_revision.
                 result_payload = {
                     "conversation_id": str(turn.conversation_id),
                     "summary": _replace_paths(

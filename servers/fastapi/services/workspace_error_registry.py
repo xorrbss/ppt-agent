@@ -403,6 +403,17 @@ WORKSPACE_ERROR_REGISTRY: dict[str, WorkspaceErrorDefinition] = {
             status_code=500,
         ),
         _definition(
+            "page_remake_request_invalid",
+            "This page remake request is missing its page or preview.",
+            status_code=400,
+        ),
+        _definition(
+            "page_remake_publish_failed",
+            "The new page version could not be applied. Try again.",
+            retryable=True,
+            status_code=500,
+        ),
+        _definition(
             "presentation_generation_job_missing",
             "The presentation generation job is being recovered. Try again.",
             retryable=True,
