@@ -13,11 +13,24 @@ const SCALE = 0.061;
 export const SlideThumbnailCard = forwardRef<
   HTMLDivElement,
   SlideThumbnailCardProps
->(({ slide, index, selected, className = "", style, ...props }, ref) => {
+>(({ slide, index, selected, className = "", style, onClick, onKeyDown, ...props }, ref) => {
   return (
     <div
       ref={ref}
       data-slide-thumbnail-index={index}
+      role="button"
+      tabIndex={0}
+      aria-label={`Slide ${index + 1}`}
+      aria-current={selected ? "true" : undefined}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (event.defaultPrevented || (event.key !== "Enter" && event.key !== " ")) {
+          return;
+        }
+        event.preventDefault();
+        onClick?.(event as unknown as React.MouseEvent<HTMLDivElement>);
+      }}
       style={{
         backgroundColor: "var(--card-color, #ffffff)",
         borderColor: selected ? "#5141e5" : "var(--stroke, #e5e7eb)",

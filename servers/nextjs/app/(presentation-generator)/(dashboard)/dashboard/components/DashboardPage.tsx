@@ -5,15 +5,19 @@ import React, {
   useEffect,
   useMemo,
   useCallback,
+  useRef,
 } from "react";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
+import { PresentationGenerationApi } from "@/app/(presentation-generator)/services/api/presentation-generation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, Loader2 } from "lucide-react";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { notify } from "@/components/ui/sonner";
+import { sanitizeAnalyticsError } from "@/utils/analytics";
 
 const actionCardBase =
   "absolute aspect-[16/9] h-[46.238px] w-[82.201px] rounded-[4.474px] border border-white/50 bg-cover bg-center bg-no-repeat shadow-[0_8px_18px_rgba(16,24,40,0.18)] transition-all duration-500 ease-out opacity-100 translate-y-0 scale-100";
@@ -41,14 +45,45 @@ const FloatingActionCards = () => (
   </div>
 );
 
+const BlankPresentationGraphic = ({ loading }: { loading: boolean }) => (
+  <span
+    className="relative ml-auto block h-[90px] w-[90px] shrink-0"
+    aria-hidden="true"
+  >
+    {loading ? (
+      <span className="absolute inset-0 flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-[#7A5AF8]" />
+      </span>
+    ) : (
+      <span className="absolute left-1/2 top-1/2 h-[90px] w-[90px] -translate-x-1/2 -translate-y-1/2 transition-transform duration-300 group-hover:-translate-y-[52%] group-hover:scale-105">
+        <span className="absolute left-[22.312px] top-[20.46px] h-[52.514px] w-[48.892px] -rotate-[5.81deg] bg-[rgba(0,0,0,0.14)]" />
+        <span className="absolute left-[21.452px] top-[19.94px] h-[52.514px] w-[48.892px] -rotate-[5.81deg] bg-[#ECEEEE]" />
+        <span className="absolute left-[23.57px] top-[21.78px] h-[50.53px] w-[47.045px] bg-[rgba(0,0,0,0.14)]" />
+        <span className="absolute left-[22.79px] top-[21.2px] h-[50.53px] w-[47.045px] bg-[#FEFEFF]" />
+        <Image
+          src="/dashboard/blank-presentation-clip.svg"
+          alt=""
+          width={9}
+          height={15}
+          className="absolute left-[25.05px] top-[15.66px] h-[14.283px] w-[8.282px]"
+        />
+      </span>
+    )}
+  </span>
+);
+
 const DashboardPage: React.FC = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const [presentations, setPresentations] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingBlankPresentation, setIsCreatingBlankPresentation] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deckSortDirection, setDeckSortDirection] = useState<"desc" | "asc">(
     "desc"
   );
+  const blankPresentationRequestInFlight = useRef(false);
 
   const sortedPresentations = useMemo(() => {
     if (!presentations) return presentations;
@@ -95,6 +130,43 @@ const DashboardPage: React.FC = () => {
     void fetchPresentations();
   }, [fetchPresentations]);
 
+  const createBlankPresentation = useCallback(async () => {
+    if (blankPresentationRequestInFlight.current) return;
+
+    blankPresentationRequestInFlight.current = true;
+    setIsCreatingBlankPresentation(true);
+    trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
+      pathname,
+      source: "dashboard_blank_presentation_card",
+    });
+
+    try {
+      const presentation =
+        await PresentationGenerationApi.createBlankPresentation();
+      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Created, {
+        pathname,
+        presentation_id: presentation.id,
+        slide_count: presentation.n_slides,
+      });
+      router.push(
+        `/presentation?id=${encodeURIComponent(presentation.id)}&type=standard`
+      );
+    } catch (creationError) {
+      const message =
+        creationError instanceof Error
+          ? creationError.message
+          : "Something went wrong while creating the presentation.";
+      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Create_Failed, {
+        pathname,
+        error_message: sanitizeAnalyticsError(creationError),
+      });
+      notify.error("Could not create blank presentation", message);
+    } finally {
+      blankPresentationRequestInFlight.current = false;
+      setIsCreatingBlankPresentation(false);
+    }
+  }, [pathname, router]);
+
   const removePresentation = (presentationId: string) => {
     setPresentations((prev: any) =>
       prev ? prev.filter((p: any) => p.id !== presentationId) : []
@@ -114,30 +186,55 @@ const DashboardPage: React.FC = () => {
         <h2 className="font-syne text-base bg-transparent font-medium pb-3.5  text-[#333333] ">
           작업
         </h2>
-        <Link
-          href="/upload"
-          onClick={() =>
-            trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
-              pathname,
-              source: "dashboard_actions_card",
-            })
-          }
-          className="group/action bg-white z-50 mt-2  relative  block w-[304px] max-w-full overflow-visible rounded-[10.8px] outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-4 cursor-pointer"
-          aria-label="발표자료 만들기"
-        >
-          <FloatingActionCards />
+        <div className="mt-2 flex flex-wrap gap-4">
+          <Link
+            href="/upload"
+            onClick={() =>
+              trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
+                pathname,
+                source: "dashboard_actions_card",
+              })
+            }
+            className="group/action relative z-50 block w-[304px] max-w-full cursor-pointer overflow-visible rounded-[10.8px] bg-white outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-4"
+            aria-label="발표자료 만들기"
+          >
+            <FloatingActionCards />
 
-          <Image
-            src="/create_presentation_bg.png"
-            alt="Background of the create presentation card"
-            width={304}
-            height={90}
-            className="relative bg-white z-10 h-[89.983px] w-[304px] max-w-full rounded-[10.8px] object-cover"
-          />
-          <span className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center font-syne text-sm font-medium text-[#191919]">
-            발표자료 만들기
-          </span>
-        </Link>
+            <Image
+              src="/create_presentation_bg.png"
+              alt="Background of the create presentation card"
+              width={304}
+              height={90}
+              className="relative z-10 h-[89.983px] w-[304px] max-w-full rounded-[10.8px] bg-white object-cover"
+            />
+            <span className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-center font-syne text-sm font-medium text-[#191919]">
+              발표자료 만들기
+            </span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => void createBlankPresentation()}
+            disabled={isCreatingBlankPresentation}
+            aria-busy={isCreatingBlankPresentation}
+            className="group relative z-50 flex h-[89.983px] w-[304px] max-w-full items-center overflow-hidden rounded-[10.8px] border border-[#EDEEEF] bg-[linear-gradient(135deg,#FAFAFF_0%,#F3F0FF_100%)] px-5 text-left outline-none transition hover:border-[#CFC7FF] hover:shadow-[0_8px_22px_rgba(81,70,229,0.12)] focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-4 disabled:cursor-not-allowed disabled:opacity-70"
+            aria-label="빈 발표자료 만들기"
+          >
+            <span className="flex min-w-0 flex-col pr-3">
+              <span className="font-syne text-sm font-medium text-[#191919]">
+                {isCreatingBlankPresentation
+                  ? "발표자료 생성 중"
+                  : "빈 발표자료"}
+              </span>
+              <span className="mt-1 text-[11px] leading-[14px] text-[#777387]">
+                {isCreatingBlankPresentation
+                  ? "캔버스를 준비하고 있습니다"
+                  : "빈 캔버스에서 시작하기"}
+              </span>
+            </span>
+            <BlankPresentationGraphic loading={isCreatingBlankPresentation} />
+          </button>
+        </div>
       </section>
       <section className="relative z-10 mt-12">
         <div className="mb-4 flex items-center justify-between">

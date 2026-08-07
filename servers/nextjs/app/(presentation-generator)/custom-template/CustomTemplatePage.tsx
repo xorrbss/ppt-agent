@@ -2,7 +2,7 @@
 
 
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 
@@ -23,6 +23,7 @@ import { FileUploadSection } from "./components/FileUploadSection";
 
 import { useFontLoader } from "../hooks/useFontLoad";
 import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
+import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
 
 
 
@@ -30,6 +31,11 @@ import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/compone
 
 const CustomTemplatePage = () => {
     const router = useRouter();
+    const autoPreviewFileRef = useRef<File | null>(null);
+
+    useEffect(() => {
+        ensureTailwindBrowserScript();
+    }, []);
 
     const [schemaEditorSlideIndex, setSchemaEditorSlideIndex] = useState<number | null>(null);
     const [schemaPreviewData, setSchemaPreviewData] = useState<Record<number, Record<string, any>>>({});
@@ -83,6 +89,24 @@ const CustomTemplatePage = () => {
             }
         }
     }, [selectedFile, fontUploadAndPreview]);
+
+    useEffect(() => {
+        if (
+            !selectedFile ||
+            state.step !== "font-check" ||
+            state.isLoading ||
+            (state.fontsData?.unavailable_fonts.length ?? 0) !== 0 ||
+            autoPreviewFileRef.current === selectedFile
+        ) {
+            return;
+        }
+
+        autoPreviewFileRef.current = selectedFile;
+        const timer = window.setTimeout(() => {
+            void handleFontUploadAndPreview();
+        }, 900);
+        return () => window.clearTimeout(timer);
+    }, [handleFontUploadAndPreview, selectedFile, state.fontsData, state.isLoading, state.step]);
 
     /**
      * Step 5: Save template with metadata
