@@ -119,7 +119,21 @@ async def _set_task(
 async def _load_deck(
     session: AsyncSession,
     presentation_id: uuid.UUID,
+    slide_index: int | None = None,
 ) -> tuple[PresentationModel, list[SlideModel]]:
+    """Load the deck and refuse a target this service cannot re-author.
+
+    The requirement is on the page being remade, not on its neighbours.  A deck
+    that carries one blank placeholder is still a deck of authored pages, and
+    demanding that every slide be authored let a single blank disable remake for
+    every other page.  Everything downstream is index-addressed - the plan role,
+    the outline alignment, the per-slide reference images - so a non-authored
+    sibling does not affect the candidate for ``slide_index``.
+
+    ``slide_index`` is validated only when it is in range; callers keep raising
+    their own out-of-range errors so the reported codes stay unchanged.
+    """
+
     presentation = await session.get(PresentationModel, presentation_id)
     if presentation is None:
         raise AuthoredPageRemakeError(
@@ -131,11 +145,12 @@ async def _load_deck(
         .order_by(SlideModel.index)
     )
     slides = list(rows.scalars().all())
-    if (
-        not slides
-        or not presentation.is_authored()
-        or not all(slide.is_authored() for slide in slides)
-    ):
+    unsupported_target = (
+        slide_index is not None
+        and 0 <= slide_index < len(slides)
+        and not slides[slide_index].is_authored()
+    )
+    if not slides or not presentation.is_authored() or unsupported_target:
         raise AuthoredPageRemakeError(
             "authored_page_remake_unsupported_presentation",
             stage="source_validation",
@@ -238,7 +253,7 @@ async def run_authored_page_remake_preview(
     started = time.perf_counter()
     lock = _ANALYZE_AND_FIX_LOCKS.setdefault(presentation_id, asyncio.Lock())
     async with lock:
-        presentation, slides = await _load_deck(session, presentation_id)
+        presentation, slides = await _load_deck(session, presentation_id, slide_index)
         if slide_index < 0 or slide_index >= len(slides):
             raise AuthoredPageRemakeError(
                 "authored_page_remake_slide_out_of_range", stage="source_validation"
@@ -531,7 +546,7 @@ async def queue_authored_page_remake_preview(
     background_tasks: BackgroundTasks,
     session: AsyncSession,
 ) -> AsyncPresentationGenerationTaskModel:
-    _presentation, slides = await _load_deck(session, presentation_id)
+    _presentation, slides = await _load_deck(session, presentation_id, slide_index)
     if slide_index < 0 or slide_index >= len(slides):
         raise HTTPException(
             status_code=400, detail="Slide index is outside the presentation"
@@ -601,7 +616,7 @@ async def publish_authored_page_remake(
 ) -> dict[str, Any]:
     """Stage one preview publication in the caller-owned transaction."""
 
-    presentation, slides = await _load_deck(session, presentation_id)
+    presentation, slides = await _load_deck(session, presentation_id, slide_index)
     if slide_index < 0 or slide_index >= len(slides):
         raise AuthoredPageRemakeError(
             "authored_page_remake_slide_out_of_range", stage="publish_validation"
