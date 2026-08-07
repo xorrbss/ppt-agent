@@ -53,10 +53,14 @@ from services.workspace_operation_handler_registry import (
 )
 
 
+# `slide.regenerate` is deliberately absent: it belongs to the authored page
+# remake handler, which registers after this one and would otherwise win only
+# by registration order.  Chat cannot serve that kind anyway - on an authored
+# deck its tools can delete a page but never rebuild one - so claiming the kind
+# here left the destructive path one line reorder away from being reachable.
 CHAT_MUTATION_OPERATION_KINDS = (
     "presentation.edit",
     "slide.edit",
-    "slide.regenerate",
     "slide.delete",
 )
 

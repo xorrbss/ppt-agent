@@ -98,6 +98,41 @@ async def _slide_rows(maker, presentation_id: uuid.UUID) -> list[SlideModel]:
         )
 
 
+def test_page_remake_owns_slide_regenerate_regardless_of_registration_order():
+    """Ownership of the remake kind must not depend on which line runs first.
+
+    Both handlers used to claim ``slide.regenerate`` and the remake handler won
+    only because it registered second.  Swapping those two lines would have
+    handed authored page regeneration to the chat tools - the exact path that
+    deletes a page it cannot rebuild.
+    """
+
+    from services.workspace_chat_operation_handler import (
+        register_presentation_chat_operation_handlers,
+    )
+    from services.workspace_operation_handler_registry import (
+        WorkspaceOperationHandlerRegistry,
+    )
+    from services.workspace_page_remake_operation_handler import (
+        WorkspacePageRemakeOperationHandler,
+        register_workspace_page_remake_operation_handler,
+    )
+
+    for chat_first in (True, False):
+        registry = WorkspaceOperationHandlerRegistry()
+        order = (
+            register_presentation_chat_operation_handlers,
+            register_workspace_page_remake_operation_handler,
+        )
+        for register in order if chat_first else reversed(order):
+            register(registry=registry, replace=True)
+
+        assert isinstance(
+            registry.resolve("slide.regenerate"),
+            WorkspacePageRemakeOperationHandler,
+        ), f"chat_first={chat_first}"
+
+
 def test_delete_slide_refuses_an_authored_page(tmp_path: Path):
     asyncio.run(_delete_slide_refuses_an_authored_page(tmp_path))
 
