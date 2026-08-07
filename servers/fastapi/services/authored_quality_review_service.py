@@ -275,17 +275,6 @@ class _RequestOcrRuntime(RequestOcrRuntime):
         )
 
 
-def _is_authored_slide(slide: SlideModel) -> bool:
-    return (
-        slide.layout_group == "authored"
-        or (slide.layout or "").startswith("authored:")
-        or (
-            isinstance(slide.content, dict)
-            and slide.content.get("__authored__") is True
-        )
-    )
-
-
 async def _set_status(
     session: AsyncSession,
     task: AsyncPresentationGenerationTaskModel,
@@ -501,7 +490,7 @@ async def _run_legacy_authored_quality_review_unlocked(
     if (
         not slides
         or not presentation.is_authored()
-        or not all(_is_authored_slide(slide) for slide in slides)
+        or not all(slide.is_authored() for slide in slides)
     ):
         raise ValueError("High-quality review supports AI-authored presentations only")
     if len(outline.slides) != len(slides):
@@ -1969,7 +1958,7 @@ async def _run_authored_quality_review_unlocked(
     if (
         not slides
         or not presentation.is_authored()
-        or not all(_is_authored_slide(slide) for slide in slides)
+        or not all(slide.is_authored() for slide in slides)
     ):
         raise ValueError("High-quality review supports AI-authored presentations only")
     if len(outline.slides) != len(slides):
@@ -2151,7 +2140,7 @@ async def queue_authored_quality_review(
     if (
         not presentation.is_authored()
         or not slides
-        or not all(_is_authored_slide(slide) for slide in slides)
+        or not all(slide.is_authored() for slide in slides)
     ):
         raise HTTPException(
             status_code=400,

@@ -126,18 +126,6 @@ async def _notify_slide_assets_ready(
     await asset_events.put((slide_index, generated_assets))
 
 
-def _is_authored_slide(slide: SlideModel) -> bool:
-    """Recognize authored slide sentinels retained by legacy saved decks."""
-    return (
-        slide.layout_group == "authored"
-        or (slide.layout or "").startswith("authored:")
-        or (
-            isinstance(slide.content, dict)
-            and slide.content.get("__authored__") is True
-        )
-    )
-
-
 @PRESENTATION_ROUTER.post("/prepare", response_model=PresentationModel)
 async def prepare_presentation(
     presentation_id: Annotated[uuid.UUID, Body()],
@@ -234,7 +222,7 @@ async def build_authored_retemplate_generation_request(
                 select(SlideModel).where(SlideModel.presentation == id)
             )
         ).scalars().all()
-        is_authored_source = any(_is_authored_slide(slide) for slide in source_slides)
+        is_authored_source = any(slide.is_authored() for slide in source_slides)
 
     if not is_authored_source:
         raise HTTPException(

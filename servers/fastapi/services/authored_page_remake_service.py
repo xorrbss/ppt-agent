@@ -37,7 +37,6 @@ from services.authored_exact_source_snapshot import (
 )
 from services.authored_quality_review_service import (
     _ANALYZE_AND_FIX_LOCKS,
-    _is_authored_slide,
     _render_review_html,
     _saved_brand,
     _saved_role,
@@ -135,7 +134,7 @@ async def _load_deck(
     if (
         not slides
         or not presentation.is_authored()
-        or not all(_is_authored_slide(slide) for slide in slides)
+        or not all(slide.is_authored() for slide in slides)
     ):
         raise AuthoredPageRemakeError(
             "authored_page_remake_unsupported_presentation",
