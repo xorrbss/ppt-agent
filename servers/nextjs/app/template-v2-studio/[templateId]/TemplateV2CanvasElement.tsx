@@ -34,6 +34,7 @@ import {
   projectTemplateV2ElementForRenderPlan,
   templateV2VectorRenderGeometry,
 } from "@/lib/template-v2-vector";
+import { mathSvgDataUri } from "@/lib/math";
 import {
   StudioInfographic,
   StudioList,
@@ -184,6 +185,56 @@ function StudioImage(props: StudioElementProps) {
   );
 }
 
+function StudioMath(props: StudioElementProps) {
+  const { element } = props;
+  const position = elementPosition(element);
+  const size = elementSize(element, { width: 860, height: 150 });
+  const alignment = isJsonRecord(element.alignment) ? element.alignment : {};
+  const font = isJsonRecord(element.font) ? element.font : {};
+  const source = mathSvgDataUri({
+    align:
+      alignment.horizontal === "left" || alignment.horizontal === "right"
+        ? alignment.horizontal
+        : "center",
+    color: stringValue(font.color, "#111827"),
+    displayMode: element.display_mode !== false,
+    fontSize: numberValue(font.size, 32),
+    height: size.height,
+    latex: element.latex,
+    verticalAlign:
+      alignment.vertical === "top" || alignment.vertical === "bottom"
+        ? alignment.vertical
+        : "middle",
+    width: size.width,
+  });
+  const image = useTemplateImage(source ?? undefined, null);
+
+  return (
+    <Group
+      {...position}
+      {...size}
+      rotation={elementRotation(element)}
+      opacity={numberValue(element.opacity, 1)}
+      {...interactionProps(props)}
+    >
+      <Rect {...size} fill="rgba(0, 0, 0, 0.001)" />
+      {image ? (
+        <KonvaImage image={image} {...size} listening={false} />
+      ) : (
+        <Text
+          {...size}
+          text={stringValue(element.latex, "Math expression")}
+          fill={stringValue(font.color, "#111827")}
+          fontSize={numberValue(font.size, 32)}
+          align="center"
+          verticalAlign="middle"
+          listening={false}
+        />
+      )}
+    </Group>
+  );
+}
+
 function StudioElementView(props: StudioElementProps) {
   const { element, path } = props;
   const position = elementPosition(element);
@@ -264,6 +315,10 @@ function StudioElementView(props: StudioElementProps) {
 
   if (element.type === "image") {
     return <StudioImage {...props} />;
+  }
+
+  if (element.type === "math") {
+    return <StudioMath {...props} />;
   }
 
   if (element.type === "text-list") {

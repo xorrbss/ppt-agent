@@ -17,7 +17,7 @@ export type TemplateV2ToolbarRoute =
       element: TemplateV2ToolbarRecord;
     }
   | {
-      kind: "vector" | "chart" | "table" | "infographic";
+      kind: "math" | "vector" | "chart" | "table" | "infographic";
       element: TemplateV2ToolbarRecord;
     }
   | {
@@ -219,6 +219,14 @@ export function resolveTemplateV2ToolbarRoute({
   }
   if (element.type === "text" || element.type === "text-list") {
     return { kind: element.type, element };
+  }
+  if (
+    element.type === "math" &&
+    typeof element.latex === "string" &&
+    element.latex.trim().length > 0 &&
+    element.latex.length <= 4000
+  ) {
+    return { kind: "math", element };
   }
   if (element.type === "vector") {
     return hasSupportedVectorContract(element)

@@ -22,6 +22,7 @@ function slideWith(elements) {
 test("renderer covers every strict Template V2 element discriminator", () => {
   assert.deepEqual(TEMPLATE_V2_RENDERED_ELEMENT_TYPES, [
     "text",
+    "math",
     "container",
     "image",
     "text-list",
@@ -36,6 +37,7 @@ test("renderer covers every strict Template V2 element discriminator", () => {
 
   const elements = [
     { type: "text", ...frame, runs: [run("plain")], name: "text" },
+    { type: "math", ...frame, latex: String.raw`E = mc^2`, display_mode: true, name: "math" },
     { type: "container", ...frame, child: { type: "text", ...frame, runs: [run("nested")], name: "nested" } },
     { type: "image", ...frame, data: "data:image/png;base64,AA==", name: "image" },
     { type: "text-list", ...frame, marker: "number", items: [[run("one")], [run("two")]], name: "list" },
@@ -101,6 +103,8 @@ test("renderer covers every strict Template V2 element discriminator", () => {
   }
   assert.match(html, /data-chart-type="bar"/);
   assert.match(html, /data-infographic-type="progress_bar"/);
+  assert.match(html, /<math[^>]*display="block"/);
+  assert.match(html, /<annotation encoding="application\/x-tex">E = mc\^2<\/annotation>/);
   assert.match(html, /position:relative/);
 });
 

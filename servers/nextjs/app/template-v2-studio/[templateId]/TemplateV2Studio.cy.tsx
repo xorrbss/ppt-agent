@@ -399,6 +399,50 @@ describe("TemplateV2Studio API integration", () => {
     cy.contains("Saved").should("be.visible");
   });
 
+  it("inserts editable math and categorized vector shapes through Studio history", () => {
+    cy.intercept(
+      "GET",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      { statusCode: 200, body: response() }
+    ).as("loadInsertTemplate");
+    cy.intercept(
+      "PATCH",
+      `**/api/v1/ppt/structured-templates/${templateId}`,
+      (request) => {
+        request.reply({
+          statusCode: 200,
+          body: response(
+            request.body.layouts,
+            request.body.expected_revision + 1
+          ),
+        });
+      }
+    ).as("saveInsertTemplate");
+
+    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    cy.wait("@loadInsertTemplate");
+    cy.contains("button", "Add math").click();
+    cy.get('[aria-label="LaTeX expression"]')
+      .should("be.visible")
+      .and("have.value", "E = mc^2");
+    cy.get('[aria-label="Add vector shape"]').select("vector-triangle");
+    cy.contains("button", "Save").click();
+
+    cy.wait("@saveInsertTemplate")
+      .its("request.body.layouts.layouts.0.components.0.elements")
+      .then((elements) => {
+        expect(elements.map((element: { type: string }) => element.type)).to.include.members([
+          "math",
+          "vector",
+        ]);
+        const vector = elements.find(
+          (element: { type: string }) => element.type === "vector"
+        );
+        expect(vector).to.exist;
+        expect(vector.points).to.have.length.greaterThan(2);
+      });
+  });
+
   it("fails closed without rendering or saving malformed upstream layouts", () => {
     let malformedSaveRequests = 0;
     cy.intercept(

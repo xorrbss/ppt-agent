@@ -132,6 +132,7 @@ def _apply_elements(
                     break
         generated = element.get("type") in {
             "text",
+            "math",
             "image",
             "text-list",
             "table",
@@ -170,6 +171,14 @@ def _set_value(element: dict[str, Any], value: Any) -> None:
         text = _text(value)
         if text:
             element["runs"] = _runs(element.get("runs"), text, element.get("font"))
+    elif kind == "math":
+        latex = (_text(value) or "").strip()
+        if latex.startswith("$$") and latex.endswith("$$") and len(latex) > 4:
+            latex = latex[2:-2].strip()
+        elif latex.startswith(r"\[") and latex.endswith(r"\]") and len(latex) > 4:
+            latex = latex[2:-2].strip()
+        if latex:
+            element["latex"] = latex[:4000]
     elif kind == "text-list" and isinstance(value, list):
         old = element.get("items") if isinstance(element.get("items"), list) else []
         element["items"] = [

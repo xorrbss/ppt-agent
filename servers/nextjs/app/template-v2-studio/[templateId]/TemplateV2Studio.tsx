@@ -67,6 +67,11 @@ import {
   type TemplateV2ToolbarPatchOptions,
 } from "./toolbar";
 import { useTemplateV2StudioPersistence } from "./useTemplateV2StudioPersistence";
+import {
+  ELEMENT_INSERT_GROUPS,
+  createElementInsertElements,
+  createTextInsertElements,
+} from "@/components/slide-editor/insert/insert-elements";
 
 const TEMPLATE_V2_TOOLBAR_WIDTH = 760;
 const TEMPLATE_V2_TOOLBAR_HEIGHT = 56;
@@ -569,6 +574,55 @@ export default function TemplateV2Studio({
           >
             Add rectangle
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!scene) return;
+              const [element] = createTextInsertElements("equation");
+              if (!element) return;
+              dispatch({
+                type: "add-rectangle",
+                layoutId: String(scene.layout.id),
+                componentId: String(scene.component.id),
+                element: element as unknown as JsonRecord,
+              });
+              setNotice(null);
+            }}
+            disabled={!scene}
+            className="rounded-lg border border-slate-600 px-4 py-2 text-sm disabled:opacity-40"
+          >
+            Add math
+          </button>
+          <select
+            aria-label="Add vector shape"
+            defaultValue=""
+            disabled={!scene}
+            className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm disabled:opacity-40"
+            onChange={(event) => {
+              if (!scene || !event.target.value) return;
+              const [element] = createElementInsertElements(event.target.value);
+              event.target.value = "";
+              if (!element) return;
+              dispatch({
+                type: "add-rectangle",
+                layoutId: String(scene.layout.id),
+                componentId: String(scene.component.id),
+                element: element as unknown as JsonRecord,
+              });
+              setNotice(null);
+            }}
+          >
+            <option value="">Add shape…</option>
+            {ELEMENT_INSERT_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.items.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => void flushAutosave()}

@@ -42,6 +42,36 @@ def test_slide_schema_ignores_decorative_content_and_validates_editable_slots():
     validate({"title": "Phase 1"}, schema)
 
 
+def test_slide_schema_exposes_math_expression_as_bounded_string():
+    layout = RawSlideLayout.model_validate(
+        {
+            "id": "equation",
+            "description": "Editable equation slide",
+            "elements": [
+                {
+                    "type": "math",
+                    "latex": r"E = mc^2",
+                    "decorative": False,
+                    "name": "equation",
+                    "min_length": 2,
+                    "max_length": 120,
+                }
+            ],
+        }
+    )
+
+    schema = extract_slide_schema_from_layout(layout)
+
+    assert schema["properties"]["equation"] == {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 120,
+    }
+    validate({"equation": r"x^2 + y^2 = z^2"}, schema)
+    with pytest.raises(ValidationError):
+        validate({"equation": "x"}, schema)
+
+
 def test_component_schema_retains_slots_named_like_schema_metadata():
     schema = get_component_schema(
         {

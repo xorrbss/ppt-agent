@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from templates.v2.models.elements import Chart, Infographic, Text, Vector
+from templates.v2.models.elements import (
+    Chart,
+    Infographic,
+    MathExpression,
+    Text,
+    Vector,
+)
 from templates.v2.models.layouts import RawSlideLayout
 
 
@@ -76,6 +82,38 @@ def test_discriminated_layout_preserves_supported_native_element_shapes():
     assert layout.elements[2].data_labels.value == "top"
     assert isinstance(layout.elements[3], Infographic)
     assert layout.model_dump(mode="json")["elements"][3]["type"] == "infographic"
+
+
+def test_discriminated_layout_preserves_math_expression_contract():
+    layout = _validate_element(
+        {
+            "type": "math",
+            "latex": r"E = mc^2",
+            "display_mode": True,
+            "decorative": False,
+            "name": "equation",
+            "min_length": 1,
+            "max_length": 120,
+        }
+    )
+
+    element = layout.elements[0]
+    assert isinstance(element, MathExpression)
+    assert element.latex == r"E = mc^2"
+    assert layout.model_dump(mode="json")["elements"][0]["type"] == "math"
+
+
+@pytest.mark.parametrize("latex", ["", "x" * 4001])
+def test_math_expression_rejects_invalid_latex_length(latex):
+    with pytest.raises(ValidationError):
+        _validate_element(
+            {
+                "type": "math",
+                "latex": latex,
+                "decorative": False,
+                "name": "equation",
+            }
+        )
 
 
 @pytest.mark.parametrize(

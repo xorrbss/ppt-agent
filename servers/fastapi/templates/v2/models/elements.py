@@ -180,6 +180,29 @@ class Text(TemplateV2Model):
         return self
 
 
+class MathExpression(TemplateV2Model):
+    type: Literal["math"]
+    position: Optional[Position] = None
+    size: Optional[Size] = None
+    rotation: Optional[float] = None
+    opacity: Optional[float] = None
+    latex: str = Field(min_length=1, max_length=4000)
+    display_mode: bool = True
+    font: Optional[Font] = None
+    alignment: Optional[Alignment] = None
+    shadow: Optional[Shadow] = None
+    decorative: bool
+    name: str
+    max_length: int = 4000
+    min_length: int = 1
+
+    @model_validator(mode="after")
+    def _length_range_is_valid(self) -> "MathExpression":
+        if self.min_length < 1 or self.max_length < self.min_length:
+            raise ValueError("math length bounds are invalid")
+        return self
+
+
 class Container(TemplateV2Model):
     type: Literal["container"]
     position: Optional[Position] = None
@@ -561,6 +584,7 @@ class Group(TemplateV2Model):
 SlideElement: TypeAlias = Annotated[
     Union[
         Text,
+        MathExpression,
         Container,
         Image,
         TextList,

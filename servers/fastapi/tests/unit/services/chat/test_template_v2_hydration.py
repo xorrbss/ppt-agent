@@ -95,6 +95,40 @@ def test_hydration_is_fail_closed_for_malformed_native_ui():
         hydrate_template_v2_slide(source, {"visuals": {}})
 
 
+def test_hydration_normalizes_generated_math_expression():
+    source = {
+        "id": "math",
+        "description": "Generated equation",
+        "components": [
+            {
+                "id": "content",
+                "description": "Equation content",
+                "position": {"x": 0, "y": 0},
+                "elements": [
+                    {
+                        "type": "math",
+                        "latex": "x",
+                        "display_mode": True,
+                        "decorative": False,
+                        "name": "equation",
+                        "min_length": 1,
+                        "max_length": 4000,
+                    }
+                ],
+            }
+        ],
+    }
+
+    state = hydrate_template_v2_slide(
+        source,
+        {"content": {"equation": r"$$ E = mc^2 $$"}},
+    )
+
+    equation = state.ui["components"][0]["elements"][0]
+    assert equation["latex"] == r"E = mc^2"
+    assert source["components"][0]["elements"][0]["latex"] == "x"
+
+
 def _merged_table_layout():
     covered = {"covered_by": {"row": 0, "column": 0}}
     return {

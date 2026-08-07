@@ -8,6 +8,7 @@ import ChartToolbar from "./ChartToolbar";
 import IconToolbar from "./IconToolbar";
 import ImageToolbar from "./ImageToolbar";
 import InfographicToolbar from "./InfographicToolbar";
+import MathToolbar from "./MathToolbar";
 import MultiSelectionToolbar from "./MultiSelectionToolbar";
 import SelectionActions from "./SelectionActions";
 import TableToolbar from "./TableToolbar";
@@ -76,6 +77,9 @@ export function TemplateV2SelectionToolbar({
             fontFamilies={fontFamilies}
             onPatch={onPatch}
           />
+        )}
+        {route.kind === "math" && (
+          <MathToolbar element={route.element} onPatch={onPatch} />
         )}
         {route.kind === "vector" && (
           <VectorToolbar element={route.element} onPatch={onPatch} />

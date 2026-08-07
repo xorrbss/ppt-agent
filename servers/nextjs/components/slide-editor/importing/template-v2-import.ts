@@ -694,6 +694,8 @@ function adaptElement(value: unknown): SlideElement | null {
   switch (type) {
     case "text":
       return adaptText(raw);
+    case "math":
+      return adaptMath(raw);
     case "container":
       return adaptContainer(raw);
     case "image":
@@ -733,6 +735,19 @@ function adaptText(raw: UnknownRecord): SlideElement {
     min_length: readNumber(raw, "min_length"),
   };
   return element;
+}
+
+function adaptMath(raw: UnknownRecord): SlideElement {
+  return {
+    ...baseElement(raw),
+    type: "math",
+    latex: truncateString(readString(raw.latex) ?? "", 4000),
+    display_mode: readBoolean(raw, "display_mode") ?? true,
+    font: adaptFont(readRecord(raw, "font")),
+    alignment: adaptAlignment(readRecord(raw, "alignment")),
+    max_length: readNumber(raw, "max_length"),
+    min_length: readNumber(raw, "min_length"),
+  };
 }
 
 function adaptContainer(raw: UnknownRecord): SlideElement {

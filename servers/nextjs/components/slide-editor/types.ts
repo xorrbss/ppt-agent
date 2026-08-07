@@ -199,6 +199,16 @@ export type TextElement = ElementBase & {
   min_length?: number | null;
 };
 
+export type MathElement = ElementBase & {
+  type: "math";
+  latex: string;
+  display_mode?: boolean | null;
+  font?: Font | null;
+  alignment?: Alignment | null;
+  max_length?: number | null;
+  min_length?: number | null;
+};
+
 export type ContainerElement = ElementBase & {
   type: "container";
   alignment?: Alignment | null;
@@ -362,6 +372,7 @@ export type GroupElement = RequiredElementBase & {
 
 export type SlideElement =
   | TextElement
+  | MathElement
   | ContainerElement
   | ImageElement
   | TextListElement

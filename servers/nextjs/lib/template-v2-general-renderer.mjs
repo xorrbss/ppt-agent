@@ -3,11 +3,13 @@ import {
   isTemplateV2SafeColor,
   sampleTemplateV2SmoothPoints,
 } from "./template-v2-render-plan.mjs";
+import katex from "katex";
 
 const CANVAS = Object.freeze({ width: 1280, height: 720 });
 
 export const TEMPLATE_V2_RENDERED_ELEMENT_TYPES = Object.freeze([
   "text",
+  "math",
   "container",
   "image",
   "text-list",
@@ -177,6 +179,46 @@ function renderText(element, path, layout, plan) {
     shadowStyle(plan?.text?.shadow, "text-shadow"),
   ].filter(Boolean);
   return `<div data-template-v2-element="text" data-element-name="${escapeHtml(element.name ?? path)}" style="${style.join(";")}"><div data-template-v2-text-runs style="white-space:pre-wrap">${renderRuns(element.runs, path, element.font)}</div></div>`;
+}
+
+function renderMath(element, path, layout, plan) {
+  if (typeof element.latex !== "string" || !element.latex.trim()) {
+    throw new Error(`template_v2_renderer_math_latex_required:${path}`);
+  }
+  let latex = element.latex.trim();
+  if (latex.startsWith("$$") && latex.endsWith("$$") && latex.length > 4) {
+    latex = latex.slice(2, -2).trim();
+  } else if (latex.startsWith("\\[") && latex.endsWith("\\]") && latex.length > 4) {
+    latex = latex.slice(2, -2).trim();
+  }
+  const alignment = isRecord(element.alignment) ? element.alignment : {};
+  const horizontal = alignment.horizontal === "right"
+    ? "flex-end"
+    : alignment.horizontal === "center"
+      ? "center"
+      : "flex-start";
+  const vertical = alignment.vertical === "bottom"
+    ? "flex-end"
+    : alignment.vertical === "middle"
+      ? "center"
+      : "flex-start";
+  const style = [
+    ...positionStyle(element, layout, plan),
+    ...fontStyle(element.font),
+    "display:flex",
+    `align-items:${vertical}`,
+    `justify-content:${horizontal}`,
+    "overflow:hidden",
+    elementShadowStyle(element.shadow),
+  ].filter(Boolean);
+  const markup = katex.renderToString(latex, {
+    displayMode: element.display_mode !== false,
+    output: "mathml",
+    strict: "error",
+    throwOnError: true,
+    trust: false,
+  });
+  return `<div data-template-v2-element="math" data-element-name="${escapeHtml(element.name ?? path)}" data-screenshot-include-children="true" style="${style.join(";")}">${markup}</div>`;
 }
 
 function radiusStyle(radius) {
@@ -793,6 +835,7 @@ function renderElement(element, path, layout = "absolute", plan = null) {
     throw new Error(`template_v2_renderer_invalid_element:${path}`);
   }
   if (element.type === "text") return renderText(element, path, layout, plan);
+  if (element.type === "math") return renderMath(element, path, layout, plan);
   if (element.type === "container") return renderContainer(element, path, layout, plan);
   if (element.type === "image") return renderImage(element, path, layout, plan);
   if (element.type === "text-list") return renderTextList(element, path, layout, plan);

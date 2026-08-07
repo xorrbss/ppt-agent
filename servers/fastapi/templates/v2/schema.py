@@ -15,7 +15,7 @@ from .models.layouts import RawSlideLayout
 
 
 JSON_SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
-CONTENT_TYPES = {"text", "image", "text-list", "table", "chart", "infographic"}
+CONTENT_TYPES = {"text", "math", "image", "text-list", "table", "chart", "infographic"}
 CHART_TYPE_VALUES = [
     "area",
     "bar",
@@ -192,7 +192,7 @@ def _node_for_element(value: Any) -> tuple[str, dict[str, Any]] | None:
 
 def _content_schema(element: Mapping[str, Any]) -> dict[str, Any]:
     element_type = element["type"]
-    if element_type == "text":
+    if element_type in {"text", "math"}:
         return _compact(
             {
                 "type": "string",
@@ -581,7 +581,7 @@ def _component_content_schema(
     path: str,
 ) -> dict[str, Any]:
     element_type = str(element["type"])
-    if element_type == "text":
+    if element_type in {"text", "math"}:
         schema: dict[str, Any] = {
             "type": "string",
             "minLength": element.get("min_length"),

@@ -2,6 +2,7 @@ const CANVAS = Object.freeze({ width: 1280, height: 720 });
 
 export const TEMPLATE_V2_PLAN_ELEMENT_TYPES = Object.freeze([
   "text",
+  "math",
   "container",
   "image",
   "text-list",
