@@ -427,8 +427,15 @@ describe("AuthoredPageRemake", () => {
     cy.get('[data-testid="page-remake-warning-issues"]')
       .should("contain.text", "자동 검사를 끝까지 수행하지 못했습니다.")
       .and("match", "p");
-    cy.get('[data-testid="page-remake-regenerate"]').should("be.visible");
-    cy.get('[data-testid="page-remake-publish"]').should("be.visible");
+    // The telemetry warning pushes the footer past the dialog's own scroll
+    // viewport. Scrolling the way a user does keeps these as visibility
+    // assertions rather than demoting them to existence checks.
+    cy.get('[data-testid="page-remake-regenerate"]')
+      .scrollIntoView()
+      .should("be.visible");
+    cy.get('[data-testid="page-remake-publish"]')
+      .scrollIntoView()
+      .should("be.visible");
     cy.get("@notifyError").should("not.have.been.called");
   });
 

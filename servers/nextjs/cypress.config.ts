@@ -18,6 +18,12 @@ export default defineConfig({
     supportFile: false,
   },
   component: {
+    // Now that the app stylesheet actually applies, mounted components have
+    // their real size. Cypress's 500x500 default is smaller than several of
+    // them, which pushed controls out of view and failed clicks on geometry no
+    // user meets. This is a desktop app; give the specs a desktop.
+    viewportWidth: 1280,
+    viewportHeight: 800,
     specPattern: [
       "cypress/component/**/*.cy.{js,jsx,ts,tsx}",
       "app/**/*.cy.{js,jsx,ts,tsx}",
@@ -28,6 +34,12 @@ export default defineConfig({
       webpackConfig: {
         mode: "development",
         devtool: false,
+        // A one-shot run never hot-reloads, and the client that implements it
+        // schedules with requestAnimationFrame but clears with clearTimeout.
+        // Specs that install cy.clock() stub both, so the mismatch throws into
+        // the spec as an application error. Nothing here needs the socket:
+        // style-loader only registers a CSS hot-accept because it is present.
+        devServer: { hot: false, liveReload: false, webSocketServer: false },
         resolve: {
           extensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
           alias: { "@": path.resolve(process.cwd()) },
@@ -57,7 +69,15 @@ export default defineConfig({
                 },
               },
             },
-            { test: /\.css$/, type: "asset/source" },
+            // Real Tailwind, not a stub. Under `asset/source` a stylesheet
+            // import became a discarded string, so utilities never applied and
+            // specs failed on layout the app does not actually have: a
+            // `pointer-events-none` preview image stayed clickable and swallowed
+            // the button beneath it. postcss-loader picks up postcss.config.mjs.
+            {
+              test: /\.css$/,
+              use: ["style-loader", "css-loader", "postcss-loader"],
+            },
           ],
         },
       },
