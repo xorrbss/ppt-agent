@@ -824,7 +824,12 @@ describe("WorkspaceChatPanel", () => {
         });
       },
     );
-    cy.contains("button", "이전 기록 불러오기").click();
+    // Cypress scrolls an element into view before clicking it. This button is
+    // the first child of a container with `py-4`, so that scroll moves the
+    // timeline 16px after the baseline above was captured at scrollTop 0, and
+    // the panel then faithfully preserves the anchor against a position this
+    // test never measured. Click where the user already is.
+    cy.contains("button", "이전 기록 불러오기").click({ scrollBehavior: false });
     cy.wait("@paginatedTimeline");
 
     cy.contains('[aria-label="사용자 메시지"]', "recent-anchor").should(
