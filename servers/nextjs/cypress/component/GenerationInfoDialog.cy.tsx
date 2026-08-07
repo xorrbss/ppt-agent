@@ -35,7 +35,12 @@ describe("GenerationInfoDialog", () => {
     cy.contains("추진계획.xlsx").should("be.visible");
     cy.contains("10장").should("be.visible");
     cy.contains("전문적").should("be.visible");
-    cy.contains("경영진 보고용으로 작성").should("be.visible");
+    // Last field in the dialog's ScrollArea, below the fold on a real screen.
+    // Reaching it the way a user does keeps this a visibility assertion rather
+    // than a mere existence one.
+    cy.contains("경영진 보고용으로 작성")
+      .scrollIntoView()
+      .should("be.visible");
   });
 
   it("shows a clear empty attachment state", () => {

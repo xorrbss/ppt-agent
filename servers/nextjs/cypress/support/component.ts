@@ -16,6 +16,11 @@
 // Import commands.js using ES2015 syntax:
 import './commands'
 
+// Components under test are styled entirely by Tailwind utilities, so without
+// the app stylesheet they mount with no geometry at all. Specs then fail on
+// overlaps and hit targets that no user ever meets.
+import '../../app/globals.css'
+
 import { mount } from 'cypress/react'
 
 // Augment the Cypress namespace to include type definitions for

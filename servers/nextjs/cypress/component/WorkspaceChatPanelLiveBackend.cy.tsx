@@ -129,16 +129,25 @@ function selectLiveBackend(): void {
   });
 }
 
+// This suite drives a real FastAPI process. Only `npm run test:workspace-e2e`
+// starts one, and it hands the address over in WORKSPACE_LIVE_BACKEND. A plain
+// `cypress run --component` sweep starts no such process, so the variable is
+// also the signal for whether this suite was asked for at all. The readiness
+// assertions below stay mandatory whenever it was.
+let liveBackendRequested = false;
+
 describe("WorkspaceChatPanel with live FastAPI persistence and runner", () => {
   before(() => {
-    cy.env(["WORKSPACE_LIVE_BACKEND"])
-      .then((configuredEnvironment) => {
-        const configuredBackend = configuredEnvironment.WORKSPACE_LIVE_BACKEND;
-        if (configuredBackend) BACKEND = String(configuredBackend);
-        WORKSPACE_ROOT = `${BACKEND}/api/v1/ppt/workspace`;
-        return cy.request(`${BACKEND}/__test__/health`);
-      })
-      .then(({ body }) => {
+    cy.env(["WORKSPACE_LIVE_BACKEND"]).then((configuredEnvironment) => {
+      const configuredBackend = configuredEnvironment.WORKSPACE_LIVE_BACKEND;
+      if (!configuredBackend) return;
+      liveBackendRequested = true;
+      BACKEND = String(configuredBackend);
+      WORKSPACE_ROOT = `${BACKEND}/api/v1/ppt/workspace`;
+      // Nested rather than chained: a `.then` callback that returns undefined
+      // yields the *previous* subject, so a sibling `.then` guarding on its own
+      // argument would still receive the environment object and assert on it.
+      cy.request(`${BACKEND}/__test__/health`).then(({ body }) => {
         expect(body).to.deep.include({
           ready: true,
           presentation_id: PRESENTATION_ID,
@@ -151,13 +160,19 @@ describe("WorkspaceChatPanel with live FastAPI persistence and runner", () => {
         expect(body.alembic_revision).not.to.equal("");
         expect(body.alembic_revision).to.equal(body.alembic_head);
       });
+    });
   });
 
-  beforeEach(() => {
+  beforeEach(function () {
+    if (!liveBackendRequested) {
+      this.skip();
+      return;
+    }
     selectLiveBackend();
   });
 
   afterEach(() => {
+    if (!liveBackendRequested) return;
     // A failed assertion must never strand the production runner behind a
     // test-owned progress gate and cascade into later scenarios.
     cy.request({
