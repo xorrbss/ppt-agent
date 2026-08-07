@@ -641,6 +641,13 @@ async def get_presentation_workspace_events(
             )
         except WorkspaceServiceError as error:
             _raise_service_error(error)
+        # The request-scoped session is torn down only after the response ends,
+        # and this stream ends only when the client disconnects. On SQLite the
+        # read transaction that validation just opened would pin a WAL snapshot
+        # for the whole life of the tab, so every checkpoint could copy frames
+        # but never restart the log and the WAL grows without bound. The stream
+        # body opens its own short session per poll and does not need this one.
+        await session.rollback()
         return StreamingResponse(
             _event_stream(
                 request=request,

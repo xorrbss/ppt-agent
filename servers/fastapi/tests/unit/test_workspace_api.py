@@ -440,6 +440,52 @@ def test_unknown_command_endpoint_returns_typed_safe_422_before_persistence(
     assert captured.value.detail == "unsupported_operation_type"
 
 
+def test_event_stream_releases_the_request_session_before_streaming(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The pre-flight read must not pin a snapshot for the life of the stream.
+
+    A request-scoped session is torn down only once the response ends, and this
+    response ends only when the client disconnects.  On SQLite the read
+    transaction opened by cursor validation would hold a WAL snapshot for as
+    long as the tab stays open, so every checkpoint could copy frames but never
+    restart the log - the WAL then grows without bound.
+    """
+
+    monkeypatch.setattr(workspace_endpoint, "_require_supported_runtime", lambda: None)
+
+    async def _events(session, **_kwargs):
+        session.reads += 1
+        return SimpleNamespace(events=[], next_cursor=None)
+
+    monkeypatch.setattr(workspace_endpoint, "workspace_events", _events)
+
+    class _Session:
+        def __init__(self) -> None:
+            self.reads = 0
+            self.rolled_back_after_reads: int | None = None
+
+        async def rollback(self) -> None:
+            self.rolled_back_after_reads = self.reads
+
+    session = _Session()
+    response = asyncio.run(
+        workspace_endpoint.get_presentation_workspace_events(
+            request=SimpleNamespace(),
+            presentation_id=uuid.uuid4(),
+            after=None,
+            last_event_id=None,
+            limit=200,
+            stream=True,
+            session=session,
+        )
+    )
+
+    assert response.media_type == "text/event-stream"
+    # Released after the validation read, not before - the check must still run.
+    assert session.rolled_back_after_reads == 1
+
+
 def test_unknown_bootstrap_endpoint_returns_typed_safe_422_before_persistence(
     monkeypatch: pytest.MonkeyPatch,
 ):

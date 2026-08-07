@@ -85,3 +85,7 @@ test-artifacts/
 # by a one-off `pnpm install` so they cannot cause dual-lockfile drift.
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# stdout/stderr of locally launched backend, frontend and proxy processes. These
+# carry request paths and presentation ids from real decks.
+.local-runtime-logs/
