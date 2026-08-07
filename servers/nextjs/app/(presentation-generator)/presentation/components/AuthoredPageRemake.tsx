@@ -455,7 +455,8 @@ export default function AuthoredPageRemake({
     return (
       <Button
         type="button"
-        variant="outline"
+        variant="toolbar"
+        size="toolbar"
         disabled={
           disabled ||
           !validSlide ||
@@ -463,7 +464,6 @@ export default function AuthoredPageRemake({
           !onWorkspacePageRemakeRequest
         }
         data-testid="page-remake-trigger"
-        className="h-10 rounded-[80px] px-5"
         onClick={() => {
           if (validSlide) onWorkspacePageRemakeRequest?.(currentSlide);
         }}
@@ -479,10 +479,10 @@ export default function AuthoredPageRemake({
       <DialogTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="toolbar"
+          size="toolbar"
           disabled={disabled || !validSlide}
           data-testid="page-remake-trigger"
-          className="h-10 rounded-[80px] px-5"
         >
           <RefreshCw className="h-4 w-4" />
           페이지 다시 만들기

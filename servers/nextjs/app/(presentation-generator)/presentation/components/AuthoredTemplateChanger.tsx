@@ -215,10 +215,10 @@ export default function AuthoredTemplateChanger({
       <DialogTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="toolbar"
+          size="toolbar"
           disabled={disabled}
           data-testid="template-change-trigger"
-          className="h-10 rounded-[80px] px-5"
         >
           <LayoutTemplate className="h-4 w-4" />
           템플릿 변경

@@ -125,13 +125,13 @@ export default function GenerationInfoDialog({
       <DialogTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant="toolbar"
+          size="toolbar"
           disabled={disabled}
           data-testid="generation-info-trigger"
-          className="h-[38px] rounded-full border-[#E4E2E8] bg-white px-4 text-sm font-semibold text-[#101323] shadow-sm hover:border-[#CFC9E8] hover:bg-[#F8F7FC]"
           aria-label="발표자료 생성 정보 보기"
         >
-          <Info className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          <Info className="h-4 w-4" aria-hidden="true" />
           생성 정보
         </Button>
       </DialogTrigger>

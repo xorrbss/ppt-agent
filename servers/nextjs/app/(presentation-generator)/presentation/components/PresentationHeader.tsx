@@ -12,6 +12,7 @@ import {
   Check,
   X,
   AlertTriangle,
+  ScanSearch,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -798,8 +799,8 @@ const PresentationHeader = ({
               />
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
+                variant="toolbar"
+                size="toolbar"
                 disabled={
                   !workspaceCommandsEnabled ||
                   !onWorkspaceQualityReviewRequest ||
@@ -809,6 +810,7 @@ const PresentationHeader = ({
                 data-testid="workspace-quality-review"
                 aria-label="채팅에서 고품질 검수 옵션 열기"
               >
+                <ScanSearch className="h-4 w-4" aria-hidden="true" />
                 고품질 검수
               </Button>
             </>
@@ -921,7 +923,7 @@ const PresentationHeader = ({
               <button
                 ref={exportTriggerRef}
                 type="button"
-                className="flex  items-center gap-[7px] px-[18px] py-[11px] rounded-[53px] text-sm font-semibold text-[#101323]"
+                className="flex h-[38px] items-center gap-[7px] rounded-full px-[18px] text-sm font-semibold text-[#101323] disabled:opacity-50"
                 style={{
                   background:
                     "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
