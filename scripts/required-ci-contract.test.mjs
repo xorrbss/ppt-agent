@@ -833,6 +833,23 @@ test("the standard Next.js build enables the bounded Windows standalone link fal
   assert.match(buildRunner, /shell: false/);
 });
 
+test("the Next.js build reads the repository-root .env so public flags are baked in", () => {
+  // `NEXT_PUBLIC_*` values are inlined into the client bundle at build time, and
+  // Next.js only reads `.env` from its own project directory.  A build that
+  // cannot see the repository-root file ships the chat-first workbench flag as
+  // `undefined`, which silently falls the workspace back to the legacy popup UI.
+  const buildRunner = read("servers/nextjs/scripts/run-next-build.mjs");
+
+  assert.match(buildRunner, /repositoryDirectory, "\.env"/u);
+  assert.match(buildRunner, /repositoryEnvironment\(\)/u);
+  // The repository file must not override an explicit environment value.
+  assert.match(buildRunner, /if \(process\.env\[name\] !== undefined\) continue;/u);
+  assert.match(
+    buildRunner,
+    /childEnvironment = \{ \.\.\.repositoryEnvironment\(\), \.\.\.process\.env \}/u,
+  );
+});
+
 test("the required route gate enforces axe and bounded approval announcements", () => {
   const nextPackage = readJson("servers/nextjs/package.json");
   const runner = read("servers/nextjs/scripts/run-workspace-e2e.mjs");
