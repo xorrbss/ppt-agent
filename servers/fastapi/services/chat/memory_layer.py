@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
-from constants.presentation import MAX_NUMBER_OF_SLIDES
+from constants.presentation import (
+    AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
+    MAX_NUMBER_OF_SLIDES,
+)
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
@@ -526,6 +529,20 @@ class PresentationChatMemoryLayer:
                 "validation_errors": [],
             }
 
+        # Check the target before layout resolution.  An authored deck has no
+        # layout catalogue, so the lookup below would reject the call as an
+        # unknown layout - a reason that sends the model looking for a different
+        # layout instead of telling it this page needs the remake flow.
+        if replace_old_slide_at_index:
+            target = slide_at_index(await self._owned_slides(), max(0, index))
+            if target is not None and target.is_authored():
+                return {
+                    "saved": False,
+                    "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
+                    "validation_errors": ["authored_slide_requires_page_remake"],
+                    "index": max(0, index),
+                }
+
         is_template_v2 = presentation.version == TEMPLATE_V2_VERSION
         hydrated_state = None
         layout = None
@@ -769,6 +786,12 @@ class PresentationChatMemoryLayer:
             return {
                 "deleted": False,
                 "message": f"No slide found at index {target_index}.",
+                "index": target_index,
+            }
+        if slide.is_authored():
+            return {
+                "deleted": False,
+                "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
                 "index": target_index,
             }
 

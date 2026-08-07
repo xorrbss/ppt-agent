@@ -19,7 +19,10 @@ from typing import Any, Protocol
 from sqlmodel import select
 
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
-from constants.presentation import MAX_NUMBER_OF_SLIDES
+from constants.presentation import (
+    AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
+    MAX_NUMBER_OF_SLIDES,
+)
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2
@@ -171,6 +174,16 @@ class OutlineTemplateContext:
                 "found": True,
                 "error": "max_slides_reached",
                 "max_slides": MAX_NUMBER_OF_SLIDES,
+            }
+
+        if any(slide.is_authored() for slide in slides):
+            # A blank slide here can never be filled: `save_slide` has no layout
+            # to author against in an authored deck, so the insert would only
+            # add an empty page beside the authored ones.
+            return {
+                "found": True,
+                "error": "authored_slide_requires_page_remake",
+                "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
             }
 
         target = len(slides) if index is None else max(0, min(index, len(slides)))

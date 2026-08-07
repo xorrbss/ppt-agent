@@ -71,6 +71,23 @@ class SlideModel(SQLModel, table=True):
             raise ValueError("slide_ui_and_authored_html_cannot_coexist")
         return self
 
+    def is_authored(self) -> bool:
+        """Whether this slide's body is model-authored HTML rather than a layout.
+
+        An authored slide has no layout schema behind it, so the schema-driven
+        chat editing tools can delete it but can never rebuild an equivalent
+        one.  Callers use this to refuse the destructive half of that pair.
+        """
+
+        return (
+            self.layout_group == "authored"
+            or (self.layout or "").startswith("authored:")
+            or (
+                isinstance(self.content, dict)
+                and self.content.get("__authored__") is True
+            )
+        )
+
     def get_new_slide(self, presentation: uuid.UUID, content: Optional[dict] = None):
         return SlideModel(
             id=uuid.uuid4(),
