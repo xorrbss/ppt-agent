@@ -581,6 +581,10 @@ export default function WorkspaceChatPanel({
                     );
                   }}
                   onFocusSlide={onSlideFocus}
+                  // The same prompt the header button opens. A chat request the
+                  // tools had to refuse now ends at the flow that can serve it
+                  // instead of at prose describing where to find it.
+                  onRemakePage={pageRemakeRequester}
                   presentationRefreshState={
                     presentationRefreshStates[item.operationId]
                   }

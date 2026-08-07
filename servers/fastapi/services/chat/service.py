@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -19,6 +19,7 @@ from llmai.shared import (  # type: ignore[import-not-found]
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.presentation import AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE
 from models.chat import ChatAttachment
 from models.sql.presentation import PresentationModel
 from services.chat.conversation_store import ChatConversationStore
@@ -44,6 +45,31 @@ class ChatTurnResult:
     conversation_id: uuid.UUID
     response_text: str
     tool_calls: list[str]
+    # Index of the page whose edit was refused because it is model-authored, if
+    # a tool refused one this turn.  The chat tools cannot serve such a request
+    # at all, so the turn ends in prose naming a flow the user then has to go
+    # find.  Carrying the page here lets the caller offer that flow instead.
+    page_remake_slide_index: int | None = None
+
+
+def _refused_authored_page_index(tool_result: object) -> int | None:
+    """Return the page a tool refused to edit because it is authored.
+
+    ``None`` covers both "not that refusal" and "that refusal, but about no
+    particular page" - the insert case, which names no target to remake.
+    """
+    if not isinstance(tool_result, Mapping):
+        return None
+    validation_errors = tool_result.get("validation_errors")
+    if not isinstance(validation_errors, list):
+        return None
+    if AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE not in validation_errors:
+        return None
+    index = tool_result.get("index")
+    # `bool` is an `int`; a stray flag here must not become a page number.
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+        return None
+    return index
 
 
 ChatStreamEventType = Literal["chunk", "complete", "status", "trace"]
@@ -73,12 +99,15 @@ class PresentationChatService:
         conversation_id, messages = await self._prepare_turn_context(
             user_message, attachments
         )
-        response_text, tool_calls = await self._run_llm_with_tools(messages)
+        response_text, tool_calls, page_remake_slide_index = (
+            await self._run_llm_with_tools(messages)
+        )
         return await self._persist_turn(
             conversation_id=conversation_id,
             user_message=user_message,
             response_text=response_text,
             tool_calls=tool_calls,
+            page_remake_slide_index=page_remake_slide_index,
         )
 
     async def stream_reply(
@@ -294,6 +323,7 @@ class PresentationChatService:
         user_message: str,
         response_text: str,
         tool_calls: list[str],
+        page_remake_slide_index: int | None = None,
     ) -> ChatTurnResult:
         await self._conversation_store.append_turn(
             presentation_id=self._presentation_id,
@@ -308,15 +338,22 @@ class PresentationChatService:
             conversation_id=conversation_id,
             response_text=response_text,
             tool_calls=tool_calls,
+            page_remake_slide_index=page_remake_slide_index,
         )
 
-    async def _run_llm_with_tools(self, messages: list[Message]) -> tuple[str, list[str]]:
+    async def _run_llm_with_tools(
+        self, messages: list[Message]
+    ) -> tuple[str, list[str], int | None]:
         client = get_client(config=get_llm_config())
         model = get_model()
         tools = build_chat_llm_tools(self._tools.get_tool_definitions())
 
         called_tools: list[str] = []
         last_tool_results: list[dict[str, Any]] = []
+        # First refusal wins.  A later round may well retry the same page and be
+        # refused again, and the model may also move on to an unrelated page it
+        # can edit; neither should change which page the user is offered.
+        page_remake_slide_index: int | None = None
 
         for _ in range(MAX_TOOL_ROUNDS):
             try:
@@ -335,7 +372,7 @@ class PresentationChatService:
                 response_text = extract_text(response.content) or (
                     "해당 요청에 대한 응답을 생성하지 못했습니다."
                 )
-                return response_text, called_tools
+                return response_text, called_tools, page_remake_slide_index
 
             called_tools.extend([tool_call.name for tool_call in response.tool_calls])
             messages = list(response.messages) if response.messages else list(messages)
@@ -344,6 +381,10 @@ class PresentationChatService:
             for tool_call in response.tool_calls:
                 tool_result = await self._tools.execute_tool_call(tool_call)
                 last_tool_results.append(tool_result)
+                if page_remake_slide_index is None:
+                    page_remake_slide_index = _refused_authored_page_index(
+                        tool_result
+                    )
                 tool_response_content = json.dumps(tool_result, ensure_ascii=False)
                 messages.append(
                     ToolResponseMessage(
@@ -359,9 +400,13 @@ class PresentationChatService:
             messages=messages,
         )
         if final_response:
-            return final_response, called_tools
+            return final_response, called_tools, page_remake_slide_index
 
-        return self._build_tool_limit_fallback(last_tool_results), called_tools
+        return (
+            self._build_tool_limit_fallback(last_tool_results),
+            called_tools,
+            page_remake_slide_index,
+        )
 
     async def _try_final_response_without_tools(
         self,

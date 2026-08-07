@@ -20,6 +20,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
+from constants.presentation import AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
@@ -149,6 +150,10 @@ async def _delete_slide_refuses_an_authored_page(tmp_path: Path):
 
         assert result["deleted"] is False, result
         assert "페이지 다시 만들기" in result["message"]
+        # The prose above is for the model.  The code and index are for the
+        # workspace client, which offers the remake flow on that exact page.
+        assert result["validation_errors"] == [AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE]
+        assert result["index"] == 1
 
         rows = await _slide_rows(maker, presentation_id)
         assert [row.index for row in rows] == [0, 1, 2]
@@ -177,7 +182,8 @@ async def _save_slide_refuses_to_replace_an_authored_page(tmp_path: Path):
             await session.commit()
 
         assert result["saved"] is False, result
-        assert result["validation_errors"] == ["authored_slide_requires_page_remake"]
+        assert result["validation_errors"] == [AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE]
+        assert result["index"] == 1
 
         rows = await _slide_rows(maker, presentation_id)
         assert [row.layout for row in rows] == ["authored:ARCHITECTURE"] * 3
