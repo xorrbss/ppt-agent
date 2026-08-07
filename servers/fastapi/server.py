@@ -2,10 +2,54 @@ import uvicorn
 import argparse
 import logging
 import os
+import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from api.main import app
+REPOSITORY_DIRECTORY = Path(__file__).resolve().parents[2]
+ENVIRONMENT_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+
+
+def load_repository_environment(
+    repository_directory: Path = REPOSITORY_DIRECTORY,
+) -> dict[str, str]:
+    """Load the repository-root ``.env`` before the application is imported.
+
+    This repository keeps one ``.env`` at the root for the backend, the proxy
+    and the frontend together, but nothing hands it to a directly launched
+    ``server.py``.  A backend started without it answers the chat-first
+    capability probe with ``chat_first_runtime_profile_required``, and the UI
+    falls back to the legacy surface - the same class of failure that
+    ``run-next-build.mjs`` fixes for the client bundle, so it is fixed the same
+    way here.
+
+    Values already present in the environment win, so Docker, Electron and
+    explicit overrides keep precedence and a missing file is not an error.
+    """
+
+    try:
+        contents = (repository_directory / ".env").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+
+    loaded: dict[str, str] = {}
+    for line in contents.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        match = ENVIRONMENT_ASSIGNMENT.match(line)
+        if match is None:
+            continue
+        name, raw_value = match.groups()
+        if name in os.environ:
+            continue
+        value = raw_value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        os.environ[name] = value
+        loaded[name] = value
+    return loaded
+
+
 
 
 LOG_LEVELS = ("critical", "error", "warning", "info", "debug", "trace")
@@ -91,4 +135,11 @@ def run_server(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
+    # Configuration first: application modules read the environment while they
+    # are being imported, so the file has to be in place before that. Keeping
+    # both inside the entry point means importing this module stays free of
+    # side effects.
+    load_repository_environment()
+    from api.main import app  # noqa: F401  fail fast on an unimportable app
+
     run_server(parse_args())
