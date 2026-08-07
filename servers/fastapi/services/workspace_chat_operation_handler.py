@@ -24,6 +24,7 @@ from sqlalchemy.sql.expression import UpdateBase
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from services.chat import PresentationChatService
 from services.chat import memory_layer as chat_memory_layer
+from services.chat.service import ChatTurnResult
 from services.database import async_session_maker
 from services.presentation_publication_service import (
     PresentationPublicationConflict,
@@ -178,6 +179,25 @@ def _error_code(detail: Any, fallback: str) -> str:
     return (safe or fallback)[:128]
 
 
+def chat_turn_result_payload(
+    turn: ChatTurnResult, replacements: Mapping[str, str]
+) -> dict[str, Any]:
+    """Describe a finished chat turn for the workspace client."""
+
+    payload: dict[str, Any] = {
+        "conversation_id": str(turn.conversation_id),
+        "summary": _replace_paths(turn.response_text, replacements),
+        "tool_calls": _replace_paths(list(turn.tool_calls), replacements),
+    }
+    # The turn answered but could not act: the page is model-authored HTML the
+    # chat tools cannot rebuild.  Naming the page turns a reply that merely
+    # describes the remake flow into one the client can offer.  The key is
+    # absent when nothing was refused, so existing readers see no change.
+    if turn.page_remake_slide_index is not None:
+        payload["page_remake_slide_index"] = turn.page_remake_slide_index
+    return payload
+
+
 def _replace_paths(value: Any, replacements: Mapping[str, str]) -> Any:
     if isinstance(value, str):
         updated = value
@@ -317,15 +337,9 @@ class PresentationChatOperationHandler:
                 # from "advance the publication token" inside the one fence, so
                 # a turn that only answered reports it without invalidating
                 # every other client's expected_revision.
-                result_payload = {
-                    "conversation_id": str(turn.conversation_id),
-                    "summary": _replace_paths(
-                        turn.response_text, promoted.replacements
-                    ),
-                    "tool_calls": _replace_paths(
-                        list(turn.tool_calls), promoted.replacements
-                    ),
-                }
+                result_payload = chat_turn_result_payload(
+                    turn, promoted.replacements
+                )
                 revision = await publish_presentation_revision(
                     session,
                     presentation_id=claim.presentation_id,

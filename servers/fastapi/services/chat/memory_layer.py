@@ -12,6 +12,7 @@ from sqlmodel import select
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from constants.presentation import (
     AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
+    AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE,
     MAX_NUMBER_OF_SLIDES,
 )
 from models.image_prompt import ImagePrompt
@@ -539,7 +540,7 @@ class PresentationChatMemoryLayer:
                 return {
                     "saved": False,
                     "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
-                    "validation_errors": ["authored_slide_requires_page_remake"],
+                    "validation_errors": [AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE],
                     "index": max(0, index),
                 }
 
@@ -792,6 +793,7 @@ class PresentationChatMemoryLayer:
             return {
                 "deleted": False,
                 "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
+                "validation_errors": [AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE],
                 "index": target_index,
             }
 

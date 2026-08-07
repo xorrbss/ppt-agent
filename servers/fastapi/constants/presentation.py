@@ -12,3 +12,10 @@ AUTHORED_SLIDE_CHAT_EDIT_REFUSAL = (
     "Tell the user to regenerate this page with the page remake action "
     "(\"페이지 다시 만들기\"); do not attempt to delete or replace it."
 )
+
+# The machine-readable half of the refusal above.  The prose reaches the model,
+# which then only tells the user which flow to use; this code reaches the
+# workspace client, which can offer that flow directly.  A refusal that names a
+# target page carries it under `validation_errors` beside that page's `index`,
+# which is what makes the offer addressable.
+AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE = "authored_slide_requires_page_remake"

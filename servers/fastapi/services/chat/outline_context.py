@@ -21,6 +21,7 @@ from sqlmodel import select
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from constants.presentation import (
     AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
+    AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE,
     MAX_NUMBER_OF_SLIDES,
 )
 from models.sql.presentation import PresentationModel
@@ -182,7 +183,9 @@ class OutlineTemplateContext:
             # add an empty page beside the authored ones.
             return {
                 "found": True,
-                "error": "authored_slide_requires_page_remake",
+                # No `index` accompanies this one: the refused call inserts a
+                # new page, so there is no existing page for a remake to target.
+                "error": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE,
                 "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
             }
 

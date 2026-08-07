@@ -39,6 +39,7 @@ interface WorkspaceOperationCardProps {
     operationType: "export.pptx" | "export.pdf",
   ) => void | Promise<void>;
   onFocusSlide?: (slideIndex: number) => void;
+  onRemakePage?: (slideIndex: number) => void;
   presentationRefreshState?: WorkspacePresentationRefreshState;
 }
 
@@ -441,6 +442,7 @@ export function WorkspaceOperationCard({
   onAction,
   onReExport,
   onFocusSlide,
+  onRemakePage,
   presentationRefreshState,
 }: WorkspaceOperationCardProps) {
   const operationKnown = isKnownWorkspaceOperationType(operation.operationType);
@@ -532,6 +534,14 @@ export function WorkspaceOperationCard({
           .slice(0, 5)
           .join(" · ")
       : "";
+  // The turn answered but the page is model-authored HTML the chat tools
+  // cannot rebuild, so the reply can only name the remake flow. The backend
+  // names the page too, which turns that description into an offer. Read only
+  // under a known operation schema: an unrecognised envelope's fields are not
+  // ours to interpret, and this one starts a write.
+  const remakeOfferSlideIndex = operationKnown
+    ? numberValue(result.page_remake_slide_index, result.pageRemakeSlideIndex)
+    : undefined;
   const inspectedRevision = numberValue(
     result.inspected_revision,
     result.inspectedRevision,
@@ -839,6 +849,28 @@ export function WorkspaceOperationCard({
         <p className="mt-2 rounded-lg bg-emerald-50 px-2.5 py-2 text-xs text-emerald-800">
           {resultSummary}
         </p>
+      )}
+      {operation.status === "succeeded" && remakeOfferSlideIndex !== undefined && (
+        <section
+          className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-950"
+          aria-label="페이지 다시 만들기 제안"
+          data-testid="page-remake-offer"
+        >
+          <p>
+            {remakeOfferSlideIndex + 1}페이지는 AI가 직접 작성한 자료라 대화로는
+            고칠 수 없습니다. 페이지를 다시 만들면 지금 요청한 내용을 반영할 수
+            있습니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => onRemakePage?.(remakeOfferSlideIndex)}
+            disabled={!onRemakePage || disabled}
+            className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-1"
+            data-testid="page-remake-offer-start"
+          >
+            {remakeOfferSlideIndex + 1}페이지 다시 만들기
+          </button>
+        </section>
       )}
       {operation.status === "succeeded" && isVersionRestore && (
         <section
