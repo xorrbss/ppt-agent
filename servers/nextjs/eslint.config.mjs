@@ -42,6 +42,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "cypress/**",
+    "public/vendor/**",
     "next-env.d.ts",
     "**/*.cy.ts",
     "**/*.cy.tsx",

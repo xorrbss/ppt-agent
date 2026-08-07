@@ -18,6 +18,7 @@ import "../../utils/prism-languages";
 import Header from "../../(dashboard)/dashboard/components/Header";
 import TemplateService from "../../services/api/template";
 import { StructuredTemplateLayoutEditor } from "./StructuredTemplateLayoutEditor";
+import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
 
 function LegacyGroupLayoutPreview() {
   const searchParams = useSearchParams();
@@ -46,6 +47,7 @@ function LegacyGroupLayoutPreview() {
 
   // Keep backend-served assets on the active origin in Docker/nginx preview mode.
   useEffect(() => {
+    ensureTailwindBrowserScript();
     const observer = setupImageUrlConverter();
     return () => observer?.disconnect();
   }, []);

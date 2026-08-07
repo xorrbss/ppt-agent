@@ -22,6 +22,7 @@ import {
   type PersistedPresentation,
 } from "@/lib/presentation-export-strategy";
 import TemplateV2GeneralSlide from "./TemplateV2GeneralSlide";
+import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
 
 const PDF_PRINT_STYLE = `
   html,
@@ -149,6 +150,17 @@ const PresentationPage = ({
   const { presentationData: storedPresentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  useEffect(() => {
+    const presentation = storedPresentationData ?? normalizedInitialPresentationData;
+    if (
+      presentation?.slides?.some(
+        (slide: { layout?: unknown }) =>
+          typeof slide?.layout === "string" && slide.layout.includes("custom")
+      )
+    ) {
+      ensureTailwindBrowserScript();
+    }
+  }, [normalizedInitialPresentationData, storedPresentationData]);
   const presentationData =
     normalizedInitialPresentationData ?? storedPresentationData;
   const [error, setError] = useState(false);
