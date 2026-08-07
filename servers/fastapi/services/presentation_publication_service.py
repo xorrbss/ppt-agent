@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.presentation import PresentationModel
@@ -25,16 +25,24 @@ async def publish_presentation_revision(
     attempt_token: str | None = None,
     result: dict | None = None,
     operation_kind: str | None = None,
+    advance_revision: bool = True,
 ) -> int:
     """Increment the publication token exactly once using a fenced CAS.
 
     Checkpoint writers must not call this function. The caller commits only
     after immutable external artifacts and their hashes are durable.
+
+    ``advance_revision=False`` records the attempt's result and terminalizes the
+    operation without moving the token.  A turn that only answered a question
+    changed nothing, and bumping the revision for it invalidates the
+    ``expected_revision`` every other client is holding.  The revision is still
+    verified under the same fence, so a concurrently superseded read cannot
+    report its answer as current.
     """
 
     if expected_revision < 0:
         raise ValueError("expected_revision must be nonnegative")
-    new_revision = expected_revision + 1
+    result_revision = expected_revision + 1 if advance_revision else expected_revision
     now = get_current_utc_datetime()
     published_operation_version: int | None = None
 
@@ -57,7 +65,7 @@ async def publish_presentation_revision(
                 )
                 .values(
                     state="succeeded",
-                    result_revision=new_revision,
+                    result_revision=result_revision,
                     result=result,
                     completed_at=now,
                     lease_expires_at=None,
@@ -88,17 +96,23 @@ async def publish_presentation_revision(
                 PresentationModel.id == presentation_id,
                 PresentationModel.revision == expected_revision,
             )
-            .values(revision=new_revision, updated_at=now)
+            .values(revision=result_revision, updated_at=now)
             .returning(PresentationModel.revision)
+            if advance_revision
+            # Same fence, no write: the turn produced nothing to publish, so
+            # verify the token rather than move it.
+            else select(PresentationModel.revision).where(
+                PresentationModel.id == presentation_id,
+                PresentationModel.revision == expected_revision,
+            )
         )
         if owner_id is not None:
             presentation_statement = presentation_statement.where(
                 PresentationModel.owner_id == owner_id
             )
-        published_revision = (
+        if (
             await session.execute(presentation_statement)
-        ).scalar_one_or_none()
-        if published_revision is None:
+        ).scalar_one_or_none() is None:
             raise PresentationPublicationConflict(
                 PresentationPublicationConflict.code
             )
@@ -107,7 +121,7 @@ async def publish_presentation_revision(
             terminal_payload = dict(result or {})
             terminal_payload.update(
                 state="succeeded",
-                result_revision=new_revision,
+                result_revision=result_revision,
             )
             projection_values = None
             if operation_kind == "quality.review":
@@ -134,4 +148,4 @@ async def publish_presentation_revision(
             if terminal_event is None:
                 raise PresentationPublicationConflict("stale_operation_event_fence")
 
-    return int(published_revision)
+    return int(result_revision)

@@ -21,6 +21,7 @@ from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.sql.expression import UpdateBase
 
+from models.sql.chat_history_message import ChatHistoryMessageModel
 from services.chat import PresentationChatService
 from services.chat import memory_layer as chat_memory_layer
 from services.database import async_session_maker
@@ -133,6 +134,23 @@ class BufferedAsyncSession:
 
     async def rollback(self) -> None:
         await self._delegate.rollback()
+
+
+def _turn_changed_the_deck(session: AsyncSession) -> bool:
+    """Whether the buffered turn holds any change beyond its own transcript.
+
+    Because the turn buffers instead of flushing, its complete unit of work is
+    still in the session here - so this is the durable answer to "did the model
+    actually edit anything", not a guess from the tool names it called.
+
+    Every turn appends chat history, including one that only answered a
+    question, so those rows are not evidence of an edit.
+    """
+
+    return any(
+        not isinstance(instance, ChatHistoryMessageModel)
+        for instance in (*session.new, *session.dirty, *session.deleted)
+    )
 
 
 ChatServiceFactory = Callable[..., PresentationChatService]
@@ -275,6 +293,8 @@ class PresentationChatOperationHandler:
                             chat_memory_layer.get_images_directory = (
                                 original_images_directory
                             )
+                # Sample before promotion adds artifact rows of its own.
+                deck_changed = _turn_changed_the_deck(session)
                 await context.raise_if_cancelled()
                 # Announce the stage while the turn is still buffered.  Artifact
                 # promotion flushes, which is where this transaction finally
@@ -289,18 +309,10 @@ class PresentationChatOperationHandler:
                 )
                 _rewrite_pending_artifact_paths(session, promoted.replacements)
 
-                # TODO: [BLOCKED]
-                #   violated: 구조 무결성 (a question is recorded as an edit)
-                #   reason: a turn that only answers still publishes a new
-                #     revision, because publish_presentation_revision marks the
-                #     operation succeeded and advances the publication token in
-                #     one fenced CAS, and the same call delivers the result
-                #     payload carrying the answer. Skipping the increment for a
-                #     read-only turn would split that fence.
-                #   required_change: separate "record this attempt's result"
-                #     from "advance the publication token", so a turn that
-                #     invoked no mutating tool can report its answer without
-                #     invalidating every other client's expected_revision.
+                # `advance_revision` below splits "record this attempt's result"
+                # from "advance the publication token" inside the one fence, so
+                # a turn that only answered reports it without invalidating
+                # every other client's expected_revision.
                 result_payload = {
                     "conversation_id": str(turn.conversation_id),
                     "summary": _replace_paths(
@@ -317,6 +329,7 @@ class PresentationChatOperationHandler:
                     operation_id=claim.operation_id,
                     attempt_token=claim.attempt_token,
                     result=result_payload,
+                    advance_revision=deck_changed,
                 )
                 await stage_workspace_chat_artifacts_for_publication(
                     session,
