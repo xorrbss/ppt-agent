@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "baseline": {
     "repository": "presenton/presenton",
-    "upstreamSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
-    "committedAt": "2026-07-29T16:21:43Z",
-    "subject": "Merge pull request #795 from presenton/saurav/convert-content-image-fills"
+    "upstreamSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
+    "committedAt": "2026-08-07T11:42:21Z",
+    "subject": "feat:Add blank presentation graphic and update loading state UI"
   },
   "versions": [
     {
@@ -68,6 +68,7 @@
     "source": "servers/nextjs/lib/template-v2-general-renderer.mjs",
     "discriminators": [
       "text",
+      "math",
       "container",
       "image",
       "text-list",
@@ -133,7 +134,7 @@
         "path": "/api/v1/ppt/presentation/status/{id}",
         "source": "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py",
         "requiredContains": [
-          "\"/status/{id}\", response_model=AsyncPresentationGenerationTaskModel"
+          "\"/status/{id}\", response_model=AsyncPresentationGenerationTaskResponse"
         ]
       },
       {

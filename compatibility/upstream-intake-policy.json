@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "repository": "presenton/presenton",
   "branch": "main",
-  "baselineSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
+  "baselineSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
   "baselineMetadata": {
-    "committedAt": "2026-07-29T16:21:43Z",
-    "subject": "Merge pull request #795 from presenton/saurav/convert-content-image-fills"
+    "committedAt": "2026-08-07T11:42:21Z",
+    "subject": "feat:Add blank presentation graphic and update loading state UI"
   },
   "requestTimeoutMs": 20000,
   "maximumCompareFiles": 300,

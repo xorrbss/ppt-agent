@@ -163,8 +163,8 @@
         {
           "path": "docker-compose.yml",
           "requiredContains": [
-            "TEMPLATE_V2_DEPLOYMENT_TIER=production",
-            "TEMPLATE_V2_DEPLOYMENT_TIER=development"
+            "TEMPLATE_V2_DEPLOYMENT_TIER: production",
+            "TEMPLATE_V2_DEPLOYMENT_TIER: development"
           ]
         },
         {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baselineUpstreamSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
+  "baselineUpstreamSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
   "sources": [
     {
       "path": "servers/fastapi/tests/unit/test_default_templates.py",

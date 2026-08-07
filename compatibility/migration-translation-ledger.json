@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baselineUpstreamSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
+  "baselineUpstreamSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
   "remoteIntakeReview": {
     "policy": "compatibility/upstream-intake-policy.json",
     "disposition": "report-only-until-human-review",
@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "e1b3c5d7f9a2",
+  "localTipRevision": "fc3d5e7f9a1b",
   "databaseCompatibility": {
     "verified": [
       {
@@ -61,7 +61,17 @@
     { "revision": "b8e2f4a7c9d1", "downRevision": "a7d4c9e2f1b3", "file": "b8e2f4a7c9d1_normalize_async_task_statuses.py" },
     { "revision": "c9f1a2b3d4e5", "downRevision": "b8e2f4a7c9d1", "file": "c9f1a2b3d4e5_multi_user_auth_and_ownership.py" },
     { "revision": "d0a2b4c6e8f1", "downRevision": "c9f1a2b3d4e5", "file": "d0a2b4c6e8f1_username_only_provider_settings.py" },
-    { "revision": "e1b3c5d7f9a2", "downRevision": "d0a2b4c6e8f1", "file": "e1b3c5d7f9a2_primary_admin_slot.py" }
+    { "revision": "e1b3c5d7f9a2", "downRevision": "d0a2b4c6e8f1", "file": "e1b3c5d7f9a2_primary_admin_slot.py" },
+    { "revision": "f2c4d6e8a0b1", "downRevision": "e1b3c5d7f9a2", "file": "f2c4d6e8a0b1_repair_chat_template_scope.py" },
+    { "revision": "a3c5e7f9b1d2", "downRevision": "f2c4d6e8a0b1", "file": "a3c5e7f9b1d2_add_authored_slide_checkpoints.py" },
+    { "revision": "b4d6f8a1c3e5", "downRevision": "a3c5e7f9b1d2", "file": "b4d6f8a1c3e5_add_authored_resume_count.py" },
+    { "revision": "c5e7f9a1b3d4", "downRevision": "b4d6f8a1c3e5", "file": "c5e7f9a1b3d4_add_authored_exact_provenance.py" },
+    { "revision": "d6f8a1c3e5b7", "downRevision": "c5e7f9a1b3d4", "file": "d6f8a1c3e5b7_add_chat_first_workspace_persistence.py" },
+    { "revision": "e7a9c2d4f6b8", "downRevision": "d6f8a1c3e5b7", "file": "e7a9c2d4f6b8_make_generation_task_timestamps_utc.py" },
+    { "revision": "f8b0d3e5a7c9", "downRevision": "e7a9c2d4f6b8", "file": "f8b0d3e5a7c9_add_durable_deletion_and_attachment_snapshots.py" },
+    { "revision": "fa1b2c3d4e5f", "downRevision": "f8b0d3e5a7c9", "file": "fa1b2c3d4e5f_add_account_deletion_fence.py" },
+    { "revision": "fb2c4d6e8a0b", "downRevision": "fa1b2c3d4e5f", "file": "fb2c4d6e8a0b_add_slidespec_artifact_bundles.py" },
+    { "revision": "fc3d5e7f9a1b", "downRevision": "fb2c4d6e8a0b", "file": "fc3d5e7f9a1b_add_slidespec_publication_attempts.py" }
   ],
   "translations": [
     {

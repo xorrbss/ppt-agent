@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-08-08",
+  "policy": "selective-integration-only",
+  "upstream": {
+    "repository": "presenton/presenton",
+    "branch": "main",
+    "previousBaselineSha": "ca7d183ee50f4602c73b274e7346a145195d78d4",
+    "observedSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
+    "committedAt": "2026-08-07T11:42:21Z",
+    "commitsReviewed": 16,
+    "filesChanged": 61,
+    "insertions": 3199,
+    "deletions": 1350
+  },
+  "integration": {
+    "branch": "integration/presenton-upstream-20260808",
+    "baseSha": "51244f13",
+    "wholesaleMergeUsed": false,
+    "directCherryPickUsed": false,
+    "method": "bounded-manual-port-and-exact-asset-import",
+    "reason": "The fork has a different Template V2 Studio and export architecture. Content-level ports preserve local authored, Windows, security, and export-fidelity contracts while adopting the upstream behavior."
+  },
+  "slices": [
+    {
+      "id": "alignment-guides-and-snapping",
+      "upstreamEvidence": [
+        "16ab94ab",
+        "900e3eb1"
+      ],
+      "disposition": "already-in-local-baseline",
+      "evidence": "TemplateV2Canvas and TemplateV2CanvasGuides already provide alignment guides and snapping through the fork snapping library; the parallel upstream Konva implementation was not duplicated."
+    },
+    {
+      "id": "local-browser-assets",
+      "upstreamEvidence": [
+        "78674d9a",
+        "c31611f9"
+      ],
+      "disposition": "integrated-with-local-export-adapter",
+      "evidence": "Pinned Chart.js, DataLabels, and Tailwind browser assets and licenses are served locally by FastAPI and Next.js. The fork collision-aware data-label renderer remains active while the upstream DataLabels runtime contract is loaded and registered."
+    },
+    {
+      "id": "editable-math-expressions",
+      "upstreamEvidence": [
+        "4ffc48ca",
+        "f2975121"
+      ],
+      "disposition": "integrated-bounded-manual-port",
+      "evidence": "Math is supported by the strict FastAPI discriminator and generated-content schema, hydration, Studio import/edit/render, JSON-to-HTML export, and the fork general PDF/PPTX renderer with bounded LaTeX and fail-closed KaTeX rendering."
+    },
+    {
+      "id": "categorized-vector-shapes",
+      "upstreamEvidence": [
+        "bace91e6",
+        "c55bed29",
+        "83bce94f",
+        "99733c1b"
+      ],
+      "disposition": "integrated-with-studio-adapter",
+      "evidence": "The upstream categorized shape presets and tests are retained, while insertion dispatches through the fork generic Studio add-element history and autosave action."
+    },
+    {
+      "id": "custom-template-auto-preview",
+      "upstreamEvidence": [
+        "9118bc07",
+        "a906d1bf"
+      ],
+      "disposition": "integrated-with-existing-font-gate",
+      "evidence": "Preview starts automatically after the selected file reaches the font-check step and no unavailable fonts remain, with a per-file guard and the existing manual preview path preserved."
+    },
+    {
+      "id": "thumbnail-navigation",
+      "upstreamEvidence": [
+        "71adce37",
+        "bed1fc6c",
+        "71851a7f"
+      ],
+      "disposition": "partially-already-present-and-accessibility-integrated",
+      "evidence": "The fork already has slideScrollSync overflow navigation and review-selection reset coverage. Thumbnail cards now add button semantics, current-slide state, focusability, and Enter/Space activation without replacing local scroll synchronization."
+    },
+    {
+      "id": "blank-presentation-dashboard-action",
+      "upstreamEvidence": [
+        "1a1b7ae6"
+      ],
+      "disposition": "integrated-with-local-dashboard-layout",
+      "evidence": "The local Korean dashboard now exposes a blank-presentation action with duplicate-request suppression, loading state, analytics, failure notification, and navigation to the standard presentation editor."
+    }
+  ],
+  "protectedLocalContracts": [
+    "authored and adaptive presentation workflows",
+    "Template V2 Studio history, autosave, snapping, and export fidelity",
+    "Windows, Electron, SQLite, Sharp, and presentation-export runtime policies",
+    "security and fail-closed ingestion boundaries"
+  ],
+  "verification": {
+    "upstreamCompatibilityChecks": 566,
+    "upstreamIntakeStatus": "unchanged",
+    "fastapiFocusedTestsPassed": 55,
+    "nextFocusedTestsPassed": 16,
+    "templateV2StudioCypressPassed": 18,
+    "ciNodeTestFilesPassed": 86,
+    "typescript": "passed",
+    "eslintErrors": 0,
+    "nextProductionBuild": {
+      "passed": true,
+      "staticPagesGenerated": 31
+    },
+    "manualBrowser": {
+      "viewport": "1280x800",
+      "dashboard": "passed",
+      "studioRoute": "blocked-by-empty-template-v2-catalog; covered by Cypress component browser test"
+    }
+  }
+}
