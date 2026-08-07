@@ -91,7 +91,7 @@ export async function GET(
   const metadata = ASSETS[asset as PreviewAsset];
   try {
     const bytes = await readFile(path.join(ARTIFACT_DIRECTORY, metadata.filename));
-    return new Response(bytes, {
+    return new Response(new Uint8Array(bytes), {
       headers: {
         "Cache-Control": "no-store",
         "Content-Disposition": metadata.disposition,
