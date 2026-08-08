@@ -19,9 +19,9 @@
   },
   "counts": {
     "upstreamOwned": 10163,
-    "identical": 9377,
-    "exceptions": 786,
-    "localOnly": 1156
+    "identical": 9376,
+    "exceptions": 787,
+    "localOnly": 1165
   },
   "identical": [
     {
@@ -46285,11 +46285,6 @@
       "blob": "e045bf79a47f778c66666f85843af46344df0c03"
     },
     {
-      "path": "servers/nextjs/app/(presentation-generator)/presentation/types/index.ts",
-      "mode": "100644",
-      "blob": "ceabe23bf3cab7aeb43d03a90fa6aba0190cd4d7"
-    },
-    {
       "path": "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/LayoutsPanel.tsx",
       "mode": "100644",
       "blob": "c83b18e6e695a119aee390fc9fa219ad9208c18f"
@@ -50076,6 +50071,13 @@
       "reasonCode": "local-fork-replacement"
     },
     {
+      "path": "servers/nextjs/app/(presentation-generator)/presentation/types/index.ts",
+      "upstreamMode": "100644",
+      "upstreamBlob": "ceabe23bf3cab7aeb43d03a90fa6aba0190cd4d7",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
       "path": "servers/nextjs/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom.ts",
       "upstreamMode": "100644",
       "upstreamBlob": "fbb295ec3401b05ffdfb25accb78c07fdbb09442",
@@ -52447,6 +52449,7 @@
     "docs/adaptive-layout-design-revision.md",
     "docs/adaptive-layout-design.md",
     "docs/adaptive-layout-rescore.md",
+    "docs/ai-authored-template-target-workspace.md",
     "docs/artifacts/ppt-master-catalog/README.md",
     "docs/artifacts/ppt-master-catalog/ppt-master-ai-technology-proposal-montage.png",
     "docs/artifacts/ppt-master-catalog/ppt-master-ai-technology-proposal.pptx",
@@ -52533,9 +52536,11 @@
     "electron/app/utils/imagemagick-check.ts",
     "electron/app/utils/libreoffice-check.ts",
     "electron/app/utils/libreoffice-urls.ts",
+    "electron/app/utils/navigation-policy.ts",
     "electron/app/utils/resource-root.ts",
     "electron/app/utils/setup-dependencies.ts",
     "electron/app/utils/update-channel.ts",
+    "electron/app/utils/window-security.ts",
     "electron/build_nextjs_resources.js",
     "electron/copy_fastapi_assets.js",
     "electron/ensure_spacy_model.js",
@@ -52564,9 +52569,11 @@
     "electron/tests/cleanup-boundaries.test.cjs",
     "electron/tests/export-msix-runtime.test.cjs",
     "electron/tests/liteparse-runner.test.mjs",
+    "electron/tests/navigation-policy.test.cjs",
     "electron/tests/resource-root.test.cjs",
     "electron/tests/rmrf.test.cjs",
     "electron/tests/standalone-copy.test.cjs",
+    "electron/tests/template-workspace-trust-boundary.test.cjs",
     "electron/tests/update-channel.test.cjs",
     "scripts/bench_authored_render_policy.py",
     "scripts/build-authored-style.py",
@@ -52796,6 +52803,7 @@
     "servers/fastapi/services/workspace_artifact_publication_service.py",
     "servers/fastapi/services/workspace_asset_maintenance.py",
     "servers/fastapi/services/workspace_asset_service.py",
+    "servers/fastapi/services/workspace_authored_template_confirmation_service.py",
     "servers/fastapi/services/workspace_authored_template_operation_handler.py",
     "servers/fastapi/services/workspace_chat_memory_outbox.py",
     "servers/fastapi/services/workspace_chat_operation_handler.py",
@@ -52891,6 +52899,7 @@
     "servers/fastapi/tests/integration/test_workspace_gate_e_vertical_flow.py",
     "servers/fastapi/tests/integration/test_workspace_production_lifecycle_gate.py",
     "servers/fastapi/tests/integration/test_workspace_public_share.py",
+    "servers/fastapi/tests/regression/test_ai_authored_template_target_workspace_contract.py",
     "servers/fastapi/tests/regression/test_authored_page_remake_warning_contract.py",
     "servers/fastapi/tests/support/workspace_browser_live_harness.py",
     "servers/fastapi/tests/support/workspace_crash_probe_worker.py",
@@ -53079,6 +53088,7 @@
     "servers/fastapi/tests/unit/test_workspace_api.py",
     "servers/fastapi/tests/unit/test_workspace_artifact_publication_faults.py",
     "servers/fastapi/tests/unit/test_workspace_asset_lifecycle.py",
+    "servers/fastapi/tests/unit/test_workspace_authored_template_confirmation.py",
     "servers/fastapi/tests/unit/test_workspace_authored_template_operation_handler.py",
     "servers/fastapi/tests/unit/test_workspace_chat_operation_handler.py",
     "servers/fastapi/tests/unit/test_workspace_contract_fixtures.py",
@@ -53175,6 +53185,7 @@
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredPageRemake.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredQualityReview.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredQualityReview.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredTemplateChanger.target-workspace.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredTemplateChanger.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/Chat.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/GenerationInfoDialog.tsx",

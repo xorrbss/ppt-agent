@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -29,6 +31,8 @@ from services.workspace_operation_handler_registry import (
 )
 from services.workspace_operation_runner import append_operation_event
 from utils.datetime_utils import get_current_utc_datetime
+
+LOGGER = logging.getLogger(__name__)
 
 PRESENTATION_DELETION_OPERATION_KIND = "presentation.delete"
 _CLEANUP_TERMINAL_STATES = frozenset({"succeeded", "dead_letter"})
@@ -219,10 +223,30 @@ class PresentationDeletionOperationHandler:
                 ) from error
             except OperationalError as error:
                 await session.rollback()
+                # Both branches below replace the driver's message with a single
+                # code, and the code is all the caller and the stored operation
+                # row ever see.  Without a log line here a failure is only ever
+                # "database unavailable", which names no cause to act on.  The
+                # response shape is unchanged - this is server-side only.
                 if is_retryable_sqlite_lock(error, session):
+                    LOGGER.warning(
+                        "Presentation deletion hit a busy/locked SQLite database "
+                        "(operation %s, presentation %s, attempt %s): %s",
+                        claim.operation_id,
+                        claim.presentation_id,
+                        claim.attempt_number,
+                        error.orig,
+                    )
                     raise RetryableWorkspaceOperationError(
                         "presentation_delete_temporarily_unavailable"
                     ) from error
+                LOGGER.exception(
+                    "Presentation deletion failed on a database error that is not "
+                    "a SQLite lock (operation %s, presentation %s, attempt %s)",
+                    claim.operation_id,
+                    claim.presentation_id,
+                    claim.attempt_number,
+                )
                 raise RetryableWorkspaceOperationError(
                     "presentation_delete_database_unavailable"
                 ) from error
