@@ -22,6 +22,57 @@ export type ChartColorTarget = {
 
 export const CHART_TEXT_MAX_LENGTH = 128;
 
+export const TEMPLATE_V2_CHART_TYPES = [
+  "area",
+  "bar",
+  "bubble",
+  "donut",
+  "horizontal_bar",
+  "horizontal_stacked_bar",
+  "line",
+  "pie",
+  "polar_area",
+  "radar",
+  "scatter",
+  "stacked_bar",
+] as const satisfies readonly ChartType[];
+
+export const TEMPLATE_V2_CHART_TYPE_LABELS: Record<
+  (typeof TEMPLATE_V2_CHART_TYPES)[number],
+  string
+> = {
+  area: "Area",
+  bar: "Bar",
+  bubble: "Bubble",
+  donut: "Donut",
+  horizontal_bar: "Horizontal bar",
+  horizontal_stacked_bar: "Horizontal stacked bar",
+  line: "Line",
+  pie: "Pie",
+  polar_area: "Polar area",
+  radar: "Radar",
+  scatter: "Scatter",
+  stacked_bar: "Stacked bar",
+};
+
+// Kept in lock-step with template-v2-render-plan.mjs. The remaining chart
+// types render, but explicit axis state is not part of their export contract.
+export const TEMPLATE_V2_AXIS_CHART_TYPES = [
+  "area",
+  "bar",
+  "horizontal_bar",
+  "horizontal_stacked_bar",
+  "line",
+  "stacked_bar",
+] as const satisfies readonly ChartType[];
+
+export const TEMPLATE_V2_DATA_LABEL_POSITIONS = [
+  "base",
+  "mid",
+  "top",
+  "outside",
+] as const;
+
 export const DEFAULT_CHART_COLORS = [
   "7F22FE",
   "155DFC",
@@ -359,6 +410,16 @@ export function normalizeChartTypeName(value: unknown) {
     .toLowerCase()
     .replace(/[\s-]+/g, "_")
     .replace(/_+/g, "_");
+}
+
+export function parseChartType(value: unknown): ChartType | null {
+  if (
+    typeof value === "string" &&
+    (TEMPLATE_V2_CHART_TYPES as readonly string[]).includes(value)
+  ) {
+    return value as ChartType;
+  }
+  return null;
 }
 
 export function rawChartType(value: unknown): ChartType {

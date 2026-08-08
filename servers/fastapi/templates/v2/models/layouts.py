@@ -1,30 +1,29 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
-from .elements import Position, SlideElement
+from .elements import Position, SlideElement, TemplateV2Model
 
 
-class RawSlideLayout(BaseModel):
-    id: str
+class RawSlideLayout(TemplateV2Model):
+    id: str = Field(min_length=1, max_length=80)
     description: str
     elements: list[SlideElement]
 
 
-class RawSlideLayouts(BaseModel):
+class RawSlideLayouts(TemplateV2Model):
     layouts: list[RawSlideLayout]
 
 
-class Component(BaseModel):
+class Component(TemplateV2Model):
     id: str = Field(min_length=1, max_length=80)
     description: str = Field(min_length=10, max_length=300)
     position: Position
     elements: list[SlideElement] = Field(min_length=1)
 
 
-class SimilarComponents(BaseModel):
+class SimilarComponents(TemplateV2Model):
     model_config = ConfigDict(extra="forbid")
-
     indices: list[int] = Field(min_length=2)
 
     @model_validator(mode="after")
@@ -36,19 +35,17 @@ class SimilarComponents(BaseModel):
         return self
 
 
-class SimilarComponentsList(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class SimilarComponentsList(TemplateV2Model):
     similar_components: list[SimilarComponents]
 
 
-class MergedComponent(BaseModel):
+class MergedComponent(TemplateV2Model):
     id: str = Field(min_length=1, max_length=80)
     description: str = Field(min_length=10, max_length=300)
     variants: list[Component] = Field(min_length=1)
 
 
-class MergedComponents(BaseModel):
+class MergedComponents(TemplateV2Model):
     components: list[MergedComponent]
 
     @model_validator(mode="after")
@@ -59,7 +56,7 @@ class MergedComponents(BaseModel):
         return self
 
 
-class SlideLayout(BaseModel):
+class SlideLayout(TemplateV2Model):
     id: str = Field(min_length=1, max_length=80)
     description: str = Field(min_length=10, max_length=300)
     components: list[Component]
@@ -72,7 +69,7 @@ class SlideLayout(BaseModel):
         return self
 
 
-class SlideLayouts(BaseModel):
+class SlideLayouts(TemplateV2Model):
     layouts: list[SlideLayout] = Field(min_length=1)
 
     @model_validator(mode="after")

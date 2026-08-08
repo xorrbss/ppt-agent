@@ -3,10 +3,13 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
 from enums.async_task_status import AsyncTaskStatus
-from models.sql.async_task import AsyncTaskModel
+from models.async_task_read import AsyncTaskReadModel
+from services.async_task_read_service import (
+    get_async_task as get_async_task_read,
+    list_async_task_reads,
+)
 from services.database import get_async_session
 
 
@@ -18,7 +21,7 @@ API_V1_ASYNC_TASKS_ROUTER = APIRouter(
 
 @API_V1_ASYNC_TASKS_ROUTER.get(
     "",
-    response_model=list[AsyncTaskModel],
+    response_model=list[AsyncTaskReadModel],
 )
 async def list_async_tasks(
     task_type: str | None = Query(default=None, alias="type"),
@@ -43,37 +46,48 @@ async def list_async_tasks(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     sql_session: AsyncSession = Depends(get_async_session),
-):
-    statement = select(AsyncTaskModel)
-    if task_type is not None:
-        statement = statement.where(AsyncTaskModel.type == task_type)
-    if status is not None:
-        statement = statement.where(AsyncTaskModel.status == status)
-    created_at_start = created_at_from or created_at
-    if created_at_start is not None:
-        statement = statement.where(AsyncTaskModel.created_at >= created_at_start)
-    if created_at_to is not None:
-        statement = statement.where(AsyncTaskModel.created_at <= created_at_to)
-
-    order_column = getattr(AsyncTaskModel, order_by)
-    statement = statement.order_by(
-        order_column.asc() if order == "asc" else order_column.desc()
+) -> list[AsyncTaskReadModel]:
+    return await list_async_task_reads(
+        task_type=task_type,
+        status=status,
+        created_at=created_at,
+        created_at_from=created_at_from,
+        created_at_to=created_at_to,
+        order_by=order_by,
+        order=order,
+        limit=limit,
+        offset=offset,
+        sql_session=sql_session,
     )
-    statement = statement.offset(offset).limit(limit)
 
-    result = await sql_session.execute(statement)
-    return list(result.scalars().all())
+
+async def _get_or_404(
+    task_id: str,
+    sql_session: AsyncSession,
+) -> AsyncTaskReadModel:
+    task = await get_async_task_read(task_id, sql_session)
+    if task is None:
+        raise HTTPException(status_code=404, detail="No async task found")
+    return task
 
 
 @API_V1_ASYNC_TASKS_ROUTER.get(
     "/status/{id}",
-    response_model=AsyncTaskModel,
+    response_model=AsyncTaskReadModel,
 )
 async def check_async_task_status(
     id: str = Path(description="ID of the async task"),
     sql_session: AsyncSession = Depends(get_async_session),
-):
-    task = await sql_session.get(AsyncTaskModel, id)
-    if not task:
-        raise HTTPException(status_code=404, detail="No async task found")
-    return task
+) -> AsyncTaskReadModel:
+    return await _get_or_404(id, sql_session)
+
+
+@API_V1_ASYNC_TASKS_ROUTER.get(
+    "/{id}",
+    response_model=AsyncTaskReadModel,
+)
+async def get_async_task(
+    id: str = Path(description="ID of the async task"),
+    sql_session: AsyncSession = Depends(get_async_session),
+) -> AsyncTaskReadModel:
+    return await _get_or_404(id, sql_session)

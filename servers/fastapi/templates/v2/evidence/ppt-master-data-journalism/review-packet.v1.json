@@ -1,0 +1,56 @@
+{
+  "schema_version": "presenton.template-v2-rights-review-request/v1",
+  "status": "pending-independent-review",
+  "prepared_at": "2026-08-02T00:00:00+09:00",
+  "template_id": "ppt-master-data-journalism",
+  "requested_artifact": {
+    "repository": "https://bitbucket.org/ibizsoftware/devax-ppt",
+    "revision": "f1dd602db95274d0048ff05e3bf87ee3d10ec348",
+    "path": "docs/artifacts/ppt-master-data-journalism/ai-capital-2026-data-journalism.pptx",
+    "sha256": "5ea1bd7f13ebaa324be3b60167bb259c7049d13c33865c0abaa2306a17d67e37",
+    "size_bytes": 192581,
+    "preservation_mode": "native_clone"
+  },
+  "superseded_upstream_sample": {
+    "repository": "https://github.com/hugohe3/ppt-master",
+    "revision": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+    "path": "examples/ppt169_global_ai_capital_2026/exports/global_ai_capital_2026.pptx",
+    "sha256": "2a323935de5a736e301e46b00707521026c31b1436663d7d7ebdec3166991972"
+  },
+  "package_inventory": {
+    "slide_count": 20,
+    "slide_master_count": 1,
+    "slide_layout_count": 11,
+    "notes_slide_count": 20,
+    "media_part_count": 0,
+    "embedding_part_count": 0,
+    "embedded_font_part_count": 0
+  },
+  "license_receipts": [
+    {
+      "repository": "https://github.com/hugohe3/ppt-master",
+      "revision": "8858c4960b870f12baf952994fbd0c76ab5ba4ec",
+      "path": "LICENSE",
+      "spdx": "MIT",
+      "sha256": "cd9cf27f52d3c336dd42e13f4a1df453da118e25e15520bbe02f91d75531e91b"
+    },
+    {
+      "repository": "https://bitbucket.org/ibizsoftware/devax-ppt",
+      "revision": "f1dd602db95274d0048ff05e3bf87ee3d10ec348",
+      "path": "LICENSE",
+      "spdx": "Apache-2.0",
+      "sha256": "72daa21cf08efa3d5f3580a34a6f48eaa0077a9deee8d260df3b50cd7fc3d01a"
+    }
+  ],
+  "requested_scopes": [
+    "candidate_pptx"
+  ],
+  "requested_permissions": [
+    "redistribute",
+    "modify",
+    "commercial_use"
+  ],
+  "approval": {
+    "status": "pending"
+  }
+}

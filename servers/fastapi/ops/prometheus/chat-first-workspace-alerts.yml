@@ -1,0 +1,194 @@
+groups:
+  - name: chat-first-workspace-durability
+    rules:
+      - alert: WorkspaceDeadLetterSLOBreach
+        expr: |
+          (
+            sum(rate(workspace_dead_letter_total[5m]))
+            / sum(rate(workspace_operation_admission_total[5m])) > 0.001
+          )
+          and sum(rate(workspace_operation_admission_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace dead-letter ratio exceeded its SLO
+          description: The five-minute dead-letter ratio has exceeded 0.1% for ten minutes.
+
+      - alert: WorkspaceLeaseLostSLOBreach
+        expr: |
+          (
+            sum(rate(workspace_lease_lost_total[5m]))
+            / sum(rate(workspace_operation_admission_total[5m])) > 0.001
+          )
+          and sum(rate(workspace_operation_admission_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace lease-loss ratio exceeded its SLO
+          description: The five-minute lease-loss ratio has exceeded 0.1% for ten minutes.
+
+      - alert: WorkspaceRevisionConflictSLOBreach
+        expr: |
+          (
+            sum(rate(workspace_revision_conflict_total[5m]))
+            / sum(rate(workspace_operation_admission_total[5m])) > 0.05
+          )
+          and sum(rate(workspace_operation_admission_total[5m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace revision-conflict ratio exceeded its SLO
+          description: The five-minute revision-conflict ratio has exceeded 5% for fifteen minutes.
+
+      - alert: WorkspaceCleanupDeadLetterSLOBreach
+        expr: |
+          (
+            sum(rate(workspace_cleanup_dead_letter_total[5m]))
+            / sum(rate(workspace_cleanup_total{outcome="claimed"}[5m])) > 0.001
+          )
+          and sum(rate(workspace_cleanup_total{outcome="claimed"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace cleanup-journal dead-letter ratio exceeded its SLO
+          description: The five-minute cleanup dead-letter ratio has exceeded 0.1% of claimed cleanup attempts for ten minutes.
+
+      - alert: WorkspaceOutboxDeadLetterSLOBreach
+        expr: |
+          (
+            sum(rate(workspace_outbox_total{outcome="dead_letter"}[5m]))
+            / sum(rate(workspace_outbox_total{outcome="dispatched"}[5m])) > 0.001
+          )
+          and sum(rate(workspace_outbox_total{outcome="dispatched"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace outbox dead-letter ratio exceeded its SLO
+          description: The five-minute outbox dead-letter ratio has exceeded 0.1% of dispatched delivery attempts for ten minutes.
+
+      - alert: WorkspaceOutboxLeaseLostSLOBreach
+        expr: |
+          (
+            sum(rate(workspace_outbox_total{outcome="lease_lost"}[5m]))
+            / sum(rate(workspace_outbox_total{outcome="dispatched"}[5m])) > 0.001
+          )
+          and sum(rate(workspace_outbox_total{outcome="dispatched"}[5m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace outbox lease-loss ratio exceeded its SLO
+          description: The five-minute outbox lease-loss ratio has exceeded 0.1% of dispatched delivery attempts for ten minutes.
+
+      - alert: WorkspaceAPIExporterAbsent
+        expr: absent(up{job="chat-first-workspace-api"})
+        for: 5m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace API metrics target is absent
+          description: Prometheus has no workspace API target, so API health and SLO signals are unavailable.
+
+      - alert: WorkspaceAPIExporterDown
+        expr: max(up{job="chat-first-workspace-api"}) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace API metrics target is down
+          description: Every configured workspace API metrics target has failed scraping for five minutes.
+
+      - alert: WorkspaceWorkerExporterAbsent
+        expr: absent(up{job="chat-first-workspace-workers"})
+        for: 5m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace worker metrics target is absent
+          description: Prometheus has no workspace worker target, so background durability signals are unavailable.
+
+      - alert: WorkspaceWorkerExporterDown
+        expr: max(up{job="chat-first-workspace-workers"}) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace worker metrics target is down
+          description: Every configured workspace worker metrics target has failed scraping for five minutes.
+
+      - alert: WorkspaceSignalSilentLossDetected
+        expr: sum(increase(workspace_silent_loss_total[10m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace shadow comparison detected silent data loss
+          description: The durable workspace timeline contains data that the legacy comparison read did not return.
+
+      - alert: WorkspaceObservabilitySignalFailure
+        expr: sum(increase(workspace_observability_signal_failure_total[10m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace observability signal delivery failed
+          description: A closed-schema operation, shadow-parity, or event-lag telemetry sink failed during the last ten minutes.
+
+      - alert: WorkspaceShadowParityDivergence
+        expr: |
+          (
+            sum(rate(workspace_shadow_parity_match_total[10m]))
+            / sum(rate(workspace_shadow_parity_total[10m])) < 0.999
+          )
+          and sum(rate(workspace_shadow_parity_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace shadow-read parity diverged
+          description: Fewer than 99.9% of live shadow comparisons matched for ten minutes.
+
+      - alert: WorkspaceEventProcessingLagSLOBreach
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(workspace_event_lag_ms_bucket[10m]))
+          ) > 5000
+          and sum(rate(workspace_event_lag_ms_count[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace event delivery lag exceeded its SLO
+          description: The p99 durable operation-event delivery lag exceeded five seconds for ten minutes.
+
+      - alert: WorkspaceEventLagSignalStalled
+        expr: |
+          sum(rate(workspace_outbox_total{outcome="event_delivered"}[10m])) > 0
+          and sum(rate(workspace_event_lag_ms_count[10m])) == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: chat-first-workspace
+        annotations:
+          summary: Workspace event-lag signal is stalled
+          description: The outbox is delivering durable operation events but no matching event-lag observations are being produced.

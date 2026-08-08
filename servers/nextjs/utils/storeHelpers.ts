@@ -1,7 +1,6 @@
 import { setLLMConfig } from "@/store/slices/userConfig";
 import { store } from "@/store/store";
 import { LLMConfig } from "@/types/llm_config";
-import { isSupportedCodexModel } from "@/utils/codexModels";
 
 function isProvided(value: unknown): boolean {
   return value !== "" && value !== null && value !== undefined;
@@ -38,11 +37,33 @@ export const normalizeLLMConfig = (llmConfig: LLMConfig): LLMConfig => {
   if (parsedDisableImageGeneration !== undefined) {
     normalizedConfig.DISABLE_IMAGE_GENERATION = parsedDisableImageGeneration;
   }
-  const parsedWebGrounding = parseOptionalBool(
-    (normalizedConfig as Record<string, unknown>).WEB_GROUNDING
-  );
-  if (parsedWebGrounding !== undefined) {
-    normalizedConfig.WEB_GROUNDING = parsedWebGrounding;
+
+  if (normalizedConfig.DISABLE_IMAGE_GENERATION || normalizedConfig.IMAGE_PROVIDER) {
+    return normalizedConfig;
+  }
+
+  if (
+    normalizedConfig.OPENAI_COMPAT_IMAGE_BASE_URL &&
+    normalizedConfig.OPENAI_COMPAT_IMAGE_API_KEY &&
+    normalizedConfig.OPENAI_COMPAT_IMAGE_MODEL
+  ) {
+    normalizedConfig.IMAGE_PROVIDER = "openai_compatible";
+  } else if (normalizedConfig.OPEN_WEBUI_IMAGE_URL) {
+    normalizedConfig.IMAGE_PROVIDER = "open_webui";
+  } else if (normalizedConfig.COMFYUI_URL) {
+    normalizedConfig.IMAGE_PROVIDER = "comfyui";
+  } else if (normalizedConfig.PEXELS_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "pexels";
+  } else if (normalizedConfig.PIXABAY_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "pixabay";
+  } else if (normalizedConfig.LLM === "openai" && normalizedConfig.OPENAI_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "gpt-image-1.5";
+    normalizedConfig.GPT_IMAGE_1_5_QUALITY =
+      normalizedConfig.GPT_IMAGE_1_5_QUALITY || "medium";
+  } else if (normalizedConfig.LLM === "google" && normalizedConfig.GOOGLE_API_KEY) {
+    normalizedConfig.IMAGE_PROVIDER = "gemini_flash";
+  } else {
+    normalizedConfig.DISABLE_IMAGE_GENERATION = true;
   }
 
   return normalizedConfig;
@@ -72,13 +93,6 @@ export const getLLMConfigValidationError = (
     }
     if (!isProvided(llmConfig.OPENAI_MODEL)) {
       return 'Text provider (OpenAI): choose a chat model on the Text Provider tab—use "Check models" after your API key, then pick a model. The model under Image Provider → Custom is only for image generation.';
-    }
-  } else if (llm === "deepseek") {
-    if (!isProvided(llmConfig.DEEPSEEK_API_KEY)) {
-      return "DeepSeek API key is required.";
-    }
-    if (!isProvided(llmConfig.DEEPSEEK_MODEL)) {
-      return 'No DeepSeek model selected. Use "Check models" after entering your API key, then choose a model.';
     }
   } else if (llm === "google") {
     if (!isProvided(llmConfig.GOOGLE_API_KEY)) {
@@ -162,8 +176,8 @@ export const getLLMConfigValidationError = (
       return 'No Anthropic model selected. Use "Check models" after entering your API key, then choose a model.';
     }
   } else if (llm === "ollama") {
-    if (!isProvided(llmConfig.OLLAMA_URL?.trim())) {
-      return 'Ollama URL is required. Enter your Ollama server URL, or click "Check models" to fill the reachable default.';
+    if (!isProvided(llmConfig.OLLAMA_URL)) {
+      return "Ollama server URL is required.";
     }
     if (!isProvided(llmConfig.OLLAMA_MODEL)) {
       return "Select an Ollama model. If none appear, confirm Ollama is running and reachable.";
@@ -190,9 +204,6 @@ export const getLLMConfigValidationError = (
     if (!isProvided(llmConfig.CODEX_MODEL)) {
       return "Select a Codex model.";
     }
-    if (!isSupportedCodexModel(llmConfig.CODEX_MODEL)) {
-      return "Select a supported Codex model.";
-    }
   } else {
     return "Unsupported or unknown text provider.";
   }
@@ -217,6 +228,11 @@ export const getLLMConfigValidationError = (
       case "gpt-image-1.5":
         if (!isProvided(llmConfig.OPENAI_API_KEY)) {
           return "OpenAI API key is required for GPT Image 1.5.";
+        }
+        break;
+      case "gpt-image-2":
+        if (!isProvided(llmConfig.OPENAI_API_KEY)) {
+          return "OpenAI API key is required for GPT Image 2.";
         }
         break;
       case "gemini_flash":
@@ -250,38 +266,6 @@ export const getLLMConfigValidationError = (
         break;
       default:
         return "Select a valid image provider.";
-    }
-  }
-
-  if (llmConfig.WEB_GROUNDING) {
-    if (!isProvided(llmConfig.WEB_SEARCH_PROVIDER)) {
-      return "Select a web search provider, or turn off web search.";
-    }
-    switch (llmConfig.WEB_SEARCH_PROVIDER) {
-      case "searxng":
-        if (!isProvided(llmConfig.SEARXNG_BASE_URL)) {
-          return "SearXNG base URL is required.";
-        }
-        break;
-      case "tavily":
-        if (!isProvided(llmConfig.TAVILY_API_KEY)) {
-          return "Tavily API key is required.";
-        }
-        break;
-      case "exa":
-        if (!isProvided(llmConfig.EXA_API_KEY)) {
-          return "Exa API key is required.";
-        }
-        break;
-      case "brave":
-        if (!isProvided(llmConfig.BRAVE_SEARCH_API_KEY)) {
-          return "Brave Search API key is required.";
-        }
-        break;
-      case "auto":
-        break;
-      default:
-        return "Select a valid web search provider.";
     }
   }
 
@@ -320,13 +304,6 @@ export function syncStoreAfterCodexSignOut(): void {
       ...prev,
       LLM: "codex",
       CODEX_MODEL: "",
-      CODEX_ACCESS_TOKEN: "",
-      CODEX_REFRESH_TOKEN: "",
-      CODEX_TOKEN_EXPIRES: "",
-      CODEX_ACCOUNT_ID: "",
-      CODEX_USERNAME: "",
-      CODEX_EMAIL: "",
-      CODEX_IS_PRO: false,
     })
   );
 }
@@ -338,12 +315,14 @@ export const handleSaveLLMConfig = async (llmConfig: LLMConfig) => {
     throw new Error(validationError);
   }
 
-  const response = await fetch("/api/user-config", {
-    method: "POST",
-    body: JSON.stringify(normalizedConfig),
-  });
-  if (!response.ok) {
-    throw new Error(`Unable to save user configuration (${response.status})`);
+  // Prefer shared API routes; fallback to Electron IPC for packaged compatibility.
+  if (typeof window !== "undefined" && window.electron?.setUserConfig) {
+    await window.electron.setUserConfig(normalizedConfig);
+  } else {
+    await fetch("/api/user-config", {
+      method: "POST",
+      body: JSON.stringify(normalizedConfig),
+    });
   }
 
   store.dispatch(setLLMConfig(normalizedConfig));

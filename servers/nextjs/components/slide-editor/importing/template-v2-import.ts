@@ -1,6 +1,8 @@
 import { resolveBackendAssetUrl } from "@/utils/api";
+import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
 import { chartDataFromSeriesWithColors } from "@/components/slide-editor/charts/chart-data";
 import { renderMarkdownTextRuns } from "@/components/slide-editor/text/markdown-text";
+import { adaptTemplateV2TableCellSpanMetadata } from "@/components/slide-editor/importing/template-v2-table-span";
 import {
   EDITOR_STAGE_HEIGHT,
   EDITOR_STAGE_WIDTH,
@@ -94,7 +96,9 @@ export function adaptTemplateV2ResponseToDeck(
     throw new Error("Template response did not include any layouts.");
   }
 
-  const slides = layouts.slice(0, 50).map(adaptLayoutToSlide);
+  const slides = layouts
+    .slice(0, MAX_NUMBER_OF_SLIDES)
+    .map(adaptLayoutToSlide);
   const deck = {
     title: truncateString(readString(template.name) ?? "Imported template", 90),
     description:
@@ -147,7 +151,7 @@ export function adaptGeneratedTemplateV2PresentationToDeck(
 
   const slides =
     generatedSlides.length > 0
-      ? generatedSlides.slice(0, 50).map((slide, index) => {
+      ? generatedSlides.slice(0, MAX_NUMBER_OF_SLIDES).map((slide, index) => {
         const uiLayout = readGeneratedSlideUiLayout(slide);
         if (uiLayout) {
           return adaptLayoutToSlide(uiLayout, index);
@@ -164,7 +168,7 @@ export function adaptGeneratedTemplateV2PresentationToDeck(
         }
         return adaptLayoutToSlide(layout, index);
       })
-      : layouts.slice(0, 50).map(adaptLayoutToSlide);
+      : layouts.slice(0, MAX_NUMBER_OF_SLIDES).map(adaptLayoutToSlide);
 
   const deck = {
     title: truncateString(
@@ -826,11 +830,10 @@ function adaptTextList(raw: UnknownRecord): SlideElement {
 }
 
 function adaptTable(raw: UnknownRecord): SlideElement {
-  const columns = adaptTableCells(readArray(raw, "columns")).slice(0, 6);
+  const columns = adaptTableCells(readArray(raw, "columns"));
   const rows = readArray(raw, "rows")
     .map((row) => adaptTableCells(Array.isArray(row) ? row : []))
-    .filter((row) => row.length > 0)
-    .slice(0, 7);
+    .filter((row) => row.length > 0);
 
   return {
     ...baseElement(raw),
@@ -858,13 +861,42 @@ function adaptVector(raw: UnknownRecord): SlideElement | null {
   void size;
   void decorative;
 
+  const knownFields = new Set([
+    "type",
+    "name",
+    "position",
+    "size",
+    "decorative",
+    "rotation",
+    "opacity",
+    "shadow",
+    "component_id",
+    "component_instance_id",
+    "component_description",
+    "component_slot",
+    "design_variables",
+    "layout",
+    "shape",
+    "points",
+    "closed",
+    "corner_radii",
+    "cornerRadii",
+    "curve",
+    "fill",
+    "stroke",
+  ]);
+  const unknownFields = Object.fromEntries(
+    Object.entries(raw).filter(([key]) => !knownFields.has(key)),
+  );
+
   return {
+    ...unknownFields,
     ...pointBase,
     type: "vector",
     shape: readEnum(raw, ["polygon", "ellipse"], "shape") ?? undefined,
     points,
     closed: adaptVectorClosed(raw, points),
-    corner_radii: adaptCornerRadii(raw, points.length),
+    corner_radii: adaptCornerRadii(raw),
     curve: adaptVectorCurve(raw) ?? adaptImplicitVectorCurve(raw),
     fill,
     stroke,
@@ -879,7 +911,9 @@ function adaptVectorPoints(raw: UnknownRecord): AdaptedPosition[] {
       if (!point) return null;
       const x = readRawNumber(point.x);
       const y = readRawNumber(point.y);
-      return x != null && y != null ? { x: round(x), y: round(y) } : null;
+      return x != null && y != null
+        ? { ...point, x: round(x), y: round(y) }
+        : null;
     })
     .filter((point): point is AdaptedPosition => point != null);
 }
@@ -904,9 +938,10 @@ function adaptVectorCurve(raw: UnknownRecord): VectorCurve | null {
   const rawType = readString(curve.type)?.trim().toLowerCase();
   if (rawType !== "smooth") return null;
   return {
+    ...curve,
     type: "smooth",
     tension: clampOptional(readRawNumber(curve.tension), 0, 1),
-    segments: clampOptional(readRawNumber(curve.segments), 1, 96),
+    segments: clampOptionalInteger(readRawNumber(curve.segments), 1, 96),
   };
 }
 
@@ -915,15 +950,13 @@ function adaptImplicitVectorCurve(raw: UnknownRecord): VectorCurve | null {
   return null;
 }
 
-function adaptCornerRadii(raw: UnknownRecord, pointCount: number): number[] | null {
+function adaptCornerRadii(raw: UnknownRecord): number[] | null {
   const rawRadii = raw.corner_radii ?? raw.cornerRadii;
-  const explicit = (Array.isArray(rawRadii) ? rawRadii : [])
+  if (!Array.isArray(rawRadii)) return null;
+  return rawRadii
     .map(readRawNumber)
     .filter((value): value is number => value != null)
-    .map((value) => clamp(round(value), 0, MAX_BORDER_RADIUS));
-  if (explicit.length > 0) return explicit.slice(0, pointCount);
-
-  return null;
+    .map((value) => Math.max(0, value));
 }
 
 function adaptChart(raw: UnknownRecord): SlideElement {
@@ -1362,23 +1395,28 @@ function adaptFont(value: UnknownRecord | null): Font | null {
 function adaptFill(value: UnknownRecord | null): Fill | null {
   const color = readColor(value?.color);
   if (!color) return null;
-  return stripNullish({
+  return {
+    ...value,
     color,
     opacity: clamp(readNumber(value ?? {}, "opacity") ?? 1, 0, 1),
-  });
+  };
 }
 
 function adaptStroke(value: UnknownRecord | null): Stroke | null {
   const color = readColor(value?.color);
   if (!color) return null;
-  return stripNullish({
+  const stroke: Stroke & UnknownRecord = {
+    ...value,
     color,
     opacity: clamp(readNumber(value ?? {}, "opacity") ?? 1, 0, 1),
     width: clamp(round(readNumber(value ?? {}, "width") ?? 1), 0, 8),
-    dash: readArray(value ?? {}, "dash")
+  };
+  if (value && Object.hasOwn(value, "dash")) {
+    stroke.dash = readArray(value, "dash")
       .map((item) => readRawNumber(item))
-      .filter((item): item is number => item != null && item >= 0),
-  });
+      .filter((item): item is number => item != null && item >= 0);
+  }
+  return stroke;
 }
 
 function hasVisiblePaint(
@@ -1413,13 +1451,16 @@ function adaptPadding(value: UnknownRecord | null): Padding | null {
 
 function adaptShadow(value: UnknownRecord | null): Shadow | null {
   if (!value) return null;
-  return stripNullish({
+  return {
+    ...value,
     color: readColor(value.color),
-    blur: clamp(round(readNumber(value, "blur") ?? 0), 0, 100),
+    blur: Math.max(0, readNumber(value, "blur") ?? 0),
     opacity: clamp(readNumber(value, "opacity") ?? 0.2, 0, 1),
-    offset_x: clamp(round(readNumber(value, "offset_x") ?? 0), -256, 256),
-    offset_y: clamp(round(readNumber(value, "offset_y") ?? 0), -256, 256),
-  });
+    offset_x:
+      readNumber(value, "offset_x") ?? readRawNumber(value.offsetX) ?? 0,
+    offset_y:
+      readNumber(value, "offset_y") ?? readRawNumber(value.offsetY) ?? 0,
+  };
 }
 
 function textRun(text: string, font?: Font | null): TextRun {
@@ -1501,6 +1542,7 @@ function adaptTableCells(value: unknown[]): TableCell[] {
             ? [textRun(text)]
             : [];
       return stripNullish({
+        ...adaptTemplateV2TableCellSpanMetadata(record),
         color:
           adaptFill(readRecord(record, "color")) ??
           adaptFill(readRecord(record, "fill")),
@@ -1735,6 +1777,10 @@ function clampInteger(value: number | null, min: number, max: number) {
 
 function clampOptional(value: number | null, min: number, max: number) {
   return value == null ? null : clamp(value, min, max);
+}
+
+function clampOptionalInteger(value: number | null, min: number, max: number) {
+  return value == null ? null : clamp(Math.round(value), min, max);
 }
 
 function truncateString(value: string, maxLength: number) {

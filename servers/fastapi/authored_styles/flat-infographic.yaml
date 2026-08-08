@@ -1,0 +1,71 @@
+id: flat-infographic
+name: 플랫 인포그래픽
+description: 틸+코랄 플랫 벡터 일러스트로 프로세스·조직·개념을 정리하는 비즈니스 인포그래픽 스타일
+category: business
+tags:
+  - 인포그래픽
+  - 플랫
+  - 프로세스
+use_cases:
+  - 업무 프로세스 안내
+  - 조직·역할 소개
+  - 서비스 개념 설명
+preview:
+  bg: "#FAFBFC"
+  accent: "#0E7C7B"
+  palette:
+    - "#FAFBFC"
+    - "#0E7C7B"
+    - "#F2545B"
+    - "#1D2B36"
+    - "#F4E9DB"
+  variant: flat-story
+illustration:
+  style_prompt: >-
+    flat 2D vector infographic illustration, simple rounded geometric people
+    and objects, teal (#0E7C7B) and coral (#F2545B) with warm sand accents on
+    a white background, no outlines or thin uniform outlines, modern corporate
+    editorial style, balanced negative space, no gradients
+brief: >-
+  MOOD: Create a friendly, modern business explainer — the visual language of
+  a well-designed annual report infographic. Approachable but disciplined:
+  playful shapes, serious structure.
+
+  PALETTE: Use near-white (#FAFBFC) as the canvas, deep teal (#0E7C7B) as the
+  primary structural color, coral (#F2545B) as the single emphasis color,
+  dark slate ink (#1D2B36) for text, and warm sand (#F4E9DB) for soft
+  background panels. Coral marks exactly one focus per slide.
+
+  TYPOGRAPHY: A clean geometric sans-serif. Big confident titles, medium
+  labels with generous letter spacing for section markers, comfortable body
+  text. All text is HTML — never inside images.
+
+  LAYOUT SYSTEM: Build slides around ONE flat illustration slot that anchors
+  the story — a scene of simple characters or objects sized to roughly half
+  the slide — with structured HTML around it: numbered steps, role cards, or
+  short bullets aligned to a clear grid. Alternate the slot between left,
+  right and banner positions across the deck. Reserve the slot area with
+  explicit sizing so the layout survives without the image.
+
+  SIGNATURE ELEMENTS: Rounded geometric characters and objects, soft sand
+  panels behind text groups, numbered step chips, thin teal rules, one coral
+  focal element per slide, generous whitespace.
+
+  DATA VISUALIZATION: Draw charts as inline SVG in the same teal/coral
+  system — simple bars, donuts and step flows with direct labels and honest
+  scales. Keep data out of the generated images.
+
+  IMAGE DIRECTION: Describe one warm, simple scene per slide that embodies
+  the concept (people collaborating at a desk, a handshake, a growing plant
+  beside a graph pedestal, parcels on a conveyor). Composition only — no
+  text or numbers in the image.
+
+  SLIDE ARCHETYPES: cover: title beside a welcoming hero scene; content:
+  scene on one side, 3-4 structured points on the other; data: one dominant
+  SVG chart with a small supporting scene; timeline: horizontal numbered
+  steps with small flat markers; closing: summary card stack with a
+  celebratory scene and one clear call to action.
+
+  AVOID: Avoid text baked into images, photographic imagery, drop shadows,
+  gradients, more than one coral emphasis, crowded scenes with many
+  characters, and clip-art-style inconsistent illustration mixing.

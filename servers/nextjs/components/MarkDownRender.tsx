@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 
-import { marked } from "marked";
+import { renderMarkdown } from "@/lib/safe-markdown";
 import { cn } from "@/lib/utils";
 
 interface MarkdownRendererProps {
@@ -14,10 +14,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
     const [markdownContent, setMarkdownContent] = useState<string>("");
 
     useEffect(() => {
-        const parseMarkdown = async () => {
+        const parseMarkdown = () => {
             try {
-                const parsed = await marked.parse(content);
-                setMarkdownContent(parsed);
+                setMarkdownContent(renderMarkdown(content));
             } catch (error) {
                 console.error("Error parsing markdown:", error);
                 setMarkdownContent("");

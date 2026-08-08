@@ -12,24 +12,57 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Import every SQL model so they register with SQLModel.metadata before
 # autogenerate or migration execution reads it.
-from models.sql.async_task import AsyncTaskModel  # noqa: F401, E402
 from models.sql.async_presentation_generation_status import (  # noqa: F401, E402
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
+    AuthoredSlideCheckpoint,
+)
+from models.sql.authored_exact_provenance import (  # noqa: F401, E402
+    AuthoredExactProvenance,
+)
 from models.sql.chat_history_message import ChatHistoryMessageModel  # noqa: F401, E402
-from models.sql.font_upload import FontUpload  # noqa: F401, E402
 from models.sql.image_asset import ImageAsset  # noqa: F401, E402
 from models.sql.key_value import KeyValueSqlModel  # noqa: F401, E402
 from models.sql.ollama_pull_status import OllamaPullStatus  # noqa: F401, E402
 from models.sql.presentation import PresentationModel  # noqa: F401, E402
+from models.sql.presentation_generation_job import (  # noqa: F401, E402
+    PresentationGenerationJob,
+)
+from models.sql.presentation_version import (  # noqa: F401, E402
+    PresentationVersionModel,
+)
 from models.sql.presentation_layout_code import (  # noqa: F401, E402
     PresentationLayoutCodeModel,
 )
 from models.sql.slide import SlideModel  # noqa: F401, E402
+from models.sql.slidespec_artifact_bundle import (  # noqa: F401, E402
+    SlideSpecArtifactBundle,
+)
+from models.sql.slidespec_publication_attempt import (  # noqa: F401, E402
+    SlideSpecPublicationAttempt,
+)
 from models.sql.template import TemplateModel  # noqa: F401, E402
-from models.sql.template_create_info import TemplateCreateInfoModel  # noqa: F401, E402
 from models.sql.template_v2 import TemplateV2  # noqa: F401, E402
+from models.sql.template_v2_local_state import (  # noqa: F401, E402
+    TemplateV2LocalState,
+)
+from models.sql.template_v2_pptx_import import (  # noqa: F401, E402
+    TemplateV2PptxImport,
+)
+from models.sql.template_create_info import TemplateCreateInfoModel  # noqa: F401, E402
 from models.sql.webhook_subscription import WebhookSubscription  # noqa: F401, E402
+from models.sql.workspace import (  # noqa: F401, E402
+    WorkspaceActionReceipt,
+    WorkspaceArtifact,
+    WorkspaceAsset,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceMessageAttachment,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
 from models.sql.user import User  # noqa: F401, E402
 from models.sql.access_token import AccessToken  # noqa: F401, E402
 from models.sql.provider_settings import ProviderSettings  # noqa: F401, E402
@@ -37,7 +70,13 @@ from models.sql.provider_settings import ProviderSettings  # noqa: F401, E402
 alembic_config = context.config
 
 if alembic_config.config_file_name is not None:
-    fileConfig(alembic_config.config_file_name)
+    # Alembic runs in-process during startup and integration tests. The
+    # ``fileConfig`` default disables every already-imported non-Alembic logger,
+    # which makes application telemetry disappear after a migration.
+    fileConfig(
+        alembic_config.config_file_name,
+        disable_existing_loggers=False,
+    )
 
 target_metadata = SQLModel.metadata
 

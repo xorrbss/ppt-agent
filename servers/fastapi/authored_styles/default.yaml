@@ -1,0 +1,53 @@
+id: default
+name: 기본 블루프린트
+description: 깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일
+category: general
+tags:
+  - 범용
+  - 깔끔한
+  - 컨설팅
+use_cases:
+  - 회사 소개
+  - 프로젝트 제안
+  - 일반 보고서
+preview:
+  bg: "#F8FAFC"
+  accent: "#2563EB"
+  palette:
+    - "#F8FAFC"
+    - "#FFFFFF"
+    - "#0F172A"
+    - "#64748B"
+    - "#2563EB"
+  variant: clean-light
+brief: |-
+  MOOD
+  Create a clear, versatile consulting aesthetic with calm confidence, generous whitespace, and a practical focus on the audience's next decision.
+
+  PALETTE
+  Build from cool white #F8FAFC, white #FFFFFF, dark ink #0F172A, slate #64748B, and brand blue #2563EB. Reserve blue for key findings, actions, and navigational cues.
+
+  TYPOGRAPHY
+  Use confident sans-serif headings, highly readable body copy, concise labels, and tabular numerals with consistent scale relationships.
+
+  LAYOUT SYSTEM
+  Use disciplined grids, strong hierarchy, and varied editorial compositions suited to each slide role. Keep content blocks spacious, aligned, and easy to scan.
+
+  SIGNATURE ELEMENTS
+  Use fine blue rules, compact section labels, restrained evidence panels, direct annotations, and one clear takeaway area per slide.
+
+  DATA VISUALIZATION
+  Render charts and tables simply with direct labels, visible units, meaningful comparisons, and minimal decoration. Highlight only the value that supports the slide's conclusion.
+
+  IMAGE DIRECTION
+  Use clean, credible photography or simple contextual illustrations with one focal subject, neutral lighting, and enough clear space for the message.
+
+  SLIDE ARCHETYPES
+  cover: Pair a concise title and context line with one restrained blue rule or focused image.
+  content: Present one claim with a two-column explanation and supporting evidence.
+  data: Show one dominant chart with direct labels, source context, and a takeaway sentence.
+  timeline: Arrange three to five milestones on a clear horizontal sequence with owners or dates.
+  closing: Summarize the decision, two or three next actions, and the immediate checkpoint.
+
+  AVOID
+  Avoid ornamental clutter, excessive cards, novelty type, competing accent colors, generic decoration, and conclusions that are not supported by the slide's evidence.

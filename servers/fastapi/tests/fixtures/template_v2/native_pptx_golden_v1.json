@@ -1,0 +1,227 @@
+{
+  "schema_version": "presenton.template-v2-native-pptx/v1",
+  "compiler": {
+    "name": "presenton-template-v2-native-ooxml",
+    "version": "1"
+  },
+  "canvas": {
+    "width_px": 1280,
+    "height_px": 720,
+    "width_emu": 12192000,
+    "height_emu": 6858000
+  },
+  "slides": [
+    {
+      "index": 0,
+      "layout_id": "native-golden",
+      "shapes": [
+        {
+          "name": "hero/container-0",
+          "type": "auto_shape",
+          "x": 0,
+          "y": 0,
+          "width": 12192000,
+          "height": 6858000,
+          "rotation": 0.0,
+          "text": "",
+          "text_frame": {
+            "margin_left": 91440,
+            "margin_top": 45720,
+            "margin_right": 91440,
+            "margin_bottom": 45720,
+            "vertical_anchor": "middle",
+            "word_wrap": null
+          },
+          "paragraphs": [
+            {
+              "text": "",
+              "alignment": "center",
+              "runs": []
+            }
+          ],
+          "fill": {
+            "type": "solid",
+            "color": "F4F7FB"
+          },
+          "line": {
+            "type": "solid",
+            "color": "D8E1EE",
+            "width": 9525
+          }
+        },
+        {
+          "name": "hero/title",
+          "type": "text_box",
+          "x": 914400,
+          "y": 838200,
+          "width": 10363200,
+          "height": 857250,
+          "rotation": 0.0,
+          "text": "Quarterly direction",
+          "text_frame": {
+            "margin_left": 0,
+            "margin_top": 0,
+            "margin_right": 0,
+            "margin_bottom": 0,
+            "vertical_anchor": "middle",
+            "word_wrap": true
+          },
+          "paragraphs": [
+            {
+              "text": "Quarterly direction",
+              "alignment": "left",
+              "runs": [
+                {
+                  "text": "Quarterly direction",
+                  "font": {
+                    "name": "Arial",
+                    "size_pt": 32.0,
+                    "color": "123456",
+                    "bold": true,
+                    "italic": null,
+                    "underline": null
+                  }
+                }
+              ]
+            }
+          ],
+          "fill": {
+            "type": "background",
+            "color": null
+          },
+          "line": {
+            "type": "solid",
+            "color": null,
+            "width": 0
+          }
+        },
+        {
+          "name": "hero/eyebrow",
+          "type": "text_box",
+          "x": 914400,
+          "y": 1847850,
+          "width": 10363200,
+          "height": 523875,
+          "rotation": 0.0,
+          "text": "Native OOXML · editable text",
+          "text_frame": {
+            "margin_left": 0,
+            "margin_top": 0,
+            "margin_right": 0,
+            "margin_bottom": 0,
+            "vertical_anchor": "top",
+            "word_wrap": true
+          },
+          "paragraphs": [
+            {
+              "text": "Native OOXML · editable text",
+              "alignment": null,
+              "runs": [
+                {
+                  "text": "Native OOXML · editable text",
+                  "font": {
+                    "name": "Arial",
+                    "size_pt": 18.0,
+                    "color": "52657A",
+                    "bold": null,
+                    "italic": null,
+                    "underline": null
+                  }
+                }
+              ]
+            }
+          ],
+          "fill": {
+            "type": "background",
+            "color": null
+          },
+          "line": {
+            "type": "solid",
+            "color": null,
+            "width": 0
+          }
+        },
+        {
+          "name": "hero/details/items",
+          "type": "text_box",
+          "x": 914400,
+          "y": 2857500,
+          "width": 10363200,
+          "height": 2286000,
+          "rotation": 0.0,
+          "text": "Plan\nBuild\nMeasure",
+          "text_frame": {
+            "margin_left": 0,
+            "margin_top": 0,
+            "margin_right": 0,
+            "margin_bottom": 0,
+            "vertical_anchor": "top",
+            "word_wrap": true
+          },
+          "paragraphs": [
+            {
+              "text": "Plan",
+              "alignment": null,
+              "runs": [
+                {
+                  "text": "Plan",
+                  "font": {
+                    "name": "Arial",
+                    "size_pt": 22.0,
+                    "color": "123456",
+                    "bold": null,
+                    "italic": null,
+                    "underline": null
+                  }
+                }
+              ]
+            },
+            {
+              "text": "Build",
+              "alignment": null,
+              "runs": [
+                {
+                  "text": "Build",
+                  "font": {
+                    "name": "Arial",
+                    "size_pt": 22.0,
+                    "color": "123456",
+                    "bold": null,
+                    "italic": null,
+                    "underline": null
+                  }
+                }
+              ]
+            },
+            {
+              "text": "Measure",
+              "alignment": null,
+              "runs": [
+                {
+                  "text": "Measure",
+                  "font": {
+                    "name": "Arial",
+                    "size_pt": 22.0,
+                    "color": "123456",
+                    "bold": null,
+                    "italic": null,
+                    "underline": null
+                  }
+                }
+              ]
+            }
+          ],
+          "fill": {
+            "type": "background",
+            "color": null
+          },
+          "line": {
+            "type": "solid",
+            "color": null,
+            "width": 0
+          }
+        }
+      ]
+    }
+  ]
+}

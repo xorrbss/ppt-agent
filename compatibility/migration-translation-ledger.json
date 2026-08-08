@@ -1,0 +1,228 @@
+{
+  "schemaVersion": 1,
+  "baselineUpstreamSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
+  "remoteIntakeReview": {
+    "policy": "compatibility/upstream-intake-policy.json",
+    "disposition": "report-only-until-human-review",
+    "rule": "A changed upstream Alembic file is unreviewed evidence. The intake tool must not add revisions, rewrite translations, select a head, merge, or cherry-pick."
+  },
+  "commonRevision": "c7b70d0f31b1",
+  "upstreamTipRevision": "b8e2f4a7c9d1",
+  "localTipRevision": "fc3d5e7f9a1b",
+  "databaseCompatibility": {
+    "verified": [
+      {
+        "dialect": "sqlite",
+        "scope": "default runtime, migration unit coverage, and delete concurrency policy"
+      },
+      {
+        "dialect": "postgresql",
+        "scope": "live Template V2 upgrade, downgrade, re-upgrade, preservation, constraints, and deletion integrity",
+        "evidenceFile": "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
+      }
+    ],
+    "unsupported": [
+      {
+        "dialects": ["mysql", "mariadb"],
+        "reason": "No documented version, service, or CI contract exists, and the unchanged baseline migration cannot compile unbounded String columns for MySQL (VARCHAR requires a length). URL adapters and defensive dialect branches remain compatibility scaffolding, not a support promise."
+      }
+    ]
+  },
+  "upstreamChain": [
+    { "revision": "6e4a1b2c3d5f", "downRevision": "c7b70d0f31b1", "file": "6e4a1b2c3d5f_add_template_v2_and_presentation_version.py" },
+    { "revision": "7f5b2c3d4e6a", "downRevision": "6e4a1b2c3d5f", "file": "7f5b2c3d4e6a_add_slide_ui.py" },
+    { "revision": "8a6c4d2e1f30", "downRevision": "7f5b2c3d4e6a", "file": "8a6c4d2e1f30_add_merged_components_to_template_v2.py" },
+    { "revision": "9b2d1c4e5f6a", "downRevision": "8a6c4d2e1f30", "file": "9b2d1c4e5f6a_add_fonts_column_to_presentations.py" },
+    { "revision": "1d9a4c7b8e2f", "downRevision": "9b2d1c4e5f6a", "file": "1d9a4c7b8e2f_add_template_v2_chat_scope.py" },
+    { "revision": "2c8f4a1b9d7e", "downRevision": "1d9a4c7b8e2f", "file": "2c8f4a1b9d7e_make_template_v2_layouts_nullable.py" },
+    { "revision": "5d7e9a1b2c3f", "downRevision": "2c8f4a1b9d7e", "file": "5d7e9a1b2c3f_add_font_uploads.py" },
+    { "revision": "3f2a1b4c5d6e", "downRevision": "5d7e9a1b2c3f", "file": "3f2a1b4c5d6e_template_v2_ids_to_strings.py" },
+    { "revision": "4b7c9d0e1f2a", "downRevision": "3f2a1b4c5d6e", "file": "4b7c9d0e1f2a_add_is_default_to_template_v2.py" },
+    { "revision": "a7d4c9e2f1b3", "downRevision": "4b7c9d0e1f2a", "file": "a7d4c9e2f1b3_add_async_tasks.py" },
+    { "revision": "b8e2f4a7c9d1", "downRevision": "a7d4c9e2f1b3", "file": "b8e2f4a7c9d1_normalize_async_task_statuses.py" }
+  ],
+  "localChain": [
+    { "revision": "c8d1e2f3a4b5", "downRevision": "c7b70d0f31b1", "file": "c8d1e2f3a4b5_add_deck_plan_column.py" },
+    { "revision": "d1f2a3b4c5e6", "downRevision": "c8d1e2f3a4b5", "file": "d1f2a3b4c5e6_add_mode_column.py" },
+    { "revision": "e2f3a4b5c6d7", "downRevision": "d1f2a3b4c5e6", "file": "e2f3a4b5c6d7_add_presentation_versions_table.py" },
+    { "revision": "f3a4b5c6d7e8", "downRevision": "e2f3a4b5c6d7", "file": "f3a4b5c6d7e8_add_share_token_column.py" },
+    { "revision": "a4b5c6d7e8f9", "downRevision": "f3a4b5c6d7e8", "file": "a4b5c6d7e8f9_add_template_v2_phase_one.py" },
+    { "revision": "b5c6d7e8f9a0", "downRevision": "a4b5c6d7e8f9", "file": "b5c6d7e8f9a0_add_template_v2_pptx_imports.py" },
+    { "revision": "c6d7e8f9a0b1", "downRevision": "b5c6d7e8f9a0", "file": "c6d7e8f9a0b1_add_template_v2_revision.py" },
+    { "revision": "d7e8f9a0b1c2", "downRevision": "c6d7e8f9a0b1", "file": "d7e8f9a0b1c2_add_template_v2_import_attempt_lease.py" },
+    { "revision": "e8f9a0b1c2d3", "downRevision": "d7e8f9a0b1c2", "file": "e8f9a0b1c2d3_add_template_v2_source_retention.py" },
+    { "revision": "f9a0b1c2d3e4", "downRevision": "e8f9a0b1c2d3", "file": "f9a0b1c2d3e4_add_template_v2_local_state_sidecar.py" },
+    { "revision": "0a1b2c3d4e5f", "downRevision": "f9a0b1c2d3e4", "file": "0a1b2c3d4e5f_harden_template_v2_delete_cascade.py" },
+    { "revision": "1b2c3d4e5f6a", "downRevision": "0a1b2c3d4e5f", "file": "1b2c3d4e5f6a_add_template_v2_import_review_boundary.py" },
+    { "revision": "2c3d4e5f6a7b", "downRevision": "1b2c3d4e5f6a", "file": "2c3d4e5f6a7b_add_template_v2_revision_journal.py" },
+    { "revision": "3d4e5f6a7b8c", "downRevision": "2c3d4e5f6a7b", "file": "3d4e5f6a7b8c_add_durable_generation_jobs.py" },
+    { "revision": "4e5f6a7b8c9d", "downRevision": "3d4e5f6a7b8c", "file": "4e5f6a7b8c9d_reconcile_presenton_multi_user.py" },
+    { "revision": "a7d4c9e2f1b3", "downRevision": "4e5f6a7b8c9d", "file": "a7d4c9e2f1b3_add_async_tasks.py" },
+    { "revision": "b8e2f4a7c9d1", "downRevision": "a7d4c9e2f1b3", "file": "b8e2f4a7c9d1_normalize_async_task_statuses.py" },
+    { "revision": "c9f1a2b3d4e5", "downRevision": "b8e2f4a7c9d1", "file": "c9f1a2b3d4e5_multi_user_auth_and_ownership.py" },
+    { "revision": "d0a2b4c6e8f1", "downRevision": "c9f1a2b3d4e5", "file": "d0a2b4c6e8f1_username_only_provider_settings.py" },
+    { "revision": "e1b3c5d7f9a2", "downRevision": "d0a2b4c6e8f1", "file": "e1b3c5d7f9a2_primary_admin_slot.py" },
+    { "revision": "f2c4d6e8a0b1", "downRevision": "e1b3c5d7f9a2", "file": "f2c4d6e8a0b1_repair_chat_template_scope.py" },
+    { "revision": "a3c5e7f9b1d2", "downRevision": "f2c4d6e8a0b1", "file": "a3c5e7f9b1d2_add_authored_slide_checkpoints.py" },
+    { "revision": "b4d6f8a1c3e5", "downRevision": "a3c5e7f9b1d2", "file": "b4d6f8a1c3e5_add_authored_resume_count.py" },
+    { "revision": "c5e7f9a1b3d4", "downRevision": "b4d6f8a1c3e5", "file": "c5e7f9a1b3d4_add_authored_exact_provenance.py" },
+    { "revision": "d6f8a1c3e5b7", "downRevision": "c5e7f9a1b3d4", "file": "d6f8a1c3e5b7_add_chat_first_workspace_persistence.py" },
+    { "revision": "e7a9c2d4f6b8", "downRevision": "d6f8a1c3e5b7", "file": "e7a9c2d4f6b8_make_generation_task_timestamps_utc.py" },
+    { "revision": "f8b0d3e5a7c9", "downRevision": "e7a9c2d4f6b8", "file": "f8b0d3e5a7c9_add_durable_deletion_and_attachment_snapshots.py" },
+    { "revision": "fa1b2c3d4e5f", "downRevision": "f8b0d3e5a7c9", "file": "fa1b2c3d4e5f_add_account_deletion_fence.py" },
+    { "revision": "fb2c4d6e8a0b", "downRevision": "fa1b2c3d4e5f", "file": "fb2c4d6e8a0b_add_slidespec_artifact_bundles.py" },
+    { "revision": "fc3d5e7f9a1b", "downRevision": "fb2c4d6e8a0b", "file": "fc3d5e7f9a1b_add_slidespec_publication_attempts.py" }
+  ],
+  "translations": [
+    {
+      "upstreamRevision": "6e4a1b2c3d5f",
+      "localRevisions": ["e2f3a4b5c6d7", "a4b5c6d7e8f9"],
+      "disposition": "split-and-consolidated",
+      "note": "Presentation versions remain separate locally; the initial Template V2 schema is consolidated into the guarded Phase 1 migration."
+    },
+    {
+      "upstreamRevision": "7f5b2c3d4e6a",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "Frozen slide UI state is part of the guarded local Template V2 schema."
+    },
+    {
+      "upstreamRevision": "8a6c4d2e1f30",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "merged_components is created by the local Phase 1 migration."
+    },
+    {
+      "upstreamRevision": "9b2d1c4e5f6a",
+      "localRevisions": [],
+      "disposition": "already-in-local-baseline",
+      "evidenceFiles": ["servers/fastapi/alembic/versions/00b3c27a13bc_init.py"],
+      "note": "The local baseline already creates presentations.fonts."
+    },
+    {
+      "upstreamRevision": "1d9a4c7b8e2f",
+      "localRevisions": [],
+      "disposition": "intentionally-untranslated",
+      "evidenceFiles": [
+        "servers/fastapi/models/sql/slide.py",
+        "servers/fastapi/templates/v2/persistence.py"
+      ],
+      "note": "The local flow persists canonical slide UI under presentation ownership and has no demonstrated multi-chat/template association that requires the upstream chat-scope foreign key. Hydration uses the existing SlideModel.ui field; it does not justify a migration."
+    },
+    {
+      "upstreamRevision": "2c8f4a1b9d7e",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "Nullable layout/component payloads are created in their final form by Phase 1."
+    },
+    {
+      "upstreamRevision": "5d7e9a1b2c3f",
+      "localRevisions": [],
+      "disposition": "intentionally-untranslated",
+      "evidenceFiles": [
+        "servers/fastapi/api/v1/ppt/endpoints/fonts.py",
+        "servers/fastapi/templates/fonts_and_slides_preview.py"
+      ],
+      "note": "The upstream font_uploads table maps to the existing local validated font upload/list/preview surface. A second persistence table would duplicate that contract."
+    },
+    {
+      "upstreamRevision": "3f2a1b4c5d6e",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "Template and presentation identifiers are created in their final local types."
+    },
+    {
+      "upstreamRevision": "4b7c9d0e1f2a",
+      "localRevisions": ["a4b5c6d7e8f9"],
+      "disposition": "consolidated",
+      "note": "is_default is created by Phase 1 with its final default and nullability."
+    },
+    {
+      "upstreamRevision": "a7d4c9e2f1b3",
+      "localRevisions": ["a7d4c9e2f1b3"],
+      "disposition": "reused-with-local-runtime-boundary",
+      "evidenceFiles": [
+        "servers/fastapi/alembic/versions/a7d4c9e2f1b3_add_async_tasks.py",
+        "servers/fastapi/alembic/versions/00b3c27a13bc_init.py",
+        "servers/fastapi/api/v1/async_tasks/router.py",
+        "servers/fastapi/services/async_task_read_service.py",
+        "servers/fastapi/models/sql/async_presentation_generation_status.py",
+        "servers/fastapi/models/sql/presentation_generation_job.py",
+        "servers/fastapi/tests/unit/test_async_task_read_facade.py",
+        "servers/fastapi/tests/integration/test_postgresql_async_task_read_facade.py"
+      ],
+      "note": "The guarded upstream-shaped async_tasks migration remains data compatibility only. The implemented owner-scoped generic list/check/get facade maps existing async_presentation_generation_tasks plus durable generation jobs, including filtering, pagination, ordering, and terminal-state semantics, without creating a second execution path or persistence table. Legacy presentation-specific status routes remain intact."
+    },
+    {
+      "upstreamRevision": "b8e2f4a7c9d1",
+      "localRevisions": ["b8e2f4a7c9d1"],
+      "disposition": "reused-with-local-runtime-boundary",
+      "evidenceFiles": [
+        "servers/fastapi/alembic/versions/b8e2f4a7c9d1_normalize_async_task_statuses.py"
+      ],
+      "note": "The local chain includes the upstream async_tasks status normalization. It does not replace the durable presentation-generation task status contract."
+    }
+  ],
+  "localOnlyExtensions": [
+    {
+      "revision": "b5c6d7e8f9a0",
+      "purpose": "Durable PPTX import jobs"
+    },
+    {
+      "revision": "c6d7e8f9a0b1",
+      "purpose": "Optimistic Template V2 revision"
+    },
+    {
+      "revision": "d7e8f9a0b1c2",
+      "purpose": "Import attempt ownership and leases"
+    },
+    {
+      "revision": "e8f9a0b1c2d3",
+      "purpose": "Private source-retention cleanup audit"
+    },
+    {
+      "revision": "f9a0b1c2d3e4",
+      "purpose": "Private Template V2 local revision sidecar",
+      "ownershipPolicy": "presentation-owned",
+      "legacyColumnDropGuard": "Do not drop template_v2.presentation_id until the dropping migration validates complete, non-orphaned sidecars and verifies that the explicit child-first presentations-to-template_v2 delete path remains authoritative without this foreign key. The sidecar presentation FK only deletes the sidecar child; SQL cascades do not run child-to-parent."
+    },
+    {
+      "revision": "0a1b2c3d4e5f",
+      "purpose": "Fail-closed Template V2 presentation deletion",
+      "ownershipPolicy": "presentation-owned",
+      "deletePolicy": "explicit-child-first",
+      "foreignKeyPolicy": "RESTRICT on both canonical and local-state presentation ownership foreign keys",
+      "compatibilityGuard": "Validate complete, matching sidecar ownership before replacing both presentation ownership CASCADE actions with RESTRICT. Delete canonical templates explicitly in the presentation transaction and preserve import audit rows.",
+      "conflictPolicy": "Return 409 presentation_delete_dependency_conflict when ownership diverges or a concurrent dependency survives.",
+      "sqliteConcurrencyPolicy": "After rollback, return retryable 503 presentation_delete_temporarily_unavailable with Retry-After: 1 only for SQLite BUSY/LOCKED. Do not reclassify other database OperationalError values or multiply SQLite's bounded driver wait with an application retry loop."
+    },
+    {
+      "revision": "1b2c3d4e5f6a",
+      "purpose": "Owner-scoped, idempotent PPTX analysis review and explicit confirmation boundary"
+    },
+    {
+      "revision": "2c3d4e5f6a7b",
+      "purpose": "Bounded Template V2 revision journal and immutable restore points"
+    },
+    {
+      "revision": "3d4e5f6a7b8c",
+      "purpose": "Durable presentation generation jobs and staging-to-published lifecycle"
+    },
+    {
+      "revision": "4e5f6a7b8c9d",
+      "purpose": "Reconcile the fork schema before the reviewed upstream async-task migrations"
+    },
+    {
+      "revision": "c9f1a2b3d4e5",
+      "purpose": "Multi-user authentication and resource ownership"
+    },
+    {
+      "revision": "d0a2b4c6e8f1",
+      "purpose": "Username-only accounts and database-backed provider settings"
+    },
+    {
+      "revision": "e1b3c5d7f9a2",
+      "purpose": "Single primary-administrator enforcement"
+    }
+  ]
+}

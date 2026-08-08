@@ -1,52 +1,40 @@
 import asyncio
-from types import SimpleNamespace
+import types
 import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from pydantic import ValidationError
 
-from api.v1.ppt.endpoints.presentation import (
-    check_async_presentation_generation_status,
-    generate_presentation_async,
-    generate_presentation_sync,
-)
+from api.v1.ppt.endpoints.presentation_generate import generate_presentation_sync
+from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
-from models.sql.async_task import AsyncTaskModel
 
 
-class FakeRequest:
-    def __init__(self):
-        self.headers: dict[str, str] = {}
-        self.cookies: dict[str, str] = {}
-        self.state = SimpleNamespace()
+def _fake_request() -> types.SimpleNamespace:
+    # Minimal stand-in for the FastAPI Request passed as request_http.
+    # build_export_cookie_header only reads headers.get("cookie"),
+    # cookies.get(...), and request.state.auth_username.
+    return types.SimpleNamespace(
+        headers={},
+        cookies={},
+        state=types.SimpleNamespace(),
+    )
 
 
 class FakeAsyncSession:
-    def __init__(self, get_results=None):
-        self._get_results = get_results or {}
-        self.added = []
-        self.commit_count = 0
-
     async def get(self, *_args, **_kwargs):
-        if len(_args) >= 2:
-            return self._get_results.get(_args[1])
         return None
 
-    def add(self, obj, *_args, **_kwargs):
-        self.added.append(obj)
+    def add(self, *_args, **_kwargs):
         return None
 
     def add_all(self, *_args, **_kwargs):
         return None
 
     async def commit(self):
-        self.commit_count += 1
-        return None
-
-    async def refresh(self, *_args, **_kwargs):
         return None
 
 
@@ -57,30 +45,26 @@ class TestPresentationGenerationAPI:
             n_slides=5,
             language="English",
             export_as="pdf",
-            template="general",
+            template="korean-biz",
         )
         response_payload = PresentationPathAndEditPath(
             presentation_id=uuid.uuid4(),
             path="/tmp/exports/test.pdf",
             edit_path="/presentation?id=test",
         )
-        request_http = FakeRequest()
 
         with patch(
-            "api.v1.ppt.endpoints.presentation.generate_presentation_handler",
+            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
                 generate_presentation_sync(
-                    request_http=request_http,
-                    request=request,
-                    sql_session=FakeAsyncSession(),
+                    _fake_request(), request, sql_session=FakeAsyncSession()
                 )
             )
 
         assert response == response_payload
         mock_handler.assert_awaited_once()
-        assert mock_handler.await_args.kwargs["request_http"] is request_http
 
     def test_generate_presentation_export_as_pptx(self):
         request = GeneratePresentationRequest(
@@ -88,7 +72,7 @@ class TestPresentationGenerationAPI:
             n_slides=5,
             language="English",
             export_as="pptx",
-            template="general",
+            template="korean-biz",
         )
         response_payload = PresentationPathAndEditPath(
             presentation_id=uuid.uuid4(),
@@ -97,66 +81,17 @@ class TestPresentationGenerationAPI:
         )
 
         with patch(
-            "api.v1.ppt.endpoints.presentation.generate_presentation_handler",
+            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
                 generate_presentation_sync(
-                    request_http=FakeRequest(),
-                    request=request,
-                    sql_session=FakeAsyncSession(),
+                    _fake_request(), request, sql_session=FakeAsyncSession()
                 )
             )
 
         assert response == response_payload
         mock_handler.assert_awaited_once()
-
-    def test_generate_presentation_async_enqueues_async_task(self):
-        request = GeneratePresentationRequest(
-            content="Create a presentation about async task tracking",
-            n_slides=5,
-            language="English",
-            export_as="pptx",
-            template="general",
-        )
-        background_tasks = BackgroundTasks()
-        fake_session = FakeAsyncSession()
-
-        task = asyncio.run(
-            generate_presentation_async(
-                request_http=FakeRequest(),
-                request=request,
-                background_tasks=background_tasks,
-                sql_session=fake_session,
-            )
-        )
-
-        assert isinstance(task, AsyncTaskModel)
-        assert task.type == "presentation.generate"
-        assert task.status == "pending"
-        assert task.message == "Queued for generation"
-        assert task.data == {"created_slides": 0, "remaining_slides": 5}
-        assert fake_session.added == [task]
-        assert fake_session.commit_count == 1
-        assert len(background_tasks.tasks) == 1
-
-    def test_presentation_status_reads_async_task(self):
-        task = AsyncTaskModel(
-            type="presentation.generate",
-            status="completed",
-            message="Presentation generation completed",
-            data={"created_slides": 5, "remaining_slides": 0},
-        )
-        fake_session = FakeAsyncSession({task.id: task})
-
-        response = asyncio.run(
-            check_async_presentation_generation_status(
-                id=task.id,
-                sql_session=fake_session,
-            )
-        )
-
-        assert response == task
 
     def test_generate_presentation_with_no_content(self):
         with pytest.raises(ValidationError):
@@ -165,7 +100,7 @@ class TestPresentationGenerationAPI:
                     "n_slides": 5,
                     "language": "English",
                     "export_as": "pdf",
-                    "template": "general",
+                    "template": "korean-biz",
                 }
             )
 
@@ -175,20 +110,66 @@ class TestPresentationGenerationAPI:
             n_slides=0,
             language="English",
             export_as="pdf",
-            template="general",
+            template="korean-biz",
         )
 
         with pytest.raises(HTTPException) as exc:
             asyncio.run(
                 generate_presentation_sync(
-                    request_http=FakeRequest(),
-                    request=request,
-                    sql_session=FakeAsyncSession(),
+                    _fake_request(), request, sql_session=FakeAsyncSession()
                 )
             )
 
         assert exc.value.status_code == 400
         assert exc.value.detail == "Number of slides must be greater than 0"
+
+    def test_generate_presentation_accepts_maximum_slide_count(self):
+        request = GeneratePresentationRequest(
+            content="Create a long presentation",
+            n_slides=MAX_NUMBER_OF_SLIDES,
+            language="English",
+            export_as="pptx",
+            template="korean-biz",
+        )
+        response_payload = PresentationPathAndEditPath(
+            presentation_id=uuid.uuid4(),
+            path="/tmp/exports/maximum.pptx",
+            edit_path="/presentation?id=maximum",
+        )
+
+        with patch(
+            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
+            new=AsyncMock(return_value=response_payload),
+        ):
+            response = asyncio.run(
+                generate_presentation_sync(
+                    _fake_request(), request, sql_session=FakeAsyncSession()
+                )
+            )
+
+        assert response == response_payload
+
+    def test_generate_presentation_rejects_slide_count_above_maximum(self):
+        request = GeneratePresentationRequest(
+            content="Create a presentation that is too long",
+            n_slides=MAX_NUMBER_OF_SLIDES + 1,
+            language="English",
+            export_as="pptx",
+            template="korean-biz",
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                generate_presentation_sync(
+                    _fake_request(), request, sql_session=FakeAsyncSession()
+                )
+            )
+
+        assert exc.value.status_code == 400
+        assert (
+            exc.value.detail
+            == f"Number of slides cannot be greater than {MAX_NUMBER_OF_SLIDES}"
+        )
 
     def test_generate_presentation_with_invalid_export_type(self):
         with pytest.raises(ValidationError):
@@ -198,6 +179,6 @@ class TestPresentationGenerationAPI:
                     "n_slides": 5,
                     "language": "English",
                     "export_as": "invalid_type",
-                    "template": "general",
+                    "template": "korean-biz",
                 }
             )

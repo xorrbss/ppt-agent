@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import secrets
 from weakref import WeakKeyDictionary
 
@@ -9,12 +10,13 @@ import aiohttp
 from fastapi import HTTPException
 from google import genai
 from google.genai import types
-from openai import NOT_GIVEN, AsyncOpenAI
+from openai import NOT_GIVEN, AsyncOpenAI, RateLimitError
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
+    get_gpt_image_2_quality_env,
     get_pexels_api_key_env,
     get_open_webui_image_url_env,
     get_open_webui_image_api_key_env,
@@ -28,6 +30,7 @@ from utils.get_env import get_comfyui_url_env
 from utils.get_env import get_comfyui_workflow_env
 from utils.image_provider import (
     is_gpt_image_1_5_selected,
+    is_gpt_image_2_selected,
     is_image_generation_disabled,
     is_pixels_selected,
     is_pixabay_selected,
@@ -39,7 +42,6 @@ from utils.image_provider import (
     is_openai_compatible_selected,
 )
 from utils.asset_directory_utils import absolute_fastapi_asset_url
-from utils.image_generation_error import normalize_image_generation_error
 import uuid
 
 
@@ -58,6 +60,23 @@ def _get_image_generation_lock() -> asyncio.Lock:
         lock = asyncio.Lock()
         _IMAGE_GENERATION_LOCKS[loop] = lock
     return lock
+
+# OpenAI image models (gpt-image-2 / gpt-image-1.5 / dall-e-3) enforce a per-minute rate limit.
+# On 429 we back off and retry instead of falling back to a placeholder.
+OPENAI_IMAGE_MAX_ATTEMPTS = 6
+OPENAI_IMAGE_MAX_WAIT_SECONDS = 30.0
+
+
+def _parse_retry_after_seconds(error: Exception) -> float | None:
+    """Extract the suggested wait from an OpenAI rate-limit error, if present."""
+    message = str(error)
+    match = re.search(r"try again in ([\d.]+)\s*s", message, re.IGNORECASE)
+    if match:
+        try:
+            return float(match.group(1)) + 1.0  # small buffer past the window
+        except ValueError:
+            return None
+    return None
 
 
 class ImageGenerationService:
@@ -82,6 +101,8 @@ class ImageGenerationService:
             return self.generate_image_openai_dalle3
         elif is_gpt_image_1_5_selected():
             return self.generate_image_openai_gpt_image_1_5
+        elif is_gpt_image_2_selected():
+            return self.generate_image_openai_gpt_image_2
         elif is_comfyui_selected():
             return self.generate_image_comfyui
         elif is_open_webui_selected():
@@ -140,10 +161,7 @@ class ImageGenerationService:
 
         except Exception as e:
             print(f"Error generating image: {e}")
-            normalized_error = normalize_image_generation_error(e)
-            if normalized_error is e:
-                raise
-            raise normalized_error from e
+            return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
 
     async def _call_image_provider(self, image_prompt: str) -> str:
         if self.is_stock_provider_selected():
@@ -154,14 +172,30 @@ class ImageGenerationService:
         self, prompt: str, output_directory: str, model: str, quality: str
     ) -> str:
         client = AsyncOpenAI()
-        result = await client.images.generate(
-            model=model,
-            prompt=prompt,
-            n=1,
-            quality=quality,
-            response_format="b64_json" if model == "dall-e-3" else NOT_GIVEN,
-            size="1024x1024",
-        )
+        result = None
+        for attempt in range(OPENAI_IMAGE_MAX_ATTEMPTS):
+            try:
+                result = await client.images.generate(
+                    model=model,
+                    prompt=prompt,
+                    n=1,
+                    quality=quality,
+                    response_format="b64_json" if model == "dall-e-3" else NOT_GIVEN,
+                    size="1024x1024",
+                )
+                break
+            except RateLimitError as e:
+                if attempt == OPENAI_IMAGE_MAX_ATTEMPTS - 1:
+                    raise
+                wait = _parse_retry_after_seconds(e)
+                if wait is None:
+                    wait = min(8.0 * (attempt + 1), OPENAI_IMAGE_MAX_WAIT_SECONDS)
+                wait = min(wait, OPENAI_IMAGE_MAX_WAIT_SECONDS)
+                print(
+                    f"Image rate-limited (attempt {attempt + 1}/"
+                    f"{OPENAI_IMAGE_MAX_ATTEMPTS}); retrying in {wait:.0f}s"
+                )
+                await asyncio.sleep(wait)
         image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
         with open(image_path, "wb") as f:
             f.write(base64.b64decode(result.data[0].b64_json))
@@ -185,6 +219,16 @@ class ImageGenerationService:
             output_directory,
             "gpt-image-1.5",
             get_gpt_image_1_5_quality_env() or "medium",
+        )
+
+    async def generate_image_openai_gpt_image_2(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        return await self.generate_image_openai(
+            prompt,
+            output_directory,
+            "gpt-image-2",
+            get_gpt_image_2_quality_env() or "medium",
         )
 
     async def generate_image_open_webui(
@@ -878,19 +922,9 @@ class ImageGenerationService:
                 f.write(base64.b64decode(item.b64_json))
         elif item.url:
             image_url = item.url
-            is_relative_url = image_url.startswith("/")
-            if is_relative_url:
+            if image_url.startswith("/"):
                 image_url = origin + image_url
-            image_origin = urlparse(image_url)
-            headers = {}
-            if (
-                is_relative_url
-                or (
-                    image_origin.scheme == parsed.scheme
-                    and image_origin.netloc == parsed.netloc
-                )
-            ):
-                headers["Authorization"] = f"Bearer {api_key}"
+            headers = {"Authorization": f"Bearer {api_key}"}
             async with aiohttp.ClientSession(trust_env=True) as session:
                 dl_resp = await session.get(
                     image_url,

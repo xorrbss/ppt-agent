@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Layout, Plus } from "lucide-react";
 
 const Header: React.FC = () => {
@@ -10,17 +11,17 @@ const Header: React.FC = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <img src="/logo-white.png" alt="Presenton" className="h-6 w-auto" />
+            <Image src="/logo-white.png" alt="Presenton" width={2250} height={938} className="h-6 w-auto" />
           </Link>
 
           <nav className="flex items-center gap-4">
             <Link href="/custom-layout" className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900">
               <Plus className="w-5 h-5" />
-              <span className="text-sm font-medium font-inter">Create Template</span>
+              <span className="text-sm font-medium font-inter">템플릿 만들기</span>
             </Link>
             <Link href="/template-preview" className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900">
               <Layout className="w-5 h-5" />
-              <span className="text-sm font-medium font-inter">Templates</span>
+              <span className="text-sm font-medium font-inter">템플릿</span>
             </Link>
           </nav>
         </div>

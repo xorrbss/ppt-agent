@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- Native img nodes are required for crop geometry and arbitrary blob/cross-origin editor sources. */
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -21,7 +22,15 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "../services/api/images";
 import { ImageAssetResponse } from "../services/api/types";
 import { resolveBackendAssetSource } from "@/utils/api";
-import { ImageEditorToolbar } from "./ImageEditorToolbar";
+import { useUploadLimits } from "@/lib/use-upload-limits";
+import {
+  cropScaleFromProperties,
+  imageCropDomStyle,
+  imageCropProperties,
+  normalizeImageFocusPoint,
+  resolveImageEditorProperties,
+  type ImageFit,
+} from "@/components/slide-editor/images/imageCrop";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
@@ -54,6 +63,7 @@ const ImageEditor = ({
   onFocusPointClick,
   onImageChange,
 }: ImageEditorProps) => {
+  const uploadLimits = useUploadLimits();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
   const stockImageProvider = useMemo(() => {
     if (llmConfig?.DISABLE_IMAGE_GENERATION) return null;
@@ -77,26 +87,22 @@ const ImageEditor = ({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<"generate" | "upload" | "edit">(
-    "generate",
-  );
   const [uploadedImages, setUploadedImages] = useState<ImageAssetResponse[]>([]);
   const [uploadedImagesLoading, setUploadedImagesLoading] = useState(false);
+  const imageProperties = useMemo(
+    () => resolveImageEditorProperties(properties, imageIdx),
+    [imageIdx, properties]
+  );
   // Focus point and object fit for image editing
   const [isFocusPointMode, setIsFocusPointMode] = useState(false);
-  const [focusPoint, setFocusPoint] = useState(
-    (properties &&
-      properties[imageIdx] &&
-      properties[imageIdx].initialFocusPoint) || {
-      x: 50,
-      y: 50,
-    }
+  const [focusPoint, setFocusPoint] = useState(() =>
+    normalizeImageFocusPoint(imageProperties.initialFocusPoint)
   );
-  const [objectFit, setObjectFit] = useState<"cover" | "contain" | "fill">(
-    (properties &&
-      properties[imageIdx] &&
-      properties[imageIdx].initialObjectFit) ||
-      "cover"
+  const [objectFit, setObjectFit] = useState<ImageFit>(
+    imageProperties.initialObjectFit || "cover"
+  );
+  const [cropScale, setCropScale] = useState(() =>
+    cropScaleFromProperties(imageProperties)
   );
 
   // Refs
@@ -105,6 +111,12 @@ const ImageEditor = ({
   useEffect(() => {
     setPreviewImages(resolveEditorImageSource(initialImage));
   }, [initialImage]);
+
+  useEffect(() => {
+    setFocusPoint(normalizeImageFocusPoint(imageProperties.initialFocusPoint));
+    setObjectFit(imageProperties.initialObjectFit || "cover");
+    setCropScale(cropScaleFromProperties(imageProperties));
+  }, [imageProperties]);
 
   useEffect(() => {
     setPrompt((prev) => (prev.trim() ? prev : promptContent || ""));
@@ -120,7 +132,7 @@ const ImageEditor = ({
     if (isOpen && !previousGeneratedImages.length && !stockImageProvider) {
       getPreviousGeneratedImage();
     }
-  }, [isOpen, stockImageProvider]);
+  }, [isOpen, previousGeneratedImages.length, stockImageProvider]);
 
   // Handle close with animation
   const handleClose = () => {
@@ -139,11 +151,11 @@ const ImageEditor = ({
         await PresentationGenerationApi.getPreviousGeneratedImages();
       setPreviousGeneratedImages(response);
     } catch (error: any) {
-      notify.error("Could not load images", "Failed to get previous generated images. Please try again.");
+      notify.error("이미지를 불러올 수 없습니다", "이전에 생성한 이미지를 가져오지 못했습니다. 다시 시도해 주세요.");
       console.error("error in getting previous generated images", error);
       setError(
         error.message ||
-          "Failed to get previous generated images. Please try again."
+          "이전에 생성한 이미지를 가져오지 못했습니다. 다시 시도해 주세요."
       );
     }
   };
@@ -156,6 +168,11 @@ const ImageEditor = ({
       const promptForSlide = stockImageProvider
         ? (prompt.trim() || promptContent || "")
         : promptContent;
+      const resetFocus = { x: 50, y: 50 };
+      setFocusPoint(resetFocus);
+      setObjectFit("cover");
+      setCropScale(1);
+      saveImageProperties("cover", resetFocus, 1);
       onImageChange(newImage, promptForSlide);
       setPreviewImages(newImage);
     }
@@ -167,7 +184,12 @@ const ImageEditor = ({
   const handleFocusPointClick = (e: React.MouseEvent) => {
     if (!isFocusPointMode || !imageRef.current) return;
 
-    const rect = imageRef.current.getBoundingClientRect();
+    // Use the fixed crop frame, not the transformed image bounds. When scale is
+    // below 1 the image is smaller than the frame, so image-relative coordinates
+    // would jump or clamp while clicking the intentional free space.
+    const rect =
+      imageRef.current.parentElement?.getBoundingClientRect() ??
+      imageRef.current.getBoundingClientRect();
     const x = Math.max(
       0,
       Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)
@@ -178,7 +200,7 @@ const ImageEditor = ({
     );
 
     setFocusPoint({ x, y });
-    saveImageProperties(objectFit, { x, y });
+    saveImageProperties(objectFit, { x, y }, cropScale);
 
     // Apply the focus point in real-time
     if (imageRef.current) {
@@ -191,7 +213,7 @@ const ImageEditor = ({
    */
   const toggleFocusPointMode = () => {
     if (isFocusPointMode) {
-      saveImageProperties(objectFit, focusPoint);
+      saveImageProperties(objectFit, focusPoint, cropScale);
     }
     setIsFocusPointMode(!isFocusPointMode);
   };
@@ -199,29 +221,42 @@ const ImageEditor = ({
   /**
    * Handles object fit change
    */
-  const handleFitChange = (fit: "cover" | "contain" | "fill") => {
+  const handleFitChange = (fit: ImageFit) => {
+    const nextCropScale = fit === "cover" ? cropScale : 1;
     setObjectFit(fit);
+    setCropScale(nextCropScale);
 
     if (imageRef.current) {
-      imageRef.current.style.objectFit = fit;
+      Object.assign(
+        imageRef.current.style,
+        imageCropDomStyle(fit, focusPoint, nextCropScale)
+      );
     }
 
-    saveImageProperties(fit, focusPoint);
+    saveImageProperties(fit, focusPoint, nextCropScale);
+  };
+
+  const handleCropScaleChange = (scale: number) => {
+    setObjectFit("cover");
+    setCropScale(scale);
+    if (imageRef.current) {
+      Object.assign(
+        imageRef.current.style,
+        imageCropDomStyle("cover", focusPoint, scale)
+      );
+    }
+    saveImageProperties("cover", focusPoint, scale);
   };
 
   /**
    * Saves image properties (focus point and object fit)
    */
   const saveImageProperties = (
-    fit: "cover" | "contain" | "fill",
-    focusPoint: { x: number; y: number }
+    fit: ImageFit,
+    focusPoint: { x: number; y: number },
+    scale: number
   ) => {
-    const propertiesData = {
-      initialObjectFit: fit,
-      initialFocusPoint: focusPoint,
-    };
-    // TODO: Save to Redux store if needed
-    onFocusPointClick?.(propertiesData);
+    onFocusPointClick?.(imageCropProperties(fit, focusPoint, scale));
   };
 
   /**
@@ -229,7 +264,7 @@ const ImageEditor = ({
    */
   const handleStockImageSearch = async () => {
     if (!prompt.trim()) {
-      setError("Please enter search keywords");
+      setError("검색 키워드를 입력하세요");
       return;
     }
     if (!stockImageProvider) return;
@@ -241,7 +276,7 @@ const ImageEditor = ({
 
     if (!apiKey) {
       setError(
-        `Add your ${stockImageProvider === "pexels" ? "Pexels" : "Pixabay"} API key in Settings to search stock images.`
+        `스톡 이미지를 검색하려면 설정에서 ${stockImageProvider === "pexels" ? "Pexels" : "Pixabay"} API 키를 추가하세요.`
       );
       return;
     }
@@ -255,12 +290,12 @@ const ImageEditor = ({
       });
       setStockSearchResults(urls);
       if (urls.length === 0) {
-        setError("No images found. Try different keywords.");
+        setError("이미지를 찾을 수 없습니다. 다른 키워드로 시도해 보세요.");
       }
     } catch (err: unknown) {
       console.error("Stock image search error", err);
       const message =
-        err instanceof Error ? err.message : "Stock search failed. Please try again.";
+        err instanceof Error ? err.message : "스톡 검색에 실패했습니다. 다시 시도해 주세요.";
       setError(message);
       setStockSearchResults([]);
     } finally {
@@ -273,7 +308,7 @@ const ImageEditor = ({
    */
   const handleGenerateImage = async () => {
     if (!prompt) {
-      setError("Please enter a prompt");
+      setError("프롬프트를 입력하세요");
       return;
     }
     if (stockImageProvider) {
@@ -291,9 +326,7 @@ const ImageEditor = ({
       setPreviewImages(resolveEditorImageSource(response));
     } catch (err: any) {
       console.error("Error in image generation", err);
-      const message = err.message || "Failed to generate image. Please try again.";
-      setError(message);
-      notify.error("Image generation failed", message);
+      setError(err.message || "이미지를 생성하지 못했습니다. 다시 시도해 주세요.");
     } finally {
       setIsGenerating(false);
     }
@@ -308,15 +341,16 @@ const ImageEditor = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("File size should be less than 5MB");
+    if (file.size > uploadLimits.image.bytes) {
+      setUploadError(
+        `이미지 파일 크기는 ${uploadLimits.image.mb}MB 이하여야 합니다`
+      );
       return;
     }
 
     // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setUploadError("Please upload an image file");
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
+      setUploadError("PNG, JPEG, GIF 또는 WebP 이미지를 업로드해 주세요");
       return;
     }
     try {
@@ -326,8 +360,8 @@ const ImageEditor = ({
       const result = await ImagesApi.uploadImage(file);
       setUploadedImageUrl(resolveEditorImageSource(result));
     } catch (err:any) {
-      setUploadError("Failed to upload image. Please try again.");
-      notify.error("Upload failed", err.message || "Failed to upload image. Please try again.");
+      setUploadError("이미지를 업로드하지 못했습니다. 다시 시도해 주세요.");
+      notify.error("업로드 실패", err.message || "이미지를 업로드하지 못했습니다. 다시 시도해 주세요.");
       console.log("Upload error:", err.message);
     } finally {
       setIsUploading(false);
@@ -340,15 +374,13 @@ const ImageEditor = ({
       const result = await ImagesApi.getUploadedImages();
       setUploadedImages(result);
     } catch (err:any) {
-      notify.error("Could not load images", err.message || "Failed to get uploaded images. Please try again.");
+      notify.error("이미지를 불러올 수 없습니다", err.message || "업로드한 이미지를 가져오지 못했습니다. 다시 시도해 주세요.");
       console.log("Get uploaded images error:", err.message);
     } finally {
       setUploadedImagesLoading(false);
     }
   };
   const handleTabChange = (value: string) => {
-    if (value !== "generate" && value !== "upload" && value !== "edit") return;
-    setActiveTab(value);
     if (value === "upload") {
       getUploadedImages();
     }
@@ -358,9 +390,9 @@ const ImageEditor = ({
     try {
       await ImagesApi.deleteImage(image_id);
       setUploadedImages(uploadedImages.filter((image) => image.id !== image_id));
-      notify.success("Image deleted", "The image was removed from your uploads.");
+      notify.success("이미지 삭제됨", "업로드 목록에서 이미지가 삭제되었습니다.");
     } catch (err:any) {
-      notify.error("Could not delete image", err.message || "Failed to delete image. Please try again.");
+      notify.error("이미지를 삭제할 수 없습니다", err.message || "이미지를 삭제하지 못했습니다. 다시 시도해 주세요.");
     }
   };
   return (
@@ -373,39 +405,39 @@ const ImageEditor = ({
           onClick={(e) => e.stopPropagation()}
         >
           <SheetHeader>
-            <SheetTitle>Update Image</SheetTitle>
+            <SheetTitle>이미지 변경</SheetTitle>
           </SheetHeader>
 
           <div className="mt-6">
-            <Tabs value={activeTab} className="w-full" onValueChange={handleTabChange}>
+            <Tabs defaultValue="generate" className="w-full" onValueChange={handleTabChange}>
               <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto">
                 <TabsTrigger className="font-medium" value="generate">
-                  {stockImageProvider ? "Stock search" : "AI Generate"}
+                  {stockImageProvider ? "스톡 검색" : "AI 생성"}
                 </TabsTrigger>
                 <TabsTrigger className="font-medium" value="upload">
-                  Upload
+                  업로드
                 </TabsTrigger>
                 <TabsTrigger className="font-medium" value="edit">
-                  Edit
+                  편집
                 </TabsTrigger>
               </TabsList>
               {/* Generate Tab */}
               <TabsContent value="generate" className="mt-4 space-y-4 overflow-y-auto hide-scrollbar h-[85vh]">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-sm font-medium mb-1">Current Prompt</h3>
+                    <h3 className="text-sm font-medium mb-1">현재 프롬프트</h3>
                     <p className="text-sm text-gray-500">{promptContent}</p>
                   </div>
 
                   <div>
                     <h3 className="text-base font-medium mb-2">
-                      {stockImageProvider ? "Search keywords" : "Image Description"}
+                      {stockImageProvider ? "검색 키워드" : "이미지 설명"}
                     </h3>
                     <Textarea
                       placeholder={
                         stockImageProvider
-                          ? "e.g. team collaboration, modern office, sunset mountains…"
-                          : "Describe the image you want to generate..."
+                          ? "예: 팀 협업, 모던한 사무실, 노을 진 산…"
+                          : "생성하려는 이미지를 설명하세요..."
                       }
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
@@ -415,7 +447,7 @@ const ImageEditor = ({
 
                   <Button
                     onClick={handleGenerateImage}
-                    className="w-full rounded-[38.4px] bg-[#EDEEEF] px-[12.8px] py-2 text-[#191919] shadow-none hover:bg-[#E1E1E5] disabled:bg-[#EDEEEF] disabled:text-[#999]"
+                    className="w-full"
                     disabled={!prompt.trim() || isGenerating || isSearchingStock}
                   >
                     {stockImageProvider ? (
@@ -425,18 +457,18 @@ const ImageEditor = ({
                     )}
                     {stockImageProvider
                       ? isSearchingStock
-                        ? "Searching…"
-                        : "Search stock images"
+                        ? "검색 중…"
+                        : "스톡 이미지 검색"
                       : isGenerating
-                        ? "Generating..."
-                        : "Generate Image"}
+                        ? "생성 중..."
+                        : "이미지 생성"}
                   </Button>
 
                   {error && <p className="text-red-500 text-sm">{error}</p>}
 
                   {stockImageProvider ? (
                     <div className="space-y-3">
-                      <h3 className="text-sm font-medium">Results — click an image to use it</h3>
+                      <h3 className="text-sm font-medium">검색 결과 — 사용할 이미지를 클릭하세요</h3>
                       <div className="grid grid-cols-2 gap-3">
                         {isSearchingStock
                           ? Array.from({ length: 8 }).map((_, index) => (
@@ -462,8 +494,8 @@ const ImageEditor = ({
                       </div>
                       {!isSearchingStock && stockSearchResults.length === 0 && (
                         <p className="text-sm text-gray-500">
-                          Run a search to see thumbnails from{" "}
-                          {stockImageProvider === "pexels" ? "Pexels" : "Pixabay"}.
+                          {stockImageProvider === "pexels" ? "Pexels" : "Pixabay"}
+                          {" "}썸네일을 보려면 검색을 실행하세요.
                         </p>
                       )}
                     </div>
@@ -495,7 +527,7 @@ const ImageEditor = ({
                       {previousGeneratedImages.length > 0 && (
                         <div className="mt-4">
                           <h3 className="text-sm font-medium mb-2">
-                            Previous Generated Images
+                            이전에 생성한 이미지
                           </h3>
                           <div className="grid grid-cols-2 gap-4  ">
                             {previousGeneratedImages.map((image) => (
@@ -536,7 +568,7 @@ const ImageEditor = ({
                       type="file"
                       id="file-upload"
                       className="hidden"
-                      accept="image/*"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
                       onChange={handleFileUpload}
                       disabled={isUploading}
                     />
@@ -554,11 +586,11 @@ const ImageEditor = ({
                       )}
                       <span className="text-sm text-gray-600">
                         {isUploading
-                          ? "Uploading your image..."
-                          : "Click to upload an image"}
+                          ? "이미지를 업로드하는 중..."
+                          : "클릭하여 이미지 업로드"}
                       </span>
                       <span className="text-xs text-gray-500 mt-1">
-                        Maximum file size: 5MB
+                        최대 파일 크기: {uploadLimits.image.mb}MB
                       </span>
                     </label>
                   </div>
@@ -572,7 +604,7 @@ const ImageEditor = ({
                   {(uploadedImageUrl || isUploading) && (
                     <div className="mt-4">
                       <h3 className="text-sm font-medium mb-2">
-                        Uploaded Image Preview
+                        업로드한 이미지 미리보기
                       </h3>
                       <div className="aspect-[4/3] relative rounded-lg overflow-hidden border border-gray-200">
                         {isUploading ? (
@@ -580,7 +612,7 @@ const ImageEditor = ({
                             <div className="flex flex-col items-center">
                               <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mb-2" />
                               <span className="text-sm text-gray-500">
-                                Processing...
+                                처리 중...
                               </span>
                             </div>
                           </div>
@@ -600,7 +632,7 @@ const ImageEditor = ({
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span className="bg-white/90 px-3 py-1 rounded-full text-sm font-medium">
-                                  Click to use this image
+                                  이 이미지 사용하기
                                 </span>
                               </div>
                             </div>
@@ -610,7 +642,7 @@ const ImageEditor = ({
                     </div>
                   )}
                   <div>
-                    <h3 className="text-sm font-medium mb-2">Uploaded Images:</h3>
+                    <h3 className="text-sm font-medium mb-2">업로드한 이미지:</h3>
                     <div className="grid grid-cols-2 gap-4">
                       {uploadedImagesLoading ? (
                         <div className="flex items-center justify-center">
@@ -637,7 +669,7 @@ const ImageEditor = ({
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span className="bg-white/90 px-3 py-1 rounded-full text-xs font-medium">
-                                  Use
+                                  사용
                                 </span>
                               </div>
                             </div>
@@ -651,14 +683,7 @@ const ImageEditor = ({
               </TabsContent>
               <TabsContent value="edit" className="mt-4 space-y-4">
                 <div className="space-y-4">
-                  <ImageEditorToolbar
-                    objectFit={objectFit}
-                    isFocusPointMode={isFocusPointMode}
-                    onObjectFitChange={handleFitChange}
-                    onToggleFocusPoint={toggleFocusPointMode}
-                    onReplaceImage={() => setActiveTab("generate")}
-                  />
-                  <h3 className="text-sm font-medium mb-2">Current Image</h3>
+                  <h3 className="text-sm font-medium mb-2">현재 이미지</h3>
                   <div
                     onClick={(e) => {
                       if (isFocusPointMode) {
@@ -669,7 +694,7 @@ const ImageEditor = ({
                     className="aspect-[4/3] group  rounded-lg overflow-hidden relative border border-gray-200"
                   >
                     <p className="group-hover:opacity-100 opacity-0 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-center font-medium bg-black/50 text-white px-2 py-1 rounded">
-                      Click to Change Focus Point
+                      클릭하여 초점 변경
                     </p>
                     {previewImages && (
                       <img
@@ -679,8 +704,11 @@ const ImageEditor = ({
                         }}
                         src={previewImages}
                         style={{
-                          objectFit: objectFit,
-                          objectPosition: `${focusPoint.x}% ${focusPoint.y}%`,
+                          ...imageCropDomStyle(
+                            objectFit,
+                            focusPoint,
+                            cropScale
+                          ),
                         }}
                         alt={`Preview`}
                         className="w-full h-full "
@@ -690,7 +718,7 @@ const ImageEditor = ({
                       <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                         <div className="text-white text-center p-2 bg-black/50 rounded">
                           <p className="text-sm font-medium pointer-events-none">
-                            Click anywhere to set focus point
+                            아무 곳이나 클릭하여 초점을 설정하세요
                           </p>
                           <button
                             className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
@@ -699,7 +727,7 @@ const ImageEditor = ({
                               toggleFocusPointMode();
                             }}
                           >
-                            Done
+                            완료
                           </button>
                         </div>
 
@@ -720,6 +748,79 @@ const ImageEditor = ({
                       </div>
                     )}
                   </div>
+                  {/* Edit Image  */}
+                  {/* Object Fit */}
+                  {
+                    <div>
+                      <h3 className="text-sm font-medium mb-2">맞춤 방식</h3>
+                      <div className="flex gap-4">
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            objectFit === "cover" &&
+                              "bg-blue-50 border-blue-500"
+                          )}
+                          onClick={() => handleFitChange("cover")}
+                        >
+                          채우기
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            objectFit === "contain" &&
+                              "bg-blue-50 border-blue-500"
+                          )}
+                          onClick={() => handleFitChange("contain")}
+                        >
+                          맞춤
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            objectFit === "fill" && "bg-blue-50 border-blue-500"
+                          )}
+                          onClick={() => handleFitChange("fill")}
+                        >
+                          늘이기
+                        </Button>
+                      </div>
+                    </div>
+                  }
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium">Crop scale</h3>
+                      <span className="text-xs tabular-nums text-gray-500">
+                        {cropScale.toFixed(1)}×
+                      </span>
+                    </div>
+                    <input
+                      aria-label="Crop scale"
+                      className="w-full accent-blue-600"
+                      max={6}
+                      min={0.1}
+                      onChange={(event) =>
+                        handleCropScaleChange(Number(event.target.value))
+                      }
+                      step={0.1}
+                      type="range"
+                      value={cropScale}
+                    />
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500">
+                        Cropping switches the image to Fill mode.
+                      </p>
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleCropScaleChange(1)}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                  {/* Focus Point */}
+                  {}
                 </div>
               </TabsContent>
             </Tabs>

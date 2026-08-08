@@ -5,7 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.v1.auth.assets import is_app_data_path_authorized
-from api.v1.auth.context import (
+from utils.owner_context import (
     reset_current_owner_id,
     reset_current_owner_is_admin,
     set_current_owner_id,
@@ -49,6 +49,21 @@ def test_browser_asset_paths_are_owner_scoped_and_traversal_safe():
         "/app_data/images/legacy.png",
         user_id=owner_id,
         is_admin=True,
+    )
+    assert is_app_data_path_authorized(
+        f"/app_data/workspace-artifacts/users/{owner_id}/operation/artifact.pptx",
+        user_id=owner_id,
+        is_admin=False,
+    )
+    assert not is_app_data_path_authorized(
+        f"/app_data/workspace-artifacts/users/{other_id}/operation/artifact.pptx",
+        user_id=owner_id,
+        is_admin=True,
+    )
+    assert not is_app_data_path_authorized(
+        "/app_data/workspace-artifacts/operation/artifact.pptx",
+        user_id=owner_id,
+        is_admin=False,
     )
 
 

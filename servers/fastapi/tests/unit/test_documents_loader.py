@@ -1,18 +1,25 @@
 import asyncio
+import codecs
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from PIL import Image
 
-from services.document_conversion_service import DocumentConversionService
+from services.document_conversion_service import DocumentConversionError
 from services.documents_loader import (
     DocumentsLoader,
+    _decode_text_bytes,
     _unwrap_liteparse_json_line_if_stored,
     clean_extracted_document_text,
 )
 from services.temp_file_service import TEMP_FILE_SERVICE
+
+
+@pytest.fixture(autouse=True)
+def _allow_test_temp_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(TEMP_FILE_SERVICE, "base_dir", str(tmp_path))
 
 
 def test_unwrap_liteparse_json_line_extracts_text_field():
@@ -50,6 +57,69 @@ def test_clean_extracted_document_text_unwraps_nested_liteparse_payloads():
     assert clean_extracted_document_text(nested) == "final body"
 
 
+@pytest.mark.parametrize(
+    ("extension", "encoded"),
+    [
+        (".txt", "제목\r\n본문\r끝".encode("utf-8")),
+        (".md", codecs.BOM_UTF8 + "# 제목\r\n\r\n- 항목".encode("utf-8")),
+        (".markdown", codecs.BOM_UTF16_LE + "# 제목\r\n본문".encode("utf-16-le")),
+        (".txt", codecs.BOM_UTF16_BE + "제목\r본문".encode("utf-16-be")),
+        (".md", "# 제목\r\n한글 본문".encode("cp949")),
+    ],
+)
+def test_load_documents_decodes_supported_text_encodings_and_normalizes_newlines(
+    tmp_path, extension, encoded
+):
+    source = tmp_path / f"source{extension}"
+    source.write_bytes(encoded)
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    asyncio.run(loader.load_documents())
+
+    assert "\r" not in loader.documents[0]
+    assert "제목" in loader.documents[0]
+    assert not loader.documents[0].startswith("\ufeff")
+
+
+def test_load_documents_preserves_markdown_structure(tmp_path):
+    markdown = (
+        "# 제목\r\n\r\n- 첫 번째\r\n- 두 번째\r\n\r\n"
+        "줄바꿈<br>표기\r\n\r\n```python\r\nprint('ok')\r\n```"
+    )
+    source = tmp_path / "source.md"
+    source.write_bytes(markdown.encode("utf-8"))
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    asyncio.run(loader.load_documents())
+
+    assert loader.documents == [
+        "# 제목\n\n- 첫 번째\n- 두 번째\n\n"
+        "줄바꿈<br>표기\n\n```python\nprint('ok')\n```"
+    ]
+
+
+def test_load_documents_does_not_unwrap_json_shaped_plain_text(tmp_path):
+    text = json.dumps(
+        {"ok": True, "filePath": "source.md", "text": "must not replace original"}
+    )
+    source = tmp_path / "source.md"
+    source.write_text(text, encoding="utf-8")
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    asyncio.run(loader.load_documents())
+
+    assert loader.documents == [text]
+
+
+def test_decode_text_bytes_reports_actionable_error():
+    with pytest.raises(HTTPException) as exc:
+        _decode_text_bytes(b"\x81\x00", "broken.md")
+
+    assert exc.value.status_code == 422
+    assert "broken.md" in exc.value.detail
+    assert "UTF-8" in exc.value.detail
+
+
 def test_load_pdf_requires_temp_dir_when_images_are_requested():
     loader = DocumentsLoader(file_paths=[])
 
@@ -67,56 +137,226 @@ def test_load_pdf_requires_temp_dir_when_images_are_requested():
     assert "temp_dir is required" in exc.value.detail
 
 
-def test_convert_image_to_png_writes_png_file(tmp_path):
-    source_path = tmp_path / "upload.jpg"
-    output_dir = tmp_path / "converted"
-    Image.new("RGB", (8, 8), "white").save(source_path, format="JPEG")
-
-    converted_path = DocumentConversionService().convert_image_to_png(
-        str(source_path),
-        str(output_dir),
-    )
-
-    assert converted_path.endswith(".png")
-    with Image.open(converted_path) as image:
-        assert image.format == "PNG"
-        assert image.mode == "RGB"
-
-
-@patch("services.documents_loader.DocumentsLoader._parse_with_liteparse")
-@patch("services.documents_loader.DocumentConversionService.convert_image_to_png")
-def test_load_image_converts_to_png_before_ocr(mock_convert, mock_parse):
-    mock_convert.return_value = "/tmp/converted.png"
-    mock_parse.return_value = "image text"
-    loader = DocumentsLoader(file_paths=[])
-
-    result = loader.load_image("/tmp/upload.webp", "/tmp/conversions")
-
-    assert result == "image text"
-    mock_convert.assert_called_once_with(
-        "/tmp/upload.webp",
-        "/tmp/conversions",
-        timeout_seconds=DocumentsLoader.DECOMPOSE_TIMEOUT_SECONDS,
-    )
-    mock_parse.assert_called_once_with("/tmp/converted.png", dpi=300)
-
-
-@patch("services.documents_loader.DocumentsLoader.load_office_document")
-def test_load_documents_parses_office_files_without_liteparse(
-    mock_extract, tmp_path, monkeypatch
+def test_load_office_falls_back_to_native_extraction_when_libreoffice_rejects_pptx(
+    tmp_path, monkeypatch
 ):
-    managed_dir = tmp_path / "presenton-temp"
-    managed_dir.mkdir()
-    monkeypatch.setattr(TEMP_FILE_SERVICE, "base_dir", str(managed_dir))
-    upload_dir = TEMP_FILE_SERVICE.create_temp_dir("upload-case")
-    office_file = TEMP_FILE_SERVICE.create_temp_file("deck.pptx", b"pptx", upload_dir)
-    mock_extract.return_value = "slide text"
-    loader = DocumentsLoader(file_paths=[office_file])
+    source = tmp_path / "source.pptx"
+    source.write_bytes(b"pptx")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    loader.document_service = MagicMock()
+    loader.document_service.parse_to_markdown.return_value = "native slide text"
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "is_soffice_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_office_to_pdf",
+        MagicMock(
+            side_effect=DocumentConversionError(
+                "LibreOffice source file could not be loaded"
+            )
+        ),
+    )
 
+    result = loader.load_office_document(str(source), str(tmp_path))
+
+    assert result == "native slide text"
+    loader.document_service.parse_to_markdown.assert_called_once_with(str(source))
+
+
+def test_load_office_keeps_conversion_error_when_native_fallback_also_fails(
+    tmp_path, monkeypatch
+):
+    source = tmp_path / "source.pptx"
+    source.write_bytes(b"invalid")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    conversion_error = DocumentConversionError(
+        "LibreOffice source file could not be loaded"
+    )
+    loader.document_service = MagicMock()
+    loader.document_service.parse_to_markdown.side_effect = DocumentConversionError(
+        "Native parser could not read the file"
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "is_soffice_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_office_to_pdf",
+        MagicMock(side_effect=conversion_error),
+    )
+
+    with pytest.raises(DocumentConversionError) as exc:
+        loader.load_office_document(str(source), str(tmp_path))
+
+    assert exc.value is conversion_error
+
+
+@pytest.mark.parametrize("suffix", [".png", ".jpg", ".jpeg", ".webp", ".bmp"])
+def test_load_image_parses_raster_without_calling_imagemagick(
+    tmp_path, monkeypatch, suffix
+):
+    """The Node bridge sends common raster images straight to OCR."""
+    source = tmp_path / f"native-image{suffix}"
+    source.write_bytes(b"image")
+    loader = DocumentsLoader(file_paths=[str(source)])
+
+    convert_image = MagicMock(
+        side_effect=AssertionError("PNG must not be sent to ImageMagick")
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_image_to_png",
+        convert_image,
+    )
+    monkeypatch.setattr(
+        loader,
+        "_parse_with_liteparse",
+        lambda file_path, dpi=None: f"parsed:{Path(file_path).name}:{dpi}",
+    )
+
+    assert loader.load_image(str(source), str(tmp_path)) == f"parsed:{source.name}:300"
+    convert_image.assert_not_called()
+
+
+def test_load_documents_preserves_mixed_batch_without_raster_conversion(
+    tmp_path, monkeypatch
+):
+    """Native raster inputs in a mixed batch must not invoke ImageMagick."""
+    first_text = tmp_path / "first.txt"
+    first_text.write_text("first body", encoding="utf-8")
+    png = tmp_path / "diagram.png"
+    png.write_bytes(b"png")
+    jpeg = tmp_path / "photo.jpg"
+    jpeg.write_bytes(b"jpeg")
+    final_text = tmp_path / "final.txt"
+    final_text.write_text("final body", encoding="utf-8")
+    loader = DocumentsLoader(
+        file_paths=[str(first_text), str(png), str(jpeg), str(final_text)]
+    )
+    convert_image = MagicMock(
+        side_effect=AssertionError("native raster images must bypass ImageMagick")
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_image_to_png",
+        convert_image,
+    )
+    monkeypatch.setattr(
+        loader,
+        "_parse_with_liteparse",
+        lambda file_path, dpi=None: f"parsed:{Path(file_path).name}",
+    )
+
+    asyncio.run(loader.load_documents(temp_dir=str(tmp_path)))
+
+    assert loader.documents == [
+        "first body",
+        "parsed:diagram.png",
+        "parsed:photo.jpg",
+        "final body",
+    ]
+    assert loader.images == [[], [], [], []]
+    convert_image.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("is_scanned", "expected_dpi", "expected_ocr_enabled"),
+    [(False, None, False), (True, 300, True)],
+)
+def test_load_pdf_enables_ocr_only_for_scanned_documents(
+    tmp_path, monkeypatch, is_scanned, expected_dpi, expected_ocr_enabled
+):
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"pdf")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    parse = MagicMock(return_value="parsed")
+    monkeypatch.setattr(loader, "_is_scanned_pdf", lambda _path: is_scanned)
+    monkeypatch.setattr(loader, "_parse_with_liteparse", parse)
+
+    document, images = asyncio.run(
+        loader.load_pdf(
+            file_path=str(source),
+            load_text=True,
+            load_images=False,
+            temp_dir=None,
+        )
+    )
+
+    assert document == "parsed"
+    assert images == []
+    parse.assert_called_once_with(str(source), expected_dpi, expected_ocr_enabled)
+
+
+@pytest.mark.parametrize(
+    ("is_scanned", "expected_dpi", "expected_ocr_enabled"),
+    [(False, None, False), (True, 300, True)],
+)
+def test_load_office_enables_ocr_only_when_converted_pdf_is_scanned(
+    tmp_path, monkeypatch, is_scanned, expected_dpi, expected_ocr_enabled
+):
+    source = tmp_path / "source.docx"
+    source.write_bytes(b"office")
+    converted = tmp_path / "source.pdf"
+    converted.write_bytes(b"pdf")
+    loader = DocumentsLoader(file_paths=[str(source)])
+    parse = MagicMock(return_value="parsed")
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "is_soffice_available",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        loader.document_conversion_service,
+        "convert_office_to_pdf",
+        MagicMock(return_value=str(converted)),
+    )
+    monkeypatch.setattr(loader, "_is_scanned_pdf", lambda _path: is_scanned)
+    monkeypatch.setattr(loader, "_parse_with_liteparse", parse)
+
+    assert loader.load_office_document(str(source), str(tmp_path)) == "parsed"
+    parse.assert_called_once_with(
+        str(converted),
+        dpi=expected_dpi,
+        ocr_enabled=expected_ocr_enabled,
+    )
+
+
+@pytest.mark.parametrize(
+    ("suffix", "encoding"),
+    [
+        (".md", "utf-8"),
+        (".markdown", "utf-16"),
+        (".txt", "cp949"),
+    ],
+)
+def test_load_text_documents_supports_markdown_and_korean_encodings(
+    tmp_path, suffix, encoding
+):
+    source = "# 발표 개요\r\n\r\n- 첫 번째 슬라이드"
+    file_path = tmp_path / f"brief{suffix}"
+    file_path.write_bytes(source.encode(encoding))
+
+    loader = DocumentsLoader(file_paths=[str(file_path)])
     asyncio.run(loader.load_documents())
 
-    assert loader.documents == ["slide text"]
-    mock_extract.assert_called_once_with(office_file)
+    assert loader.documents == ["# 발표 개요\n\n- 첫 번째 슬라이드"]
+
+
+def test_load_text_document_reports_unsupported_encoding(tmp_path):
+    file_path = tmp_path / "brief.md"
+    file_path.write_bytes(b"\x81")
+
+    loader = DocumentsLoader(file_paths=[str(file_path)])
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(loader.load_documents())
+
+    assert exc.value.status_code == 422
+    assert "brief.md" in exc.value.detail
 
 
 def _make_mock_page(text: str) -> MagicMock:

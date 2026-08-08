@@ -9,6 +9,12 @@ from services.chat import sql_chat_history
 class ChatConversationStore:
     def __init__(self, sql_session: AsyncSession):
         self._sql = sql_session
+        # Workspace operations wrap the legacy session so inner commits become
+        # flushes.  Their external memory side effect must be emitted from the
+        # transactional outbox only after the fenced publication commits.
+        self._defer_external_memory = (
+            getattr(sql_session, "defer_external_chat_memory", False) is True
+        )
 
     async def load_history(
         self,
@@ -53,12 +59,13 @@ class ChatConversationStore:
             assistant_message=assistant_message,
             tool_calls=tool_calls,
         )
-        await CHAT_MEMORY_STORE.store_chat_turn(
-            presentation_id=presentation_id,
-            conversation_id=conversation_id,
-            user_message=user_message,
-            assistant_message=assistant_message,
-        )
+        if not self._defer_external_memory:
+            await CHAT_MEMORY_STORE.store_chat_turn(
+                presentation_id=presentation_id,
+                conversation_id=conversation_id,
+                user_message=user_message,
+                assistant_message=assistant_message,
+            )
 
     async def retrieve_semantic_context(
         self,

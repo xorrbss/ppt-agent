@@ -5,8 +5,8 @@ import { getServerAuthStatus } from '@/utils/serverAuth'
 import { getSettingsView } from '@/utils/settingsAccess'
 
 export const metadata = {
-  title: 'Settings | Presenton',
-  description: 'Settings page',
+  title: '설정 | Presenton',
+  description: '설정 페이지',
 }
 const page = async () => {
   const status = await getServerAuthStatus()

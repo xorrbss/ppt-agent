@@ -1,0 +1,18 @@
+{
+  "slides": [
+    {
+      "id": "slide-01",
+      "role": "content",
+      "source_image": "C:/absolute/path/source-01.png",
+      "render_image": "C:/absolute/path/render-01.png",
+      "source_text": "Used only by explicit --text-source manifest/html_proxy\nwith preserved line breaks",
+      "render_text": "Used only by explicit --text-source manifest",
+      "source_objects": [
+        {"id": "title", "x": 64, "y": 72, "width": 720, "height": 64}
+      ],
+      "candidate_objects": [
+        {"id": "title", "x": 64, "y": 72, "width": 720, "height": 64}
+      ]
+    }
+  ]
+}

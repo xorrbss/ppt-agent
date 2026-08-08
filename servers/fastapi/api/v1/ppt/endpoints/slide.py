@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +10,10 @@ from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.workspace_legacy_write_gate import (
+    legacy_write_requires_presentation_scope,
+    require_legacy_presentation_write_path,
+)
 from utils.asset_directory_utils import get_images_directory
 from utils.llm_calls.edit_slide import get_edited_slide_content
 from utils.llm_calls.edit_slide_html import get_edited_slide_html
@@ -19,11 +22,13 @@ from utils.process_slides import process_old_and_new_slides_and_fetch_assets
 
 
 SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
-LOGGER = logging.getLogger(__name__)
 
-
-def _is_template_layout_payload(layout: object) -> bool:
-    return isinstance(layout, dict) and isinstance(layout.get("layouts"), list)
+# Authored decks are model-authored images (no React layout), so per-slide LLM editing
+# does not apply — the deck is view-only in-app and edited in PowerPoint via the PPTX.
+_AUTHORED_NOT_EDITABLE = (
+    "이 슬라이드는 AI 저작(authored) 모드로 생성되어 인앱 편집을 지원하지 않습니다. "
+    "내보낸 PPTX를 PowerPoint에서 편집하세요."
+)
 
 
 @SLIDE_ROUTER.post("/edit")
@@ -32,12 +37,20 @@ async def edit_slide(
     prompt: Annotated[str, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    resolve_rollout_scope = legacy_write_requires_presentation_scope()
     slide = await sql_session.get(SlideModel, id)
     if not slide:
         raise HTTPException(status_code=404, detail="Slide not found")
+    if resolve_rollout_scope:
+        require_legacy_presentation_write_path(slide.presentation)
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+    if presentation.is_authored():
+        raise HTTPException(
+            status_code=400,
+            detail=_AUTHORED_NOT_EDITABLE,
+        )
 
     memory_context = await MEM0_PRESENTATION_MEMORY_SERVICE.retrieve_context(
         presentation.id,
@@ -66,26 +79,12 @@ async def edit_slide(
     image_generation_service = ImageGenerationService(get_images_directory())
 
     # This will mutate edited_slide_content
-    image_warnings: list[dict] = []
     new_assets = await process_old_and_new_slides_and_fetch_assets(
         image_generation_service,
         slide.content,
         edited_slide_content,
         icon_weight=presentation.get_layout().icon_weight,
-        use_template_asset_fields=(
-            _is_template_layout_payload(presentation.layout)
-            or isinstance(slide.ui, dict)
-        ),
-        allow_image_fallback=True,
-        image_warnings=image_warnings,
     )
-    for warning in image_warnings:
-        LOGGER.warning(
-            "Slide edit image generation warning: presentation_id=%s slide_id=%s detail=%s",
-            presentation.id,
-            slide.id,
-            warning.get("detail"),
-        )
 
     # Always assign a new unique id to the slide
     slide.id = uuid.uuid4()
@@ -114,13 +113,21 @@ async def edit_slide_html(
     html: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    resolve_rollout_scope = legacy_write_requires_presentation_scope()
     slide = await sql_session.get(SlideModel, id)
     if not slide:
         raise HTTPException(status_code=404, detail="Slide not found")
+    if resolve_rollout_scope:
+        require_legacy_presentation_write_path(slide.presentation)
 
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
+    if presentation.is_authored():
+        raise HTTPException(
+            status_code=400,
+            detail=_AUTHORED_NOT_EDITABLE,
+        )
 
     html_to_edit = html or slide.html_content
     if not html_to_edit:

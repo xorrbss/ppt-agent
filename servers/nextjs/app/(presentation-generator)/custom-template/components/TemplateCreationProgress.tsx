@@ -24,32 +24,30 @@ interface StepConfig {
 const steps: StepConfig[] = [
     {
         id: 'file-upload',
-        label: 'Upload',
+        label: '업로드',
         icon: <Upload className="w-4 h-4" />
     },
     {
         id: 'font-check',
-        label: 'Fonts',
+        label: '글꼴',
         icon: <Type className="w-4 h-4" />
     },
     {
         id: 'slides-preview',
-        label: 'Preview',
+        label: '미리보기',
         icon: <Images className="w-4 h-4" />
     },
     {
         id: 'template-creation',
-        label: 'Generate',
+        label: '생성',
         icon: <Sparkles className="w-4 h-4" />
     },
     {
         id: 'completed',
-        label: 'Done',
+        label: '완료',
         icon: <Check className="w-4 h-4" />
     },
 ];
-
-const MAX_PROCESSING_PROGRESS_PERCENT = 95;
 
 export const TemplateCreationProgress: React.FC<TemplateCreationProgressProps> = ({
     currentStep,
@@ -72,10 +70,7 @@ export const TemplateCreationProgress: React.FC<TemplateCreationProgressProps> =
     };
 
     const progressPercentage = totalSlides > 0
-        ? Math.min(
-            MAX_PROCESSING_PROGRESS_PERCENT,
-            Math.round((processedSlides / totalSlides) * 100)
-        )
+        ? Math.round((processedSlides / totalSlides) * 100)
         : 0;
 
     return (
@@ -145,7 +140,7 @@ export const TemplateCreationProgress: React.FC<TemplateCreationProgressProps> =
                 <div className="mt-6 p-4 bg-[#F9FAFB] rounded-xl border border-[#E5E7EB]">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-[#374151]">
-                            Processing slides
+                            슬라이드 처리 중
                         </span>
                         <span className="text-sm font-medium text-[#374151]">
                             {processedSlides} / {totalSlides}

@@ -1,4 +1,5 @@
 import asyncio
+import codecs
 import json
 import logging
 import os
@@ -21,12 +22,14 @@ from services.document_conversion_service import (
     DocumentConversionService,
 )
 from services.liteparse_service import LiteParseError, LiteParseService
-from services.office_document_service import (
-    OfficeDocumentError,
-    extract_office_document_text,
+from utils.document_context import (
+    HARD_MAX_DOCUMENT_CONTEXT_CHARS,
+    DocumentContextLimitError,
+    ensure_document_within_limit,
+    get_document_context_limits,
 )
-from services.temp_file_service import TEMP_FILE_SERVICE
 from utils.ocr_language import presentation_language_to_ocr_code
+from utils.document_path_security import validate_document_paths
 
 # Optional fallback converter (primarily useful on Windows)
 try:
@@ -35,6 +38,44 @@ except Exception:
     DocumentServiceCls = None
 
 LOGGER = logging.getLogger(__name__)
+
+_MAX_TEXT_BYTES_PER_CHARACTER = 4
+_TEXT_BOM_ALLOWANCE_BYTES = 4
+
+# The Node bridge decodes these bounded raster formats with sharp and sends a
+# normalized PNG buffer straight to OCR. SVG remains on the converter path
+# because it is active markup rather than an ordinary raster input.
+_LITEPARSE_NATIVE_IMAGE_EXTENSIONS = frozenset(
+    {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+)
+
+
+def _normalize_text_newlines(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _decode_text_bytes(data: bytes, filename: str) -> str:
+    """Decode plain-text and Markdown uploads using supported Korean encodings."""
+    try:
+        if data.startswith(codecs.BOM_UTF8):
+            text = data.decode("utf-8-sig", errors="strict")
+        elif data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+            text = data.decode("utf-16", errors="strict")
+        else:
+            try:
+                text = data.decode("utf-8", errors="strict")
+            except UnicodeDecodeError:
+                text = data.decode("cp949", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Unable to decode text file '{filename}'. "
+                "Save it as UTF-8, UTF-16 with BOM, or CP949 and try again."
+            ),
+        ) from exc
+
+    return _normalize_text_newlines(text)
 
 
 def _unwrap_liteparse_json_line_if_stored(text: str) -> str:
@@ -167,9 +208,11 @@ class DocumentsLoader:
         self,
         file_paths: List[str],
         presentation_language: Optional[str] = None,
+        allow_context_truncation: bool = False,
     ):
-        self._file_paths = TEMP_FILE_SERVICE.resolve_existing_temp_paths(file_paths)
+        self._file_paths = file_paths
         self._ocr_language = presentation_language_to_ocr_code(presentation_language)
+        self._allow_context_truncation = allow_context_truncation
         self.liteparse_service = LiteParseService(
             timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS
         )
@@ -200,12 +243,9 @@ class DocumentsLoader:
         documents: List[str] = []
         images: List[List[str]] = []
 
-        for file_path in self._file_paths:
-            if not os.path.exists(file_path):
-                raise HTTPException(
-                    status_code=404, detail=f"File {file_path} not found"
-                )
+        self._file_paths = validate_document_paths(self._file_paths)
 
+        for file_path in self._file_paths:
             document = ""
             imgs: List[str] = []
 
@@ -216,27 +256,42 @@ class DocumentsLoader:
                 extension,
             )
 
-            if extension in PDF_EXTENSIONS:
-                document, imgs = await self.load_pdf(
-                    file_path, load_text, load_images, temp_dir
-                )
-            elif extension in TEXT_EXTENSIONS:
-                document = await self.load_text(file_path)
-            elif extension in OFFICE_EXTENSIONS:
-                document = await asyncio.to_thread(
-                    self.load_office_document,
-                    file_path,
-                )
-            elif extension in IMAGE_EXTENSIONS:
-                document = await asyncio.to_thread(
-                    self.load_image,
-                    file_path,
-                    temp_dir,
-                )
-            else:
-                document = await asyncio.to_thread(self._parse_with_liteparse, file_path)
+            try:
+                if extension in PDF_EXTENSIONS:
+                    document, imgs = await self.load_pdf(
+                        file_path, load_text, load_images, temp_dir
+                    )
+                elif extension in TEXT_EXTENSIONS:
+                    document = await self.load_text(file_path)
+                elif extension in OFFICE_EXTENSIONS:
+                    document = await asyncio.to_thread(
+                        self.load_office_document,
+                        file_path,
+                        temp_dir,
+                    )
+                elif extension in IMAGE_EXTENSIONS:
+                    document = await asyncio.to_thread(
+                        self.load_image,
+                        file_path,
+                        temp_dir,
+                    )
+                else:
+                    document = await asyncio.to_thread(
+                        self._parse_with_liteparse, file_path
+                    )
+            except DocumentConversionError as exc:
+                if exc.filename:
+                    raise
+                raise DocumentConversionError(
+                    str(exc),
+                    code=exc.code,
+                    filename=os.path.basename(file_path),
+                    retryable=exc.retryable,
+                    public_message=exc.public_message,
+                ) from exc
 
-            document = clean_extracted_document_text(document)
+            if extension not in TEXT_EXTENSIONS:
+                document = clean_extracted_document_text(document)
             documents.append(document)
             images.append(imgs)
 
@@ -256,7 +311,12 @@ class DocumentsLoader:
         if load_text:
             is_scanned = await asyncio.to_thread(self._is_scanned_pdf, file_path)
             dpi = 300 if is_scanned else None
-            document = await asyncio.to_thread(self._parse_with_liteparse, file_path, dpi)
+            document = await asyncio.to_thread(
+                self._parse_with_liteparse,
+                file_path,
+                dpi,
+                is_scanned,
+            )
 
         if load_images:
             if temp_dir is None:
@@ -282,17 +342,114 @@ class DocumentsLoader:
             return False
 
     async def load_text(self, file_path: str) -> str:
-        with open(file_path, "r", encoding="utf-8") as file:
-            return await asyncio.to_thread(file.read)
+        _, per_document_limit = get_document_context_limits()
+        read_limit = (
+            HARD_MAX_DOCUMENT_CONTEXT_CHARS
+            if self._allow_context_truncation
+            else per_document_limit
+        )
+        filename = os.path.basename(file_path)
+        max_encoded_bytes = (
+            read_limit * _MAX_TEXT_BYTES_PER_CHARACTER
+            + _TEXT_BOM_ALLOWANCE_BYTES
+        )
 
-    @staticmethod
-    def load_office_document(file_path: str) -> str:
+        def _read_bounded() -> bytes:
+            with open(file_path, "rb") as file:
+                return file.read(max_encoded_bytes + 1)
+
+        data = await asyncio.to_thread(_read_bounded)
+        if len(data) > max_encoded_bytes:
+            raise DocumentContextLimitError(
+                actual_chars=read_limit + 1,
+                limit_chars=read_limit,
+                scope="document",
+                filename=filename,
+            )
+
+        text = _decode_text_bytes(data, filename)
+        ensure_document_within_limit(
+            text,
+            filename=filename,
+            per_document_limit=read_limit,
+        )
+        return text
+
+    def load_office_document(self, file_path: str, temp_dir: Optional[str] = None) -> str:
+        # No LibreOffice (e.g. native Windows): extract text directly for the
+        # formats we can handle without it; otherwise surface a clear error.
+        if not self.document_conversion_service.is_soffice_available():
+            if self.document_service is None:
+                raise DocumentConversionError(
+                    f"'{os.path.basename(file_path)}' 변환에 필요한 LibreOffice를 찾을 수 없습니다."
+                )
+            return self.document_service.parse_to_markdown(file_path)
+
         try:
-            return extract_office_document_text(file_path)
-        except OfficeDocumentError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if temp_dir:
+                converted_path = self.document_conversion_service.convert_office_to_pdf(
+                    file_path,
+                    temp_dir,
+                    timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
+                )
+                is_scanned = self._is_scanned_pdf(converted_path)
+                return self._parse_with_liteparse(
+                    converted_path,
+                    dpi=300 if is_scanned else None,
+                    ocr_enabled=is_scanned,
+                )
+
+            with tempfile.TemporaryDirectory(prefix="office-convert-") as conversion_dir:
+                converted_path = (
+                    self.document_conversion_service.convert_office_to_pdf(
+                        file_path,
+                        conversion_dir,
+                        timeout_seconds=self.DECOMPOSE_TIMEOUT_SECONDS,
+                    )
+                )
+                is_scanned = self._is_scanned_pdf(converted_path)
+                return self._parse_with_liteparse(
+                    converted_path,
+                    dpi=300 if is_scanned else None,
+                    ocr_enabled=is_scanned,
+                )
+        except DocumentConversionError as conversion_error:
+            if self.document_service is None:
+                raise
+
+            filename = os.path.basename(file_path)
+            LOGGER.warning(
+                "[DocumentsLoader] LibreOffice conversion failed; trying native "
+                "office text extraction file=%s",
+                filename,
+            )
+            try:
+                document = self.document_service.parse_to_markdown(file_path)
+            except Exception as fallback_error:
+                LOGGER.warning(
+                    "[DocumentsLoader] Native office text extraction also failed "
+                    "file=%s error_type=%s",
+                    filename,
+                    type(fallback_error).__name__,
+                )
+                raise conversion_error from fallback_error
+
+            LOGGER.info(
+                "[DocumentsLoader] Native office text extraction succeeded file=%s",
+                filename,
+            )
+            return document
 
     def load_image(self, file_path: str, temp_dir: Optional[str] = None) -> str:
+        extension = Path(file_path).suffix.lower()
+        if extension in _LITEPARSE_NATIVE_IMAGE_EXTENSIONS:
+            LOGGER.info(
+                "[DocumentsLoader] Using native image without conversion file=%s extension=%s",
+                file_path,
+                extension,
+            )
+            return self._parse_with_liteparse(file_path, dpi=300)
+
         if temp_dir:
             converted_path = self.document_conversion_service.convert_image_to_png(
                 file_path,
@@ -309,16 +466,21 @@ class DocumentsLoader:
             )
             return self._parse_with_liteparse(converted_path, dpi=300)
 
-    def _parse_with_liteparse(self, file_path: str, dpi: int = None) -> str:
+    def _parse_with_liteparse(
+        self,
+        file_path: str,
+        dpi: int = None,
+        ocr_enabled: bool = True,
+    ) -> str:
         try:
             LOGGER.info("[DocumentsLoader] LiteParse start file=%s", file_path)
             return self.liteparse_service.parse_to_markdown(
                 file_path,
-                ocr_enabled=True,
+                ocr_enabled=ocr_enabled,
                 ocr_language=self._ocr_language,
                 dpi=dpi,
             )
-        except (LiteParseError, DocumentConversionError, OfficeDocumentError) as exc:
+        except (LiteParseError, DocumentConversionError) as exc:
             LOGGER.warning(
                 "[DocumentsLoader] Primary parse failed file=%s error=%s",
                 file_path,

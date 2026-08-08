@@ -1,15 +1,14 @@
 from datetime import datetime
 import secrets
 from typing import Any, Optional
-
 import uuid
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, String
+from sqlalchemy import JSON, Column, DateTime, String, Uuid
 from sqlmodel import Field, SQLModel
 
+from utils.owner_context import get_current_owner_id
 from enums.async_task_status import AsyncTaskStatus
 from utils.datetime_utils import get_current_utc_datetime
-from api.v1.auth.context import get_current_owner_id
 
 
 class AsyncTaskModel(SQLModel, table=True):
@@ -22,9 +21,9 @@ class AsyncTaskModel(SQLModel, table=True):
     owner_id: Optional[uuid.UUID] = Field(
         default_factory=get_current_owner_id,
         exclude=True,
-        sa_column=Column(
-            ForeignKey("user.id", ondelete="CASCADE"), nullable=True, index=True
-        ),
+        # Alembic owns the production FK; ORM metadata stays composable for
+        # focused table fixtures.
+        sa_column=Column(Uuid, nullable=True, index=True),
     )
     type: str = Field(index=True)
     status: AsyncTaskStatus = Field(

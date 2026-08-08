@@ -1,7 +1,5 @@
-from io import BytesIO
 from typing import List
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Query, Header
-from PIL import Image, UnidentifiedImageError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -20,68 +18,42 @@ from enums.image_provider import ImageProvider
 import os
 import uuid
 from utils.file_utils import get_file_name_with_random_uuid
+from utils.upload_limits import get_image_upload_limit_bytes, stream_upload_to_file
 
 IMAGES_ROUTER = APIRouter(prefix="/images", tags=["Images"])
 
-ALLOWED_UPLOAD_IMAGE_EXTENSIONS = {
-    ".avif",
-    ".bmp",
-    ".gif",
-    ".jpeg",
-    ".jpg",
-    ".png",
-    ".tif",
-    ".tiff",
-    ".webp",
-}
-ALLOWED_UPLOAD_IMAGE_FORMATS = {
-    "AVIF",
-    "BMP",
-    "GIF",
-    "JPEG",
-    "PNG",
-    "TIFF",
-    "WEBP",
+_IMAGE_TYPES = {
+    ".png": ("image/png", lambda value: value.startswith(b"\x89PNG\r\n\x1a\n")),
+    ".jpg": ("image/jpeg", lambda value: value.startswith(b"\xff\xd8\xff")),
+    ".jpeg": ("image/jpeg", lambda value: value.startswith(b"\xff\xd8\xff")),
+    ".gif": (
+        "image/gif",
+        lambda value: value.startswith((b"GIF87a", b"GIF89a")),
+    ),
+    ".webp": (
+        "image/webp",
+        lambda value: value.startswith(b"RIFF") and value[8:12] == b"WEBP",
+    ),
 }
 REDACTED_SECRET_PLACEHOLDER = "__configured__"
 
 
-async def _read_validated_image_upload(file: UploadFile) -> bytes:
-    filename = file.filename or ""
-    extension = os.path.splitext(filename)[1].lower()
-    if extension not in ALLOWED_UPLOAD_IMAGE_EXTENSIONS:
-        accepted = ", ".join(sorted(ALLOWED_UPLOAD_IMAGE_EXTENSIONS))
+def _validate_uploaded_image(file: UploadFile, image_path: str) -> None:
+    suffix = os.path.splitext(file.filename or "")[1].lower()
+    expected = _IMAGE_TYPES.get(suffix)
+    media_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    if expected is None or media_type != expected[0]:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid image file type. Accepted types: {accepted}",
+            status_code=415,
+            detail="Unsupported image type. Use PNG, JPEG, GIF, or WebP.",
         )
-
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Uploaded image file is empty")
-
-    try:
-        with Image.open(BytesIO(content)) as image:
-            if image.format not in ALLOWED_UPLOAD_IMAGE_FORMATS:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Uploaded image format is not supported",
-                )
-            image.verify()
-    except HTTPException:
-        raise
-    except (
-        Image.DecompressionBombError,
-        OSError,
-        SyntaxError,
-        UnidentifiedImageError,
-        ValueError,
-    ):
+    with open(image_path, "rb") as image_stream:
+        prefix = image_stream.read(12)
+    if not expected[1](prefix):
         raise HTTPException(
-            status_code=400, detail="Uploaded file is not a valid image"
+            status_code=415,
+            detail="Image content does not match its declared type.",
         )
-
-    return content
 
 
 def _normalize_stock_provider(provider: str | None) -> str:
@@ -210,15 +182,20 @@ async def get_generated_images(sql_session: AsyncSession = Depends(get_async_ses
 async def upload_image(
     file: UploadFile = File(...), sql_session: AsyncSession = Depends(get_async_session)
 ):
+    image_path = ""
     try:
-        content = await _read_validated_image_upload(file)
         new_filename = get_file_name_with_random_uuid(file)
         image_path = os.path.join(
             get_images_directory(), os.path.basename(new_filename)
         )
 
-        with open(image_path, "wb") as f:
-            f.write(content)
+        await stream_upload_to_file(
+            file,
+            image_path,
+            limit_bytes=get_image_upload_limit_bytes(),
+            label="Image",
+        )
+        _validate_uploaded_image(file, image_path)
 
         image_asset = ImageAsset(path=image_path, is_uploaded=True)
 
@@ -229,8 +206,18 @@ async def upload_image(
 
         return _image_asset_api_dict(image_asset)
     except HTTPException:
+        if image_path:
+            try:
+                os.remove(image_path)
+            except OSError:
+                pass
         raise
     except Exception as e:
+        if image_path:
+            try:
+                os.remove(image_path)
+            except OSError:
+                pass
         raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
 
 

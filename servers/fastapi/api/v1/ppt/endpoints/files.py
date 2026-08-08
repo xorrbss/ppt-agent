@@ -1,15 +1,35 @@
 import os
 from typing import Annotated, List, Optional
-from fastapi import APIRouter, Body, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, UploadFile, HTTPException
 
-from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES
+from constants.documents import TEXT_EXTENSIONS, UPLOAD_ACCEPTED_FILE_TYPES
 from models.decomposed_file_info import DecomposedFileInfo
+from services.document_conversion_service import DocumentConversionError
 from services.temp_file_service import TEMP_FILE_SERVICE
 from services.documents_loader import DocumentsLoader
 import uuid
+from utils.document_path_security import (
+    create_server_upload_filename,
+    validate_document_paths,
+    validated_upload_extension,
+)
+from utils.upload_limits import (
+    MIB,
+    format_limit,
+    get_single_upload_limit_bytes,
+    get_total_upload_limit_bytes,
+    stream_upload_to_file,
+    upload_limits_payload,
+)
 from utils.validators import validate_files
 
 FILES_ROUTER = APIRouter(prefix="/files", tags=["Files"])
+
+@FILES_ROUTER.get("/upload-limits")
+async def get_upload_limits():
+    """Expose effective limits so clients can validate and explain them."""
+
+    return upload_limits_payload()
 
 
 @FILES_ROUTER.post("/upload", response_model=List[str])
@@ -17,21 +37,61 @@ async def upload_files(files: Optional[List[UploadFile]]):
     if not files:
         raise HTTPException(400, "Documents are required")
 
+    single_limit = get_single_upload_limit_bytes()
+    total_limit = get_total_upload_limit_bytes()
+    upload_extensions = [
+        validated_upload_extension(each_file.filename, UPLOAD_ACCEPTED_FILE_TYPES)
+        for each_file in files
+    ]
+    validate_files(
+        files,
+        True,
+        True,
+        single_limit // MIB,
+        UPLOAD_ACCEPTED_FILE_TYPES,
+    )
+    declared_total = sum(each_file.size or 0 for each_file in files)
+    if declared_total > total_limit:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Combined upload size exceeds the "
+                f"{format_limit(total_limit)} request limit."
+            ),
+        )
+
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
-
-    validate_files(files, True, True, 100, UPLOAD_ACCEPTED_FILE_TYPES)
-
     temp_files: List[str] = []
-    if files:
-        for each_file in files:
+    actual_total = 0
+    try:
+        for each_file, extension in zip(files, upload_extensions):
             temp_path = TEMP_FILE_SERVICE.create_temp_file_path(
-                each_file.filename, temp_dir
+                create_server_upload_filename(extension), temp_dir
             )
-            with open(temp_path, "wb") as f:
-                content = await each_file.read()
-                f.write(content)
-
+            # Track the destination before streaming so a mid-stream size or
+            # I/O failure cannot leave a partial upload behind.
             temp_files.append(temp_path)
+            actual_total += await stream_upload_to_file(
+                each_file,
+                temp_path,
+                limit_bytes=single_limit,
+                label="Document",
+            )
+            if actual_total > total_limit:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        "Combined upload size exceeds the "
+                        f"{format_limit(total_limit)} request limit."
+                    ),
+                )
+    except Exception:
+        for temp_path in temp_files:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        raise
 
     return temp_files
 
@@ -41,19 +101,21 @@ async def decompose_files(
     file_paths: Annotated[List[str], Body(embed=True)],
     language: Annotated[Optional[str], Body()] = None,
 ):
+    file_paths = validate_document_paths(file_paths)
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(uuid.uuid4()))
-    resolved_file_paths = TEMP_FILE_SERVICE.resolve_existing_temp_paths(file_paths)
 
-    txt_files = []
-    other_files = []
-    for file_path in resolved_file_paths:
-        if file_path.endswith(".txt"):
-            txt_files.append(file_path)
-        else:
-            other_files.append(file_path)
-
-    documents_loader = DocumentsLoader(file_paths=other_files, presentation_language=language)
-    await documents_loader.load_documents(temp_dir)
+    # Run text files through DocumentsLoader as well. It reads TXT/Markdown
+    # directly, normalizes their encoding/newlines, and preserves their body.
+    documents_loader = DocumentsLoader(
+        file_paths=file_paths,
+        presentation_language=language,
+    )
+    try:
+        await documents_loader.load_documents(temp_dir)
+    except DocumentConversionError as exc:
+        # Unconvertible/unsupported document — surface an actionable message
+        # instead of a raw 500 (the frontend shows `detail` directly).
+        raise HTTPException(status_code=422, detail=exc.to_detail()) from exc
     parsed_documents = documents_loader.documents
 
     response = []
@@ -61,30 +123,15 @@ async def decompose_files(
         file_path = TEMP_FILE_SERVICE.create_temp_file_path(
             f"{uuid.uuid4()}.txt", temp_dir
         )
-        parsed_doc = parsed_doc.replace("<br>", "\n")
-        with open(file_path, "w", encoding="utf-8") as text_file:
+        source_extension = os.path.splitext(file_paths[index])[1].lower()
+        if source_extension not in TEXT_EXTENSIONS:
+            parsed_doc = parsed_doc.replace("<br>", "\n")
+        with open(file_path, "w", encoding="utf-8", newline="\n") as text_file:
             text_file.write(parsed_doc)
         response.append(
             DecomposedFileInfo(
-                name=os.path.basename(other_files[index]), file_path=file_path
+                name=os.path.basename(file_paths[index]), file_path=file_path
             )
         )
 
-    # Return the txt documents as it is
-    for each_file in txt_files:
-        response.append(
-            DecomposedFileInfo(name=os.path.basename(each_file), file_path=each_file)
-        )
-
     return response
-
-
-@FILES_ROUTER.post("/update")
-async def update_files(
-    file_path: Annotated[str, Body()],
-    file: Annotated[UploadFile, File()],
-):
-    validate_files(file, False, False, 100, UPLOAD_ACCEPTED_FILE_TYPES)
-    await TEMP_FILE_SERVICE.update_temp_file_from_upload(file_path, file)
-
-    return {"message": "File updated successfully"}

@@ -13,11 +13,11 @@
 
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
+import { setPresentationId } from "@/store/slices/presentationGeneration";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter, usePathname } from "next/navigation";
 import { RootState } from "@/store/store";
@@ -28,7 +28,7 @@ import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
 import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { parseLimitedSlideCount } from "@/utils/presentationLimits";
+import Image from "next/image";
 
 // Types
 interface LoadingState {
@@ -92,7 +92,7 @@ const DocumentsPreviewPage: React.FC = () => {
     }
   };
 
-  const readFile = async (filePath: string) => {
+  const readFile = useCallback(async (filePath: string) => {
     if (typeof window !== "undefined" && window.electron?.readFile) {
       return window.electron.readFile(filePath);
     }
@@ -102,9 +102,9 @@ const DocumentsPreviewPage: React.FC = () => {
       body: JSON.stringify({ filePath }),
     });
     return res.json();
-  };
+  }, []);
 
-  const maintainDocumentTexts = async () => {
+  const maintainDocumentTexts = useCallback(async () => {
     const newDocuments: string[] = [];
     const promises: Promise<{ content: string }>[] = [];
 
@@ -132,16 +132,16 @@ const DocumentsPreviewPage: React.FC = () => {
         });
       } catch (error) {
         console.error("Error reading files:", error);
-        notify.error("Could not read document", "Failed to read document content.");
+        notify.error("문서를 읽을 수 없습니다", "문서 내용을 불러오지 못했습니다.");
       }
       setDownloadingDocuments([]);
     }
-  };
+  }, [documentKeys, fileItems, readFile, textContents]);
 
   const handleCreatePresentation = async () => {
     try {
       setShowLoading({
-        message: "Generating presentation outline...",
+        message: "발표자료 개요를 생성하는 중…",
         show: true,
         duration: 40,
         progress: true,
@@ -151,11 +151,13 @@ const DocumentsPreviewPage: React.FC = () => {
         (fileItem: FileItem) => fileItem.file_path
       );
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
+      const presentationId = crypto.randomUUID();
       const createResponse = await PresentationGenerationApi.createPresentation(
         {
+          presentation_id: presentationId,
+          idempotency_key: `presentation-create:${presentationId}`,
           content: config?.prompt ?? "",
-          version: "v2-standard",
-          n_slides: parseLimitedSlideCount(config?.slides),
+          n_slides: config?.slides ? parseInt(config.slides) : null,
           file_paths: documentPaths,
           language: config?.language ?? "",
           tone: config?.tone,
@@ -167,15 +169,14 @@ const DocumentsPreviewPage: React.FC = () => {
         }
       );
 
-      dispatch(clearOutlines());
       dispatch(setPresentationId(createResponse.id));
       trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline" });
       router.replace("/outline");
     } catch (error: any) {
       console.error("Error in radar presentation creation:", error);
-      notify.error("Creation failed", error.message || "Something went wrong while creating the presentation.");
+      notify.error("생성 실패", error.message || "발표자료를 생성하는 중 문제가 발생했습니다.");
       setShowLoading({
-        message: "Error in radar presentation creation.",
+        message: "발표자료 생성 중 오류가 발생했습니다.",
         show: true,
         duration: 10,
         progress: false,
@@ -194,9 +195,9 @@ const DocumentsPreviewPage: React.FC = () => {
   useEffect(() => {
     if (documentKeys.length > 0) {
       setSelectedDocument(documentKeys[0]);
-      maintainDocumentTexts();
+      void maintainDocumentTexts();
     }
-  }, [documentKeys]);
+  }, [documentKeys, maintainDocumentTexts]);
 
   // Render helpers
   const renderDocumentContent = () => {
@@ -210,7 +211,7 @@ const DocumentsPreviewPage: React.FC = () => {
       <div className="h-full mr-4">
         <div className="overflow-y-auto custom_scrollbar h-full">
           <div className="h-full w-full max-w-full flex flex-col mb-5">
-            <h1 className="text-2xl font-medium mb-5">Content:</h1>
+            <h1 className="text-2xl font-medium mb-5">내용:</h1>
             {downloadingDocuments.includes(selectedDocument) ? (
               <Skeleton className="w-full h-full" />
             ) : (
@@ -238,7 +239,7 @@ const DocumentsPreviewPage: React.FC = () => {
 
         {documentKeys.length > 0 && (
           <div className="mt-8">
-            <p className="text-xs mt-2 text-[#2E2E2E] opacity-70">DOCUMENTS</p>
+            <p className="text-xs mt-2 text-[#2E2E2E] opacity-70">문서</p>
             <div className="flex flex-col gap-2 mt-6">
               {documentKeys.map((key: string) => (
                 <div
@@ -247,10 +248,12 @@ const DocumentsPreviewPage: React.FC = () => {
                   className={`${selectedDocument === key ? "border border-blue-500" : ""
                     } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
-                  <img
+                  <Image
                     className="h-6 w-6 border border-gray-200"
                     src={getIconFromFile(key)}
-                    alt="Document icon"
+                    alt="문서 아이콘"
+                    width={24}
+                    height={24}
                   />
                   <span className="text-sm h-6 text-[#2E2E2E] overflow-hidden">
                     {key.split("/").pop() ?? "file.txt"}
@@ -276,7 +279,7 @@ const DocumentsPreviewPage: React.FC = () => {
       <div className="flex mt-6 gap-4 font-instrument_sans">
         {!isOpen && (
           <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50">
-            <ToolTip content="Open Panel">
+            <ToolTip content="패널 열기">
               <Button
                 onClick={() => setIsOpen(true)}
                 className="bg-[#5146E5] text-white p-3 shadow-lg"
@@ -298,7 +301,7 @@ const DocumentsPreviewPage: React.FC = () => {
             onClick={handleCreatePresentation}
             className="flex items-center gap-2 px-8 py-6 rounded-sm text-md bg-[#5146E5] hover:bg-[#5146E5]/90"
           >
-            <span className="text-white font-semibold">Next</span>
+            <span className="text-white font-semibold">다음</span>
             <ChevronRight />
           </Button>
         </div>

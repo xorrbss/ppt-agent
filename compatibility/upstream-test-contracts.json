@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "baselineUpstreamSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
+  "sources": [
+    {
+      "path": "servers/fastapi/tests/unit/test_default_templates.py",
+      "tests": [
+        {
+          "name": "test_default_template_import_normalizes_shapes_and_copies_static",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "The local Template V2 rollout is default-off and does not mutate database rows or static assets during startup."
+        },
+        {
+          "name": "test_default_template_import_force_replaces_static_assets",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Force-replacing bundled static assets would bypass the local default-off rollout boundary."
+        },
+        {
+          "name": "test_default_template_import_removes_static_directory_removed_from_bundle",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Startup deletion of static directories is outside the local Template V2 compatibility surface."
+        },
+        {
+          "name": "test_default_template_import_updates_existing_database_row",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Automatic mutation of existing Template V2 rows conflicts with the feature-gated local write policy."
+        },
+        {
+          "name": "test_default_template_import_removes_stale_default_database_rows",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "Automatic removal of persisted defaults would change local data outside an explicit API write."
+        },
+        {
+          "name": "test_default_template_import_removes_all_defaults_when_bundle_is_empty",
+          "disposition": "excluded",
+          "reasonCode": "startup-default-import-not-enabled",
+          "reason": "An empty upstream bundle must not delete local Template V2 rows."
+        },
+        {
+          "name": "test_bundled_general_template_json_matches_template_v2_shapes",
+          "disposition": "excluded",
+          "reasonCode": "no-bundled-default-template-contract",
+          "reason": "The local rollout does not ship or initialize an upstream general default-template bundle."
+        },
+        {
+          "name": "test_resolve_default_template_id_maps_public_name_to_json_id",
+          "disposition": "excluded",
+          "reasonCode": "no-public-name-default-resolver",
+          "reason": "Local Template V2 APIs use explicit allowlisted string identifiers and do not alias a public default-template name."
+        },
+        {
+          "name": "test_resolve_default_template_id_rejects_paths",
+          "disposition": "excluded",
+          "reasonCode": "no-filesystem-default-resolver",
+          "reason": "No local API resolves a user-supplied template identifier to a bundled filesystem path."
+        }
+      ]
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_async_tasks_api.py",
+      "tests": [
+        {
+          "name": "test_async_tasks_routes_use_hyphenated_endpoint",
+          "disposition": "ported",
+          "localTests": [
+            "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_http_contract_exposes_list_check_and_get_without_breaking_legacy",
+            "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_main_app_mounts_generic_and_legacy_routes_without_openapi_collisions"
+          ],
+          "evidenceFiles": [
+            "servers/fastapi/api/v1/async_tasks/router.py"
+          ]
+        },
+        {
+          "name": "test_async_task_status_enum_uses_string_column",
+          "disposition": "ported",
+          "localTests": [
+            "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_read_facade_maps_durable_states_and_is_strictly_owner_scoped"
+          ],
+          "evidenceFiles": [
+            "servers/fastapi/models/async_task_read.py",
+            "servers/fastapi/services/async_task_read_service.py"
+          ]
+        },
+        {
+          "name": "test_check_async_task_status_returns_task",
+          "disposition": "ported",
+          "localTests": [
+            "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_http_contract_exposes_list_check_and_get_without_breaking_legacy"
+          ],
+          "evidenceFiles": [
+            "servers/fastapi/api/v1/async_tasks/router.py"
+          ]
+        },
+        {
+          "name": "test_check_async_task_status_returns_404_for_missing_task",
+          "disposition": "ported",
+          "localTests": [
+            "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_http_contract_exposes_list_check_and_get_without_breaking_legacy"
+          ],
+          "evidenceFiles": [
+            "servers/fastapi/api/v1/async_tasks/router.py"
+          ]
+        },
+        {
+          "name": "test_list_async_tasks_filters_and_orders_tasks",
+          "disposition": "ported",
+          "localTests": [
+            "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_read_facade_filters_orders_and_paginates_the_durable_source",
+            "servers/fastapi/tests/integration/test_postgresql_async_task_read_facade.py::test_postgresql_owner_status_filter_and_terminal_semantics"
+          ],
+          "evidenceFiles": [
+            "servers/fastapi/services/async_task_read_service.py"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_templates_v2_generation.py",
+      "tests": [
+        {
+          "name": "test_generate_slide_layout_replaces_content_image_urls",
+          "disposition": "ported"
+        }
+      ]
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_presentation_template_v2_ui.py",
+      "tests": [
+        {
+          "name": "test_chat_template_image_content_stores_prompt",
+          "disposition": "ported",
+          "localTests": [
+            "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_clones_layout_and_preserves_image_prompt_metadata"
+          ],
+          "evidenceFiles": [
+            "servers/fastapi/services/chat/template_v2_hydration.py"
+          ]
+        },
+        {
+          "name": "test_apply_template_image_content_avoids_stretching_generated_photos",
+          "disposition": "ported",
+          "localTests": [
+            "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_clones_layout_and_preserves_image_prompt_metadata"
+          ],
+          "evidenceFiles": [
+            "servers/fastapi/services/chat/template_v2_hydration.py"
+          ]
+        }
+      ]
+    }
+  ],
+  "excludedApiContracts": [
+    {
+      "method": "GET",
+      "path": "/api/v1/ppt/template/{template_id}",
+      "reasonCode": "legacy-template-read-response-conflict",
+      "reason": "The legacy router already owns this method/path shape with PresentationLayoutModel; mounting the upstream Template V2 GET response there would change legacy API behavior.",
+      "evidenceFiles": [
+        "servers/fastapi/templates/router.py"
+      ]
+    }
+  ],
+  "portedContracts": [
+    {
+      "id": "template-v2-default-off",
+      "sourceConcept": "Default templates must not become active implicitly.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_v2_is_default_off_without_rollout_configuration"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/templates/v2/policy.py"
+      ]
+    },
+    {
+      "id": "versioned-api-with-legacy-async-status",
+      "sourceConcept": "Async task status remains reachable through a stable versioned API.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_v2_routes_stay_in_api_v1_and_preserve_legacy_async_status"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py"
+      ]
+    },
+    {
+      "id": "non-conflicting-template-v2-compat-mutations",
+      "sourceConcept": "Expose only Template V2 method/path pairs that do not replace the legacy template read contract.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_compat_router_adds_advanced_routes_without_legacy_collisions",
+        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_item_openapi_exposes_one_resource_path_with_unique_operations"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
+        "servers/fastapi/templates/router.py"
+      ]
+    },
+    {
+      "id": "template-v2-generated-content-image-cover",
+      "sourceConcept": "Generated raster content images use cover fitting while icons and decorative assets retain their existing semantics.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_template_v2_prompted_layout.py::test_prompted_layout_retries_and_normalizes_replaceable_assets",
+        "servers/fastapi/tests/unit/test_template_v2_prompted_layout.py::test_prompted_layout_normalizes_contained_content_images_to_cover"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/templates/v2/generation.py"
+      ]
+    },
+    {
+      "id": "template-v2-chat-layout-hydration-image-semantics",
+      "sourceConcept": "Chat hydration clones a Template V2 layout, preserves image prompt metadata, uses cover for generated raster content, and preserves SVG, icon, and clipped-asset semantics.",
+      "localTests": [
+        "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_clones_layout_and_preserves_image_prompt_metadata",
+        "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_is_fail_closed_for_malformed_native_ui",
+        "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_apply_state_restores_all_fields_when_assignment_fails"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/services/chat/template_v2_hydration.py"
+      ]
+    },
+    {
+      "id": "durable-owner-scoped-async-read-facade",
+      "sourceConcept": "Expose generic async task reads without creating a second execution path or weakening owner isolation.",
+      "localTests": [
+        "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_read_facade_maps_durable_states_and_is_strictly_owner_scoped",
+        "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_read_facade_filters_orders_and_paginates_the_durable_source",
+        "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_http_contract_exposes_list_check_and_get_without_breaking_legacy",
+        "servers/fastapi/tests/unit/test_async_task_read_facade.py::test_postgresql_query_compiles_against_only_existing_durable_tables"
+      ],
+      "evidenceFiles": [
+        "servers/fastapi/api/v1/async_tasks/router.py",
+        "servers/fastapi/services/async_task_read_service.py",
+        "servers/fastapi/models/sql/async_presentation_generation_status.py",
+        "servers/fastapi/models/sql/presentation_generation_job.py"
+      ]
+    }
+  ]
+}

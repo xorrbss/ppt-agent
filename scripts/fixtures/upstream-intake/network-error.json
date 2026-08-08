@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "NETWORK_ERROR",
+    "message": "fixture connection refused"
+  }
+}

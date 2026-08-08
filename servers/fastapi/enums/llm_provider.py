@@ -3,7 +3,6 @@ from enum import Enum
 
 class LLMProvider(Enum):
     OLLAMA = "ollama"
-    DEEPSEEK = "deepseek"
     OPENAI = "openai"
     GOOGLE = "google"
     VERTEX = "vertex"

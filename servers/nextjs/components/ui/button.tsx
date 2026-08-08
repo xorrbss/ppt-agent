@@ -19,12 +19,20 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        // Presentation header action. Pair with size="toolbar": geometry has to
+        // live in the size slot because cva emits size after variant, so a
+        // height declared here would be overridden by the default size.
+        toolbar:
+          "border border-[#E4E2E8] bg-white text-[#101323] shadow-sm hover:border-[#CFC9E8] hover:bg-[#F8F7FC]",
       },
       size: {
         default: "h-9 px-4 py-2",
         sm: "h-8 rounded-md px-3 text-xs",
         lg: "h-10 rounded-md px-8",
         icon: "h-9 w-9",
+        // Matches the icon cluster and the export button so the header sits on
+        // one baseline.
+        toolbar: "h-[38px] rounded-full px-4 text-sm font-semibold",
       },
     },
     defaultVariants: {

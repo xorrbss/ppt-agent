@@ -1,5 +1,5 @@
 "use client";
-import { LayoutDashboard, Settings, Upload } from "lucide-react";
+import { LayoutDashboard, Settings } from "lucide-react";
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -24,7 +24,7 @@ const HeaderNav = () => {
       >
         <LayoutDashboard className="w-5 h-5" />
         <span className="text-sm font-medium font-inter">
-          Dashboard
+          대시보드
         </span>
       </Link>
       {canChangeKeys && (
@@ -37,7 +37,7 @@ const HeaderNav = () => {
         >
           <Settings className="w-5 h-5" />
           <span className="text-sm font-medium font-inter">
-            Settings
+            설정
           </span>
         </Link>
       )}

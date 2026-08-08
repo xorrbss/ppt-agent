@@ -5,11 +5,6 @@ export interface LLMConfig {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
 
-  // DeepSeek
-  DEEPSEEK_API_KEY?: string;
-  DEEPSEEK_MODEL?: string;
-  DEEPSEEK_BASE_URL?: string;
-
   // Google
   GOOGLE_API_KEY?: string;
   GOOGLE_MODEL?: string;
@@ -104,18 +99,13 @@ export interface LLMConfig {
   DALL_E_3_QUALITY?: string;
   // GPT Image 1.5 Quality
   GPT_IMAGE_1_5_QUALITY?: string;
+  // GPT Image 2 Quality
+  GPT_IMAGE_2_QUALITY?: string;
 
   // Other Configs
   DISABLE_THINKING?: boolean;
   EXTENDED_REASONING?: boolean;
   WEB_GROUNDING?: boolean;
-  WEB_SEARCH_PROVIDER?: string;
-  WEB_SEARCH_MAX_RESULTS?: string;
-  SEARXNG_BASE_URL?: string;
-  TAVILY_API_KEY?: string;
-  EXA_API_KEY?: string;
-  BRAVE_SEARCH_API_KEY?: string;
-  SERPER_API_KEY?: string;
 
   // Codex OAuth (ChatGPT)
   CODEX_MODEL?: string;

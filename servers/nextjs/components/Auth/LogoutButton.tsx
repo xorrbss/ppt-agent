@@ -6,7 +6,6 @@ import { LogOut } from "lucide-react";
 import { getApiUrl } from "@/utils/api";
 import {
   MixpanelEvent,
-  trackEvent,
   trackEventImmediately,
 } from "@/utils/mixpanel";
 
@@ -17,7 +16,7 @@ type LogoutButtonProps = {
 };
 
 export default function LogoutButton({
-  label = "Logout",
+  label = "로그아웃",
   className = "",
   iconOnly = false,
 }: LogoutButtonProps) {
@@ -29,9 +28,6 @@ export default function LogoutButton({
     }
 
     setIsSubmitting(true);
-    trackEvent(MixpanelEvent.Auth_SignOut_Started, {
-      source: "logout_button",
-    });
     try {
       const response = await fetch(getApiUrl("/api/v1/auth/logout"), {
         method: "POST",
@@ -71,7 +67,7 @@ export default function LogoutButton({
       title={label}
     >
       <LogOut className="h-4 w-4" />
-      {!iconOnly ? <span>{isSubmitting ? "Signing out..." : label}</span> : null}
+      {!iconOnly ? <span>{isSubmitting ? "로그아웃 중..." : label}</span> : null}
     </button>
   );
 }

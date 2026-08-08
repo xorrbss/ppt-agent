@@ -30,6 +30,18 @@ def get_fastapi_public_base_url() -> str | None:
     return v or None
 
 
+def get_next_internal_base_url() -> str:
+    """Base origin for trusted backend -> Next.js loopback calls (e.g. /api/template,
+    which serves built-in template schemas) — no trailing slash.
+
+    Defaults to http://localhost (nginx :80 fronts Next.js in Docker). Setups without
+    nginx must set NEXT_INTERNAL_URL, e.g. local Windows dev where the single-origin
+    proxy runs on :5000 (or Next.js directly on :3000).
+    """
+    v = (os.getenv("NEXT_INTERNAL_URL") or "").strip().rstrip("/")
+    return v or "http://localhost"
+
+
 def get_temp_directory_env():
     return os.getenv("TEMP_DIRECTORY")
 
@@ -44,11 +56,6 @@ def get_disable_auth_env():
 
 def is_disable_auth_enabled():
     return _is_truthy(get_disable_auth_env())
-
-
-def is_presenton_electron_desktop():
-    """True when running inside the Presenton Electron desktop app."""
-    return _is_truthy(os.getenv("PRESENTON_ELECTRON"))
 
 
 def get_llm_provider_env():
@@ -69,18 +76,6 @@ def get_ollama_url_env():
 
 def get_custom_llm_url_env():
     return os.getenv("CUSTOM_LLM_URL")
-
-
-def get_deepseek_base_url_env():
-    return os.getenv("DEEPSEEK_BASE_URL")
-
-
-def get_deepseek_api_key_env():
-    return os.getenv("DEEPSEEK_API_KEY")
-
-
-def get_deepseek_model_env():
-    return os.getenv("DEEPSEEK_MODEL")
 
 
 def get_openai_api_key_env():
@@ -263,6 +258,14 @@ def get_disable_image_generation_env():
     return os.getenv("DISABLE_IMAGE_GENERATION")
 
 
+def get_enable_mock_endpoints_env():
+    return os.getenv("ENABLE_MOCK_ENDPOINTS")
+
+
+def get_authored_resume_max_attempts_env():
+    return os.getenv("AUTHORED_RESUME_MAX_ATTEMPTS")
+
+
 def is_parallel_image_generation_enabled() -> bool:
     """Whether image provider requests may run concurrently.
 
@@ -292,34 +295,6 @@ def get_web_grounding_env():
     return os.getenv("WEB_GROUNDING")
 
 
-def get_web_search_provider_env():
-    return os.getenv("WEB_SEARCH_PROVIDER")
-
-
-def get_web_search_max_results_env():
-    return os.getenv("WEB_SEARCH_MAX_RESULTS")
-
-
-def get_searxng_base_url_env():
-    return os.getenv("SEARXNG_BASE_URL")
-
-
-def get_tavily_api_key_env():
-    return os.getenv("TAVILY_API_KEY")
-
-
-def get_exa_api_key_env():
-    return os.getenv("EXA_API_KEY")
-
-
-def get_brave_search_api_key_env():
-    return os.getenv("BRAVE_SEARCH_API_KEY")
-
-
-def get_serper_api_key_env():
-    return os.getenv("SERPER_API_KEY")
-
-
 def get_comfyui_url_env():
     return os.getenv("COMFYUI_URL")
 
@@ -336,6 +311,11 @@ def get_dall_e_3_quality_env():
 # Gpt Image 1.5 Quality
 def get_gpt_image_1_5_quality_env():
     return os.getenv("GPT_IMAGE_1_5_QUALITY")
+
+
+# Gpt Image 2 Quality
+def get_gpt_image_2_quality_env():
+    return os.getenv("GPT_IMAGE_2_QUALITY")
 
 
 # Codex OAuth
@@ -369,6 +349,10 @@ def get_codex_is_pro_env():
 
 def get_codex_model_env():
     return os.getenv("CODEX_MODEL")
+
+
+def get_codex_reasoning_effort_env():
+    return os.getenv("CODEX_REASONING_EFFORT")
 
 
 def get_migrate_database_on_startup_env():

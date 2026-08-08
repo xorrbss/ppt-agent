@@ -1,20 +1,28 @@
 {
   "name": "presenton",
-  "version": "0.9.3-beta",
+  "version": "1.0.0",
   "presentationExportVersion": "v0.4.2",
   "type": "module",
   "description": "Open-source AI presentation generator",
   "scripts": {
-    "test": "npm run test:template-converter && node --test scripts/package-metadata.test.mjs",
-    "convert:template": "node scripts/convert-template.mjs",
-    "convert:presentation-template": "node scripts/convert-presentation-template.mjs",
-    "test:template-converter": "node --test scripts/convert-template.test.mjs scripts/convert-presentation-template.test.mjs",
+    "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
     "sync:presentation-export": "node scripts/sync-presentation-export.cjs",
     "sync:presentation-export:force": "node scripts/sync-presentation-export.cjs --force",
-    "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only"
+    "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only",
+    "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs",
+    "test:chat-first-deployment-config": "node scripts/check-chat-first-deployment-config.mjs",
+    "test:next-ci": "node --test scripts/ppt-agent.test.mjs scripts/required-ci-contract.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:workspace-e2e": "npm --prefix servers/nextjs run test:workspace-e2e",
+    "test:local": "node scripts/test-local.mjs"
   },
   "dependencies": {
     "@llamaindex/liteparse": "^1.5.2",
-    "sharp": "^0.34.5"
+    "sharp": "0.35.3",
+    "tesseract.js": "^7.0.0"
+  },
+  "overrides": {
+    "axios": "1.18.1",
+    "form-data": "4.0.6",
+    "sharp": "0.35.3"
   }
 }

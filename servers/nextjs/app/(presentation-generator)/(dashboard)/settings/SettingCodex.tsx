@@ -1,13 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Check,
     ChevronUp,
     Loader2,
     RefreshCw,
     Trash2,
-    Crown,
-    User,
     UserCheck,
 } from "lucide-react";
 import {
@@ -24,19 +22,9 @@ import { notify } from "@/components/ui/sonner";
 import { getApiUrl } from "@/utils/api";
 import { Button } from "@/components/ui/button";
 import {
-    CODEX_MODELS,
+    CHATGPT_MODELS,
     DEFAULT_CODEX_MODEL,
-    isSupportedCodexModel,
-} from "@/utils/codexModels";
-import { useRouter } from "next/navigation";
-import { syncStoreAfterCodexSignOut } from "@/utils/storeHelpers";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { sanitizeAnalyticsError } from "@/utils/analytics";
-import {
-    isChatGptAuthRequiredResponse,
-    normalizeChatGptAuthMessage,
-    requestChatGptReauth,
-} from "@/utils/chatgptAuth";
+} from "@/components/CodexConfig";
 
 interface CodexConfigProps {
     codexModel: string;
@@ -62,7 +50,6 @@ export default function CodexConfig({
     const [accountId, setAccountId] = useState<string | null>(null);
     const [username, setUsername] = useState<string | null>(null);
     const [email, setEmail] = useState<string | null>(null);
-    const [isPro, setIsPro] = useState<boolean | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [manualCode, setManualCode] = useState("");
     const [isExchanging, setIsExchanging] = useState(false);
@@ -70,34 +57,21 @@ export default function CodexConfig({
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [openModelSelect, setOpenModelSelect] = useState(false);
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const router = useRouter();
 
-    const stopPolling = () => {
+    const stopPolling = useCallback(() => {
         if (pollIntervalRef.current) {
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
         }
-    };
-
-    useEffect(() => {
-        checkCurrentAuthStatus();
-        return () => stopPolling();
     }, []);
 
-    useEffect(() => {
-        if (codexModel && !isSupportedCodexModel(codexModel)) {
-            onInputChange(DEFAULT_CODEX_MODEL, "codex_model");
-        }
-    }, [codexModel, onInputChange]);
-
-    const applyProfile = (data: Partial<StatusResponse>) => {
+    const applyProfile = useCallback((data: Partial<StatusResponse>) => {
         setAccountId(data.account_id ?? null);
         setUsername(data.username ?? null);
         setEmail(data.email ?? null);
-        setIsPro(typeof data.is_pro === "boolean" ? data.is_pro : null);
-    };
+    }, []);
 
-    const checkCurrentAuthStatus = async () => {
+    const checkCurrentAuthStatus = useCallback(async () => {
         try {
             const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
             if (!res.ok) {
@@ -117,12 +91,16 @@ export default function CodexConfig({
             setAuthStatus("unauthenticated");
             applyProfile({});
         }
-    };
+    }, [applyProfile]);
+
+    useEffect(() => {
+        void checkCurrentAuthStatus();
+        return stopPolling;
+    }, [checkCurrentAuthStatus, stopPolling]);
 
     const handleSignIn = async () => {
         try {
             onInputChange('codex', 'LLM');
-            trackEvent(MixpanelEvent.Codex_SignIn_API_Call);
             const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/initiate"), {
                 method: "POST",
             });
@@ -144,43 +122,33 @@ export default function CodexConfig({
 
                     if (pollData.status === "success") {
                         stopPolling();
-                        trackEvent(MixpanelEvent.Codex_SignIn_Completed, {
-                            method: "browser_poll",
-                        });
                         setAuthStatus("authenticated");
                         applyProfile(pollData);
                         setSessionId(null);
-                        if (!isSupportedCodexModel(codexModel)) {
+                        if (!codexModel) {
                             onInputChange(DEFAULT_CODEX_MODEL, "codex_model");
                         }
                         notify.success(
-                            "Signed in to ChatGPT",
-                            "Your ChatGPT account is connected and ready to use."
+                            "ChatGPT 로그인 완료",
+                            "ChatGPT 계정이 연결되어 사용할 준비가 되었습니다."
                         );
                     } else if (pollData.status === "failed") {
                         stopPolling();
-                        trackEvent(MixpanelEvent.Codex_SignIn_Failed, {
-                            method: "browser_poll",
-                        });
                         setAuthStatus("unauthenticated");
                         applyProfile({});
                         notify.error(
-                            "Sign-in failed",
-                            "Authentication did not complete. Please try signing in again."
+                            "로그인 실패",
+                            "인증이 완료되지 않았습니다. 다시 로그인해 주세요."
                         );
                     }
                 } catch {
                     // keep polling on transient errors
                 }
             }, 2000);
-        } catch (err) {
-            trackEvent(MixpanelEvent.Codex_SignIn_Failed, {
-                method: "initiate",
-                error_message: sanitizeAnalyticsError(err, "Failed to initiate auth"),
-            });
+        } catch {
             notify.error(
-                "Sign-in failed",
-                "Could not start the sign-in flow. Please try again."
+                "로그인 실패",
+                "로그인을 시작할 수 없습니다. 다시 시도해 주세요."
             );
             setAuthStatus("unauthenticated");
             applyProfile({});
@@ -198,32 +166,25 @@ export default function CodexConfig({
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || "Exchange failed");
+                throw new Error(err.detail || "인증 코드 교환에 실패했습니다");
             }
             const data = await res.json();
             stopPolling();
-            trackEvent(MixpanelEvent.Codex_SignIn_Completed, {
-                method: "manual_exchange",
-            });
             setAuthStatus("authenticated");
             applyProfile(data);
             setSessionId(null);
             setManualCode("");
-            if (!isSupportedCodexModel(codexModel)) {
+            if (!codexModel) {
                 onInputChange(DEFAULT_CODEX_MODEL, "codex_model");
             }
             notify.success(
-                "Signed in to ChatGPT",
-                "Your ChatGPT account is connected and ready to use."
+                "ChatGPT 로그인 완료",
+                "ChatGPT 계정이 연결되어 사용할 준비가 되었습니다."
             );
         } catch (err: any) {
-            trackEvent(MixpanelEvent.Codex_SignIn_Failed, {
-                method: "manual_exchange",
-                error_message: sanitizeAnalyticsError(err, "Exchange failed"),
-            });
             notify.error(
-                "Sign-in failed",
-                err.message || "The verification code could not be accepted. Please try again."
+                "로그인 실패",
+                err.message || "인증 코드를 사용할 수 없습니다. 다시 시도해 주세요."
             );
         } finally {
             setIsExchanging(false);
@@ -232,7 +193,6 @@ export default function CodexConfig({
 
     const handleCancelPolling = () => {
         stopPolling();
-        trackEvent(MixpanelEvent.Codex_SignIn_Cancelled);
         setSessionId(null);
         setManualCode("");
         setAuthStatus("unauthenticated");
@@ -242,28 +202,18 @@ export default function CodexConfig({
         setIsLoggingOut(true);
         try {
             await fetch(getApiUrl("/api/v1/ppt/codex/auth/logout"), { method: "POST" });
-            trackEvent(MixpanelEvent.Codex_Signed_Out);
             setAuthStatus("unauthenticated");
             applyProfile({});
             onInputChange("codex", "LLM");
             onInputChange('', "codex_model");
-            onInputChange("", "CODEX_ACCESS_TOKEN");
-            onInputChange("", "CODEX_REFRESH_TOKEN");
-            onInputChange("", "CODEX_TOKEN_EXPIRES");
-            onInputChange("", "CODEX_ACCOUNT_ID");
-            onInputChange("", "CODEX_USERNAME");
-            onInputChange("", "CODEX_EMAIL");
-            onInputChange(false, "CODEX_IS_PRO");
-            syncStoreAfterCodexSignOut();
-            router.replace("/settings");
             notify.success(
-                "Signed out",
-                "You have been disconnected from ChatGPT."
+                "로그아웃 완료",
+                "ChatGPT 연결이 해제되었습니다."
             );
         } catch {
             notify.error(
-                "Sign-out failed",
-                "Could not disconnect from ChatGPT. Please try again."
+                "로그아웃 실패",
+                "ChatGPT 연결을 해제할 수 없습니다. 다시 시도해 주세요."
             );
         } finally {
             setIsLoggingOut(false);
@@ -276,37 +226,17 @@ export default function CodexConfig({
             const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/refresh"), {
                 method: "POST",
             });
-            if (!res.ok) {
-                let errorData: { detail?: unknown; message?: string; error?: string } | null = null;
-                let message = "Your ChatGPT session could not be renewed. Please sign in again.";
-                try {
-                    const parsedError: { detail?: unknown; message?: string; error?: string } = await res.json();
-                    errorData = parsedError;
-                    message =
-                        (typeof parsedError.detail === "string" && parsedError.detail) ||
-                        parsedError.message ||
-                        parsedError.error ||
-                        message;
-                } catch {}
-                if (isChatGptAuthRequiredResponse(res, errorData, message)) {
-                    requestChatGptReauth({
-                        message: normalizeChatGptAuthMessage(message),
-                        source: "codex-refresh",
-                    });
-                    return;
-                }
-                throw new Error(message);
-            }
+            if (!res.ok) throw new Error("Refresh failed");
             const data = await res.json();
             applyProfile(data);
             notify.success(
-                "Session refreshed",
-                "Your ChatGPT connection was renewed successfully."
+                "세션 갱신 완료",
+                "ChatGPT 연결이 성공적으로 갱신되었습니다."
             );
         } catch {
             notify.error(
-                "Session refresh failed",
-                "Your ChatGPT session could not be renewed. Please sign in again."
+                "세션 갱신 실패",
+                "ChatGPT 세션을 갱신할 수 없습니다. 다시 로그인해 주세요."
             );
             setAuthStatus("unauthenticated");
             applyProfile({});
@@ -319,7 +249,7 @@ export default function CodexConfig({
         return (
             <div className="flex items-center gap-2 py-3 text-gray-400">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-xs">Checking status…</span>
+                <span className="text-xs">상태 확인 중…</span>
             </div>
         );
     }
@@ -329,23 +259,23 @@ export default function CodexConfig({
             <div className="space-y-4">
                 <div className="flex items-center gap-3 py-2">
                     <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-                    <span className="text-sm text-gray-600">Waiting for sign-in…</span>
+                    <span className="text-sm text-gray-600">로그인 대기 중…</span>
                     <button
                         onClick={handleCancelPolling}
                         className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 ml-auto"
                     >
-                        Cancel
+                        취소
                     </button>
                 </div>
 
                 <div className="space-y-2">
                     <p className="text-xs text-gray-400">
-                        Paste redirect URL or code if not redirected automatically
+                        자동으로 리디렉션되지 않으면 리디렉션 URL 또는 코드를 붙여넣으세요
                     </p>
                     <div className="flex gap-2">
                         <input
                             type="text"
-                            placeholder="Paste URL or code…"
+                            placeholder="URL 또는 코드 붙여넣기…"
                             className="flex-1 px-2 py-2 outline-none border border-gray-300 rounded-lg text-xs focus:border-gray-400 transition-colors"
                             value={manualCode}
                             onChange={(e) => setManualCode(e.target.value)}
@@ -358,7 +288,7 @@ export default function CodexConfig({
                             {isExchanging ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             ) : (
-                                "Submit"
+                                "제출"
                             )}
                         </button>
                     </div>
@@ -368,8 +298,6 @@ export default function CodexConfig({
     }
 
     if (authStatus === "authenticated") {
-        const planLabel = isPro === true ? "Pro" : isPro === false ? "Free" : "Unknown";
-
         return (
             <div className="space-y-4">
                 <div className="flex items-center gap-3 p-3  border border-[#EDEEEF] rounded-lg">
@@ -377,7 +305,7 @@ export default function CodexConfig({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
                             <p className="text-sm font-medium text-gray-800 truncate">
-                                {username || email || (accountId ? `Account ${accountId}` : "ChatGPT Account")}
+                                {username || email || (accountId ? `${accountId} 계정` : "ChatGPT 계정")}
                             </p>
 
                         </div>
@@ -387,13 +315,13 @@ export default function CodexConfig({
                         {!email && accountId && (
                             <p className="text-xs text-gray-500 truncate">ID: {accountId}</p>
                         )}
-                        <p className="text-xs text-gray-400">Signed in to ChatGPT</p>
+                        <p className="text-xs text-gray-400">ChatGPT에 로그인됨</p>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
                         <button
                             onClick={handleRefreshToken}
                             disabled={isRefreshing}
-                            title="Refresh token"
+                            title="토큰 갱신"
                             className="w-8 h-8 flex items-center justify-center rounded-full bg-[#EDEEEF] hover:bg-[#E4E5E6] disabled:opacity-40 transition-colors"
                         >
                             {isRefreshing ? (
@@ -405,7 +333,7 @@ export default function CodexConfig({
                         <button
                             onClick={handleSignOut}
                             disabled={isLoggingOut}
-                            title="Sign out"
+                            title="로그아웃"
                             className="w-8 h-8 flex items-center justify-center rounded-full bg-[#EDEEEF] hover:bg-[#E4E5E6] disabled:opacity-40 transition-colors"
                         >
                             {isLoggingOut ? (
@@ -419,7 +347,7 @@ export default function CodexConfig({
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Select GPT Model
+                        GPT 모델 선택
                     </label>
                     <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
                         <PopoverTrigger asChild>
@@ -431,8 +359,8 @@ export default function CodexConfig({
                             >
                                 <span className="text-sm text-gray-900">
                                     {codexModel
-                                        ? (CODEX_MODELS.find((m) => m.id === codexModel)?.name ?? codexModel)
-                                        : "Select a model"}
+                                        ? (CHATGPT_MODELS.find((m) => m.id === codexModel)?.name ?? codexModel)
+                                        : "모델 선택"}
                                 </span>
                                 <ChevronUp className="w-4 h-4 text-gray-400" />
                             </Button>
@@ -443,19 +371,15 @@ export default function CodexConfig({
                             style={{ width: "var(--radix-popover-trigger-width)" }}
                         >
                             <Command>
-                                <CommandInput placeholder="Search models…" />
+                                <CommandInput placeholder="모델 검색…" />
                                 <CommandList>
-                                    <CommandEmpty>No model found.</CommandEmpty>
+                                    <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                                     <CommandGroup>
-                                        {CODEX_MODELS.map((model) => (
+                                        {CHATGPT_MODELS.map((model) => (
                                             <CommandItem
                                                 key={model.id}
                                                 value={model.id}
                                                 onSelect={(value) => {
-                                                    trackEvent(MixpanelEvent.Settings_Model_Selected, {
-                                                        provider: "codex",
-                                                        model: value,
-                                                    });
                                                     onInputChange(value, "codex_model");
                                                     setOpenModelSelect(false);
                                                 }}
@@ -486,7 +410,7 @@ export default function CodexConfig({
             onClick={handleSignIn}
             className="mt-8 py-2.5 px-3.5 bg-[#EDEEEF] hover:bg-[#E4E5E6] rounded-[48px] text-xs font-semibold text-[#101323] transition-colors"
         >
-            Sign in with ChatGPT
+            ChatGPT로 로그인
         </button>
     );
 }

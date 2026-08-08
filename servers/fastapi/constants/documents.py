@@ -1,5 +1,5 @@
 PDF_EXTENSIONS = [".pdf"]
-TEXT_EXTENSIONS = [".txt"]
+TEXT_EXTENSIONS = [".txt", ".md", ".markdown"]
 
 WORD_EXTENSIONS = [".doc", ".docx", ".docm", ".odt", ".rtf"]
 POWERPOINT_EXTENSIONS = [".ppt", ".pptx", ".pptm", ".odp"]
@@ -19,6 +19,7 @@ IMAGE_EXTENSIONS = (
     + BMP_EXTENSIONS
     + TIFF_EXTENSIONS
     + WEBP_EXTENSIONS
+    + SVG_EXTENSIONS
 )
 
 OFFICE_EXTENSIONS = WORD_EXTENSIONS + POWERPOINT_EXTENSIONS + SPREADSHEET_EXTENSIONS
@@ -60,6 +61,7 @@ IMAGE_MIME_TYPES = [
     "image/bmp",
     "image/tiff",
     "image/webp",
+    "image/svg+xml",
 ]
 
 UPLOAD_ACCEPTED_MIME_TYPES = (

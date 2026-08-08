@@ -1,23 +1,21 @@
-"""Create editable content JSON schemas from template v2 slide layouts."""
+"""Create editable-content JSON schemas from Template V2 layouts.
+
+This is the persistence-neutral portion of upstream's schema extractor.  It
+walks the recursive element contract and deliberately ignores decorative
+elements while retaining nested/repeated editable regions.
+"""
 
 from __future__ import annotations
 
 import copy
 import re
-from typing import Any
+from typing import Any, Mapping
 
 from .models.layouts import RawSlideLayout
 
 
-CONTENT_TYPES = {
-    "text",
-    "math",
-    "image",
-    "text-list",
-    "table",
-    "chart",
-    "infographic",
-}
+JSON_SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
+CONTENT_TYPES = {"text", "math", "image", "text-list", "table", "chart", "infographic"}
 CHART_TYPE_VALUES = [
     "area",
     "bar",
@@ -32,42 +30,21 @@ CHART_TYPE_VALUES = [
     "scatter",
     "stacked_bar",
 ]
-REPEATED_NAME_SUFFIX_RE = re.compile(r"_\d+$")
-JSON_SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
-COMPONENT_REPEATED_NAME_TOKEN_RE = re.compile(r"_\d+(?=_|$)")
-COMPONENT_SCHEMA_METADATA_KEYS = {
-    "$schema",
-    "title",
-    "description",
-    "x-element-type",
-    "x-element-path",
-}
-
-
-def _is_editable_element(element: dict[str, Any]) -> bool:
-    return element.get("decorative") is False
+_REPEATED_SUFFIX = re.compile(r"_\d+$")
 
 
 def extract_slide_schema_from_layout(layout: RawSlideLayout) -> dict[str, Any]:
-    """
-    Take slide layout and return content schema from slide layout.
-    """
     return _object_schema(_properties_schema(layout.elements))
 
 
-def get_component_schema(component: Any | dict[str, Any]) -> dict[str, Any] | None:
-    """
-    Return an editable content schema for a generated template component.
-    """
-    component_data = _component_data(component)
+def get_component_schema(component: Any | Mapping[str, Any]) -> dict[str, Any] | None:
+    component_data = _as_mapping(component)
     elements = component_data.get("elements")
     if not isinstance(elements, list):
         raise ValueError("component must contain an elements array")
-
-    properties = _component_schema_properties(elements)
+    properties = _component_properties_schema(elements)
     if not properties:
         return None
-
     return {
         "$schema": JSON_SCHEMA_URI,
         "type": "object",
@@ -80,23 +57,72 @@ def get_component_schema(component: Any | dict[str, Any]) -> dict[str, Any] | No
 
 
 def get_template_schema(
-    template_json: Any | dict[str, Any],
+    template_json: Any | Mapping[str, Any],
     *,
     source_file: str = "template.json",
 ) -> dict[str, Any]:
-    """
-    Return editable content schemas for component-based template layouts.
-    """
-    template_data = _template_data(template_json)
+    template_data = _as_mapping(template_json)
     layouts = template_data.get("layouts")
     if not isinstance(layouts, list):
         raise ValueError("template JSON must contain a layouts array")
 
-    generated_layouts = [
-        _template_layout_schema(layout, index)
-        for index, layout in enumerate(layouts, start=1)
-        if isinstance(layout, dict)
-    ]
+    generated_layouts: list[dict[str, Any]] = []
+    for index, layout_value in enumerate(layouts, start=1):
+        if not isinstance(layout_value, Mapping):
+            raise ValueError("each template layout must be an object")
+        components = layout_value.get("components")
+        if not isinstance(components, list):
+            raise ValueError("each template layout must contain components")
+
+        properties: dict[str, Any] = {}
+        entries: list[tuple[str, dict[str, Any]]] = []
+        for component in components:
+            schema = get_component_schema(component)
+            if schema is None:
+                continue
+            component_data = _as_mapping(component)
+            component_id = component_data.get("id")
+            if not isinstance(component_id, str):
+                raise ValueError("component must include a string id")
+            entries.append((component_id, schema))
+
+        counts = {
+            component_id: sum(
+                1 for candidate_id, _schema in entries if candidate_id == component_id
+            )
+            for component_id, _schema in entries
+        }
+        indexes: dict[str, int] = {}
+        for component_id, schema in entries:
+            occurrence = indexes.get(component_id, 0)
+            indexes[component_id] = occurrence + 1
+            key = (
+                f"{component_id}_{occurrence}"
+                if counts[component_id] > 1
+                else component_id
+            )
+            _add_property(properties, key, _strip_schema_metadata(schema))
+
+        layout_id = str(layout_value.get("id") or f"layout_{index}")
+        content_schema = None
+        if properties:
+            content_schema = {
+                "$schema": JSON_SCHEMA_URI,
+                "type": "object",
+                "title": layout_id,
+                "description": layout_value.get("description"),
+                "additionalProperties": False,
+                "properties": properties,
+                "required": list(properties),
+            }
+        generated_layouts.append(
+            {
+                "slide": index,
+                "layout_id": layout_value.get("id"),
+                "schema": content_schema,
+            }
+        )
+
     return {
         "source_file": source_file,
         "layout_count": len(generated_layouts),
@@ -106,86 +132,66 @@ def get_template_schema(
 
 def _properties_schema(elements: list[Any]) -> dict[str, Any]:
     properties: dict[str, Any] = {}
-
-    for name, schema in _nodes_for_elements(elements):
-        _add_property(properties, name, schema)
-
+    for value in elements:
+        node = _node_for_element(value)
+        if node is not None:
+            _add_property(properties, *node)
     return properties
 
 
-def _nodes_for_elements(elements: list[Any]) -> list[tuple[str, dict[str, Any]]]:
-    nodes: list[tuple[str, dict[str, Any]]] = []
-
-    for value in elements:
-        node = _node_for_element_value(value)
-        if node is not None:
-            nodes.append(node)
-
-    return nodes
-
-
-def _node_for_element_value(value: Any) -> tuple[str, dict[str, Any]] | None:
-    element = _element_dict(value)
-    if element is None:
+def _node_for_element(value: Any) -> tuple[str, dict[str, Any]] | None:
+    try:
+        element = _as_mapping(value)
+    except ValueError:
         return None
-
-    return _node_for_element(element)
-
-
-def _node_for_element(element: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
     element_type = element.get("type")
 
     if element_type == "container":
-        return _node_for_element_value(element.get("child"))
+        child = element.get("child")
+        return _node_for_element(child) if child is not None else None
 
     if element_type in {"flex", "grid", "group"}:
-        children = element.get("children", [])
+        children = element.get("children")
         if not isinstance(children, list):
             return None
-
-        nodes = _nodes_for_elements(children)
+        nodes = [
+            node for child in children if (node := _node_for_element(child)) is not None
+        ]
         if not nodes:
             return None
-
         name = _element_name(element)
         if name is None:
             return None
 
         if element_type in {"flex", "grid"}:
-            array_schema = _array_schema_for_repeated_children(element, children, nodes)
-            if array_schema is not None:
-                return name, array_schema
+            repeated = _repeated_children_schema(element, nodes)
+            if repeated is not None:
+                return name, repeated
 
         properties: dict[str, Any] = {}
         for child_name, child_schema in nodes:
             _add_property(properties, child_name, child_schema)
-
         schema = _object_schema(properties)
         if element_type in {"flex", "grid"}:
-            schema.update(
-                _compact(
-                    {
-                        "minProperties": element.get("min_children"),
-                        "maxProperties": element.get("max_children"),
-                    }
-                )
-            )
-
+            if element.get("min_children") is not None:
+                schema["minProperties"] = element["min_children"]
+            if element.get("max_children") is not None:
+                schema["maxProperties"] = element["max_children"]
         return name, schema
 
-    if element_type not in CONTENT_TYPES or not _is_editable_element(element):
+    if (
+        element_type not in CONTENT_TYPES
+        or element.get("decorative") is not False
+    ):
         return None
-
     name = _element_name(element)
     if name is None:
         return None
+    return name, _content_schema(element)
 
-    return name, _content_schema_for_element(element)
 
-
-def _content_schema_for_element(element: dict[str, Any]) -> dict[str, Any]:
+def _content_schema(element: Mapping[str, Any]) -> dict[str, Any]:
     element_type = element["type"]
-
     if element_type in {"text", "math"}:
         return _compact(
             {
@@ -194,11 +200,9 @@ def _content_schema_for_element(element: dict[str, Any]) -> dict[str, Any]:
                 "maxLength": element.get("max_length"),
             }
         )
-
     if element_type == "image":
-        key = "icon_query" if element.get("is_icon") is True else "image_prompt"
-        return _object_schema({key: {"type": "string"}})
-
+        prompt_key = "icon_query" if element.get("is_icon") is True else "image_prompt"
+        return _object_schema({prompt_key: {"type": "string"}})
     if element_type == "text-list":
         return _compact(
             {
@@ -214,60 +218,126 @@ def _content_schema_for_element(element: dict[str, Any]) -> dict[str, Any]:
                 ),
             }
         )
-
     if element_type == "table":
-        return _compact(
-            {
-                "type": "array",
-                "minItems": element.get("min_rows"),
-                "maxItems": element.get("max_rows"),
-                "items": _compact(
-                    {
-                        "type": "array",
-                        "minItems": element.get("min_columns"),
-                        "maxItems": element.get("max_columns"),
-                        "items": {"type": "string"},
-                    }
-                ),
-            }
-        )
-
+        return _table_content_schema(element)
     if element_type == "chart":
         return _chart_content_schema()
-
     if element_type == "infographic":
         return _infographic_content_schema()
-
     raise ValueError(f"unsupported content element type: {element_type}")
 
 
-def _array_schema_for_repeated_children(
-    element: dict[str, Any],
-    children: list[Any],
+def _repeated_children_schema(
+    element: Mapping[str, Any],
     nodes: list[tuple[str, dict[str, Any]]],
 ) -> dict[str, Any] | None:
-    if len(nodes) != _element_count(children):
-        return None
-
     if len(nodes) < 2 and not _can_expand_repeated_children(element, len(nodes)):
         return None
-
-    item_schemas = [
-        _schema_without_repeated_name_suffix(schema, _repeated_name_suffix(name))
+    normalized_names = [_REPEATED_SUFFIX.sub("", name) for name, _ in nodes]
+    normalized_schemas = [
+        _normalize_repeated_schema(
+            copy.deepcopy(schema),
+            _repeated_suffix(name),
+            strip_metadata=True,
+        )
         for name, schema in nodes
     ]
-    item_schema = _component_merge_repeated_schemas(item_schemas)
-    if item_schema is None:
+    if len(set(normalized_names)) != 1 or any(
+        schema != normalized_schemas[0] for schema in normalized_schemas[1:]
+    ):
         return None
-
     return _compact(
         {
             "type": "array",
-            "minItems": element.get("min_children"),
-            "maxItems": element.get("max_children"),
-            "items": item_schema,
+            "minItems": element.get("min_children", len(nodes)),
+            "maxItems": element.get("max_children", len(nodes)),
+            "items": normalized_schemas[0],
         }
     )
+
+
+def _can_expand_repeated_children(
+    element: Mapping[str, Any],
+    child_count: int,
+) -> bool:
+    max_children = element.get("max_children")
+    return isinstance(max_children, (int, float)) and max_children > child_count
+
+
+def _repeated_suffix(name: str) -> str | None:
+    match = _REPEATED_SUFFIX.search(name)
+    return match.group(0) if match else None
+
+
+def _normalize_repeated_schema(
+    value: Any,
+    suffix: str | None,
+    *,
+    strip_metadata: bool,
+) -> Any:
+    if isinstance(value, list):
+        return [
+            _normalize_repeated_schema(
+                item,
+                suffix,
+                strip_metadata=strip_metadata,
+            )
+            for item in value
+        ]
+    if not isinstance(value, dict):
+        return value
+
+    normalized: dict[str, Any] = {}
+    for key, nested in value.items():
+        if strip_metadata and key in {"title", "description", "x-element-path"}:
+            continue
+        if key == "properties" and isinstance(nested, dict):
+            normalized[key] = {
+                _strip_repeated_suffix(property_name, suffix): (
+                    _normalize_repeated_schema(
+                        property_schema,
+                        suffix,
+                        strip_metadata=strip_metadata,
+                    )
+                )
+                for property_name, property_schema in nested.items()
+            }
+            continue
+        if key == "required" and isinstance(nested, list):
+            normalized[key] = [
+                _strip_repeated_suffix(item, suffix)
+                for item in nested
+                if isinstance(item, str)
+            ]
+            continue
+        normalized[key] = _normalize_repeated_schema(
+            nested,
+            suffix,
+            strip_metadata=strip_metadata,
+        )
+    return normalized
+
+
+def _strip_repeated_suffix(value: str, suffix: str | None) -> str:
+    return value[: -len(suffix)] if suffix and value.endswith(suffix) else value
+
+
+def _add_property(
+    properties: dict[str, Any],
+    name: str,
+    schema: dict[str, Any],
+) -> None:
+    candidate = name
+    suffix = 2
+    while candidate in properties:
+        candidate = f"{name}_{suffix}"
+        suffix += 1
+    properties[candidate] = schema
+
+
+def _element_name(element: Mapping[str, Any]) -> str | None:
+    name = element.get("name")
+    return name.strip() if isinstance(name, str) and name.strip() else None
 
 
 def _object_schema(
@@ -277,610 +347,261 @@ def _object_schema(
 ) -> dict[str, Any]:
     return {
         "type": "object",
+        "additionalProperties": False,
         "properties": properties,
         "required": list(properties) if required is None else required,
-        "additionalProperties": False,
     }
-
-
-def _element_name(element: dict[str, Any]) -> str | None:
-    name = element.get("name")
-    if not isinstance(name, str):
-        return None
-
-    stripped = name.strip()
-    return stripped or None
-
-
-def _add_property(
-    properties: dict[str, Any],
-    name: str,
-    schema: dict[str, Any],
-) -> None:
-    key = name
-    suffix = 2
-
-    while key in properties:
-        key = f"{name}_{suffix}"
-        suffix += 1
-
-    properties[key] = schema
-
-
-def _schema_without_repeated_name_suffix(
-    schema: dict[str, Any],
-    suffix: str | None,
-) -> dict[str, Any]:
-    if schema.get("type") != "object":
-        return {
-            key: _normalize_schema_value(value, suffix)
-            for key, value in schema.items()
-        }
-
-    properties = schema.get("properties")
-    if not isinstance(properties, dict):
-        return {
-            key: _normalize_schema_value(value, suffix)
-            for key, value in schema.items()
-        }
-
-    normalized_properties: dict[str, Any] = {}
-    name_map: dict[str, str] = {}
-
-    for key, value in properties.items():
-        normalized_key = _strip_repeated_suffix(key, suffix)
-        name_map[key] = normalized_key
-        normalized_properties[normalized_key] = _normalize_schema_value(value, suffix)
-
-    normalized_schema = {
-        key: _normalize_schema_value(value, suffix)
-        for key, value in schema.items()
-        if key not in {"properties", "required"}
-    }
-    normalized_schema["properties"] = normalized_properties
-
-    required = schema.get("required")
-    if isinstance(required, list):
-        normalized_schema["required"] = [
-            name_map.get(item, _strip_repeated_suffix(item, suffix))
-            for item in required
-            if isinstance(item, str)
-        ]
-
-    return normalized_schema
-
-
-def _normalize_schema_value(value: Any, suffix: str | None) -> Any:
-    if isinstance(value, dict):
-        return _schema_without_repeated_name_suffix(value, suffix)
-
-    if isinstance(value, list):
-        return [_normalize_schema_value(item, suffix) for item in value]
-
-    return value
-
-
-def _repeated_name_suffix(value: str) -> str | None:
-    match = REPEATED_NAME_SUFFIX_RE.search(value)
-    return match.group(0) if match else None
-
-
-def _strip_repeated_suffix(value: str, suffix: str | None) -> str:
-    if suffix and value.endswith(suffix):
-        return value[: -len(suffix)]
-
-    return value
-
-
-def _element_count(values: list[Any]) -> int:
-    return sum(1 for value in values if _element_dict(value) is not None)
-
-
-def _can_expand_repeated_children(element: dict[str, Any], child_count: int) -> bool:
-    max_children = element.get("max_children")
-    return isinstance(max_children, (int, float)) and max_children > child_count
 
 
 def _compact(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if item is not None}
 
 
-def _element_dict(value: Any) -> dict[str, Any] | None:
-    if isinstance(value, dict):
-        return value
-
+def _as_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return dict(value)
     model_dump = getattr(value, "model_dump", None)
-    if not callable(model_dump):
-        return None
-
-    dumped = model_dump(mode="json")
-    if isinstance(dumped, dict):
-        return dumped
-
-    return None
+    if callable(model_dump):
+        return model_dump(mode="json", exclude_none=True)
+    raise ValueError("Template V2 value must be an object")
 
 
-def _template_layout_schema(layout: dict[str, Any], slide_index: int) -> dict[str, Any]:
-    properties: dict[str, Any] = {}
-    required: list[str] = []
-
-    components = layout.get("components")
-    if not isinstance(components, list):
-        components = []
-
-    component_entries: list[tuple[str, dict[str, Any]]] = []
-    for component in components:
-        component_data = _component_data_or_none(component)
-        if component_data is None:
-            continue
-
-        component_schema = get_component_schema(component_data)
-        if component_schema is None:
-            continue
-
-        component_entries.append((_component_id(component_data), component_schema))
-
-    component_counts: dict[str, int] = {}
-    for component_id, _schema in component_entries:
-        component_counts[component_id] = component_counts.get(component_id, 0) + 1
-
-    component_indexes: dict[str, int] = {}
-    for component_id, component_schema in component_entries:
-        component_index = component_indexes.get(component_id, 0)
-        component_indexes[component_id] = component_index + 1
-
-        key = _template_component_key(
-            component_id,
-            occurrence_index=component_index,
-            occurrence_count=component_counts[component_id],
-            properties=properties,
-        )
-        properties[key] = _component_schema_for_template(component_schema)
-        required.append(key)
-
-    schema = None
-    if properties:
-        schema = {
-            "$schema": JSON_SCHEMA_URI,
-            "type": "object",
-            "title": layout.get("id") or f"slide_{slide_index}",
-            "description": layout.get("description"),
-            "additionalProperties": False,
-            "properties": properties,
-            "required": required,
-        }
-
-    return {
-        "slide": slide_index,
-        "layout_id": layout.get("id"),
-        "schema": schema,
-    }
-
-
-def _component_schema_for_template(component_schema: dict[str, Any]) -> dict[str, Any]:
-    schema = _strip_component_schema_metadata(copy.deepcopy(component_schema))
-    return schema if isinstance(schema, dict) else component_schema
-
-
-def _strip_component_schema_metadata(value: Any) -> Any:
+def _strip_schema_metadata(value: Any) -> Any:
     if isinstance(value, list):
-        return [_strip_component_schema_metadata(item) for item in value]
-
+        return [_strip_schema_metadata(item) for item in value]
     if not isinstance(value, dict):
-        return value
-
+        return copy.deepcopy(value)
     stripped: dict[str, Any] = {}
-    for key, nested in value.items():
-        if key in COMPONENT_SCHEMA_METADATA_KEYS:
+    for key, item in value.items():
+        if key in {
+            "$schema",
+            "title",
+            "description",
+            "x-element-type",
+            "x-element-path",
+        }:
             continue
-
-        if key == "properties" and isinstance(nested, dict):
+        # Property names are user-defined editor slot identifiers. A slot can
+        # legitimately be named "title" or "description"; only metadata keys
+        # on each schema object are removed.
+        if key == "properties" and isinstance(item, dict):
             stripped[key] = {
-                property_name: _strip_component_schema_metadata(property_schema)
-                for property_name, property_schema in nested.items()
+                property_name: _strip_schema_metadata(property_schema)
+                for property_name, property_schema in item.items()
             }
             continue
-
-        stripped[key] = _strip_component_schema_metadata(nested)
-
+        stripped[key] = _strip_schema_metadata(item)
     return stripped
 
 
-def _template_component_key(
-    component_id: str,
-    *,
-    occurrence_index: int,
-    occurrence_count: int,
-    properties: dict[str, Any],
-) -> str:
-    key = (
-        f"{component_id}_{occurrence_index}"
-        if occurrence_count > 1
-        else component_id
-    )
-    suffix = 1
-    unique_key = key
-    while unique_key in properties:
-        unique_key = f"{key}_{suffix}"
-        suffix += 1
-    return unique_key
-
-
-def _component_data(component: Any | dict[str, Any]) -> dict[str, Any]:
-    component_data = _component_data_or_none(component)
-    if component_data is not None:
-        return component_data
-    raise ValueError("component must be a Component or JSON object")
-
-
-def _component_data_or_none(value: Any) -> dict[str, Any] | None:
+def _strip_titles(value: Any) -> Any:
     if isinstance(value, dict):
-        return copy.deepcopy(value)
-
-    model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        dumped = model_dump(mode="json")
-        if isinstance(dumped, dict):
-            return dumped
-
-    return None
-
-
-def _template_data(template_json: Any | dict[str, Any]) -> dict[str, Any]:
-    if isinstance(template_json, dict):
-        return copy.deepcopy(template_json)
-
-    model_dump = getattr(template_json, "model_dump", None)
-    if callable(model_dump):
-        dumped = model_dump(mode="json")
-        if isinstance(dumped, dict):
-            return dumped
-
-    raise ValueError("template JSON must be a JSON object")
+        return {
+            key: _strip_titles(item)
+            for key, item in value.items()
+            if key not in {"title", "description"}
+        }
+    if isinstance(value, list):
+        return [_strip_titles(item) for item in value]
+    return value
 
 
-def _component_id(component_data: dict[str, Any]) -> str:
-    component_id = component_data.get("id")
-    if isinstance(component_id, str):
-        return component_id
-    raise ValueError("component must include a string id")
-
-
-def _component_schema_properties(elements: list[Any]) -> dict[str, Any]:
+def _component_properties_schema(elements: list[Any]) -> dict[str, Any]:
     properties: dict[str, Any] = {}
-    for name, schema in _component_schema_nodes_for_elements(elements):
-        _component_add_schema_property(properties, name, schema)
+    for name, schema in _component_nodes_for_elements(elements):
+        _add_property(properties, name, schema)
     return properties
 
 
-def _component_schema_nodes_for_elements(
+def _component_nodes_for_elements(
     elements: list[Any],
     *,
     path: str = "elements",
 ) -> list[tuple[str, dict[str, Any]]]:
     nodes: list[tuple[str, dict[str, Any]]] = []
-    for index, element in enumerate(elements):
-        if isinstance(element, dict):
+    for index, value in enumerate(elements):
+        if isinstance(value, Mapping):
             nodes.extend(
-                _component_schema_nodes_for_element(
-                    element,
+                _component_nodes_for_element(
+                    dict(value),
                     path=f"{path}.{index}",
                 )
             )
     return nodes
 
 
-def _component_schema_nodes_for_element(
+def _component_nodes_for_element(
     element: dict[str, Any],
     *,
     path: str,
 ) -> list[tuple[str, dict[str, Any]]]:
     element_type = element.get("type")
-    name = _component_schema_element_name(element)
+    name = _element_name(element)
 
     if (
         element_type in CONTENT_TYPES
-        and _is_editable_element(element)
+        and element.get("decorative") is False
         and name is not None
     ):
-        return [
-            (
-                name,
-                _component_content_field_schema(
-                    {"name": name, "path": path, "element": element}
-                ),
-            )
-        ]
+        return [(name, _component_content_schema(element, name=name, path=path))]
 
     if element_type == "container":
         child = element.get("child")
         child_nodes = (
-            _component_schema_nodes_for_element(child, path=f"{path}.child")
-            if isinstance(child, dict)
+            _component_nodes_for_element(dict(child), path=f"{path}.child")
+            if isinstance(child, Mapping)
             else []
         )
         if name is None or not child_nodes:
             return child_nodes
-        return [(name, _component_object_schema_from_nodes(child_nodes))]
+        return [(name, _component_object_schema(child_nodes))]
 
     if element_type in {"flex", "grid", "group"}:
         children = element.get("children")
         if not isinstance(children, list):
             return []
-
         child_node_sets = [
-            _component_schema_nodes_for_element(child, path=f"{path}.children.{index}")
-            if isinstance(child, dict)
+            _component_nodes_for_element(
+                dict(child),
+                path=f"{path}.children.{index}",
+            )
+            if isinstance(child, Mapping)
             else []
             for index, child in enumerate(children)
         ]
-        child_nodes = [
-            node
-            for node_set in child_node_sets
-            for node in node_set
-        ]
+        child_nodes = [node for node_set in child_node_sets for node in node_set]
         if name is None or not child_nodes:
             return child_nodes
-
         if element_type in {"flex", "grid"}:
-            array_schema = _component_array_schema_for_repeated_children(
-                element,
-                child_node_sets,
-            )
-            if array_schema is not None:
-                return [(name, array_schema)]
-
-        return [(name, _component_object_schema_from_nodes(child_nodes))]
-
+            repeated = _component_repeated_schema(element, child_node_sets)
+            if repeated is not None:
+                return [(name, repeated)]
+        return [(name, _component_object_schema(child_nodes))]
     return []
 
 
-def _component_schema_element_name(element: dict[str, Any]) -> str | None:
-    name = element.get("name")
-    if not isinstance(name, str):
-        return None
-    stripped = name.strip()
-    return stripped or None
-
-
-def _component_object_schema_from_nodes(
+def _component_object_schema(
     nodes: list[tuple[str, dict[str, Any]]],
 ) -> dict[str, Any]:
     properties: dict[str, Any] = {}
     for name, schema in nodes:
-        _component_add_schema_property(properties, name, schema)
+        _add_property(properties, name, schema)
+    return _object_schema(properties)
+
+
+def _component_repeated_schema(
+    element: Mapping[str, Any],
+    child_node_sets: list[list[tuple[str, dict[str, Any]]]],
+) -> dict[str, Any] | None:
+    if any(not node_set for node_set in child_node_sets):
+        return None
+    if len(child_node_sets) < 2 and not _can_expand_repeated_children(
+        element,
+        len(child_node_sets),
+    ):
+        return None
+
+    normalized_items: list[dict[str, Any]] = []
+    for node_set in child_node_sets:
+        suffix = _repeated_suffix(node_set[0][0])
+        item_schema = (
+            node_set[0][1]
+            if len(node_set) == 1 and node_set[0][1].get("type") == "object"
+            else _component_object_schema(node_set)
+        )
+        normalized = _normalize_repeated_schema(
+            copy.deepcopy(item_schema),
+            suffix,
+            strip_metadata=False,
+        )
+        normalized = _remove_element_paths(normalized)
+        _retitle_properties(normalized)
+        normalized_items.append(normalized)
+
+    comparable = [_comparable_schema(item) for item in normalized_items]
+    if any(item != comparable[0] for item in comparable[1:]):
+        return None
+    return _compact(
+        {
+            "type": "array",
+            "minItems": element.get("min_children"),
+            "maxItems": element.get("max_children"),
+            "items": normalized_items[0],
+        }
+    )
+
+
+def _remove_element_paths(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_remove_element_paths(item) for item in value]
+    if not isinstance(value, dict):
+        return value
     return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": properties,
-        "required": list(properties),
+        key: _remove_element_paths(item)
+        for key, item in value.items()
+        if key != "x-element-path"
     }
 
 
-def _component_add_schema_property(
-    properties: dict[str, Any],
+def _retitle_properties(value: Any) -> None:
+    if not isinstance(value, dict):
+        return
+    properties = value.get("properties")
+    if isinstance(properties, dict):
+        for name, schema in properties.items():
+            if isinstance(schema, dict) and "title" in schema:
+                schema["title"] = _field_title(name)
+            _retitle_properties(schema)
+    for nested in value.values():
+        if isinstance(nested, (dict, list)):
+            if isinstance(nested, list):
+                for item in nested:
+                    _retitle_properties(item)
+            else:
+                _retitle_properties(nested)
+
+
+def _comparable_schema(value: Any, key: str = "") -> Any:
+    if isinstance(value, list):
+        items = [_comparable_schema(item) for item in value]
+        return sorted(items) if key in {"enum", "required"} else items
+    if not isinstance(value, dict):
+        return value
+    return {
+        nested_key: _comparable_schema(value[nested_key], nested_key)
+        for nested_key in sorted(value)
+        if nested_key != "x-element-path"
+    }
+
+
+def _component_content_schema(
+    element: Mapping[str, Any],
+    *,
     name: str,
-    schema: dict[str, Any],
-) -> None:
-    key = name
-    suffix = 2
-    while key in properties:
-        key = f"{name}_{suffix}"
-        suffix += 1
-    properties[key] = schema
-
-
-def _component_array_schema_for_repeated_children(
-    element: dict[str, Any],
-    child_node_sets: list[list[tuple[str, dict[str, Any]]]],
-) -> dict[str, Any] | None:
-    populated_node_sets = [node_set for node_set in child_node_sets if node_set]
-    if len(populated_node_sets) != len(child_node_sets):
-        return None
-
-    if len(populated_node_sets) < 2 and not _can_expand_repeated_children(
-        element,
-        len(populated_node_sets),
-    ):
-        return None
-
-    for strategy in ("numeric", "none", "prefix"):
-        normalized_item_schemas = [
-            _component_normalized_repeated_item_schema(node_set, strategy=strategy)
-            for node_set in populated_node_sets
-        ]
-        merged_item_schema = _component_merge_repeated_schemas(
-            normalized_item_schemas
-        )
-        if merged_item_schema is not None:
-            return _without_none_values(
-                {
-                    "type": "array",
-                    "minItems": element.get("min_children"),
-                    "maxItems": element.get("max_children"),
-                    "items": merged_item_schema,
-                }
-            )
-
-    return None
-
-
-def _component_normalized_repeated_item_schema(
-    nodes: list[tuple[str, dict[str, Any]]],
-    *,
-    strategy: str,
+    path: str,
 ) -> dict[str, Any]:
-    token = _component_normalization_token_for_nodes(nodes, strategy=strategy)
-    item_schema = (
-        nodes[0][1]
-        if len(nodes) == 1 and nodes[0][1].get("type") == "object"
-        else _component_object_schema_from_nodes(nodes)
-    )
-    normalized = _component_schema_without_repeated_name_suffix(item_schema, token)
-    if (
-        token
-        and len(nodes) == 1
-        and isinstance(normalized, dict)
-        and isinstance(normalized.get("title"), str)
-    ):
-        normalized["title"] = _component_content_field_title(
-            _component_strip_repeated_suffix(nodes[0][0], token)
-        )
-    return normalized
-
-
-def _component_normalization_token_for_nodes(
-    nodes: list[tuple[str, dict[str, Any]]],
-    *,
-    strategy: str,
-) -> str | None:
-    if strategy == "none":
-        return None
-
-    token_getter = (
-        _component_numeric_name_token
-        if strategy == "numeric"
-        else _component_prefix_name_token
-    )
-    tokens = [token_getter(name) for name, _schema in nodes]
-    tokens = [token for token in tokens if token is not None]
-    if not tokens:
-        return None
-
-    first_token = tokens[0]
-    if all(token == first_token for token in tokens):
-        return first_token
-    return None
-
-
-def _component_numeric_name_token(value: str) -> str | None:
-    match = COMPONENT_REPEATED_NAME_TOKEN_RE.search(value)
-    return match.group(0) if match else None
-
-
-def _component_prefix_name_token(value: str) -> str | None:
-    token, separator, _rest = value.partition("_")
-    if not separator or not token:
-        return None
-    return f"{token}_"
-
-
-def _component_schema_without_repeated_name_suffix(
-    schema: dict[str, Any],
-    suffix: str | None,
-) -> dict[str, Any]:
-    normalized = _component_normalize_schema_value(schema, suffix)
-    return normalized if isinstance(normalized, dict) else schema
-
-
-def _component_normalize_schema_value(value: Any, suffix: str | None) -> Any:
-    if isinstance(value, list):
-        return [_component_normalize_schema_value(item, suffix) for item in value]
-
-    if not isinstance(value, dict):
-        return value
-
-    normalized: dict[str, Any] = {}
-    for key, nested in value.items():
-        if key == "x-element-path":
-            continue
-
-        if key == "properties" and isinstance(nested, dict):
-            properties: dict[str, Any] = {}
-            for property_name, property_schema in nested.items():
-                normalized_name = _component_strip_repeated_suffix(
-                    property_name,
-                    suffix,
-                )
-                normalized_schema = _component_normalize_schema_value(
-                    property_schema,
-                    suffix,
-                )
-                if isinstance(normalized_schema, dict) and "title" in normalized_schema:
-                    normalized_schema["title"] = _component_content_field_title(
-                        normalized_name
-                    )
-                properties[normalized_name] = normalized_schema
-            normalized[key] = properties
-            continue
-
-        if key == "required" and isinstance(nested, list):
-            normalized[key] = [
-                _component_strip_repeated_suffix(item, suffix)
-                for item in nested
-                if isinstance(item, str)
-            ]
-            continue
-
-        normalized[key] = _component_normalize_schema_value(nested, suffix)
-
-    return normalized
-
-
-def _component_strip_repeated_suffix(value: str, suffix: str | None) -> str:
-    if suffix and suffix in value:
-        return value.replace(suffix, "", 1)
-    return value
-
-
-def _component_merge_repeated_schemas(
-    schemas: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    if not schemas:
-        return None
-
-    first = _component_comparable_repeated_schema(schemas[0])
-    if any(_component_comparable_repeated_schema(schema) != first for schema in schemas):
-        return None
-
-    return _without_none_values(copy.deepcopy(schemas[0]))
-
-
-def _component_comparable_repeated_schema(value: Any, key: str = "") -> Any:
-    if isinstance(value, list):
-        items = [_component_comparable_repeated_schema(item) for item in value]
-        if key in {"enum", "required"} and all(isinstance(item, str) for item in items):
-            return sorted(items)
-        return items
-
-    if not isinstance(value, dict):
-        return value
-
-    comparable: dict[str, Any] = {}
-    for nested_key in sorted(value):
-        if nested_key == "x-element-path":
-            continue
-        comparable[nested_key] = _component_comparable_repeated_schema(
-            value[nested_key],
-            nested_key,
-        )
-    return comparable
-
-
-def _component_content_field_schema(field: dict[str, Any]) -> dict[str, Any]:
-    element = field["element"]
-    element_type = element.get("type")
-    schema: dict[str, Any]
-
-    if element_type == "text":
-        schema = {
+    element_type = str(element["type"])
+    if element_type in {"text", "math"}:
+        schema: dict[str, Any] = {
             "type": "string",
             "minLength": element.get("min_length"),
             "maxLength": element.get("max_length"),
         }
     elif element_type == "image":
-        prompt_key = _component_image_prompt_key(element)
-        schema = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
+        prompt_key = "icon_query" if element.get("is_icon") is True else "image_prompt"
+        prompt_description = (
+            "Search query for the replacement icon."
+            if element.get("is_icon") is True
+            else "Prompt for the replacement image."
+        )
+        schema = _object_schema(
+            {
                 prompt_key: {
                     "type": "string",
-                    "description": _component_image_prompt_description(element),
+                    "description": prompt_description,
                 }
-            },
-            "required": [prompt_key],
-        }
+            }
+        )
     elif element_type == "text-list":
         schema = {
             "type": "array",
@@ -893,10 +614,61 @@ def _component_content_field_schema(field: dict[str, Any]) -> dict[str, Any]:
             "maxItems": element.get("max_items"),
         }
     elif element_type == "table":
-        schema = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
+        schema = _table_content_schema(element)
+    elif element_type == "chart":
+        schema = _chart_content_schema()
+    elif element_type == "infographic":
+        schema = _infographic_content_schema()
+    else:
+        schema = {}
+    return {
+        **_compact_nested(schema),
+        "title": _field_title(name),
+        "x-element-type": element_type,
+        "x-element-path": path,
+    }
+
+
+def _field_title(name: str) -> str:
+    return " ".join(part.capitalize() for part in name.split("_") if part) or name
+
+
+def _infographic_data_schema(infographic_type: str) -> dict[str, Any]:
+    return _object_schema(
+        {
+            "type": {"const": infographic_type},
+            "min_value": {"type": "number"},
+            "max_value": {"type": "number"},
+            "value": {"type": "number"},
+        }
+    )
+
+
+def _infographic_content_schema() -> dict[str, Any]:
+    return _object_schema(
+        {
+            "data": {
+                "oneOf": [
+                    _infographic_data_schema("progress_bar"),
+                    _infographic_data_schema("gauge"),
+                ]
+            },
+            "colors": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+            },
+        },
+        required=["data"],
+    )
+
+
+def _table_content_schema(element: Mapping[str, Any]) -> dict[str, Any]:
+    """Use one table content contract for raw layouts and editable components."""
+
+    schema = _compact_nested(
+        _object_schema(
+            {
                 "columns": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -914,80 +686,42 @@ def _component_content_field_schema(field: dict[str, Any]) -> dict[str, Any]:
                     "minItems": element.get("min_rows"),
                     "maxItems": element.get("max_rows"),
                 },
-            },
-            "required": ["columns", "rows"],
-        }
-    elif element_type == "chart":
-        schema = _chart_content_schema()
-    elif element_type == "infographic":
-        schema = _infographic_content_schema()
-    else:
-        schema = {}
-
-    return {
-        **_without_none_values(schema),
-        "title": _component_content_field_title(field["name"]),
-        "x-element-type": element_type,
-        "x-element-path": field["path"],
-    }
-
-
-def _infographic_data_content_schema(infographic_type: str) -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "type": {"const": infographic_type},
-            "min_value": {"type": "number"},
-            "max_value": {"type": "number"},
-            "value": {"type": "number"},
-        },
-        "required": ["type", "min_value", "max_value", "value"],
-    }
-
-
-def _infographic_content_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "data": {
-                "oneOf": [
-                    _infographic_data_content_schema("progress_bar"),
-                    _infographic_data_content_schema("gauge"),
-                ]
-            },
-            "colors": {
-                "type": "array",
-                "items": {"type": "string"},
-                "minItems": 1,
-            },
-        },
-        "required": ["data"],
-    }
-
-
-def _without_none_values(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: _without_none_values(nested)
-            for key, nested in value.items()
-            if nested is not None
-        }
-    if isinstance(value, list):
-        return [_without_none_values(item) for item in value]
-    return value
+            }
+        )
+    )
+    min_columns = element.get("min_columns")
+    max_columns = element.get("max_columns")
+    if (
+        isinstance(min_columns, int)
+        and not isinstance(min_columns, bool)
+        and isinstance(max_columns, int)
+        and not isinstance(max_columns, bool)
+        and 0 <= min_columns <= max_columns
+    ):
+        schema["oneOf"] = [
+            {
+                "properties": {
+                    "columns": {
+                        "minItems": column_count,
+                        "maxItems": column_count,
+                    },
+                    "rows": {
+                        "items": {
+                            "minItems": column_count,
+                            "maxItems": column_count,
+                        }
+                    },
+                }
+            }
+            for column_count in range(min_columns, max_columns + 1)
+        ]
+    return schema
 
 
 def _chart_content_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "chart_type": {
-                "type": "string",
-                "enum": CHART_TYPE_VALUES,
-            },
+    schema = _object_schema(
+        {
+            "chart_type": {"type": "string", "enum": CHART_TYPE_VALUES},
             "title": {"type": ["string", "null"]},
             "categories": {
                 "type": "array",
@@ -996,35 +730,69 @@ def _chart_content_schema() -> dict[str, Any]:
             },
             "series": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
+                "items": _object_schema(
+                    {
                         "name": {"type": "string"},
                         "values": {
                             "type": "array",
                             "items": {"type": "number"},
                             "maxItems": 24,
                         },
-                    },
-                    "required": ["name", "values"],
-                },
+                    }
+                ),
                 "maxItems": 12,
             },
         },
-        "required": ["chart_type", "categories", "series"],
-    }
+        required=["chart_type", "categories", "series"],
+    )
+    schema["allOf"] = [
+        {
+            "if": {
+                "properties": {
+                    "chart_type": {"enum": ["pie", "donut"]},
+                },
+                "required": ["chart_type"],
+            },
+            "then": {
+                "properties": {
+                    "series": {"maxItems": 1},
+                }
+            },
+        },
+        {
+            "oneOf": [
+                {
+                    "properties": {
+                        "categories": {
+                            "minItems": item_count,
+                            "maxItems": item_count,
+                        },
+                        "series": {
+                            "items": {
+                                "properties": {
+                                    "values": {
+                                        "minItems": item_count,
+                                        "maxItems": item_count,
+                                    }
+                                }
+                            }
+                        },
+                    }
+                }
+                for item_count in range(25)
+            ]
+        },
+    ]
+    return schema
 
 
-def _component_content_field_title(name: str) -> str:
-    return " ".join(part.capitalize() for part in name.split("_") if part) or name
-
-
-def _component_image_prompt_key(element: dict[str, Any]) -> str:
-    return "icon_query" if element.get("is_icon") is True else "image_prompt"
-
-
-def _component_image_prompt_description(element: dict[str, Any]) -> str:
-    if element.get("is_icon") is True:
-        return "Search query for the replacement icon."
-    return "Prompt for the replacement image."
+def _compact_nested(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_compact_nested(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _compact_nested(item)
+            for key, item in value.items()
+            if item is not None
+        }
+    return value

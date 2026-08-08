@@ -1,8 +1,9 @@
 import ipaddress
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse
 
@@ -29,6 +30,35 @@ from api.v1.auth.token import TOKEN_ROUTER
 
 API_V1_AUTH_ROUTER = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 API_V1_AUTH_ROUTER.include_router(TOKEN_ROUTER)
+
+# In-memory login throttle: without it a single known-admin account can be
+# brute-forced online (PBKDF2 only slows OFFLINE cracking). Per-client sliding
+# window; sufficient for this single-instance self-hosted tool.
+_LOGIN_MAX_FAILURES = 5
+_LOGIN_WINDOW_SECONDS = 300
+_login_failures: dict[str, list[float]] = {}
+
+
+def _login_client_key(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _assert_login_allowed(key: str) -> None:
+    now = time.monotonic()
+    recent = [t for t in _login_failures.get(key, []) if now - t < _LOGIN_WINDOW_SECONDS]
+    _login_failures[key] = recent
+    if len(recent) >= _LOGIN_MAX_FAILURES:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed login attempts. Please wait a few minutes.",
+        )
+
+
+def _record_login_failure(key: str) -> None:
+    _login_failures.setdefault(key, []).append(time.monotonic())
 
 
 def normalize_username(username: str) -> str:
@@ -181,37 +211,33 @@ async def login(
 ):
     if not await _account_count(session):
         raise HTTPException(status_code=428, detail="Login setup is required")
+
+    client_key = _login_client_key(request)
+    _assert_login_allowed(client_key)
+
     username = normalize_username(body.username)
-    rate_limit_key = login_rate_limit_key(
-        _login_client_host(request),
-        username,
-    )
-    retry_after = await LOGIN_RATE_LIMITER.retry_after(rate_limit_key)
-    if retry_after is not None:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many failed login attempts. Please try again later.",
-            headers={"Retry-After": str(retry_after)},
-        )
     user = await session.scalar(
         select(User).where(func.lower(User.username) == username.casefold())
     )
     if user is None or not user.is_active:
+        # Keep unknown-user requests close to the cost of a real password check.
         PASSWORD_HELPER.hash(body.password)
-        await LOGIN_RATE_LIMITER.record_failure(rate_limit_key)
+        _record_login_failure(client_key)
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     verified, replacement_hash = PASSWORD_HELPER.verify_and_update(
         body.password, user.hashed_password
     )
     if not verified:
-        await LOGIN_RATE_LIMITER.record_failure(rate_limit_key)
+        _record_login_failure(client_key)
         raise HTTPException(status_code=401, detail="Unauthorized")
     if replacement_hash:
         user.hashed_password = replacement_hash
         await session.commit()
-    await LOGIN_RATE_LIMITER.clear(rate_limit_key)
+        if user.is_superuser:
+            persist_admin_credentials(user.username, replacement_hash)
 
+    _login_failures.pop(client_key, None)
     token = await get_jwt_strategy().write_token(user)
     response = JSONResponse(
         {

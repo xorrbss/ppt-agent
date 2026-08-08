@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 class OllamaModelStatus(BaseModel):
     name: str
-    parameters: Optional[str] = None
     size: Optional[int] = None
     downloaded: Optional[int] = None
     status: str

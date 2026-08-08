@@ -3,6 +3,7 @@ import fsPromises from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveAppDataDirectory } from "@/lib/app-data-directory";
 import { authStatusForRequest } from "@/lib/server-auth-role";
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -12,11 +13,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 function getExportsDirectory(): string {
-  const appDataDirectory = process.env.APP_DATA_DIRECTORY?.trim();
-  if (!appDataDirectory) {
-    throw new Error("APP_DATA_DIRECTORY is required to download exported files.");
-  }
-  return path.join(appDataDirectory, "exports");
+  return path.join(resolveAppDataDirectory(), "exports");
 }
 
 function getSafeExportName(
@@ -68,6 +65,13 @@ export async function GET(request: NextRequest) {
   if (!filename) {
     return NextResponse.json({ error: "Invalid export file name" }, { status: 400 });
   }
+  const ext = path.extname(filename).toLowerCase();
+  if (!CONTENT_TYPES[ext]) {
+    return NextResponse.json(
+      { error: "Unsupported export file type" },
+      { status: 400 }
+    );
+  }
 
   try {
     const exportsDirectory = getExportsDirectory();
@@ -82,13 +86,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    const ext = path.extname(resolvedFilePath).toLowerCase();
     const stats = await fsPromises.stat(resolvedFilePath);
+    if (!stats.isFile()) {
+      return NextResponse.json({ error: "Export file not found" }, { status: 404 });
+    }
     const stream = Readable.toWeb(fs.createReadStream(resolvedFilePath));
     return new NextResponse(stream as unknown as BodyInit, {
       headers: {
-        "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream",
-        "Content-Disposition": contentDisposition(path.basename(filename)),
+        "Content-Type": CONTENT_TYPES[ext],
+        "Content-Disposition": contentDisposition(filename),
         "Content-Length": String(stats.size),
         "Cache-Control": "no-store",
       },

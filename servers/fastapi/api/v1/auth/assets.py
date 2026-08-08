@@ -8,6 +8,7 @@ PRIVATE_APP_DATA_ROOTS = {
     "uploads",
     "pptx-to-html",
     "pptx-to-json",
+    "workspace-artifacts",
 }
 SHARED_APP_DATA_ROOTS = {"fonts", "templates"}
 

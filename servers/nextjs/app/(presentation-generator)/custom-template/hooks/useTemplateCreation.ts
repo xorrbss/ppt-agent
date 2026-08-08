@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { notify } from "@/components/ui/sonner";
 import { getHeader, getHeaderForFormData } from "@/app/(presentation-generator)/services/api/header";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
@@ -6,21 +6,15 @@ import {
     TemplateCreationState,
     FontData,
     FontUploadPreviewResponse,
+    SlideLayoutResponse,
     UploadedFont,
     ProcessedSlide,
-    TemplateV2Layout,
-    TemplateCreationMetadata,
 } from "../types";
 import { getApiUrl } from "@/utils/api";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import { bucketFileSize, sanitizeAnalyticsError } from "@/utils/analytics";
 
-const TEMPLATE_V2_LAYOUT_BATCH_SIZE = 1;
-const MAX_PROCESSING_PROGRESS_PERCENT = 95;
-
-type CreatedTemplateV2Layout = { index: number; layout: TemplateV2Layout };
-type FailedTemplateV2Layout = { index: number; error: string };
-type GoogleFontReplacement = { fontName: string; fontUrl: string };
+/** Must match `VISION_LAYOUT_ERROR_MARKER` in FastAPI `utils/template_vision_errors.py`. */
+const TEMPLATE_VISION_MODEL_MARKER = "TEMPLATE_VISION_MODEL_REQUIRED";
 
 const initialState: TemplateCreationState = {
     step: 'file-upload',
@@ -30,93 +24,18 @@ const initialState: TemplateCreationState = {
     previewData: null,
     templateId: null,
     totalSlides: 0,
+    slideLayouts: [],
     currentSlideIndex: 0,
 };
 
-function normalizeTemplateMetadata(
-    metadata?: TemplateCreationMetadata | null
-): TemplateCreationMetadata | null {
-    const name = metadata?.name?.trim();
-    if (!name) return null;
-
-    const description = metadata?.description?.trim();
-    return {
-        name,
-        ...(description ? { description } : {}),
-    };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readTemplateV2InitId(value: unknown): string | null {
-    if (typeof value === "string" && value) {
-        return value;
-    }
-    if (isRecord(value) && typeof value.id === "string" && value.id) {
-        return value.id;
-    }
-    return null;
-}
-
-function extractCreatedTemplateV2Layouts(
-    value: unknown
-): CreatedTemplateV2Layout[] {
-    const rawLayouts = isRecord(value) && Array.isArray(value.layouts)
-        ? value.layouts
-        : [];
-
-    return rawLayouts.flatMap((item) => {
-        if (!isRecord(item) || !Number.isInteger(item.index) || !isRecord(item.layout)) {
-            return [];
-        }
-        return [{ index: item.index as number, layout: item.layout as TemplateV2Layout }];
-    });
-}
-
-function templateV2SlideFromLayout(
-    slide: ProcessedSlide,
-    layout: TemplateV2Layout,
-    templateId: string,
-    index: number
-): ProcessedSlide {
-    const layoutId = typeof layout.id === "string" ? layout.id : null;
-    const layoutDescription = typeof layout.description === "string"
-        ? layout.description
-        : "Generated with Templates V2";
-
-    return {
-        ...slide,
-        processing: false,
-        processed: true,
-        error: undefined,
-        v2Layout: layout,
-        template_v2_id: templateId,
-        layout_id: layoutId || `slide_${index + 1}`,
-        layout_name: layoutId || `Slide ${index + 1}`,
-        layout_description: layoutDescription,
-    };
-}
-
-function templateV2LayoutBatches(totalSlides: number): number[][] {
-    const batches: number[][] = [];
-    for (let start = 0; start < totalSlides; start += TEMPLATE_V2_LAYOUT_BATCH_SIZE) {
-        const end = Math.min(start + TEMPLATE_V2_LAYOUT_BATCH_SIZE, totalSlides);
-        batches.push(Array.from({ length: end - start }, (_, offset) => start + offset));
-    }
-    return batches;
-}
-
-function errorMessageFromUnknown(error: unknown, fallback: string): string {
-    return error instanceof Error ? error.message : fallback;
-}
 
 export const useTemplateCreation = () => {
     const [state, setState] = useState<TemplateCreationState>(initialState);
     const [uploadedFonts, setUploadedFonts] = useState<UploadedFont[]>([]);
     const [slides, setSlides] = useState<ProcessedSlide[]>([]);
-    const templateMetadataRef = useRef<TemplateCreationMetadata | null>(null);
+    const createSlideLayoutRef = useRef<
+        ((templateId: string, slideIndex: number, autoAdvance?: boolean, isAutoRetry?: boolean) => Promise<SlideLayoutResponse | null>) | null
+    >(null);
 
     // Helper to update state partially
     const updateState = useCallback((updates: Partial<TemplateCreationState>) => {
@@ -128,7 +47,6 @@ export const useTemplateCreation = () => {
         setState(initialState);
         setUploadedFonts([]);
         setSlides([]);
-        templateMetadataRef.current = null;
     }, []);
 
     // Step 1: Check fonts in PPTX file
@@ -163,25 +81,12 @@ export const useTemplateCreation = () => {
                 step: 'font-check',
                 isLoading: false
             });
-            trackEvent(MixpanelEvent.CustomTemplate_Font_Check_Completed, {
-                file_size_bucket: bucketFileSize(pptxFile.size),
-                file_extension: fileExtension,
-                available_font_count: data.available_fonts?.length ?? 0,
-                unavailable_font_count: data.unavailable_fonts?.length ?? 0,
-            });
 
             return data;
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Font check failed";
+            const errorMessage = error instanceof Error ? error.message : "폰트 확인 실패";
             updateState({ error: errorMessage, isLoading: false });
-            trackEvent(MixpanelEvent.CustomTemplate_Font_Check_Failed, {
-                file_size_bucket: bucketFileSize(pptxFile.size),
-                file_extension: pptxFile.name.includes(".")
-                    ? pptxFile.name.slice(pptxFile.name.lastIndexOf(".")).toLowerCase()
-                    : "",
-                error_message: sanitizeAnalyticsError(error, "Font check failed"),
-            });
-            notify.error("Font check failed", errorMessage);
+            notify.error("폰트 확인 실패", errorMessage);
             return null;
         }
     }, [updateState]);
@@ -191,7 +96,7 @@ export const useTemplateCreation = () => {
         // Check if font is already added
         const existingFont = uploadedFonts.find((f) => f.fontName === fontName);
         if (existingFont) {
-            notify.warning("Font already added", `Font "${fontName}" is already in your upload list.`);
+            notify.warning("이미 추가된 폰트", `"${fontName}" 폰트가 이미 업로드 목록에 있습니다.`);
             return fontName;
         }
 
@@ -200,14 +105,14 @@ export const useTemplateCreation = () => {
         const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf("."));
 
         if (!validExtensions.includes(fileExtension)) {
-            notify.error("Invalid font file", "Please upload .ttf, .otf, .woff, .woff2, or .eot files.");
+            notify.error("잘못된 폰트 파일", ".ttf, .otf, .woff, .woff2 또는 .eot 파일을 업로드해 주세요.");
             return null;
         }
 
         // Validate file size (10MB limit)
         const maxSize = 10 * 1024 * 1024;
         if (file.size > maxSize) {
-            notify.error("File too large", "Font file size must be less than 10MB.");
+            notify.error("파일이 너무 큽니다", "폰트 파일 크기는 10MB 미만이어야 합니다.");
             return null;
         }
 
@@ -220,14 +125,14 @@ export const useTemplateCreation = () => {
         };
 
         setUploadedFonts(prev => [...prev, newFont]);
-        notify.success("Font added", `Font "${fontName}" was added successfully.`);
+        notify.success("폰트가 추가되었습니다", `"${fontName}" 폰트가 성공적으로 추가되었습니다.`);
         return fontName;
     }, [uploadedFonts]);
 
     // Remove a font
     const removeFont = useCallback((fontName: string) => {
         setUploadedFonts(prev => prev.filter(font => font.fontName !== fontName));
-        notify.info("Font removed", "The font was removed from your upload list.");
+        notify.info("폰트가 제거되었습니다", "업로드 목록에서 폰트가 제거되었습니다.");
     }, []);
 
     // Get all unsupported fonts that need upload
@@ -257,18 +162,9 @@ export const useTemplateCreation = () => {
 
     // Step 2: Upload fonts and get slide preview
     const fontUploadAndPreview = useCallback(async (
-        pptxFile: File,
-        googleFontReplacementsByOriginalName: Record<string, GoogleFontReplacement> = {}
+        pptxFile: File
     ): Promise<FontUploadPreviewResponse | null> => {
         updateState({ isLoading: true, error: null, step: 'font-upload' });
-        const startedAt = Date.now();
-        const missingFontCount = getUnsupportedFonts().length;
-        const selectedGoogleFontCount = Object.keys(googleFontReplacementsByOriginalName).length;
-        trackEvent(MixpanelEvent.CustomTemplate_Preview_Started, {
-            uploaded_font_count: uploadedFonts.length,
-            missing_font_count: missingFontCount,
-            selected_google_font_count: selectedGoogleFontCount,
-        });
 
         try {
             const formData = new FormData();
@@ -279,13 +175,6 @@ export const useTemplateCreation = () => {
                 formData.append("font_files", font.file);
                 formData.append("original_font_names", font.fontName);
             });
-            Object.entries(googleFontReplacementsByOriginalName).forEach(
-                ([originalFontName, googleFont]) => {
-                    formData.append("google_font_original_names", originalFontName);
-                    formData.append("google_font_replacement_names", googleFont.fontName);
-                    formData.append("google_font_urls", googleFont.fontUrl);
-                }
-            );
 
             const response = await fetch(
                 getApiUrl(`/api/v1/ppt/template/fonts-upload-and-slides-preview`),
@@ -306,532 +195,276 @@ export const useTemplateCreation = () => {
                 step: 'slides-preview',
                 isLoading: false
             });
-            trackEvent(MixpanelEvent.CustomTemplate_Preview_Completed, {
-                slide_count: data.slide_image_urls?.length ?? 0,
-                uploaded_font_count: uploadedFonts.length,
-                selected_google_font_count: selectedGoogleFontCount,
-                duration_ms: Date.now() - startedAt,
-            });
 
-            notify.success("Document prepared", "Template generation is starting now.");
+            notify.success("미리보기가 생성되었습니다", "슬라이드 미리보기가 성공적으로 생성되었습니다.");
             return data;
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Document preparation failed";
+            const errorMessage = error instanceof Error ? error.message : "Preview generation failed";
             updateState({ error: errorMessage, isLoading: false });
-            trackEvent(MixpanelEvent.CustomTemplate_Preview_Failed, {
-                uploaded_font_count: uploadedFonts.length,
-                duration_ms: Date.now() - startedAt,
-                error_message: sanitizeAnalyticsError(
-                    error,
-                    "Document preparation failed"
-                ),
-            });
-            notify.error("Document preparation failed", errorMessage);
+            notify.error("미리보기 실패", errorMessage);
             return null;
         }
-    }, [getUnsupportedFonts, uploadedFonts, updateState]);
+    }, [uploadedFonts, updateState]);
 
-    const saveTemplateV2Layouts = useCallback(async (
-        templateId: string,
-        layouts: CreatedTemplateV2Layout[]
-    ): Promise<void> => {
-        if (layouts.length === 0) return;
-
-        const response = await fetch(
-            getApiUrl(`/api/v1/ppt/template/${encodeURIComponent(templateId)}/layouts`),
-            {
-                method: "PATCH",
-                headers: getHeader(),
-                body: JSON.stringify({ layouts }),
-            }
-        );
-
-        await ApiResponseHandler.handleResponse(
-            response,
-            "Failed to save generated template layouts"
-        );
-    }, []);
-
-    const createTemplateV2Layout = useCallback(async (
-        templateId: string,
-        index: number
-    ): Promise<CreatedTemplateV2Layout> => {
-        const response = await fetch(getApiUrl("/api/v1/ppt/template/layouts/create"), {
-            method: "POST",
-            headers: getHeader(),
-            body: JSON.stringify({
-                template_id: templateId,
-                index,
-            }),
-        });
-
-        const data = await ApiResponseHandler.handleResponse(
-            response,
-            `Failed to generate template layout for slide ${index + 1}`
-        );
-        const layout = extractCreatedTemplateV2Layouts(data)
-            .find((item) => item.index === index);
-        if (!layout) {
-            throw new Error("No generated layout was returned for this slide.");
-        }
-        return layout;
-    }, []);
-
-    const createAndSaveTemplateV2Layouts = useCallback(async (
-        templateId: string,
-        indices: number[],
-        options: {
-            onLayoutCreated?: (layout: CreatedTemplateV2Layout) => void;
-        } = {}
-    ): Promise<{ layouts: CreatedTemplateV2Layout[]; failures: FailedTemplateV2Layout[] }> => {
-        const layouts: CreatedTemplateV2Layout[] = [];
-        const failures: FailedTemplateV2Layout[] = [];
-
-        for (const index of indices) {
-            try {
-                const layout = await createTemplateV2Layout(templateId, index);
-                options.onLayoutCreated?.(layout);
-                layouts.push(layout);
-            } catch (error) {
-                failures.push({
-                    index,
-                    error: errorMessageFromUnknown(
-                        error,
-                        "Template layout generation failed"
-                    ),
-                });
-            }
+    // Step 3: Initialize template creation
+    const initTemplateCreation = useCallback(async (): Promise<string | null> => {
+        if (!state.previewData) {
+            notify.error("미리보기 데이터 없음", "계속하기 전에 미리보기를 생성하세요.");
+            return null;
         }
 
-        if (layouts.length > 0) {
-            try {
-                await saveTemplateV2Layouts(templateId, layouts);
-            } catch (error) {
-                const saveError = errorMessageFromUnknown(
-                    error,
-                    "Failed to save generated template layouts"
-                );
-                return {
-                    layouts: [],
-                    failures: [
-                        ...failures,
-                        ...layouts.map((layout) => ({
-                            index: layout.index,
-                            error: saveError,
-                        })),
-                    ],
-                };
-            }
-        }
-
-        return { layouts, failures };
-    }, [createTemplateV2Layout, saveTemplateV2Layouts]);
-
-    const generateTemplateV2Blocks = useCallback(async (
-        templateId: string
-    ): Promise<void> => {
-        const response = await fetch(getApiUrl("/api/v1/ppt/template/generate-blocks"), {
-            method: "POST",
-            headers: getHeader(),
-            body: JSON.stringify({
-                template_id: templateId,
-            }),
-        });
-
-        await ApiResponseHandler.handleResponse(
-            response,
-            "Failed to generate template blocks"
-        );
-    }, []);
-
-    const generateTemplateV2 = useCallback(async (
-        previewData: FontUploadPreviewResponse,
-        options: {
-            retrySlideIndex?: number;
-            metadata?: TemplateCreationMetadata | null;
-        } = {}
-    ): Promise<string | null> => {
-        const metadata = normalizeTemplateMetadata(options.metadata)
-            ?? templateMetadataRef.current;
-        const initialSlides: ProcessedSlide[] = previewData.slide_image_urls.map(
-            (url, index) => ({
-                slide_number: index + 1,
-                screenshot_url: url,
-                processing: true,
-                processed: false,
-                error: undefined,
-            })
-        );
-
-        setSlides(initialSlides);
-        updateState({
-            isLoading: true,
-            error: null,
-            step: 'template-creation',
-            totalSlides: initialSlides.length,
-            currentSlideIndex: 0,
-        });
-        const generationStartedAt = Date.now();
+        updateState({ isLoading: true, error: null, step: 'template-creation' });
 
         try {
-            trackEvent(MixpanelEvent.CustomTemplate_Creation_Started, {
-                source: options.retrySlideIndex === undefined
-                    ? "template_v2_create"
-                    : "template_v2_retry",
-                retry_slide_index: options.retrySlideIndex,
-                total_slides: previewData.slide_image_urls.length,
-                uploaded_font_count: Object.keys(previewData.fonts ?? {}).length,
-            });
-
-            const initResponse = await fetch(getApiUrl("/api/v1/ppt/template/init"), {
+            const response = await fetch(getApiUrl(`/api/v1/ppt/template/create/init`), {
                 method: "POST",
                 headers: getHeader(),
                 body: JSON.stringify({
-                    pptx_url: previewData.modified_pptx_url,
-                    slide_image_urls: previewData.slide_image_urls,
-                    fonts: previewData.fonts,
-                    ...(metadata ? { name: metadata.name } : {}),
-                    ...(metadata?.description ? { description: metadata.description } : {}),
+                    pptx_url: state.previewData.modified_pptx_url,
+                    slide_image_urls: state.previewData.slide_image_urls,
+                    fonts: state.previewData.fonts,
                 }),
             });
 
-            const initData = await ApiResponseHandler.handleResponse(
-                initResponse,
-                "Failed to initialize template"
+            const data = await ApiResponseHandler.handleResponse(
+                response,
+                "Failed to initialize template creation"
             );
-            const templateId = readTemplateV2InitId(initData);
-            if (!templateId) {
-                throw new Error("Template initialization did not return a template id");
-            }
 
-            updateState({
-                templateId,
-                totalSlides: initialSlides.length,
-                currentSlideIndex: 0,
-            });
-
-            let generatedSlides = initialSlides;
-            const slideStartedAtByIndex = new Map<number, number>();
-            const commitSlides = (nextSlides: ProcessedSlide[]) => {
-                generatedSlides = nextSlides;
-                setSlides(nextSlides);
-            };
-            const updateGeneratedSlides = (
-                updater: (currentSlides: ProcessedSlide[]) => ProcessedSlide[]
-            ) => {
-                commitSlides(updater(generatedSlides));
-            };
-
-            for (const indices of templateV2LayoutBatches(initialSlides.length)) {
-                indices.forEach((index) => {
-                    slideStartedAtByIndex.set(index, Date.now());
-                    trackEvent(MixpanelEvent.CustomTemplate_Slide_Generation_Started, {
-                        template_id: templateId,
-                        template_version: "v2",
-                        slide_index: index,
-                        auto_retry: false,
-                    });
-                });
-                updateState({ currentSlideIndex: indices[0] ?? 0 });
-                updateGeneratedSlides((currentSlides) =>
-                    currentSlides.map((slide, index) =>
-                        indices.includes(index)
-                            ? {
-                                ...slide,
-                                processing: true,
-                                processed: false,
-                                error: undefined,
-                            }
-                            : slide
-                    )
-                );
-
-                const { layouts: createdLayouts, failures } =
-                    await createAndSaveTemplateV2Layouts(templateId, indices, {
-                        onLayoutCreated: (createdLayout) => {
-                            trackEvent(MixpanelEvent.CustomTemplate_Slide_Generation_Completed, {
-                                template_id: templateId,
-                                template_version: "v2",
-                                slide_index: createdLayout.index,
-                                duration_ms:
-                                    Date.now() -
-                                    (slideStartedAtByIndex.get(createdLayout.index) ??
-                                        Date.now()),
-                            });
-                            updateGeneratedSlides((currentSlides) =>
-                                currentSlides.map((slide, index) =>
-                                    index === createdLayout.index
-                                        ? templateV2SlideFromLayout(
-                                            slide,
-                                            createdLayout.layout,
-                                            templateId,
-                                            index
-                                        )
-                                        : slide
-                                )
-                            );
-                        },
-                    });
-                const layoutByIndex = new Map(
-                    createdLayouts.map((item) => [item.index, item.layout])
-                );
-                const failureByIndex = new Map(
-                    failures.map((item) => [item.index, item.error])
-                );
-                failures.forEach((failure) => {
-                    trackEvent(MixpanelEvent.CustomTemplate_Slide_Generation_Failed, {
-                        template_id: templateId,
-                        template_version: "v2",
-                        slide_index: failure.index,
-                        duration_ms:
-                            Date.now() -
-                            (slideStartedAtByIndex.get(failure.index) ?? Date.now()),
-                        error_message: sanitizeAnalyticsError(
-                            failure.error,
-                            "Template layout generation failed"
-                        ),
-                    });
-                });
-                updateGeneratedSlides((currentSlides) =>
-                    currentSlides.map((slide, index) => {
-                        if (!indices.includes(index)) return slide;
-
-                        const failure = failureByIndex.get(index);
-                        if (failure) {
-                            return {
-                                ...slide,
-                                processing: false,
-                                processed: false,
-                                error: failure,
-                            };
-                        }
-
-                        const layout = layoutByIndex.get(index);
-                        if (!layout) {
-                            return {
-                                ...slide,
-                                processing: false,
-                                processed: false,
-                                error: "No generated layout was returned for this slide.",
-                            };
-                        }
-                        return templateV2SlideFromLayout(
-                            slide,
-                            layout,
-                            templateId,
-                            index
-                        );
-                    })
-                );
-            }
-
-            const failedCount = generatedSlides.filter((slide) => Boolean(slide.error)).length;
-            const processedCount = generatedSlides.filter((slide) => slide.processed).length;
-            let blocksError: string | null = null;
-            if (processedCount > 0) {
-                try {
-                    await generateTemplateV2Blocks(templateId);
-                    trackEvent(MixpanelEvent.CustomTemplate_Blocks_Generation_Completed, {
-                        template_id: templateId,
-                        template_version: "v2",
-                    });
-                } catch (error) {
-                    blocksError = errorMessageFromUnknown(
-                        error,
-                        "Failed to generate template blocks"
-                    );
-                    trackEvent(MixpanelEvent.CustomTemplate_Blocks_Generation_Failed, {
-                        template_id: templateId,
-                        template_version: "v2",
-                        error_message: sanitizeAnalyticsError(
-                            error,
-                            "Failed to generate template blocks"
-                        ),
-                    });
-                    updateState({ error: blocksError });
-                }
-            }
-
-            updateState({
-                step: 'completed',
-                isLoading: false,
-            });
-            trackEvent(MixpanelEvent.CustomTemplate_Creation_Completed, {
-                template_id: templateId,
-                template_version: "v2",
-                total_slides: generatedSlides.length,
-                processed_slides: processedCount,
-                failed_slides: failedCount,
-            });
-
-            if (failedCount > 0) {
-                notify.warning(
-                    "Some slides could not be generated",
-                    `${processedCount} of ${generatedSlides.length} slides were generated.`
-                );
-            } else if (blocksError) {
-                notify.warning(
-                    "Template generated",
-                    `Slides were saved, but template blocks were not generated. ${blocksError}`
-                );
-            } else {
-                notify.success(
-                    "Template generated",
-                    "The template was generated and saved successfully."
-                );
-            }
-
-            return templateId;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "Template generation failed";
-            updateState({ error: errorMessage, isLoading: false });
-            trackEvent(MixpanelEvent.CustomTemplate_Creation_Failed, {
-                template_id: state.templateId,
-                template_version: "v2",
-                step: "template-creation",
-                slide_index: options.retrySlideIndex ?? null,
-                duration_ms: Date.now() - generationStartedAt,
-                error_message: sanitizeAnalyticsError(
-                    error,
-                    "Template generation failed"
-                ),
-            });
-            setSlides((current) =>
-                (current.length ? current : initialSlides).map((slide) => ({
-                    ...slide,
+            // Initialize slides array based on preview images
+            const initialSlides: ProcessedSlide[] = state.previewData.slide_image_urls.map(
+                (url, index) => ({
+                    slide_number: index + 1,
+                    screenshot_url: url,
                     processing: false,
                     processed: false,
-                    error: errorMessage,
-                }))
+                })
             );
-            notify.error("Generation failed", errorMessage);
+
+            setSlides(initialSlides);
+            updateState({
+                templateId: data.id || data,
+                totalSlides: state.previewData.slide_image_urls.length,
+                isLoading: false
+            });
+            trackEvent(MixpanelEvent.CustomTemplate_Creation_Started, {
+                source: "template_init",
+                template_id: typeof data === "string" ? data : data.id,
+                total_slides: state.previewData.slide_image_urls.length,
+                uploaded_font_count: state.previewData.fonts?.length || 0,
+            });
+
+            notify.success("템플릿이 초기화되었습니다", "템플릿 생성이 성공적으로 초기화되었습니다.");
+
+            // Automatically start processing the first slide
+            if (typeof data === 'string') {
+                void createSlideLayoutRef.current?.(data, 0);
+            } else if (data.id) {
+                void createSlideLayoutRef.current?.(data.id, 0);
+            }
+
+            return typeof data === 'string' ? data : data.id;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "초기화 실패";
+            updateState({ error: errorMessage, isLoading: false });
+            notify.error("초기화 실패", errorMessage);
+            // reset the state
+            reset();
             return null;
         }
-    }, [
-        createAndSaveTemplateV2Layouts,
-        generateTemplateV2Blocks,
-        state.templateId,
-        updateState,
-    ]);
+    }, [reset, state.previewData, updateState]);
 
-    // Step 3: Initialize template creation
-    const initTemplateCreation = useCallback(async (
-        metadata?: TemplateCreationMetadata,
-        previewDataOverride?: FontUploadPreviewResponse
-    ): Promise<string | null> => {
-        const previewData = previewDataOverride ?? state.previewData;
-        if (!previewData) {
-            notify.error("No preview data", "Prepare the document before continuing.");
+    // Step 4: Create slide layout for a specific slide (with auto-advance for initial processing)
+    const createSlideLayout = useCallback(async (
+        templateId: string,
+        slideIndex: number,
+        autoAdvance: boolean = true,
+        _isAutoRetry: boolean = false
+    ): Promise<SlideLayoutResponse | null> => {
+        // Mark slide as processing
+        setSlides(prev => prev.map((s, i) =>
+            i === slideIndex ? { ...s, processing: true, error: undefined } : s
+        ));
+
+        updateState({ currentSlideIndex: slideIndex });
+
+        try {
+            const startResponse = await fetch(
+                getApiUrl(`/api/v1/ppt/template/slide-layout/create/start`),
+                {
+                    method: "POST",
+                    headers: getHeader(),
+                    body: JSON.stringify({
+                        id: templateId,
+                        index: slideIndex,
+                    }),
+                }
+            );
+
+            const startData = await ApiResponseHandler.handleResponse(
+                startResponse,
+                `Failed to start layout job for slide ${slideIndex + 1}`
+            );
+            const jobId = startData.job_id as string;
+
+            const pollMs = 2000;
+            const maxWaitMs = 45 * 60 * 1000;
+            const deadline = Date.now() + maxWaitMs;
+            let data: { react_component: string } | undefined;
+
+            while (Date.now() < deadline) {
+                const statusResponse = await fetch(
+                    getApiUrl(`/api/v1/ppt/template/slide-layout/create/job/${encodeURIComponent(jobId)}`),
+                    { headers: getHeader() }
+                );
+                const statusData = await ApiResponseHandler.handleResponse(
+                    statusResponse,
+                    `Failed to check layout job for slide ${slideIndex + 1}`
+                );
+                if (statusData.status === "complete" && statusData.react_component) {
+                    data = { react_component: statusData.react_component };
+                    break;
+                }
+                if (statusData.status === "failed") {
+                    throw new Error(
+                        statusData.error ||
+                            `Layout generation failed for slide ${slideIndex + 1}`
+                    );
+                }
+                await new Promise((r) => setTimeout(r, pollMs));
+            }
+
+            if (!data) {
+                throw new Error(
+                    "Timed out waiting for slide layout generation (exceeded 45 minutes)"
+                );
+            }
+
+            const layoutResult: SlideLayoutResponse = {
+                slide_index: slideIndex,
+                react_component: data.react_component,
+                layout_id: "",
+                layout_name: "",
+            };
+
+            // Update slide with the react component
+            setSlides(prev => {
+                const newSlides = prev.map((s, i) =>
+                    i === slideIndex ? {
+                        ...s,
+                        processing: false,
+                        processed: true,
+                        react: layoutResult.react_component,
+                        layout_id: layoutResult.layout_id || undefined,
+                        layout_name: layoutResult.layout_name || undefined,
+                    } : s
+                );
+
+                // Only auto-advance during initial processing
+                if (autoAdvance) {
+                    const nextIndex = slideIndex + 1;
+                    if (nextIndex < newSlides.length && !newSlides[nextIndex].processed) {
+                        setTimeout(() => {
+                            createSlideLayout(templateId, nextIndex, true);
+                        }, 500);
+                    } else {
+                        // Check if all slides are processed
+                        const allProcessed = newSlides.every(s => s.processed || s.error);
+                        if (allProcessed) {
+                            updateState({ step: 'completed' });
+                            trackEvent(MixpanelEvent.CustomTemplate_Creation_Completed, {
+                                template_id: templateId,
+                                total_slides: newSlides.length,
+                                processed_slides: newSlides.filter(s => s.processed).length,
+                                failed_slides: newSlides.filter(s => Boolean(s.error)).length,
+                            });
+                            const failedCount = newSlides.filter(s => Boolean(s.error)).length;
+                            const processedCount = newSlides.filter(s => s.processed).length;
+                            if (failedCount > 0) {
+                                notify.warning(
+                                    "일부 슬라이드를 처리하지 못했습니다",
+                                    `${newSlides.length}개 중 ${processedCount}개 슬라이드가 재구성되었습니다. ${failedCount}개 슬라이드가 실패했습니다 — 확인 후 다시 시도해 주세요.`
+                                );
+                            } else {
+                                notify.success(
+                                    "모든 슬라이드 처리 완료",
+                                    "모든 슬라이드가 성공적으로 재구성되었습니다."
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    // Single slide reconstruction - just show success
+                    notify.success("슬라이드 재구성됨", `${slideIndex + 1}번 슬라이드가 성공적으로 재구성되었습니다.`);
+                }
+
+                return newSlides;
+            });
+
+            return layoutResult;
+        } catch (error) {
+            const errorMessage =
+                error instanceof Error ? error.message : "Layout creation failed";
+            const isVisionModelError = errorMessage.includes(TEMPLATE_VISION_MODEL_MARKER);
+
+            // Auto-retry once on transient failures; vision/model capability errors won't recover.
+            if (!_isAutoRetry && !isVisionModelError) {
+                console.log(`Auto-retrying slide ${slideIndex + 1} after API failure...`);
+                return createSlideLayout(templateId, slideIndex, autoAdvance, true);
+            }
+
+            // Mark slide with error
+            setSlides(prev => {
+                const newSlides = prev.map((s, i) =>
+                    i === slideIndex ? { ...s, processing: false, error: errorMessage } : s
+                );
+
+                // Only auto-advance during initial processing
+                if (autoAdvance) {
+                    const nextIndex = slideIndex + 1;
+                    if (nextIndex < newSlides.length && !newSlides[nextIndex].processed) {
+                        setTimeout(() => {
+                            createSlideLayout(templateId, nextIndex, true);
+                        }, 500);
+                    } else {
+                        const allProcessed = newSlides.every(s => s.processed || s.error);
+                        if (allProcessed) {
+                            updateState({ step: 'completed' });
+                        }
+                    }
+                }
+
+                return newSlides;
+            });
+
+            if (isVisionModelError) {
+                const description = errorMessage
+                    .replace(TEMPLATE_VISION_MODEL_MARKER, "")
+                    .trim()
+                    .replace(/^\n+/, "");
+                notify.error(
+                    "비전 지원 텍스트 모델이 필요합니다",
+                    description ||
+                        "설정에서 이미지를 지원하는 텍스트 모델을 선택하고 저장한 뒤 다시 시도해 주세요.",
+                    { duration: 12_000 }
+                );
+            } else {
+                notify.error(`${slideIndex + 1}번 슬라이드 실패`, errorMessage);
+            }
             return null;
         }
-
-        const normalizedMetadata = normalizeTemplateMetadata(metadata);
-        if (normalizedMetadata) {
-            templateMetadataRef.current = normalizedMetadata;
-        }
-
-        return generateTemplateV2(previewData, {
-            metadata: normalizedMetadata,
-        });
-    }, [
-        generateTemplateV2,
-        state.previewData,
-    ]);
+    }, [updateState]);
+    useEffect(() => {
+        createSlideLayoutRef.current = createSlideLayout;
+    }, [createSlideLayout]);
 
     // Reconstruct a single slide (no auto-advance)
     const retrySlide = useCallback((slideIndex: number) => {
-        if (!state.templateId) {
-            notify.error("Template unavailable", "Initialize the template before trying again.");
-            return;
+        if (state.templateId) {
+            // Pass false for autoAdvance to only reconstruct this specific slide
+            createSlideLayout(state.templateId, slideIndex, false);
         }
-
-        const templateId = state.templateId;
-        updateState({ currentSlideIndex: slideIndex });
-        setSlides((current) =>
-            current.map((slide, index) =>
-                index === slideIndex
-                    ? {
-                        ...slide,
-                        processing: true,
-                        processed: false,
-                        error: undefined,
-                    }
-                    : slide
-            )
-        );
-
-        void (async () => {
-            const startedAt = Date.now();
-            trackEvent(MixpanelEvent.CustomTemplate_Slide_Generation_Started, {
-                template_id: templateId,
-                template_version: "v2",
-                slide_index: slideIndex,
-                auto_retry: true,
-            });
-            try {
-                const { layouts: createdLayouts, failures } = await createAndSaveTemplateV2Layouts(
-                    templateId,
-                    [slideIndex]
-                );
-                const failure = failures.find((item) => item.index === slideIndex);
-                if (failure) {
-                    throw new Error(failure.error);
-                }
-                const layout = createdLayouts.find((item) => item.index === slideIndex)?.layout;
-                if (!layout) {
-                    throw new Error("No generated layout was returned for this slide.");
-                }
-                setSlides((current) =>
-                    current.map((slide, index) =>
-                        index === slideIndex
-                            ? templateV2SlideFromLayout(slide, layout, templateId, index)
-                            : slide
-                    )
-                );
-                trackEvent(MixpanelEvent.CustomTemplate_Slide_Generation_Completed, {
-                    template_id: templateId,
-                    template_version: "v2",
-                    slide_index: slideIndex,
-                    duration_ms: Date.now() - startedAt,
-                });
-                notify.success(
-                    "Slide regenerated",
-                    `Slide ${slideIndex + 1} was regenerated successfully.`
-                );
-            } catch (error) {
-                const errorMessage = error instanceof Error
-                    ? error.message
-                    : "Template layout generation failed";
-                setSlides((current) =>
-                    current.map((slide, index) =>
-                        index === slideIndex
-                            ? {
-                                ...slide,
-                                processing: false,
-                                processed: false,
-                                error: errorMessage,
-                            }
-                            : slide
-                    )
-                );
-                trackEvent(MixpanelEvent.CustomTemplate_Slide_Generation_Failed, {
-                    template_id: templateId,
-                    template_version: "v2",
-                    slide_index: slideIndex,
-                    duration_ms: Date.now() - startedAt,
-                    error_message: sanitizeAnalyticsError(
-                        error,
-                        "Template layout generation failed"
-                    ),
-                });
-                notify.error(`Slide ${slideIndex + 1} failed`, errorMessage);
-            }
-        })();
-    }, [
-        createAndSaveTemplateV2Layouts,
-        state.templateId,
-        updateState,
-    ]);
+    }, [state.templateId, createSlideLayout]);
 
     // Move to font upload step (when font check is done)
     const proceedToFontUpload = useCallback(() => {
@@ -841,10 +474,7 @@ export const useTemplateCreation = () => {
     // Calculate progress
     const completedSlides = slides.filter(s => s.processed || s.error).length;
     const progressPercentage = state.totalSlides > 0
-        ? Math.min(
-            MAX_PROCESSING_PROGRESS_PERCENT,
-            Math.round((completedSlides / state.totalSlides) * 100)
-        )
+        ? Math.round((completedSlides / state.totalSlides) * 100)
         : 0;
 
     return {
@@ -868,6 +498,7 @@ export const useTemplateCreation = () => {
         // Template creation operations
         fontUploadAndPreview,
         initTemplateCreation,
+        createSlideLayout,
         retrySlide,
 
         // Navigation

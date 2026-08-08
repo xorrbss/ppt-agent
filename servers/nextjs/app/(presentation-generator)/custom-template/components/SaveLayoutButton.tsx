@@ -1,7 +1,7 @@
 'use client'
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 interface SaveLayoutButtonProps {
   onSave: () => void;
@@ -31,15 +31,15 @@ export const SaveLayoutButton: React.FC<SaveLayoutButtonProps> = ({
         {isSaving ? (
           <>
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Saving Template...
+            템플릿 저장 중…
           </>
         ) : (
           <>
 
-            Save as Template
+            템플릿으로 저장
           </>
         )}
       </Button>
     </div>
   );
-}; 
+};

@@ -1,34 +1,22 @@
-from contextvars import ContextVar, Token
-import uuid
+"""Backward-compatibility shim: the owner context moved to utils.owner_context.
 
-
-_CURRENT_OWNER_ID: ContextVar[uuid.UUID | None] = ContextVar(
-    "presenton_current_owner_id", default=None
+Import from utils.owner_context in new code; this module only re-exports so any
+remaining external references keep working.
+"""
+from utils.owner_context import (
+    get_current_owner_id,
+    get_current_owner_is_admin,
+    reset_current_owner_id,
+    reset_current_owner_is_admin,
+    set_current_owner_id,
+    set_current_owner_is_admin,
 )
-_CURRENT_OWNER_IS_ADMIN: ContextVar[bool] = ContextVar(
-    "presenton_current_owner_is_admin", default=False
-)
 
-
-def get_current_owner_id() -> uuid.UUID | None:
-    return _CURRENT_OWNER_ID.get()
-
-
-def get_current_owner_is_admin() -> bool:
-    return _CURRENT_OWNER_IS_ADMIN.get()
-
-
-def set_current_owner_id(owner_id: uuid.UUID | None) -> Token:
-    return _CURRENT_OWNER_ID.set(owner_id)
-
-
-def set_current_owner_is_admin(is_admin: bool) -> Token:
-    return _CURRENT_OWNER_IS_ADMIN.set(is_admin)
-
-
-def reset_current_owner_id(token: Token) -> None:
-    _CURRENT_OWNER_ID.reset(token)
-
-
-def reset_current_owner_is_admin(token: Token) -> None:
-    _CURRENT_OWNER_IS_ADMIN.reset(token)
+__all__ = [
+    "get_current_owner_id",
+    "get_current_owner_is_admin",
+    "reset_current_owner_id",
+    "reset_current_owner_is_admin",
+    "set_current_owner_id",
+    "set_current_owner_is_admin",
+]

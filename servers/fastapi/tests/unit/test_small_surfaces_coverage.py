@@ -15,7 +15,7 @@ from models.api_error_model import APIErrorModel
 from models.image_prompt import ImagePrompt
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
-from models.sql.presentation import PresentationModel, PresentationVersion
+from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sse_response import (
     SSECompleteResponse,
@@ -49,6 +49,7 @@ from utils.image_provider import (
     is_dalle3_selected,
     is_gemini_flash_selected,
     is_gpt_image_1_5_selected,
+    is_gpt_image_2_selected,
     is_image_generation_disabled,
     is_nanobanana_pro_selected,
     is_open_webui_selected,
@@ -58,7 +59,6 @@ from utils.image_provider import (
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.parsers import parse_bool_or_none
 from utils.path_helpers import get_resource_path, get_writable_path
-from utils.sse import safe_sse_stream
 
 _ALL_IMAGE_PROVIDER_PREDICATES = (
     is_pixels_selected,
@@ -67,6 +67,7 @@ _ALL_IMAGE_PROVIDER_PREDICATES = (
     is_nanobanana_pro_selected,
     is_dalle3_selected,
     is_gpt_image_1_5_selected,
+    is_gpt_image_2_selected,
     is_comfyui_selected,
     is_open_webui_selected,
 )
@@ -148,15 +149,11 @@ def test_slide_model_get_new_slide_branches():
         layout="l",
         index=2,
         content={"a": 1},
-        html_content="<div>slide</div>",
         speaker_note="n",
         properties={"x": True},
-        ui={"id": "layout-1", "components": []},
     )
     assert base.get_new_slide(pid, None).content == {"a": 1}
     assert base.get_new_slide(pid, {"b": 2}).content == {"b": 2}
-    assert base.get_new_slide(pid).ui == {"id": "layout-1", "components": []}
-    assert base.get_new_slide(pid).html_content == "<div>slide</div>"
 
 
 def test_sse_response_frame_format():
@@ -184,37 +181,11 @@ def test_sse_typed_frames_encode_json_payloads():
     assert data == {"type": "complete", "k": {"v": 1}}
 
 
-def test_safe_sse_stream_converts_late_exception_to_error_frame():
-    async def broken_stream():
-        yield SSEResponse(
-            event="response",
-            data=json.dumps({"type": "chunk"}),
-        ).to_string()
-        raise RuntimeError("provider failed")
-
-    async def collect():
-        chunks = []
-        async for chunk in safe_sse_stream(
-            broken_stream(),
-            logger=MagicMock(),
-            error_detail="Stream failed",
-        ):
-            chunks.append(chunk)
-        return chunks
-
-    chunks = asyncio.run(collect())
-    assert len(chunks) == 2
-    event, data = _parse_sse_frame(chunks[-1])
-    assert event == "response"
-    assert data == {"type": "error", "detail": "Stream failed"}
-
-
 @pytest.mark.parametrize("theme", [{}, None])
 def test_presentation_model_get_new_and_typed_getters(theme):
     outline, layout_payload, structure_payload = _outline_layout_structure_payloads()
     p = PresentationModel(
         id=uuid.uuid4(),
-        version=PresentationVersion.V1_STANDARD,
         content="c",
         n_slides=1,
         language="English",
@@ -223,16 +194,8 @@ def test_presentation_model_get_new_and_typed_getters(theme):
         layout=layout_payload,
         structure=structure_payload,
         theme=theme,
-        fonts={"heading": "Inter"},
-        web_search=True,
     )
-    new_presentation = p.get_new_presentation()
-    assert p.version == PresentationVersion.V1_STANDARD
-    assert new_presentation.version == PresentationVersion.V1_STANDARD
-    assert new_presentation.content == "c"
-    assert new_presentation.theme == theme
-    assert new_presentation.fonts == {"heading": "Inter"}
-    assert new_presentation.web_search is True
+    assert p.get_new_presentation().content == "c"
     assert isinstance(p.get_presentation_outline(), PresentationOutlineModel)
     assert isinstance(p.get_layout(), PresentationLayoutModel)
     assert isinstance(p.get_structure(), PresentationStructureModel)
@@ -242,7 +205,6 @@ def test_presentation_model_set_layout_updates_stored_dict():
     _, layout_payload, _ = _outline_layout_structure_payloads()
     p = PresentationModel(
         id=uuid.uuid4(),
-        version=PresentationVersion.V1_STANDARD,
         content="c",
         n_slides=1,
         language="English",
@@ -263,7 +225,6 @@ def test_presentation_model_set_layout_updates_stored_dict():
 def test_presentation_model_missing_outline_and_structure_returns_none():
     ghost = PresentationModel(
         id=uuid.uuid4(),
-        version=PresentationVersion.V1_STANDARD,
         content="c",
         n_slides=0,
         language="English",
@@ -279,7 +240,6 @@ def test_presentation_model_set_structure_updates_slides():
     _, _, structure_payload = _outline_layout_structure_payloads()
     p = PresentationModel(
         id=uuid.uuid4(),
-        version=PresentationVersion.V1_STANDARD,
         content="c",
         n_slides=1,
         language="English",
@@ -330,6 +290,7 @@ def test_get_writable_path_app_data_fallback(monkeypatch, tmp_path):
         ("nanobanana_pro", is_nanobanana_pro_selected),
         ("dall-e-3", is_dalle3_selected),
         ("gpt-image-1.5", is_gpt_image_1_5_selected),
+        ("gpt-image-2", is_gpt_image_2_selected),
         ("comfyui", is_comfyui_selected),
         ("open_webui", is_open_webui_selected),
     ],
@@ -354,7 +315,7 @@ def test_get_selected_image_provider_invalid_env_raises(monkeypatch):
 
 
 def test_dynamic_outline_and_structure_factories_validate():
-    long_text = "x" * 100
+    long_text = "x" * 400  # SlideOutlineModelWithNSlides.content requires min_length=300
     OutlineCls = get_presentation_outline_model_with_n_slides(1)
     outline = OutlineCls(slides=[{"content": long_text}])
 
@@ -401,24 +362,26 @@ def test_handle_llm_client_exceptions(monkeypatch):
 
     from google.genai.errors import APIError as GoogleAPIError
     from llmai.shared.errors import BaseError as LLMAIBaseError
-    from utils.provider_error_messages import INVALID_API_KEY_MESSAGE
 
     llmai_err = LLMAIBaseError(status_code=429, message="busy")
-    assert handle_llm_client_exceptions(llmai_err).detail == "busy"
+    assert (
+        handle_llm_client_exceptions(llmai_err).detail
+        == "AI provider is temporarily rate limited. Please wait and try again."
+    )
 
-    wrapped_auth_err = LLMAIBaseError(
-        status_code=401,
+    usage_limit_err = LLMAIBaseError(
+        status_code=429,
         message=(
-            "Error code: 401 - {'error': {'message': "
-            "'Incorrect API key provided: sk-proj-secret', "
-            "'code': 'invalid_api_key'}}"
+            "Error code: 429 - {'error': {'type': 'usage_limit_reached', "
+            "'resets_in_seconds': 419033}}"
         ),
     )
-    wrapped_auth_response = handle_llm_client_exceptions(wrapped_auth_err)
-    assert wrapped_auth_response.detail == INVALID_API_KEY_MESSAGE
-    assert "sk-proj" not in wrapped_auth_response.detail
+    usage_limit_detail = handle_llm_client_exceptions(usage_limit_err).detail
+    assert "usage limit reached" in usage_limit_detail
+    assert "4 days 20 hours" in usage_limit_detail
+    assert "usage_limit_reached" not in usage_limit_detail
 
-    assert "OpenAI API request failed" in handle_llm_client_exceptions(
+    assert "OpenAI API error" in handle_llm_client_exceptions(
         OpenAIAPIError(
             message="boom",
             request=httpx.Request("POST", "https://x"),
@@ -429,20 +392,6 @@ def test_handle_llm_client_exceptions(monkeypatch):
     assert "Google API error" in handle_llm_client_exceptions(
         GoogleAPIError(503, {})
     ).detail
-
-    from enums.llm_provider import LLMProvider
-
-    monkeypatch.setitem(
-        handle_llm_client_exceptions.__globals__,
-        "get_llm_provider",
-        lambda: LLMProvider.CODEX,
-    )
-    codex_auth = handle_llm_client_exceptions(
-        HTTPException(status_code=401, detail="expired")
-    )
-    assert codex_auth.status_code == 401
-    assert "CHATGPT_AUTH_REQUIRED:" in codex_auth.detail
-    assert codex_auth.headers == {"X-Presenton-Auth-Action": "codex-reauth"}
 
     generic = handle_llm_client_exceptions(ValueError("oops"))
     assert generic.detail.startswith("LLM API error")
@@ -481,21 +430,11 @@ def test_export_includes_optional_fastapi_param():
             },
             clear=False,
         ), patch.object(EXPORT_TASK_SERVICE, "export_from_url", mock_pdf):
-            await export_presentation(
-                dummy,
-                title="safe",
-                export_as="pdf",
-                cookie_header="presenton_session=abc; theme=dark",
-            )
+            await export_presentation(dummy, title="safe", export_as="pdf")
 
         pdf_call = mock_pdf.await_args.kwargs
-        assert "pdf-maker" in pdf_call["url"]
-        assert (
-            "#exportCookie=presenton_session%3Dabc%3B+theme%3Ddark"
-            in pdf_call["url"]
-        )
+        assert pdf_call["url"].startswith("https://next.example/pdf-maker?")
         assert pdf_call["fastapi_url"] == "https://fast.example"
-        assert pdf_call["cookie_header"] == "presenton_session=abc; theme=dark"
 
         mock_pptx = AsyncMock(return_value=fake_result)
         with patch.dict(
@@ -503,12 +442,33 @@ def test_export_includes_optional_fastapi_param():
         ), patch.object(EXPORT_TASK_SERVICE, "export_from_url", mock_pptx):
             await export_presentation(dummy, title="two", export_as="pptx")
         pptx_call = mock_pptx.await_args.kwargs
-        assert "#" not in pptx_call["url"]
         assert pptx_call["fastapi_url"] is None
 
     asyncio.run(runner())
 
 
+def test_export_uses_next_internal_url_when_public_url_is_unset(monkeypatch):
+    monkeypatch.delenv("NEXT_PUBLIC_URL", raising=False)
+    monkeypatch.delenv("NEXT_PUBLIC_FAST_API", raising=False)
+    monkeypatch.setenv("NEXT_INTERNAL_URL", "http://localhost:5000/")
+
+    async def runner():
+        fake_result = MagicMock(path="/exports/deck.pptx")
+        dummy = uuid.uuid4()
+        mock_export = AsyncMock(return_value=fake_result)
+        with patch.object(EXPORT_TASK_SERVICE, "export_from_url", mock_export):
+            await export_presentation(dummy, title="local", export_as="pptx")
+
+        export_call = mock_export.await_args.kwargs
+        assert export_call["url"] == f"http://localhost:5000/pdf-maker?id={dummy}"
+
+    asyncio.run(runner())
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="POSIX file-mode semantics: NTFS/Windows does not implement chmod 0o755/0o644 bits.",
+)
 def test_export_task_output_permissions_are_readable(tmp_path):
     export_dir = tmp_path / "exports"
     export_dir.mkdir(mode=0o700)
@@ -666,6 +626,42 @@ def test_get_layout_by_name_does_not_attach_obsolete_auth_cookie():
 
     asyncio.run(runner())
     assert "Cookie" not in captured
+
+
+def test_get_layout_by_name_prefers_build_artifact(monkeypatch):
+    # When the build-time artifact carries the group, resolution uses it and must
+    # never touch the network (the headless scrape / JSON route are both skipped).
+    payload = {
+        "name": "korean-biz",
+        "ordered": False,
+        "icon_weight": "thin",
+        "slides": [
+            {
+                "id": "korean-biz:cover",
+                "name": "Cover",
+                "description": "",
+                "json_schema": {"title": "t"},
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        tpl_layout_fetcher,
+        "_read_builtin_layout_artifact",
+        lambda name: dict(payload),
+    )
+
+    def _boom(*_a, **_k):
+        raise AssertionError("HTTP fallback must not run when the artifact resolves")
+
+    monkeypatch.setattr(tpl_layout_fetcher.aiohttp, "ClientSession", _boom)
+
+    async def runner():
+        layout = await tpl_layout_fetcher.get_layout_by_name("korean-biz")
+        assert isinstance(layout, PresentationLayoutModel)
+        assert layout.name == "korean-biz"
+        assert [s.id for s in layout.slides] == ["korean-biz:cover"]
+
+    asyncio.run(runner())
 
 
 @pytest.mark.parametrize(

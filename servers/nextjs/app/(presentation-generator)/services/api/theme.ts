@@ -8,17 +8,12 @@ import { getApiUrl } from "@/utils/api"
 class ThemeApi {
 
   static async getThemes(): Promise<Theme[]> {
-    try {
-      const response = await fetch(getApiUrl(`/api/v1/ppt/themes/all`), {
-        method: "GET",
-        headers: getHeader(),
-        cache: "no-store",
-      })
-      return await ApiResponseHandler.handleResponse(response, "Failed to get themes")
-    } catch (error) {
-      console.error("Error getting themes:", error)
-      throw error
-    }
+    const response = await fetch(getApiUrl(`/api/v1/ppt/themes/all`), {
+      method: "GET",
+      headers: getHeader(),
+      cache: "no-store",
+    })
+    return await ApiResponseHandler.handleResponse(response, "Failed to get themes")
   }
   static async createTheme(theme: ThemeParams) {
     try {

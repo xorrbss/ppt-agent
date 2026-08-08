@@ -2,6 +2,7 @@ import asyncio
 import os
 from pathlib import Path
 import re
+import shutil
 import struct
 import tempfile
 import urllib
@@ -34,6 +35,16 @@ _SFNT_FORMATS = {
     "wOF2": "WOFF2",
 }
 _SFNT_SIGNATURE_BYTES = (b"OTTO", b"ttcf", b"\x00\x01\x00\x00", b"true")
+
+
+def _create_temp_fontconfig_file(temp_dir: str) -> str:
+    fd, fonts_conf_path = tempfile.mkstemp(
+        prefix="fonts_custom_",
+        suffix=".conf",
+        dir=temp_dir,
+    )
+    os.close(fd)
+    return fonts_conf_path
 
 
 class FontDetail(BaseModel):
@@ -71,9 +82,6 @@ class FontDetail(BaseModel):
     line_gap: Optional[int] = None
     num_glyphs: Optional[int] = None
     format: Optional[str] = None
-
-
-FontAvailability = Tuple[str, Optional[str], List[str]]
 
 
 _STYLE_TOKENS = {
@@ -281,7 +289,7 @@ async def get_google_font_file_urls(family_name: str, api_key: str) -> List[str]
                 for _variant, url in files.items():
                     if not url:
                         continue
-                    # Prefer directly loadable TTF/OTF files; upgrade to https.
+                    # Prefer TTF/OTF for LibreOffice; upgrade to https
                     fixed_url = url.replace("http://", "https://")
                     lower = fixed_url.lower()
                     if lower.endswith(".ttf") or lower.endswith(".otf"):
@@ -855,7 +863,7 @@ def extract_used_fonts_from_pptx(pptx_path: str) -> Set[str]:
 
 async def get_available_and_unavailable_fonts_for_pptx(
     pptx_path: str, temp_dir: str
-) -> Tuple[List[FontAvailability], List[FontAvailability]]:
+) -> Tuple[List[Tuple[str, Optional[str]]], List[Tuple[str, Optional[str]]]]:
     """
     Return lists of available/unavailable fonts for a PPTX file.
 
@@ -865,7 +873,7 @@ async def get_available_and_unavailable_fonts_for_pptx(
 
     Returns:
         Tuple of (available_fonts, unavailable_fonts) where each entry is a list
-        of (font_name, url or None, variants).
+        of (font_name, url or None).
     """
     raw_fonts, emb_font_details, _ = await asyncio.to_thread(
         extract_raw_fonts_and_embedded_details,
@@ -879,35 +887,28 @@ async def get_available_and_unavailable_fonts_for_pptx(
     if not raw_fonts:
         return [], []
 
-    requested_variant_keys: Dict[Tuple[str, str], str] = {}
-    for font_name in raw_fonts:
-        normalized_name = normalize_font_family_name(font_name)
-        if not normalized_name:
-            continue
-        for variant in normalize_font_variants(font_variants_by_name.get(font_name)):
-            requested_variant_keys.setdefault((normalized_name, variant), font_name)
-
-    found_fonts_with_url: Dict[Tuple[str, str], Tuple[str, str]] = {}
+    found_fonts_with_url: Dict[str, str] = {}
     for font_name in raw_fonts:
         match_index = get_index_of_matching_font_detail_or_none(
             font_name, emb_font_details
         )
         if match_index is None:
             continue
-        normalized_name = normalize_font_family_name(font_name)
-        if not normalized_name:
-            continue
-        for variant in normalize_font_variants(font_variants_by_name.get(font_name)):
-            found_fonts_with_url[(normalized_name, variant)] = (
-                font_name,
-                "https://example.com/just-a-placeholder-url.ttf",
-            )
+        found_fonts_with_url[font_name] = (
+            "https://example.com/just-a-placeholder-url.ttf"
+        )
 
-    fonts_to_check: Dict[str, Set[str]] = {}
-    for normalized_name, variant in requested_variant_keys:
-        if (normalized_name, variant) in found_fonts_with_url:
-            continue
-        fonts_to_check.setdefault(normalized_name, set()).add(variant)
+    matched_fonts = set(found_fonts_with_url.keys())
+    fonts_to_check = sorted(raw_fonts - matched_fonts)
+
+    normalized_variants: Dict[str, Set[str]] = {}
+    for font_name, variants in font_variants_by_name.items():
+        normalized_name = normalize_font_family_name(font_name)
+        if normalized_name:
+            normalized_variants.setdefault(normalized_name, set()).update(variants)
+
+    fonts_to_check = [normalize_font_family_name(font) for font in fonts_to_check]
+    fonts_to_check = list(set(fonts_to_check))
 
     availability_results: List[bool] = []
     if fonts_to_check:
@@ -915,32 +916,27 @@ async def get_available_and_unavailable_fonts_for_pptx(
             *[
                 check_google_font_availability(
                     font,
-                    variants=normalize_font_variants(variants),
+                    variants=normalize_font_variants(normalized_variants.get(font)),
                 )
-                for font, variants in sorted(fonts_to_check.items())
+                for font in fonts_to_check
             ]
         )
 
-    available_fonts: List[FontAvailability] = []
-    unavailable_fonts: List[FontAvailability] = []
+    available_fonts: List[Tuple[str, Optional[str]]] = []
+    unavailable_fonts: List[Tuple[str, Optional[str]]] = []
 
-    for (_normalized_name, variant), (font_name, font_url) in sorted(
-        found_fonts_with_url.items()
-    ):
-        available_fonts.append((font_name, font_url, [variant]))
+    for font_name, font_url in found_fonts_with_url.items():
+        available_fonts.append((font_name, font_url))
 
-    for (font, variants), is_available in zip(
-        sorted(fonts_to_check.items()), availability_results
-    ):
-        normalized_font_variants = normalize_font_variants(variants)
+    for font, is_available in zip(fonts_to_check, availability_results):
         if is_available:
             google_fonts_url = build_google_fonts_stylesheet_url(
                 font,
-                variants=normalized_font_variants,
+                variants=normalize_font_variants(normalized_variants.get(font)),
             )
-            available_fonts.append((font, google_fonts_url, normalized_font_variants))
+            available_fonts.append((font, google_fonts_url))
         else:
-            unavailable_fonts.append((font, None, normalized_font_variants))
+            unavailable_fonts.append((font, None))
 
     return available_fonts, unavailable_fonts
 
@@ -1190,6 +1186,49 @@ def replace_fonts_in_pptx(
 
     # Save the modified presentation
     prs.save(output_path)
+
+
+async def install_fonts_for_libreoffice(font_paths: List[str], temp_dir: str) -> str:
+    """
+    Install fonts for LibreOffice by copying them to a temporary directory
+    and creating a fontconfig configuration.
+
+    Args:
+        font_paths: List of paths to font files
+        temp_dir: Temporary directory to store fonts
+
+    Returns:
+        Path to fontconfig configuration file
+    """
+    # Create fonts directory in temp_dir
+    fonts_dir = os.path.join(temp_dir, "custom_fonts")
+    await asyncio.to_thread(os.makedirs, fonts_dir, exist_ok=True)
+
+    # Copy fonts to the directory
+    for font_path in font_paths:
+        font_filename = os.path.basename(font_path)
+        dest_path = os.path.join(fonts_dir, font_filename)
+        await asyncio.to_thread(shutil.copy, font_path, dest_path)
+
+    # Create fontconfig file
+    fonts_conf_path = await asyncio.to_thread(_create_temp_fontconfig_file, temp_dir)
+
+    def _write_fonts_conf() -> None:
+        Path(fonts_conf_path).write_text(
+            f"""<?xml version='1.0'?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <include>/etc/fonts/fonts.conf</include>
+  <dir>{fonts_dir}</dir>
+  <cachedir>{temp_dir}/fontconfig-cache</cachedir>
+</fontconfig>
+""",
+            encoding="utf-8",
+        )
+
+    await asyncio.to_thread(_write_fonts_conf)
+
+    return fonts_conf_path
 
 
 def extract_font_from_eot(eot_path: Path) -> bytes:

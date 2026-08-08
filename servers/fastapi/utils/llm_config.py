@@ -4,7 +4,6 @@ from typing import Optional
 from fastapi import HTTPException
 from llmai import (
     BedrockClientConfig,
-    DeepSeekClientConfig,
     FireworksClientConfig,
     LMStudioClientConfig,
     TogetherAIClientConfig,
@@ -41,12 +40,11 @@ from utils.get_env import (
     get_cerebras_base_url_env,
     get_codex_access_token_env,
     get_codex_account_id_env,
+    get_codex_reasoning_effort_env,
     get_codex_refresh_token_env,
     get_codex_token_expires_env,
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
-    get_deepseek_api_key_env,
-    get_deepseek_base_url_env,
     get_disable_thinking_env,
     get_fireworks_api_key_env,
     get_fireworks_base_url_env,
@@ -78,10 +76,6 @@ from utils.set_env import (
 )
 
 
-CHATGPT_AUTH_REQUIRED_HEADERS = {"X-Presenton-Auth-Action": "codex-reauth"}
-CHATGPT_AUTH_REQUIRED_PREFIX = "CHATGPT_AUTH_REQUIRED:"
-
-
 def enable_web_grounding() -> bool:
     return parse_bool_or_none(get_web_grounding_env()) or False
 
@@ -94,12 +88,11 @@ def _get_codex_access_token() -> str:
     access_token = get_codex_access_token_env()
     if not access_token:
         raise HTTPException(
-            status_code=401,
+            status_code=400,
             detail=(
-                f"{CHATGPT_AUTH_REQUIRED_PREFIX} ChatGPT authentication is required. "
-                "Please sign in again from Settings."
+                "Codex OAuth access token is not set. Please authenticate via "
+                "/api/v1/ppt/codex/auth/initiate"
             ),
-            headers=CHATGPT_AUTH_REQUIRED_HEADERS,
         )
 
     expires_str = get_codex_token_expires_env()
@@ -109,49 +102,29 @@ def _get_codex_access_token() -> str:
             now_ms = int(time.time() * 1000)
             if now_ms >= expires_ms - 60_000:
                 refresh_token = get_codex_refresh_token_env()
-                if not refresh_token:
-                    raise HTTPException(
-                        status_code=401,
-                        detail=(
-                            f"{CHATGPT_AUTH_REQUIRED_PREFIX} Your ChatGPT session expired. "
-                            "Please sign in again from Settings."
-                        ),
-                        headers=CHATGPT_AUTH_REQUIRED_HEADERS,
+                if refresh_token:
+                    from utils.oauth.openai_codex import (
+                        TokenSuccess,
+                        get_account_id,
+                        refresh_access_token,
                     )
 
-                from utils.oauth.openai_codex import (
-                    TokenSuccess,
-                    get_account_id,
-                    refresh_access_token,
-                )
-                from utils.user_config import save_codex_tokens_to_user_config
-
-                result = refresh_access_token(refresh_token)
-                if not isinstance(result, TokenSuccess):
-                    raise HTTPException(
-                        status_code=401,
-                        detail=(
-                            f"{CHATGPT_AUTH_REQUIRED_PREFIX} Your ChatGPT session expired. "
-                            "Please sign in again from Settings."
-                        ),
-                        headers=CHATGPT_AUTH_REQUIRED_HEADERS,
-                    )
-
-                set_codex_access_token_env(result.access)
-                set_codex_refresh_token_env(result.refresh)
-                set_codex_token_expires_env(str(result.expires))
-                account_id = get_account_id(result.access)
-                if account_id:
-                    set_codex_account_id_env(account_id)
-                save_codex_tokens_to_user_config()
-                access_token = result.access
+                    result = refresh_access_token(refresh_token)
+                    if isinstance(result, TokenSuccess):
+                        set_codex_access_token_env(result.access)
+                        set_codex_refresh_token_env(result.refresh)
+                        set_codex_token_expires_env(str(result.expires))
+                        account_id = get_account_id(result.access)
+                        if account_id:
+                            set_codex_account_id_env(account_id)
+                        access_token = result.access
         except (TypeError, ValueError):
             pass
 
     return access_token
 
 
-def get_llm_config(*, use_openai_responses_api: bool = False) -> ClientConfig:
+def get_llm_config() -> ClientConfig:
     llm_provider = get_llm_provider()
 
     match llm_provider:
@@ -161,20 +134,7 @@ def get_llm_config(*, use_openai_responses_api: bool = False) -> ClientConfig:
                 raise HTTPException(status_code=400, detail="OpenAI API Key is not set")
             return OpenAIClientConfig(
                 api_key=api_key,
-                api_type=(
-                    OpenAIApiType.RESPONSES
-                    if use_openai_responses_api
-                    else OpenAIApiType.COMPLETIONS
-                ),
-            )
-        case LLMProvider.DEEPSEEK:
-            api_key = get_deepseek_api_key_env()
-            if not api_key:
-                raise HTTPException(status_code=400, detail="DeepSeek API Key is not set")
-            base_url = get_deepseek_base_url_env()
-            return DeepSeekClientConfig(
-                api_key=api_key,
-                base_url=base_url or None,
+                api_type=OpenAIApiType.COMPLETIONS,
             )
         case LLMProvider.GOOGLE:
             api_key = get_google_api_key_env()
@@ -379,19 +339,20 @@ def get_llm_config(*, use_openai_responses_api: bool = False) -> ClientConfig:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "LLM Provider must be either openai, deepseek, google, vertex, azure, "
+                    "LLM Provider must be either openai, google, vertex, azure, "
                     "bedrock, openrouter, fireworks, together, cerebras, "
                     "anthropic, litellm, lmstudio, ollama, custom, or codex"
                 ),
             )
 
 
-def get_extra_body(*, uses_tool_choice: bool = False) -> Optional[dict]:
-    llm_provider = get_llm_provider()
-    if llm_provider == LLMProvider.DEEPSEEK and (
-        disable_thinking() or uses_tool_choice
-    ):
-        return {"thinking": {"type": "disabled"}}
-    if llm_provider == LLMProvider.CUSTOM and disable_thinking():
+def get_extra_body() -> Optional[dict]:
+    provider = get_llm_provider()
+    if provider == LLMProvider.CUSTOM and disable_thinking():
         return {"enable_thinking": False}
+    if provider == LLMProvider.CODEX:
+        effort = (get_codex_reasoning_effort_env() or "").strip().lower()
+        # codex (gpt-5.x) reasoning-effort levels; other providers 400 on this param.
+        if effort in ("minimal", "none", "low", "medium", "high", "xhigh"):
+            return {"reasoning": {"effort": effort}}
     return None

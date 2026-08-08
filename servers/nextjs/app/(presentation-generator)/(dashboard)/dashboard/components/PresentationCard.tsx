@@ -1,9 +1,10 @@
 'use client'
 import React, { useEffect } from "react";
+import Image from "next/image";
 
 import { Card } from "@/components/ui/card";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { Archive, AlertTriangle, Copy, EllipsisVertical, Loader2, Trash } from "lucide-react";
+import { AlertTriangle, EllipsisVertical, Loader2, Trash } from "lucide-react";
 import {
   Popover,
   PopoverTrigger,
@@ -12,12 +13,8 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 
-import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
+import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
-import {
-  shouldRenderTemplateV2HtmlPreview,
-  TemplateV2HtmlSlidePreview,
-} from "@/app/(presentation-generator)/components/TemplateV2HtmlSlidePreview";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
@@ -25,35 +22,20 @@ export const PresentationCard = ({
   id,
   title,
   presentation,
-  viewMode = "grid",
-  onDeleted,
-  onDuplicated
+  onDeleted
 }: {
   id: string;
   title: string;
   presentation: any;
-  viewMode?: "grid" | "list";
   onDeleted?: (presentationId: string) => void;
-  onDuplicated?: (presentation: any) => void;
 }) => {
   const router = useRouter();
   const pathname = usePathname();
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
-  const [isDuplicating, setIsDuplicating] = React.useState(false);
-  const isUnsupported = presentation?.version === "v1-standard";
-
-  
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (isUnsupported) {
-      notify.warning(
-        "Unsupported presentation",
-        "This deck was created in an older Presenton version. Downgrade to a compatible version to open it."
-      );
-      return;
-    }
     trackEvent(MixpanelEvent.Dashboard_Presentation_Opened, {
       pathname,
       presentation_id: id,
@@ -62,7 +44,14 @@ export const PresentationCard = ({
     });
     router.push(`/presentation?id=${id}&type=standard`);
   };
-
+  useEffect(() => {
+    // Unified theme application (base 16 vars + fonts + adaptive tone & manner
+    // tokens) so adaptive-deck thumbnails match the editor/export render. Legacy
+    // thumbnails are unaffected — base vars are identical, extended tokens are
+    // consumed only by the adaptive renderer.
+    const element = document.getElementById(`dashboard-presentation-card-${id}`)
+    applyPresentationThemeToElement(element, presentation.theme)
+  }, [id, presentation.theme])
 
   const handleDelete = async () => {
     if (isDeleting) return;
@@ -75,96 +64,38 @@ export const PresentationCard = ({
         presentation_id: id,
         slide_count: presentation?.slides?.length || 0,
       });
-      notify.success("Presentation deleted", "The presentation was removed from your dashboard.");
+      notify.success("발표자료 삭제됨", "발표자료가 대시보드에서 삭제되었습니다.");
       setShowDeleteDialog(false);
       if (onDeleted) {
         onDeleted(id);
       }
     } else {
-      notify.error("Could not delete presentation", response?.message || "Something went wrong while deleting the presentation.");
+      notify.error("발표자료를 삭제할 수 없습니다", response?.message || "발표자료를 삭제하는 중 문제가 발생했습니다.");
     }
     setIsDeleting(false);
   };
-
-  const handleDuplicate = async () => {
-    if (isDuplicating) return;
-    setIsDuplicating(true);
-    try {
-      const duplicated = await DashboardApi.duplicatePresentation(id);
-      trackEvent(MixpanelEvent.Dashboard_Presentation_Duplicated, {
-        pathname,
-        presentation_id: id,
-        duplicate_presentation_id: duplicated?.id,
-        slide_count: presentation?.slides?.length || 0,
-      });
-      notify.success("Presentation duplicated", "A copy was added to your dashboard.");
-      onDuplicated?.(duplicated);
-    } catch (error) {
-      notify.error(
-        "Could not duplicate presentation",
-        error instanceof Error ? error.message : "Something went wrong while duplicating the presentation."
-      );
-    } finally {
-      setIsDuplicating(false);
-    }
-  };
   const firstSlide = presentation?.slides?.[0];
-  const useTemplateV2HtmlPreview = shouldRenderTemplateV2HtmlPreview(
-    firstSlide,
-    presentation?.version
-  );
-  console.log('presentation'  , presentation)
   return (
     <Card
       suppressHydrationWarning={true}
       onClick={handlePreview}
-      aria-disabled={isUnsupported}
-      title={isUnsupported ? "Unsupported in this version of Presenton" : undefined}
-      className={`bg-[#F8FBFB] font-syne relative shadow-none sm:shadow-none presentation-card rounded-[12px] p-0 group transition-all duration-500 slide-theme overflow-hidden flex flex-col ${
-        isUnsupported
-          ? "cursor-not-allowed border-[#EDEEEF]"
-          : "cursor-pointer hover:shadow-md"
-      }`}
+      className="bg-[#F8FBFB] font-syne shadow-none sm:shadow-none  presentation-card rounded-[12px] p-0 group hover:shadow-md transition-all duration-500 slide-theme cursor-pointer overflow-hidden flex flex-col"
     >
-     
       <div
         id={`dashboard-presentation-card-${id}`}
-        suppressHydrationWarning={true}
-        className={`relative z-40 flex flex-1 ${viewMode === "list" ? "min-h-[122px] flex-row" : "flex-col"}`}
-      >
+        suppressHydrationWarning={true} className="flex flex-col flex-1 relative z-40">
         {/* <p className=" text-xs font-syne absolute top-2 flex gap-1 capitalize  items-center left-2 rounded-[100px]  px-2.5 py-1 bg-[#3A3A3AF5] text-white font-semibold  z-40 ">
 
           {presentation.type}
         </p> */}
 
-        <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
-        <div className={isUnsupported
-          ? `relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-[#EDEEEF] bg-white/90 ${viewMode === "list" ? "m-3 w-[170px] shrink-0" : "mx-5 mt-4"}`
-          : `border border-gray-300 rounded-lg overflow-hidden ${viewMode === "list" ? "m-3 w-[170px] shrink-0" : "scale-[0.75] mt-4"}`
-        }>
+        <Image src="/card_bg.svg" alt="" fill className="absolute object-cover" />
+        <div className="scale-[0.75] mt-4  border border-gray-300 rounded-lg overflow-hidden">
 
-          {isUnsupported ? (
-            <div className="flex flex-col items-center gap-2 px-5 text-center text-[#666666]">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F4F3FF] text-[#7A5AF8]">
-                <Archive className="h-[18px] w-[18px]" aria-hidden="true" />
-              </span>
-              <p className="text-xs font-medium">Preview unavailable</p>
-            </div>
-          ) : useTemplateV2HtmlPreview ? (
-            <TemplateV2HtmlSlidePreview
-              slide={firstSlide}
-              fonts={presentation.fonts}
-            />
-          ) : (
-            <SlideScale
-              slide={firstSlide}
-              isClickable={false}
-              presentationLayout={presentation.layout}
-            />
-          )}
+          <SlideScale slide={firstSlide} isClickable={false} />
         </div>
-       <p className="absolute top-1 z-40 right-2">{presentation.n_slides}</p>
-        <div className={`z-40 flex bg-white px-5 py-3 ${viewMode === "list" ? "min-w-0 flex-1 items-center border-l border-[#EDEEEF]" : "relative mt-auto w-full border-t border-[#EDEEEF]"}`}>
+
+        <div className="w-full py-3 px-5 mt-auto z-40 relative bg-white  border-t border-[#EDEEEF]">
           <div className="flex items-center justify-between gap-7 w-full">
             <div className="flex flex-col items-start gap-1">
               <div className="text-sm text-[#191919] font-semibold  overflow-hidden line-clamp-1">
@@ -180,24 +111,6 @@ export const PresentationCard = ({
                 <EllipsisVertical className="w-6 h-6 text-gray-500" />
               </PopoverTrigger>
               <PopoverContent align="end" className="bg-white w-[200px]">
-                {!isUnsupported && (
-                  <button
-                    className="flex items-center justify-between w-full px-2 py-1 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={isDuplicating}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      void handleDuplicate();
-                    }}
-                  >
-                    <p>{isDuplicating ? "Duplicating..." : "Duplicate"}</p>
-                    {isDuplicating ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                    ) : (
-                      <Copy className="h-4 w-4 text-gray-500" />
-                    )}
-                  </button>
-                )}
                 <button
                   className="flex items-center justify-between w-full px-2 py-1 hover:bg-gray-100"
                   onClick={(e) => {
@@ -206,7 +119,7 @@ export const PresentationCard = ({
                     setShowDeleteDialog(true);
                   }}
                 >
-                  <p>Delete</p>
+                  <p>삭제</p>
                   <Trash className="w- h-4 text-red-500" />
                 </button>
               </PopoverContent>
@@ -238,12 +151,11 @@ export const PresentationCard = ({
                 <AlertTriangle className="h-6 w-6 text-red-500" />
               </div>
               <h3 className="mb-2 text-lg font-semibold text-[#191919]">
-                Delete Presentation?
+                발표자료를 삭제하시겠습니까?
               </h3>
               <p className="text-sm leading-relaxed text-gray-500">
-                You are about to delete{" "}
-                <span className="font-medium text-gray-700">&quot;{title}&quot;</span>.
-                This action cannot be undone.
+                <span className="font-medium text-gray-700">&quot;{title}&quot;</span>
+                {" "}발표자료를 삭제하려고 합니다. 이 작업은 되돌릴 수 없습니다.
               </p>
             </div>
             <div className="flex border-t border-gray-100">
@@ -252,7 +164,7 @@ export const PresentationCard = ({
                 disabled={isDeleting}
                 className="flex-1 px-4 py-3.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Cancel
+                취소
               </button>
               <button
                 onClick={() => void handleDelete()}
@@ -262,10 +174,10 @@ export const PresentationCard = ({
                 {isDeleting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Deleting...
+                    삭제 중…
                   </>
                 ) : (
-                  "Delete"
+                  "삭제"
                 )}
               </button>
             </div>

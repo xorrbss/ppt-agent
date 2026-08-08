@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Manrope, Syne, Unbounded } from "next/font/google";
+import { Syne, Unbounded } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import { Providers } from "./providers";
@@ -23,12 +23,6 @@ const syne = Syne({
   variable: "--font-syne",
 });
 
-const manrope = Manrope({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-manrope",
-});
-
 const unbounded = Unbounded({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
@@ -40,6 +34,23 @@ export const metadata: Metadata = {
   title: "Presenton - Open Source AI presentation generator",
   description:
     "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
+  icons: {
+    icon: [
+      {
+        url: "/dx-browser-icon-v2.png",
+        type: "image/png",
+        sizes: "512x512",
+      },
+    ],
+    shortcut: ["/dx-browser-icon-v2.png"],
+    apple: [
+      {
+        url: "/apple-icon.png",
+        type: "image/png",
+        sizes: "180x180",
+      },
+    ],
+  },
   keywords: [
     "AI presentation generator",
     "data storytelling",
@@ -87,11 +98,9 @@ export default function RootLayout({
 
   return (
     <html lang="en">
-      <head>
-        <link rel="preload" href="/Presenton_Splash.png" as="image" />
-      </head>
       <body
-        className={`${inter.variable} ${syne.variable} ${manrope.variable} ${unbounded.variable} antialiased`}
+        suppressHydrationWarning
+        className={`${inter.variable} ${syne.variable} ${unbounded.variable} antialiased`}
       >
         <Providers>
           <MixpanelInitializer>

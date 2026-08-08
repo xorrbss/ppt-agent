@@ -2,22 +2,126 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const nextjsRoot = path.dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = path.resolve(nextjsRoot, "../..");
+const exportRuntimeTrace = ["../../presentation-export/**/*"];
+const semverRuntimeTrace = [
+  "node_modules/.pnpm/semver@*/node_modules/semver/**/*",
+];
+const sharpNativeRuntimeTrace = [
+  "node_modules/@img/sharp-*/lib/**/*",
+  "node_modules/.pnpm/@img+sharp-*/node_modules/@img/sharp-*/lib/**/*",
+];
+const linkFreeRuntimeTrace = [
+  "node_modules/@img/**/*",
+  "node_modules/@next/env/**/*",
+  "node_modules/@swc/helpers/**/*",
+  "node_modules/baseline-browser-mapping/**/*",
+  "node_modules/caniuse-lite/**/*",
+  "node_modules/client-only/**/*",
+  "node_modules/detect-libc/**/*",
+  "node_modules/nanoid/**/*",
+  "node_modules/picocolors/**/*",
+  "node_modules/postcss/**/*",
+  "node_modules/scheduler/**/*",
+  "node_modules/semver/**/*",
+  "node_modules/source-map-js/**/*",
+  "node_modules/styled-jsx/**/*",
+];
+const runtimeTailwindTrace = [
+  // Tailwind reads this file with fs.readFileSync while constructing its core
+  // plugins. Next's JS tracer cannot infer that runtime path for standalone.
+  "node_modules/tailwindcss/lib/css/**/*",
+];
 
 const nextConfig = {
   reactStrictMode: false,
-  distDir: ".next-build",
-  output: "standalone",
+  distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
+  // Next requires this to agree with outputFileTracingRoot. The repository root
+  // is required to trace the presentation-export runtime outside this app.
   turbopack: {
-    root: nextjsRoot,
+    root: repositoryRoot,
+  },
+  experimental: {
+    // Fidelity tests isolate their distDir per run. Avoid duplicating Turbopack's
+    // persistent dev cache on disk in that already-disposable Windows workspace.
+    turbopackFileSystemCacheForDev: !process.env.PRESENTON_TEST_NEXT_DIST_DIR,
+  },
+  output: "standalone",
+  // Runtime template CSS compilation needs Tailwind's real package __dirname.
+  // Bundling it can bake the build machine path into fs.readFileSync calls.
+  serverExternalPackages: ["postcss", "tailwindcss"],
+  outputFileTracingRoot: repositoryRoot,
+  outputFileTracingIncludes: {
+    "/*": [
+      ...semverRuntimeTrace,
+      ...sharpNativeRuntimeTrace,
+      ...linkFreeRuntimeTrace,
+      ...runtimeTailwindTrace,
+    ],
+    "/api/export-presentation": exportRuntimeTrace,
+  },
+  outputFileTracingExcludes: {
+    "/*": [
+      "../../.git/**/*",
+      "../../.cache/**/*",
+      "../../electron/dist/resources/**/*",
+      "../../electron/src/**/*",
+      "../../docs/**/*",
+      "../../servers/fastapi/**/*",
+      "../../**/.next*/cache/**/*",
+      "../../**/__pycache__/**/*",
+      "../../**/tests/**/*",
+      "../../**/cypress/**/*",
+      "../../**/*.test.*",
+      "../../**/*.spec.*",
+      "../../**/*.cy.*",
+      "../../**/package-lock.json",
+      "../../**/pnpm-lock.yaml",
+      "../../**/yarn.lock",
+      "../../**/uv.lock",
+      "../../**/*.tsbuildinfo",
+    ],
   },
   ...(process.env.NODE_ENV !== "production"
     ? {
         allowedDevOrigins: [
+          "http://127.0.0.1:40001",
+          "http://localhost:40001",
           "127.0.0.1",
           "localhost",
         ],
       }
     : {}),
+
+  // Keep direct Next.js access usable in development as well as the
+  // single-origin local proxy. Browser API calls are same-origin, so without
+  // this rewrite opening port 3000 directly returns a Next.js 404.
+  async rewrites() {
+    const fastApiUrl =
+      process.env.FAST_API_INTERNAL_URL || "http://127.0.0.1:8000";
+
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${fastApiUrl}/api/v1/:path*`,
+      },
+      {
+        source: "/app_data/:path*",
+        destination: `${fastApiUrl}/app_data/:path*`,
+      },
+    ];
+  },
+
+  // /compose is a friendly alias for the main compose screen (/upload).
+  async redirects() {
+    return [
+      {
+        source: '/compose',
+        destination: '/upload',
+        permanent: false,
+      },
+    ];
+  },
 
   images: {
     remotePatterns: [

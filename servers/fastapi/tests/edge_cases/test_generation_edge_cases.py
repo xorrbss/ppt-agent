@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from api.v1.ppt.endpoints import presentation as presentation_endpoint
+from api.v1.ppt.endpoints import presentation_generate as presentation_endpoint
 from models.generate_presentation_request import GeneratePresentationRequest
 from utils.llm_calls.generate_presentation_outlines import get_user_prompt
 
@@ -20,7 +20,7 @@ def test_empty_input_is_rejected_during_request_validation(fake_async_session):
         n_slides=3,
         language="English",
         export_as="pptx",
-        template="general",
+        template="korean-biz",
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -33,6 +33,30 @@ def test_empty_input_is_rejected_during_request_validation(fake_async_session):
 
     assert exc.value.status_code == 400
     assert "Either content or slides markdown or files is required" in exc.value.detail
+
+
+@pytest.mark.parametrize("template", ["authored", "Authored", "AUTHORED"])
+def test_authored_mode_passes_template_validation(fake_async_session, template):
+    """The authored generation mode reuses the template field as a MODE selector; it
+    must pass validation (case-insensitively) and normalize to "authored" — it is not
+    a layout template, so it must never be rejected as "Template not found"."""
+    request = GeneratePresentationRequest(
+        content="Some topic",
+        n_slides=5,
+        language="English",
+        export_as="pptx",
+        template=template,
+    )
+
+    (presentation_id,) = _run(
+        presentation_endpoint.check_if_api_request_is_valid(
+            request=request,
+            sql_session=fake_async_session,
+        )
+    )
+
+    assert isinstance(presentation_id, uuid.UUID)
+    assert request.template == "authored"
 
 
 def test_large_input_generates_prompt_without_randomness():
@@ -58,7 +82,7 @@ def test_invalid_llm_payload_raises_structured_http_error(fake_async_session):
         n_slides=2,
         language="English",
         export_as="pdf",
-        template="general",
+        template="korean-biz",
     )
 
     async def failing_outline_stream(*_args, **_kwargs):

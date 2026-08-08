@@ -1,0 +1,59 @@
+id: science-sketch
+name: 사이언스 스케치
+description: 손그림 주석과 명료한 도식을 결합해 복잡한 과학 개념을 단계적으로 설명하는 스타일
+category: research
+tags:
+  - science
+  - diagram
+  - explainer
+use_cases:
+  - 과학 교육
+  - 연구 설명
+  - 실험 프로토콜
+preview:
+  bg: "#FFFDF7"
+  accent: "#0F766E"
+  palette:
+    - "#FFFDF7"
+    - "#17324D"
+    - "#0F766E"
+    - "#E6B84C"
+    - "#D7E8E5"
+  variant: annotated-notebook
+brief: >-
+  MOOD: Make science feel observable and teachable: a clean field notebook elevated
+  by precise, approachable diagrams. It should be curious and human, but still
+  disciplined enough for a research audience.
+
+  PALETTE: Use warm notebook white (#FFFDF7), deep blue ink (#17324D), teal (#0F766E),
+  specimen yellow (#E6B84C), and pale teal wash (#D7E8E5). Use color as a coding
+  system, not as decoration.
+
+  TYPOGRAPHY: Use an exceptionally legible sans-serif for all core text. Reserve a
+  subtle handwritten-style accent only for short diagram callouts; never use it for
+  body text, data labels, or citations.
+
+  LAYOUT SYSTEM: Set diagrams on an airy modular grid with a clear central process or
+  specimen. Build explanations in numbered steps, leave room for labels, and maintain
+  strong contrast between mark, background, and annotation.
+
+  SIGNATURE ELEMENTS: Include hand-drawn-style arrows, numbered callout circles,
+  specimen labels, calibration ticks, light graph-paper fragments, and concise
+  observation notes.
+
+  DATA VISUALIZATION: Use explanatory plots, labeled process diagrams, simple before/
+  after comparisons, and small multiples. Label every variable, unit, condition, and
+  sample; distinguish measured data from illustrative diagrams.
+
+  IMAGE DIRECTION: Use close-up specimens, field observations, microscope imagery, or
+  technical line illustrations. Add thin annotation leaders and source captions
+  without obscuring the subject.
+
+  SLIDE ARCHETYPES: cover: one specimen or sketch with title and field-note label;
+  content: a single concept diagram with three to five numbered explanations; data: a
+  readable plot paired with a plain-language observation; timeline: experiment phases
+  marked as collected, analyzed, and interpreted; closing: a summary sketch that
+  restates the mechanism and the open question.
+
+  AVOID: Avoid childish doodles, low-contrast pencil effects, decorative equations,
+  unlabeled arrows, crowded callouts, and treating an illustrative sketch as evidence.

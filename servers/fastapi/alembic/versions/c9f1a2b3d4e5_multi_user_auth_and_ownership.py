@@ -84,13 +84,45 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    existing_tables = set(inspector.get_table_names())
     for table in reversed(OWNED_TABLES):
+        if table not in existing_tables:
+            continue
+        columns = {column["name"] for column in inspector.get_columns(table)}
+        if "owner_id" not in columns:
+            continue
+        foreign_keys = {
+            foreign_key.get("name")
+            for foreign_key in inspector.get_foreign_keys(table)
+        }
+        indexes = {
+            index.get("name") for index in inspector.get_indexes(table)
+        }
         with op.batch_alter_table(table) as batch:
-            batch.drop_constraint(f"fk_{table}_owner_id_user", type_="foreignkey")
-            batch.drop_index(f"ix_{table}_owner_id")
+            constraint_name = f"fk_{table}_owner_id_user"
+            if constraint_name in foreign_keys:
+                batch.drop_constraint(constraint_name, type_="foreignkey")
+            index_name = f"ix_{table}_owner_id"
+            if index_name in indexes:
+                batch.drop_index(index_name)
             batch.drop_column("owner_id")
-    op.drop_index("ix_access_tokens_user_id", table_name="access_tokens")
-    op.drop_index("ix_access_tokens_token", table_name="access_tokens")
-    op.drop_table("access_tokens")
-    op.drop_index("ix_user_username", table_name="user")
-    op.drop_table("user")
+    if "access_tokens" in existing_tables:
+        access_indexes = {
+            index.get("name")
+            for index in inspector.get_indexes("access_tokens")
+        }
+        if "ix_access_tokens_user_id" in access_indexes:
+            op.drop_index(
+                "ix_access_tokens_user_id", table_name="access_tokens"
+            )
+        if "ix_access_tokens_token" in access_indexes:
+            op.drop_index("ix_access_tokens_token", table_name="access_tokens")
+        op.drop_table("access_tokens")
+    if "user" in existing_tables:
+        user_indexes = {
+            index.get("name") for index in inspector.get_indexes("user")
+        }
+        if "ix_user_username" in user_indexes:
+            op.drop_index("ix_user_username", table_name="user")
+        op.drop_table("user")

@@ -1,0 +1,29 @@
+description: "An academic editorial aesthetic with research imagery and crimson accents."
+design_system:
+  global_style:
+    theme: "Academic Edge. Editorial research style with B&W imagery."
+    typography:
+      primary_heading: "Codec Pro, sans-serif"
+      secondary_heading: "Codec Pro, light"
+      body_text: "Inter, sans-serif"
+    color_palette:
+      primary: "Crimson (#d00000)"
+      background: "#fff"
+      surface: "#F8F9FA"
+      accent_gradient: "Soft grainy peach-to-red gradient"
+      text_main: "#1a1a1a"
+    key_visual_elements:
+      - "High-contrast black and white photography"
+      - "Bold red arrows and list bullets"
+  image_generation_prompts:
+    style_guidelines: "Editorial photography, high contrast, minimalist composition."
+    themes:
+      - target: "Research & Detail"
+        prompt_elements: "Architectural structures in high-contrast black and white."
+slide_layout_templates:
+  - type: "Thesis_Hero"
+    usage: "Large title on the left and a gradient on the right"
+  - type: "Editorial_Results"
+    usage: "Data charts with red bars"
+    components:
+      - "Direct labels"

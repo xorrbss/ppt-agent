@@ -7,13 +7,14 @@ const ts = require("typescript");
 const repoRoot = path.resolve(__dirname, "..");
 const appDistDir = path.join(repoRoot, "app_dist");
 
-const rootBuildFiles = ["build.js"].map((file) => path.join(repoRoot, file));
-
-const scriptsDir = path.join(repoRoot, "scripts");
-const scriptBuildFiles = walkFiles(
-  scriptsDir,
-  (file) => file.endsWith(".cjs") || file.endsWith(".js"),
-);
+const rootBuildFiles = [
+  "build.js",
+  "build_nextjs_resources.js",
+  "copy_fastapi_assets.js",
+  "ensure_spacy_model.js",
+  "generate_update.js",
+  "sync_export_runtime.js",
+].map((file) => path.join(repoRoot, file));
 
 function walkFiles(dir, predicate, results = []) {
   if (!fs.existsSync(dir)) {
@@ -44,7 +45,6 @@ if (generatedMainFiles.length === 0) {
 const files = [
   ...generatedMainFiles,
   ...rootBuildFiles.filter((file) => fs.existsSync(file)),
-  ...scriptBuildFiles,
 ];
 
 const program = ts.createProgram(files, {

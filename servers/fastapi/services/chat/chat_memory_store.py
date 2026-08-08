@@ -150,9 +150,16 @@ class ChatMemoryStore:
         conversation_id: UUID,
         user_message: str,
         assistant_message: str,
+        delivery_id: str | None = None,
+        strict: bool = False,
     ) -> None:
         client = await self._get_client()
         if client is None:
+            # Explicitly disabling Mem0 preserves the legacy no-op behavior.
+            # A configured-but-unavailable provider must fail an outbox
+            # attempt so the durable dispatcher can retry it after recovery.
+            if strict and self._enabled:
+                raise RuntimeError("mem0_chat_memory_unavailable")
             return
 
         user_text = self._normalize(user_message)
@@ -173,24 +180,79 @@ class ChatMemoryStore:
         ]
         scoped_user_id = self._scope_user_id(presentation_id, conversation_id)
 
-        def _add():
+        normalized_delivery_id = (delivery_id or "").strip()[:160]
+
+        def _already_delivered() -> bool:
+            if not normalized_delivery_id:
+                return False
+            filters = {
+                "user_id": scoped_user_id,
+                "workspace_delivery_id": normalized_delivery_id,
+            }
             try:
-                return client.add(payload, user_id=scoped_user_id, infer=False)
+                response = client.get_all(filters=filters, limit=1)
             except TypeError:
-                return client.add(
-                    messages=payload,
-                    user_id=scoped_user_id,
-                    infer=False,
-                )
+                # Retain the delivery-id filter when adapting older Mem0
+                # signatures. Falling back to a user-only query would mistake
+                # an unrelated turn for this delivery.
+                response = client.get_all(filters=filters)
+            return bool(self._collect_results(response))
+
+        def _add():
+            metadata = (
+                {"workspace_delivery_id": normalized_delivery_id}
+                if normalized_delivery_id
+                else None
+            )
+            try:
+                kwargs: dict[str, Any] = {
+                    "user_id": scoped_user_id,
+                    "infer": False,
+                }
+                if metadata is not None:
+                    kwargs["metadata"] = metadata
+                return client.add(payload, **kwargs)
+            except TypeError:
+                fallback_kwargs: dict[str, Any] = {
+                    "messages": payload,
+                    "user_id": scoped_user_id,
+                    "infer": False,
+                }
+                if metadata is not None:
+                    fallback_kwargs["metadata"] = metadata
+                return client.add(**fallback_kwargs)
 
         try:
+            if normalized_delivery_id and await asyncio.to_thread(_already_delivered):
+                return
             await asyncio.to_thread(_add)
         except BaseException as exc:
             if not self._is_nonfatal_mem0_error(exc):
                 raise
             if isinstance(exc, SystemExit):
-                self._disable_runtime("mem0 runtime failed while storing chat turns", exc=exc)
+                if strict:
+                    self._disable_runtime(
+                        "mem0 runtime failed while storing chat turns"
+                    )
+                    raise RuntimeError(
+                        "mem0_chat_memory_delivery_failed"
+                    ) from None
+                self._disable_runtime(
+                    "mem0 runtime failed while storing chat turns", exc=exc
+                )
                 return
+            if strict:
+                # Provider errors can echo request bodies. Keep durable worker
+                # logs secret-free while surfacing a stable retry code.
+                LOGGER.warning(
+                    (
+                        "Mem0 chat turn delivery will retry "
+                        "presentation_id=%s conversation_id=%s"
+                    ),
+                    presentation_id,
+                    conversation_id,
+                )
+                raise RuntimeError("mem0_chat_memory_delivery_failed") from None
             LOGGER.exception(
                 (
                     "Failed to add chat mem0 memory "

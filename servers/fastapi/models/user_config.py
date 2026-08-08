@@ -80,11 +80,6 @@ class UserConfig(BaseModel):
     CUSTOM_LLM_API_KEY: Optional[str] = None
     CUSTOM_MODEL: Optional[str] = None
 
-    # DeepSeek
-    DEEPSEEK_BASE_URL: Optional[str] = None
-    DEEPSEEK_API_KEY: Optional[str] = None
-    DEEPSEEK_MODEL: Optional[str] = None
-
     # Image Provider
     DISABLE_IMAGE_GENERATION: Optional[bool] = None
     IMAGE_PROVIDER: Optional[str] = None
@@ -108,6 +103,8 @@ class UserConfig(BaseModel):
     DALL_E_3_QUALITY: Optional[str] = None
     # Gpt Image 1.5 Quality
     GPT_IMAGE_1_5_QUALITY: Optional[str] = None
+    # Gpt Image 2 Quality
+    GPT_IMAGE_2_QUALITY: Optional[str] = None
 
     # Reasoning
     DISABLE_THINKING: Optional[bool] = None
@@ -115,13 +112,6 @@ class UserConfig(BaseModel):
 
     # Web Search
     WEB_GROUNDING: Optional[bool] = None
-    WEB_SEARCH_PROVIDER: Optional[str] = None
-    WEB_SEARCH_MAX_RESULTS: Optional[str] = None
-    SEARXNG_BASE_URL: Optional[str] = None
-    TAVILY_API_KEY: Optional[str] = None
-    EXA_API_KEY: Optional[str] = None
-    BRAVE_SEARCH_API_KEY: Optional[str] = None
-    SERPER_API_KEY: Optional[str] = None
 
     # Codex OAuth (ChatGPT)
     CODEX_MODEL: Optional[str] = None

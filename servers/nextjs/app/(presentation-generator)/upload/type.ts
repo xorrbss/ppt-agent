@@ -15,7 +15,7 @@ export enum ThemeType {
 
 export enum LanguageType {
   // Major World Languages
-  Auto = "Auto (English)",
+  Auto = "Auto",
   English = "English",
   Spanish = "Spanish (Español)",
   French = "French (Français)",

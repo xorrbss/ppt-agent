@@ -1,10 +1,11 @@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
+import Image from 'next/image'
 
 const TemplateCardSkeleton = () => (
     <Card className="overflow-hidden shadow-none sm:shadow-none relative">
         <Skeleton className="absolute top-2 left-2 h-6 w-20 rounded-full z-40" />
-        <img src="/card_bg.svg" alt="" className="absolute top-0 left-0 w-full h-full object-cover" />
+        <Image src="/card_bg.svg" alt="" fill className="absolute object-cover" />
         <div className="p-5">
             <div className="grid grid-cols-2 gap-2">
                 {Array.from({ length: 4 }).map((_, i) => (

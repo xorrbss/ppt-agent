@@ -1,3 +1,8 @@
+import type {
+  GenerationFailure,
+  GenerationProgress,
+} from "../../services/api/presentation-generation";
+
 export interface Template {
   id: string;
   name: string;
@@ -12,6 +17,8 @@ export interface LoadingState {
   isLoading: boolean;
   showProgress: boolean;
   duration: number;
+  progress?: GenerationProgress;
+  failure?: GenerationFailure;
 }
 
 
@@ -21,4 +28,4 @@ export const TABS = {
   LAYOUTS: 'layouts'
 } as const;
 
-export type TabType = typeof TABS[keyof typeof TABS]; 
+export type TabType = typeof TABS[keyof typeof TABS];

@@ -1,34 +1,14 @@
-from pathlib import Path
+DEFAULT_TEMPLATES = ["adaptive", "korean-biz", "financial-chart", "comparison-table", "roadmap", "org-chart"]
+MAX_NUMBER_OF_SLIDES = 100
 
-MAX_NUMBER_OF_SLIDES = 50
-MAX_OUTLINE_CONTENT_WORDS = 100
-
-_PREFERRED_TEMPLATE_ORDER = [
-    "momentum",
-    "dynamic",
-    "executive",
-    "general",
-    "modern",
-    "standard",
-    "swift",
-]
-
-
-def _discover_default_templates() -> list[str]:
-    templates_dir = Path(__file__).resolve().parents[3] / "templates"
-
-    if not templates_dir.is_dir():
-        return []
-
-    discovered = {
-        entry.name
-        for entry in templates_dir.iterdir()
-        if entry.is_dir() and (entry / "template.json").is_file()
-    }
-
-    ordered = [name for name in _PREFERRED_TEMPLATE_ORDER if name in discovered]
-    extras = sorted(discovered - set(ordered))
-    return ordered + extras
-
-
-DEFAULT_TEMPLATES = _discover_default_templates()
+# Authored slides are model-written HTML with no layout schema behind them.
+# The schema-driven chat tools can delete such a slide, but `save_slide` has no
+# layout to rebuild an equivalent one from - so an "improve this page" turn
+# destroys the page and leaves a blank in its place.  The tools refuse the
+# destructive half and name the flow that can regenerate an authored page.
+AUTHORED_SLIDE_CHAT_EDIT_REFUSAL = (
+    "This page is model-authored HTML with no editable layout behind it. The "
+    "slide tools cannot rebuild it once changed, so they will not modify it. "
+    "Tell the user to regenerate this page with the page remake action "
+    "(\"페이지 다시 만들기\"); do not attempt to delete or replace it."
+)

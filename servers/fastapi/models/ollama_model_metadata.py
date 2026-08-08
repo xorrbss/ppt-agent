@@ -5,4 +5,3 @@ class OllamaModelMetadata(BaseModel):
     label: str
     value: str
     size: str
-    tested: bool = True

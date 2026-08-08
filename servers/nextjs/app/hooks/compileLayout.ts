@@ -52,59 +52,23 @@ const RESERVED_FOR_LUCIDE = new Set([
     "Text",
 ]);
 
-function isLucideComponent(value: unknown): boolean {
-    return typeof value === "function" || (typeof value === "object" && value !== null);
-}
+let lucideBindingLinesCache: string | null = null;
 
-function getLucideBindingLines(layoutCode: string): string {
-    const requestedBindings = new Map<string, string>();
-    const declaredComponents = new Set<string>();
-    const bindings: string[] = [];
-
-    for (const match of layoutCode.matchAll(
-        /\b(?:const|let|var|function|class)\s+([A-Z][A-Za-z0-9_$]*)\b/g
-    )) {
-        declaredComponents.add(match[1]);
+function getLucideBindingLines(): string {
+    if (lucideBindingLinesCache !== null) {
+        return lucideBindingLinesCache;
     }
-
-    const importPattern = /import\s+\{([\s\S]*?)\}\s+from\s+['"]lucide-react['"];?/g;
-
-    for (const match of layoutCode.matchAll(importPattern)) {
-        const specifiers = match[1].split(",");
-        for (const specifier of specifiers) {
-            const [importedName, localName = importedName] = specifier
-                .trim()
-                .split(/\s+as\s+/);
-
-            if (!importedName || !/^[A-Z][A-Za-z0-9_$]*$/.test(localName)) continue;
-            requestedBindings.set(localName, importedName);
-        }
+    const lines: string[] = [];
+    for (const name of Object.keys(LucideReact)) {
+        if (!/^[A-Z]/.test(name)) continue;
+        if (RESERVED_FOR_LUCIDE.has(name)) continue;
+        const v = (LucideReact as Record<string, unknown>)[name];
+        if (typeof v !== "function") continue;
+        if (name === "Icon" || name === "LucideIcon") continue;
+        lines.push(`const ${name} = _Lucide[${JSON.stringify(name)}];`);
     }
-
-    // Generated layouts sometimes omit Lucide imports entirely. Any undefined
-    // capitalized JSX component gets a Lucide component or a visible placeholder.
-    for (const match of layoutCode.matchAll(/<\s*([A-Z][A-Za-z0-9_$]*)(?![A-Za-z0-9_$.])/g)) {
-        const componentName = match[1];
-        if (!requestedBindings.has(componentName)) {
-            requestedBindings.set(componentName, componentName);
-        }
-    }
-
-    for (const [localName, importedName] of requestedBindings) {
-        if (RESERVED_FOR_LUCIDE.has(localName)) continue;
-        if (localName === "Icon" || localName === "LucideIcon") continue;
-        if (declaredComponents.has(localName)) continue;
-
-        const resolvedName = isLucideComponent(
-            (LucideReact as Record<string, unknown>)[importedName]
-        )
-            ? importedName
-            : "CircleHelp";
-
-        bindings.push(`const ${localName} = _Lucide[${JSON.stringify(resolvedName)}];`);
-    }
-
-    return bindings.join("\n");
+    lucideBindingLinesCache = lines.join("\n");
+    return lucideBindingLinesCache;
 }
 
 export interface CompiledLayout {
@@ -115,36 +79,6 @@ export interface CompiledLayout {
     schema: any;
     sampleData: Record<string, any>;
     schemaJSON: any;
-}
-
-function createInvalidCompiledLayout(message: string): CompiledLayout {
-    const InvalidLayout: React.ComponentType<{ data: any }> = () => (
-        React.createElement(
-            "div",
-            {
-                className:
-                    "relative w-full max-w-[1280px] max-h-[720px] aspect-video bg-white border border-red-200 text-red-700 flex items-center justify-center p-8 text-center",
-            },
-            React.createElement(
-                "div",
-                null,
-                React.createElement("div", { className: "text-lg font-semibold" }, "Invalid layout code"),
-                React.createElement("div", { className: "mt-2 text-sm text-red-600" }, message)
-            )
-        )
-    );
-    InvalidLayout.displayName = "InvalidCustomTemplateLayout";
-
-    const schema = z.object({});
-    return {
-        component: InvalidLayout,
-        layoutId: "invalid-layout",
-        layoutName: "Invalid Layout",
-        layoutDescription: "This custom layout code is invalid and must be regenerated or edited.",
-        schema,
-        sampleData: {},
-        schemaJSON: z.toJSONSchema(schema),
-    };
 }
 
 function isLikelyBackendAssetPath(value: string): boolean {
@@ -181,7 +115,7 @@ function normalizeLayoutAssetUrls<T>(value: T): T {
 function normalizeHardcodedBackendUrlsInCode(layoutCode: string): string {
     // Keep /app_data and /static paths origin-agnostic so nginx can proxy them.
     return layoutCode.replace(
-        /https?:\/\/(?:127\.0\.0\.1|localhost|0\.0\.0\.0):(?:8000|5000|5001)(?=\/(?:app_data|static)\/)/g,
+        /https?:\/\/(?:127\.0\.0\.1|localhost|0\.0\.0\.0):(?:8000|5000)(?=\/(?:app_data|static)\/)/g,
         ""
     );
 }
@@ -190,7 +124,6 @@ function normalizeHardcodedBackendUrlsInCode(layoutCode: string): string {
  * Compiles a layout code string into a usable React component
  */
 export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
-    console.log('compileCustomLayout called');
     try {
         const normalizedLayoutCode = normalizeHardcodedBackendUrlsInCode(layoutCode);
 
@@ -212,10 +145,6 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
             .replace(/import\s+[\w$]+\s+from\s+['"]lucide-react['"];?\s*/g, "")
             // Remove other common imports we'll provide
             .replace(/import\s+.*\s+from\s+['"]@\/[^'"]+['"];?/g, "")
-            // Remove named exports; the runtime factory returns known bindings itself.
-            .replace(/export\s+(const|let|var|function)\s+/g, "$1 ")
-            .replace(/export\s*\{[\s\S]*?\};?\s*$/gm, "")
-            .replace(/export\s+default\s+function\s+(\w+)/g, "function $1")
             // Remove export default at the end (we'll handle it differently)
             .replace(/export\s+default\s+\w+;?\s*$/g, "");
 
@@ -230,7 +159,7 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
         }).code;
 
         // Create a factory function that executes the compiled code
-        const lucideBindings = getLucideBindingLines(normalizedLayoutCode);
+        const lucideBindings = getLucideBindingLines();
 
         const factory = new Function(
             "React",
@@ -283,12 +212,7 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
 
         if (!result.component) {
             console.error("No component found in compiled code");
-            return createInvalidCompiledLayout("Missing dynamicSlideLayout component.");
-        }
-
-        if (!result.Schema) {
-            console.error("No Schema found in compiled code");
-            return createInvalidCompiledLayout("Missing Schema declaration.");
+            return null;
         }
 
         const wrappedComponent: React.ComponentType<{ data: any }> = ({ data, ...props }) => {
@@ -319,9 +243,10 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
         };
     } catch (error) {
         console.error("Error compiling layout:", error);
-        const message =
-            error instanceof Error ? error.message : "The layout could not be compiled.";
-        return createInvalidCompiledLayout(message);
+        return null;
     }
 }
+
+
+
 

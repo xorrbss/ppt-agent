@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { trackEvent, MixpanelEvent, setTelemetryEnabled } from "@/utils/mixpanel";
 import { Switch } from '../ui/switch';
 import confetti from 'canvas-confetti';
+import Image from 'next/image';
 
 const CONFETTI_COLORS = ['#ff00c5', '#f3ff00', '#9500d0', '#00d2f2', '#00ea9b', '#ff7f36'];
 
@@ -29,19 +30,14 @@ const FinalStep = () => {
 
     useEffect(() => {
         fireRealisticConfetti();
-        trackEvent(MixpanelEvent.Onboarding_Step_Viewed, {
-            step_name: "finish",
-            step_number: 4,
-        });
-        trackEvent(MixpanelEvent.Onboarding_Completed);
     }, []);
 
     useEffect(() => {
         async function fetchStatus() {
             try {
-                const response = await fetch('/api/telemetry-status');
-                if (!response.ok) throw new Error(`telemetry-status returned ${response.status}`);
-                const data = await response.json();
+        const data = window.electron?.telemetryStatus
+          ? await window.electron.telemetryStatus()
+          : await fetch('/api/telemetry-status').then((res) => res.json());
                 setTrackingEnabled(data.telemetryEnabled);
             } catch {
                 setTrackingEnabled(true);
@@ -55,13 +51,18 @@ const FinalStep = () => {
         setTrackingEnabled(enabled);
         setTelemetryEnabled(enabled);
         try {
-            const response = await fetch('/api/user-config', {
-                method: 'POST',
-                body: JSON.stringify({
-                    DISABLE_ANONYMOUS_TRACKING: enabled ? 'false' : 'true',
-                }),
-            });
-            if (!response.ok) throw new Error(`user-config returned ${response.status}`);
+      if (window.electron?.setUserConfig) {
+        await window.electron.setUserConfig({
+          DISABLE_ANONYMOUS_TRACKING: enabled ? undefined : 'true',
+        } as any);
+      } else {
+        await fetch('/api/user-config', {
+          method: 'POST',
+          body: JSON.stringify({
+            DISABLE_ANONYMOUS_TRACKING: enabled ? undefined : 'true',
+          }),
+        });
+      }
         } catch {
             setTrackingEnabled(prev);
             setTelemetryEnabled(prev ?? true);
@@ -80,15 +81,15 @@ const FinalStep = () => {
         <div className='fixed top-0 left-0 w-full h-full flex flex-col items-center justify-center'>
             <div className='flex flex-col items-center justify-center'>
 
-                <img src="/final_onboarding.png" alt="presenton" className='w-[118px] h-[98px]  object-contain' />
-                <h1 className='text-black text-[30px] font-normal font-unbounded py-2.5'>Welcome on board!</h1>
-                <p className='text-[#000000CC] text-xl font-normal font-syne'>You’re all set. Let’s create your first presentation.</p>
+                <Image src="/final_onboarding.png" alt="Presenton" width={118} height={98} className='w-[118px] h-[98px] object-contain' />
+                <h1 className='text-black text-[30px] font-normal font-unbounded py-2.5'>환영합니다!</h1>
+                <p className='text-[#000000CC] text-xl font-normal font-syne'>모든 준비가 끝났습니다. 첫 번째 발표자료를 만들어 보세요.</p>
 
                 {trackingEnabled !== null && (
                     <div className='flex items-center gap-3 mt-8 px-5 py-3.5 rounded-[10px] border border-[#EDEEEF] bg-white'>
                         <div>
-                            <p className='text-sm font-medium text-[#191919] font-syne'>Usage analytics</p>
-                            <p className='text-[11px] text-[#9CA3AF] font-syne leading-tight mt-0.5'>Help improve Presenton by sharing anonymous usage data.</p>
+                            <p className='text-sm font-medium text-[#191919] font-syne'>사용 분석</p>
+                            <p className='text-[11px] text-[#9CA3AF] font-syne leading-tight mt-0.5'>익명 사용 데이터를 공유해 Presenton 개선에 도움을 주세요.</p>
                         </div>
                         <Switch
                             checked={trackingEnabled}
@@ -98,12 +99,12 @@ const FinalStep = () => {
                     </div>
                 )}
 
-                <button onClick={handleGoToUpload} className='bg-[#7C51F8] px-[23px] mt-8 py-[15px]  rounded-[70px] text-white text-lg font-syne font-semibold'>My First Presentation 🚀</button>
+                <button onClick={handleGoToUpload} className='bg-[#7C51F8] px-[23px] mt-8 py-[15px]  rounded-[70px] text-white text-lg font-syne font-semibold'>첫 발표자료 만들기 🚀</button>
                 <button onClick={fireRealisticConfetti} className='mt-3 flex items-center gap-1.5 text-sm text-[#7A5AF8] font-syne font-medium hover:underline'>
-                    <PartyPopper className='w-4 h-4' /> Celebrate again!
+                    <PartyPopper className='w-4 h-4' /> 다시 축하하기!
                 </button>
             </div>
-            <button onClick={handleGoToDashboard} className='absolute uppercase bottom-20 text-[#7A5AF8] flex items-center gap-2 right-10  text-xs font-normal font-syne'>Go to your dashboard <ArrowRight className='w-4 h-4 text-[#7A5AF8]' /></button>
+            <button onClick={handleGoToDashboard} className='absolute uppercase bottom-20 text-[#7A5AF8] flex items-center gap-2 right-10  text-xs font-normal font-syne'>대시보드로 이동 <ArrowRight className='w-4 h-4 text-[#7A5AF8]' /></button>
         </div>
     )
 }

@@ -45,8 +45,8 @@ const SlideContent = memo(({ slide, data, compiledLayout, retrySlide }: SlideCon
   if (!module) {
     return (
       <div className="w-full aspect-[16/9] h-[720px] bg-red-50 text-red-700 p-4 rounded border border-red-200 text-sm whitespace-pre-wrap break-words flex flex-col items-center justify-center">
-        <p className="text-center"> Failed to render slide component. Check console for details.</p>
-        <button onClick={() => retrySlide(slide.slide_number)} className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center justify-center mt-6"> <RotateCcw className="w-4 h-4 mr-1" /> Re-Construct</button>
+        <p className="text-center"> 슬라이드 컴포넌트를 렌더링하지 못했습니다. 자세한 내용은 콘솔을 확인하세요.</p>
+        <button onClick={() => retrySlide(slide.slide_number)} className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center justify-center mt-6"> <RotateCcw className="w-4 h-4 mr-1" /> 다시 생성</button>
       </div>
     );
   }

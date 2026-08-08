@@ -5,8 +5,6 @@ interface TimerProps {
   duration: number // seconds
 }
 
-const MAX_PROCESSING_PROGRESS = 0.95
-
 const Timer = ({ duration }: TimerProps) => {
   const [progress, setProgress] = useState<number>(0)
   const rafIdRef = useRef<number | null>(null)
@@ -26,7 +24,8 @@ const Timer = ({ duration }: TimerProps) => {
       if (t < 1) {
         rafIdRef.current = requestAnimationFrame(tick)
       } else {
-        setProgress(MAX_PROCESSING_PROGRESS)
+        // Ensure we finish at 100%
+        setProgress(1)
         if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
         rafIdRef.current = null
       }
@@ -44,7 +43,7 @@ const Timer = ({ duration }: TimerProps) => {
     }
   }, [duration])
 
-  const progressValue = Math.min(MAX_PROCESSING_PROGRESS, Number(progress.toFixed(4)))
+  const progressValue = Math.min(1, Number(progress.toFixed(4)))
   const displayedProgress = Math.round(progressValue * 100)
 
   return (

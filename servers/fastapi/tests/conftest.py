@@ -12,6 +12,7 @@ class FakeAsyncSession:
         self.added_all: list[Any] = []
         self.deleted: list[Any] = []
         self.commit_count = 0
+        self.rollback_count = 0
 
     async def get(self, _model: Any, key: Any):
         return self._get_results.get(key)
@@ -29,13 +30,17 @@ class FakeAsyncSession:
         self.commit_count += 1
 
     async def rollback(self) -> None:
-        return None
+        self.rollback_count += 1
 
     async def refresh(self, _obj: Any) -> None:
         return None
 
     async def execute(self, *_args: Any, **_kwargs: Any):
         class _EmptyResult:
+            # Default fake UPDATE/DELETE execution models one successful row.
+            # Tests that need a conflict should provide a purpose-built result.
+            rowcount = 1
+
             def scalars(self):
                 return self
 

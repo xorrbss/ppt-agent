@@ -8,8 +8,12 @@ interface OverlayLoaderProps {
   show: boolean;
   showProgress?: boolean;
   duration?: number;
+  progress?: number;
+  progressLabel?: string;
   extra_info?: string;
   onProgressComplete?: () => void;
+  onCancel?: () => void;
+  cancelText?: string;
 }
 
 export const OverlayLoader = ({
@@ -18,8 +22,12 @@ export const OverlayLoader = ({
   show,
   showProgress = false,
   duration = 10,
+  progress,
+  progressLabel,
   onProgressComplete,
   extra_info,
+  onCancel,
+  cancelText = "취소",
 }: OverlayLoaderProps) => {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -58,7 +66,12 @@ export const OverlayLoader = ({
         />
         {showProgress ? (
           <div className="w-full space-y-6 pt-4">
-            <ProgressBar duration={duration} onComplete={onProgressComplete} />
+            <ProgressBar
+              duration={duration}
+              onComplete={onProgressComplete}
+              value={progress}
+              label={progressLabel}
+            />
             {text && (
               <div className="space-y-1">
                 <p className="text-[#191919] text-base text-center font-medium font-inter">
@@ -83,6 +96,15 @@ export const OverlayLoader = ({
               </p>
             )}
           </>
+        )}
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="relative z-10 mt-6 rounded-full border border-[#E4E2EB] bg-white px-5 py-2 text-sm font-medium text-[#191919]/70 transition-colors hover:bg-[#F6F6F9] hover:text-[#191919] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a5af8]"
+          >
+            {cancelText}
+          </button>
         )}
         <svg
           className="absolute left-0 bottom-0"

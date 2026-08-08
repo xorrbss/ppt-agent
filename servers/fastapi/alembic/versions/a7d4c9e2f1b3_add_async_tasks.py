@@ -1,7 +1,7 @@
 """add async tasks
 
 Revision ID: a7d4c9e2f1b3
-Revises: 4b7c9d0e1f2a
+Revises: 4e5f6a7b8c9d
 Create Date: 2026-07-09 00:00:00.000000
 
 """
@@ -12,9 +12,8 @@ import sqlalchemy as sa
 import sqlmodel
 
 
-# revision identifiers, used by Alembic.
 revision: str = "a7d4c9e2f1b3"
-down_revision: Union[str, None] = "4b7c9d0e1f2a"
+down_revision: Union[str, None] = "4e5f6a7b8c9d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -23,28 +23,15 @@ container.db
 app_dist
 resources/fastapi
 resources/nextjs
-resources/templates/
 dist
 eng.traineddata
-.cache/
-.cache/export-runtime/
+resources/document-extraction/tessdata/
+electron/.cache/
+electron/.cache/export-runtime/
 
-# presenton-export runtime (downloaded via npm run setup:export-runtime / scripts/sync-export-runtime.cjs)
+# presenton-export runtime (downloaded via npm run setup:export-runtime / sync_export_runtime.js)
 resources/export/
-
-# Bundled export Chromium (Chrome for Testing) — npm run prepare:export-chromium
-# Includes .exe, .dll, .pak, .manifest, .hyb, .dat, and other browser binaries.
-resources/chromium/
-
-# Optional bundled ImageMagick binaries — see docs/electron-dependency-strategy.md
-resources/imagemagick/
 *.pkg
-*.provisionprofile
-*.cer
-*.certSigningRequest
-*.mobileprovision
-*.p12
-*.p8
 *.toc
 *.zip
 *.pyc

@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
-import { Markdown } from "tiptap-markdown";
-import Underline from "@tiptap/extension-underline";
+import { Markdown, type MarkdownStorage } from "tiptap-markdown";
 import {
   Bold,
   Italic,
@@ -27,10 +27,10 @@ const TiptapText: React.FC<TiptapTextProps> = ({
   content,
   onContentChange,
   className = "",
-  placeholder = "Enter text...",
+  placeholder = "텍스트를 입력하세요...",
 }) => {
   const editor = useEditor({
-    extensions: [StarterKit, Markdown, Underline],
+    extensions: [StarterKit, Markdown],
     content: content || placeholder,
 
     editorProps: {
@@ -42,22 +42,29 @@ const TiptapText: React.FC<TiptapTextProps> = ({
     onBlur: ({ editor }) => {
       // const element = editor?.options.element;
       // element?.classList.add("tiptap-text-edited");
-      const markdown = editor?.storage.markdown.getMarkdown();
+      const markdown = (
+        editor.storage as unknown as { markdown: MarkdownStorage }
+      ).markdown.getMarkdown();
       if (onContentChange) {
         onContentChange(markdown);
       }
     },
     editable: true,
     immediatelyRender: false,
+    // Tiptap 3 disables transaction-driven React renders by default. Preserve
+    // the v2 behavior because toolbar active states are derived during render.
+    shouldRerenderOnTransaction: true,
   });
 
   // Update editor content when content prop changes
   useEffect(() => {
     if (!editor) return;
     // Compare against current plain text to avoid unnecessary updates
-    const currentText = editor?.storage.markdown.getMarkdown();
+    const currentText = (
+      editor.storage as unknown as { markdown: MarkdownStorage }
+    ).markdown.getMarkdown();
     if ((content || "") !== currentText) {
-      editor.commands.setContent(content || "", false);
+      editor.commands.setContent(content || "", { emitUpdate: false });
     }
   }, [content, editor]);
 
@@ -72,7 +79,6 @@ const TiptapText: React.FC<TiptapTextProps> = ({
       <BubbleMenu
         editor={editor}
         className="z-50"
-        tippyOptions={{ duration: 100 }}
       >
         <div
           style={{
@@ -85,7 +91,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("bold") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Bold"
+            title="굵게"
           >
             <Bold className="h-4 w-4" />
           </button>
@@ -94,7 +100,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("italic") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Italic"
+            title="기울임"
           >
             <Italic className="h-4 w-4" />
           </button>
@@ -103,7 +109,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("underline") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Underline"
+            title="밑줄"
           >
             <UnderlinedIcon className="h-4 w-4" />
           </button>
@@ -112,7 +118,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("strike") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Strikethrough"
+            title="취소선"
           >
             <Strikethrough className="h-4 w-4" />
           </button>
@@ -121,7 +127,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("code") ? "bg-blue-100 text-blue-600" : ""
             }`}
-            title="Code"
+            title="코드"
           >
             <Code className="h-4 w-4" />
           </button>

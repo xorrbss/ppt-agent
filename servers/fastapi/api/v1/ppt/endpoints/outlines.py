@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import traceback
 import uuid
 import dirtyjson
@@ -8,9 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.presentation_outline_model import PresentationOutlineModel
-from models.sql.presentation import PresentationModel
 from models.sse_response import (
     SSECompleteResponse,
     SSEErrorResponse,
@@ -23,62 +22,30 @@ from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.presentation_access_service import require_live_presentation
+from services.workspace_legacy_write_gate import (
+    require_outline_bootstrap_write_path,
+)
+from utils.document_context import (
+    DocumentContextLimitError,
+    build_document_context,
+)
 from utils.llm_utils import message_content_to_text
 from utils.outline_utils import (
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
 )
-from utils.outline_limits import normalize_outline_payload
+from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
-    OutlineGenerationStatus,
     generate_ppt_outline,
     get_messages as get_outline_messages,
 )
-from utils.sse import safe_sse_stream
-from utils.web_search import get_selected_web_search_provider, get_web_search_route
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 LOGGER = logging.getLogger(__name__)
-
-
-@OUTLINES_ROUTER.get("/{id}", response_model=PresentationOutlineModel)
-async def get_outline(
-    id: uuid.UUID,
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
-
-    if not presentation.outlines:
-        return PresentationOutlineModel(slides=[])
-
-    return PresentationOutlineModel(**presentation.outlines)
-
-
-@OUTLINES_ROUTER.put("/{id}", response_model=PresentationOutlineModel)
-async def update_outline(
-    id: uuid.UUID,
-    outline: PresentationOutlineModel,
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    presentation = await sql_session.get(PresentationModel, id)
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
-
-    presentation.outlines = outline.model_dump(mode="json")
-    presentation.n_slides = len(outline.slides)
-    presentation.title = get_presentation_title_from_presentation_outline(outline)
-
-    sql_session.add(presentation)
-    await sql_session.commit()
-
-    await MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines(
-        presentation.id,
-        presentation.outlines,
-    )
-
-    return outline
+CONTENT_BRIEF_TIMEOUT_SECONDS = float(
+    os.getenv("CONTENT_BRIEF_TIMEOUT_SECONDS", "45")
+)
 
 
 @OUTLINES_ROUTER.get("/stream/{id}")
@@ -87,25 +54,18 @@ async def stream_outlines(
     request: Request,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation = await sql_session.get(PresentationModel, id)
-
-    if not presentation:
-        raise HTTPException(status_code=404, detail="Presentation not found")
-
-    search_route, actual_search_provider = get_web_search_route()
-    LOGGER.info(
-        "Starting outline stream: presentation_id=%s web_search_enabled=%s "
-        "selected_web_search_provider=%s web_search_route=%s actual_web_search_provider=%s",
-        presentation.id,
-        presentation.web_search,
-        get_selected_web_search_provider().value,
-        search_route,
-        (
-            actual_search_provider.value
-            if actual_search_provider
-            else ("model-native" if search_route == "native" else "none")
-        ),
-    )
+    # This GET endpoint persists its result. During the chat-first migration it
+    # may write only to the owner-scoped staging deck whose generation
+    # operation is still awaiting activation.
+    #
+    # That decision needs the deck, so it cannot be pre-empted by the
+    # scope preflight: for a fully enabled cohort the preflight rejects before
+    # any database access, which would make the bootstrap allowance below
+    # unreachable and leave a staged deck with no way to generate its outline.
+    # `require_outline_bootstrap_write_path` performs the same rollout
+    # evaluation and still re-raises unsupported/unavailable runtimes.
+    presentation = await require_live_presentation(sql_session, id)
+    await require_outline_bootstrap_write_path(sql_session, presentation)
 
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
 
@@ -114,19 +74,76 @@ async def stream_outlines(
             return
 
         yield SSEStatusResponse(
-            status="Preparing your presentation outline"
+            status="Generating presentation outlines..."
         ).to_string()
+
+        # EventSource reconnects automatically when a proxy/server connection is
+        # interrupted. If this presentation already finished, replay the persisted
+        # completion instead of starting a second expensive LLM generation. This
+        # also lets a client that missed the original "complete" event recover
+        # immediately from a progress screen parked at 95%.
+        if presentation.outlines:
+            yield SSECompleteResponse(
+                key="presentation", value=presentation.model_dump(mode="json")
+            ).to_string()
+            return
 
         additional_context = ""
         if presentation.file_paths:
-            documents_loader = DocumentsLoader(
-                file_paths=presentation.file_paths,
-                presentation_language=presentation.language,
+            try:
+                documents_loader = DocumentsLoader(
+                    file_paths=presentation.file_paths,
+                    presentation_language=presentation.language,
+                    allow_context_truncation=True,
+                )
+                await documents_loader.load_documents(temp_dir)
+                additional_context = build_document_context(
+                    documents_loader.documents,
+                    presentation.file_paths,
+                    overflow_strategy="truncate",
+                )
+            except DocumentContextLimitError as error:
+                yield SSEErrorResponse(detail=error.to_sse_detail()).to_string()
+                return
+
+        # Stage A - Knowledge Brief: research rich, grounded substance first,
+        # then ground the outline in it. Falls back to documents-only on failure.
+        yield SSEStatusResponse(
+            status="Researching and organizing content..."
+        ).to_string()
+        outline_context = additional_context
+        try:
+            content_brief = await asyncio.wait_for(
+                generate_content_brief(
+                    presentation.content,
+                    presentation.language,
+                    additional_context,
+                    presentation.tone,
+                    presentation.verbosity,
+                    presentation.instructions,
+                ),
+                timeout=CONTENT_BRIEF_TIMEOUT_SECONDS,
             )
-            await documents_loader.load_documents(temp_dir)
-            documents = documents_loader.documents
-            if documents:
-                additional_context = "\n\n".join(documents)
+            brief_context = content_brief.to_prompt_context()
+            outline_context = (
+                f"{additional_context}\n\n{brief_context}".strip()
+                if additional_context
+                else brief_context
+            )
+        except HTTPException as error:
+            if error.status_code == 429:
+                yield SSEErrorResponse(detail=str(error.detail)).to_string()
+                return
+            traceback.print_exc()
+        except asyncio.TimeoutError:
+            LOGGER.warning(
+                "Content brief generation timed out after %.1f seconds for "
+                "presentation %s; continuing with the source content",
+                CONTENT_BRIEF_TIMEOUT_SECONDS,
+                presentation.id,
+            )
+        except Exception:
+            traceback.print_exc()
 
         presentation_outlines_text = ""
 
@@ -143,7 +160,7 @@ async def stream_outlines(
             presentation.content,
             n_slides_to_generate,
             presentation.language,
-            additional_context,
+            outline_context,
             presentation.tone,
             presentation.verbosity,
             presentation.instructions,
@@ -171,27 +188,17 @@ async def stream_outlines(
             presentation.content,
             n_slides_to_generate,
             presentation.language,
-            additional_context,
+            outline_context,
             presentation.tone,
             presentation.verbosity,
             presentation.instructions,
             presentation.include_title_slide,
             presentation.web_search,
             presentation.include_table_of_contents,
-            emit_statuses=True,
             disconnect_checker=request.is_disconnected,
         ):
             # Give control to the event loop
             await asyncio.sleep(0)
-
-            if isinstance(chunk, OutlineGenerationStatus):
-                LOGGER.info(
-                    "Outline generation status: presentation_id=%s status=%s",
-                    presentation.id,
-                    chunk.message,
-                )
-                yield SSEStatusResponse(status=chunk.message).to_string()
-                continue
 
             if isinstance(chunk, HTTPException):
                 yield SSEErrorResponse(detail=chunk.detail).to_string()
@@ -215,12 +222,7 @@ async def stream_outlines(
             ).to_string()
             return
 
-        presentation_outlines = PresentationOutlineModel(
-            **normalize_outline_payload(
-                presentation_outlines_json,
-                MAX_NUMBER_OF_SLIDES,
-            )
-        )
+        presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
 
         if (
             n_slides_to_generate is not None
@@ -259,15 +261,4 @@ async def stream_outlines(
             key="presentation", value=presentation.model_dump(mode="json")
         ).to_string()
 
-    async def rollback_stream_session():
-        await sql_session.rollback()
-
-    return StreamingResponse(
-        safe_sse_stream(
-            inner(),
-            logger=LOGGER,
-            error_detail="Failed to generate presentation outlines. Please try again.",
-            on_error=rollback_stream_session,
-        ),
-        media_type="text/event-stream",
-    )
+    return StreamingResponse(inner(), media_type="text/event-stream")

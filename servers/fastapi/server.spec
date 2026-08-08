@@ -65,6 +65,8 @@ a = Analysis(
         ("assets", "assets"),
         ("static", "static"),
         ("alembic", "alembic"),
+        ("authored_styles", "authored_styles"),
+        ("authored_style_assets", "authored_style_assets"),
     ]
     + datas_fastembed_cache
     + datas_fastembed
@@ -113,7 +115,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

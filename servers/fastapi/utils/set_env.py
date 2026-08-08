@@ -21,18 +21,6 @@ def set_custom_llm_url_env(value):
     os.environ["CUSTOM_LLM_URL"] = value
 
 
-def set_deepseek_base_url_env(value):
-    os.environ["DEEPSEEK_BASE_URL"] = value
-
-
-def set_deepseek_api_key_env(value):
-    os.environ["DEEPSEEK_API_KEY"] = value
-
-
-def set_deepseek_model_env(value):
-    os.environ["DEEPSEEK_MODEL"] = value
-
-
 def set_openai_api_key_env(value):
     os.environ["OPENAI_API_KEY"] = value
 
@@ -241,33 +229,6 @@ def set_web_grounding_env(value):
     os.environ["WEB_GROUNDING"] = value
 
 
-def set_web_search_provider_env(value):
-    os.environ["WEB_SEARCH_PROVIDER"] = value
-
-
-def set_web_search_max_results_env(value):
-    os.environ["WEB_SEARCH_MAX_RESULTS"] = value
-
-
-def set_searxng_base_url_env(value):
-    os.environ["SEARXNG_BASE_URL"] = value
-
-
-def set_tavily_api_key_env(value):
-    os.environ["TAVILY_API_KEY"] = value
-
-
-def set_exa_api_key_env(value):
-    os.environ["EXA_API_KEY"] = value
-
-
-def set_brave_search_api_key_env(value):
-    os.environ["BRAVE_SEARCH_API_KEY"] = value
-
-
-def set_serper_api_key_env(value):
-    os.environ["SERPER_API_KEY"] = value
-
 def set_comfyui_url_env(value):
     os.environ["COMFYUI_URL"] = value
 
@@ -282,6 +243,10 @@ def set_dall_e_3_quality_env(value):
 
 def set_gpt_image_1_5_quality_env(value):
     os.environ["GPT_IMAGE_1_5_QUALITY"] = value
+
+
+def set_gpt_image_2_quality_env(value):
+    os.environ["GPT_IMAGE_2_QUALITY"] = value
 
 
 # Codex OAuth

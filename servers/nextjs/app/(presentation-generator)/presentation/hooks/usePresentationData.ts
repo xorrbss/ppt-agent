@@ -1,13 +1,13 @@
 import { useCallback } from "react";
 import { useDispatch } from "react-redux";
-import { useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
+import { DashboardApi } from '../../services/api/dashboard';
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 import { normalizeBackendAssetUrls } from "@/utils/api";
 import { useFontLoader } from "../../hooks/useFontLoad";
-import { DashboardApi } from "../../services/api/dashboard";
+import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
 
 
 export const usePresentationData = (
@@ -16,22 +16,10 @@ export const usePresentationData = (
   setError: (error: boolean) => void
 ) => {
   const dispatch = useDispatch();
-  const router = useRouter();
 
   const fetchUserSlides = useCallback(async (options?: { clearHistory?: boolean }) => {
     try {
       const data = await DashboardApi.getPresentation(presentationId);
-
-      if (data?.version === "v1-standard") {
-        notify.warning(
-          "Unsupported presentation",
-          "This deck was created in an older Presenton version. Downgrade to a compatible version to open it."
-        );
-        setLoading(false);
-        router.replace("/dashboard");
-        return undefined;
-      }
-
       const normalizedData = normalizeBackendAssetUrls(data);
 
 
@@ -41,23 +29,27 @@ export const usePresentationData = (
           dispatch(clearHistory());
         }
         setLoading(false);
+        if (normalizedData.fonts) {
+          useFontLoader(normalizedData.fonts);
+        }
+        if (normalizedData.theme) {
+          const el = document.getElementById("presentation-slides-wrapper");
+          applyPresentationThemeToElement(el, normalizedData.theme);
+        }
+        return normalizedData;
       }
-      if (normalizedData.fonts) {
-        useFontLoader(normalizedData.fonts);
-      }
-      if (normalizedData?.theme) {
-        const el = document.getElementById("presentation-slides-wrapper");
-        applyPresentationThemeToElement(el, normalizedData.theme);
-      }
-      return normalizedData;
     } catch (error) {
+      if (isUnauthorizedApiError(error)) {
+        setLoading(false);
+        return;
+      }
       setError(true);
-      notify.error("Failed to load presentation", "The presentation could not be loaded. Please try again.");
+      notify.error("프레젠테이션을 불러오지 못했습니다", "프레젠테이션을 불러올 수 없습니다. 다시 시도해 주세요.");
       console.error("Error fetching user slides:", error);
       setLoading(false);
       return undefined;
     }
-  }, [presentationId, dispatch, router, setLoading, setError]);
+  }, [presentationId, dispatch, setLoading, setError]);
 
   return {
     fetchUserSlides,

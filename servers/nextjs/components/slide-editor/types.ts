@@ -251,10 +251,18 @@ export type TextListElement = ElementBase & {
 
 export type BulletsElement = TextListElement;
 
+export type TableCellReference = {
+  row: number;
+  column: number;
+};
+
 export type TableCell = {
   color?: Fill | null;
   font?: Font | null;
   alignment?: HorizontalAlignment | null;
+  rowspan?: number | null;
+  colspan?: number | null;
+  covered_by?: TableCellReference | null;
   runs: TextRun[];
 };
 

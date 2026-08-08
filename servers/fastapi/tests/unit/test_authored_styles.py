@@ -1,0 +1,645 @@
+import asyncio
+import logging
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import httpx
+from fastapi import FastAPI
+from PIL import Image
+import yaml
+
+from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
+from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from utils.authored_styles import (
+    AUTHORED_STYLE_CATEGORIES,
+    AUTHORED_STYLES_DIRECTORY,
+    load_authored_styles,
+    resolve_authored_style,
+)
+
+
+EXPECTED_AUTHORED_STYLE_IDS = {
+    "academic-edge",
+    "architectural-portfolio",
+    "botanical-journal",
+    "broadside",
+    "clinical-precision",
+    "cobalt-editorial",
+    "cyber-ai",
+    "default",
+    "editorial-tritone",
+    "exec-report",
+    "flat-infographic",
+    "geometric-mono",
+    "groovy-70s",
+    "iso-blueprint",
+    "liquid-executive",
+    "luxury-editorial",
+    "minimal-vellum",
+    "neo-grid-bold",
+    "neon-venture",
+    "osb-smart-banking",
+    "prestige-gold",
+    "prime-noir",
+    "prismatic-tech",
+    "project-launch",
+    "scholars-journal",
+    "science-sketch",
+    "signal",
+    "silicon-refined",
+    "sketch-note",
+    "soft-editorial",
+    "startup-aura",
+    "strategic-insight",
+    "strategic-navy",
+    "structured-mint",
+    "tech-blueprint",
+    "visual-discovery",
+}
+TECHNOLOGY_STYLE_IDS = {
+    "cyber-ai",
+    "iso-blueprint",
+    "neon-venture",
+    "prismatic-tech",
+    "project-launch",
+    "startup-aura",
+    "tech-blueprint",
+    "visual-discovery",
+}
+REQUIRED_BRIEF_SECTIONS = (
+    "MOOD",
+    "PALETTE",
+    "TYPOGRAPHY",
+    "LAYOUT SYSTEM",
+    "SIGNATURE ELEMENTS",
+    "DATA VISUALIZATION",
+    "IMAGE DIRECTION",
+    "SLIDE ARCHETYPES",
+    "AVOID",
+)
+PLACEHOLDER_PATTERN = re.compile(
+    r"\b(?:TODO|TBD|FIXME|placeholder)\b|lorem ipsum|"
+    r"\{\{.*?\}\}|\$\{[^}]+\}|"
+    r"<(?:placeholder|replace)[^>]*>|\[(?:placeholder|replace)[^]]*\]",
+    re.IGNORECASE | re.DOTALL,
+)
+BRIEF_SECTION_PATTERN = re.compile(
+    r"(?m)^[ \t]*([A-Z][A-Z ]*?[A-Z])[ \t]*(?::(?:[ \t]|$)|$)"
+)
+
+
+def _write(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+
+
+def _write_exact_image(path: Path) -> None:
+    Image.new("RGB", (1280, 720), "#123456").save(path, format="PNG")
+
+
+def _tracked_authored_style_sources() -> list[Path]:
+    """Return the repository catalogue, not machine-local ignored style drafts.
+
+    `load_authored_styles()` deliberately discovers every YAML file on disk so a
+    developer can preview a local style.  The catalogue contract, however,
+    describes the versioned product surface.  Resolving that surface via Git
+    keeps this test hermetic when a developer has an ignored draft next to the
+    36 shipped styles, while still failing if a tracked file is added, removed,
+    or renamed without updating the contract.
+    """
+
+    repository_root = AUTHORED_STYLES_DIRECTORY.parents[2]
+    relative_glob = (
+        AUTHORED_STYLES_DIRECTORY.relative_to(repository_root).as_posix()
+        + "/*.yaml"
+    )
+    completed = subprocess.run(
+        ["git", "ls-files", "-z", "--", relative_glob],
+        cwd=repository_root,
+        check=False,
+        capture_output=True,
+        text=False,
+    )
+    assert completed.returncode == 0, completed.stderr.decode(
+        "utf-8", errors="replace"
+    )
+    sources = [
+        repository_root / relative_path
+        for relative_path in completed.stdout.decode("utf-8").split("\0")
+        if relative_path
+    ]
+    assert sources, "Git did not report any tracked authored styles"
+    assert all(source.parent == AUTHORED_STYLES_DIRECTORY for source in sources)
+    assert all(source.is_file() for source in sources)
+    return sorted(sources)
+
+
+def test_load_authored_styles_keeps_legacy_yaml_compatible(tmp_path):
+    _write(
+        tmp_path / "zeta.yaml",
+        "id: zeta\nname: Zeta\ndescription: Z\npreview:\n  bg: '#000000'\n  accent: '#FFFFFF'\nbrief: zeta brief\n",
+    )
+    _write(
+        tmp_path / "alpha.yaml",
+        "id: alpha\nname: Alpha\ndescription: A\npreview:\n  bg: '#FFFFFF'\n  accent: '#000000'\nbrief: alpha brief\n",
+    )
+
+    styles = load_authored_styles(tmp_path)
+
+    assert [style.id for style in styles] == ["alpha", "zeta"]
+    assert styles[0].brief == "alpha brief"
+    assert styles[0].category == "general"
+    assert styles[0].tags == []
+    assert styles[0].use_cases == []
+    assert styles[0].preview_palette is None
+    assert styles[0].preview_variant is None
+    assert styles[0].public_dict() == {
+        "id": "alpha",
+        "name": "Alpha",
+        "description": "A",
+        "category": "general",
+        "tags": [],
+        "use_cases": [],
+        "preview": {"bg": "#FFFFFF", "accent": "#000000"},
+    }
+
+
+def test_load_authored_styles_parses_rich_public_metadata(tmp_path):
+    _write(
+        tmp_path / "research.yaml",
+        """id: research
+name: Research
+description: Evidence-led
+category: research
+tags:
+  - Evidence
+  - Academic
+use_cases:
+  - Literature review
+preview:
+  bg: '#F8FAFC'
+  accent: '#2563EB'
+  palette:
+    - '#F8FAFC'
+    - '#0F172A'
+    - '#2563EB'
+  variant: evidence-grid
+brief: structured private brief
+""",
+    )
+
+    style = load_authored_styles(tmp_path)[0]
+
+    assert style.category == "research"
+    assert style.tags == ["Evidence", "Academic"]
+    assert style.use_cases == ["Literature review"]
+    assert style.preview_palette == ["#F8FAFC", "#0F172A", "#2563EB"]
+    assert style.preview_variant == "evidence-grid"
+    assert style.public_dict() == {
+        "id": "research",
+        "name": "Research",
+        "description": "Evidence-led",
+        "category": "research",
+        "tags": ["Evidence", "Academic"],
+        "use_cases": ["Literature review"],
+        "preview": {
+            "bg": "#F8FAFC",
+            "accent": "#2563EB",
+            "palette": ["#F8FAFC", "#0F172A", "#2563EB"],
+            "variant": "evidence-grid",
+        },
+    }
+
+
+def test_load_authored_styles_warns_and_skips_broken_or_duplicate_files(tmp_path, caplog):
+    _write(
+        tmp_path / "default.yaml",
+        "id: default\nname: Default\ndescription: D\npreview:\n  bg: '#FFFFFF'\n  accent: '#000000'\nbrief: default brief\n",
+    )
+    _write(tmp_path / "broken.yaml", "id: [not valid")
+    _write(
+        tmp_path / "duplicate.yaml",
+        "id: default\nname: Duplicate\ndescription: D\npreview:\n  bg: '#FFFFFF'\n  accent: '#000000'\nbrief: duplicate brief\n",
+    )
+    _write(tmp_path / "missing-brief.yaml", "id: incomplete\nname: X\ndescription: X\npreview: {}\n")
+
+    styles = load_authored_styles(tmp_path)
+
+    assert [style.id for style in styles] == ["default"]
+    assert caplog.text.count("Skipping invalid authored style") == 3
+
+
+def test_load_authored_styles_validates_all_preview_colors(tmp_path, caplog):
+    base = "id: {id}\nname: Invalid\ndescription: D\npreview:\n{preview}\nbrief: private\n"
+    invalid_previews = {
+        "short-bg": "  bg: '#FFF'\n  accent: '#000000'",
+        "missing-hash": "  bg: 'FFFFFF'\n  accent: '#000000'",
+        "bad-accent": "  bg: '#FFFFFF'\n  accent: '#12345G'",
+        "bad-palette": (
+            "  bg: '#FFFFFF'\n  accent: '#000000'\n"
+            "  palette:\n    - '#2563EB'\n    - '#12345G'"
+        ),
+    }
+    for style_id, preview in invalid_previews.items():
+        _write(
+            tmp_path / f"{style_id}.yaml",
+            base.format(id=style_id, preview=preview),
+        )
+
+    assert load_authored_styles(tmp_path) == []
+    assert caplog.text.count("Skipping invalid authored style") == len(
+        invalid_previews
+    )
+    assert "must be a #RRGGBB color" in caplog.text
+
+
+def test_load_authored_styles_rejects_invalid_metadata_shapes(tmp_path, caplog):
+    base = (
+        "id: {id}\nname: Invalid\ndescription: D\n{metadata}"
+        "preview:\n  bg: '#FFFFFF'\n  accent: '#000000'\nbrief: private\n"
+    )
+    invalid_metadata = {
+        "bad-category": "category: sales\n",
+        "bad-tags": "tags: not-a-list\n",
+        "bad-use-cases": "use_cases:\n  - valid\n  - 42\n",
+        "bad-variant": "",
+    }
+    for style_id, metadata in invalid_metadata.items():
+        if style_id == "bad-variant":
+            content = (
+                "id: bad-variant\nname: Invalid\ndescription: D\npreview:\n"
+                "  bg: '#FFFFFF'\n  accent: '#000000'\n  variant: Not_English\n"
+                "brief: private\n"
+            )
+        else:
+            content = base.format(id=style_id, metadata=metadata)
+        _write(tmp_path / f"{style_id}.yaml", content)
+
+    assert load_authored_styles(tmp_path) == []
+    assert caplog.text.count("Skipping invalid authored style") == len(
+        invalid_metadata
+    )
+
+
+def test_resolve_authored_style_falls_back_to_default_for_empty_or_unknown_id(tmp_path):
+    _write(
+        tmp_path / "default.yaml",
+        "id: default\nname: Default\ndescription: D\npreview:\n  bg: '#FFFFFF'\n  accent: '#000000'\nbrief: default brief\n",
+    )
+
+    for requested_id in (None, "", "   ", "does-not-exist"):
+        style = resolve_authored_style(requested_id, tmp_path)
+        assert style.id == "default"
+        assert style.brief == "default brief"
+
+
+def test_resolve_authored_style_warns_only_for_an_unknown_named_id(tmp_path, caplog):
+    _write(
+        tmp_path / "default.yaml",
+        "id: default\nname: Default\ndescription: D\npreview:\n  bg: '#FFFFFF'\n  accent: '#000000'\nbrief: default brief\n",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        resolve_authored_style("stategic-navy", tmp_path)  # typo of a real style
+    assert "Unknown authored style 'stategic-navy'" in caplog.text
+
+    caplog.clear()
+    # Empty / default requests are not typos and must stay quiet.
+    with caplog.at_level(logging.WARNING):
+        resolve_authored_style(None, tmp_path)
+        resolve_authored_style("default", tmp_path)
+    assert "Unknown authored style" not in caplog.text
+
+
+def test_resolve_authored_style_uses_builtin_default_when_default_file_is_broken(tmp_path):
+    _write(tmp_path / "default.yaml", "id: [not valid")
+
+    style = resolve_authored_style("does-not-exist", tmp_path)
+
+    assert style.id == "default"
+    assert style.name == "기본 블루프린트"
+    assert style.description == "깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일"
+    assert style.preview_bg == "#F8FAFC"
+
+
+def test_load_authored_style_resolves_safe_reference_assets(tmp_path):
+    styles_dir = tmp_path / "styles"
+    assets_dir = tmp_path / "authored_style_assets" / "pilot"
+    styles_dir.mkdir()
+    assets_dir.mkdir(parents=True)
+    (assets_dir / "cover.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    _write(
+        styles_dir / "pilot.yaml",
+        """id: pilot
+name: Pilot
+description: Visual pilot
+preview:
+  bg: '#07130F'
+  accent: '#35F2C2'
+  image: pilot/cover.png
+design_tokens:
+  primary: '#35F2C2'
+  background: '#07130F'
+  heading_font: Space Grotesk
+  body_font: Noto Sans KR
+reference_images:
+  cover:
+    - pilot/cover.png
+brief: private
+""",
+    )
+
+    style = load_authored_styles(styles_dir)[0]
+
+    assert style.preview_image == (assets_dir / "cover.png").resolve()
+    assert style.reference_images["cover"] == (style.preview_image,)
+    assert style.primary_color == "#35F2C2"
+    assert style.body_font == "Noto Sans KR"
+    assert style.public_dict()["preview"]["image"].endswith("/pilot/preview")
+
+
+def test_authored_style_reference_mode_defaults_to_style_reference(tmp_path):
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "legacy.yaml",
+        """id: legacy
+name: Legacy
+description: Legacy reference style
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+brief: legacy brief
+""",
+    )
+
+    style = load_authored_styles(styles_dir)[0]
+
+    assert style.reference_mode == STYLE_REFERENCE
+
+
+def test_authored_style_reference_mode_allows_exact_reconstruction_opt_in(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("AUTHORED_EXACT_RECONSTRUCTION_ENABLED", "true")
+    monkeypatch.setenv("AUTHORED_EXACT_STYLE_IDS", "exact")
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    assets_dir = tmp_path / "authored_style_assets" / "exact"
+    assets_dir.mkdir(parents=True)
+    _write_exact_image(assets_dir / "source.png")
+    _write(
+        styles_dir / "exact.yaml",
+        """id: exact
+name: Exact
+description: Faithful reconstruction reference style
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+reference_mode: exact_reconstruction
+slide_reference_images:
+  - slide_index: 0
+    source: exact/source.png
+brief: exact brief
+""",
+    )
+
+    style = load_authored_styles(styles_dir)[0]
+
+    assert style.reference_mode == EXACT_RECONSTRUCTION
+    assert style.slide_reference_indices == (0,)
+    assert "reference_mode" not in style.public_dict()
+    assert "slide_reference_images" not in style.public_dict()
+    assert "assets_root" not in style.public_dict()
+
+
+def test_authored_style_rejects_exact_reconstruction_without_reference(
+    tmp_path, caplog, monkeypatch
+):
+    monkeypatch.setenv("AUTHORED_EXACT_RECONSTRUCTION_ENABLED", "true")
+    monkeypatch.setenv(
+        "AUTHORED_EXACT_STYLE_IDS",
+        "exact-without-source",
+    )
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "exact-without-source.yaml",
+        """id: exact-without-source
+name: Exact without source
+description: Invalid exact reconstruction preset
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+reference_mode: exact_reconstruction
+brief: exact brief
+""",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        assert load_authored_styles(styles_dir) == []
+
+    assert "requires readable slide_reference_images" in caplog.text
+
+
+def test_authored_style_rejects_unknown_reference_mode(tmp_path, caplog):
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "invalid-mode.yaml",
+        """id: invalid-mode
+name: Invalid mode
+description: Invalid mode style
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+reference_mode: REINTERPRET_IT
+brief: invalid mode brief
+""",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        assert load_authored_styles(styles_dir) == []
+
+    assert "reference_mode" in caplog.text
+
+
+def test_load_authored_style_rejects_reference_path_traversal(tmp_path, caplog):
+    styles_dir = tmp_path / "styles"
+    styles_dir.mkdir()
+    _write(
+        styles_dir / "unsafe.yaml",
+        """id: unsafe
+name: Unsafe
+description: Unsafe
+preview:
+  bg: '#FFFFFF'
+  accent: '#000000'
+  image: ../secret.png
+brief: private
+""",
+    )
+
+    assert load_authored_styles(styles_dir) == []
+    assert "must stay inside authored_style_assets" in caplog.text
+
+
+def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
+    sources = _tracked_authored_style_sources()
+    tracked_catalogue = tmp_path / "authored_styles"
+    tracked_catalogue.mkdir()
+    for source in sources:
+        shutil.copy2(source, tracked_catalogue / source.name)
+    shutil.copytree(
+        AUTHORED_STYLES_DIRECTORY.parent / "authored_style_assets",
+        tmp_path / "authored_style_assets",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
+        styles = load_authored_styles(tracked_catalogue)
+
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 36
+    assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
+    assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
+    assert not [
+        record
+        for record in caplog.records
+        if record.name == "utils.authored_styles"
+        and record.levelno >= logging.WARNING
+    ]
+
+    for source in sources:
+        data = yaml.safe_load(source.read_text(encoding="utf-8"))
+        style_id = data["id"]
+
+        assert source.stem == style_id
+        assert data["category"] in AUTHORED_STYLE_CATEGORIES
+        if style_id == "clinical-precision":
+            assert data["category"] == "research"
+        if style_id in TECHNOLOGY_STYLE_IDS:
+            assert data["category"] == "technology"
+        assert data["tags"] and all(
+            isinstance(tag, str) and tag.strip() for tag in data["tags"]
+        )
+        assert data["use_cases"] and all(
+            isinstance(use_case, str) and use_case.strip()
+            for use_case in data["use_cases"]
+        )
+        assert re.search(r"[가-힣]", data["name"])
+        assert re.search(r"[가-힣]", data["description"])
+
+        preview = data["preview"]
+        expected_preview_fields = {"bg", "accent", "palette", "variant"}
+        if style_id in {"cyber-ai", "osb-smart-banking", "tech-blueprint"}:
+            expected_preview_fields.add("image")
+        assert set(preview) == expected_preview_fields
+        assert len(preview["palette"]) >= 3
+        assert preview["variant"]
+
+        brief = data["brief"]
+        assert tuple(BRIEF_SECTION_PATTERN.findall(brief)) == REQUIRED_BRIEF_SECTIONS
+        for section in REQUIRED_BRIEF_SECTIONS:
+            headings = re.findall(
+                rf"(?m)^[ \t]*{re.escape(section)}[ \t]*:?(?:[ \t]|$)",
+                brief,
+            )
+            assert len(headings) == 1, f"{style_id}: {section} section"
+
+        archetypes = re.search(
+            r"(?ms)^[ \t]*SLIDE ARCHETYPES[ \t]*:?[ \t]*(.*?)"
+            r"(?=^[ \t]*AVOID[ \t]*:?)",
+            brief,
+        )
+        assert archetypes, f"{style_id}: SLIDE ARCHETYPES body"
+        archetype_labels = re.findall(
+            r"(?im)(?:^|[;\n])[ \t]*(?:-\s*)?"
+            r"([a-z][a-z0-9 -]*?)[ \t]*:",
+            archetypes.group(1),
+        )
+        assert len(set(archetype_labels)) >= 5, f"{style_id}: slide archetypes"
+        assert not PLACEHOLDER_PATTERN.search(source.read_text(encoding="utf-8"))
+
+
+def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
+    app = FastAPI()
+    app.include_router(AUTHORED_ROUTER, prefix="/api/v1/ppt")
+
+    async def fetch(path: str) -> httpx.Response:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            return await client.get(path)
+
+    response = asyncio.run(fetch("/api/v1/ppt/authored/styles"))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 36
+    assert [style["id"] for style in body] == sorted(style["id"] for style in body)
+    assert {style["id"] for style in body} == EXPECTED_AUTHORED_STYLE_IDS
+    assert all(
+        set(style)
+        == {
+            "id",
+            "name",
+            "description",
+            "category",
+            "tags",
+            "use_cases",
+            "preview",
+        }
+        for style in body
+    )
+    assert all("brief" not in style for style in body)
+    assert all({"bg", "accent"} <= set(style["preview"]) for style in body)
+
+    by_id = {style["id"]: style for style in body}
+    assert by_id["cyber-ai"]["preview"]["image"] == (
+        "/api/v1/ppt/authored/styles/cyber-ai/preview"
+    )
+    assert by_id["tech-blueprint"]["preview"]["image"] == (
+        "/api/v1/ppt/authored/styles/tech-blueprint/preview"
+    )
+    assert by_id["osb-smart-banking"]["preview"]["image"] == (
+        "/api/v1/ppt/authored/styles/osb-smart-banking/preview"
+    )
+    assert by_id["default"]["name"] == "기본 블루프린트"
+    assert by_id["default"]["description"] == (
+        "깔끔한 흰 바탕과 브랜드 블루로 구성한 범용 프레젠테이션 스타일"
+    )
+    expected_categories = {
+        "default": "general",
+        "osb-smart-banking": "business",
+        "strategic-navy": "business",
+        "editorial-tritone": "editorial",
+        "neo-grid-bold": "creative",
+        "minimal-vellum": "editorial",
+    }
+    for style_id, category in expected_categories.items():
+        style = by_id[style_id]
+        assert style["category"] == category
+        assert style["tags"]
+        assert style["use_cases"]
+        assert len(style["preview"]["palette"]) >= 3
+        assert style["preview"]["variant"]
+
+    exec_report = by_id["exec-report"]
+    assert exec_report["category"] == "business"
+    assert exec_report["tags"] == ["executive", "finance", "data"]
+    assert exec_report["use_cases"] == ["경영 실적 보고", "이사회 보고", "투자 검토"]
+    assert exec_report["preview"] == {
+        "bg": "#051C2C",
+        "accent": "#00A3E0",
+        "palette": ["#051C2C", "#FFFFFF", "#2E3338", "#00A3E0", "#A7B0B7"],
+        "variant": "executive-ledger",
+    }
+
+    for style_id in ("cyber-ai", "osb-smart-banking", "tech-blueprint"):
+        preview_response = asyncio.run(
+            fetch(f"/api/v1/ppt/authored/styles/{style_id}/preview")
+        )
+        assert preview_response.status_code == 200
+        assert preview_response.headers["content-type"] == "image/png"
+        assert preview_response.content.startswith(b"\x89PNG")

@@ -1,5 +1,6 @@
-import React, { useRef } from "react";
+import React from "react";
 import { UploadIcon, ChevronRight, Plus, FileText, X } from "lucide-react";
+import { useUploadLimits } from "@/lib/use-upload-limits";
 import { ProcessedSlide } from "../types";
 
 interface FileUploadSectionProps {
@@ -7,8 +8,6 @@ interface FileUploadSectionProps {
   handleFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
   removeFile: () => void;
   CheckFonts: () => void;
-  onPptxFileSelect?: (file: File) => void | Promise<void>;
-  processingLabel?: string;
 
   isProcessingPptx: boolean;
   slides: ProcessedSlide[];
@@ -20,36 +19,19 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
   handleFileSelect,
   removeFile,
   CheckFonts,
-  onPptxFileSelect,
-  processingLabel = "Checking Fonts...",
 
   isProcessingPptx,
   slides,
   completedSlides,
 }) => {
+  const uploadLimits = useUploadLimits();
   const isProcessing = isProcessingPptx || slides.some((s) => s.processing);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleCheckFonts = () => {
-    if (!selectedFile && onPptxFileSelect) {
-      fileInputRef.current?.click();
-      return;
-    }
+
     CheckFonts();
+
   }
-
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (onPptxFileSelect) {
-      event.target.value = "";
-      if (file) {
-        void onPptxFileSelect(file);
-      }
-      return;
-    }
-
-    handleFileSelect(event);
-  };
 
   return (
     <div className="md:h-[calc(100vh-310px)] h-[calc(100vh-450px)] relative overflow-hidden">
@@ -70,7 +52,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
             }}
           >
             <UploadIcon className={`w-4 h-4 text-black`} />
-            <p className='text-xs font-medium text-black'>Upload PPTX File</p>
+            <p className='text-xs font-medium text-black'>PPTX 파일 업로드</p>
           </div>
         </div>
         <div className=" w-full bg-[#FAFAFF] rounded-[28px] p-2.5 "
@@ -84,11 +66,10 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
               <div className="border border-[#B8B8C1] border-dashed rounded-[12px ] p-1.5 h-full relative">
                 {!selectedFile ? <>
                   <input
-                    ref={fileInputRef}
                     id="file-upload"
                     type="file"
                     accept=".pptx"
-                    onChange={handleInputChange}
+                    onChange={handleFileSelect}
                     className="opacity-0 w-full h-full cursor-pointer absolute top-0 left-0 z-10"
                   />
                   <div className='absolute inset-0 flex flex-col items-center justify-center'>
@@ -98,7 +79,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                       </div>
                     </div>
                     <p className='pt-3 text-xs font-normal text-[#808080] tracking-[-0.12px] text-center'>
-                      <span className='text-[#808080] underline underline-offset-4'>Click to Upload</span> or drag &amp; drop.
+                      <span className='text-[#808080] underline underline-offset-4'>클릭하여 업로드</span>하거나 끌어다 놓으세요.
                     </p>
                   </div>
                 </> : <div className="flex gap-2 items-center justify-center h-full w-fit mx-auto">
@@ -122,7 +103,7 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                     </div>
                     <div className="flex-1">
                       <h3 className="text-[#4C4C4C] text-sm font-medium line-clamp-1"> {selectedFile.name}</h3>
-                      <p className="text-xs font-normal text-[#808080] tracking-[-0.12px]">Presentation ( {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)</p>
+                      <p className="text-xs font-normal text-[#808080] tracking-[-0.12px]">발표자료 ( {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)</p>
                     </div>
 
                   </div>
@@ -134,17 +115,17 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
               <div className="flex items-center justify-between gap-2.5">
                 <div className="min-w-[140px] w-full">
                   {isProcessing ? (
-                    <div className="flex items-center justify-end gap-3" aria-live="polite" aria-label="Processing">
+                    <div className="flex items-center justify-end gap-3" aria-live="polite" aria-label="처리 중">
                       <div
                         className="h-[14px] w-[74px] rounded-full bg-[#EFEDFF] overflow-hidden ring-1 ring-[#E4E0FF]"
                         aria-hidden="true"
                       >
                         <div className="h-full w-full rounded-full processing-stripes" />
                       </div>
-                      <p className="text-sm font-medium text-[#9A9AA6] tracking-[-0.1px]">Processing</p>
+                      <p className="text-sm font-medium text-[#9A9AA6] tracking-[-0.1px]">처리 중</p>
                       {slides.length > 0 ? (
                         <p className="text-sm font-medium text-[#9A9AA6] tracking-[-0.1px]">
-                          {completedSlides}/{slides.length} Slides
+                          슬라이드 {completedSlides}/{slides.length}
                         </p>
                       ) : null}
                       <style jsx>{`
@@ -184,10 +165,10 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
                         disabled={isProcessing}
                       >
                         {isProcessingPptx
-                          ? processingLabel
+                          ? "폰트 확인 중…"
                           : !selectedFile
-                            ? "Select a PPTX file"
-                            : "Check Fonts"}
+                            ? "PPTX 파일 선택"
+                            : "폰트 확인"}
                         <ChevronRight className="w-3.5 h-3.5 text-black" />
                       </button>
                     </div>
@@ -205,24 +186,34 @@ export const FileUploadSection: React.FC<FileUploadSectionProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8.5" cy="8.17041" r="4.5" fill="#EBE9FE" />
             </svg>
-            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">PPTX. Only</p>
+            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">PPTX 전용</p>
           </li>
           <li className="flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8.5" cy="8.17041" r="4.5" fill="#EBE9FE" />
             </svg>
-            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">Max 100MB</p>
+            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">최대 {uploadLimits.document.mb}MB</p>
           </li>
           <li className="flex items-center gap-1">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="8.5" cy="8.17041" r="4.5" fill="#EBE9FE" />
             </svg>
-            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">5min Generation</p>
+            <p className="md:text-sm text-[10px] font-normal text-[#3A3A3A] ">5분 생성</p>
           </li>
         </ul>
+
+        <div className="mt-4 px-4 py-3 rounded-lg border border-[#EBE9FE]  flex items-start gap-2 shadow-md">
+          <svg className="mt-0.5 shrink-0" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="10" fill="#EBE9FE" />
+            <path d="M10 6V10M10 14H10.0088" stroke="#5B49A1" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <p className="text-sm md:text-base font-medium text-[#20165C] tracking-[-0.13px]">
+            <span className="font-bold text-[#5B49A1]">참고:</span> 각 슬라이드는 설정된 텍스트 모델에 <span className="font-semibold">스크린샷과 HTML 참조</span> 형태로 전송됩니다. <span className="font-semibold">비전 지원</span> 모델(이미지 입력)만 레이아웃을 정확히 활용할 수 있습니다. 텍스트 전용 모델은 오류가 발생하거나 레이아웃 품질이 낮을 수 있으니, 설정에서 제공자의 비전 모델을 선택하세요.
+          </p>
+        </div>
 
       </div>
     </div>
 
   );
-}; 
+};

@@ -13,22 +13,42 @@ from models.sql.async_task import AsyncTaskModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.chat_history_message import ChatHistoryMessageModel
-from models.sql.font_upload import FontUpload
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
 from models.sql.ollama_pull_status import OllamaPullStatus
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
-from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.template_v2 import TemplateV2
+from models.sql.template_v2_local_state import TemplateV2LocalState
+from models.sql.template_v2_revision import TemplateV2Revision
+from models.sql.template_v2_pptx_import import TemplateV2PptxImport
+from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
+from models.sql.slidespec_artifact_bundle import SlideSpecArtifactBundle
 from models.sql.webhook_subscription import WebhookSubscription
+from models.sql.workspace import (
+    WorkspaceActionReceipt,
+    WorkspaceArtifact,
+    WorkspaceAsset,
+    WorkspaceCleanupJournal,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceMessageAttachment,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
 from models.sql.user import User
 from models.sql.access_token import AccessToken
 from models.sql.provider_settings import ProviderSettings
-from api.v1.auth.context import get_current_owner_id
+from templates.v2.catalog import get_template_v2_default_template_id
+from utils.owner_context import get_current_owner_id
 from utils.get_env import get_migrate_database_on_startup_env
 from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
 
@@ -46,10 +66,18 @@ sql_engine: AsyncEngine = create_async_engine(
 
 if "sqlite" in database_url:
     @event.listens_for(sql_engine.sync_engine, "connect")
-    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+        try:
+            # sqlite-local supports a separate worker process. WAL keeps API
+            # reads available while that worker publishes a short write, and
+            # busy_timeout absorbs the remaining writer/writer hand-off.
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.fetchone()
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
 
 
 async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
@@ -66,6 +94,15 @@ _STRICT_OWNER_MODELS = (
     AsyncTaskModel,
     AsyncPresentationGenerationTaskModel,
     WebhookSubscription,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceAsset,
+    WorkspaceMessageAttachment,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+    WorkspaceActionReceipt,
+    WorkspaceArtifact,
 )
 
 
@@ -81,6 +118,7 @@ def _scope_owned_selects(execute_state) -> None:
         return
 
     statement = execute_state.statement
+    catalog_default_id = get_template_v2_default_template_id()
     for model in _STRICT_OWNER_MODELS:
         statement = statement.options(
             with_loader_criteria(
@@ -95,6 +133,10 @@ def _scope_owned_selects(execute_state) -> None:
             lambda row: or_(
                 row.owner_id == owner_id,
                 (row.owner_id.is_(None) & row.is_default.is_(True)),
+                (
+                    row.owner_id.is_(None)
+                    & (row.id == catalog_default_id)
+                ),
             ),
             include_aliases=True,
         )
@@ -128,15 +170,32 @@ async def create_db_and_tables():
                     sync_conn,
                     tables=[
                         PresentationModel.__table__,
+                        WorkspaceConversation.__table__,
+                        WorkspaceMessage.__table__,
+                        WorkspaceAsset.__table__,
+                        WorkspaceMessageAttachment.__table__,
+                        WorkspaceOperation.__table__,
+                        WorkspaceOperationEvent.__table__,
+                        WorkspaceOutbox.__table__,
+                        WorkspaceActionReceipt.__table__,
+                        WorkspaceArtifact.__table__,
+                        WorkspaceCleanupJournal.__table__,
+                        AuthoredExactProvenance.__table__,
+                        PresentationGenerationJob.__table__,
+                        AuthoredSlideCheckpoint.__table__,
+                        PresentationVersionModel.__table__,
                         SlideModel.__table__,
+                        SlideSpecArtifactBundle.__table__,
                         KeyValueSqlModel.__table__,
-                        TemplateV2.__table__,
                         ChatHistoryMessageModel.__table__,
                         ImageAsset.__table__,
-                        FontUpload.__table__,
                         PresentationLayoutCodeModel.__table__,
                         TemplateCreateInfoModel.__table__,
                         TemplateModel.__table__,
+                        TemplateV2.__table__,
+                        TemplateV2LocalState.__table__,
+                        TemplateV2Revision.__table__,
+                        TemplateV2PptxImport.__table__,
                         WebhookSubscription.__table__,
                         AsyncTaskModel.__table__,
                         AsyncPresentationGenerationTaskModel.__table__,

@@ -1,80 +1,24 @@
 import { getApiUrl } from "@/utils/api";
 import { LLMConfig } from "@/types/llm_config";
 
-const LOCALHOST_OLLAMA_URL = "http://localhost:11434";
-const DOCKER_HOST_OLLAMA_URL = "http://host.docker.internal:11434";
-const OLLAMA_MODELS_CACHE_TTL_MS = 30_000;
-
-type OllamaModelsCacheEntry = {
-  expiresAt: number;
-  promise: Promise<AvailableOllamaModel[]>;
-};
-
-let ollamaLibraryModelsPromise: Promise<OllamaLibraryModel[]> | null = null;
-const ollamaModelsCache = new Map<string, OllamaModelsCacheEntry>();
-
 export interface OllamaModel {
   label: string;
   value: string;
   size: string;
 }
 
-export interface AvailableOllamaModel {
+export interface DownloadingModel {
   name: string;
-  parameters: string | null;
   size: number | null;
-}
-
-export interface OllamaLibraryModel {
-  name: string;
-  description: string;
-  parameters: string;
-  size: string;
-}
-
-export interface OllamaPullProgressEvent {
-  type: "status" | "progress" | "complete" | "error";
-  status?: string;
-  total?: number;
-  completed?: number;
-  progress?: number;
-  model?: string;
-  detail?: string;
+  downloaded: number | null;
+  status: string;
+  done: boolean;
+  error?: string | null;
 }
 
 export interface OllamaModelsResult {
   models: OllamaModel[];
   updatedConfig?: LLMConfig;
-}
-
-export interface ReachableOllamaModelsResult {
-  models: AvailableOllamaModel[];
-  resolvedUrl: string;
-  usedFallback: boolean;
-}
-
-function isElectronRuntime(): boolean {
-  return typeof window !== "undefined" && !!window.electron;
-}
-
-function normalizeOllamaUrl(url?: string): string {
-  return (url || "").trim().replace(/\/+$/, "");
-}
-
-function getOllamaModelsCacheKey(ollamaUrl?: string): string {
-  return normalizeOllamaUrl(ollamaUrl) || "__default__";
-}
-
-export function clearOllamaModelsCache(ollamaUrl?: string) {
-  if (ollamaUrl === undefined) {
-    ollamaModelsCache.clear();
-    return;
-  }
-  ollamaModelsCache.delete(getOllamaModelsCacheKey(ollamaUrl));
-}
-
-export function getDefaultOllamaUrl(): string {
-  return isElectronRuntime() ? LOCALHOST_OLLAMA_URL : DOCKER_HOST_OLLAMA_URL;
 }
 
 /**
@@ -88,9 +32,6 @@ export const updateLLMConfig = (
   const fieldMappings: Record<string, keyof LLMConfig> = {
     openai_api_key: "OPENAI_API_KEY",
     openai_model: "OPENAI_MODEL",
-    deepseek_api_key: "DEEPSEEK_API_KEY",
-    deepseek_model: "DEEPSEEK_MODEL",
-    deepseek_base_url: "DEEPSEEK_BASE_URL",
     google_api_key: "GOOGLE_API_KEY",
     google_model: "GOOGLE_MODEL",
     vertex_api_key: "VERTEX_API_KEY",
@@ -140,20 +81,15 @@ export const updateLLMConfig = (
     pixabay_api_key: "PIXABAY_API_KEY",
     image_provider: "IMAGE_PROVIDER",
     disable_image_generation: "DISABLE_IMAGE_GENERATION",
+    use_custom_url: "USE_CUSTOM_URL",
     disable_thinking: "DISABLE_THINKING",
     extended_reasoning: "EXTENDED_REASONING",
     web_grounding: "WEB_GROUNDING",
-    web_search_provider: "WEB_SEARCH_PROVIDER",
-    web_search_max_results: "WEB_SEARCH_MAX_RESULTS",
-    searxng_base_url: "SEARXNG_BASE_URL",
-    tavily_api_key: "TAVILY_API_KEY",
-    exa_api_key: "EXA_API_KEY",
-    brave_search_api_key: "BRAVE_SEARCH_API_KEY",
-    serper_api_key: "SERPER_API_KEY",
     comfyui_url: "COMFYUI_URL",
     comfyui_workflow: "COMFYUI_WORKFLOW",
     dall_e_3_quality: "DALL_E_3_QUALITY",
     gpt_image_1_5_quality: "GPT_IMAGE_1_5_QUALITY",
+    gpt_image_2_quality: "GPT_IMAGE_2_QUALITY",
     open_webui_image_url: "OPEN_WEBUI_IMAGE_URL",
     open_webui_image_api_key: "OPEN_WEBUI_IMAGE_API_KEY",
     openai_compat_image_base_url: "OPENAI_COMPAT_IMAGE_BASE_URL",
@@ -179,10 +115,6 @@ export const changeProvider = (
 ): LLMConfig => {
   const newConfig = { ...currentConfig, LLM: provider };
 
-  if (provider === "ollama" && !newConfig.OLLAMA_URL?.trim()) {
-    newConfig.OLLAMA_URL = getDefaultOllamaUrl();
-  }
-
   // Auto Select appropriate image provider based on the text models
   if (provider === "openai") {
     newConfig.IMAGE_PROVIDER = "gpt-image-1.5";
@@ -196,112 +128,41 @@ export const changeProvider = (
 };
 
 
-function getOllamaApiUrl(
-  path: string,
-  params: Record<string, string | undefined>
-): string {
-  const searchParams = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value?.trim()) searchParams.set(key, value.trim());
-  });
-  const query = searchParams.toString();
-  return getApiUrl(query ? `${path}?${query}` : path);
+export const checkIfSelectedOllamaModelIsPulled = async (ollamaModel: string) => {
+  try {
+    const response = await fetch(getApiUrl('/api/v1/ppt/ollama/models/available'));
+    const models = await response.json();
+    const pulledModels = models.map((model: any) => model.name);
+    return pulledModels.includes(ollamaModel);
+  } catch (error) {
+    console.error('Error checking if selected Ollama model is pulled:', error);
+    return false;
+  }
 }
 
-export const isOllamaModelAvailable = async (
-  ollamaModel: string,
-  ollamaUrl?: string
-): Promise<boolean> => {
-  const { models } = await getReachableOllamaModels(ollamaUrl);
-  return models.some((model) => model.name === ollamaModel);
-};
 
-const fetchAvailableOllamaModels = async (
-  ollamaUrl?: string
-): Promise<AvailableOllamaModel[]> => {
-  const normalizedUrl = normalizeOllamaUrl(ollamaUrl);
-  const response = await fetch(
-    getOllamaApiUrl("/api/v1/ppt/ollama/models/available", {
-      ollama_url: normalizedUrl,
-    })
-  );
-  if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Could not list Ollama models"));
-  }
-  const models: unknown = await response.json();
-  if (!Array.isArray(models)) {
-    throw new Error("Ollama returned an invalid model list");
-  }
-  return models.flatMap((model) => {
-    if (!model || typeof model !== "object" || !("name" in model)) return [];
-    const name = (model as { name?: unknown }).name;
-    const parameters = (model as { parameters?: unknown }).parameters;
-    const size = (model as { size?: unknown }).size;
-    if (typeof name !== "string") return [];
-    return [
-      {
-        name,
-        parameters:
-          typeof parameters === "string" &&
-          parameters.trim() &&
-          parameters.trim().toLowerCase() !== "unknown"
-            ? parameters
-            : null,
-        size: typeof size === "number" ? size : null,
-      },
-    ];
-  });
-};
+/**
+ * Resets downloading model state
+ */
+export const resetDownloadingModel = (): DownloadingModel => ({
+  name: "",
+  size: null,
+  downloaded: null,
+  status: "",
+  done: false,
+});
 
-export const getAvailableOllamaModels = async (
-  ollamaUrl?: string
-): Promise<AvailableOllamaModel[]> => {
-  const cacheKey = getOllamaModelsCacheKey(ollamaUrl);
-  const now = Date.now();
-  const cached = ollamaModelsCache.get(cacheKey);
+function abortPullError(): Error {
+  const err = new Error("Download cancelled");
+  err.name = "AbortError";
+  return err;
+}
 
-  if (cached && cached.expiresAt > now) {
-    return cached.promise;
-  }
+function isAbortError(e: unknown): boolean {
+  return e instanceof Error && e.name === "AbortError";
+}
 
-  const promise = fetchAvailableOllamaModels(ollamaUrl);
-  ollamaModelsCache.set(cacheKey, {
-    expiresAt: now + OLLAMA_MODELS_CACHE_TTL_MS,
-    promise,
-  });
-
-  try {
-    return await promise;
-  } catch (error) {
-    ollamaModelsCache.delete(cacheKey);
-    throw error;
-  }
-};
-
-export const getReachableOllamaModels = async (
-  ollamaUrl?: string
-): Promise<ReachableOllamaModelsResult> => {
-  const preferredUrl = normalizeOllamaUrl(ollamaUrl) || getDefaultOllamaUrl();
-
-  try {
-    const models = await getAvailableOllamaModels(preferredUrl);
-    return { models, resolvedUrl: preferredUrl, usedFallback: false };
-  } catch (error) {
-    const shouldTryLocalFallback =
-      !isElectronRuntime() && preferredUrl === DOCKER_HOST_OLLAMA_URL;
-    if (!shouldTryLocalFallback) {
-      throw error;
-    }
-    const models = await getAvailableOllamaModels(LOCALHOST_OLLAMA_URL);
-    return {
-      models,
-      resolvedUrl: LOCALHOST_OLLAMA_URL,
-      usedFallback: true,
-    };
-  }
-};
-
-async function getApiErrorMessage(
+async function getPullErrorMessage(
   response: Response,
   fallback: string
 ): Promise<string> {
@@ -314,117 +175,112 @@ async function getApiErrorMessage(
       return body.error;
     }
   } catch {
+    // Ignore parse errors and use fallback.
   }
   return fallback;
 }
 
-export const getOllamaLibraryModels = async (): Promise<OllamaLibraryModel[]> => {
-  if (ollamaLibraryModelsPromise) {
-    return ollamaLibraryModelsPromise;
-  }
-
-  ollamaLibraryModelsPromise = fetchOllamaLibraryModels();
-  try {
-    return await ollamaLibraryModelsPromise;
-  } catch (error) {
-    ollamaLibraryModelsPromise = null;
-    throw error;
-  }
-};
-
-const fetchOllamaLibraryModels = async (): Promise<OllamaLibraryModel[]> => {
-  const response = await fetch(
-    getApiUrl("/api/v1/ppt/ollama/models/library")
-  );
-  if (!response.ok) {
-    throw new Error(await getApiErrorMessage(response, "Could not fetch Ollama library models"));
-  }
-  const models: unknown = await response.json();
-  if (!Array.isArray(models)) {
-    throw new Error("Invalid library model list");
-  }
-  return models.flatMap((model) => {
-    if (!model || typeof model !== "object" || !("name" in model)) return [];
-    const name = (model as { name?: unknown }).name;
-    const description = (model as { description?: unknown }).description;
-    const parameters = (model as { parameters?: unknown }).parameters;
-    const size = (model as { size?: unknown }).size;
-    if (typeof name !== "string") return [];
-    return [{
-      name,
-      description: typeof description === "string" ? description : "",
-      parameters:
-        typeof parameters === "string" &&
-        parameters.trim() &&
-        parameters.trim().toLowerCase() !== "unknown"
-          ? parameters
-          : "",
-      size: typeof size === "string" ? size : "",
-    }];
-  });
-};
-
+/**
+ * Pulls Ollama model with progress tracking.
+ * Pass an AbortSignal to stop polling (e.g. user cancels download).
+ */
 export const pullOllamaModel = async (
-  modelName: string,
-  ollamaUrl: string,
-  onEvent: (event: OllamaPullProgressEvent) => void,
+  model: string,
+  onProgress?: (model: DownloadingModel) => void,
   signal?: AbortSignal
-): Promise<void> => {
-  const params = new URLSearchParams();
-  params.set("model_name", modelName.trim());
-  if (ollamaUrl.trim()) params.set("ollama_url", ollamaUrl.trim());
+): Promise<DownloadingModel> => {
+  return new Promise((resolve, reject) => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let settled = false;
+    let polling = false;
 
-  const response = await fetch(
-    getApiUrl(`/api/v1/ppt/ollama/models/pull?${params.toString()}`),
-    { method: "POST", signal }
-  );
+    const cleanup = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+      signal?.removeEventListener("abort", onAbort);
+    };
 
-  if (!response.ok) {
-    const msg = await getApiErrorMessage(response, "Failed to pull model");
-    onEvent({ type: "error", detail: msg });
-    return;
-  }
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      onProgress?.(resetDownloadingModel());
+      reject(abortPullError());
+    };
 
-  const reader = response.body?.getReader();
-  if (!reader) {
-    onEvent({ type: "error", detail: "No response stream" });
-    return;
-  }
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort);
 
-  const decoder = new TextDecoder();
-  let buffer = "";
+    const pollOnce = async () => {
+      if (settled || polling) {
+        return;
+      }
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
 
-      let currentEvent = "";
-      for (const line of lines) {
-        if (line.startsWith("event: ")) {
-          currentEvent = line.slice(7).trim();
-        } else if (line.startsWith("data: ")) {
-          const dataStr = line.slice(6);
-          try {
-            const data = JSON.parse(dataStr) as OllamaPullProgressEvent;
-            if (currentEvent === "error" || data.type === "error") {
-              onEvent({ type: "error", detail: data.detail || "Pull failed" });
-              return;
-            }
-            onEvent(data);
-            if (data.type === "complete") {
-              clearOllamaModelsCache(ollamaUrl);
-              return;
-            }
-          } catch {
+      polling = true;
+      try {
+        const response = await fetch(
+          getApiUrl(`/api/v1/ppt/ollama/model/pull?model=${model}`)
+        );
+        if (settled) return;
+        if (response.status === 200) {
+          const data = await response.json();
+          if (data.done && data.status !== "error") {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            onProgress?.(data);
+            resolve(data);
+          } else if (data.status === "error" || data.error) {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            onProgress?.(resetDownloadingModel());
+            reject(new Error(data.error || "Error occurred while pulling model"));
+          } else {
+            onProgress?.(data);
+          }
+        } else {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          onProgress?.(resetDownloadingModel());
+          if (response.status === 403) {
+            reject(new Error("Request to Ollama Not Authorized"));
+          } else {
+            const errorMessage = await getPullErrorMessage(
+              response,
+              "Error occurred while pulling model"
+            );
+            reject(new Error(errorMessage));
           }
         }
+      } catch (error) {
+        if (settled) return;
+        if (isAbortError(error)) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        onProgress?.(resetDownloadingModel());
+        reject(error);
+      } finally {
+        polling = false;
       }
-    }
-  } finally {
-    reader.releaseLock();
-  }
+    };
+
+    void pollOnce();
+    interval = setInterval(() => {
+      void pollOnce();
+    }, 1000);
+  });
 };

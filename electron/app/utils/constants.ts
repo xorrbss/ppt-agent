@@ -8,14 +8,12 @@ export const localhost = "http://127.0.0.1"
 
 export const isDev = !app.isPackaged;
 export const baseDir = app.getAppPath();
-export const resourceBaseDir =
-  isDev || !baseDir.endsWith(".asar") ? baseDir : `${baseDir}.unpacked`;
 export const fastapiDir = isDev
   ? path.resolve(baseDir, "..", "servers", "fastapi")
-  : path.join(resourceBaseDir, "resources/fastapi");
+  : path.join(baseDir, "resources/fastapi");
 export const nextjsDir = isDev
   ? path.resolve(baseDir, "..", "servers", "nextjs")
-  : path.join(resourceBaseDir, "resources/nextjs");
+  : path.join(baseDir, "resources/nextjs");
 
 const appDirectoryName = "Presenton Open Source";
 

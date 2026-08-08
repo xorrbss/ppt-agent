@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function NotFound() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-6 text-center">
       <div className="mx-auto w-full max-w-lg rounded-lg bg-white p-8 shadow-md">
         <div className="mx-auto mb-6 flex h-48 w-full max-w-[300px] items-center justify-center overflow-hidden sm:h-56 sm:max-w-sm">
-          <img
+          <Image
             src="/404.svg"
             alt="Page not found"
             width={500}

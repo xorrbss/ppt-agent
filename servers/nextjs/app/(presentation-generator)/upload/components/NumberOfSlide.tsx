@@ -1,6 +1,5 @@
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { clampSlideCountValue, MAX_NUMBER_OF_SLIDES } from '@/utils/presentationLimits';
 import React, { useState } from 'react'
 
 const SLIDE_OPTIONS: string[] = ["5", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"];
@@ -11,7 +10,11 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
     );
 
     const sanitizeToPositiveInteger = (raw: string): string => {
-        return clampSlideCountValue(raw);
+        const digitsOnly = raw.replace(/\D+/g, "");
+        if (!digitsOnly) return "";
+        // Remove leading zeros
+        const noLeadingZeros = digitsOnly.replace(/^0+/, "");
+        return noLeadingZeros;
     };
 
     const applyCustomValue = () => {
@@ -26,9 +29,9 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                 className="w-[180px] font-instrument_sans font-medium bg-blue-100 border-blue-200 focus-visible:ring-blue-300"
                 data-testid="slides-select"
             >
-                <SelectValue placeholder="Select Slides" />
+                <SelectValue placeholder="슬라이드 선택" />
             </SelectTrigger>
-            <SelectContent className="font-instrument_sans">
+            <SelectContent className="font-instrument_sans min-w-[12rem]">
                 {/* Sticky custom input at the top */}
                 <div
                     className="sticky top-0 z-10 bg-white  p-2 border-b"
@@ -40,7 +43,6 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                         <Input
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            max={MAX_NUMBER_OF_SLIDES}
                             value={customInput}
                             onMouseDown={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
@@ -59,14 +61,14 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                             placeholder="--"
                             className="h-8 w-16 px-2 text-sm"
                         />
-                        <span className="text-sm font-medium">slides</span>
+                        <span className="text-sm font-medium">슬라이드</span>
                     </div>
                 </div>
 
                 {/* Hidden item to allow SelectValue to render custom selection */}
                 {value && !SLIDE_OPTIONS.includes(value) && (
                     <SelectItem value={value} className="hidden">
-                        {value} slides
+                        슬라이드 {value}개
                     </SelectItem>
                 )}
 
@@ -74,10 +76,10 @@ const NumberOfSlide = ({ value, onValueChange }: { value: string, onValueChange:
                     <SelectItem
                         key={option}
                         value={option}
-                        className="font-instrument_sans text-sm font-medium"
+                        className="font-instrument_sans text-sm font-medium whitespace-nowrap"
                         role="option"
                     >
-                        {option} slides
+                        슬라이드 {option}개
                     </SelectItem>
                 ))}
             </SelectContent>

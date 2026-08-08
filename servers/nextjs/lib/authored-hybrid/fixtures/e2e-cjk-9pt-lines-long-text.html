@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 1280px; height: 720px; margin: 0; overflow: hidden; }
+    body { position: relative; background: #fffdf8; color: #20242c;
+      font-family: "Malgun Gothic", "Noto Sans CJK KR", sans-serif; }
+    h1 { position: absolute; left: 70px; top: 48px; margin: 0; font-size: 34px; line-height: 44px; }
+    .micro { position: absolute; left: 72px; top: 145px; width: 420px; height: 24px;
+      font-size: 8px; line-height: 10px; white-space: nowrap; }
+    .long-copy { position: absolute; left: 72px; top: 205px; width: 560px; height: 210px;
+      font-size: 18px; line-height: 30px; }
+    .horizontal { position: absolute; left: 72px; top: 475px; width: 1040px; height: 2px; background: #d54a3a; }
+    .vertical { position: absolute; left: 1080px; top: 120px; width: 2px; height: 420px; background: #315eb0; }
+    .footer { position: absolute; left: 72px; top: 540px; width: 900px; height: 70px;
+      font-size: 16px; line-height: 25px; }
+  </style>
+</head>
+<body>
+  <h1>편집 가능한 한글 프레젠테이션</h1>
+  <div class="micro">최소 글꼴 기준 검증: authored 6pt는 PowerPoint에서 9pt로 보정되어야 합니다.</div>
+  <div class="long-copy">긴 텍스트는 내보내기 과정에서 마지막 문장이 사라지거나 슬라이드 경계를 벗어나면 안 됩니다. 브라우저에서 확인한 줄바꿈을 유지하면서도 PowerPoint 편집 과정에서 문장이 잘리지 않도록 충분한 텍스트 상자 높이를 확보합니다. 한국어와 English 2026을 함께 사용해 CJK 글꼴 대체와 혼합 문자열의 안정성도 검증합니다. 이 문장은 완전하게 보존되어야 합니다.</div>
+  <div class="horizontal"></div>
+  <div class="vertical"></div>
+  <div class="footer">가로선과 세로선은 얇은 사각형이 아니라 축이 정확히 고정된 편집 가능한 직선으로 유지되어야 합니다.</div>
+</body>
+</html>

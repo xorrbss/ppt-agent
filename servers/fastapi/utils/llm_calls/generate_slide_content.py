@@ -7,10 +7,18 @@ from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 
 from models.presentation_layout import SlideLayoutModel
 from models.presentation_outline_model import SlideOutlineModel
+from utils.content_preservation import (
+    requires_content_preservation,
+    without_content_preservation_marker,
+)
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
-from utils.llm_utils import DisconnectChecker, generate_structured_with_schema_retries
+from utils.llm_utils import (
+    DisconnectChecker,
+    format_text_length_guidance,
+    generate_structured_with_schema_retries,
+)
 from utils.schema_utils import (
     add_field_in_schema,
     ensure_array_schemas_have_items,
@@ -30,23 +38,15 @@ You need to generate structured content json based on the schema.
 
 # General Rules
 - Follow language guidelines.
-- Slide Language is authoritative when it is explicitly set. If slide content
-  or user instructions request a different language, ignore that conflicting
-  language request unless Slide Language says auto-detect.
 - Speaker notes must be plain text (no markdown).
 - Never exceed max character limits; do not clip mid-sentence to fit—rephrase instead.
 - Do not use emojis or $schema fields.
-- Follow the intended outcome of user instructions when they do not conflict with Slide
-  Language; do not generalize or expand their scope.
+- Follow user instructions literally; do not reinterpret, generalize, or expand them.
 - Apply slide-specific instructions only to the exact slide mentioned (first/second/last/named) and only once.
 - Do not apply patterns across multiple slides unless explicitly requested.
 - If instructions are ambiguous, use the most direct interpretation without extending scope.
-- Treat chart, layout, styling, positioning, and other visual instructions as production
-  controls. Honor them through the selected schema, but never emit those instructions or
-  meta-commentary as a title, body, label, table cell, or speaker note.
-- Output fields must contain only audience-facing content and data. For chart fields,
-  populate the requested labels, series, and values rather than text such as "create a
-  bar chart" or "show this data as a graph".
+
+{content_depth_rules}
 
 {markdown_emphasis_rules}
 
@@ -57,6 +57,8 @@ You need to generate structured content json based on the schema.
 {verbosity_instructions}
 
 {output_fields_instructions}
+
+{text_length_guidance}
 """
 
 
@@ -70,26 +72,20 @@ English
 # Slide Language:
 {language}
 
-{slide_number_section}
 # SLIDE CONTENT: START
 {content}
 # SLIDE CONTENT: END
 """
 
-ASSET_ONLY_FIELDS = ["__image_url__", "__icon_url__"]
-AUTO_DETECT_LANGUAGE_INSTRUCTION = (
-    "auto-detect from the slide content and use the same language as the slide content"
-)
-
 
 def _resolve_prompt_language(language: Optional[str]) -> str:
     if language is None:
-        return AUTO_DETECT_LANGUAGE_INSTRUCTION
+        return "auto-detect"
     s = str(language).strip()
     if not s:
-        return AUTO_DETECT_LANGUAGE_INSTRUCTION
+        return "auto-detect"
     if s.lower() in {"auto", "auto-detect"}:
-        return AUTO_DETECT_LANGUAGE_INSTRUCTION
+        return "auto-detect"
     return s
 
 
@@ -109,6 +105,9 @@ def get_system_prompt(
     instructions: Optional[str] = None,
     response_schema: Optional[dict] = None,
 ):
+    preserve_source_content = requires_content_preservation(instructions)
+    instructions = without_content_preservation_marker(instructions)
+
     markdown_emphasis_rules = (
         "- Strictly use markdown to emphasize important points, by bolding or "
         "italicizing the part of text."
@@ -119,19 +118,47 @@ def get_system_prompt(
         f"# Tone Instructions:\nMake slide as {tone} as possible." if tone else ""
     )
 
-    verbosity_instructions = ""
-    if verbosity:
-        verbosity_instructions = "# Verbosity Instructions:\n"
-        if verbosity == "concise":
-            verbosity_instructions += "Make slide as concise as possible."
-        elif verbosity == "standard":
-            verbosity_instructions += "Make slide as standard as possible."
-        elif verbosity == "text-heavy":
-            verbosity_instructions += "Make slide as text-heavy as possible."
+    verbosity_instructions = "# Verbosity Instructions:\n"
+    if verbosity == "concise":
+        verbosity_instructions += (
+            "Aim for roughly 50-60% of each text field's maximum length and include most allowed list items. Keep it tight but still concrete and specific."
+        )
+    elif verbosity == "text-heavy":
+        verbosity_instructions += (
+            "Use the field-specific recommended budgets and populate the maximum number "
+            "of useful list items the schema allows. Maximize substantive, specific detail "
+            "without treating hard maximum lengths as targets."
+        )
+    else:
+        # standard / default: still apply real density pressure (this is the common path)
+        verbosity_instructions += (
+            "Aim for the field-specific recommended budgets (normally 80% of each hard "
+            "maximum) and populate most or all useful list items. Favor substance over filler."
+        )
 
     output_fields_instructions = "# Output Fields:\n" + _get_schema_markdown(
         response_schema
     )
+    text_length_guidance = format_text_length_guidance(response_schema or {})
+
+    if preserve_source_content:
+        verbosity_instructions = (
+            "# Verbosity Instructions:\nUse only as much text and as many items as "
+            "the source provides. Never invent or duplicate content to meet a density target."
+        )
+        content_depth_rules = """# Content Preservation
+- Treat the supplied slide content as the complete and authoritative source.
+- Preserve every fact, number, date, proper noun, URL, qualifier, and relationship.
+- Do not add examples, claims, interpretations, or supporting details that are not present in the source.
+- Rephrase only when required by the response schema or a field length limit; never change meaning.
+- Distribute the source across required schema fields without dropping information. Do not duplicate content merely to fill optional fields.
+- Keep the slide in the same language as the source content."""
+    else:
+        content_depth_rules = """# Content Depth
+- Be specific and concrete: prefer named examples, figures, dates, percentages, and cause-effect detail over generic statements.
+- Genuinely expand each outline point into substantive prose — do not merely restate or summarize the outline.
+- Fill each text field toward its recommended length budget, and populate the maximum number of useful list items the schema allows. Do not add filler merely to consume space.
+- Every bullet or point must carry real, distinct information; never use filler such as \"various aspects\", \"many benefits\", or vague placeholders."""
 
     return SLIDE_CONTENT_SYSTEM_PROMPT.format(
         markdown_emphasis_rules=markdown_emphasis_rules,
@@ -139,22 +166,15 @@ def get_system_prompt(
         tone_instructions=tone_instructions,
         verbosity_instructions=verbosity_instructions,
         output_fields_instructions=output_fields_instructions,
+        content_depth_rules=content_depth_rules,
+        text_length_guidance=text_length_guidance,
     )
 
 
-def _get_slide_number_section(slide_number: Optional[int]) -> str:
-    if slide_number is None:
-        return ""
-    return f"# Slide Number:\n{slide_number}\n"
-
-
-def get_user_prompt(
-    outline: str, language: Optional[str], slide_number: Optional[int] = None
-):
+def get_user_prompt(outline: str, language: Optional[str]):
     return SLIDE_CONTENT_USER_PROMPT.format(
         current_date_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         language=_resolve_prompt_language(language),
-        slide_number_section=_get_slide_number_section(slide_number),
         content=outline,
     )
 
@@ -166,8 +186,6 @@ def get_messages(
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
     response_schema: Optional[dict] = None,
-    *,
-    slide_number: Optional[int] = None,
 ) -> list[Message]:
 
     return [
@@ -180,30 +198,26 @@ def get_messages(
             ),
         ),
         UserMessage(
-            content=get_user_prompt(outline, language, slide_number),
+            content=get_user_prompt(outline, language),
         ),
     ]
 
 
-def _schema_has_content_fields(response_schema: Optional[dict]) -> bool:
-    if not isinstance(response_schema, dict):
-        return False
+async def get_slide_content_from_type_and_outline(
+    slide_layout: SlideLayoutModel,
+    outline: SlideOutlineModel,
+    language: Optional[str],
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+    disconnect_checker: Optional[DisconnectChecker] = None,
+):
+    client = get_client(config=get_llm_config())
+    model = get_model()
 
-    properties = response_schema.get("properties")
-    return isinstance(properties, dict) and bool(properties)
-
-
-def _prepare_response_schema(json_schema: Optional[dict]) -> Optional[dict]:
-    if not isinstance(json_schema, dict):
-        return None
-
-    response_schema = remove_fields_from_schema(json_schema, ASSET_ONLY_FIELDS)
-    if not _schema_has_content_fields(response_schema):
-        return None
-
-    if response_schema.get("type") != "object":
-        response_schema["type"] = "object"
-
+    response_schema = remove_fields_from_schema(
+        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
+    )
     response_schema = add_field_in_schema(
         response_schema,
         {
@@ -216,26 +230,7 @@ def _prepare_response_schema(json_schema: Optional[dict]) -> Optional[dict]:
         },
         True,
     )
-    return ensure_array_schemas_have_items(response_schema)
-
-
-async def get_slide_content_from_type_and_outline(
-    slide_layout: SlideLayoutModel,
-    outline: SlideOutlineModel,
-    language: Optional[str],
-    tone: Optional[str] = None,
-    verbosity: Optional[str] = None,
-    instructions: Optional[str] = None,
-    *,
-    slide_number: Optional[int] = None,
-    disconnect_checker: Optional[DisconnectChecker] = None,
-):
-    response_schema = _prepare_response_schema(slide_layout.json_schema)
-    if response_schema is None:
-        return {}
-
-    client = get_client(config=get_llm_config())
-    model = get_model()
+    response_schema = ensure_array_schemas_have_items(response_schema)
 
     try:
         response_format = JSONSchemaResponse(
@@ -250,7 +245,6 @@ async def get_slide_content_from_type_and_outline(
             verbosity,
             instructions,
             response_schema,
-            slide_number=slide_number,
         )
 
         return await generate_structured_with_schema_retries(

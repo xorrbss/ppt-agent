@@ -10,26 +10,24 @@ import {
   ArrowUpRight,
   Pencil,
   Check,
-  Keyboard,
   X,
   AlertTriangle,
+  ScanSearch,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Image from "next/image";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { useDispatch, useSelector } from "react-redux";
 
 import { RootState } from "@/store/store";
 import { notify } from "@/components/ui/sonner";
-import {
-  trackEvent,
-  trackEventImmediately,
-  MixpanelEvent,
-} from "@/utils/mixpanel";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
 import {
@@ -38,6 +36,7 @@ import {
 } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { Separator } from "@/components/ui/separator";
+import type { PresentationExportQualityReport } from "@/lib/presentation-export-quality";
 import {
   Dialog,
   DialogContent,
@@ -46,63 +45,98 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import ThemeSelector from "./ThemeSelector";
+import VersionHistoryPopover from "./VersionHistoryPopover";
+import SharePopover from "./SharePopover";
+import GenerationInfoDialog from "./GenerationInfoDialog";
+import { DEFAULT_THEMES } from "../../(dashboard)/theme/components/ThemePanel/constants";
+import ThemeApi from "../../services/api/theme";
+import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
+import { Theme } from "../../services/api/types";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { cn } from "@/lib/utils";
+import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
+import AuthoredQualityReview from "./AuthoredQualityReview";
+import AuthoredPageRemake from "./AuthoredPageRemake";
+import {
+  formatAuthoredHybridExportSummary,
+  type AuthoredHybridExportMetadata,
+} from "@/lib/authored-hybrid/export-metadata";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
+import { buildSafeExportFileName } from "../utils/buildSafeExportFileName";
+import type {
+  WorkspaceCommandDispatcher,
+  WorkspacePageRemakeRequester,
+  WorkspaceQualityReviewRequester,
+} from "../workspace";
 
-const MAX_EXPORT_TITLE_LENGTH = 40;
+type PptxExportMode = "fidelity" | "hybrid";
 
-const buildSafeExportFileName = (
-  rawTitle: string | null | undefined,
-  extension: "pdf" | "pptx"
-) => {
-  const normalizedTitle = (rawTitle || "presentation").trim();
-  const titleWithoutExtension = normalizedTitle.replace(/\.(pdf|pptx)$/i, "");
-
-  let safeBase = titleWithoutExtension
-    // Replace all punctuation/special chars (including dots) with dashes
-    .replace(/[^a-zA-Z0-9\s_-]+/g, "-")
-    // Replace whitespace with single dashes
-    .replace(/\s+/g, "-")
-    // Collapse repeated separators
-    .replace(/[-_]{2,}/g, "-")
-    // Trim separators from both ends
-    .replace(/^[-_]+|[-_]+$/g, "");
-
-  if (!safeBase) {
-    safeBase = "presentation";
+class ExportRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ExportRequestError";
   }
+}
 
-  if (safeBase.length > MAX_EXPORT_TITLE_LENGTH) {
-    safeBase = safeBase
-      .slice(0, MAX_EXPORT_TITLE_LENGTH)
-      .replace(/[-_]+$/g, "");
-  }
+function isUnauthorizedError(error: unknown): boolean {
+  if (error instanceof ExportRequestError) return error.status === 401;
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status?: unknown }).status === 401
+  );
+}
 
-  if (!safeBase) {
-    safeBase = "presentation";
-  }
-
-  return `${safeBase}.${extension}`;
-};
+function getAuthoredStyleId(theme: unknown): string | null {
+  if (!theme || typeof theme !== "object") return null;
+  const style = (theme as Record<string, unknown>).style;
+  return typeof style === "string" ? style : null;
+}
 
 const PresentationHeader = ({
   presentation_id,
   isPresentationSaving,
+  isPresentationSaveFailed = false,
   currentSlide,
+  onReload,
+  isAuthoredDeck = false,
+  mutationsEnabled = true,
+  chatFirstEnabled = false,
+  workspaceCommandsEnabled = false,
+  onWorkspaceCommand,
+  onWorkspaceQualityReviewRequest,
+  onWorkspacePageRemakeRequest,
 }: {
   presentation_id: string;
   isPresentationSaving: boolean;
+  isPresentationSaveFailed?: boolean;
   currentSlide?: number;
+  onReload?: () => void;
+  isAuthoredDeck?: boolean;
+  mutationsEnabled?: boolean;
+  chatFirstEnabled?: boolean;
+  workspaceCommandsEnabled?: boolean;
+  onWorkspaceCommand?: WorkspaceCommandDispatcher;
+  onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
+  onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
 }) => {
   const [open, setOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
+  const [themes, setThemes] = useState<Theme[]>([]);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isRegenerateConfirmOpen, setIsRegenerateConfirmOpen] = useState(false);
+  const [exportQuality, setExportQuality] =
+    useState<PresentationExportQualityReport | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const exportTriggerRef = useRef<HTMLButtonElement>(null);
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
   const titleBlurIntentRef = useRef<"none" | "save" | "cancel">("none");
 
@@ -112,7 +146,37 @@ const PresentationHeader = ({
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo();
+
+  useEffect(() => {
+    if (isAuthoredDeck || !mutationsEnabled) return;
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [customThemes] = await Promise.all([ThemeApi.getThemes()]);
+        if (!cancelled) setThemes([...customThemes, ...DEFAULT_THEMES]);
+      } catch (e: any) {
+        if (isUnauthorizedApiError(e)) return;
+        if (!cancelled) {
+          notify.error("테마를 불러올 수 없습니다", e?.message || "테마를 불러오지 못했습니다.");
+        }
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthoredDeck, mutationsEnabled]);
+
+  const workspaceHistoryEnabled =
+    chatFirstEnabled && workspaceCommandsEnabled && Boolean(onWorkspaceCommand);
+  const historyEnabled = chatFirstEnabled
+    ? workspaceHistoryEnabled
+    : mutationsEnabled;
+  const { onUndo, onRedo, canUndo, canRedo } = usePresentationUndoRedo(
+    !chatFirstEnabled && mutationsEnabled,
+    workspaceHistoryEnabled ? onWorkspaceCommand : undefined
+  );
 
   useEffect(() => {
     if (isEditingTitle) {
@@ -121,19 +185,42 @@ const PresentationHeader = ({
     }
   }, [isEditingTitle]);
 
+  useEffect(() => {
+    if (!mutationsEnabled) {
+      setIsEditingTitle(false);
+      setIsRegenerateConfirmOpen(false);
+    }
+  }, [mutationsEnabled]);
+
+  // Restore focus to the export trigger once an export finishes. The trigger is
+  // `disabled` while `isExporting`, so focusing it inside the export handler could
+  // no-op before React re-enabled the button; running here (after the enabling
+  // re-render commits) guarantees keyboard focus returns to the trigger.
+  const wasExportingRef = useRef(false);
+  useEffect(() => {
+    if (wasExportingRef.current && !isExporting) {
+      exportTriggerRef.current?.focus();
+    }
+    wasExportingRef.current = isExporting;
+  }, [isExporting]);
+
   const beginTitleEdit = () => {
-    if (isStreaming || !presentationData) return;
+    if (!mutationsEnabled || isStreaming || !presentationData) return;
     setDraftTitle(presentationData.title || "");
     setIsEditingTitle(true);
   };
 
   const commitTitleEdit = () => {
+    if (!mutationsEnabled) {
+      setIsEditingTitle(false);
+      return;
+    }
     if (!presentationData) {
       setIsEditingTitle(false);
       return;
     }
     const trimmed = draftTitle.trim();
-    const next = trimmed || presentationData.title || "Presentation";
+    const next = trimmed || presentationData.title || "발표자료";
     if (next !== presentationData.title) {
       dispatch(updateTitle(next));
       trackEvent(MixpanelEvent.Presentation_Title_Updated, {
@@ -187,56 +274,124 @@ const PresentationHeader = ({
     }
   };
 
-  const handleExportPptx = async () => {
-    if (isStreaming) return;
+  const handleExportPptx = async (
+    pptxMode?: PptxExportMode,
+    fontEmbedding = false
+  ) => {
+    if (
+      isStreaming ||
+      isExporting ||
+      (chatFirstEnabled && (!workspaceCommandsEnabled || !onWorkspaceCommand))
+    ) return;
+    if (chatFirstEnabled && onWorkspaceCommand) {
+      const option = pptxMode === "hybrid" ? "편집 가능한 요소를 분리해 " : "";
+      const fontOption = fontEmbedding ? "(허용된 글꼴 포함) " : "";
+      try {
+        await onWorkspaceCommand(`${option}${fontOption}PPTX로 내보내기`, {
+          commandType: "export.pptx",
+          context: {
+            format: "pptx",
+            ...(pptxMode ? { pptx_mode: pptxMode } : {}),
+            ...(pptxMode ? { font_embedding: fontEmbedding } : {}),
+          },
+        });
+      } catch {
+        // The durable timeline owns request errors and explicit retry UI.
+      }
+      return;
+    }
 
     let exportToastId: string | number | undefined;
+    let exportSummary: string | undefined;
     try {
+      trackEvent(MixpanelEvent.Presentation_Export_Started, {
+        pathname,
+        presentation_id,
+        format: "pptx",
+        slide_count: presentationData?.slides?.length || 0,
+      });
       exportToastId = notify.loading(
-        "Exporting PPTX",
-        "Your presentation is being exported. This may take a moment."
+        "PPTX 내보내는 중",
+        "발표자료를 내보내고 있습니다. 잠시 시간이 걸릴 수 있습니다."
       );
       setIsExporting(true);
+      // The export endpoint reads the persisted server snapshot. Flush the
+      // current client state first so a pending/debounced autosave cannot make
+      // an authored export use stale slide HTML and misplaced elements.
+      if (mutationsEnabled) {
+        await PresentationGenerationApi.updatePresentationContent(
+          presentationData
+        );
+      }
       const safePptxFileName = buildSafeExportFileName(
         presentationData?.title,
         "pptx"
       );
       const safePptxTitle = safePptxFileName.replace(/\.pptx$/i, "");
-      if (window.electron?.exportPresentation) {
-        await trackExportCompleted("pptx", "electron");
+      // The desktop bridge has no pptxMode argument. Authored exports use the
+      // web API so both fidelity and hybrid modes are explicit; adaptive keeps IPC.
+      if (window.electron?.exportPresentation && !pptxMode) {
         await exportViaIpc("pptx", safePptxTitle);
       } else {
+        const requestBody = {
+          format: "pptx" as const,
+          id: presentation_id,
+          title: safePptxTitle,
+          ...(pptxMode ? { pptxMode, fontEmbedding } : {}),
+        };
         const response = await fetch("/api/export-presentation", {
           method: "POST",
-          body: JSON.stringify({
-            format: "pptx",
-            id: presentation_id,
-            title: safePptxTitle,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
-          throw new Error("Failed to export PPTX");
+          throw new ExportRequestError(
+            "PPTX 내보내기에 실패했습니다.",
+            response.status
+          );
         }
 
-        const { path: pptxPath } = await response.json();
+        const payload = (await response.json()) as {
+          path?: string;
+          quality?: PresentationExportQualityReport;
+          exportMetadata?: AuthoredHybridExportMetadata;
+        };
+        const pptxPath = payload.path;
+        const exportMetadata = payload.exportMetadata;
         if (!pptxPath) {
-          throw new Error("No path returned from export");
+          throw new Error("내보내기 경로를 받지 못했습니다.");
         }
 
-        await trackExportCompleted("pptx", "browser_api");
+        if (exportMetadata?.strategy === "authored-hybrid") {
+          exportSummary = formatAuthoredHybridExportSummary(exportMetadata);
+        }
         downloadLink(pptxPath, safePptxFileName);
+        if (payload.quality) setExportQuality(payload.quality);
+        if (payload.exportMetadata && !payload.quality) {
+          notify.info(
+            "PPTX 내보내기 정보",
+            `${payload.exportMetadata.editableSlides}/${payload.exportMetadata.totalSlides}개 슬라이드에 편집 가능한 요소가 포함되어 있습니다.`
+          );
+        }
       }
       notify.success(
-        "Export complete",
-        "Your PPTX file has been downloaded.",
+        "내보내기 완료",
+        exportSummary ?? "PPTX 파일이 다운로드되었습니다.",
         { id: exportToastId }
       );
     } catch (error) {
+      if (isUnauthorizedError(error)) {
+        notify.error(
+          "로그인이 필요합니다",
+          "로그인 세션이 만료되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요.",
+          exportToastId !== undefined ? { id: exportToastId } : undefined
+        );
+        return;
+      }
       console.error("Export failed:", error);
       notify.error(
-        "Export failed",
-        "We are having trouble exporting your presentation. Please try again.",
+        "내보내기 실패",
+        "발표자료를 내보내는 데 문제가 발생했습니다. 다시 시도해 주세요.",
         exportToastId !== undefined ? { id: exportToastId } : undefined
       );
     } finally {
@@ -245,22 +400,49 @@ const PresentationHeader = ({
   };
 
   const handleExportPdf = async () => {
-    if (isStreaming) return;
+    if (
+      isStreaming ||
+      isExporting ||
+      (chatFirstEnabled && (!workspaceCommandsEnabled || !onWorkspaceCommand))
+    ) return;
+    if (chatFirstEnabled && onWorkspaceCommand) {
+      try {
+        await onWorkspaceCommand("PDF로 내보내기", {
+          commandType: "export.pdf",
+          context: { format: "pdf" },
+        });
+      } catch {
+        // The durable timeline owns request errors and explicit retry UI.
+      }
+      return;
+    }
 
     let exportToastId: string | number | undefined;
     try {
+      trackEvent(MixpanelEvent.Presentation_Export_Started, {
+        pathname,
+        presentation_id,
+        format: "pdf",
+        slide_count: presentationData?.slides?.length || 0,
+      });
       exportToastId = notify.loading(
-        "Exporting PDF",
-        "Your presentation is being exported. This may take a moment."
+        "PDF 내보내는 중",
+        "발표자료를 내보내고 있습니다. 잠시 시간이 걸릴 수 있습니다."
       );
       setIsExporting(true);
+      // PDF also reads the persisted snapshot, so it must observe the same
+      // save-before-export ordering as PPTX.
+      if (mutationsEnabled) {
+        await PresentationGenerationApi.updatePresentationContent(
+          presentationData
+        );
+      }
       const safePdfFileName = buildSafeExportFileName(
         presentationData?.title,
         "pdf"
       );
       const safePdfTitle = safePdfFileName.replace(/\.pdf$/i, "");
       if (window.electron?.exportPresentation) {
-        await trackExportCompleted("pdf", "electron");
         await exportViaIpc("pdf", safePdfTitle);
       } else {
         const response = await fetch("/api/export-presentation", {
@@ -274,32 +456,49 @@ const PresentationHeader = ({
 
         if (response.ok) {
           const { path: pdfPath } = await response.json();
-          if (!pdfPath) {
-            throw new Error("No path returned from export");
-          }
-          await trackExportCompleted("pdf", "browser_api");
           downloadLink(pdfPath, safePdfFileName);
         } else {
-          throw new Error("Failed to export PDF");
+          throw new ExportRequestError(
+            "PDF 내보내기에 실패했습니다.",
+            response.status
+          );
         }
       }
       notify.success(
-        "Export complete",
-        "Your PDF file has been downloaded.",
+        "내보내기 완료",
+        "PDF 파일이 다운로드되었습니다.",
         { id: exportToastId }
       );
     } catch (err) {
+      if (isUnauthorizedError(err)) {
+        notify.error(
+          "로그인이 필요합니다",
+          "로그인 세션이 만료되었습니다. 페이지를 새로고침한 뒤 다시 로그인해 주세요.",
+          exportToastId !== undefined ? { id: exportToastId } : undefined
+        );
+        return;
+      }
       console.error(err);
       notify.error(
-        "Export failed",
-        "We are having trouble exporting your presentation. Please try again.",
+        "내보내기 실패",
+        "발표자료를 내보내는 데 문제가 발생했습니다. 다시 시도해 주세요.",
         exportToastId !== undefined ? { id: exportToastId } : undefined
       );
     } finally {
       setIsExporting(false);
     }
   };
+  const handleQualityReview = () => {
+    if (
+      !chatFirstEnabled ||
+      !workspaceCommandsEnabled ||
+      !onWorkspaceQualityReviewRequest ||
+      isStreaming
+    ) return;
+    onWorkspaceQualityReviewRequest(currentSlide);
+  };
   const handleReGenerate = () => {
+    if (!mutationsEnabled) return;
     setIsRegenerateConfirmOpen(false);
     dispatch(clearPresentationData());
     dispatch(clearHistory());
@@ -308,7 +507,9 @@ const PresentationHeader = ({
       presentation_id,
       slide_count: presentationData?.slides?.length || 0,
     });
-    router.push(`/presentation?id=${presentation_id}&stream=true`);
+    // regenerate=true forces the stream to re-run generation; without it the
+    // stream now replays existing slides idempotently (so a refresh can't wipe edits).
+    router.push(`/presentation?id=${presentation_id}&stream=true&regenerate=true`);
   };
   const downloadLink = (path: string, fileName: string) => {
     const link = document.createElement("a");
@@ -320,50 +521,104 @@ const PresentationHeader = ({
     document.body.removeChild(link);
   };
 
-  const trackExportCompleted = async (
-    format: "pptx" | "pdf",
-    exportRuntime: "electron" | "browser_api"
-  ) => {
-    await trackEventImmediately(MixpanelEvent.Presentation_Export_Completed, {
-      pathname,
-      presentation_id,
-      format,
-      slide_count: presentationData?.slides?.length || 0,
-      export_runtime: exportRuntime,
-    });
+  const closeExportOptions = () => {
+    setOpen(false);
+    requestAnimationFrame(() => exportTriggerRef.current?.focus());
   };
+
+  const exportDisabled =
+    isStreaming === true ||
+    (chatFirstEnabled ? !workspaceCommandsEnabled || !onWorkspaceCommand : isExporting);
 
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (
     <div
-      className={` rounded-[18px] max-md:mt-4 ${mobile ? "" : "bg-white"}  p-5`}
+      className={`rounded-[18px] max-md:mt-4 ${mobile ? "" : "bg-white"} p-5`}
+      aria-label="내보내기 형식 선택"
+      role="group"
     >
-      <p className="text-sm font-medium text-[#19001F]">Export as</p>
+      <p className="text-sm font-medium text-[#19001F]">다음 형식으로 내보내기</p>
       <div className="my-[18px] h-[1px] bg-[#E8E8E8]" />
-      <div className="space-y-3">
+      <div className="space-y-2">
+        {isAuthoredDeck && (
+          <>
+            <Button
+              type="button"
+              onClick={() => {
+                closeExportOptions();
+                void handleExportPptx("hybrid");
+              }}
+              disabled={exportDisabled}
+              data-testid="authored-export-hybrid"
+              variant="ghost"
+              className="h-auto min-h-[72px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl px-3 py-3 text-left text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed"
+              aria-label="PPTX로 내보내기, 배경과 요소 분리"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold leading-5">PPTX · 배경과 요소 분리</span>
+                <span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-[#5F5B66]">
+                  배경, 텍스트, 이미지와 도형을 가능한 범위에서 각각 분리합니다.
+                </span>
+              </span>
+              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                closeExportOptions();
+                void handleExportPptx("hybrid", true);
+              }}
+              disabled={exportDisabled}
+              data-testid="authored-export-hybrid-embedded"
+              variant="ghost"
+              className="h-auto min-h-[88px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-3 text-left text-xs text-black hover:bg-amber-50 focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed"
+              aria-label="PPTX로 내보내기, 편집 가능 및 글꼴 포함"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold leading-5">
+                  PPTX · 편집 가능 + 글꼴 포함
+                </span>
+                <span
+                  className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-amber-900"
+                  role="note"
+                >
+                  명시적 opt-in입니다. 서버에서 허용된 글꼴만 포함하며 파일
+                  크기가 크게 늘 수 있습니다. 실패 시 호환 글꼴로 대체됩니다.
+                </span>
+              </span>
+              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Button>
+          </>
+        )}
         <Button
           onClick={() => {
-            handleExportPdf();
-            setOpen(false);
+            closeExportOptions();
+            void handleExportPdf();
           }}
+          disabled={exportDisabled}
+          data-testid="export-pdf"
           variant="ghost"
-          className={`  rounded-none px-0 w-full text-xs flex justify-start text-black hover:bg-transparent ${mobile ? "bg-white py-6 border-none rounded-lg" : ""
-            }`}
+          className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${
+            mobile ? "border-none bg-white" : ""
+          }`}
         >
           PDF
-          <ArrowUpRight className="w-3.5 h-3.5" />
+          <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         </Button>
-        <Button
+        {!isAuthoredDeck && <Button
           onClick={() => {
-            handleExportPptx();
-            setOpen(false);
+            closeExportOptions();
+            void handleExportPptx();
           }}
+          disabled={exportDisabled}
+          data-testid="export-pptx"
           variant="ghost"
-          className={`w-full flex px-0 justify-start text-xs text-black hover:bg-transparent  ${mobile ? "bg-white py-6" : ""
-            }`}
+          className={`h-auto min-h-10 w-full justify-between gap-3 whitespace-normal rounded-lg px-3 py-2.5 text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] ${
+            mobile ? "bg-white" : ""
+          }`}
         >
           PPTX
-          <ArrowUpRight className="w-3.5 h-3.5" />
-        </Button>
+          <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        </Button>}
       </div>
     </div>
   );
@@ -371,19 +626,20 @@ const PresentationHeader = ({
   const titleBlock = (
     <div
       className={cn(
-        "min-w-0 max-w-[min(640px,calc(100vw-12rem))] flex-1 transition-[box-shadow] duration-200",
+        "min-w-0 flex-1 transition-[box-shadow] duration-200",
         isEditingTitle && "relative z-[60]"
       )}
     >
       {isEditingTitle ? (
-        <div className="flex items-stretch w-[450px]  gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-[#5141e5]/15">
+        <div className="flex w-full max-w-[450px] items-stretch gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-[#5141e5]/15">
           <input
             ref={titleInputRef}
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
             onBlur={handleTitleBlur}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              // Skip while an IME composition is active so confirming Korean input doesn't commit.
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 titleBlurIntentRef.current = "save";
                 commitTitleEdit();
@@ -393,29 +649,29 @@ const PresentationHeader = ({
                 cancelTitleEdit();
               }
             }}
-            placeholder="Presentation title"
+            placeholder="발표자료 제목"
             className="min-w-0 flex-1 bg-transparent py-2 pr-2 font-unbounded text-base leading-tight text-[#101323] placeholder:text-[#101323]/35 outline-none border-0 focus:ring-0"
-            aria-label="Presentation title"
+            aria-label="발표자료 제목"
           />
           <div className="flex shrink-0 items-center gap-0.5 border-l border-[#EDECEC] pl-1 ml-0.5">
-            <ToolTip content="Save · Enter">
+            <ToolTip content="저장 · Enter">
               <button
                 type="button"
                 onMouseDown={onTitleSaveMouseDown}
                 onClick={commitTitleEdit}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-[#5141e5] hover:bg-[#5141e5]/10 transition-colors"
-                aria-label="Save title"
+                aria-label="제목 저장"
               >
                 <Check className="h-4 w-4" strokeWidth={2.25} />
               </button>
             </ToolTip>
-            <ToolTip content="Cancel · Esc">
+            <ToolTip content="취소 · Esc">
               <button
                 type="button"
                 onMouseDown={onTitleCancelMouseDown}
                 onClick={cancelTitleEdit}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-[#101323]/55 hover:bg-[#F6F6F9] hover:text-[#101323] transition-colors"
-                aria-label="Cancel editing title"
+                aria-label="제목 편집 취소"
               >
                 <X className="h-4 w-4" strokeWidth={2.25} />
               </button>
@@ -426,20 +682,21 @@ const PresentationHeader = ({
         <button
           type="button"
           onClick={beginTitleEdit}
-          disabled={isStreaming || !presentationData}
+          disabled={!mutationsEnabled || isStreaming || !presentationData}
+          data-testid="presentation-title-edit"
           className={cn(
             "group/title flex w-full min-w-0 items-center gap-2.5 rounded-[14px] px-3 py-2 text-left -mx-3 transition-colors",
             "hover:bg-[#F6F6F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5] focus-visible:ring-offset-2",
             "disabled:pointer-events-none disabled:opacity-100 disabled:hover:bg-transparent"
           )}
         >
-          <h2 className="min-w-0 flex-1 font-unbounded text-lg w-[450px] leading-snug text-[#101323]">
+          <h2 className="min-w-0 flex-1 font-unbounded text-lg leading-snug text-[#101323]">
             <MarkdownRenderer
-              content={presentationData?.title || "Presentation"}
+              content={presentationData?.title || "발표자료"}
               className="mb-0 min-w-0 overflow-hidden text-ellipsis line-clamp-1 text-sm text-[#101323] prose-p:my-0 prose-headings:my-0"
             />
           </h2>
-          {presentationData && !isStreaming && (
+          {mutationsEnabled && presentationData && !isStreaming && (
             <Pencil
               className="h-3.5 w-3.5 shrink-0 text-[#101323]/40 transition-all duration-200 group-hover/title:text-[#5141e5] opacity-80 sm:opacity-0 sm:group-hover/title:opacity-100 group-hover/title:opacity-100"
               aria-hidden
@@ -452,44 +709,136 @@ const PresentationHeader = ({
 
   return (
     <>
-      <div className="py-[18px] px-4 sticky top-0 bg-white z-50 shadow-sm font-syne flex justify-between items-center gap-4">
-        <div className="flex items-center gap-3">
-          <img
+      <div className="sticky top-0 z-50 flex w-full min-w-0 items-center justify-between gap-4 bg-white px-4 py-[18px] font-syne shadow-sm">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <Image
             onClick={() => {
               router.push("/dashboard");
             }}
             src="/logo-with-bg.png"
             alt=""
-            className="w-10 h-10 cursor-pointer object-contain"
+            width={40}
+            height={40}
+            className="h-10 w-10 shrink-0 cursor-pointer object-contain"
           />
-          {presentationData && !isStreaming && !isEditingTitle ? (
-            <ToolTip content="Rename presentation">{titleBlock}</ToolTip>
+          {mutationsEnabled && presentationData && !isStreaming && !isEditingTitle ? (
+            <ToolTip content="발표자료 이름 변경">{titleBlock}</ToolTip>
           ) : (
             titleBlock
           )}
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-2.5">
           {isPresentationSaving && (
             <div className="flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             </div>
           )}
+          {isPresentationSaveFailed && !isPresentationSaving && (
+            <div className="flex items-center gap-1.5 text-red-600" role="status">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span className="text-xs font-medium">저장 안 됨</span>
+            </div>
+          )}
+          {mutationsEnabled && presentationData && isAuthoredDeck ? (
+            <>
+              <AuthoredTemplateChanger
+                presentationId={presentation_id}
+                currentStyleId={getAuthoredStyleId(presentationData.theme)}
+                disabled={isStreaming || isPresentationSaving}
+              />
+              <AuthoredQualityReview
+                presentationId={presentation_id}
+                currentSlide={currentSlide}
+                slideCount={presentationData.slides?.length || 0}
+                disabled={isStreaming || isPresentationSaving}
+                onReload={onReload}
+              />
+              <AuthoredPageRemake
+                presentationId={presentation_id}
+                currentSlide={currentSlide}
+                disabled={isStreaming || isPresentationSaving}
+                onReload={onReload}
+              />
+            </>
+          ) : mutationsEnabled ? (
+            presentationData?.slides &&
+            !presentationData.slides?.[0]?.layout?.includes("custom") && (
+              <ThemeSelector
+                current_theme={presentationData?.theme || {}}
+                themes={themes}
+              />
+            )
+          ) : null}
+
+          {chatFirstEnabled && presentationData && isAuthoredDeck && (
+            <>
+              <AuthoredTemplateChanger
+                presentationId={presentation_id}
+                currentStyleId={getAuthoredStyleId(presentationData.theme)}
+                disabled={
+                  !workspaceCommandsEnabled ||
+                  !onWorkspaceCommand ||
+                  isStreaming === true ||
+                  isPresentationSaving
+                }
+                onWorkspaceCommand={onWorkspaceCommand}
+              />
+              <AuthoredPageRemake
+                presentationId={presentation_id}
+                currentSlide={currentSlide}
+                disabled={
+                  !workspaceCommandsEnabled ||
+                  !onWorkspaceCommand ||
+                  isStreaming === true ||
+                  isPresentationSaving
+                }
+                chatFirstEnabled
+                workspaceCommandsEnabled={workspaceCommandsEnabled}
+                onWorkspacePageRemakeRequest={onWorkspacePageRemakeRequest}
+              />
+              <Button
+                type="button"
+                variant="toolbar"
+                size="toolbar"
+                disabled={
+                  !workspaceCommandsEnabled ||
+                  !onWorkspaceQualityReviewRequest ||
+                  isStreaming === true
+                }
+                onClick={handleQualityReview}
+                data-testid="workspace-quality-review"
+                aria-label="채팅에서 고품질 검수 옵션 열기"
+              >
+                <ScanSearch className="h-4 w-4" aria-hidden="true" />
+                고품질 검수
+              </Button>
+            </>
+          )}
+
           <div className="flex items-center gap-2 bg-[#F6F6F9] px-3.5 h-[38px] border border-[#EDECEC] rounded-[80px]">
-            <ToolTip content="Regenerate Presentation">
+            <ToolTip content="발표자료 재생성">
               <button
                 type="button"
                 onClick={() => setIsRegenerateConfirmOpen(true)}
-                className="group"
+                data-testid="presentation-regenerate"
+                aria-label="발표자료 재생성"
+                className={cn("group", !mutationsEnabled && "hidden")}
               >
                 <RotateCcw className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
               </button>
             </ToolTip>
             <Separator orientation="vertical" className="h-4" />
-            <ToolTip content="Undo">
+            <ToolTip content="실행 취소">
               <button
+                type="button"
                 disabled={!canUndo}
-                className=" disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group"
+                data-testid="presentation-undo"
+                aria-label="실행 취소"
+                className={cn(
+                  "disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group",
+                  !historyEnabled && "hidden",
+                )}
                 onClick={() => {
                   onUndo();
                 }}
@@ -498,10 +847,16 @@ const PresentationHeader = ({
               </button>
             </ToolTip>
             <Separator orientation="vertical" className="h-4" />
-            <ToolTip content="Redo">
+            <ToolTip content="다시 실행">
               <button
+                type="button"
                 disabled={!canRedo}
-                className=" disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group"
+                data-testid="presentation-redo"
+                aria-label="다시 실행"
+                className={cn(
+                  "disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer group",
+                  !historyEnabled && "hidden",
+                )}
                 onClick={() => {
                   onRedo();
                 }}
@@ -510,11 +865,13 @@ const PresentationHeader = ({
               </button>
             </ToolTip>
             <Separator orientation="vertical" className="h-4 w-[2px]" />
-            <ToolTip content="Present">
+            <ToolTip content="발표 시작">
               <button
+                type="button"
                 onClick={() => {
-                  const to = `?id=${presentation_id}&mode=present&slide=${currentSlide || 0
-                    }`;
+                  const to = `?id=${presentation_id}&mode=present&slide=${
+                    currentSlide || 0
+                  }`;
                   trackEvent(MixpanelEvent.Presentation_Mode_Entered, {
                     pathname,
                     presentation_id,
@@ -529,61 +886,164 @@ const PresentationHeader = ({
                   !presentationData?.slides ||
                   presentationData?.slides.length === 0
                 }
+                aria-label="발표 시작"
                 className="cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
               >
                 <Play className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
               </button>
             </ToolTip>
+            <Separator orientation="vertical" className="h-4" />
+            <VersionHistoryPopover
+              presentationId={presentation_id}
+              disabled={isStreaming === true}
+              onRestored={() => onReload?.()}
+              allowRestore={historyEnabled}
+              chatFirstEnabled={chatFirstEnabled}
+              workspaceCommandsEnabled={workspaceCommandsEnabled}
+              onWorkspaceCommand={onWorkspaceCommand}
+            />
           </div>
 
-          <ToolTip content="Keyboard shortcuts (?)">
-            <button
-              type="button"
-              aria-label="Keyboard shortcuts"
-              aria-haspopup="dialog"
-              aria-expanded={shortcutsDialogOpen}
-              aria-keyshortcuts="?"
-              data-testid="keyboard-shortcuts-btn"
-              className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-full border border-[#EDECEC] bg-[#F6F6F9] text-[#101323] transition-colors hover:border-[#D8D3FE] hover:bg-[#F0EDFF] hover:text-[#6847F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2"
-              onClick={() => setShortcutsDialogOpen(true)}
-            >
-              <Keyboard
-                aria-hidden="true"
-                className="size-4"
-                strokeWidth={1.8}
-              />
-            </button>
-          </ToolTip>
+          {mutationsEnabled && (
+            <SharePopover
+              presentationId={presentation_id}
+              disabled={isStreaming === true}
+            />
+          )}
+
+          {presentationData && (
+            <GenerationInfoDialog
+              presentationId={presentation_id}
+              disabled={isStreaming === true}
+            />
+          )}
 
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <button
-                className="flex  items-center gap-[7px] px-[18px] py-[11px] rounded-[53px] text-sm font-semibold text-[#101323]"
+                ref={exportTriggerRef}
+                type="button"
+                className="flex h-[38px] items-center gap-[7px] rounded-full px-[18px] text-sm font-semibold text-[#101323] disabled:opacity-50"
                 style={{
                   background:
                     "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
                 }}
-                disabled={isExporting || isStreaming === true}
+                disabled={exportDisabled}
+                data-testid="export-trigger"
+                aria-label={
+                  chatFirstEnabled
+                    ? workspaceCommandsEnabled
+                      ? "채팅에서 내보내기 형식 선택"
+                      : "채팅 작업 연결 대기 중"
+                    : isExporting
+                      ? "내보내는 중"
+                      : "내보내기 형식 선택"
+                }
               >
                 {isExporting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                 ) : (
-                  "Export"
+                  "내보내기"
                 )}{" "}
                 <ArrowRightFromLine className="w-3.5 h-3.5" />
               </button>
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-[200px] rounded-[18px] space-y-2 p-0  "
+              className="w-[min(22rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[18px] space-y-2 p-0"
             >
               <ExportOptions mobile={false} />
             </PopoverContent>
           </Popover>
+          {isExporting && (
+            <span className="sr-only" role="status" aria-live="polite">
+              발표자료를 내보내는 중입니다.
+            </span>
+          )}
         </div>
       </div>
       <Dialog
-        open={isRegenerateConfirmOpen}
+        open={exportQuality !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setExportQuality(null);
+        }}
+      >
+        <DialogContent
+          className="w-[420px] rounded-2xl sm:max-w-[420px]"
+          data-testid="export-quality-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>PPTX 편집 품질</DialogTitle>
+            <DialogDescription>
+              전체 {exportQuality?.totalSlides ?? 0}장 · 편집 요소 포함{" "}
+              {exportQuality?.editableSlides ?? 0}장 · 이미지 fallback{" "}
+              {exportQuality?.imageFallbackSlides ?? 0}장
+            </DialogDescription>
+          </DialogHeader>
+          {exportQuality &&
+            (exportQuality.status !== "fully-editable" ||
+              exportQuality.imageFallbackSlides > 0 ||
+              exportQuality.rasterFallbackElements > 0) && (
+            <div
+              className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"
+              role="alert"
+            >
+              일부 콘텐츠는 이미지로 남아 완전 편집형이 아닙니다.
+            </div>
+          )}
+          {exportQuality && (
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                네이티브 텍스트 {exportQuality.nativeTextElements}개 · 도형{" "}
+                {exportQuality.nativeShapeElements}개 · 그룹{" "}
+                {exportQuality.nativeGroupElements ?? 0}개 · 이미지{" "}
+                {exportQuality.nativeImageElements}개 · 잔여 raster{" "}
+                {exportQuality.rasterFallbackElements}개
+              </p>
+              {exportQuality.slides.some(
+                (slide) => slide.fallbackReasons.length > 0
+              ) && (
+                <div className="max-h-36 overflow-y-auto rounded-lg bg-gray-50 p-3">
+                  {exportQuality.slides
+                    .filter((slide) => slide.fallbackReasons.length > 0)
+                    .flatMap((slide) =>
+                      (slide.fallbackElements?.length ?? 0) > 0
+                        ? (slide.fallbackElements ?? []).map((element) => (
+                            <p
+                              key={`${slide.slideNumber}:${element.elementId}`}
+                            >
+                              {slide.slideNumber}장 · {element.elementId} (
+                              {element.candidateKind}):{" "}
+                              {element.reasons.join(", ")}
+                            </p>
+                          ))
+                        : [
+                            <p key={slide.slideNumber}>
+                              {slide.slideNumber}장:{" "}
+                              {slide.fallbackReasons.join(", ")}
+                            </p>,
+                          ]
+                    )}
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                {exportQuality.fontEmbeddingStatus?.applied
+                  ? `OOXML 폰트 임베딩 ${exportQuality.fontEmbeddingStatus.embeddedFontFiles}개가 적용되었습니다.`
+                  : exportQuality.fontEmbeddingStatus?.requested
+                    ? "글꼴 포함을 요청했지만 적용되지 않아 호환 typeface/fallback을 사용했습니다."
+                    : "이 내보내기에는 글꼴이 포함되지 않아 호환 typeface/fallback을 사용합니다."}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" onClick={() => setExportQuality(null)}>
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={mutationsEnabled && isRegenerateConfirmOpen}
         onOpenChange={setIsRegenerateConfirmOpen}
       >
         <DialogContent className="w-[360px] rounded-2xl border-0 p-0 shadow-2xl sm:max-w-[360px]">
@@ -592,11 +1052,11 @@ const PresentationHeader = ({
               <AlertTriangle className="h-6 w-6 text-red-500" />
             </div>
             <DialogTitle className="text-lg font-semibold text-[#191919]">
-              Regenerate Presentation?
+              발표자료를 재생성할까요?
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-gray-500">
-              This will replace the current slides with a newly generated
-              version and clear undo history. Your current edits may be lost.
+              현재 슬라이드가 새로 생성된 버전으로 대체되고 실행 취소 기록이
+              삭제됩니다. 현재 편집 내용이 사라질 수 있습니다.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-row border-t border-gray-100 p-0 sm:space-x-0">
@@ -606,7 +1066,7 @@ const PresentationHeader = ({
               onClick={() => setIsRegenerateConfirmOpen(false)}
               className="h-auto flex-1 rounded-none rounded-bl-2xl px-4 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-700"
             >
-              Cancel
+              취소
             </Button>
             <Button
               type="button"
@@ -614,7 +1074,7 @@ const PresentationHeader = ({
               onClick={handleReGenerate}
               className="h-auto flex-1 rounded-none rounded-br-2xl border-l border-gray-100 px-4 py-3.5 text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600"
             >
-              Regenerate
+              재생성
             </Button>
           </DialogFooter>
         </DialogContent>

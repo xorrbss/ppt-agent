@@ -1,0 +1,60 @@
+{
+  "version": "v2-standard",
+  "mode": "template",
+  "template_id": "internal-v2-title-body",
+  "slides": [{
+    "id": "slide-title-body",
+    "ui": {
+      "id": "title-body",
+      "description": "Title and bordered body panel layout",
+      "components": [{
+        "id": "main",
+        "description": "Complete title and body slide composition",
+        "position": { "x": 0, "y": 0 },
+        "elements": [
+          {
+            "type": "container",
+            "position": { "x": 0, "y": 0 },
+            "size": { "width": 1280, "height": 720 },
+            "fill": { "color": "#f7faff" }
+          },
+          {
+            "type": "container",
+            "position": { "x": 0, "y": 0 },
+            "size": { "width": 18, "height": 720 },
+            "fill": { "color": "#2878d8" }
+          },
+          {
+            "type": "text",
+            "position": { "x": 96, "y": 78 },
+            "size": { "width": 1020, "height": 54 },
+            "font": { "size": 44, "family": "Arial", "color": "#123b72", "bold": true, "line_height": 54 },
+            "runs": [{ "text": "Quarterly direction" }],
+            "decorative": false,
+            "name": "title",
+            "max_length": 120,
+            "min_length": 1
+          },
+          {
+            "type": "container",
+            "position": { "x": 100, "y": 228 },
+            "size": { "width": 840, "height": 180 },
+            "fill": { "color": "#eaf3ff" },
+            "stroke": { "color": "#2f80ed", "width": 3 }
+          },
+          {
+            "type": "text",
+            "position": { "x": 128, "y": 256 },
+            "size": { "width": 784, "height": 124 },
+            "font": { "size": 25, "family": "Arial", "color": "#173b65", "line_height": 36 },
+            "runs": [{ "text": "Focus the team on reliable delivery." }],
+            "decorative": false,
+            "name": "body",
+            "max_length": 500,
+            "min_length": 1
+          }
+        ]
+      }]
+    }
+  }]
+}

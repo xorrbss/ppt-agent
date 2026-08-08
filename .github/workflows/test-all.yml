@@ -2,110 +2,166 @@ name: Test All Applications
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test-repository-tools:
-    name: Test repository tooling
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run repository tests
-        run: npm test
-
-      - name: Install presentation export runtime
-        run: npm run sync:presentation-export
-
-      - name: Verify presentation export runtime
-        run: npm run check:presentation-export
-
   test-fastapi:
-    name: Test FastAPI
+    name: Test Main FastAPI (locked + system + binary)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: servers/fastapi
     env:
       APP_DATA_DIRECTORY: /tmp/presenton-app-data
       TEMP_DIRECTORY: /tmp/presenton-temp
-      DATABASE_URL: sqlite+aiosqlite:////tmp/presenton-test.db
+      USER_CONFIG_PATH: /tmp/presenton-app-data/userConfig.json
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      DATABASE_URL: sqlite+aiosqlite:///./test.db
       DISABLE_ANONYMOUS_TRACKING: "true"
       DISABLE_IMAGE_GENERATION: "true"
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          cache-dependency-glob: servers/fastapi/uv.lock
-
-      - name: Install locked dependencies
-        run: uv sync --locked --dev
-
-      - name: Create test directories
-        run: mkdir -p "$APP_DATA_DIRECTORY" "$TEMP_DIRECTORY"
-
-      - name: Run all pytest tests
-        run: uv run --locked python -m pytest --verbose --tb=short
-
-  test-nextjs:
-    name: Test Next.js
-    runs-on: ubuntu-latest
+    
     defaults:
       run:
+        working-directory: ./servers/fastapi
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+    
+    - name: Install uv (with Python 3.11)
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      with:
+        python-version: "3.11"
+        working-directory: servers/fastapi
+        enable-cache: true
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libreoffice \
+          fontconfig \
+          chromium \
+          chromium-driver \
+          imagemagick
+    
+    - name: Install locked Python dependencies
+      run: uv sync --frozen
+
+    - name: Prepare runtime directories
+      run: uv run python -c "from pathlib import Path; import os; [Path(os.environ[key]).mkdir(parents=True, exist_ok=True) for key in ('APP_DATA_DIRECTORY', 'TEMP_DIRECTORY')]"
+
+    - name: Run production lifecycle Gate E (real app + worker processes)
+      run: uv run pytest -q --no-header tests/integration/test_workspace_production_lifecycle_gate.py
+
+    - name: Run remaining FastAPI pytest suite (including authored catalogue)
+      run: uv run pytest -q --no-header --ignore=tests/integration/test_workspace_production_lifecycle_gate.py
+
+    - name: Build FastAPI binary
+      run: uv run --with pyinstaller python -m PyInstaller server.spec
+
+  test-nextjs:
+    name: Test Main Next.js
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./servers/nextjs
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: servers/nextjs/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Validate local parity entrypoint mapping
+      working-directory: .
+      run: node scripts/test-local.mjs --dry-run --all
+
+    - name: Run shared Next.js CI Node suite
+      working-directory: .
+      run: npm run test:next-ci
+
+    - name: Type-check all Next.js TypeScript sources
+      run: npx tsc --noEmit -p tsconfig.json
+
+    - name: Lint application
+      run: npm run lint
+
+    - name: Build application
+      env:
+        NEXT_PUBLIC_FAST_API: http://localhost:8000
+        NEXT_PUBLIC_URL: http://localhost:3000
+      run: npm run build
+    
+    # Gate on the component tests that run under the framework:react+webpack
+    # config. The manual webpack adapter remains necessary with Next 16; Cypress
+    # 15 itself is supported by this job's Node 22 runtime.
+    # The official action handles Xvfb + Linux Electron deps; npm ci already
+    # installed the binary, so install: false.
+    - name: Cypress component tests (gate — adaptive editor + theme + upload)
+      uses: cypress-io/github-action@fa4a118725a8f001170d49631ea89e5d66fee626 # v7.4.1
+      with:
         working-directory: servers/nextjs
+        component: true
+        spec: "**/AdaptiveBlockControls.cy.tsx,**/AdaptivePropertyControls.cy.tsx,**/ChartLeaf.cy.tsx,**/Variants.cy.tsx,**/UploadPage.cy.tsx,**/ThemeComposer.cy.tsx,**/TemplateSelection.cy.tsx,**/presentationGenUpload.cy.ts,**/presentation-generation.cy.ts,**/api/authored.cy.ts,**/usePresentationGeneration.cy.tsx,**/PresentationHeader.cy.tsx,**/Chat.cy.tsx,**/WorkspaceChatPanel.cy.tsx,**/SharePopover.cy.tsx,**/TemplateV2Studio.cy.tsx,**/TemplateV2Studio.matrix.cy.tsx,**/TemplateV2SelectionToolbar.cy.tsx,**/VectorToolbar.vector-geometry.cy.tsx,**/ChartTableToolbar.cy.tsx,**/TemplateV2PptxImportPanel.cy.tsx,**/TemplateV2ChartCopilotPanel.cy.tsx,**/TemplateV2TableEditorPanel.cy.tsx,**/TemplateV2QualityInspector.cy.tsx,**/TemplateV2ImageReplacementPanel.cy.tsx"
+        install: false
+
+  workspace-e2e:
+    name: Workspace chat-first browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      WORKSPACE_E2E_ARTIFACT_DIR: ${{ github.workspace }}/test-artifacts/workspace-e2e
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: servers/nextjs/package-lock.json
+    - name: Set up Node.js
+      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: servers/nextjs/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+    - name: Install uv (with Python 3.11)
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      with:
+        python-version: "3.11"
+        working-directory: servers/fastapi
+        enable-cache: true
 
-      - name: Run Node.js tests
-        run: npm test
+    - name: Install locked application dependencies
+      run: |
+        npm ci --prefix servers/nextjs
+        uv sync --frozen --directory servers/fastapi
 
-      - name: Run ESLint
-        run: npm run lint
+    - name: Run isolated workspace E2E suites
+      working-directory: servers/nextjs
+      run: xvfb-run -a npm run test:workspace-e2e
 
-      - name: Build application
-        env:
-          NEXT_PUBLIC_FAST_API: http://localhost:8000
-          NEXT_PUBLIC_URL: http://localhost:3000
-        run: npm run build
+    - name: Upload workspace E2E diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: workspace-e2e-${{ github.sha }}
+        path: |
+          test-artifacts/workspace-e2e
+          servers/nextjs/cypress/screenshots
+          servers/nextjs/cypress/videos
+        if-no-files-found: warn
+        retention-days: 14
 
-      - name: Run Cypress component tests
-        run: npx cypress run --component --browser electron

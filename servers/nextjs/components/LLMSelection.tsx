@@ -47,7 +47,7 @@ export default function LLMProviderSelection({
   const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
   useEffect(() => {
     onConfigChange(llmConfig);
-  }, [llmConfig]);
+  }, [llmConfig, onConfigChange]);
 
   useEffect(() => {
     const needsModelSelection =
@@ -68,6 +68,8 @@ export default function LLMProviderSelection({
       ((llmConfig.IMAGE_PROVIDER === "dall-e-3" && !llmConfig.OPENAI_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5" &&
           !llmConfig.OPENAI_API_KEY) ||
+        (llmConfig.IMAGE_PROVIDER === "gpt-image-2" &&
+          !llmConfig.OPENAI_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "gemini_flash" &&
           !llmConfig.GOOGLE_API_KEY) ||
         (llmConfig.IMAGE_PROVIDER === "nanobanana_pro" &&
@@ -76,6 +78,8 @@ export default function LLMProviderSelection({
         (llmConfig.IMAGE_PROVIDER === "pixabay" && !llmConfig.PIXABAY_API_KEY));
 
     const needsApiKey = needsProviderApiKey || needsImageProviderApiKey;
+
+    const needsOllamaUrl = llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_URL;
 
     const needsComfyUIConfig =
       !llmConfig.DISABLE_IMAGE_GENERATION &&
@@ -99,23 +103,26 @@ export default function LLMProviderSelection({
       isDisabled:
         needsModelSelection ||
         needsApiKey ||
+        needsOllamaUrl ||
         needsComfyUIConfig ||
         needsOpenWebUIImageUrl ||
         needsOpenAICompatImageConfig,
       text: needsModelSelection
-        ? "Please Select a Model"
+        ? "모델을 선택하세요"
         : needsApiKey
-          ? "Please Enter API Key"
-          : needsComfyUIConfig
-            ? "Please Configure ComfyUI"
-            : needsOpenWebUIImageUrl
-              ? "Please Enter Open WebUI URL"
-              : needsOpenAICompatImageConfig
-                ? "Please Configure Custom Image API"
-                : "Save Configuration",
+          ? "API 키를 입력하세요"
+          : needsOllamaUrl
+            ? "Ollama URL을 입력하세요"
+            : needsComfyUIConfig
+              ? "ComfyUI를 설정하세요"
+              : needsOpenWebUIImageUrl
+                ? "Open WebUI URL을 입력하세요"
+                : needsOpenAICompatImageConfig
+                  ? "사용자 지정 이미지 API를 설정하세요"
+                  : "설정 저장",
       showProgress: false,
     });
-  }, [llmConfig]);
+  }, [llmConfig, setButtonState]);
 
   const input_field_changed = (new_value: string | boolean, field: string) => {
     const updatedConfig = updateLLMConfig(llmConfig, field, new_value);
@@ -167,6 +174,16 @@ export default function LLMProviderSelection({
   };
 
   useEffect(() => {
+    if (!llmConfig.USE_CUSTOM_URL) {
+      setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
+    } else {
+      if (!llmConfig.OLLAMA_URL) {
+        setLlmConfig({ ...llmConfig, OLLAMA_URL: "http://localhost:11434" });
+      }
+    }
+  }, [llmConfig, llmConfig.USE_CUSTOM_URL]);
+
+  useEffect(() => {
     setLlmConfig((prevConfig) => {
       const updates: Partial<LLMConfig> = {};
 
@@ -178,6 +195,10 @@ export default function LLMProviderSelection({
         } else {
           updates.IMAGE_PROVIDER = "pexels";
         }
+      }
+
+      if (!prevConfig.OLLAMA_URL) {
+        updates.OLLAMA_URL = "http://localhost:11434";
       }
 
       if (Object.keys(updates).length === 0) {
@@ -204,6 +225,13 @@ export default function LLMProviderSelection({
         !prevConfig.GPT_IMAGE_1_5_QUALITY
       ) {
         updates.GPT_IMAGE_1_5_QUALITY = "medium";
+      }
+
+      if (
+        prevConfig.IMAGE_PROVIDER === "gpt-image-2" &&
+        !prevConfig.GPT_IMAGE_2_QUALITY
+      ) {
+        updates.GPT_IMAGE_2_QUALITY = "medium";
       }
 
       if (Object.keys(updates).length === 0) {
@@ -280,6 +308,7 @@ export default function LLMProviderSelection({
             <OllamaConfig
               ollamaModel={llmConfig.OLLAMA_MODEL || ""}
               ollamaUrl={llmConfig.OLLAMA_URL || ""}
+              useCustomUrl={llmConfig.USE_CUSTOM_URL || false}
               onInputChange={input_field_changed}
             />
           </TabsContent>

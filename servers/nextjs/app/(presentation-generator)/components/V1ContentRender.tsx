@@ -1,261 +1,268 @@
 "use client";
 
-import React, { useMemo, useState, type FormEvent } from "react";
+import React, { useLayoutEffect, useMemo, useRef } from "react";
+import EditableLayoutWrapper from "../components/EditableLayoutWrapper";
 import SlideErrorBoundary from "../components/SlideErrorBoundary";
-
-import { ArrowUp, PenLine } from "lucide-react";
+import TiptapTextReplacer, { EditBinding } from "../components/TiptapTextReplacer";
+import { EditableTextProvider } from "../components/EditableTextContext";
 import {
-    type TemplateV2Layout,
-} from "@/components/slide-editor/importing/template-v2-import";
-import { TemplateV2KonvaSlide } from "@/components/slide-editor/surface/TemplateV2KonvaSlide";
-import { TemplateV2HtmlSlidePreview } from "./TemplateV2HtmlSlidePreview";
-import {
-    BLANK_TEMPLATE_V2_LAYOUT,
-    isBlankPresentationSlide,
-    isTemplateV2Slide as isTemplateV2PresentationSlide,
-} from "../_shared/blank-slide";
-import {
-    PRESENTON_BLANK_SLIDE_PROMPT_EVENT,
-    type BlankSlidePromptEventDetail,
-} from "../_shared/blank-slide-prompt-event";
-
-const TEMPLATE_V2_PREVIEW_SCALE = 0.085;
+    cropScaleFromProperties,
+    imageCropDomStyle,
+    normalizeImageFocusPoint,
+    resolveImageEditorProperties,
+} from "@/components/slide-editor/images/imageCrop";
+import { validate as uuidValidate } from 'uuid';
+import { getLayoutByLayoutId } from "@/app/presentation-templates";
+import { useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
+import { updateSlideContent, updateAdaptiveBlock } from "@/store/slices/presentationGeneration";
+import { resolveAuthoredImageUrl } from "@/utils/api";
+import { useDispatch } from "react-redux";
+import { Loader2 } from "lucide-react";
+import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
 
 
-function createTemplateV2PromptPreviewSlide(
-    layout: TemplateV2Layout,
-    slideIndex: number,
-) {
-    return {
-        id: `template-v2-prompt-preview-${slideIndex}`,
-        content: {},
-        ui: layout,
-        layout: typeof layout.id === "string" ? layout.id : `slide-${slideIndex}`,
-        layout_group: "template-v2",
-    };
-}
 
-function TemplateV2PromptOverlay({
-    layout,
-    slideIndex,
-    showLayoutPreview,
-    onDismiss,
-}: {
-    layout: TemplateV2Layout;
-    slideIndex: number;
-    showLayoutPreview: boolean;
-    onDismiss?: () => void;
-}) {
-    const [prompt, setPrompt] = useState("");
-    const [isPromptVisible, setIsPromptVisible] = useState(true);
 
-    const dismissPrompt = () => {
-        setIsPromptVisible(false);
-        onDismiss?.();
-    };
+export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml = false }: { slide: any, isEditMode: boolean, theme?: any, enableEditMode?: boolean, preferAuthoredHtml?: boolean }) => {
+    const dispatch = useDispatch();
+    const containerRef = useRef<HTMLDivElement | null>(null);
 
-    const submitPrompt = (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        const trimmedPrompt = prompt.trim();
-        if (!trimmedPrompt || typeof window === "undefined") return;
+    // Read-only rendering is also used by the browser-backed PPT export. Keep
+    // persisted fit/focus/crop values visible there, without mounting the
+    // interactive EditableLayoutWrapper.
+    useLayoutEffect(() => {
+        if (isEditMode || !containerRef.current) return;
 
-        window.dispatchEvent(
-            new CustomEvent<BlankSlidePromptEventDetail>(
-                PRESENTON_BLANK_SLIDE_PROMPT_EVENT,
-                {
-                    detail: {
-                        prompt: trimmedPrompt,
-                        slideIndex,
-                        layoutId:
-                            typeof layout.id === "string" ? layout.id : null,
-                        promptKind: showLayoutPreview ? "layout" : "blank",
-                        layout: showLayoutPreview ? layout : null,
-                    },
-                },
-            ),
-        );
-        setPrompt("");
-        dismissPrompt();
-    };
+        containerRef.current.querySelectorAll("img").forEach((image, index) => {
+            const properties = resolveImageEditorProperties(slide.properties, index);
+            const style = imageCropDomStyle(
+                properties.initialObjectFit || "cover",
+                normalizeImageFocusPoint(properties.initialFocusPoint),
+                cropScaleFromProperties(properties)
+            );
 
-    if (!isPromptVisible) return null;
+            image.style.objectFit = style.objectFit;
+            image.style.objectPosition = style.objectPosition;
+            image.style.transform = style.transform;
+            image.style.transformOrigin = style.transformOrigin;
+        });
+    }, [isEditMode, slide.id, slide.properties]);
 
-    return (
-        <div className="pointer-events-none absolute inset-0 z-20 font-syne">
-            <div className="absolute inset-0 bg-white" aria-hidden="true" />
-            <div className="absolute left-[76px] top-[76px] text-[44px] font-medium leading-none text-[#191919]/[0.04]">
-                New page
-            </div>
-            <div
-                aria-hidden="true"
-                className="pointer-events-auto absolute inset-0"
-                onPointerDown={dismissPrompt}
-            />
-            {showLayoutPreview ? (
-                <div className="pointer-events-none absolute left-[150px] top-[202px] h-[61px] w-[109px] overflow-hidden rounded-[4px] border border-[#EDEEEF] bg-white shadow-[0_4px_14px_rgba(16,24,40,0.08)]">
-                    <div
-                        className="absolute left-0 top-0"
-                        style={{
-                            width: 1280,
-                            height: 720,
-                            transform: `scale(${TEMPLATE_V2_PREVIEW_SCALE})`,
-                            transformOrigin: "top left",
-                        }}
-                    >
-                        <TemplateV2HtmlSlidePreview
-                            slide={createTemplateV2PromptPreviewSlide(
-                                layout,
-                                slideIndex,
-                            )}
-                            fixedSize
-                        />
-                    </div>
-                </div>
-            ) : null}
-            <form
-                aria-label="Create slide from prompt"
-                onSubmit={submitPrompt}
-                onPointerDown={(event) => event.stopPropagation()}
-                className="pointer-events-auto absolute left-1/2 top-[292px] flex h-[104px] w-[980px] max-w-[calc(100%_-_160px)] -translate-x-1/2 items-center rounded-[14px] border border-dashed border-[#E3E4EA] bg-white/90 px-4 shadow-[0_10px_30px_rgba(16,24,40,0.03)]"
-            >
-                <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <PenLine className="mt-1 h-5 w-5 shrink-0 text-[#191919]" strokeWidth={1.7} />
-                    <div className="min-w-0 flex-1">
-                        <label
-                            htmlFor={`blank-slide-prompt-${slideIndex}`}
-                            className="block text-[18px] font-normal leading-[22px] text-[#333333]"
-                        >
-                            Write prompt
-                        </label>
-                        <input
-                            id={`blank-slide-prompt-${slideIndex}`}
-                            autoFocus
-                            value={prompt}
-                            onChange={(event) => setPrompt(event.target.value)}
-                            placeholder="Start with your idea... we'll handle the slides"
-                            className="mt-3 h-8 w-full border-0 bg-transparent p-0 text-[18px] font-normal leading-8 text-[#191919] outline-none placeholder:text-[#9B9BA1]"
-                        />
-                    </div>
-                </div>
-                <button
-                    type="submit"
-                    aria-label="Create slide"
-                    disabled={!prompt.trim()}
-                    style={{
-                        background:
-                            "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-                    }}
-                    className="ml-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-full  text-[#191919] transition hover:bg-[#E1E3E8] disabled:cursor-not-allowed disabled:text-[#9B9BA1] disabled:hover:bg-[#ECEEF2]"
-                >
-                    <ArrowUp className="h-5 w-5" strokeWidth={2.1} />
-                </button>
-            </form>
-        </div>
+    // Context consumed by in-tree <EditableText> in migrated templates. Binds edits
+    // by explicit path (no DOM surgery / text matching). Templates still wrapped in
+    // TiptapTextReplacer for any text not yet migrated (the two coexist).
+    const editableCtx = useMemo(
+        () => ({
+            slideIndex: slide.index,
+            isEditMode: Boolean(isEditMode),
+            onEdit: (path: string, content: string) =>
+                dispatch(
+                    updateSlideContent({ slideIndex: slide.index, dataPath: path, content })
+                ),
+        }),
+        [slide.index, isEditMode, dispatch]
     );
-}
 
 
-export const V1ContentRender = ({
-    slide,
-    presentationId,
-    isEditMode,
-    fonts,
-    renderIndex,
-    displayScale = 1,
-    enableViewportCulling = false,
-    isSelected = false,
-    showBlankPromptOverlay = false,
-    onBlankPromptOverlayDismiss,
-    showTemplatePromptOverlay = false,
-    onTemplatePromptOverlayDismiss,
-}: {
-    slide: any,
-    presentationId?: string,
-    isEditMode: boolean,
-    theme?: any,
-    fonts?: unknown,
-    renderIndex?: number,
-    displayScale?: number,
-    enableViewportCulling?: boolean,
-    isSelected?: boolean,
-    showBlankPromptOverlay?: boolean,
-    onBlankPromptOverlayDismiss?: () => void,
-    showTemplatePromptOverlay?: boolean,
-    onTemplatePromptOverlayDismiss?: () => void,
-    enableEditMode?: boolean,
-    presentationLayout?: unknown,
-}) => {
+    const customTemplateId = slide.layout_group.startsWith("custom-") ? slide.layout_group.split("custom-")[1] : slide.layout_group;
+    const isCustomTemplate = uuidValidate(customTemplateId) || slide.layout_group.startsWith("custom-");
+
+    // Always call the hook (React hooks rule), but with empty id when not a custom template
+    const { template: customTemplate, loading: customLoading } = useCustomTemplateDetails({
+        id: isCustomTemplate ? customTemplateId : "",
+        name: isCustomTemplate ? slide.layout_group : "",
+        description: ""
+    });
 
 
-    const safeSlide = slide ?? {};
-
-    const isBlankSlide = isBlankPresentationSlide(safeSlide);
-    const isTemplateV2Slide = isTemplateV2PresentationSlide(safeSlide);
-
-
-
+    // Memoize layout resolution to prevent unnecessary recalculations
+    const Layout = useMemo(() => {
+        if (isCustomTemplate) {
+            if (customTemplate) {
+                const layoutId = slide.layout.startsWith("custom-") ? slide.layout.split(":")[1] : slide.layout;
 
 
-    const templateV2Layout = useMemo(() => {
-        if (!isTemplateV2Slide) return null;
-
-        const slideUi = safeSlide.ui;
-        return slideUi &&
-            typeof slideUi === "object" &&
-            !Array.isArray(slideUi)
-            ? slideUi as TemplateV2Layout
-            : null;
-    }, [isTemplateV2Slide, safeSlide.ui]);
+                const compiledLayout = customTemplate.layouts.find(
+                    (layout) => layout.layoutId === layoutId
+                );
 
 
-
-    if (isBlankSlide) {
-        if (!isTemplateV2Slide) {
-            return <div className="h-full w-full bg-white" />;
+                return compiledLayout?.component ?? null;
+            }
+            return null;
+        } else {
+            const template = getLayoutByLayoutId(slide.layout, slide.layout_group);
+            return template?.component ?? null;
         }
+    }, [isCustomTemplate, customTemplate, slide.layout, slide.layout_group]);
+
+    // Authored HTML is the source of truth; the generated PNG is a preview cache.
+    // Main-canvas previews use an isolated HTML frame when requested; thumbnail and
+    // export surfaces retain the PNG cache. PowerPoint export remains the editable
+    // surface; this browser preview is read-only.
+    const isAuthored =
+        slide?.content?.__authored__ === true || slide.layout_group === "authored";
+    if (isAuthored) {
+        const imageRef = slide?.content?.image || slide?.properties?.image;
+        const src = resolveAuthoredImageUrl(imageRef);
+        if (preferAuthoredHtml) {
+            return (
+                <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+                    <div ref={containerRef} className="h-full w-full">
+                        <AuthoredSlidePreview
+                            slideIndex={slide.index}
+                            html={slide.html_content}
+                            imageSrc={src}
+                            preferHtml
+                        />
+                    </div>
+                </SlideErrorBoundary>
+            );
+        }
+        return (
+            <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+                <div
+                    ref={containerRef}
+                    className="aspect-video h-full w-full overflow-hidden bg-white"
+                >
+                    {src ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- Authored slide images may be backend, data, or blob URLs and must render unchanged.
+                        <img
+                            src={src}
+                            alt={`Slide ${slide.index + 1}`}
+                            className="h-full w-full object-cover"
+                            draggable={false}
+                        />
+                    ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-600">
+                            authored 슬라이드 이미지를 찾을 수 없습니다
+                        </div>
+                    )}
+                </div>
+            </SlideErrorBoundary>
+        );
     }
 
-    const directLayout = templateV2Layout ??
-        (isBlankSlide ? BLANK_TEMPLATE_V2_LAYOUT : null);
+    // Show loading state for custom templates
+    if (isCustomTemplate && customLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center aspect-video h-full bg-gray-100 rounded-lg">
+                <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+        );
+    }
 
 
+    if (!Layout) {
+        if (Object.keys(slide.content).length === 0) {
+            return (
+                <div className="flex flex-col items-center cursor-pointer justify-center aspect-video h-full bg-gray-100 rounded-lg">
+                    <p className="text-gray-600 text-center text-base">빈 슬라이드</p>
+                    <p className="text-gray-600 text-center text-sm">이 슬라이드는 비어 있습니다. 편집 버튼을 눌러 내용을 추가하세요.</p>
+                </div>
+            )
+        }
+        return (
+            <div className="flex flex-col items-center justify-center aspect-video h-full bg-gray-100 rounded-lg">
+                <p className="text-gray-600 text-center text-base">
+                    &quot;{slide.layout_group}&quot; 템플릿에서 &quot;{slide.layout}&quot;
+                    레이아웃을 찾을 수 없습니다
+                </p>
+            </div>
+        );
+    }
+    const LayoutComp = Layout as React.ComponentType<{ data: any }>;
+
+    const layoutTree = (
+        <EditableTextProvider value={editableCtx}>
+            <LayoutComp data={{
+                ...slide.content,
+                _logo_url__: theme ? theme.logo_url : null,
+                __companyName__: (theme && theme.company_name) ? theme.company_name : null,
+            }} />
+        </EditableTextProvider>
+    );
+
+    // Built-in templates now edit entirely via in-tree <EditableText>, so they no
+    // longer need the DOM-surgery replacer (which leaked React roots and bound
+    // non-adaptive text by fragile string matching). Only adaptive (sound
+    // data-block-id binding) and custom DB templates (legacy string-match) still
+    // use it.
+    const usesReplacer = slide.layout_group === "adaptive" || isCustomTemplate;
+
+    if (isEditMode) {
+        return (
+            <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+                <div ref={containerRef} className={` `}>
+
+                    <EditableLayoutWrapper
+                        slideIndex={slide.index}
+                        slideData={slide.content}
+                        properties={slide.properties}
+                    >
+                        {usesReplacer ? (
+                            <TiptapTextReplacer
+                                key={slide.id}
+                                slideData={slide.content}
+                                slideIndex={slide.index}
+                                useBlockId={slide.layout_group === "adaptive"}
+                                onContentChange={(
+                                    content: string,
+                                    binding: EditBinding,
+                                    slideIndex?: number
+                                ) => {
+                                    if (!binding.key || slideIndex === undefined) return;
+                                    if (binding.kind === "blockId") {
+                                        dispatch(
+                                            updateAdaptiveBlock({
+                                                slideIndex,
+                                                blockId: binding.key,
+                                                content,
+                                            })
+                                        );
+                                    } else {
+                                        dispatch(
+                                            updateSlideContent({
+                                                slideIndex,
+                                                dataPath: binding.key,
+                                                content,
+                                            })
+                                        );
+                                    }
+                                }}
+                            >
+                                {layoutTree}
+                            </TiptapTextReplacer>
+                        ) : (
+                            layoutTree
+                        )}
+                    </EditableLayoutWrapper>
+
+
+
+                </div>
+            </SlideErrorBoundary>
+
+        );
+    }
     return (
-        <SlideErrorBoundary label={`Slide ${(safeSlide.index ?? 0) + 1}`}>
-            <div className="relative h-full w-full">
-                <TemplateV2KonvaSlide
-                    layout={directLayout ?? BLANK_TEMPLATE_V2_LAYOUT}
-                    isEditMode={isEditMode}
-                    slideId={safeSlide.id ?? null}
-                    presentationId={presentationId}
-                    slideIndex={safeSlide.index ?? 0}
-                    renderIndex={renderIndex}
-                    fonts={fonts}
-                    displayScale={displayScale}
-                    enableViewportCulling={enableViewportCulling}
-                    isSelected={isSelected}
-                />
-                {isEditMode &&
-                    ((showBlankPromptOverlay && isBlankSlide) ||
-                        (showTemplatePromptOverlay && !isBlankSlide)) ? (
-                    <TemplateV2PromptOverlay
-                        layout={directLayout ?? BLANK_TEMPLATE_V2_LAYOUT}
-                        slideIndex={safeSlide.index ?? 0}
-                        showLayoutPreview={!isBlankSlide}
-                        onDismiss={
-                            isBlankSlide
-                                ? onBlankPromptOverlayDismiss
-                                : onTemplatePromptOverlayDismiss
-                        }
-                    />
-                ) : null}
+        <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+            <div ref={containerRef}>
+                {usesReplacer ? (
+                    <TiptapTextReplacer
+                        key={slide.id}
+                        slideData={slide.content}
+                        slideIndex={slide.index}
+                        useBlockId={slide.layout_group === "adaptive"}
+                        readOnly
+                    >
+                        {layoutTree}
+                    </TiptapTextReplacer>
+                ) : (
+                    layoutTree
+                )}
             </div>
         </SlideErrorBoundary>
     );
-
-
-
-
-
-
-
 };
+

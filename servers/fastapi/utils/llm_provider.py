@@ -8,7 +8,6 @@ from constants.llm import (
     DEFAULT_BEDROCK_MODEL,
     DEFAULT_CEREBRAS_MODEL,
     DEFAULT_CODEX_MODEL,
-    DEFAULT_DEEPSEEK_MODEL,
     DEFAULT_FIREWORKS_MODEL,
     DEFAULT_LITELLM_MODEL,
     DEFAULT_GOOGLE_MODEL,
@@ -17,7 +16,6 @@ from constants.llm import (
     DEFAULT_OPENROUTER_MODEL,
     DEFAULT_TOGETHER_MODEL,
     DEFAULT_VERTEX_MODEL,
-    SUPPORTED_CODEX_MODELS,
 )
 from enums.llm_provider import LLMProvider
 from utils.get_env import (
@@ -27,7 +25,6 @@ from utils.get_env import (
     get_bedrock_model_env,
     get_codex_model_env,
     get_custom_model_env,
-    get_deepseek_model_env,
     get_fireworks_model_env,
     get_google_api_key_env,
     get_google_model_env,
@@ -52,7 +49,7 @@ def get_llm_provider():
             status_code=500,
             detail=(
                 "Invalid LLM provider. Please select one of: "
-                "openai, deepseek, google, vertex, azure, bedrock, openrouter, "
+                "openai, google, vertex, azure, bedrock, openrouter, "
                 "fireworks, together, cerebras, anthropic, litellm, "
                 "lmstudio, ollama, custom, codex"
             ),
@@ -61,10 +58,6 @@ def get_llm_provider():
 
 def is_openai_selected():
     return get_llm_provider() == LLMProvider.OPENAI
-
-
-def is_deepseek_selected():
-    return get_llm_provider() == LLMProvider.DEEPSEEK
 
 
 def is_google_selected():
@@ -127,8 +120,6 @@ def get_model():
     selected_llm = get_llm_provider()
     if selected_llm == LLMProvider.OPENAI:
         return get_openai_model_env() or DEFAULT_OPENAI_MODEL
-    elif selected_llm == LLMProvider.DEEPSEEK:
-        return get_deepseek_model_env() or DEFAULT_DEEPSEEK_MODEL
     elif selected_llm == LLMProvider.GOOGLE:
         return get_google_model_env() or DEFAULT_GOOGLE_MODEL
     elif selected_llm == LLMProvider.VERTEX:
@@ -160,14 +151,13 @@ def get_model():
     elif selected_llm == LLMProvider.LMSTUDIO:
         return get_lmstudio_model_env() or DEFAULT_LMSTUDIO_MODEL
     elif selected_llm == LLMProvider.CODEX:
-        codex_model = get_codex_model_env()
-        return codex_model if codex_model in SUPPORTED_CODEX_MODELS else DEFAULT_CODEX_MODEL
+        return get_codex_model_env() or DEFAULT_CODEX_MODEL
     else:
         raise HTTPException(
             status_code=500,
             detail=(
                 "Invalid LLM provider. Please select one of: "
-                "openai, deepseek, google, vertex, azure, bedrock, openrouter, "
+                "openai, google, vertex, azure, bedrock, openrouter, "
                 "fireworks, together, cerebras, anthropic, litellm, "
                 "lmstudio, ollama, custom, codex"
             ),

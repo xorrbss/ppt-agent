@@ -2,15 +2,21 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 import uuid
-import copy
-from sqlalchemy import JSON, Column, DateTime, Enum as SAEnum, ForeignKey, String
+from sqlalchemy import BigInteger, CheckConstraint, JSON, Column, DateTime, ForeignKey, String, Uuid, text
 from sqlmodel import Boolean, Field, SQLModel
 
 from models.presentation_outline_model import PresentationOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.presentation_layout import PresentationLayoutModel
+from models.slide_spec_model import PresentationComposition
 from utils.datetime_utils import get_current_utc_datetime
-from api.v1.auth.context import get_current_owner_id
+from templates.v2.constants import LEGACY_PRESENTATION_VERSION
+from utils.owner_context import get_current_owner_id
+
+PRESENTATION_LIFECYCLE_STAGING = "staging"
+PRESENTATION_LIFECYCLE_PUBLISHED = "published"
+PRESENTATION_LIFECYCLE_GENERATION_FAILED = "generation_failed"
+PRESENTATION_LIFECYCLE_DELETED = "deleted"
 
 
 class PresentationVersion(str, Enum):
@@ -20,28 +26,17 @@ class PresentationVersion(str, Enum):
 
 class PresentationModel(SQLModel, table=True):
     __tablename__ = "presentations"
+    __table_args__ = (
+        CheckConstraint("revision >= 0", name="ck_presentations_revision_nonnegative"),
+    )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
     owner_id: Optional[uuid.UUID] = Field(
         default_factory=get_current_owner_id,
         exclude=True,
-        sa_column=Column(
-            ForeignKey("user.id", ondelete="CASCADE"),
-            nullable=True,
-            index=True,
-        ),
-    )
-    version: PresentationVersion = Field(
-        sa_column=Column(
-            SAEnum(
-                PresentationVersion,
-                values_callable=lambda enum: [item.value for item in enum],
-                name="presentation_version",
-                native_enum=False,
-                create_constraint=True,
-            ),
-            nullable=False,
-        ),
+        # The production FK is managed by Alembic; omit it from ORM metadata so
+        # partial-schema fixtures can create presentations independently.
+        sa_column=Column(Uuid, nullable=True, index=True),
     )
     content: str
     n_slides: int
@@ -71,29 +66,93 @@ class PresentationModel(SQLModel, table=True):
     include_title_slide: bool = Field(sa_column=Column(Boolean), default=True)
     web_search: bool = Field(sa_column=Column(Boolean), default=False)
     theme: Optional[dict] = Field(sa_column=Column(JSON), default=None)
-    fonts: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    # Adaptive composer output (PresentationComposition: SlideSpec[]). NEW column
+    # (additive, nullable) — holds the authoritative adaptive composition; legacy
+    # decks leave it NULL. See docs/adaptive-layout-design-revision.md R3.
+    deck_plan: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    # Explicit generation mode: "template" | "adaptive" | "authored". Authoritative
+    # replacement for the older sentinels (deck_plan non-null → adaptive; theme.mode
+    # / layout is None → authored). Additive, nullable; legacy rows are backfilled by
+    # migration and still read correctly via the is_authored() fallback below.
+    mode: Optional[str] = Field(sa_column=Column(String), default=None)
+    # Persisted presentation-format identity. Legacy/template/adaptive decks
+    # remain v1-standard; native Template V2 decks are explicitly v2-standard.
+    # No existing presentation is converted by this additive field.
+    version: str = Field(
+        sa_column=Column(
+            String,
+            nullable=False,
+            default=LEGACY_PRESENTATION_VERSION,
+            server_default=LEGACY_PRESENTATION_VERSION,
+        ),
+        default=LEGACY_PRESENTATION_VERSION,
+    )
+    # Generation writes may be committed for the internal exporter while still
+    # hidden from discovery/share APIs. Only a successful export publishes them.
+    lifecycle_status: str = Field(
+        sa_column=Column(
+            String,
+            nullable=False,
+            default=PRESENTATION_LIFECYCLE_PUBLISHED,
+            server_default=PRESENTATION_LIFECYCLE_PUBLISHED,
+        ),
+        default=PRESENTATION_LIFECYCLE_PUBLISHED,
+    )
+    # A delete command leaves a minimal tombstone so the durable operation can
+    # append its terminal Event after the destructive transaction commits.
+    # The operation id is intentionally not a foreign key: account cleanup and
+    # legacy hard deletion must not make the tombstone relationship cyclic.
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    deletion_operation_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(Uuid, nullable=True),
+    )
+    # Publication commit token. Intermediate checkpoints never change this;
+    # the final database pointer commit increments it once using compare-and-swap.
+    revision: int = Field(
+        default=0,
+        sa_column=Column(
+            BigInteger,
+            nullable=False,
+            default=0,
+            server_default=text("0"),
+        ),
+    )
+    # Read-only public share link. NULL = not shared. When set, the unguessable
+    # token serves this deck (only) via GET /presentation/public/{share_token}
+    # without the admin session (see SessionAuthMiddleware exemption).
+    share_token: Optional[str] = Field(
+        sa_column=Column(String, unique=True, index=True), default=None
+    )
 
     def get_new_presentation(self):
         return PresentationModel(
             id=uuid.uuid4(),
             owner_id=self.owner_id,
-            version=self.version,
             content=self.content,
             n_slides=self.n_slides,
             language=self.language,
             title=self.title,
-            file_paths=copy.deepcopy(self.file_paths),
-            outlines=copy.deepcopy(self.outlines),
-            layout=copy.deepcopy(self.layout),
-            structure=copy.deepcopy(self.structure),
+            file_paths=self.file_paths,
+            outlines=self.outlines,
+            layout=self.layout,
+            structure=self.structure,
             instructions=self.instructions,
             tone=self.tone,
             verbosity=self.verbosity,
             include_table_of_contents=self.include_table_of_contents,
             include_title_slide=self.include_title_slide,
-            web_search=self.web_search,
-            theme=copy.deepcopy(self.theme),
-            fonts=copy.deepcopy(self.fonts),
+            deck_plan=self.deck_plan,
+            # Carry mode + theme so a derived deck keeps its identity. theme was
+            # previously dropped here, which lost authored brand colours (and the
+            # legacy authored sentinel) on /derive.
+            mode=self.mode,
+            version=self.version,
+            lifecycle_status=self.lifecycle_status,
+            theme=self.theme,
         )
 
     def get_presentation_outline(self):
@@ -114,3 +173,24 @@ class PresentationModel(SQLModel, table=True):
 
     def set_structure(self, structure: PresentationStructureModel):
         self.structure = structure.model_dump()
+
+    def is_authored(self) -> bool:
+        """True for authored-mode decks: the model authored bespoke HTML per slide,
+        rendered to full-bleed images (no React layout/structure — both are None).
+        Such decks are view-only in-app and exported as an image PPTX; callers must
+        not drive them through the template stream/edit/layout paths."""
+        if self.mode is not None:
+            return self.mode == "authored"
+        # Legacy rows written before the mode column existed: fall back to the
+        # original sentinels (theme.mode == "authored", or no React layout).
+        if isinstance(self.theme, dict) and self.theme.get("mode") == "authored":
+            return True
+        return self.layout is None
+
+    def get_deck_plan(self):
+        if not self.deck_plan:
+            return None
+        return PresentationComposition(**self.deck_plan)
+
+    def set_deck_plan(self, composition: PresentationComposition):
+        self.deck_plan = composition.model_dump(mode="json")

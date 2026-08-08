@@ -33,4 +33,3 @@ export function bucketMessageLength(length: number): string {
   if (length < 2000) return "1000-1999";
   return "2000+";
 }
-

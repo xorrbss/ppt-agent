@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
@@ -37,33 +37,29 @@ import {
   isTemplateFreePresentation,
 } from "../../_shared/blank-slide";
 import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
+import { getThumbnailScrollTarget } from "../utils/slideScrollSync";
 
 interface SidePanelProps {
   selectedSlide: number;
-  onSlideClick: (
-    index: number,
-    options?: {
-      promptOverlaySlideId?: string;
-      promptOverlayKind?: "blank" | "layout";
-    },
-  ) => void;
+  onSlideClick: (index: number) => void;
   presentationId: string;
-
   loading: boolean;
+  mutationsEnabled?: boolean;
 }
 
 const SidePanel = ({
   selectedSlide,
   onSlideClick,
   presentationId,
-
   loading,
+  mutationsEnabled = true,
 }: SidePanelProps) => {
   const pathname = usePathname();
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
+  const thumbnailScrollRef = useRef<HTMLDivElement | null>(null);
 
   const { presentationData, isStreaming } = useSelector(
-    (state: RootState) => state.presentationGeneration
+    (state: RootState) => state.presentationGeneration,
   );
 
   const dispatch = useDispatch();
@@ -71,23 +67,42 @@ const SidePanel = ({
   const lastSlideIndex = presentationData?.slides?.length
     ? presentationData.slides.length - 1
     : 0;
-  const lastSlide = presentationData?.slides?.[lastSlideIndex];
-  const lastSlideLayoutGroup =
-    typeof lastSlide?.layout_group === "string" ? lastSlide.layout_group : "";
-  const lastSlideLayoutTemplateId =
-    typeof lastSlide?.layout === "string" ? lastSlide.layout.split(":")[0] : "";
-  const lastSlideTemplateId = lastSlideLayoutGroup.startsWith("template-v2")
-    ? lastSlideLayoutGroup
-    : lastSlideLayoutGroup || lastSlideLayoutTemplateId;
+  const lastSlideTemplateId = presentationData?.slides?.[lastSlideIndex]?.layout
+    ? presentationData.slides[lastSlideIndex].layout.split(":")[0]
+    : "";
   const isTemplateFree = isTemplateFreePresentation(presentationData);
 
+  useEffect(() => {
+    const container = thumbnailScrollRef.current;
+    if (!container) return;
+    const thumbnail = container.querySelector<HTMLElement>(
+      `[data-slide-thumbnail-index="${selectedSlide}"]`,
+    );
+    if (!thumbnail) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const thumbnailRect = thumbnail.getBoundingClientRect();
+    const targetTop =
+      thumbnailRect.top - containerRect.top + container.scrollTop;
+    const target = getThumbnailScrollTarget({
+      scrollTop: container.scrollTop,
+      clientHeight: container.clientHeight,
+      targetTop,
+      targetBottom: targetTop + thumbnailRect.height,
+    });
+    if (target === null) return;
+    container.scrollTo({ top: target, behavior: "smooth" });
+  }, [presentationData?.slides?.length, selectedSlide]);
+
   const handleAddSlideClick = () => {
-    if (!presentationData?.slides?.length || isStreaming) return;
+    if (!mutationsEnabled || !presentationData?.slides?.length || isStreaming) {
+      return;
+    }
 
     if (presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
       notify.warning(
         "Slide limit reached",
-        `You can have up to ${MAX_NUMBER_OF_SLIDES} slides.`
+        `You can have up to ${MAX_NUMBER_OF_SLIDES} slides.`,
       );
       return;
     }
@@ -107,7 +122,7 @@ const SidePanel = ({
         addNewSlide({
           slideData: blankSlide,
           index: lastSlideIndex,
-        })
+        }),
       );
       trackEvent(MixpanelEvent.Presentation_Slide_Added, {
         pathname,
@@ -133,10 +148,11 @@ const SidePanel = ({
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = (event: any) => {
+    if (!mutationsEnabled) return;
     const { active, over } = event;
 
     if (!active || !over || !presentationData?.slides) return;
@@ -144,17 +160,17 @@ const SidePanel = ({
     if (active.id !== over.id) {
       // Find the indices of the dragged and target items
       const oldIndex = presentationData?.slides.findIndex(
-        (item: any) => item.id === active.id
+        (item: any) => item.id === active.id,
       );
       const newIndex = presentationData?.slides.findIndex(
-        (item: any) => item.id === over.id
+        (item: any) => item.id === over.id,
       );
 
       // Reorder the array
       const reorderedArray = arrayMove(
         presentationData?.slides,
         oldIndex,
-        newIndex
+        newIndex,
       );
 
       // Update indices of all slides
@@ -165,7 +181,7 @@ const SidePanel = ({
 
       // Update the store with new order and indices
       dispatch(
-        setPresentationData({ ...presentationData, slides: updatedArray })
+        setPresentationData({ ...presentationData, slides: updatedArray }),
       );
       trackEvent(MixpanelEvent.Presentation_Slides_Reordered, {
         pathname,
@@ -188,6 +204,7 @@ const SidePanel = ({
   }
 
   const shouldShowNewSlideModal =
+    mutationsEnabled &&
     showNewSlideSelection &&
     !isTemplateFree &&
     lastSlideTemplateId &&
@@ -209,12 +226,12 @@ const SidePanel = ({
                 templateID={lastSlideTemplateId}
                 setShowNewSlideSelection={setShowNewSlideSelection}
                 presentationId={presentationId}
-                onSlideAdded={onSlideClick}
+                mutationsEnabled={mutationsEnabled}
               />
             </div>
           </div>
         </div>,
-        document.body
+        document.body,
       )
     : null;
 
@@ -233,30 +250,26 @@ const SidePanel = ({
             onDragEnd={handleDragEnd}
           >
             <div
-              data-slide-thumbnail-scroll-container="true"
+              ref={thumbnailScrollRef}
+              data-testid="slide-thumbnail-scroll"
               className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5"
             >
-              {isStreaming ? (
+              {isStreaming || !mutationsEnabled ? (
                 presentationData &&
                 presentationData?.slides.map((slide: any, index: number) => (
                   <SlideThumbnailCard
-                    key={
-                      slide.id ??
-                      `${slide.type ?? "slide"}-${slide.index ?? index}`
-                    }
+                    key={`${slide.id}-${index}`}
                     slide={slide}
                     index={index}
                     selected={selectedSlide === index}
-                    fonts={presentationData.fonts}
-                    presentationVersion={presentationData.version}
-                    onClick={() => onSlideClick(index)}
+                    onClick={() => onSlideClick(slide.index ?? index)}
                   />
                 ))
               ) : (
                 <SortableContext
                   items={
                     presentationData?.slides.map(
-                      (slide: any) => slide.id || `${slide.index}`
+                      (slide: any) => slide.id || `${slide.index}`,
                     ) || []
                   }
                   strategy={verticalListSortingStrategy}
@@ -265,35 +278,35 @@ const SidePanel = ({
                     presentationData?.slides.map(
                       (slide: any, index: number) => (
                         <SortableSlide
-                          key={
-                            slide.id ??
-                            `${slide.type ?? "slide"}-${slide.index ?? index}`
-                          }
+                          key={`${slide.id}-${index}`}
                           slide={slide}
                           index={index}
                           selectedSlide={selectedSlide}
-                          fonts={presentationData.fonts}
-                          presentationVersion={presentationData.version}
                           onSlideClick={onSlideClick}
                         />
-                      )
+                      ),
                     )}
                 </SortableContext>
               )}
             </div>
           </DndContext>
-          <Separator orientation="horizontal" className=" " />
+          {mutationsEnabled && (
+            <Separator orientation="horizontal" className=" " />
+          )}
 
-          <button
-            type="button"
-            onClick={handleAddSlideClick}
-            className="py-4 gap-2 flex flex-col duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-normal text-[#000000]">
-              Add Slide
-            </span>
-          </button>
+          {mutationsEnabled && (
+            <button
+              type="button"
+              data-testid="side-panel-add-slide"
+              onClick={handleAddSlideClick}
+              className="py-4 gap-2 flex flex-col duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-normal text-[#000000]">
+                슬라이드 추가
+              </span>
+            </button>
+          )}
         </div>
       </div>
       {newSlideModal}

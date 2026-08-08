@@ -1,32 +1,32 @@
 require("dotenv").config();
-import { app, BrowserWindow, dialog, globalShortcut } from "electron";
+import { app, BrowserWindow, globalShortcut } from "electron";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { findUnusedPorts, setupEnv } from "./utils";
+import { findUnusedPorts, setupEnv, setUserConfig } from "./utils";
 import { startFastApiServer, startNextJsServer } from "./utils/servers";
 import {
   baseDir,
   ensureDirectoriesExist,
   fastapiDir,
   getAppDataDir,
-  getCacheDir,
   getTempDir,
   getUserConfigPath,
   initializeAppPaths,
   isDev,
   localhost,
   nextjsDir,
-  resourceBaseDir,
 } from "./utils/constants";
 import { setupIpcHandlers } from "./ipc";
+import { ipcMain } from "electron";
 import { stopActiveExportProcesses } from "./ipc/export_handlers";
+import { setupLibreOfficeInstallHandlers, stopActiveLibreOfficeInstallProcesses } from "./ipc/libreoffice_install_handlers";
+import { setupSetupInstallHandlers, stopActiveSetupInstallProcesses } from "./ipc/setup_install_handlers";
+import { checkDependenciesBeforeWindow } from "./utils/setup-dependencies";
+import { getSofficePath, isLibreOfficeInstalled } from "./utils/libreoffice-check";
 import { getLiteParseRunnerPath } from "./utils/liteparse-check";
-import {
-  buildPathWithImageMagick,
-  resolveImageMagickRuntime,
-  type ImageMagickRuntime,
-} from "./utils/imagemagick-runtime";
+import { getImageMagickBinaryPath, isImageMagickInstalled } from "./utils/imagemagick-check";
+import { isExportChromiumAvailable } from "./utils/export-chromium";
 import { startUpdateChecker, stopUpdateChecker } from "./utils/update-checker";
 import {
   addMainBreadcrumb,
@@ -46,19 +46,8 @@ import {
   prepareChromiumCacheRecovery,
   type ChromiumCacheRecoveryStatus,
 } from "./utils/chromium-cache-recovery";
-import {
-  removeBrokenExportChromiumCaches,
-  resolveLaunchableExportChromiumPath,
-} from "./utils/export-chromium";
-import { syncUserConfigFromEnv } from "./utils/user-config-env";
 
 installSafeConsole();
-
-// Local and ad-hoc signed macOS builds otherwise prompt for Keychain access when
-// Chromium initializes encrypted session storage.
-if (process.platform === "darwin") {
-  app.commandLine.appendSwitch("use-mock-keychain");
-}
 
 // Linux Chromium requires chrome-sandbox to be root-owned mode 4755; unpacked
 // dist/linux-unpacked builds usually lack that. Disable sandbox only when invalid.
@@ -88,6 +77,11 @@ type ManagedServerProcess = Awaited<ReturnType<typeof startFastApiServer>>;
 var fastApiServer: ManagedServerProcess | undefined;
 var nextjsServer: ManagedServerProcess | undefined;
 let isStopping = false;
+const startupStatus: Record<string, string> = {
+  libreoffice: "checking",
+  imagemagick: "checking",
+  chromium: "checking",
+};
 
 function getLiveMainWindow(): BrowserWindow | undefined {
   if (!win || win.isDestroyed()) {
@@ -148,11 +142,6 @@ function resolveExportConverterPath(appRoot: string): string | undefined {
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
-function isDisableAuthEnabledValue(value?: string): boolean {
-  const raw = value?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
-}
-
 function resolveElectronDisableAuth(): string {
   const raw = (
     process.env.ELECTRON_DISABLE_AUTH ?? process.env.DISABLE_AUTH
@@ -163,27 +152,10 @@ function resolveElectronDisableAuth(): string {
   if (["0", "false", "no", "off"].includes(raw)) {
     return "false";
   }
-  if (isDisableAuthEnabledValue(raw)) {
+  if (["1", "true", "yes", "on"].includes(raw)) {
     return "true";
   }
   return "true";
-}
-
-function buildImageMagickEnv(runtime: ImageMagickRuntime | null): Partial<FastApiEnv> {
-  if (!runtime) {
-    return {};
-  }
-
-  const pathKey = process.platform === "win32" && process.env.Path !== undefined
-    ? "Path"
-    : "PATH";
-
-  return {
-    IMAGEMAGICK_BINARY: runtime.binaryPath,
-    MAGICK_HOME: runtime.homeDir,
-    MAGICK_CONFIGURE_PATH: runtime.homeDir,
-    [pathKey]: buildPathWithImageMagick(runtime),
-  };
 }
 
 app.commandLine.appendSwitch('gtk-version', '3');
@@ -204,6 +176,9 @@ const chromiumCacheRecovery = prepareChromiumCacheRecovery(
 );
 safeLog("[Presenton] Electron paths initialized:", electronAppPaths);
 
+// Allow renderer to query initial startup status as soon as it loads.
+ipcMain.handle("startup:get-status", () => startupStatus);
+
 initMainSentry();
 updateSentryRuntimeContext(chromiumCacheRecovery);
 
@@ -216,48 +191,15 @@ safeLog("[Presenton] Startup memory:", {
   memory: memorySnapshotMb(),
 });
 
-function isAllowedMainWindowUrl(url: string, appOrigin: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.origin === appOrigin;
-  } catch {
-    return false;
-  }
-}
-
-function openUrlOutsideApp(mainWindow: BrowserWindow, url: string): void {
-  if (!isSupportedExternalUrl(url)) {
-    safeWarn("[Presenton] Blocked unsupported external URL.");
-    return;
-  }
-
-  void openExternalUrl(url)
-    .then(async (result) => {
-      if (result.success) {
-        return;
-      }
-
-      safeWarn(`[Presenton] Failed to open external URL: ${result.message || "Unknown error"}`);
-      await showOpenTargetErrorDialog({
-        parent: mainWindow,
-        title: "Could Not Open Link",
-        message: "Presenton could not open this link in your browser.",
-        detail: `${result.message || "No application is registered to open this link."}\n\n${url}`,
-      });
-    })
-    .catch((error) => {
-      safeWarn("[Presenton] Failed to handle external URL open:", error);
-    });
-}
-
-const createWindow = (appOrigin: string) => {
+const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
-    show: false, // Reveal once the app URL is ready to avoid a blank flash.
+    show: false, // Reveal once the launch screen has painted to avoid a blank flash.
     backgroundColor: "#f3f5ff",
-    icon: path.join(resourceBaseDir, "resources/ui/assets/images/presenton_short_filled.png"),
+    icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
     webPreferences: {
+        webSecurity: false,
         // Ensure a known preload path and explicit isolation settings so
         // the `contextBridge` API is exposed reliably to renderer pages.
         contextIsolation: true,
@@ -288,20 +230,32 @@ const createWindow = (appOrigin: string) => {
     recordProcessGone("renderer", details);
   });
 
-  const guardMainFrameNavigation = (event: Electron.Event, url: string) => {
-    if (isAllowedMainWindowUrl(url, appOrigin)) {
-      return;
-    }
-    event.preventDefault();
-    openUrlOutsideApp(mainWindow, url);
-  };
-  mainWindow.webContents.on("will-navigate", guardMainFrameNavigation);
-  mainWindow.webContents.on("will-redirect", guardMainFrameNavigation);
-
   // Open external links (e.g. "Download update") in the system browser so the user
   // sees download progress and can manage downloads normally.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    openUrlOutsideApp(mainWindow, url);
+    if (!isSupportedExternalUrl(url)) {
+      safeWarn("[Presenton] Blocked unsupported window open URL.");
+      return { action: "deny" };
+    }
+
+    void openExternalUrl(url)
+      .then(async (result) => {
+        if (result.success) {
+          return;
+        }
+
+        safeWarn(`[Presenton] Failed to open external URL: ${result.message || "Unknown error"}`);
+        await showOpenTargetErrorDialog({
+          parent: mainWindow,
+          title: "Could Not Open Link",
+          message: "Presenton could not open this link in your browser.",
+          detail: `${result.message || "No application is registered to open this link."}\n\n${url}`,
+        });
+      })
+      .catch((error) => {
+        safeWarn("[Presenton] Failed to handle external URL open:", error);
+      });
+
     return { action: "deny" };
   });
 
@@ -339,60 +293,87 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
     const tempDir = getTempDir();
     const userConfigPath = getUserConfigPath();
     const disableAuthForElectron = resolveElectronDisableAuth();
-    const imageMagickRuntime = resolveImageMagickRuntime();
-    const exportPackageRoot = path.join(resourceBaseDir, "resources", "export");
-    const exportConverterPath = resolveExportConverterPath(resourceBaseDir);
-    await removeBrokenExportChromiumCaches();
-    const exportChromiumPath = await resolveLaunchableExportChromiumPath();
-    const puppeteerCacheDir = path.join(getCacheDir(), "puppeteer");
-    const puppeteerTempDir = path.join(tempDir, "puppeteer");
-    await Promise.all([
-      fs.promises.mkdir(puppeteerCacheDir, { recursive: true }),
-      fs.promises.mkdir(puppeteerTempDir, { recursive: true }),
-    ]);
-    if (exportChromiumPath) {
-      safeLog("[Presenton] Export Chromium runtime resolved:", exportChromiumPath);
-    } else {
-      safeWarn(
-        "[Presenton] Export Chromium runtime was not found; Template Studio slide previews will fail until Chromium is installed."
-      );
-    }
-    if (imageMagickRuntime) {
-      safeLog("[Presenton] ImageMagick runtime resolved:", {
-        source: imageMagickRuntime.source,
-        binaryPath: imageMagickRuntime.binaryPath,
-        homeDir: imageMagickRuntime.homeDir,
-      });
-    } else {
-      safeWarn("[Presenton] ImageMagick runtime was not found; LiteParse image conversion will fail until it is bundled or installed.");
-    }
+    const sofficePath = getSofficePath();
+    const exportPackageRoot = path.join(baseDir, "resources", "export");
+    const exportConverterPath = resolveExportConverterPath(baseDir);
     const fastApi = await startFastApiServer(
       fastapiDir,
       fastApiPort,
       {
-        // The child inherits process.env, including every provider supported by
-        // Docker. Keep only Electron-specific overrides here.
         DEBUG: isDev ? "True" : "False",
         CAN_CHANGE_KEYS: process.env.CAN_CHANGE_KEYS,
+        LLM: process.env.LLM,
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+        OPENAI_MODEL: process.env.OPENAI_MODEL,
+        GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+        GOOGLE_MODEL: process.env.GOOGLE_MODEL,
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+        ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+        OLLAMA_URL: process.env.OLLAMA_URL,
+        OLLAMA_MODEL: process.env.OLLAMA_MODEL,
+        CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL,
+        CUSTOM_LLM_API_KEY: process.env.CUSTOM_LLM_API_KEY,
+        CUSTOM_MODEL: process.env.CUSTOM_MODEL,
+        BEDROCK_REGION: process.env.BEDROCK_REGION,
+        BEDROCK_API_KEY: process.env.BEDROCK_API_KEY,
+        BEDROCK_AWS_ACCESS_KEY_ID: process.env.BEDROCK_AWS_ACCESS_KEY_ID,
+        BEDROCK_AWS_SECRET_ACCESS_KEY: process.env.BEDROCK_AWS_SECRET_ACCESS_KEY,
+        BEDROCK_AWS_SESSION_TOKEN: process.env.BEDROCK_AWS_SESSION_TOKEN,
+        BEDROCK_PROFILE_NAME: process.env.BEDROCK_PROFILE_NAME,
+        BEDROCK_MODEL: process.env.BEDROCK_MODEL,
+        FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY,
+        FIREWORKS_MODEL: process.env.FIREWORKS_MODEL,
+        FIREWORKS_BASE_URL: process.env.FIREWORKS_BASE_URL,
+        TOGETHER_API_KEY: process.env.TOGETHER_API_KEY,
+        TOGETHER_MODEL: process.env.TOGETHER_MODEL,
+        TOGETHER_BASE_URL: process.env.TOGETHER_BASE_URL,
+        LMSTUDIO_BASE_URL: process.env.LMSTUDIO_BASE_URL,
+        LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
+        LMSTUDIO_MODEL: process.env.LMSTUDIO_MODEL,
+        PEXELS_API_KEY: process.env.PEXELS_API_KEY,
+        PIXABAY_API_KEY: process.env.PIXABAY_API_KEY,
+        IMAGE_PROVIDER: process.env.IMAGE_PROVIDER,
+        DISABLE_IMAGE_GENERATION: process.env.DISABLE_IMAGE_GENERATION,
+        EXTENDED_REASONING: process.env.EXTENDED_REASONING,
+        TOOL_CALLS: process.env.TOOL_CALLS,
+        DISABLE_THINKING: process.env.DISABLE_THINKING,
+        WEB_GROUNDING: process.env.WEB_GROUNDING,
+        DATABASE_URL: process.env.DATABASE_URL,
+        SLIDESPEC_IMPORT_SHADOW: process.env.SLIDESPEC_IMPORT_SHADOW,
+        SLIDESPEC_REPAIR_SHADOW: process.env.SLIDESPEC_REPAIR_SHADOW,
+        SLIDESPEC_REPAIR_CANARY: process.env.SLIDESPEC_REPAIR_CANARY,
+        SLIDESPEC_REPAIR_APPLY: process.env.SLIDESPEC_REPAIR_APPLY,
+        SLIDESPEC_REPAIR_ALL_SLIDES: process.env.SLIDESPEC_REPAIR_ALL_SLIDES,
+        SLIDESPEC_KILL_SWITCH: process.env.SLIDESPEC_KILL_SWITCH,
+        SLIDESPEC_REPAIR_ROLLOUT_SALT: process.env.SLIDESPEC_REPAIR_ROLLOUT_SALT,
+        DISABLE_ANONYMOUS_TRACKING: process.env.DISABLE_ANONYMOUS_TRACKING,
+        COMFYUI_URL: process.env.COMFYUI_URL,
+        COMFYUI_WORKFLOW: process.env.COMFYUI_WORKFLOW,
+        DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
+        GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
+        GPT_IMAGE_2_QUALITY: process.env.GPT_IMAGE_2_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath,
         MIGRATE_DATABASE_ON_STARTUP: "True",
         DISABLE_AUTH: disableAuthForElectron,
-        PRESENTON_ELECTRON: "true",
-        ...buildImageMagickEnv(imageMagickRuntime),
+        // Resolved by libreoffice-check.ts at startup when available; lets
+        // Python invoke the exact binary path instead of relying on PATH.
+        ...(sofficePath && {
+          SOFFICE_PATH: sofficePath,
+        }),
+        IMAGEMAGICK_BINARY: getImageMagickBinaryPath(),
         LITEPARSE_RUNNER_PATH: getLiteParseRunnerPath(),
-        // Use Electron's embedded runtime for LiteParse so parsing does not
-        // depend on a system-wide Node installation.
-        LITEPARSE_NODE_BINARY: process.execPath,
+        // Packaged builds use Electron's embedded runtime so LiteParse does not
+        // depend on a system-wide Node install. In dev, electron-as-node imports
+        // @llamaindex/liteparse too slowly (>20s, native-addon ABI mismatch),
+        // tripping the backend's readiness timeout — use system Node instead.
+        // PRESENTON_DEV_NODE_BINARY lets the launcher pin an absolute node path.
+        LITEPARSE_NODE_BINARY:
+          process.env.PRESENTON_DEV_NODE_BINARY || (isDev ? "node" : process.execPath),
         ELECTRON_RUN_AS_NODE: "1",
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
         EXPORT_RUNTIME_DIR: exportPackageRoot,
-        PUPPETEER_CACHE_DIR: puppeteerCacheDir,
-        PUPPETEER_TMP_DIR: puppeteerTempDir,
-        ...(exportChromiumPath && {
-          PUPPETEER_EXECUTABLE_PATH: exportChromiumPath,
-        }),
         ...(exportConverterPath && {
           BUILT_PYTHON_MODULE_PATH: exportConverterPath,
         }),
@@ -407,19 +388,18 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
       nextjsPort,
       {
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
-        FAST_API_INTERNAL_URL: process.env.FAST_API_INTERNAL_URL,
         TEMP_DIRECTORY: process.env.TEMP_DIRECTORY,
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
-        USER_CONFIG_PATH: process.env.USER_CONFIG_PATH,
+        NEXT_PUBLIC_USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
+        NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:
+          process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI,
+        NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:
+          process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES,
+        USER_CONFIG_PATH: process.env.NEXT_PUBLIC_USER_CONFIG_PATH,
         APP_DATA_DIRECTORY: appDataDir,
         DISABLE_AUTH: disableAuthForElectron,
         EXPORT_PACKAGE_ROOT: exportPackageRoot,
-        PRESENTON_APP_ROOT: resourceBaseDir,
-        PUPPETEER_CACHE_DIR: puppeteerCacheDir,
-        PUPPETEER_TMP_DIR: puppeteerTempDir,
-        ...(exportChromiumPath && {
-          PUPPETEER_EXECUTABLE_PATH: exportChromiumPath,
-        }),
+        PRESENTON_APP_ROOT: baseDir,
         ...(exportConverterPath && {
           BUILT_PYTHON_MODULE_PATH: exportConverterPath,
         }),
@@ -430,8 +410,6 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
     await nextjs.ready;
   } catch (error) {
     safeError("Server startup error:", error);
-    await stopServers();
-    throw error;
   }
 }
 
@@ -458,6 +436,8 @@ async function forceQuitApp(exitCode = 0) {
   stopUpdateChecker();
   try {
     await stopActiveExportProcesses();
+    await stopActiveSetupInstallProcesses();
+    await stopActiveLibreOfficeInstallProcesses();
     await stopServers();
   } finally {
     app.exit(exitCode);
@@ -466,22 +446,8 @@ async function forceQuitApp(exitCode = 0) {
 
 if (gotSingleInstanceLock) {
 app.whenReady().then(async () => {
-  const disableAuthForElectron = resolveElectronDisableAuth();
-  process.env.DISABLE_AUTH = disableAuthForElectron;
-  process.env.ELECTRON_DISABLE_AUTH = disableAuthForElectron;
-  process.env.PRESENTON_ELECTRON = "true";
-
   // Ensure all required directories exist before starting
   ensureDirectoriesExist();
-
-  // Resolve runtime ports and publish their URLs before creating the first
-  // renderer. Electron renderer processes snapshot their environment at
-  // launch, so assigning these after loadFile/loadURL can leave window.env
-  // empty for the lifetime of the renderer.
-  const [fastApiPort, nextjsPort] = await findUnusedPorts();
-  safeLog(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
-  setupEnv(fastApiPort, nextjsPort);
-  setupIpcHandlers();
 
   await finishChromiumCacheRecovery(
     electronAppPaths.userDataDir,
@@ -489,28 +455,124 @@ app.whenReady().then(async () => {
   );
   updateSentryRuntimeContext(chromiumCacheRecovery);
 
-  // Create the main window hidden; the app splash handles the visible startup state.
-  createWindow(`${localhost}:${nextjsPort}`);
+  // Register install handlers early so the unified setup window can use them
+  setupLibreOfficeInstallHandlers();
+  setupSetupInstallHandlers();
+
+  // Create main window before setup so that when user skips, the main window stays open
+  createWindow();
+  const initialWindow = getLiveMainWindow();
+  if (initialWindow && !initialWindow.webContents.isDestroyed()) {
+    void initialWindow
+      .loadFile(path.join(baseDir, "resources/ui/homepage/index.html"))
+      .catch((error) => {
+        if (!initialWindow.isDestroyed()) {
+          safeWarn("[Presenton] Failed to load startup page", error);
+        }
+      });
+  }
+
+  // Single installer: checks LibreOffice, ImageMagick, and export Chromium; if any are
+  // missing, shows one window that installs them one after another.
+  const setupCompleted = await checkDependenciesBeforeWindow();
+  if (!setupCompleted) {
+    // Block app usage when required setup is not completed.
+    getLiveMainWindow()?.destroy();
+    app.quit();
+    return;
+  }
+
+  // Update startup status after setup (user may have installed one or both)
+  const [loResult, imageMagickOk] = await Promise.all([
+    isLibreOfficeInstalled(),
+    Promise.resolve(isImageMagickInstalled()),
+  ]);
+  startupStatus.libreoffice = loResult.installed ? "installed" : "missing";
+  startupStatus.imagemagick = imageMagickOk ? "installed" : "missing";
+  startupStatus.chromium = isExportChromiumAvailable() ? "installed" : "missing";
+
+  // Ensure the launch screen stays visible and focused during the server boot.
+  const launchWindow = getLiveMainWindow();
+  launchWindow?.show();
+  launchWindow?.focus();
+
+  const sendStartupStatus = (name: string, status: string) => {
+    startupStatus[name] = status;
+    const mainWindow = getLiveMainWindow();
+    if (!mainWindow || mainWindow.webContents.isDestroyed()) {
+      return;
+    }
+    mainWindow.webContents.send("startup:status", { name, status });
+  };
+
+  const statusWindow = getLiveMainWindow();
+  if (statusWindow && !statusWindow.webContents.isDestroyed()) {
+    statusWindow.webContents.once("did-finish-load", () => {
+      sendStartupStatus("libreoffice", startupStatus.libreoffice);
+      sendStartupStatus("imagemagick", startupStatus.imagemagick);
+      sendStartupStatus("chromium", startupStatus.chromium);
+    });
+  }
 
   try {
-    if (process.env.CAN_CHANGE_KEYS !== "false") {
-      syncUserConfigFromEnv();
-    }
+    setUserConfig({
+      CAN_CHANGE_KEYS: process.env.CAN_CHANGE_KEYS,
+      LLM: process.env.LLM,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      OPENAI_MODEL: process.env.OPENAI_MODEL,
+      GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+      GOOGLE_MODEL: process.env.GOOGLE_MODEL,
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+      OLLAMA_URL: process.env.OLLAMA_URL,
+      OLLAMA_MODEL: process.env.OLLAMA_MODEL,
+      CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL,
+      CUSTOM_LLM_API_KEY: process.env.CUSTOM_LLM_API_KEY,
+      CUSTOM_MODEL: process.env.CUSTOM_MODEL,
+      BEDROCK_REGION: process.env.BEDROCK_REGION,
+      BEDROCK_API_KEY: process.env.BEDROCK_API_KEY,
+      BEDROCK_AWS_ACCESS_KEY_ID: process.env.BEDROCK_AWS_ACCESS_KEY_ID,
+      BEDROCK_AWS_SECRET_ACCESS_KEY: process.env.BEDROCK_AWS_SECRET_ACCESS_KEY,
+      BEDROCK_AWS_SESSION_TOKEN: process.env.BEDROCK_AWS_SESSION_TOKEN,
+      BEDROCK_PROFILE_NAME: process.env.BEDROCK_PROFILE_NAME,
+      BEDROCK_MODEL: process.env.BEDROCK_MODEL,
+      FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY,
+      FIREWORKS_MODEL: process.env.FIREWORKS_MODEL,
+      FIREWORKS_BASE_URL: process.env.FIREWORKS_BASE_URL,
+      TOGETHER_API_KEY: process.env.TOGETHER_API_KEY,
+      TOGETHER_MODEL: process.env.TOGETHER_MODEL,
+      TOGETHER_BASE_URL: process.env.TOGETHER_BASE_URL,
+      LMSTUDIO_BASE_URL: process.env.LMSTUDIO_BASE_URL,
+      LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
+      LMSTUDIO_MODEL: process.env.LMSTUDIO_MODEL,
+      PEXELS_API_KEY: process.env.PEXELS_API_KEY,
+      PIXABAY_API_KEY: process.env.PIXABAY_API_KEY,
+      IMAGE_PROVIDER: process.env.IMAGE_PROVIDER,
+      DISABLE_IMAGE_GENERATION: process.env.DISABLE_IMAGE_GENERATION,
+      EXTENDED_REASONING: process.env.EXTENDED_REASONING,
+      TOOL_CALLS: process.env.TOOL_CALLS,
+      DISABLE_THINKING: process.env.DISABLE_THINKING,
+      WEB_GROUNDING: process.env.WEB_GROUNDING,
+      DATABASE_URL: process.env.DATABASE_URL,
+      DISABLE_ANONYMOUS_TRACKING: process.env.DISABLE_ANONYMOUS_TRACKING,
+      COMFYUI_URL: process.env.COMFYUI_URL,
+      COMFYUI_WORKFLOW: process.env.COMFYUI_WORKFLOW,
+      DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
+      GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
+      GPT_IMAGE_2_QUALITY: process.env.GPT_IMAGE_2_QUALITY,
+    })
   } catch (error) {
     safeWarn("[Presenton] Failed to persist startup user config", error);
   }
 
-  try {
-    await startServers(fastApiPort, nextjsPort);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    dialog.showErrorBox(
-      "Presenton Could Not Start",
-      `The local application servers failed to start.\n\n${detail}`,
-    );
-    await forceQuitApp(1);
-    return;
-  }
+  const [fastApiPort, nextjsPort] = await findUnusedPorts();
+  safeLog(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
+
+  //? Setup environment variables to be used in the preloads
+  setupEnv(fastApiPort, nextjsPort);
+  setupIpcHandlers();
+
+  await startServers(fastApiPort, nextjsPort);
   if (isStopping) {
     return;
   }
@@ -520,10 +582,7 @@ app.whenReady().then(async () => {
   }
 
   try {
-    const appPath = isDisableAuthEnabledValue(process.env.DISABLE_AUTH)
-      ? "/upload"
-      : "";
-    await mainWindow.loadURL(`${localhost}:${nextjsPort}${appPath}`);
+    await mainWindow.loadURL(`${localhost}:${nextjsPort}`);
   } catch (error) {
     if (mainWindow.isDestroyed()) {
       return;

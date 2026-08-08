@@ -1,6 +1,8 @@
 import asyncio
 import json
+import os
 import stat
+import uuid
 
 import pytest
 from sqlalchemy import select
@@ -10,6 +12,15 @@ from api.v1.auth import bootstrap
 from api.v1.auth.users import PASSWORD_HELPER
 from models.sql.access_token import AccessToken
 from models.sql.user import User
+from models.sql.template_v2 import TemplateV2
+from utils import user_config_store
+
+
+def assert_private_config_file(config_path):
+    # Windows represents the owner-only contract as an ACL; stat mode bits are
+    # not a reliable indicator after ``icacls`` has secured the file.
+    if os.name != "nt":
+        assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
 
 
 async def _create_auth_database(database_path):
@@ -19,6 +30,51 @@ async def _create_auth_database(database_path):
         await connection.run_sync(User.__table__.create)
         await connection.run_sync(AccessToken.__table__.create)
     return engine, session_maker
+
+
+def test_legacy_backfill_excludes_all_catalog_template_ids():
+    class RecordingSession:
+        def __init__(self):
+            self.statements = []
+            self.commit_count = 0
+
+        async def execute(self, statement):
+            self.statements.append(statement)
+
+        async def commit(self):
+            self.commit_count += 1
+
+    session = RecordingSession()
+    admin = User(
+        id=uuid.uuid4(),
+        username="admin",
+        hashed_password="unused",
+        is_active=True,
+        is_superuser=True,
+        is_verified=True,
+    )
+
+    asyncio.run(bootstrap._backfill_legacy_ownership(session, admin))
+
+    template_update = next(
+        statement
+        for statement in session.statements
+        if statement.table.name == TemplateV2.__tablename__
+    )
+    compiled = template_update.compile()
+    catalog_ids = {
+        entry.id
+        for entry in bootstrap.list_template_v2_catalog_entries(
+            include_unpublished=True
+        )
+    }
+
+    assert "NOT IN" in str(template_update)
+    assert any(
+        isinstance(value, (tuple, list)) and set(value) == catalog_ids
+        for value in compiled.params.values()
+    )
+    assert session.commit_count == 1
 
 
 def test_reset_auth_recovers_admin_without_replacing_account(
@@ -96,8 +152,8 @@ def test_reset_auth_recovers_admin_without_replacing_account(
     assert config["AUTH_PASSWORD_HASH"] != "old-hash"
     assert config["AUTH_SECRET_KEY"] != "old-secret"
     assert config["LLM_PROVIDER"] == "openai"
-    assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
-    assert stat.S_IMODE((tmp_path / "userConfig.json.bak").stat().st_mode) == 0o600
+    assert_private_config_file(config_path)
+    assert_private_config_file(tmp_path / "userConfig.json.bak")
 
 
 def test_reset_auth_without_password_refuses_to_delete_or_replace_admin(

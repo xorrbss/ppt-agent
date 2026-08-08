@@ -10,17 +10,26 @@
  */
 
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { PromptInput } from "./PromptInput";
 import { LanguageType, PresentationConfig, ToneType, VerbosityType } from "../type";
-import SupportingDoc from "./SupportingDoc";
+import SupportingDoc, {
+  isAllowedFile,
+  MAX_SUPPORTED_FILES,
+  SUPPORTED_FILE_FORMATS_DESCRIPTION,
+  TEXT_EXTENSIONS,
+  TEXT_MIME_TYPES,
+} from "./SupportingDoc";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { notify } from "@/components/ui/sonner";
-import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import {
+  isAbortError,
+  PresentationGenerationApi,
+} from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import Wrapper from "@/components/Wrapper";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
@@ -30,19 +39,21 @@ import { RootState } from "@/store/store";
 import { ImagesApi } from "../../services/api/images";
 import CurrentConfig from "./CurrentConfig";
 import { LLMConfig } from "@/types/llm_config";
-import {
-  clampSlideCountValue,
-  parseLimitedSlideCount,
-} from "@/utils/presentationLimits";
+import TemplateSelection from "../../outline/components/TemplateSelection";
+import { resolveTemplateSelection, templateSelectionToId } from "@/app/presentation-templates/select";
+import ThemeGallery from "./ThemeGallery";
+import { useUploadLimits } from "@/lib/use-upload-limits";
+import { applyDeckTheme, resolveDeckTheme } from "./applyDeckTheme";
+import { useChatFirstWorkbenchRollout } from "@/lib/use-chat-first-workbench-rollout";
+import { resolvePresentationCreateThemeStrategy } from "@/lib/chat-first-workbench";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 const FILE_TYPE_WORD = new Set([".doc", ".docx", ".docm", ".odt", ".rtf"]);
 const FILE_TYPE_PRESENTATION = new Set([".ppt", ".pptx", ".pptm", ".odp"]);
 const FILE_TYPE_SPREADSHEET = new Set([".xls", ".xlsx", ".xlsm", ".ods", ".csv", ".tsv"]);
-const FILE_TYPE_IMAGE = new Set([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp"]);
-const FILE_MIME_IMAGE = new Set(["image/jpeg", "image/png", "image/gif", "image/bmp", "image/tiff", "image/webp"]);
+const FILE_TYPE_IMAGE = new Set([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg"]);
 const FILE_TYPE_PDF = new Set([".pdf"]);
-const FILE_TYPE_TEXT = new Set([".txt"]);
+const FILE_TYPE_TEXT = new Set<string>(TEXT_EXTENSIONS);
 
 // Types for loading state
 interface LoadingState {
@@ -50,8 +61,18 @@ interface LoadingState {
   message: string;
   duration?: number;
   showProgress?: boolean;
+  progress?: number;
+  progressLabel?: string;
   extra_info?: string;
 }
+
+const abortDocumentProcessing = (controller: AbortController | null) => {
+  if (!controller || controller.signal.aborted) return;
+
+  controller.abort(
+    new DOMException("Document processing was cancelled", "AbortError"),
+  );
+};
 
 const getFileExtension = (fileName: string): string => {
   const index = fileName.lastIndexOf(".");
@@ -64,9 +85,9 @@ const getFileCategory = (file: File): string => {
   if (FILE_TYPE_WORD.has(extension)) return "word";
   if (FILE_TYPE_PRESENTATION.has(extension)) return "presentation";
   if (FILE_TYPE_SPREADSHEET.has(extension)) return "spreadsheet";
-  if (FILE_TYPE_IMAGE.has(extension) || FILE_MIME_IMAGE.has((file.type || "").toLowerCase())) return "image";
+  if (FILE_TYPE_IMAGE.has(extension) || (file.type || "").startsWith("image/")) return "image";
   if (FILE_TYPE_PDF.has(extension) || file.type === "application/pdf") return "pdf";
-  if (FILE_TYPE_TEXT.has(extension) || file.type === "text/plain") return "text";
+  if (FILE_TYPE_TEXT.has(extension) || TEXT_MIME_TYPES.some((mime) => mime === (file.type || "").toLowerCase())) return "text";
   return "other";
 };
 
@@ -75,8 +96,6 @@ const getSelectedTextModel = (config?: LLMConfig): string => {
   switch (config.LLM) {
     case "openai":
       return config.OPENAI_MODEL || "";
-    case "deepseek":
-      return config.DEEPSEEK_MODEL || "";
     case "google":
       return config.GOOGLE_MODEL || "";
     case "vertex":
@@ -114,34 +133,94 @@ const getSelectedImageQuality = (config?: LLMConfig): string => {
   if (!config) return "";
   if (config.IMAGE_PROVIDER === "dall-e-3") return config.DALL_E_3_QUALITY || "";
   if (config.IMAGE_PROVIDER === "gpt-image-1.5") return config.GPT_IMAGE_1_5_QUALITY || "";
+  if (config.IMAGE_PROVIDER === "gpt-image-2") return config.GPT_IMAGE_2_QUALITY || "";
   return "";
 };
 
-const getDocumentPaths = (files: unknown): string[] => {
-  if (!Array.isArray(files)) {
-    return [];
-  }
-
-  return files
-    .flat()
-    .map((file) =>
-      file && typeof file === "object" && "file_path" in file
-        ? (file as { file_path?: unknown }).file_path
-        : null
-    )
-    .filter((filePath): filePath is string => typeof filePath === "string");
-};
-
 const UploadPage = () => {
+  // Allocate the server-visible deck id before capability discovery. Partial
+  // rollout decisions are deck scoped, so the capability check and the later
+  // create command must hash the exact same stable id across retries.
+  const [pendingPresentationId] = useState(() => crypto.randomUUID());
+  const chatFirstRollout = useChatFirstWorkbenchRollout(
+    undefined,
+    pendingPresentationId,
+  );
+  const themeStrategy = resolvePresentationCreateThemeStrategy(chatFirstRollout.mode);
+  const generationEnabled =
+    chatFirstRollout.mode === "chat" || chatFirstRollout.mode === "legacy";
+  const uploadLimits = useUploadLimits();
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
+  const selectedTemplateId = useSelector((state: RootState) => state.pptGenUpload.selectedTemplate);
+  const selectedThemeId = useSelector((state: RootState) => state.pptGenUpload.selectedTheme);
+  const selectedTemplate = useMemo(
+    () => resolveTemplateSelection(selectedTemplateId),
+    [selectedTemplateId]
+  );
 
   const [files, setFiles] = useState<File[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Compose-card drag & drop. The compact SupportingDoc has no dropzone, so drops
+  // are handled here at the card level (mirrors SupportingDoc's file validation).
+  const handleCardDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    // Only intercept FILE drags — text drags into the prompt textarea still work.
+    if (!Array.from(e.dataTransfer.types || []).includes("Files")) return;
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleCardDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    // Ignore leaves that just move onto a child element.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragOver(false);
+  };
+
+  const handleCardDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    const dropped = Array.from(e.dataTransfer.files ?? []);
+    if (dropped.length === 0) return;
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const nextFiles = [...files, ...dropped];
+    const allowed = nextFiles.filter(
+      (file) =>
+        isAllowedFile(file) && file.size <= uploadLimits.document.bytes
+    );
+    const limited = allowed.slice(0, MAX_SUPPORTED_FILES);
+    setFiles(limited);
+
+    if (allowed.length !== nextFiles.length) {
+      notify.error(
+        "지원하지 않는 파일이 있습니다",
+        `지원 형식: ${SUPPORTED_FILE_FORMATS_DESCRIPTION}`
+      );
+    }
+    if (nextFiles.some((file) => file.size > uploadLimits.document.bytes)) {
+      notify.error(
+        "파일이 너무 큽니다",
+        `파일당 최대 크기는 ${uploadLimits.document.mb}MB입니다.`
+      );
+    }
+    if (allowed.length > MAX_SUPPORTED_FILES) {
+      notify.warning(
+        "최대 파일 수 초과",
+        `문서는 최대 ${MAX_SUPPORTED_FILES}개까지만 업로드할 수 있습니다.`
+      );
+    }
+    if (limited.length > files.length) {
+      notify.success(
+        "파일 선택 완료",
+        `${limited.length - files.length}개의 파일이 추가되었습니다.`
+      );
+    }
+  };
   const [config, setConfig] = useState<PresentationConfig>({
-    slides: null,
-    language: LanguageType.Auto,
+    slides: "8",
+    language: LanguageType.Korean,
     prompt: "",
     tone: ToneType.Default,
     verbosity: VerbosityType.Standard,
@@ -151,15 +230,6 @@ const UploadPage = () => {
     webSearch: false,
   });
 
-  useEffect(() => {
-    if (llmConfig?.WEB_GROUNDING !== undefined) {
-      setConfig((current) => ({
-        ...current,
-        webSearch: !!llmConfig.WEB_GROUNDING,
-      }));
-    }
-  }, [llmConfig?.WEB_GROUNDING]);
-
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isLoading: false,
     message: "",
@@ -167,13 +237,23 @@ const UploadPage = () => {
     showProgress: false,
     extra_info: "",
   });
+  const decomposeAbortControllerRef = useRef<AbortController | null>(null);
+  const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
+    useState(false);
+
+  // A queued decomposition keeps running on FastAPI until it is explicitly
+  // cancelled. Abort it when this upload screen unmounts (navigation/close).
+  useEffect(() => {
+    return () => abortDocumentProcessing(decomposeAbortControllerRef.current);
+  }, []);
 
   const getUploadSnapshotProps = () => {
     const trimmedPrompt = config.prompt.trim();
     const trimmedInstructions = (config.instructions || "").trim();
     const attachmentCategories = Array.from(new Set(files.map(getFileCategory))).sort();
     const imageGenerationEnabled = !llmConfig?.DISABLE_IMAGE_GENERATION;
-    const parsedSlides = parseLimitedSlideCount(config.slides);
+    const parsedSlides =
+      config.slides && /^\d+$/.test(config.slides) ? Number(config.slides) : null;
 
     return {
       pathname,
@@ -210,11 +290,7 @@ const UploadPage = () => {
   };
 
   const handleConfigChange = (key: keyof PresentationConfig, value: unknown) => {
-    const nextValue =
-      key === "slides" && typeof value === "string"
-        ? clampSlideCountValue(value)
-        : value;
-    setConfig((prev) => ({ ...prev, [key]: nextValue } as PresentationConfig));
+    setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
   };
 
   const ensureStockImageProviderReady = async (): Promise<boolean> => {
@@ -240,9 +316,9 @@ const UploadPage = () => {
       return true;
     } catch (error: any) {
       notify.error(
-        "Image provider unavailable",
+        "이미지 제공자에 연결할 수 없습니다",
         error?.message ||
-        `Unable to reach ${selectedProvider} right now. Please check your API key/settings and try again.`
+        `현재 ${selectedProvider}에 연결할 수 없습니다. API 키와 설정을 확인한 후 다시 시도해 주세요.`
       );
       return false;
     }
@@ -255,19 +331,19 @@ const UploadPage = () => {
   const validateConfiguration = (): boolean => {
     if (!config.language) {
       trackUploadValidationFailure("language_missing");
-      notify.warning("Language required", "Please select a language.");
+      notify.warning("언어를 선택해 주세요", "언어를 선택해 주세요.");
       return false;
     }
 
     if (files.length > 0 && config.language === LanguageType.Auto) {
       trackUploadValidationFailure("language_auto_with_documents");
-      notify.warning("Language required", "Please choose a language before processing uploaded documents.");
+      notify.warning("언어를 선택해 주세요", "업로드한 문서를 처리하기 전에 언어를 선택해 주세요.");
       return false;
     }
 
     if (!config.prompt.trim() && files.length === 0) {
       trackUploadValidationFailure("prompt_or_document_missing");
-      notify.warning("Input required", "Provide a prompt or upload at least one document.");
+      notify.warning("입력이 필요합니다", "프롬프트를 입력하거나 문서를 하나 이상 업로드해 주세요.");
       return false;
     }
     return true;
@@ -277,6 +353,10 @@ const UploadPage = () => {
    * Handles the presentation generation process
    */
   const handleGeneratePresentation = async () => {
+    // A chat-first build must not regain legacy writes while capability
+    // discovery is pending or unhealthy. Only the explicit backend kill switch
+    // resolves to legacy mode.
+    if (!generationEnabled) return;
     if (!validateConfiguration()) return;
     trackEvent(MixpanelEvent.Upload_Generation_Started, getUploadSnapshotProps());
 
@@ -306,10 +386,12 @@ const UploadPage = () => {
   const handleDocumentProcessing = async () => {
     setLoadingState({
       isLoading: true,
-      message: "Processing documents...",
+      message: "문서를 처리하는 중…",
       showProgress: true,
       duration: 90,
-      extra_info: files.length > 0 ? "It might take a few minutes for large documents." : "",
+      progress: 0,
+      progressLabel: `0/${files.length}`,
+      extra_info: files.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
     });
 
     let documents = [];
@@ -324,28 +406,62 @@ const UploadPage = () => {
     const promises: Promise<any>[] = [];
 
     if (documents.length > 0) {
+      const decomposeController = new AbortController();
+      decomposeAbortControllerRef.current = decomposeController;
+      setCanCancelDocumentProcessing(true);
       promises.push(
         PresentationGenerationApi.decomposeDocuments(
           documents,
-          selectedLanguage
+          selectedLanguage,
+          {
+            signal: decomposeController.signal,
+            onProgress: (job) => {
+              const completed = job.progress?.completed_files ?? 0;
+              const total = job.progress?.total_files ?? documents.length;
+              setLoadingState((previous) => ({
+                ...previous,
+                progress: total > 0 ? (completed / total) * 100 : undefined,
+                progressLabel:
+                  total > 0 ? `${completed}/${total}` : undefined,
+                extra_info:
+                  total > 0
+                    ? `${completed}/${total}개 파일 처리 완료`
+                    : previous.extra_info,
+              }));
+            },
+          },
         )
       );
     }
-    const responses = await Promise.all(promises);
-    const documentPaths = getDocumentPaths(responses);
+    let responses: any[];
+    try {
+      responses = await Promise.all(promises);
+    } finally {
+      decomposeAbortControllerRef.current = null;
+      setCanCancelDocumentProcessing(false);
+    }
+    dispatch(setPptGenUploadState({
+      config,
+      files: responses,
+    }));
+    dispatch(clearOutlines())
 
-    setLoadingState({
-      isLoading: true,
-      message: "Generating presentation outline...",
-      showProgress: true,
-      duration: 40,
-      extra_info: "",
-    });
+    // Silently create the presentation from the decomposed documents and go
+    // straight to the auto outline bridge (skip the /documents-preview step).
+    const documentPaths = responses
+      .flat()
+      .filter((item: any) => item && item.name && item.file_path)
+      .map((item: any) => item.file_path);
 
+    const presentationId = pendingPresentationId;
+    const selectedTheme = themeStrategy === "embedded"
+      ? await resolveDeckTheme(selectedThemeId)
+      : undefined;
     const createResponse = await PresentationGenerationApi.createPresentation({
+      presentation_id: presentationId,
+      idempotency_key: `presentation-create:${presentationId}`,
       content: config?.prompt ?? "",
-      version: "v2-standard",
-      n_slides: parseLimitedSlideCount(config?.slides),
+      n_slides: config?.slides ? parseInt(config.slides, 10) : null,
       file_paths: documentPaths,
       language: selectedLanguage,
       tone: config?.tone,
@@ -354,30 +470,22 @@ const UploadPage = () => {
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
+      theme: selectedTheme,
     });
 
-    dispatch(setPptGenUploadState({
-      config,
-      files: responses,
-    }));
-    dispatch(clearOutlines());
+    if (themeStrategy === "legacy-patch") {
+      await applyDeckTheme(createResponse.id, selectedThemeId);
+    }
     dispatch(setPresentationId(createResponse.id));
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
       uploaded_documents_count: documents.length,
       decompose_job_count: responses.length,
-      extracted_document_count: documentPaths.length,
-      destination: "/outline",
-    });
-    trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
-      ...getUploadSnapshotProps(),
       presentation_id: createResponse.id,
-      uploaded_documents_count: documents.length,
-      extracted_document_count: documentPaths.length,
-      destination: "/outline",
+      destination: "/outline?auto=1",
     });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline" });
-    router.push("/outline");
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline?auto=1" });
+    router.push("/outline?auto=1");
   };
 
   /**
@@ -386,18 +494,23 @@ const UploadPage = () => {
   const handleDirectPresentationGeneration = async () => {
     setLoadingState({
       isLoading: true,
-      message: "Preparing outline generation...",
+      message: "개요를 생성하는 중…",
       showProgress: true,
       duration: 30,
     });
 
     const selectedLanguage = config?.language ?? "";
 
-    // Start the outline job; template selection happens on the outline page.
+    // Use the first available layout group for direct generation
+    const presentationId = pendingPresentationId;
+    const selectedTheme = themeStrategy === "embedded"
+      ? await resolveDeckTheme(selectedThemeId)
+      : undefined;
     const createResponse = await PresentationGenerationApi.createPresentation({
+      presentation_id: presentationId,
+      idempotency_key: `presentation-create:${presentationId}`,
       content: config?.prompt ?? "",
-
-      n_slides: parseLimitedSlideCount(config?.slides),
+      n_slides: config?.slides ? parseInt(config.slides, 10) : null,
       file_paths: [],
       language: selectedLanguage,
       tone: config?.tone,
@@ -406,27 +519,41 @@ const UploadPage = () => {
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
+      theme: selectedTheme,
     });
 
-    dispatch(setPptGenUploadState({
-      config,
-      files: [],
-    }));
-    dispatch(clearOutlines());
+
+    if (themeStrategy === "legacy-patch") {
+      await applyDeckTheme(createResponse.id, selectedThemeId);
+    }
     dispatch(setPresentationId(createResponse.id));
+    dispatch(clearOutlines())
     trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
       ...getUploadSnapshotProps(),
       presentation_id: createResponse.id,
-      destination: "/outline",
+      destination: "/outline?auto=1",
     });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline" });
-    router.push("/outline");
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline?auto=1" });
+    router.push("/outline?auto=1");
   };
 
   /**
    * Handles errors during presentation generation
    */
   const handleGenerationError = (error: any) => {
+    // Aborts are expected when the user cancels, leaves this screen, or a
+    // development refresh remounts it. Reset the local loader without
+    // presenting the cancellation as a failed presentation generation.
+    if (isAbortError(error)) {
+      setLoadingState({
+        isLoading: false,
+        message: "",
+        duration: 0,
+        showProgress: false,
+      });
+      return;
+    }
+
     console.error("Error in upload page", error);
     setLoadingState({
       isLoading: false,
@@ -435,57 +562,116 @@ const UploadPage = () => {
       showProgress: false,
     });
     notify.error(
-      "Generation failed",
-      error.message || "Something went wrong while starting your presentation."
+      "생성에 실패했습니다",
+      error.message || "발표자료를 시작하는 중 문제가 발생했습니다."
     );
   };
 
   return (
-    <Wrapper className="pb-10 lg:max-w-[65%] xl:max-w-[60%] min-[1800px]:max-w-[1180px] min-[2200px]:max-w-[1520px]">
+    <Wrapper className="pb-28 lg:max-w-[60%] xl:max-w-[54%]">
       <OverlayLoader
         show={loadingState.isLoading}
         text={loadingState.message}
         showProgress={loadingState.showProgress}
         duration={loadingState.duration}
+        progress={loadingState.progress}
+        progressLabel={loadingState.progressLabel}
         extra_info={loadingState.extra_info}
+        onCancel={
+          canCancelDocumentProcessing
+            ? () =>
+                abortDocumentProcessing(decomposeAbortControllerRef.current)
+            : undefined
+        }
       />
-      <div className="rounded-2xl " >
-        <div className="flex flex-col gap-4 px-4 md:flex-row md:items-center md:justify-between min-[1800px]:gap-5 min-[1800px]:px-5 min-[2200px]:gap-6 min-[2200px]:px-6">
-          <CurrentConfig webSearchEnabled={config.webSearch} />
-          <ConfigurationSelects
-            config={config}
-            onConfigChange={handleConfigChange}
+      <div className="flex flex-col items-center pt-6 md:pt-10">
+        <h1 className="text-center text-2xl md:text-[32px] font-semibold tracking-[-0.02em] text-[#101828] font-syne">
+          무엇을 만들어 드릴까요?
+        </h1>
+        <p className="mt-2 text-center text-sm text-[#667085] font-syne">
+          아이디어를 입력하고 필요하면 파일을 첨부하세요. 발표자료를 만들어 드립니다.
+        </p>
+
+        <div
+          className={`mt-7 w-full rounded-2xl border bg-white p-4 shadow-[0_4px_24px_rgba(16,24,40,0.06)] transition-colors ${
+            isDragOver
+              ? "border-[#5146E5] ring-2 ring-[#5146E5]/20"
+              : "border-[#EAECF0]"
+          }`}
+          onDragOver={handleCardDragOver}
+          onDragLeave={handleCardDragLeave}
+          onDrop={handleCardDrop}
+          data-testid="compose-card"
+        >
+          <PromptInput
+            value={config.prompt}
+            onChange={(value) => handleConfigChange("prompt", value)}
+            onSubmit={generationEnabled ? handleGeneratePresentation : undefined}
           />
-        </div>
 
-        <div className="p-4 min-[1800px]:p-5 min-[2200px]:p-6">
-
-          <div className="relative">
-            <PromptInput
-              value={config.prompt}
-              onChange={(value) => handleConfigChange("prompt", value)}
-
+          <div className="mt-3">
+            <SupportingDoc
+              files={[...files]}
+              onFilesChange={setFiles}
+              compact
             />
           </div>
+
+          <div className="mt-4 flex flex-col gap-3 border-t border-[#F2F4F7] pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <ConfigurationSelects
+              config={config}
+              onConfigChange={handleConfigChange}
+            />
+            <CurrentConfig />
+          </div>
         </div>
-        <div className="p-4 min-[1800px]:p-5 min-[2200px]:p-6">
-          <h3 className="mb-2 text-sm font-medium text-[#333333] min-[1800px]:text-base min-[2200px]:text-lg">Attachments (optional)</h3>
-          <SupportingDoc
-            files={[...files]}
-            onFilesChange={setFiles}
+
+        {chatFirstRollout.mode === "checking" ? (
+          <p className="mt-3 text-center text-sm text-[#667085]" role="status" aria-live="polite">
+            작업 공간 연결을 확인하는 중입니다.
+          </p>
+        ) : chatFirstRollout.mode === "blocked" ? (
+          <div className="mt-3 flex flex-col items-center gap-2 text-center" role="alert">
+            <p className="text-sm text-amber-700">
+              작업 공간을 안전하게 연결할 수 없어 생성을 시작하지 않았습니다.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void chatFirstRollout.refresh()}>
+              다시 확인
+            </Button>
+          </div>
+        ) : null}
+
+        <div className="mt-8 w-full">
+          <h2 className="mb-3 text-base font-semibold text-[#101828] font-syne">템플릿 선택</h2>
+          <TemplateSelection
+            selectedTemplate={selectedTemplate}
+            onSelectTemplate={(t) =>
+              dispatch(setPptGenUploadState({ selectedTemplate: templateSelectionToId(t) }))
+            }
           />
         </div>
 
-        <div className="p-4 min-[1800px]:p-5 min-[2200px]:p-6">
+        <div className="mt-8 w-full">
+          <h2 className="mb-3 text-base font-semibold text-[#101828] font-syne">
+            테마 프리셋 <span className="text-sm font-normal text-[#667085]">(선택)</span>
+          </h2>
+          <ThemeGallery
+            selectedTheme={selectedThemeId}
+            onSelectTheme={(id) => dispatch(setPptGenUploadState({ selectedTheme: id }))}
+          />
+        </div>
+
+        <div className="mt-6 flex w-full justify-center">
           <Button
             onClick={handleGeneratePresentation}
+            disabled={!generationEnabled || loadingState.isLoading}
             style={{
               background: "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)"
             }}
-            className="ml-auto mr-0 flex w-fit items-center justify-center rounded-[28px] px-4 py-5 font-syne text-xs font-semibold text-[#101323] min-[1800px]:px-5 min-[1800px]:py-5 min-[1800px]:text-sm min-[2200px]:px-6 min-[2200px]:py-6 min-[2200px]:text-base"
+            className="rounded-[28px] flex items-center justify-center py-5 px-8 text-[#101323] font-syne font-semibold text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span>Get Started</span>
-            <ChevronRight className="!h-5 !w-5 min-[1800px]:!h-6 min-[1800px]:!w-6" />
+            <span>생성하기</span>
+            <ChevronRight className="!w-5 !h-5 " />
           </Button>
         </div>
       </div>

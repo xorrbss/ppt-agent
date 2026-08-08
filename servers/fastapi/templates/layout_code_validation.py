@@ -1,3 +1,5 @@
+"""Client for the Next.js Template V2 layout-code validator."""
+
 from __future__ import annotations
 
 import os
@@ -24,11 +26,11 @@ class LayoutCodeValidationError(Exception):
         *,
         line: int | None = None,
         column: int | None = None,
-    ) -> None:
-        super().__init__(error)
+    ):
         self.error = error
         self.line = line
         self.column = column
+        super().__init__(error)
 
     def to_detail(self) -> dict[str, Any]:
         detail: dict[str, Any] = {"error": self.error}
@@ -44,56 +46,56 @@ class LayoutCodeValidationServiceError(Exception):
 
 
 def _endpoint_from_base(base_url: str) -> str:
-    base = base_url.strip().rstrip("/")
-    if base.endswith("/api/validate-layout-code"):
-        return base
-    return f"{base}/api/validate-layout-code"
+    normalized = base_url.strip().rstrip("/")
+    if normalized.endswith("/api/validate-layout-code"):
+        return normalized
+    return f"{normalized}/api/validate-layout-code"
 
 
 def _validation_url_candidates() -> list[str]:
-    explicit_endpoint = (os.getenv("LAYOUT_CODE_VALIDATION_URL") or "").strip()
-    if explicit_endpoint:
-        return [_endpoint_from_base(explicit_endpoint)]
+    explicit_url = os.getenv("LAYOUT_CODE_VALIDATION_URL")
+    if explicit_url and explicit_url.strip():
+        return [_endpoint_from_base(explicit_url)]
 
-    candidate_bases = [
+    candidates = [
         os.getenv("NEXT_PUBLIC_URL"),
         os.getenv("PRESENTON_NEXT_URL"),
         "http://localhost",
         "http://localhost:3000",
     ]
-
-    seen: set[str] = set()
-    urls: list[str] = []
-    for base in candidate_bases:
-        if not base:
+    endpoints: list[str] = []
+    for candidate in candidates:
+        if not candidate or not candidate.strip():
             continue
-        url = _endpoint_from_base(base)
-        if url in seen:
-            continue
-        seen.add(url)
-        urls.append(url)
-    return urls
+        endpoint = _endpoint_from_base(candidate)
+        if endpoint not in endpoints:
+            endpoints.append(endpoint)
+    return endpoints
 
 
-def _coerce_validation_error(payload: Any, fallback: str) -> LayoutCodeValidationError:
+def _coerce_validation_error(
+    payload: Any,
+    fallback: str,
+) -> LayoutCodeValidationError:
     if not isinstance(payload, dict):
         return LayoutCodeValidationError(fallback)
+    error = payload.get("error")
+    line = payload.get("line")
+    column = payload.get("column")
     return LayoutCodeValidationError(
-        str(payload.get("error") or fallback),
-        line=payload.get("line") if isinstance(payload.get("line"), int) else None,
-        column=payload.get("column")
-        if isinstance(payload.get("column"), int)
-        else None,
+        error if isinstance(error, str) and error else fallback,
+        line=line if isinstance(line, int) else None,
+        column=column if isinstance(column, int) else None,
     )
 
 
 async def validate_layout_code(layout_code: str) -> ValidatedLayoutCode:
-    last_service_error: str | None = None
     timeout = aiohttp.ClientTimeout(total=20)
     headers = {
         "Content-Type": "application/json",
-        **await authenticated_internal_request_headers(),
+        **(await authenticated_internal_request_headers()),
     }
+    last_error: Exception | None = None
 
     for url in _validation_url_candidates():
         try:
@@ -104,33 +106,29 @@ async def validate_layout_code(layout_code: str) -> ValidatedLayoutCode:
                     headers=headers,
                 ) as response:
                     payload = await response.json(content_type=None)
-
                     if response.status == 200 and isinstance(payload, dict):
                         return ValidatedLayoutCode(
-                            layout_code=str(payload.get("layout_code") or ""),
-                            layout_id=str(payload.get("layoutId") or ""),
-                            layout_name=str(payload.get("layoutName") or ""),
-                            layout_description=str(
-                                payload.get("layoutDescription") or ""
-                            ),
-                            schema_json_value=payload.get("schemaJSON"),
+                            layout_code=payload["layout_code"],
+                            layout_id=payload["layoutId"],
+                            layout_name=payload["layoutName"],
+                            layout_description=payload["layoutDescription"],
+                            schema_json_value=payload["schemaJSON"],
                         )
-
                     if response.status == 400:
                         raise _coerce_validation_error(
-                            payload, "Layout code validation failed"
+                            payload,
+                            "Layout code is invalid",
                         )
-
-                    last_service_error = (
-                        f"Layout validation service returned HTTP {response.status}"
+                    last_error = LayoutCodeValidationServiceError(
+                        f"Layout validation service returned {response.status}"
                     )
         except LayoutCodeValidationError:
             raise
-        except (aiohttp.ClientError, TimeoutError) as exc:
-            last_service_error = str(exc) or exc.__class__.__name__
-        except Exception as exc:  # noqa: BLE001
-            last_service_error = str(exc) or exc.__class__.__name__
+        except (aiohttp.ClientError, TimeoutError, KeyError, TypeError) as error:
+            last_error = error
+        except Exception as error:
+            last_error = error
 
     raise LayoutCodeValidationServiceError(
-        last_service_error or "Layout validation service is unavailable"
-    )
+        "Layout validation service is unavailable"
+    ) from last_error

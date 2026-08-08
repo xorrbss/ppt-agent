@@ -1,0 +1,70 @@
+{
+  "contract_version": 1,
+  "input": {
+    "source_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "slides": [
+      {
+        "source_part": "ppt/slides/slide1.xml",
+        "relationship_id": "rId1",
+        "width": 1280.0,
+        "height": 720.0,
+        "shapes": [
+          {
+            "source_id": "2",
+            "name": "Title 1",
+            "kind": "text",
+            "x": 128.0,
+            "y": 72.0,
+            "width": 640.0,
+            "height": 96.0,
+            "rotation": 0.0,
+            "text": "Deterministic title",
+            "fill_color": null,
+            "confidence": 0.92,
+            "unsupported_reason": null
+          },
+          {
+            "source_id": "graphicFrame-3",
+            "name": "graphicFrame_3",
+            "kind": "unsupported",
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "rotation": 0.0,
+            "text": null,
+            "fill_color": null,
+            "confidence": 0.0,
+            "unsupported_reason": "unsupported_ooxml:graphicFrame"
+          }
+        ],
+        "external_relationships": []
+      }
+    ],
+    "relationship_graph": {
+      "evidence_version": 0,
+      "root_part": "ppt/presentation.xml",
+      "nodes": [
+        "ppt/presentation.xml",
+        "ppt/slides/slide1.xml"
+      ],
+      "relationships": [
+        {
+          "source_part": "ppt/presentation.xml",
+          "relationship_id": "rId1",
+          "relationship_kind": "slide",
+          "target_part": "ppt/slides/slide1.xml",
+          "external": false,
+          "cycle": false,
+          "missing": false
+        }
+      ],
+      "missing_parts": [],
+      "cycle_count": 0,
+      "skipped_relationship_count": 0,
+      "local_render_enabled": false,
+      "ocr_enabled": false,
+      "external_model_access": false
+    }
+  }
+}

@@ -1,27 +1,70 @@
+"""Regression tests for SessionAuthMiddleware path handling."""
 from api.middlewares import SessionAuthMiddleware
 
 
-def test_only_shared_app_data_asset_prefixes_do_not_require_auth():
-    middleware = SessionAuthMiddleware(app=None)
+def _mw() -> SessionAuthMiddleware:
+    return SessionAuthMiddleware(app=None)
 
-    assert middleware._requires_auth("/app_data/images/photo.png") is True
-    assert middleware._requires_auth("/app_data/fonts/embedded/font.ttf") is False
+
+def _requires_auth(raw_path: str) -> bool:
+    mw = _mw()
+    return mw._requires_auth(mw._normalize(raw_path))
+
+
+def _is_exempt(raw_path: str) -> bool:
+    mw = _mw()
+    return mw._is_exempt(mw._normalize(raw_path))
+
+
+def test_traversal_out_of_images_requires_auth():
+    # The core bypass: escape the image exemption up to the auth secret / keys.
+    assert _requires_auth("/app_data/images/../userConfig.json") is True
+    assert _requires_auth("/app_data/images/../../app_data/fastapi.db") is True
+    assert _requires_auth("/app_data/images/authored/../../userConfig.json") is True
+
+
+def test_all_direct_image_paths_require_auth():
+    assert _requires_auth("/app_data/images/0e9c8226.png") is True
+    assert _requires_auth("/app_data/images/photo.JPEG") is True
+    assert _requires_auth("/app_data/images/authored/deck-id/slide_0.png") is True
+    assert _requires_auth("/app_data/images/users/owner-id/slide.png") is True
+
+
+def test_non_image_under_images_requires_auth():
+    assert _requires_auth("/app_data/images/userConfig.json") is True
+    assert _requires_auth("/app_data/images/secret.db") is True
+    assert _requires_auth("/app_data/images/nodotfile") is True
+
+
+def test_direct_secrets_and_api_require_auth():
+    assert _requires_auth("/app_data/userConfig.json") is True
+    assert _requires_auth("/app_data/fastapi.db") is True
+    assert _requires_auth("/api/v1/ppt/presentation/create") is True
+
+
+def test_normalize_keeps_leading_slash():
+    mw = _mw()
+    assert mw._normalize("/app_data/images/x.png") == "/app_data/images/x.png"
     assert (
-        middleware._requires_auth("/app_data/pptx-to-html/session/fonts/font.ttf")
-        is True
-    )
-    assert (
-        middleware._requires_auth("/app_data/templates/default/thumbnail.png")
-        is False
-    )
-    assert (
-        middleware._requires_auth("/app_data/pptx-to-html/session/images/image.png")
-        is True
+        mw._normalize("/app_data/images/../userConfig.json")
+        == "/app_data/userConfig.json"
     )
 
 
-def test_other_app_data_prefixes_still_require_auth():
-    middleware = SessionAuthMiddleware(app=None)
+def test_public_share_link_is_exempt():
+    # The read-only public share view is reachable without the admin session.
+    assert _is_exempt("/api/v1/ppt/presentation/public/abcDEF123456xyz") is True
 
-    assert middleware._requires_auth("/app_data/uploads/source.pptx") is True
-    assert middleware._requires_auth("/app_data/exports/deck.pdf") is True
+
+def test_public_share_traversal_cannot_ride_exemption():
+    # A traversal from the public prefix must not ride the exemption to a
+    # protected path: it normalizes off the prefix and still requires auth.
+    raw = "/api/v1/ppt/presentation/public/../../../app_data/userConfig.json"
+    assert _is_exempt(raw) is False
+    assert _requires_auth(raw) is True
+
+
+def test_admin_share_management_requires_auth():
+    # Only GET-by-token is public; enabling/rotating/disabling a link is admin-only.
+    assert _is_exempt("/api/v1/ppt/presentation/1234/share") is False
+    assert _requires_auth("/api/v1/ppt/presentation/1234/share") is True

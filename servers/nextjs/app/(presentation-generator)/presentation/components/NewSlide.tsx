@@ -1,154 +1,94 @@
 "use client";
-import React, {
-  useEffect,
-  useState,
-  memo,
-  useCallback,
-  useRef,
-} from "react";
-import { useDispatch, useSelector } from "react-redux";
+import React, { useEffect, useState, memo, useCallback, useRef } from "react";
+import { useDispatch } from "react-redux";
 import { addNewSlide } from "@/store/slices/presentationGeneration";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { notify } from "@/components/ui/sonner";
-
+import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
+import { getTemplatesByTemplateName } from "@/app/presentation-templates";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { RootState } from "@/store/store";
-import { TemplateV2HtmlSlidePreview } from "../../components/TemplateV2HtmlSlidePreview";
-import {
-  extractTemplateV2Layouts,
-  type TemplateV2Layout,
-} from "@/components/slide-editor/importing/template-v2-import";
-import {
-  BLANK_SLIDE_LAYOUT_ID,
-  BLANK_TEMPLATE_V2_LAYOUT,
-} from "../../_shared/blank-slide";
-import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
-import TemplateService from "../../services/api/template";
 
 interface LayoutItemProps {
   layout: any;
   onSelect: (sampleData: any, layoutId: string) => void;
+  disabled?: boolean;
 }
 
 const PREVIEW_WIDTH = 1280;
 const PREVIEW_HEIGHT = 720;
-const EMPTY_SLIDE_LAYOUT = {
-  layoutId: BLANK_SLIDE_LAYOUT_ID,
-  layoutName: "Empty Slide",
-  sampleData: BLANK_TEMPLATE_V2_LAYOUT,
-  isEmptySlide: true,
-};
 
-function createTemplateV2LayoutItem(layout: TemplateV2Layout, layoutIndex: number) {
-  const layoutId =
-    typeof layout.id === "string" && layout.id.trim()
-      ? layout.id
-      : `layout_${layoutIndex + 1}`;
-  const description =
-    typeof layout.description === "string" && layout.description.trim()
-      ? layout.description
-      : null;
+const LayoutItem = memo(
+  ({ layout, onSelect, disabled = false }: LayoutItemProps) => {
+    const previewRef = useRef<HTMLDivElement | null>(null);
+    const [scale, setScale] = useState(0.2);
+    const {
+      component: LayoutComponent,
+      sampleData,
+      layoutId,
+      layoutName,
+    } = layout;
 
-  return {
-    layoutId,
-    layoutName: description ?? layoutId,
-    sampleData: layout,
-    v2Layout: layout,
-  };
-}
+    useEffect(() => {
+      if (!previewRef.current) return;
 
-function createTemplateV2PreviewSlide(layout: TemplateV2Layout, layoutId: string) {
-  return {
-    id: `template-v2-preview-${layoutId}`,
-    content: {},
-    ui: layout,
-    layout: layoutId,
-    layout_group: "template-v2",
-  };
-}
+      const previewElement = previewRef.current;
+      const updateScale = () => {
+        const nextScale = Math.min(
+          previewElement.clientWidth / PREVIEW_WIDTH,
+          previewElement.clientHeight / PREVIEW_HEIGHT,
+        );
+        setScale(nextScale || 0.2);
+      };
 
-const LayoutItem = memo(({ layout, onSelect }: LayoutItemProps) => {
-  const previewRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(0.2);
-  const {
-    component: LayoutComponent,
-    sampleData,
-    layoutId,
-    layoutName,
-    v2Layout,
-    isEmptySlide,
-  } = layout;
+      const resizeObserver = new ResizeObserver(updateScale);
+      resizeObserver.observe(previewElement);
+      updateScale();
 
-  useEffect(() => {
-    if (!previewRef.current) return;
+      return () => resizeObserver.disconnect();
+    }, []);
 
-    const previewElement = previewRef.current;
-    const updateScale = () => {
-      const nextScale = Math.min(
-        previewElement.clientWidth / PREVIEW_WIDTH,
-        previewElement.clientHeight / PREVIEW_HEIGHT
-      );
-      setScale(nextScale || 0.2);
+    const selectLayout = () => {
+      if (!disabled) onSelect(sampleData, layoutId);
     };
 
-    const resizeObserver = new ResizeObserver(updateScale);
-    resizeObserver.observe(previewElement);
-    updateScale();
-
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  const selectLayout = () => onSelect(sampleData, layoutId);
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`Add ${layoutName || "slide"} layout`}
-      title={layoutName || "Slide layout"}
-      onClick={selectLayout}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        selectLayout();
-      }}
-      className="relative aspect-video cursor-pointer overflow-hidden rounded-md border border-[#E4E4EA] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition duration-200 hover:border-[#7C51F8] hover:shadow-[0_0_0_2px_rgba(124,81,248,0.18)] focus-visible:ring-2 focus-visible:ring-[#7C51F8]"
-    >
-      <div className="absolute inset-0 z-40 bg-transparent" />
-      <div ref={previewRef} className="relative h-full w-full overflow-hidden">
+    return (
+      <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        aria-label={`${layoutName || "슬라이드"} 레이아웃 추가`}
+        title={layoutName || "슬라이드 레이아웃"}
+        onClick={selectLayout}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          selectLayout();
+        }}
+        className="relative aspect-video cursor-pointer overflow-hidden rounded-md border border-[#E4E4EA] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition duration-200 hover:border-[#7C51F8] hover:shadow-[0_0_0_2px_rgba(124,81,248,0.18)] focus-visible:ring-2 focus-visible:ring-[#7C51F8]"
+      >
+        <div className="absolute inset-0 z-40 bg-transparent" />
         <div
-          className="absolute left-0 top-0"
-          style={{
-            width: isEmptySlide ? "100%" : PREVIEW_WIDTH,
-            height: isEmptySlide ? "100%" : PREVIEW_HEIGHT,
-            transform: isEmptySlide ? undefined : `scale(${scale})`,
-            transformOrigin: "top left",
-          }}
+          ref={previewRef}
+          className="relative h-full w-full overflow-hidden"
         >
-          {isEmptySlide ? (
-            <div className="flex h-full w-full items-center justify-center bg-white">
-              <div className="flex flex-col items-center gap-2 text-[#191919]">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E2E2EA] bg-[#FAFAFB]">
-                  <Plus className="h-4 w-4" />
-                </span>
-                <span className="text-sm font-medium">Empty Slide</span>
-              </div>
-            </div>
-          ) : v2Layout ? (
-            <TemplateV2HtmlSlidePreview
-              slide={createTemplateV2PreviewSlide(v2Layout, layoutId)}
-              fixedSize
-            />
-          ) : LayoutComponent ? (
+          <div
+            className="absolute left-0 top-0"
+            style={{
+              width: PREVIEW_WIDTH,
+              height: PREVIEW_HEIGHT,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+            }}
+          >
             <LayoutComponent data={sampleData} />
-          ) : null}
+          </div>
         </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
 LayoutItem.displayName = "LayoutItem";
 interface NewSlideV1Props {
@@ -156,33 +96,21 @@ interface NewSlideV1Props {
   templateID: string;
   index: number;
   presentationId: string;
-  onSlideAdded?: (
-    index: number,
-    options?: {
-      promptOverlaySlideId?: string;
-      promptOverlayKind?: "blank" | "layout";
-    },
-  ) => void;
+  mutationsEnabled?: boolean;
 }
 const NewSlideV1 = ({
   setShowNewSlideSelection,
   templateID,
   index,
   presentationId,
-  onSlideAdded,
+  mutationsEnabled = true,
 }: NewSlideV1Props) => {
   const dispatch = useDispatch();
   const pathname = usePathname();
-  const presentationLayout = useSelector(
-    (state: RootState) => state.presentationGeneration.presentationData?.layout
-  );
-  const slideCount = useSelector((state: RootState) => {
-    const slides = state.presentationGeneration.presentationData?.slides;
-    return Array.isArray(slides) ? slides.length : 0;
-  });
   const [layouts, setLayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const isCustomTemplate = templateID.startsWith("custom-");
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -195,46 +123,32 @@ const NewSlideV1 = ({
 
   const handleNewSlide = useCallback(
     (sampleData: any, id: string) => {
-      if (slideCount >= MAX_NUMBER_OF_SLIDES) {
-        notify.warning(
-          "Slide limit reached",
-          `You can have up to ${MAX_NUMBER_OF_SLIDES} slides.`
-        );
-        return;
-      }
-
+      if (!mutationsEnabled) return;
       try {
-        const slideId = uuidv4();
         const newSlide = {
-          id: slideId,
-          index,
-          content: {},
-          ui: sampleData,
+          id: uuidv4(),
+          index: index,
+          content: sampleData,
           layout_group: templateID,
-          layout: id,
+          layout: isCustomTemplate ? `${templateID}:${id}` : id,
           presentation: presentationId,
         };
-
         dispatch(addNewSlide({ slideData: newSlide, index }));
-        onSlideAdded?.(
-          index + 1,
-          {
-            promptOverlaySlideId: slideId,
-            promptOverlayKind:
-              id === BLANK_SLIDE_LAYOUT_ID ? "blank" : "layout",
-          },
-        );
         trackEvent(MixpanelEvent.Presentation_Slide_Added, {
           pathname,
           presentation_id: presentationId,
           inserted_after_index: index,
           template_id: templateID,
           layout_id: id,
+          is_custom_template: isCustomTemplate,
         });
         setShowNewSlideSelection(false);
       } catch (error: any) {
         console.error(error);
-        notify.error("Could not add slide", "Something went wrong while adding the new slide.");
+        notify.error(
+          "슬라이드를 추가할 수 없습니다",
+          "새 슬라이드를 추가하는 중 문제가 발생했습니다.",
+        );
       }
     },
     [
@@ -243,10 +157,10 @@ const NewSlideV1 = ({
       presentationId,
       dispatch,
       setShowNewSlideSelection,
+      isCustomTemplate,
       pathname,
-      onSlideAdded,
-      slideCount,
-    ]
+      mutationsEnabled,
+    ],
   );
 
   useEffect(() => {
@@ -255,42 +169,21 @@ const NewSlideV1 = ({
     const fetchLayouts = async () => {
       try {
         setLoading(true);
-        setLoadError(null);
-
-        const embeddedLayouts = extractTemplateV2Layouts(presentationLayout);
-        let templateV2Layouts = embeddedLayouts;
-
-        try {
-          const template = await TemplateService.getTemplateDetails(templateID);
-          const fetchedLayouts = extractTemplateV2Layouts(template.layouts);
-          if (fetchedLayouts.length > 0) {
-            templateV2Layouts = fetchedLayouts;
-          }
-        } catch (error) {
-          if (embeddedLayouts.length === 0) {
-            throw error;
-          }
-          console.warn(
-            "Could not refresh template layouts; using presentation layouts instead.",
-            error,
+        if (isCustomTemplate) {
+          const customTemplateId = templateID.split("custom-")[1];
+          const templateDetails = await getCustomTemplateDetails(
+            customTemplateId,
+            "Custom Template",
+            "User-created template",
           );
-        }
-
-        const layoutItems = templateV2Layouts.map((layout, layoutIndex) =>
-          createTemplateV2LayoutItem(layout, layoutIndex)
-        );
-        if (isMounted) {
-          setLayouts(layoutItems);
-          if (layoutItems.length === 0) {
-            setLoadError("This template does not contain any usable layouts.");
-          }
+          if (isMounted) setLayouts(templateDetails?.layouts || []);
+        } else {
+          const templateDetails = getTemplatesByTemplateName(templateID);
+          if (isMounted) setLayouts(templateDetails || []);
         }
       } catch (error) {
         console.error("Error loading slide layouts:", error);
-        if (isMounted) {
-          setLayouts([]);
-          setLoadError("Could not load layouts for this template.");
-        }
+        if (isMounted) setLayouts([]);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -301,16 +194,9 @@ const NewSlideV1 = ({
     return () => {
       isMounted = false;
     };
-  }, [presentationLayout, templateID]);
+  }, [isCustomTemplate, templateID]);
 
-  const showEmptySlideLayout = true;
-  const selectableLayouts = showEmptySlideLayout
-    ? [EMPTY_SLIDE_LAYOUT, ...layouts]
-    : layouts;
-  const layoutCountText = showEmptySlideLayout
-    ? `${selectableLayouts.length} Option${selectableLayouts.length === 1 ? "" : "s"}`
-    : `${layouts.length} Layout${layouts.length === 1 ? "" : "s"}`;
-
+  const layoutCountText = `레이아웃 ${layouts.length}개`;
 
   return (
     <div
@@ -321,7 +207,7 @@ const NewSlideV1 = ({
     >
       <button
         type="button"
-        aria-label="Close layout picker"
+        aria-label="레이아웃 선택 닫기"
         onClick={() => setShowNewSlideSelection(false)}
         className="absolute right-0 top-[-52px] z-50 flex h-10 w-10 items-center justify-center rounded-full border border-[#EDEEEF] bg-white text-[#191919] shadow-[0_6.6px_13.2px_rgba(0,0,0,0.10)] transition hover:bg-[#F7F6F9]"
       >
@@ -334,40 +220,34 @@ const NewSlideV1 = ({
             id="choose-slide-layout-title"
             className="text-base font-medium leading-tight text-[#191919]"
           >
-            Choose Slide Layout
+            슬라이드 레이아웃 선택
           </h2>
           <p className="mt-1 text-xs font-normal leading-none text-[#7A7A85]">
-            {loading ? "Loading layouts" : layoutCountText}
+            {loading ? "레이아웃 불러오는 중" : layoutCountText}
           </p>
         </div>
-        {loading && (
-          <Loader2 className="h-5 w-5 animate-spin text-[#7C51F8]" />
-        )}
+        {loading && <Loader2 className="h-5 w-5 animate-spin text-[#7C51F8]" />}
       </div>
 
       <div className="max-h-[min(70vh,640px)] overflow-y-auto px-4 py-4 md:px-5">
-        {!loading && loadError && (
-          <p className="mb-4 rounded-lg border border-[#FEE4E2] bg-[#FFFBFA] px-4 py-3 text-sm text-[#B42318]">
-            {loadError}
-          </p>
-        )}
         {loading ? (
           <div className="flex h-56 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-[#7C51F8]" />
           </div>
-        ) : selectableLayouts.length > 0 ? (
+        ) : layouts.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {selectableLayouts.map((layout: any) => (
+            {layouts.map((layout: any) => (
               <LayoutItem
                 key={layout.layoutId}
                 layout={layout}
                 onSelect={handleNewSlide}
+                disabled={!mutationsEnabled}
               />
             ))}
           </div>
         ) : (
           <div className="flex h-56 items-center justify-center rounded-lg border border-dashed border-[#D9D9E1] bg-[#FAFAFB] text-sm text-[#7A7A85]">
-            No layouts available.
+            사용 가능한 레이아웃이 없습니다.
           </div>
         )}
       </div>

@@ -25,16 +25,10 @@ export interface DeplotResponse {
 }
 
 export interface ImageAssetResponse {
-    message?: string;
+    message: string;
     path: string;
     id: string;
     file_url?: string;
-    created_at?: string;
-    is_uploaded?: boolean;
-    extras?: {
-        prompt?: string;
-        theme_prompt?: string | null;
-    } | null;
 }
 
 

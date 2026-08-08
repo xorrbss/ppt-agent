@@ -1,9 +1,8 @@
 import asyncio
-import base64
 import json
 import logging
-import mimetypes
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -14,13 +13,13 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError, model_validator
 
 from services.liteparse_service import _command_str, _snippet
-from api.v1.auth.context import get_current_owner_id
+from utils.owner_context import get_current_owner_id
 from utils.asset_directory_utils import (
     get_exports_directory,
     resolve_app_path_to_filesystem,
 )
 from utils.get_env import get_app_data_directory_env, get_temp_directory_env
-from utils.icon_weights import DEFAULT_ICON_TYPE, extract_icon_type_from_settings
+from utils.icon_weights import DEFAULT_ICON_WEIGHT, extract_icon_weight_from_settings
 from utils.runtime_limits import (
     BoundedTextBuffer,
     log_memory,
@@ -32,57 +31,13 @@ EXPORT_DIRECTORY_MODE = 0o755
 EXPORT_FILE_MODE = 0o644
 
 
-def _localize_json_image_assets(
-    value: Any,
-    data_uri_cache: dict[str, str] | None = None,
-) -> Any:
-    """Return a copy with local image sources embedded for headless rendering."""
-    cache = data_uri_cache if data_uri_cache is not None else {}
+def _redact_export_url(url: str) -> str:
+    """Mask the admin session token in an export URL before it hits the logs.
 
-    if isinstance(value, list):
-        return [_localize_json_image_assets(item, cache) for item in value]
-    if not isinstance(value, dict):
-        return value
-
-    localized = {
-        key: _localize_json_image_assets(item, cache) for key, item in value.items()
-    }
-    if localized.get("type") != "image":
-        return localized
-
-    source = localized.get("data")
-    if not isinstance(source, str) or not source:
-        return localized
-
-    parsed = urlparse(source)
-    if parsed.scheme in ("http", "https"):
-        candidate = unquote(parsed.path)
-    elif not parsed.scheme and source.startswith(("/app_data/", "/static/")):
-        candidate = source
-    else:
-        return localized
-
-    if not candidate.startswith(("/app_data/", "/static/")):
-        return localized
-
-    resolved = resolve_app_path_to_filesystem(candidate)
-    if not resolved:
-        return localized
-
-    data_uri = cache.get(resolved)
-    if data_uri is None:
-        try:
-            with open(resolved, "rb") as asset_file:
-                asset_data = asset_file.read()
-        except OSError:
-            return localized
-        mime_type = mimetypes.guess_type(resolved)[0] or "application/octet-stream"
-        encoded = base64.b64encode(asset_data).decode("ascii")
-        data_uri = f"data:{mime_type};base64,{encoded}"
-        cache[resolved] = data_uri
-
-    localized["data"] = data_uri
-    return localized
+    The /pdf-maker export URL carries ?exportSession=<session-token>; logging it
+    verbatim let anyone with log access recover a valid 30-day admin token.
+    """
+    return re.sub(r"(exportSession=)[^&]*", r"\1***", url)
 
 
 def _windows_hidden_subprocess_kwargs() -> dict[str, object]:
@@ -101,22 +56,18 @@ class PptxToHtmlDocument(BaseModel):
 
 
 class PptxToJsonDocument(BaseModel):
-    layouts: list[dict[str, Any]]
+    """Raw slide layouts emitted by the bundled converter's `pptx-to-json` task.
+
+    Deliberately permissive: this is the transport shape. Strict validation belongs
+    to `templates.v2`, which owns the element contract, so a converter upgrade that
+    adds a field surfaces there rather than failing the task at the service layer.
+    """
+
+    layouts: list[dict]
+    output_dir: str = ""
 
 
 class PresentationExportTaskResult(BaseModel):
-    path: str
-
-
-class HtmlToImageTaskResult(BaseModel):
-    path: str
-
-
-class HtmlToImagesTaskResult(BaseModel):
-    paths: list[str]
-
-
-class JsonToImageTaskResult(BaseModel):
     path: str
 
 
@@ -130,18 +81,15 @@ class ExtractSchemaSlide(BaseModel):
 class ExtractSchemaDocument(BaseModel):
     name: str
     ordered: bool = False
-    icon_type: str = DEFAULT_ICON_TYPE
-    icon_weight: str = DEFAULT_ICON_TYPE
+    icon_weight: str = DEFAULT_ICON_WEIGHT
     slides: list[ExtractSchemaSlide]
 
     @model_validator(mode="before")
     @classmethod
-    def normalize_icon_type(cls, data):
+    def normalize_icon_weight(cls, data):
         if isinstance(data, dict):
             normalized = dict(data)
-            icon_type = extract_icon_type_from_settings(normalized)
-            normalized["icon_type"] = icon_type
-            normalized["icon_weight"] = icon_type
+            normalized["icon_weight"] = extract_icon_weight_from_settings(normalized)
             return normalized
         return data
 
@@ -206,25 +154,17 @@ class ExportTaskService:
         extension = ".exe" if os.name == "nt" else ""
         platform_name = sys_platform()
         arch_name = sys_arch()
-
-        candidates: list[str] = []
-        configured = (os.getenv("BUILT_PYTHON_MODULE_PATH") or "").strip()
-        if configured:
-            candidates.append(configured)
-
-        candidates.append(
-            os.path.join(py_dir, f"convert-{platform_name}-{arch_name}{extension}")
-        )
-        if platform_name == "linux" and arch_name == "x64":
-            # Older Linux export bundles used amd64 while Node reports x64.
-            candidates.append(os.path.join(py_dir, f"convert-linux-amd64{extension}"))
-        candidates.extend(
-            [
-                os.path.join(py_dir, f"convert-{platform_name}{extension}"),
-                os.path.join(py_dir, f"convert{extension}"),
-                os.path.join(py_dir, "convert"),
-            ]
-        )
+        names = [
+            f"convert-{platform_name}-{arch_name}{extension}",
+            f"convert-{platform_name}{extension}",
+            f"convert{extension}",
+            "convert",
+        ]
+        # The converter location moved between releases: v0.2.x ships it under
+        # `py/`, v0.3.x at the archive root. Check both (matches the sync script).
+        candidates = [os.path.join(py_dir, n) for n in names] + [
+            os.path.join(export_dir, n) for n in names
+        ]
         for candidate in candidates:
             if candidate and os.path.isfile(candidate):
                 return candidate
@@ -250,34 +190,26 @@ class ExportTaskService:
         os.makedirs(temp_directory, exist_ok=True)
         env["TEMP_DIRECTORY"] = temp_directory
 
-        puppeteer_temp_directory = (
-            env.get("PUPPETEER_TMP_DIR") or os.path.join(temp_directory, "puppeteer")
-        )
-        os.makedirs(puppeteer_temp_directory, exist_ok=True)
-        env["PUPPETEER_TMP_DIR"] = puppeteer_temp_directory
-
-        puppeteer_cache_directory = env.get("PUPPETEER_CACHE_DIR") or os.path.join(
-            temp_directory, "puppeteer-cache"
-        )
-        os.makedirs(puppeteer_cache_directory, exist_ok=True)
-        env["PUPPETEER_CACHE_DIR"] = puppeteer_cache_directory
-
-        if env.get("PRESENTON_ELECTRON", "").lower() == "true":
-            chromium_executable = (env.get("PUPPETEER_EXECUTABLE_PATH") or "").strip()
-            if not chromium_executable or not os.path.isfile(chromium_executable):
-                raise HTTPException(
-                    status_code=500,
-                    detail=(
-                        "The pinned Electron Chromium runtime is unavailable. "
-                        "Refusing to download or launch a different browser version."
-                    ),
-                )
-
-        # The export runtime consumes app-data paths relative to the page it is
-        # rendering. Docker intentionally leaves NEXT_PUBLIC_FAST_API unset so
-        # nginx remains the public origin; Electron supplies its dynamic origin.
-        env["ASSETS_BASE_URL"] = "/app_data"
+        fastapi_base = (os.getenv("NEXT_PUBLIC_FAST_API") or "").strip()
+        if not fastapi_base:
+            raise HTTPException(
+                status_code=500,
+                detail="NEXT_PUBLIC_FAST_API must be set for PPTX-to-HTML export",
+            )
+        env["ASSETS_BASE_URL"] = f"{fastapi_base.rstrip('/')}/app_data"
         env["BUILT_PYTHON_MODULE_PATH"] = self.converter_path
+
+        # The export runtime renders /pdf-maker via puppeteer. When the deploy hasn't
+        # pinned a browser (Docker sets PUPPETEER_EXECUTABLE_PATH to its bundled
+        # chromium), fall back to the same Chrome the authored renderer auto-detects,
+        # so byte-PPTX export works on a desktop instead of puppeteer trying to
+        # download its own Chrome (which also fails offline / behind a proxy).
+        if not env.get("PUPPETEER_EXECUTABLE_PATH"):
+            from utils.slide_capture import find_chrome
+
+            chrome = find_chrome()
+            if chrome:
+                env["PUPPETEER_EXECUTABLE_PATH"] = chrome
 
         return env
 
@@ -295,12 +227,11 @@ class ExportTaskService:
 
     @staticmethod
     def _resolve_output_path(response_data: dict) -> str:
-        for path_key in ("path", "file_path"):
-            path_value = response_data.get(path_key)
-            if isinstance(path_value, str):
-                resolved = ExportTaskService._resolve_trusted_runtime_path(path_value)
-                if resolved:
-                    return resolved
+        path_value = response_data.get("path")
+        if isinstance(path_value, str):
+            resolved = resolve_app_path_to_filesystem(path_value) or path_value
+            if os.path.isfile(resolved):
+                return resolved
 
         url_value = response_data.get("url")
         if isinstance(url_value, str):
@@ -398,7 +329,6 @@ class ExportTaskService:
                     status_code=500,
                     detail=(
                         "Export task failed. "
-                        f"returncode={result['returncode']} "
                         f"stderr={_snippet(result['stderr'])} stdout={_snippet(result['stdout'])}"
                     ),
                 )
@@ -498,10 +428,9 @@ class ExportTaskService:
         fastapi_url: str | None = None,
         cookie_header: str | None = None,
     ) -> PresentationExportTaskResult:
-        log_url = url.split("#", 1)[0] if "#" in url else url
         LOGGER.info(
             "[export_runtime] export_from_url url=%s format=%s cookie_header=%s",
-            log_url,
+            _redact_export_url(url),
             export_as,
             "set" if cookie_header else "empty",
         )
@@ -557,145 +486,26 @@ class ExportTaskService:
                 detail="PPTX-to-HTML export produced invalid JSON output",
             ) from exc
 
-    async def render_html_to_image(
-        self,
-        html: str,
-        width: int,
-        height: int,
-    ) -> HtmlToImageTaskResult:
-        if width <= 0 or height <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="HTML-to-image dimensions must be positive",
-            )
+    async def convert_pptx_to_json(
+        self, pptx_path: str, *, session_id: str
+    ) -> PptxToJsonDocument:
+        """Convert a PPTX into raw slide layouts, extracting embedded media to disk.
 
-        response_data = await self._run_task(
-            {
-                "type": "html-to-image",
-                "html": html,
-                "width": width,
-                "height": height,
-            },
-            "HTML-to-image export task did not produce a response file",
-        )
-
-        output_path = self._resolve_output_path(response_data)
-        self._ensure_output_readable(output_path)
-
-        return HtmlToImageTaskResult(path=output_path)
-
-    async def render_json_to_image(
-        self,
-        data: list[dict[str, Any]],
-        width: int,
-        height: int,
-        fonts: Mapping[str, str] | None = None,
-    ) -> JsonToImageTaskResult:
-        if width <= 0 or height <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="JSON-to-image dimensions must be positive",
-            )
-
-        task_payload: dict[str, Any] = {
-            "type": "json-to-image",
-            "data": _localize_json_image_assets(data),
-            "width": width,
-            "height": height,
-        }
-        if fonts:
-            task_payload["fonts"] = dict(fonts)
-
-        response_data = await self._run_task(
-            task_payload,
-            "JSON-to-image export task did not produce a response file",
-        )
-
-        output_path = self._resolve_output_path(response_data)
-        self._ensure_output_readable(output_path)
-
-        return JsonToImageTaskResult(path=output_path)
-
-    async def render_htmls_to_images(
-        self,
-        htmls: list[str],
-        width: int,
-        height: int,
-    ) -> HtmlToImagesTaskResult:
-        if not htmls:
-            raise HTTPException(
-                status_code=400,
-                detail="At least one HTML document is required",
-            )
-        if width <= 0 or height <= 0:
-            raise HTTPException(
-                status_code=400,
-                detail="HTML-to-image dimensions must be positive",
-            )
+        `session_id` is required by the converter's task schema even though it does
+        not determine the output location -- the runtime allocates its own directory
+        per run. Callers that need to reclaim the extracted media must use
+        `output_dir`, not a path derived from the session id.
+        """
+        if not os.path.isfile(pptx_path):
+            raise HTTPException(status_code=400, detail=f"PPTX not found: {pptx_path}")
 
         try:
             response_data = await self._run_task(
                 {
-                    "type": "html-to-images",
-                    "htmls": htmls,
-                    "width": width,
-                    "height": height,
+                    "type": "pptx-to-json",
+                    "pptx_path": pptx_path,
+                    "session_id": session_id,
                 },
-                "HTML-to-images export task did not produce a response file",
-            )
-        except HTTPException as exc:
-            if "Invalid task type" in str(exc.detail):
-                LOGGER.warning(
-                    "[export_runtime] html-to-images is unavailable; "
-                    "falling back to one task per HTML document"
-                )
-            elif exc.status_code == 500:
-                LOGGER.warning(
-                    "[export_runtime] html-to-images failed; "
-                    "falling back to one task per HTML document. detail=%s",
-                    exc.detail,
-                )
-            else:
-                raise
-            results = [
-                await self.render_html_to_image(html, width, height) for html in htmls
-            ]
-            return HtmlToImagesTaskResult(paths=[result.path for result in results])
-
-        raw_paths = response_data.get("file_paths")
-        if not isinstance(raw_paths, list) or len(raw_paths) != len(htmls):
-            raise HTTPException(
-                status_code=500,
-                detail="HTML-to-images export task produced invalid output",
-            )
-
-        output_paths = [
-            self._resolve_output_path({"file_path": raw_path}) for raw_path in raw_paths
-        ]
-        for output_path in output_paths:
-            self._ensure_output_readable(output_path)
-
-        return HtmlToImagesTaskResult(paths=output_paths)
-
-    async def convert_pptx_to_json(
-        self,
-        pptx_path: str,
-        *,
-        slide_concurrency: int | None = None,
-    ) -> PptxToJsonDocument:
-        if not os.path.isfile(pptx_path):
-            raise HTTPException(status_code=400, detail=f"PPTX not found: {pptx_path}")
-
-        task_payload: dict[str, Any] = {
-            "type": "pptx-to-json",
-            "pptx_path": pptx_path,
-        }
-        if slide_concurrency is not None:
-            task_payload["slide_concurrency"] = slide_concurrency
-
-        try:
-            response_data = await self._run_task(
-                task_payload,
                 "PPTX-to-JSON export task did not produce a response file",
             )
 
@@ -708,6 +518,12 @@ class ExportTaskService:
                 "pptx-to-json",
             )
 
+            if not isinstance(output_data, dict):
+                raise HTTPException(
+                    status_code=500,
+                    detail="PPTX-to-JSON export produced invalid output",
+                )
+            output_data.setdefault("output_dir", os.path.dirname(output_path))
             return PptxToJsonDocument(**output_data)
         except json.JSONDecodeError as exc:
             raise HTTPException(
@@ -821,15 +637,11 @@ class ExportTaskService:
             slide_n = len(slides) if isinstance(slides, list) else "?"
             LOGGER.info(
                 "[export_runtime] extract_schema node finished url=%s "
-                "response_name=%r ordered=%s icon_type=%s slides=%s",
+                "response_name=%r ordered=%s icon_weight=%s slides=%s",
                 url,
                 response_data.get("name") if isinstance(response_data, dict) else None,
                 response_data.get("ordered") if isinstance(response_data, dict) else None,
-                (
-                    response_data.get("icon_type") or response_data.get("icon_weight")
-                    if isinstance(response_data, dict)
-                    else None
-                ),
+                response_data.get("icon_weight") if isinstance(response_data, dict) else None,
                 slide_n,
             )
             return ExtractSchemaDocument(**response_data)

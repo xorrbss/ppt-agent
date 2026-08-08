@@ -1,11 +1,25 @@
-from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+import uuid
+from typing import Any, List, Literal, Optional
+
+from pydantic import BaseModel, Field, PrivateAttr
 
 from enums.tone import Tone
 from enums.verbosity import Verbosity
 
 
 class GeneratePresentationRequest(BaseModel):
+    # Admission-only state. This never crosses the HTTP wire, but lets the
+    # in-process background task execute the exact immutable revision that was
+    # accepted instead of re-reading mutable current state.
+    _template_v2_generation_target: Any = PrivateAttr(default=None)
+    _request_id: Optional[str] = PrivateAttr(default=None)
+    _authored_exact_snapshot_id: Optional[str] = PrivateAttr(default=None)
+
+    # Chat-first async generation reuses the durable presentation shell and
+    # awaiting-approval operation created by /presentation/create.  Legacy
+    # generation ignores this field while the feature flag is disabled.
+    presentation_id: Optional[uuid.UUID] = Field(default=None)
+
     content: str = Field(..., description="The content for generating the presentation")
     slides_markdown: Optional[List[str]] = Field(
         default=None, description="The markdown for the slides"
@@ -27,7 +41,26 @@ class GeneratePresentationRequest(BaseModel):
         description="Language for the presentation. If omitted, model auto-detects language.",
     )
     template: str = Field(
-        default="general", description="Template to use for the presentation"
+        default="adaptive", description="Template to use for the presentation"
+    )
+    strategy: Optional[
+        Literal["legacy", "adaptive", "authored", "template_v2"]
+    ] = Field(
+        default=None,
+        description=(
+            "Explicit generation strategy. Omit to preserve the existing "
+            "template-driven behavior."
+        ),
+    )
+    template_v2_id: Optional[str] = Field(
+        default=None,
+        description="Structured Template V2 id (required for strategy=template_v2)",
+    )
+    template_v2_revision: Optional[int] = Field(
+        default=None,
+        description=(
+            "Immutable Template V2 revision (required for strategy=template_v2)"
+        ),
     )
     include_table_of_contents: bool = Field(
         default=False, description="Whether to include a table of contents"
@@ -43,4 +76,26 @@ class GeneratePresentationRequest(BaseModel):
     )
     trigger_webhook: bool = Field(
         default=False, description="Whether to trigger subscribed webhooks"
+    )
+    vision_qa: bool = Field(
+        default=False,
+        description=(
+            "Opt-in high-quality pass: after composing/authoring, render and "
+            "vision-critique each slide and re-do any flagged as broken. Slower "
+            "and token-heavier; off by default."
+        ),
+    )
+    # Authored-mode brand tokens (ignored by the template path). When omitted, authored
+    # mode uses a brand-blue primary + language-aware fonts and no wordmark.
+    primary_color: Optional[str] = Field(
+        default=None, description="Authored mode: brand primary colour (hex, e.g. #2563EB)"
+    )
+    fonts: Optional[str] = Field(
+        default=None, description="Authored mode: brand font family (e.g. 'Noto Sans KR')"
+    )
+    wordmark: Optional[str] = Field(
+        default=None, description="Authored mode: small footer wordmark text"
+    )
+    authored_style: Optional[str] = Field(
+        default=None, description="Authored mode: authored style preset id"
     )

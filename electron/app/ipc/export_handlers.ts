@@ -1,11 +1,5 @@
 import { ipcMain } from "electron";
-import {
-  getAppDataDir,
-  getCacheDir,
-  getDownloadsDir,
-  getTempDir,
-  resourceBaseDir,
-} from "../utils/constants";
+import { baseDir, getAppDataDir, getDownloadsDir, getTempDir } from "../utils/constants";
 import fs from "fs";
 import path from "path";
 
@@ -20,7 +14,7 @@ import { killProcess } from "../utils";
 import {
   isExportChromiumAvailable,
   removeBrokenExportChromiumCaches,
-  resolveLaunchableExportChromiumPath,
+  resolveInstalledExportChromiumPath,
 } from "../utils/export-chromium";
 import { resolveExportSpawnTarget } from "../utils/export-msix-runtime";
 
@@ -54,6 +48,15 @@ export async function stopActiveExportProcesses(): Promise<void> {
 }
 
 export function setupExportHandlers() {
+  ipcMain.handle("file-downloaded", async (_, filePath: string): Promise<IPCStatus> => {
+    const fileName = path.basename(filePath);
+    const destinationPath = path.join(getDownloadsDir(), fileName);
+
+    await fs.promises.rename(filePath, destinationPath);
+    showFileDownloadedDialogInBackground(destinationPath);
+    return { success: true };
+  });
+
   ipcMain.handle("export-presentation", async (_, id: string, title: string, exportAs: "pptx" | "pdf") => {
     let exportTempDir: string | undefined;
     try {
@@ -95,7 +98,7 @@ export function setupExportHandlers() {
       const exportTaskPath = path.join(exportTempDir, "export_task.json");
       await fs.promises.writeFile(exportTaskPath, JSON.stringify(exportTask));
 
-      const packagedExportRoot = path.join(resourceBaseDir, "resources", "export");
+      const packagedExportRoot = path.join(baseDir, "resources", "export");
       const packagedExportScriptPath = path.join(packagedExportRoot, "index.js");
       const { scriptPath: exportScriptPath, converterPath: pythonModulePath } =
         await resolveExportSpawnTarget(
@@ -114,29 +117,16 @@ export function setupExportHandlers() {
         NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
         NEXT_PUBLIC_FAST_API: process.env.NEXT_PUBLIC_FAST_API,
       });
-      const chromiumExecutablePath = await resolveLaunchableExportChromiumPath();
-      if (!chromiumExecutablePath) {
-        return {
-          success: false,
-          message:
-            "Export could not prepare Chromium for this Microsoft Store install. Restart Presenton and try again.",
-        };
-      }
-      const puppeteerTempDir = path.join(tempDir, "puppeteer");
-      const puppeteerCacheDir = path.join(getCacheDir(), "puppeteer");
-      await Promise.all([
-        fs.promises.mkdir(puppeteerTempDir, { recursive: true }),
-        fs.promises.mkdir(puppeteerCacheDir, { recursive: true }),
-      ]);
+      const chromiumExecutablePath = resolveInstalledExportChromiumPath();
       const baseExportEnv = {
         ...process.env,
         TEMP_DIRECTORY: tempDir,
         APP_DATA_DIRECTORY: appDataDir,
         NODE_ENV: "development",
         BUILT_PYTHON_MODULE_PATH: pythonModulePath,
-        PUPPETEER_EXECUTABLE_PATH: chromiumExecutablePath,
-        PUPPETEER_CACHE_DIR: puppeteerCacheDir,
-        PUPPETEER_TMP_DIR: puppeteerTempDir,
+        ...(chromiumExecutablePath && {
+          PUPPETEER_EXECUTABLE_PATH: chromiumExecutablePath,
+        }),
       };
       const responsePath = exportTaskPath.replace(".json", ".response.json");
       const responseRaw = await runExportTaskAndReadResponse(

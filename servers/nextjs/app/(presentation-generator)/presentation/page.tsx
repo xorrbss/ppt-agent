@@ -12,9 +12,9 @@ const page = () => {
   if (!queryId) {
     return (
       <div className="flex flex-col items-center justify-center h-screen font-syne">
-        <h1 className="text-2xl font-bold">No presentation id found</h1>
-        <p className="text-gray-500 pb-4">Please try again</p>
-        <Button onClick={() => router.push("/dashboard")}>Go to home</Button>
+        <h1 className="text-2xl font-bold">발표자료 ID를 찾을 수 없습니다</h1>
+        <p className="text-gray-500 pb-4">다시 시도해 주세요</p>
+        <Button onClick={() => router.push("/dashboard")}>홈으로 이동</Button>
       </div>
     );
   }

@@ -1,28 +1,21 @@
-"""Pydantic models matching the frontend slide element types."""
+"""Strict Pydantic models matching the native Template V2 slide element types.
+
+Selected from upstream ``templates/v2/models/elements.py``.  Phase 1 keeps the
+serializable model layer but not the Konva renderer.  Unknown fields are
+rejected here because silently dropping editor payload would violate the
+lossless ``slide.ui`` persistence contract.
+"""
 
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Literal, Optional, TypeAlias, Union, List
+from typing import Annotated, Literal, Optional, TypeAlias, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-def _validate_min_max(
-    min_value: int | None,
-    max_value: int | None,
-    *,
-    min_name: str,
-    max_name: str,
-) -> None:
-    if min_value is None or max_value is None:
-        return
-
-    expected_min = (max_value + 1) // 2
-    if min_value != expected_min:
-        raise ValueError(
-            f"{min_name} must equal half of {max_name}, rounded up ({expected_min})"
-        )
+class TemplateV2Model(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class HorizontalAlignment(str, Enum):
@@ -71,17 +64,18 @@ class IconType(str, Enum):
 
 
 class ChartType(str, Enum):
-    BAR = "bar"
-    HORIZONTAL_BAR = "horizontal_bar"
-    LINE = "line"
     AREA = "area"
-    PIE = "pie"
+    BAR = "bar"
+    BUBBLE = "bubble"
     DONUT = "donut"
-    STACKED_BAR = "stacked_bar"
+    HORIZONTAL_BAR = "horizontal_bar"
     HORIZONTAL_STACKED_BAR = "horizontal_stacked_bar"
-    SCATTER = "scatter"
-    RADAR = "radar"
+    LINE = "line"
+    PIE = "pie"
     POLAR_AREA = "polar_area"
+    RADAR = "radar"
+    SCATTER = "scatter"
+    STACKED_BAR = "stacked_bar"
 
 
 class DataLabelPosition(str, Enum):
@@ -91,29 +85,29 @@ class DataLabelPosition(str, Enum):
     OUTSIDE = "outside"
 
 
-class Position(BaseModel):
+class Position(TemplateV2Model):
     x: float
     y: float
 
 
-class Size(BaseModel):
+class Size(TemplateV2Model):
     width: float
     height: float
 
 
-class Padding(BaseModel):
+class Padding(TemplateV2Model):
     top: float
     right: float
     bottom: float
     left: float
 
 
-class Alignment(BaseModel):
+class Alignment(TemplateV2Model):
     horizontal: Optional[HorizontalAlignment] = None
     vertical: Optional[VerticalAlignment] = None
 
 
-class Font(BaseModel):
+class Font(TemplateV2Model):
     size: Optional[float] = None
     family: Optional[str] = None
     color: Optional[str] = None
@@ -126,26 +120,26 @@ class Font(BaseModel):
     opacity: Optional[float] = None
 
 
-class Fill(BaseModel):
+class Fill(TemplateV2Model):
     color: str
     opacity: Optional[float] = None
 
 
-class Stroke(BaseModel):
+class Stroke(TemplateV2Model):
     color: str
     opacity: Optional[float] = None
     width: float
     dash: Optional[list[float]] = None
 
 
-class BorderRadius(BaseModel):
+class BorderRadius(TemplateV2Model):
     tl: float
     tr: float
     bl: float
     br: float
 
 
-class Shadow(BaseModel):
+class Shadow(TemplateV2Model):
     color: str
     blur: Optional[float] = None
     opacity: Optional[float] = None
@@ -153,17 +147,17 @@ class Shadow(BaseModel):
     offset_y: Optional[float] = None
 
 
-class ChartSeries(BaseModel):
+class ChartSeries(TemplateV2Model):
     name: str
     values: list[float]
 
 
-class TextRun(BaseModel):
+class TextRun(TemplateV2Model):
     text: str
     font: Optional[Font] = None
 
 
-class Text(BaseModel):  # Konva Text
+class Text(TemplateV2Model):
     type: Literal["text"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -174,15 +168,19 @@ class Text(BaseModel):  # Konva Text
     stroke: Optional[Stroke] = None
     shadow: Optional[Shadow] = None
     runs: list[TextRun]
-
-    # Schema
     decorative: bool
     name: str
     max_length: int
     min_length: int
 
+    @model_validator(mode="after")
+    def _length_range_is_valid(self) -> "Text":
+        if self.min_length < 0 or self.max_length < self.min_length:
+            raise ValueError("text length bounds are invalid")
+        return self
 
-class MathExpression(BaseModel):
+
+class MathExpression(TemplateV2Model):
     type: Literal["math"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -193,15 +191,19 @@ class MathExpression(BaseModel):
     font: Optional[Font] = None
     alignment: Optional[Alignment] = None
     shadow: Optional[Shadow] = None
-
-    # Schema
     decorative: bool
     name: str
     max_length: int = 4000
     min_length: int = 1
 
+    @model_validator(mode="after")
+    def _length_range_is_valid(self) -> "MathExpression":
+        if self.min_length < 1 or self.max_length < self.min_length:
+            raise ValueError("math length bounds are invalid")
+        return self
 
-class Container(BaseModel):  # Konva Group
+
+class Container(TemplateV2Model):
     type: Literal["container"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -212,10 +214,10 @@ class Container(BaseModel):  # Konva Group
     border_radius: Optional[BorderRadius] = None
     shadow: Optional[Shadow] = None
     padding: Optional[Padding] = None
-    child: Optional[SlideElement] = None
+    child: Optional["SlideElement"] = None
 
 
-class Image(BaseModel):  # Konva Image
+class Image(TemplateV2Model):
     type: Literal["image"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -231,8 +233,6 @@ class Image(BaseModel):  # Konva Image
     border_radius: Optional[BorderRadius] = None
     clip_path: Optional[str] = None
     color: Optional[str] = None
-
-    # Schema
     decorative: bool
     name: str
     prompt: Optional[str] = None
@@ -240,7 +240,7 @@ class Image(BaseModel):  # Konva Image
     icon_type: Optional[IconType] = None
 
 
-class TextList(BaseModel):  # Konva Group
+class TextList(TemplateV2Model):
     type: Literal["text-list"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -248,8 +248,6 @@ class TextList(BaseModel):  # Konva Group
     font: Optional[Font] = None
     marker: Optional[Marker] = None
     items: list[list[TextRun]]
-
-    # Schema
     decorative: bool
     name: str
     max_items: int
@@ -257,23 +255,52 @@ class TextList(BaseModel):  # Konva Group
     max_item_length: int
     min_item_length: int
 
+    @model_validator(mode="after")
+    def _ranges_are_valid(self) -> "TextList":
+        if (
+            self.min_items < 0
+            or self.max_items < self.min_items
+            or self.min_item_length < 0
+            or self.max_item_length < self.min_item_length
+        ):
+            raise ValueError("text-list bounds are invalid")
+        if not self.min_items <= len(self.items) <= self.max_items:
+            raise ValueError("text-list item count is outside its declared bounds")
+        return self
 
-class TableCell(BaseModel):
+
+class TableCellReference(TemplateV2Model):
+    """Zero-based absolute table coordinate, including the header row."""
+
+    row: int = Field(ge=0, strict=True)
+    column: int = Field(ge=0, strict=True)
+
+
+class TableCell(TemplateV2Model):
     color: Optional[Fill] = None
     font: Optional[Font] = None
     alignment: Optional[HorizontalAlignment] = None
-    runs: List[TextRun]
+    runs: list[TextRun]
+    rowspan: int = Field(default=1, ge=1, strict=True)
+    colspan: int = Field(default=1, ge=1, strict=True)
+    covered_by: Optional[TableCellReference] = None
+
+    @model_validator(mode="after")
+    def _covered_cells_cannot_start_spans(self) -> "TableCell":
+        if self.covered_by is not None and (
+            self.rowspan != 1 or self.colspan != 1
+        ):
+            raise ValueError("covered table cells cannot start spans")
+        return self
 
 
-class Table(BaseModel):
+class Table(TemplateV2Model):
     type: Literal["table"]
     position: Optional[Position] = None
     size: Optional[Size] = None
     rotation: Optional[float] = None
     columns: list[TableCell]
     rows: list[list[TableCell]]
-
-    # Schema
     decorative: bool
     name: str
     max_columns: int
@@ -281,19 +308,75 @@ class Table(BaseModel):
     max_rows: int
     min_rows: int
 
+    @model_validator(mode="after")
+    def _ranges_are_valid(self) -> "Table":
+        if (
+            self.min_columns < 0
+            or self.max_columns < self.min_columns
+            or self.min_rows < 0
+            or self.max_rows < self.min_rows
+        ):
+            raise ValueError("table bounds are invalid")
+        column_count = len(self.columns)
+        if not self.min_columns <= column_count <= self.max_columns:
+            raise ValueError("table column count is outside its declared bounds")
+        if not self.min_rows <= len(self.rows) <= self.max_rows:
+            raise ValueError("table row count is outside its declared bounds")
+        if any(len(row) != column_count for row in self.rows):
+            raise ValueError("table rows must match the declared column count")
+        grid = [self.columns, *self.rows]
+        occupied: dict[tuple[int, int], tuple[int, int]] = {}
+        for row_index, row in enumerate(grid):
+            for column_index, cell in enumerate(row):
+                if cell.covered_by is not None:
+                    continue
+                end_row = row_index + cell.rowspan
+                end_column = column_index + cell.colspan
+                if end_row > len(grid) or end_column > column_count:
+                    raise ValueError("table cell span is outside the table grid")
+                anchor = (row_index, column_index)
+                for covered_row in range(row_index, end_row):
+                    for covered_column in range(column_index, end_column):
+                        coordinate = (covered_row, covered_column)
+                        prior = occupied.get(coordinate)
+                        if prior is not None and prior != anchor:
+                            raise ValueError("table cell spans overlap")
+                        occupied[coordinate] = anchor
+                        if coordinate == anchor:
+                            continue
+                        marker = grid[covered_row][covered_column].covered_by
+                        if marker is None or (
+                            marker.row,
+                            marker.column,
+                        ) != anchor:
+                            raise ValueError(
+                                "table covered cell must reference its span anchor"
+                            )
+        for row_index, row in enumerate(grid):
+            for column_index, cell in enumerate(row):
+                marker = cell.covered_by
+                if marker is None:
+                    continue
+                coordinate = (row_index, column_index)
+                if occupied.get(coordinate) != (marker.row, marker.column):
+                    raise ValueError(
+                        "table covered cell references a missing span anchor"
+                    )
+        return self
+
 
 class VectorShape(str, Enum):
     POLYGON = "polygon"
     ELLIPSE = "ellipse"
 
 
-class VectorCurve(BaseModel):
+class VectorCurve(TemplateV2Model):
     type: Literal["smooth"]
     tension: Optional[float] = Field(default=None, ge=0, le=1)
     segments: Optional[int] = Field(default=16, ge=1, le=96)
 
 
-class Vector(BaseModel):
+class Vector(TemplateV2Model):
     type: Literal["vector"]
     shape: Optional[VectorShape] = None
     points: list[Position] = Field(min_length=2)
@@ -306,8 +389,14 @@ class Vector(BaseModel):
     stroke: Optional[Stroke] = None
     shadow: Optional[Shadow] = None
 
+    @model_validator(mode="after")
+    def _ellipse_uses_a_bounding_pair(self) -> "Vector":
+        if self.shape is VectorShape.ELLIPSE and len(self.points) != 2:
+            raise ValueError("ellipse vectors require exactly two bounding points")
+        return self
 
-class Chart(BaseModel):
+
+class Chart(TemplateV2Model):
     type: Literal["chart"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -316,8 +405,6 @@ class Chart(BaseModel):
     title: Optional[str] = None
     title_color: Optional[str] = None
     legend_color: Optional[str] = None
-
-    # PPTX chart model emitted by the template-v2 converter.
     colors: Optional[list[str]] = None
     x_axis: Optional[bool] = None
     y_axis: Optional[bool] = None
@@ -332,19 +419,23 @@ class Chart(BaseModel):
     y_axis_grid: Optional[bool] = None
     grid_color: Optional[str] = None
     source: Optional[str] = None
-
-    # Schema
     decorative: bool
     name: str
 
     @model_validator(mode="after")
-    def _pie_and_donut_use_only_first_series(self) -> "Chart":
+    def _data_shape_is_valid(self) -> "Chart":
         if (
             self.chart_type in {ChartType.PIE, ChartType.DONUT}
             and self.series
             and len(self.series) > 1
         ):
-            self.series = self.series[:1]
+            raise ValueError("pie and donut charts support at most one series")
+        if self.categories is not None and self.series is not None:
+            category_count = len(self.categories)
+            if any(len(series.values) != category_count for series in self.series):
+                raise ValueError(
+                    "chart series values must match the category count"
+                )
         return self
 
     @field_validator("data_labels", mode="before")
@@ -362,33 +453,44 @@ class Chart(BaseModel):
 
     @model_validator(mode="after")
     def _size_must_be_visible_when_explicit(self) -> "Chart":
-        if self.size is None:
-            return self
-        if self.size.width < 80 or self.size.height < 60:
+        if self.size is not None and (
+            self.size.width < 80 or self.size.height < 60
+        ):
             raise ValueError("chart size must be at least 80x60 px")
         return self
 
 
-class InfographicType(str, Enum):
-    PROGRESS_BAR = "progress_bar"
-    GAUGE = "gauge"
-
-
-class ProgressBarInfographicData(BaseModel):
+class ProgressBarInfographicData(TemplateV2Model):
     type: Literal["progress_bar"]
     max_value: float
     min_value: float
     value: float
 
+    @model_validator(mode="after")
+    def _range_is_valid(self) -> "ProgressBarInfographicData":
+        if self.min_value >= self.max_value:
+            raise ValueError("infographic min_value must be less than max_value")
+        if not self.min_value <= self.value <= self.max_value:
+            raise ValueError("infographic value must be within its declared range")
+        return self
 
-class GaugeInfographicData(BaseModel):
+
+class GaugeInfographicData(TemplateV2Model):
     type: Literal["gauge"]
     max_value: float
     min_value: float
     value: float
 
+    @model_validator(mode="after")
+    def _range_is_valid(self) -> "GaugeInfographicData":
+        if self.min_value >= self.max_value:
+            raise ValueError("infographic min_value must be less than max_value")
+        if not self.min_value <= self.value <= self.max_value:
+            raise ValueError("infographic value must be within its declared range")
+        return self
 
-class Infographic(BaseModel):
+
+class Infographic(TemplateV2Model):
     type: Literal["infographic"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -397,16 +499,12 @@ class Infographic(BaseModel):
         Union[ProgressBarInfographicData, GaugeInfographicData],
         Field(discriminator="type"),
     ]
-
-    # Design
-    colors: List[str] = Field(default_factory=list)
-
-    # Schema
+    colors: list[str] = Field(default_factory=list)
     decorative: bool
     name: str
 
 
-class Flex(BaseModel):
+class Flex(TemplateV2Model):
     type: Literal["flex"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -418,15 +516,26 @@ class Flex(BaseModel):
     gap: Optional[float] = None
     column_gap: Optional[float] = None
     row_gap: Optional[float] = None
-    children: list[SlideElement]
-
-    # Schema
+    children: list["SlideElement"]
     name: str
     max_children: int
     min_children: int
 
+    @model_validator(mode="after")
+    def _layout_bounds_are_valid(self) -> "Flex":
+        if self.min_children < 0 or self.max_children < self.min_children:
+            raise ValueError("flex child bounds are invalid")
+        if not self.min_children <= len(self.children) <= self.max_children:
+            raise ValueError("flex child count is outside its declared bounds")
+        if any(
+            gap is not None and gap < 0
+            for gap in (self.gap, self.column_gap, self.row_gap)
+        ):
+            raise ValueError("flex gaps must be non-negative")
+        return self
 
-class Grid(BaseModel):
+
+class Grid(TemplateV2Model):
     type: Literal["grid"]
     position: Optional[Position] = None
     size: Optional[Size] = None
@@ -438,21 +547,37 @@ class Grid(BaseModel):
     row_gap: Optional[float] = None
     align_items: Optional[LayoutAlignment] = None
     justify_items: Optional[LayoutAlignment] = None
-    children: list[SlideElement]
-
-    # Schema
+    children: list["SlideElement"]
     name: str
     max_children: int
     min_children: int
 
+    @model_validator(mode="after")
+    def _layout_bounds_are_valid(self) -> "Grid":
+        if self.columns <= 0 or (self.rows is not None and self.rows <= 0):
+            raise ValueError("grid dimensions must be positive")
+        if self.min_children < 0 or self.max_children < self.min_children:
+            raise ValueError("grid child bounds are invalid")
+        child_count = len(self.children)
+        if not self.min_children <= child_count <= self.max_children:
+            raise ValueError("grid child count is outside its declared bounds")
+        if any(
+            gap is not None and gap < 0
+            for gap in (self.gap, self.column_gap, self.row_gap)
+        ):
+            raise ValueError("grid gaps must be non-negative")
+        if self.rows is not None:
+            capacity = self.columns * self.rows
+            if self.max_children > capacity or child_count > capacity:
+                raise ValueError("grid child bounds exceed its declared capacity")
+        return self
 
-class Group(BaseModel):
+
+class Group(TemplateV2Model):
     type: Literal["group"]
     position: Optional[Position] = None
     size: Optional[Size] = None
-    children: list[SlideElement]
-
-    # Schema
+    children: list["SlideElement"]
     name: str
 
 
@@ -477,45 +602,3 @@ SlideElement: TypeAlias = Annotated[
 
 for _model in (Container, Flex, Grid, Group):
     _model.model_rebuild()
-
-
-__all__ = [
-    "Alignment",
-    "BorderRadius",
-    "Chart",
-    "ChartSeries",
-    "ChartType",
-    "Container",
-    "Fill",
-    "Flex",
-    "FlexDirection",
-    "Font",
-    "Grid",
-    "HorizontalAlignment",
-    "Image",
-    "ImageFit",
-    "IconType",
-    "Infographic",
-    "InfographicType",
-    "GaugeInfographicData",
-    "LayoutAlignment",
-    "Marker",
-    "MathExpression",
-    "Padding",
-    "Position",
-    "ProgressBarInfographicData",
-    "Shadow",
-    "Size",
-    "SlideElement",
-    "Group",
-    "Stroke",
-    "Table",
-    "TableCell",
-    "Text",
-    "TextList",
-    "TextRun",
-    "VerticalAlignment",
-    "Vector",
-    "VectorCurve",
-    "VectorShape",
-]

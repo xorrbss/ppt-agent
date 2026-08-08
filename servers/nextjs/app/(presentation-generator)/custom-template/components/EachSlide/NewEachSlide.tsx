@@ -5,18 +5,24 @@ import { useCompiledLayout } from "../../hooks/useCompiledLayout";
 import { useSlideUndoRedo } from "../../hooks/useSlideUndoRedo";
 import { EachSlideProps } from "../../types";
 import { SlideContentDisplay } from "./SlideContentDisplay";
+import { useSlideEdit } from "../../hooks/useSlideEdit";
+import { ensureRuntimeTailwindCss } from "@/lib/runtime-tailwind-client";
 import {
   Trash2,
+  X,
+  Check,
   Loader2,
   RotateCcw,
+  Sparkles,
   Edit,
+  MousePointer2,
   Undo,
   Redo
 } from "lucide-react";
 import Timer from "../Timer";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import ToolTip from "@/components/ToolTip";
-import SlideErrorBoundary from "@/app/(presentation-generator)/components/SlideErrorBoundary";
 // import { CodeEditor } from "./CodeEditor";
 // import SlideSelectionEditor from "./SlideSelectionEditor";
 import SchemaElementHighlighter from "../SchemaElementHighlighter";
@@ -32,10 +38,10 @@ import {
 
 const EachSlide: React.FC<EachSlideProps> = ({
   slide,
-  templateFonts,
   index,
   retrySlide,
   setSlides,
+  onSlideUpdate,
   onOpenSchemaEditor,
   isSchemaEditorOpen = false,
   schemaPreviewData,
@@ -47,10 +53,19 @@ const EachSlide: React.FC<EachSlideProps> = ({
   // Use schema preview data from parent if available, otherwise use local
   const previewData = schemaPreviewData ?? localPreviewData;
   const setPreviewData = setLocalPreviewData;
+  const [isEditPromptOpen, setIsEditPromptOpen] = useState(false);
   const slideDisplayRef = useRef<HTMLDivElement>(null);
+  const [isSelectionEditMode, setIsSelectionEditMode] = useState(false);
 
   // Compile layout once and share with child components
   const compiledLayout = useCompiledLayout(slide.react);
+
+  useEffect(() => {
+    if (!slide.react) return;
+    ensureRuntimeTailwindCss([slide.react]).catch((error) => {
+      console.error("Failed to prepare runtime Tailwind styles:", error);
+    });
+  }, [slide.react]);
 
   // Auto-retry once if compilation fails
   const hasAutoRetriedCompile = useRef(false);
@@ -71,6 +86,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
       !hasAutoRetriedCompile.current
     ) {
       hasAutoRetriedCompile.current = true;
+      console.log(`Auto-retrying slide ${index + 1} after compile failure...`);
       retrySlide(index);
     }
   }, [slide.react, slide.processed, slide.processing, compiledLayout, index, retrySlide]);
@@ -96,9 +112,33 @@ const EachSlide: React.FC<EachSlideProps> = ({
     canRedo,
   } = useSlideUndoRedo(slide, setSlides, index);
 
+  const {
+    isUpdating,
+    prompt,
+    setPrompt,
+    handleSave,
+    handleEditClick,
+    handleCancelEdit,
+  } = useSlideEdit(slide, index, onSlideUpdate, setSlides);
+
   // Handle retry slide
   const handleRetrySlide = () => {
     retrySlide(index);
+  };
+
+  const closeEditPrompt = () => {
+    setIsEditPromptOpen(false);
+    handleCancelEdit();
+  };
+
+  const submitEditPrompt = async () => {
+
+    if (isUpdating) return;
+
+    await handleSave();
+    setIsEditPromptOpen(false);
+    setPrompt("");
+
   };
 
   // Clear preview data - clears both local and parent state
@@ -111,7 +151,13 @@ const EachSlide: React.FC<EachSlideProps> = ({
 
   // Handle delete slide
   const handleDeleteSlide = () => {
-    setIsDeleteDialogOpen(true);
+    // warmin
+    const confirmed = window.confirm(
+      `슬라이드 ${index + 1}을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+    );
+    if (!confirmed) return;
+    setSlides(prev => prev.filter((_, i) => i !== index));
+    setIsDeleteDialogOpen(false);
   };
 
   const confirmDeleteSlide = () => {
@@ -119,10 +165,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
     setIsDeleteDialogOpen(false);
   };
 
-  const hasReactLayout = Boolean(slide.react && compiledLayout);
-  const hasV2Layout = Boolean(slide.v2Layout);
-  const isSlideReady = slide.processed && !slide.processing && (hasReactLayout || hasV2Layout);
-  const supportsReactEditing = hasReactLayout;
+  const isSlideReady = slide.processed && !slide.processing;
   const isSlideProcessing = slide.processing;
   const hasError = !!slide.error;
 
@@ -139,11 +182,11 @@ const EachSlide: React.FC<EachSlideProps> = ({
             </div>
             <div>
               <h3 className="text-base font-semibold text-[#111827] tracking-tight">
-                {compiledLayout?.layoutId || slide.layout_name || slide.v2Layout?.id || `Slide ${index + 1}`}
+                {compiledLayout?.layoutId || `슬라이드 ${index + 1}`}
               </h3>
-              {(compiledLayout?.layoutDescription || slide.layout_description) && (
+              {compiledLayout?.layoutDescription && (
                 <p className="text-sm text-[#6B7280] mt-0.5 line-clamp-1 max-w-[300px]">
-                  {compiledLayout?.layoutDescription || slide.layout_description}
+                  {compiledLayout.layoutDescription}
                 </p>
               )}
             </div>
@@ -153,8 +196,100 @@ const EachSlide: React.FC<EachSlideProps> = ({
           <div className="flex items-center gap-1.5">
             {/* Primary Actions Group */}
             <div className="flex items-center bg-gray-50/80 rounded-lg p-1 gap-0.5">
+              {/* AI Edit Button */}
+              <Popover
+                open={isEditPromptOpen}
+                onOpenChange={(open) => {
+                  setIsEditPromptOpen(open);
+                  if (open) handleEditClick();
+                  else handleCancelEdit();
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <button
+                    disabled={!isSlideReady}
+                    className={`
+                      inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+                      rounded-md transition-all duration-150
+                      ${!isSlideReady
+                        ? "opacity-40 cursor-not-allowed text-gray-400"
+                        : "text-gray-600 hover:bg-white hover:text-violet-600 hover:shadow-sm"
+                      }
+                    `}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI 편집</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  side="bottom"
+                  sideOffset={8}
+                  className="w-[380px] p-0 rounded-xl border border-gray-200 shadow-2xl bg-white"
+                >
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm">
+                          <Sparkles className="w-3.5 h-3.5 text-white" />
+                        </div>
+                        <div>
+                          <span className="text-sm font-semibold text-gray-800">AI 편집</span>
+                          <p className="text-[10px] text-gray-400">AI로 편집 및 세부 조정 적용</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={closeEditPrompt}
+                        disabled={isUpdating}
+                        className="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      rows={3}
+                      autoFocus
+                      placeholder="어떻게 변경할까요? 예: '제목을 더 크게' 또는 '색상을 파란색 테마로 변경'"
+                      disabled={isUpdating}
+                      className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 focus:bg-white transition-all"
+                    />
+
+                    <div className="flex justify-end mt-3">
+                      <button
+                        type="button"
+                        onClick={submitEditPrompt}
+                        disabled={isUpdating || !prompt.trim()}
+                        className={`
+                          inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all
+                          ${isUpdating || !prompt.trim()
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 shadow-sm hover:shadow-md"
+                          }
+                        `}
+                      >
+                        {isUpdating ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            적용 중…
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            적용
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               {/* Schema Button */}
-              <ToolTip content="Edit content schema">
+              <ToolTip content="콘텐츠 스키마 편집">
                 <button
                   onClick={() => {
                     if (isSchemaEditorOpen) {
@@ -163,17 +298,47 @@ const EachSlide: React.FC<EachSlideProps> = ({
                       onOpenSchemaEditor?.(index);
                     }
                   }}
-                  disabled={!supportsReactEditing}
+                  disabled={!isSlideReady}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${isSchemaEditorOpen
                     ? "bg-emerald-100 text-emerald-700"
                     : "text-gray-600 hover:bg-white hover:text-emerald-600 hover:shadow-sm"
                     }`}
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  <span>Schema</span>
+                  <span>스키마</span>
                 </button>
               </ToolTip>
 
+              {/* Code Button */}
+              {/* <ToolTip content="Edit source code">
+                <button
+                  onClick={() => setShowCodeEditor(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-gray-600 hover:bg-white hover:text-blue-600 hover:shadow-sm transition-all duration-150"
+                >
+                  <Code className="w-3.5 h-3.5" />
+                  <span>Code</span>
+                </button>
+              </ToolTip> */}
+
+              {/* Select Edit Button */}
+              {/* <ToolTip content={isSelectionEditMode ? "Exit selection mode" : "Click elements to edit"}>
+                <button
+                  onClick={() => setIsSelectionEditMode(!isSelectionEditMode)}
+                  disabled={!isSlideReady}
+                  className={`
+                    inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+                    rounded-md transition-all duration-150
+                    ${isSelectionEditMode
+                      ? "bg-indigo-100 text-indigo-700"
+                      : "text-gray-600 hover:bg-white hover:text-indigo-600 hover:shadow-sm"
+                    }
+                    disabled:opacity-40 disabled:cursor-not-allowed
+                  `}
+                >
+                  <MousePointer2 className="w-3.5 h-3.5" />
+                  <span>{isSelectionEditMode ? "Exit" : "Select"}</span>
+                </button>
+              </ToolTip> */}
             </div>
 
             {/* Separator */}
@@ -181,14 +346,14 @@ const EachSlide: React.FC<EachSlideProps> = ({
 
             {/* Undo/Redo Group */}
             <div className="flex items-center bg-gray-50/80 rounded-lg p-1 gap-0.5">
-              <ToolTip content={canUndo ? "Undo (Ctrl+Z)" : "Nothing to undo"}>
+              <ToolTip content={canUndo ? "실행 취소 (Ctrl+Z)" : "실행 취소할 항목 없음"}>
                 <button
                   onClick={undo}
-                  disabled={!canUndo || !supportsReactEditing}
+                  disabled={!canUndo || !isSlideReady}
                   className={`
                     inline-flex items-center justify-center w-8 h-8
                     rounded-md transition-all duration-150
-                    ${!canUndo || !supportsReactEditing
+                    ${!canUndo || !isSlideReady
                       ? "opacity-40 cursor-not-allowed text-gray-400"
                       : "text-gray-600 hover:bg-white hover:text-amber-600 hover:shadow-sm"
                     }
@@ -197,14 +362,14 @@ const EachSlide: React.FC<EachSlideProps> = ({
                   <Undo className="w-4 h-4" />
                 </button>
               </ToolTip>
-              <ToolTip content={canRedo ? "Redo (Ctrl+Shift+Z)" : "Nothing to redo"}>
+              <ToolTip content={canRedo ? "다시 실행 (Ctrl+Shift+Z)" : "다시 실행할 항목 없음"}>
                 <button
                   onClick={redo}
-                  disabled={!canRedo || !supportsReactEditing}
+                  disabled={!canRedo || !isSlideReady}
                   className={`
                     inline-flex items-center justify-center w-8 h-8
                     rounded-md transition-all duration-150
-                    ${!canRedo || !supportsReactEditing
+                    ${!canRedo || !isSlideReady
                       ? "opacity-40 cursor-not-allowed text-gray-400"
                       : "text-gray-600 hover:bg-white hover:text-amber-600 hover:shadow-sm"
                     }
@@ -219,7 +384,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
             <div className="w-px h-6 bg-gray-200 mx-1" />
 
             {/* Re-Construct Button */}
-            <ToolTip content="Re-Design this slide">
+            <ToolTip content="이 슬라이드 다시 디자인">
               <button
                 onClick={handleRetrySlide}
                 disabled={!isSlideReady}
@@ -236,13 +401,13 @@ const EachSlide: React.FC<EachSlideProps> = ({
                 } : undefined}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Re-Construct
+                다시 구성
               </button>
 
             </ToolTip>
 
             {/* Delete Button */}
-            <ToolTip content="Delete slide">
+            <ToolTip content="슬라이드 삭제">
               <button
                 onClick={handleDeleteSlide}
                 disabled={!isSlideReady}
@@ -265,7 +430,7 @@ const EachSlide: React.FC<EachSlideProps> = ({
           <div className="mt-4">
             <div className="flex items-center gap-2 mb-2">
               <Loader2 className="w-4 h-4 animate-spin text-[#7A5AF8]" />
-              <span className="text-sm font-medium text-[#7A5AF8]">Generating slide layout...</span>
+              <span className="text-sm font-medium text-[#7A5AF8]">슬라이드 레이아웃 생성 중…</span>
             </div>
             <Timer duration={120} />
           </div>
@@ -274,31 +439,53 @@ const EachSlide: React.FC<EachSlideProps> = ({
 
       {/* Slide Content */}
       <div className="p-4">
-        <SlideErrorBoundary
-          label={`Slide ${index + 1}`}
-          resetKey={`${slide.processing}:${slide.processed}:${slide.react}`}
-        >
-          <div className="relative">
-            <SlideContentDisplay
-              slide={slide}
-              templateFonts={templateFonts}
-              compiledLayout={compiledLayout}
-              previewData={previewData}
-              retrySlide={handleRetrySlide}
-              onClearPreview={handleClearPreview}
-              slideDisplayRef={slideDisplayRef}
-            />
-            {/* Schema-Element Highlighting Overlay - active when schema editor is open */}
-            {isSchemaEditorOpen && supportsReactEditing && (
-              <SchemaElementHighlighter
-                containerRef={slideDisplayRef}
-                sampleData={sampleData}
-                isActive={isSchemaEditorOpen}
-              />
-            )}
+        {/* Selection Edit Mode Banner */}
+        {isSelectionEditMode && slide.processed && !slide.processing && (
+          <div className="mb-4 flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
+                <MousePointer2 className="w-3.5 h-3.5 text-white" />
+              </div>
+              <span className="text-sm font-medium text-indigo-700">
+                선택 편집 모드 — 요소를 클릭하면 AI로 편집할 수 있습니다
+              </span>
+            </div>
+            <button
+              onClick={() => setIsSelectionEditMode(false)}
+              className="h-8 px-3 text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100 rounded-md transition-colors"
+            >
+              종료
+            </button>
           </div>
-        </SlideErrorBoundary>
+        )}
+        <div className="relative">
+          <SlideContentDisplay
+            slide={slide}
+            compiledLayout={compiledLayout}
+            previewData={previewData}
+            retrySlide={handleRetrySlide}
+            onClearPreview={handleClearPreview}
+            slideDisplayRef={slideDisplayRef}
+          />
+          {/* Schema-Element Highlighting Overlay - active when schema editor is open */}
+          {isSchemaEditorOpen && slide.processed && !slide.processing && (
+            <SchemaElementHighlighter
+              containerRef={slideDisplayRef}
+              sampleData={sampleData}
+              isActive={isSchemaEditorOpen}
+            />
+          )}
+          {/* Selection Editor Overlay */}
+          {/* {isSelectionEditMode && slide.processed && !slide.processing && (
+            <SlideSelectionEditor
+              containerRef={slideDisplayRef}
+              slide={slide}
+              onSlideUpdate={handleSelectionUpdate}
+            />
+          )} */}
+        </div>
       </div>
+
 
       {/* Status Indicator */}
       {hasError && (

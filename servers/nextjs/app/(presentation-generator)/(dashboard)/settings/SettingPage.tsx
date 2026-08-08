@@ -1,6 +1,7 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
-import { Loader2, ChevronRight } from "lucide-react";
+import React, { useCallback, useState, useEffect } from "react";
+import { Loader2, Download, CheckCircle, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ui/sonner";
 import { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -8,28 +9,22 @@ import {
   getLLMConfigValidationError,
   handleSaveLLMConfig,
 } from "@/utils/storeHelpers";
-import { isOllamaModelAvailable } from "@/utils/providerUtils";
+import {
+  checkIfSelectedOllamaModelIsPulled,
+  pullOllamaModel,
+} from "@/utils/providerUtils";
 import { useRouter, usePathname } from "next/navigation";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import SettingSideBar, { SettingsSection } from "./SettingSideBar";
+import SettingSideBar from "./SettingSideBar";
 import TextProvider from "./TextProvider";
 import ImageProvider from "./ImageProvider";
-import WebSearchProvider from "./WebSearchProvider";
 import PrivacySettings from "./PrivacySettings";
-import {
-  IMAGE_PROVIDERS,
-  LLM_PROVIDERS,
-  WEB_SEARCH_PROVIDERS,
-} from "@/utils/providerConstants";
+import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
 import { ImagesApi } from "@/app/(presentation-generator)/services/api/images";
 import { getApiUrl } from "@/utils/api";
 import LogoutButton from "@/components/Auth/LogoutButton";
 import AdminPanel from "../admin/AdminPanel";
-import {
-  CHATGPT_AUTH_REQUIRED_EVENT,
-  requestChatGptReauth,
-} from "@/utils/chatgptAuth";
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
@@ -46,59 +41,59 @@ interface ButtonState {
 const SettingsPage = () => {
   const router = useRouter();
   const pathname = usePathname();
-  const [selectedProvider, setSelectedProvider] = useState<SettingsSection>("text-provider");
+  const [mode, setMode] = useState<'nanobanana' | 'presenton'>('presenton')
+  const [selectedProvider, setSelectedProvider] = useState<
+    "text-provider" | "image-provider" | "privacy" | "admin" | "session"
+  >("text-provider");
   const userConfigState = useSelector((state: RootState) => state.userConfig);
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(
     userConfigState.llm_config
+  );
+  const handleLlmInputChange = useCallback(
+    (value: string | boolean, field: string) => {
+      setLlmConfig((prev) => {
+        if (prev[field as keyof LLMConfig] === value) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [field]: value,
+        };
+      });
+    },
+    []
   );
   const canChangeKeys = userConfigState.can_change_keys;
   const [buttonState, setButtonState] = useState<ButtonState>({
     isLoading: false,
     isDisabled: false,
-    text: "Save Configuration",
+    text: "설정 저장",
     showProgress: false,
   });
 
-  const handleTextProviderInputChange = useCallback(
-    (value: string | boolean, field: string) => {
-      setLlmConfig((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    },
-    []
-  );
+  const [downloadingModel, setDownloadingModel] = useState<{
+    name: string;
+    size: number | null;
+    downloaded: number | null;
+    status: string;
+    done: boolean;
+  } | null>(null);
+  const [showDownloadModal, setShowDownloadModal] = useState<boolean>(false);
+  const downloadAbortRef = React.useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    setLlmConfig(userConfigState.llm_config);
-  }, [userConfigState.llm_config]);
-
-  useEffect(() => {
-    const handleChatGptReauth = () => {
-      setSelectedProvider("text-provider");
-    };
-
-    window.addEventListener(CHATGPT_AUTH_REQUIRED_EVENT, handleChatGptReauth);
-    return () => {
-      window.removeEventListener(CHATGPT_AUTH_REQUIRED_EVENT, handleChatGptReauth);
-    };
-  }, []);
-
-  const selectSettingsSection = (section: SettingsSection) => {
-    trackEvent(MixpanelEvent.Settings_Tab_Switched, {
-      from_section: selectedProvider,
-      to_section: section,
-    });
-    setSelectedProvider(section);
-  };
-
-  useEffect(() => {
-    trackEvent(MixpanelEvent.Settings_Section_Entered, {
-      section: selectedProvider,
-      image_generation_enabled: !llmConfig.DISABLE_IMAGE_GENERATION,
-      web_search_enabled: !!llmConfig.WEB_GROUNDING,
-    });
-  }, [selectedProvider, llmConfig.DISABLE_IMAGE_GENERATION, llmConfig.WEB_GROUNDING]);
+  const downloadProgress = React.useMemo(() => {
+    if (
+      downloadingModel &&
+      downloadingModel.downloaded !== null &&
+      downloadingModel.size !== null
+    ) {
+      return Math.round(
+        (downloadingModel.downloaded / downloadingModel.size) * 100
+      );
+    }
+    return 0;
+  }, [downloadingModel]);
 
   const ensureSelectedStockProviderReady = async (): Promise<boolean> => {
     if (llmConfig.DISABLE_IMAGE_GENERATION) {
@@ -122,9 +117,9 @@ const SettingsPage = () => {
       return true;
     } catch (error: any) {
       notify.error(
-        "Cannot save settings",
+        "설정을 저장할 수 없습니다",
         error?.message ||
-        `Unable to reach ${provider} with the provided API key. Please verify your settings and try again.`
+        `제공된 API 키로 ${provider}에 연결할 수 없습니다. 설정을 확인하고 다시 시도해 주세요.`
       );
       return false;
     }
@@ -152,10 +147,7 @@ const SettingsPage = () => {
     if (llmConfig.LLM === 'codex') {
       const isAuthenticated = await checkCurrentAuthStatus();
       if (!isAuthenticated) {
-        requestChatGptReauth({
-          message: "Please sign in to ChatGPT again from Settings.",
-          source: "settings-save",
-        });
+        notify.error("로그인이 필요합니다", "계속하려면 ChatGPT에 로그인해 주세요.");
         return;
       }
     }
@@ -164,11 +156,11 @@ const SettingsPage = () => {
     });
     const validationError = getLLMConfigValidationError(llmConfig);
     if (validationError) {
-      notify.warning("Cannot save settings", validationError);
+      notify.warning("설정을 저장할 수 없습니다", validationError);
       if (
         selectedProvider === "image-provider" &&
-        ((llmConfig.LLM === "openai" && !String(llmConfig.OPENAI_MODEL || "").trim()) ||
-          (llmConfig.LLM === "deepseek" && !String(llmConfig.DEEPSEEK_MODEL || "").trim()))
+        llmConfig.LLM === "openai" &&
+        !String(llmConfig.OPENAI_MODEL || "").trim()
       ) {
         setSelectedProvider("text-provider");
       }
@@ -185,46 +177,121 @@ const SettingsPage = () => {
         ...prev,
         isLoading: true,
         isDisabled: true,
-        text: "Saving Configuration...",
+        text: "설정 저장 중...",
       }));
       trackEvent(MixpanelEvent.Settings_SaveConfiguration_API_Call);
-      if (
-        llmConfig.LLM === "ollama" &&
-        llmConfig.OLLAMA_MODEL &&
-        !(await isOllamaModelAvailable(
-          llmConfig.OLLAMA_MODEL,
-          llmConfig.OLLAMA_URL
-        ))
-      ) {
-        throw new Error(
-          `The selected model "${llmConfig.OLLAMA_MODEL}" is not available at ${llmConfig.OLLAMA_URL}. Check models and select an available model.`
-        );
-      }
       await handleSaveLLMConfig(llmConfig);
+      let ollamaModelDownloaded = false;
+      if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
+        trackEvent(MixpanelEvent.Settings_CheckOllamaModelPulled_API_Call);
+        const isPulled = await checkIfSelectedOllamaModelIsPulled(
+          llmConfig.OLLAMA_MODEL
+        );
+        if (!isPulled) {
+          setShowDownloadModal(true);
+          setDownloadingModel({
+            name: llmConfig.OLLAMA_MODEL || "",
+            size: null,
+            downloaded: null,
+            status: "pulling",
+            done: false,
+          });
+          trackEvent(MixpanelEvent.Settings_DownloadOllamaModel_API_Call);
+          const downloadOutcome = await handleModelDownload();
+          if (downloadOutcome === "cancelled") {
+            return;
+          }
+          ollamaModelDownloaded = downloadOutcome === "completed";
+        }
+      }
       notify.success(
-        "Settings saved",
-        "Your configuration was saved successfully."
+        ollamaModelDownloaded ? "설정 저장 및 모델 준비 완료" : "설정 저장됨",
+        ollamaModelDownloaded
+          ? "설정이 저장되었고 Ollama 모델 다운로드가 완료되었습니다."
+          : "설정이 성공적으로 저장되었습니다."
       );
       setButtonState((prev) => ({
         ...prev,
         isLoading: false,
         isDisabled: false,
-        text: "Save Configuration",
+        text: "설정 저장",
       }));
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Something went wrong while saving.";
-      notify.error("Could not save settings", message);
+          : "저장하는 중 문제가 발생했습니다.";
+      notify.error("설정을 저장하지 못했습니다", message);
       setButtonState((prev) => ({
         ...prev,
         isLoading: false,
         isDisabled: false,
-        text: "Save Configuration",
+        text: "설정 저장",
       }));
     }
   };
+
+  const handleModelDownload = async (): Promise<"completed" | "cancelled"> => {
+    const ac = new AbortController();
+    downloadAbortRef.current = ac;
+    try {
+      await pullOllamaModel(
+        llmConfig.OLLAMA_MODEL!,
+        setDownloadingModel,
+        ac.signal
+      );
+      return "completed";
+    } catch (e) {
+      const aborted = e instanceof Error && e.name === "AbortError";
+      if (aborted) {
+        setDownloadingModel(null);
+        setShowDownloadModal(false);
+        setButtonState({
+          isLoading: false,
+          isDisabled: false,
+          text: "설정 저장",
+          showProgress: false,
+        });
+        notify.info(
+          "다운로드 취소됨",
+          "Ollama 모델 다운로드가 중지되었습니다. 설정은 이미 저장되었으며, 다시 저장하면 다운로드를 재시도할 수 있습니다."
+        );
+        return "cancelled";
+      }
+      setDownloadingModel(null);
+      setShowDownloadModal(false);
+      throw e;
+    } finally {
+      downloadAbortRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (
+      downloadingModel &&
+      downloadingModel.downloaded !== null &&
+      downloadingModel.size !== null
+    ) {
+      const percentage = Math.round(
+        (downloadingModel.downloaded / downloadingModel.size) * 100
+      );
+      setButtonState({
+        isLoading: true,
+        isDisabled: true,
+        text: `모델 다운로드 중 (${percentage}%)`,
+        showProgress: true,
+        progressPercentage: percentage,
+        status: downloadingModel.status,
+      });
+    }
+
+    if (downloadingModel && downloadingModel.done) {
+      setTimeout(() => {
+        setShowDownloadModal(false);
+        setDownloadingModel(null);
+      }, 2000);
+    }
+  }, [downloadingModel]);
 
   useEffect(() => {
     if (!canChangeKeys) {
@@ -242,8 +309,6 @@ const SettingsPage = () => {
   const selectedTextModel =
     textProviderKey === "openai"
       ? llmConfig.OPENAI_MODEL
-      : textProviderKey === "deepseek"
-        ? llmConfig.DEEPSEEK_MODEL
       : textProviderKey === "google"
         ? llmConfig.GOOGLE_MODEL
         : textProviderKey === "vertex"
@@ -278,15 +343,11 @@ const SettingsPage = () => {
     : textProviderLabel;
 
   const imageSummary = llmConfig.DISABLE_IMAGE_GENERATION
-    ? "Image generation disabled"
+    ? "이미지 생성 비활성화됨"
     : llmConfig.IMAGE_PROVIDER
       ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
       llmConfig.IMAGE_PROVIDER
-      : "No image provider";
-  const webSearchProviderKey = (llmConfig.WEB_SEARCH_PROVIDER || "").toLowerCase();
-  const webSearchSummary = llmConfig.WEB_GROUNDING
-    ? `Web: ${WEB_SEARCH_PROVIDERS[webSearchProviderKey]?.label || "No provider"}`
-    : "Web search disabled";
+      : "이미지 제공자 없음";
 
 
   useEffect(() => {
@@ -294,7 +355,6 @@ const SettingsPage = () => {
     if (
       (llmConfig.LLM === "codex" && !llmConfig.CODEX_MODEL) ||
       (llmConfig.LLM === "openai" && !llmConfig.OPENAI_MODEL) ||
-      (llmConfig.LLM === "deepseek" && !llmConfig.DEEPSEEK_MODEL) ||
       (llmConfig.LLM === "google" && !llmConfig.GOOGLE_MODEL) ||
       (llmConfig.LLM === "vertex" && !llmConfig.VERTEX_MODEL) ||
       (llmConfig.LLM === "azure" && !llmConfig.AZURE_OPENAI_MODEL) ||
@@ -306,10 +366,11 @@ const SettingsPage = () => {
       (llmConfig.LLM === "litellm" && !llmConfig.LITELLM_MODEL) ||
       (llmConfig.LLM === "lmstudio" && !llmConfig.LMSTUDIO_MODEL) ||
       (llmConfig.LLM === "anthropic" && !llmConfig.ANTHROPIC_MODEL) ||
-      (llmConfig.LLM === "ollama" &&
-        (!llmConfig.OLLAMA_URL?.trim() || !llmConfig.OLLAMA_MODEL)) ||
+      (llmConfig.LLM === "ollama" && !llmConfig.OLLAMA_MODEL) ||
       (llmConfig.LLM === "custom" && !llmConfig.CUSTOM_MODEL)
     ) {
+      notify.error("설정을 저장할 수 없습니다", "선택한 제공자의 모델을 선택해 주세요");
+
       const currentUrl = window.location.href;
 
       const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -336,7 +397,7 @@ const SettingsPage = () => {
           targetAttr !== "_blank"
         ) {
 
-          // notify.error("Cannot save settings", "Please select a model for the selected provider");
+          // notify.error("설정을 저장할 수 없습니다", "선택한 제공자에 사용할 모델을 선택해 주세요");
           e.preventDefault();
           window.history.pushState(null, "", pathname);
         }
@@ -369,39 +430,43 @@ const SettingsPage = () => {
     <div className="h-screen font-syne flex flex-col overflow-hidden relative">
       <main className="w-full mx-auto gap-6   overflow-hidden flex ">
         <SettingSideBar
+          mode={mode}
+          setMode={setMode}
           selectedProvider={selectedProvider}
-          setSelectedProvider={selectSettingsSection}
+          setSelectedProvider={setSelectedProvider}
         />
         <div className="w-full">
           <div className="sticky top-0 right-0 z-50 py-[28px]   backdrop-blur mb-4 ">
             <div className="flex  gap-3 items-center ">
               <h3 className=" text-[28px] tracking-[-0.84px] font-unbounded font-normal text-black flex items-center gap-2">
-                Settings
+                설정
               </h3>
               <p className="text-[10px] px-2.5 py-0.5 rounded-[50px] text-[#7A5AF8] border border-[#EDEEEF]  font-medium ">
-                {textSummary} · {imageSummary} · {webSearchSummary}
+                {textSummary} · {imageSummary}
               </p>
             </div>
           </div>
 
-          {selectedProvider === 'text-provider' && <TextProvider
-            onInputChange={handleTextProviderInputChange}
+          {mode === 'nanobanana' && <div className=" w-full bg-[#F9F8F8] p-7 rounded-[20px]">
+            <h4>Nano Banana</h4>
+          </div>}
+          {mode === 'presenton' && selectedProvider === 'text-provider' && <TextProvider
+            onInputChange={handleLlmInputChange}
             llmConfig={llmConfig}
           />}
-          {selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
-          {selectedProvider === 'web-search-provider' && <WebSearchProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
+          {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
           {selectedProvider === 'privacy' && <PrivacySettings />}
           {selectedProvider === "admin" && <AdminPanel embedded />}
           {selectedProvider === "session" && (
             <div className="w-full max-w-lg space-y-5 rounded-[20px] border border-[#EDEEEF] bg-white p-7">
               <div>
-                <h4 className="font-unbounded text-lg font-normal text-black">Sign out</h4>
+                <h4 className="font-unbounded text-lg font-normal text-black">로그아웃</h4>
                 <p className="mt-2 font-syne text-sm leading-relaxed text-[#494A4D]">
-                  End your session on this deployment. You will need to sign in again to use the app and access the API.
+                  이 배포에서 세션을 종료합니다. 앱을 사용하고 API에 접근하려면 다시 로그인해야 합니다.
                 </p>
               </div>
               <LogoutButton
-                label="Sign out"
+                label="로그아웃"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-[58px] border border-[#EDEEEF] bg-[#7C51F8] px-5 py-3 font-syne text-xs font-semibold text-white transition hover:bg-[#6d46e6] disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
@@ -439,6 +504,104 @@ const SettingsPage = () => {
         </div>
       ) : null}
 
+      {/* Download Progress Modal */}
+      {showDownloadModal && downloadingModel && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white/95 backdrop-blur-md rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+            {/* Modal Content */}
+            <div className="text-center">
+              {/* Icon */}
+              <div className="mb-4">
+                {downloadingModel.done ? (
+                  <CheckCircle className="w-12 h-12 text-green-600 mx-auto" />
+                ) : (
+                  <Download className="w-12 h-12 text-blue-600 mx-auto animate-pulse" />
+                )}
+              </div>
+
+              {/* Title */}
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {downloadingModel.done
+                  ? "다운로드 완료!"
+                  : "모델 다운로드 중"}
+              </h3>
+
+              {/* Model Name */}
+              <p className="text-sm text-gray-600 mb-6">
+                {llmConfig.OLLAMA_MODEL}
+              </p>
+
+              {/* Progress Bar */}
+              {downloadProgress > 0 && (
+                <div className="mb-4">
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${downloadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    {downloadProgress}% 완료
+                  </p>
+                </div>
+              )}
+
+              {/* Status */}
+              {downloadingModel.status && (
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700 capitalize">
+                    {downloadingModel.status}
+                  </span>
+                </div>
+              )}
+
+              {/* Status Message */}
+              {downloadingModel.status &&
+                downloadingModel.status !== "pulled" && (
+                  <div className="text-xs text-gray-500">
+                    {downloadingModel.status === "downloading" &&
+                      "모델 파일 다운로드 중..."}
+                    {downloadingModel.status === "verifying" &&
+                      "모델 무결성 확인 중..."}
+                    {downloadingModel.status === "pulling" &&
+                      "레지스트리에서 모델 가져오는 중..."}
+                  </div>
+                )}
+
+              {/* Download Info */}
+              {downloadingModel.downloaded && downloadingModel.size && (
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex justify-between text-xs text-gray-600">
+                    <span>
+                      다운로드됨:{" "}
+                      {(downloadingModel.downloaded / 1024 / 1024).toFixed(1)}{" "}
+                      MB
+                    </span>
+                    <span>
+                      전체: {(downloadingModel.size / 1024 / 1024).toFixed(1)}{" "}
+                      MB
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {!downloadingModel.done && (
+                <div className="mt-6 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-lg border-gray-300 text-gray-800 hover:bg-gray-50"
+                    onClick={() => downloadAbortRef.current?.abort()}
+                  >
+                    다운로드 취소
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

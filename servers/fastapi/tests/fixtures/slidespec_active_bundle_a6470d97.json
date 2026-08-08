@@ -1,0 +1,44 @@
+{
+  "schema": "urn:ppt-agent:slidespec-active-bundle-fixture:1.0",
+  "presentation_id": "50907f60-ea13-404c-90da-57f821404d74",
+  "review_task_id": "task-f53aa0d6fd74806ac9cdcf91292c80d9cab349bf54c11666e4544438b9dd3ac0",
+  "slide_id": "7bf0a9be598d4892bf8aa38267c3fc9b",
+  "slide_index": 4,
+  "bundle_id": "a6470d97-658a-46e2-bf8f-86062d13e09c",
+  "html_file": "slidespec_active_bundle_a6470d97_slide_0004.html",
+  "html_sha256": "11f1d61d4d885e3a107b38b6ee97b444e38a96df09a29174bb31447c83f7d68b",
+  "artifact_html_hash": "sha256:db6c33785d7ed9a9ea9c4548524e54258a981b59f3256cd2e776b613671959e7",
+  "viewport": {"width": 1280, "height": 720},
+  "physical_issue": {
+    "id": "bottom-implication-band-occludes-content",
+    "category": "overlap_occlusion",
+    "raw_target_qids": [
+      "q-div-63a4d3c2e6c7",
+      "q-div-655134fc7990",
+      "q-strong-f213b54d7db8"
+    ],
+    "deduplicated_issue_count": 1,
+    "expected_occluded_fraction": 1.0
+  },
+  "unrelated_unknown": {
+    "qid": "q-div-c6f2820b2605",
+    "metric": "occluded_fraction",
+    "stage": "chrome_occlusion",
+    "reason": "no_sample_on_owned_paint"
+  },
+  "fresh_v4_footer_measurement": {
+    "sensor_version": "slide_capture/4",
+    "qid": "q-div-c6f2820b2605",
+    "metric": "occluded_fraction",
+    "stage": "chrome_occlusion",
+    "state": "proven_clean",
+    "purpose": "fresh measurement only; it does not rewrite the historical raw unknown"
+  },
+  "scenarios": [
+    "unrelated_footer_unknown_preserves_confirmed_overlap",
+    "target_dependency_unknown_blocks_publish_but_preserves_detection",
+    "moving_overlay_removes_same_target_issue_post_render",
+    "intentional_overlap_requires_explicit_evidence_to_exempt",
+    "nested_three_raw_findings_deduplicate_to_one_physical_issue"
+  ]
+}

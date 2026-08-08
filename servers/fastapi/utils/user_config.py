@@ -7,9 +7,6 @@ from utils.get_env import (
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
     get_custom_model_env,
-    get_deepseek_api_key_env,
-    get_deepseek_base_url_env,
-    get_deepseek_model_env,
     get_dall_e_3_quality_env,
     get_disable_image_generation_env,
     get_disable_thinking_env,
@@ -52,6 +49,7 @@ from utils.get_env import (
     get_openrouter_base_url_env,
     get_openrouter_model_env,
     get_gpt_image_1_5_quality_env,
+    get_gpt_image_2_quality_env,
     get_llm_provider_env,
     get_ollama_model_env,
     get_ollama_url_env,
@@ -63,13 +61,6 @@ from utils.get_env import (
     get_pixabay_api_key_env,
     get_extended_reasoning_env,
     get_web_grounding_env,
-    get_web_search_provider_env,
-    get_web_search_max_results_env,
-    get_searxng_base_url_env,
-    get_tavily_api_key_env,
-    get_exa_api_key_env,
-    get_brave_search_api_key_env,
-    get_serper_api_key_env,
     get_codex_access_token_env,
     get_codex_refresh_token_env,
     get_codex_token_expires_env,
@@ -94,9 +85,6 @@ from utils.set_env import (
     set_custom_llm_api_key_env,
     set_custom_llm_url_env,
     set_custom_model_env,
-    set_deepseek_api_key_env,
-    set_deepseek_base_url_env,
-    set_deepseek_model_env,
     set_dall_e_3_quality_env,
     set_disable_image_generation_env,
     set_disable_thinking_env,
@@ -140,6 +128,7 @@ from utils.set_env import (
     set_openrouter_base_url_env,
     set_openrouter_model_env,
     set_gpt_image_1_5_quality_env,
+    set_gpt_image_2_quality_env,
     set_llm_provider_env,
     set_ollama_model_env,
     set_ollama_url_env,
@@ -149,13 +138,6 @@ from utils.set_env import (
     set_image_provider_env,
     set_pixabay_api_key_env,
     set_web_grounding_env,
-    set_web_search_provider_env,
-    set_web_search_max_results_env,
-    set_searxng_base_url_env,
-    set_tavily_api_key_env,
-    set_exa_api_key_env,
-    set_brave_search_api_key_env,
-    set_serper_api_key_env,
     set_codex_access_token_env,
     set_codex_refresh_token_env,
     set_codex_token_expires_env,
@@ -176,11 +158,9 @@ def get_user_config():
     user_config_path = get_user_config_path_env()
 
     existing_config = UserConfig()
-    existing_config_data = {}
     try:
         if user_config_path:
-            existing_config_data = read_user_config_file(user_config_path)
-            existing_config = UserConfig(**existing_config_data)
+            existing_config = UserConfig(**read_user_config_file(user_config_path))
     except Exception:
         print("Error while loading user config")
         pass
@@ -241,19 +221,12 @@ def get_user_config():
         ANTHROPIC_API_KEY=existing_config.ANTHROPIC_API_KEY
         or get_anthropic_api_key_env(),
         ANTHROPIC_MODEL=existing_config.ANTHROPIC_MODEL or get_anthropic_model_env(),
-        OLLAMA_URL=(
-            existing_config.OLLAMA_URL
-            if "OLLAMA_URL" in existing_config_data
-            else get_ollama_url_env()
-        ),
+        OLLAMA_URL=existing_config.OLLAMA_URL or get_ollama_url_env(),
         OLLAMA_MODEL=existing_config.OLLAMA_MODEL or get_ollama_model_env(),
         CUSTOM_LLM_URL=existing_config.CUSTOM_LLM_URL or get_custom_llm_url_env(),
         CUSTOM_LLM_API_KEY=existing_config.CUSTOM_LLM_API_KEY
         or get_custom_llm_api_key_env(),
         CUSTOM_MODEL=existing_config.CUSTOM_MODEL or get_custom_model_env(),
-        DEEPSEEK_BASE_URL=existing_config.DEEPSEEK_BASE_URL or get_deepseek_base_url_env(),
-        DEEPSEEK_API_KEY=existing_config.DEEPSEEK_API_KEY or get_deepseek_api_key_env(),
-        DEEPSEEK_MODEL=existing_config.DEEPSEEK_MODEL or get_deepseek_model_env(),
         IMAGE_PROVIDER=existing_config.IMAGE_PROVIDER or get_image_provider_env(),
         DISABLE_IMAGE_GENERATION=(
             existing_config.DISABLE_IMAGE_GENERATION
@@ -267,6 +240,8 @@ def get_user_config():
         DALL_E_3_QUALITY=existing_config.DALL_E_3_QUALITY or get_dall_e_3_quality_env(),
         GPT_IMAGE_1_5_QUALITY=existing_config.GPT_IMAGE_1_5_QUALITY
         or get_gpt_image_1_5_quality_env(),
+        GPT_IMAGE_2_QUALITY=existing_config.GPT_IMAGE_2_QUALITY
+        or get_gpt_image_2_quality_env(),
         DISABLE_THINKING=(
             existing_config.DISABLE_THINKING
             if existing_config.DISABLE_THINKING is not None
@@ -282,16 +257,6 @@ def get_user_config():
             if existing_config.WEB_GROUNDING is not None
             else (parse_bool_or_none(get_web_grounding_env()) or False)
         ),
-        WEB_SEARCH_PROVIDER=existing_config.WEB_SEARCH_PROVIDER
-        or get_web_search_provider_env(),
-        WEB_SEARCH_MAX_RESULTS=existing_config.WEB_SEARCH_MAX_RESULTS
-        or get_web_search_max_results_env(),
-        SEARXNG_BASE_URL=existing_config.SEARXNG_BASE_URL or get_searxng_base_url_env(),
-        TAVILY_API_KEY=existing_config.TAVILY_API_KEY or get_tavily_api_key_env(),
-        EXA_API_KEY=existing_config.EXA_API_KEY or get_exa_api_key_env(),
-        BRAVE_SEARCH_API_KEY=existing_config.BRAVE_SEARCH_API_KEY
-        or get_brave_search_api_key_env(),
-        SERPER_API_KEY=existing_config.SERPER_API_KEY or get_serper_api_key_env(),
         CODEX_MODEL=existing_config.CODEX_MODEL or get_codex_model_env(),
         CODEX_ACCESS_TOKEN=existing_config.CODEX_ACCESS_TOKEN or get_codex_access_token_env(),
         CODEX_REFRESH_TOKEN=existing_config.CODEX_REFRESH_TOKEN or get_codex_refresh_token_env(),
@@ -403,7 +368,7 @@ def update_env_with_user_config():
         set_anthropic_api_key_env(user_config.ANTHROPIC_API_KEY)
     if user_config.ANTHROPIC_MODEL:
         set_anthropic_model_env(user_config.ANTHROPIC_MODEL)
-    if user_config.OLLAMA_URL is not None:
+    if user_config.OLLAMA_URL:
         set_ollama_url_env(user_config.OLLAMA_URL)
     if user_config.OLLAMA_MODEL:
         set_ollama_model_env(user_config.OLLAMA_MODEL)
@@ -413,12 +378,6 @@ def update_env_with_user_config():
         set_custom_llm_api_key_env(user_config.CUSTOM_LLM_API_KEY)
     if user_config.CUSTOM_MODEL:
         set_custom_model_env(user_config.CUSTOM_MODEL)
-    if user_config.DEEPSEEK_BASE_URL:
-        set_deepseek_base_url_env(user_config.DEEPSEEK_BASE_URL)
-    if user_config.DEEPSEEK_API_KEY:
-        set_deepseek_api_key_env(user_config.DEEPSEEK_API_KEY)
-    if user_config.DEEPSEEK_MODEL:
-        set_deepseek_model_env(user_config.DEEPSEEK_MODEL)
     if user_config.DISABLE_IMAGE_GENERATION is not None:
         set_disable_image_generation_env(str(user_config.DISABLE_IMAGE_GENERATION))
     if user_config.IMAGE_PROVIDER:
@@ -435,26 +394,14 @@ def update_env_with_user_config():
         set_dall_e_3_quality_env(user_config.DALL_E_3_QUALITY)
     if user_config.GPT_IMAGE_1_5_QUALITY:
         set_gpt_image_1_5_quality_env(user_config.GPT_IMAGE_1_5_QUALITY)
+    if user_config.GPT_IMAGE_2_QUALITY:
+        set_gpt_image_2_quality_env(user_config.GPT_IMAGE_2_QUALITY)
     if user_config.DISABLE_THINKING is not None:
         set_disable_thinking_env(str(user_config.DISABLE_THINKING))
     if user_config.EXTENDED_REASONING is not None:
         set_extended_reasoning_env(str(user_config.EXTENDED_REASONING))
     if user_config.WEB_GROUNDING is not None:
         set_web_grounding_env(str(user_config.WEB_GROUNDING))
-    if user_config.WEB_SEARCH_PROVIDER:
-        set_web_search_provider_env(user_config.WEB_SEARCH_PROVIDER)
-    if user_config.WEB_SEARCH_MAX_RESULTS:
-        set_web_search_max_results_env(user_config.WEB_SEARCH_MAX_RESULTS)
-    if user_config.SEARXNG_BASE_URL:
-        set_searxng_base_url_env(user_config.SEARXNG_BASE_URL)
-    if user_config.TAVILY_API_KEY:
-        set_tavily_api_key_env(user_config.TAVILY_API_KEY)
-    if user_config.EXA_API_KEY:
-        set_exa_api_key_env(user_config.EXA_API_KEY)
-    if user_config.BRAVE_SEARCH_API_KEY:
-        set_brave_search_api_key_env(user_config.BRAVE_SEARCH_API_KEY)
-    if user_config.SERPER_API_KEY:
-        set_serper_api_key_env(user_config.SERPER_API_KEY)
     if user_config.CODEX_MODEL:
         set_codex_model_env(user_config.CODEX_MODEL)
     if user_config.CODEX_ACCESS_TOKEN:
@@ -483,19 +430,17 @@ def update_env_with_user_config():
         set_openai_compat_image_model_env(user_config.OPENAI_COMPAT_IMAGE_MODEL)
 
 
-def save_codex_tokens_to_user_config(*, include_model: bool = False) -> None:
+def save_codex_tokens_to_user_config() -> None:
     """
     Write the current in-memory Codex OAuth token env vars back to userConfig.json
-    so they survive container restarts.  Pass include_model=True on logout, where
-    CODEX_MODEL has already been cleared and should be persisted as cleared.
+    so they survive container restarts.  Called after a successful token exchange
+    and on logout (where the env vars have already been cleared to "").
     """
     user_config_path = get_user_config_path_env()
     if not user_config_path:
         return
 
     def merge_codex_tokens(existing: dict) -> dict:
-        if include_model:
-            existing["CODEX_MODEL"] = get_codex_model_env()
         existing["CODEX_ACCESS_TOKEN"] = get_codex_access_token_env()
         existing["CODEX_REFRESH_TOKEN"] = get_codex_refresh_token_env()
         existing["CODEX_TOKEN_EXPIRES"] = get_codex_token_expires_env()

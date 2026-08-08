@@ -15,17 +15,30 @@ from models.chat import (
 from models.sse_response import (
     SSECompleteResponse,
     SSEErrorResponse,
-    SSEResponse,
     SSEStatusResponse,
     SSETraceResponse,
+    SSEResponse,
 )
-from services.chat import sql_chat_history
 from services.chat import ChatTurnResult, PresentationChatService
-from services.chat.conversation_store import ChatConversationStore
+from services.chat import sql_chat_history
 from services.database import get_async_session
-
+from services.workspace_legacy_write_gate import require_legacy_presentation_write_path
 
 CHAT_ROUTER = APIRouter(prefix="/chat", tags=["Chat"])
+
+
+def _require_legacy_chat_write_path(
+    presentation_id: uuid.UUID | None = None,
+) -> None:
+    """Fail closed once workspace commands own presentation mutations.
+
+    Keeping the legacy POST routes writable while the operation runner is
+    enabled would bypass per-presentation serialization, revision fencing, and
+    the durable timeline.  Read-only legacy history remains available during
+    rollout and rollback.
+    """
+
+    require_legacy_presentation_write_path(presentation_id)
 
 
 @CHAT_ROUTER.get("/conversations", response_model=list[ChatConversationListItem])
@@ -57,49 +70,20 @@ async def get_chat_history(
         presentation_id=presentation_id,
         conversation_id=conversation_id,
     )
-    if not rows:
-        # Conversations created before SQL history was introduced may still
-        # exist in the legacy memory store. Load and migrate them on demand so
-        # a browser refresh can restore the visible chat thread.
-        legacy_rows = await ChatConversationStore(sql_session).load_history(
-            presentation_id=presentation_id,
-            conversation_id=conversation_id,
-        )
-        if legacy_rows:
-            await sql_session.commit()
-            rows = await sql_chat_history.load_messages_with_meta(
-                sql_session,
-                presentation_id=presentation_id,
-                conversation_id=conversation_id,
-            )
     return ChatHistoryResponse(
         presentation_id=presentation_id,
         conversation_id=conversation_id,
         messages=[
             ChatHistoryMessageItem(
-                role=str(message.get("role") or ""),
-                content=str(message.get("content") or ""),
-                created_at=message.get("created_at")
-                if isinstance(message.get("created_at"), str)
+                role=str(m.get("role") or ""),
+                content=str(m.get("content") or ""),
+                created_at=m.get("created_at")
+                if isinstance(m.get("created_at"), str)
                 else None,
             )
-            for message in rows
+            for m in rows
         ],
     )
-
-
-@CHAT_ROUTER.delete("/conversation", status_code=204)
-async def delete_chat_conversation(
-    presentation_id: uuid.UUID = Query(..., description="Presentation id"),
-    conversation_id: uuid.UUID = Query(..., description="Conversation thread id"),
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    await sql_chat_history.delete_conversation(
-        sql_session,
-        presentation_id=presentation_id,
-        conversation_id=conversation_id,
-    )
-    await sql_session.commit()
 
 
 @CHAT_ROUTER.post("/message", response_model=ChatMessageResponse)
@@ -107,12 +91,15 @@ async def chat_message(
     payload: ChatMessageRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    _require_legacy_chat_write_path(payload.presentation_id)
     service = PresentationChatService(
         sql_session=sql_session,
         presentation_id=payload.presentation_id,
         conversation_id=payload.conversation_id,
     )
-    result = await service.generate_reply(payload.message, payload.attachments)
+    result = await service.generate_reply(
+        payload.message, attachments=payload.attachments
+    )
     return ChatMessageResponse(
         conversation_id=result.conversation_id,
         response=result.response_text,
@@ -125,6 +112,7 @@ async def chat_message_stream(
     payload: ChatMessageRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    _require_legacy_chat_write_path(payload.presentation_id)
     service = PresentationChatService(
         sql_session=sql_session,
         presentation_id=payload.presentation_id,
@@ -134,8 +122,7 @@ async def chat_message_stream(
     async def inner():
         try:
             async for event_type, value in service.stream_reply(
-                payload.message,
-                payload.attachments,
+                payload.message, attachments=payload.attachments
             ):
                 if event_type == "chunk" and isinstance(value, str):
                     yield SSEResponse(

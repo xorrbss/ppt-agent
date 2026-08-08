@@ -53,7 +53,7 @@ const SchemaElementHighlighter: React.FC<SchemaElementHighlighterProps> = ({
                     map.set(String(value), path)
                 } else if (Array.isArray(value)) {
                     // For arrays, map each item's content with array notation
-                    value.forEach((item, index) => {
+                    value.forEach((item) => {
                         if (typeof item === 'object' && item !== null) {
                             buildMap(item, `${path}[]`)
                         } else if (typeof item === 'string' && item.trim().length > 0) {

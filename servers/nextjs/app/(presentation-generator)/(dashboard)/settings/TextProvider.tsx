@@ -12,31 +12,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { LLMConfig } from "@/types/llm_config";
-import { getApiErrorMessage, getApiUrl } from "@/utils/api";
+import { getApiUrl } from "@/utils/api";
 import { LLM_PROVIDERS } from "@/utils/providerConstants";
-import { getDefaultOllamaUrl } from "@/utils/providerUtils";
-import {
-  Check,
-  Loader2,
-  Eye,
-  EyeOff,
-  ChevronUp,
-  ChevronDown,
-} from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Loader2, Eye, EyeOff, ChevronUp } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notify } from "@/components/ui/sonner";
 import CodexConfig from "./SettingCodex";
 import VertexAzureManualFields from "@/components/VertexAzureManualFields";
 import BedrockManualFields from "@/components/BedrockManualFields";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
-import OllamaConfig from "@/components/OllamaConfig";
 
 interface OpenAIConfigProps {
   onInputChange: (value: string | boolean, field: string) => void;
@@ -47,7 +32,6 @@ interface ModelOption {
   value: string;
   label: string;
   size?: string;
-  tested?: boolean;
 }
 
 const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure", "bedrock"]);
@@ -59,9 +43,6 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsChecked, setModelsChecked] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [deepseekAdvancedOpen, setDeepseekAdvancedOpen] = useState(() =>
-    !!(llmConfig.DEEPSEEK_BASE_URL || "").trim()
-  );
   const isFirstRender = useRef(true);
 
   const selectedProvider = (llmConfig.LLM ||
@@ -72,8 +53,6 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     switch (selectedProvider) {
       case "openai":
         return "OPENAI_MODEL";
-      case "deepseek":
-        return "DEEPSEEK_MODEL";
       case "google":
         return "GOOGLE_MODEL";
       case "vertex":
@@ -111,8 +90,6 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     switch (selectedProvider) {
       case "openai":
         return "OPENAI_API_KEY";
-      case "deepseek":
-        return "DEEPSEEK_API_KEY";
       case "google":
         return "GOOGLE_API_KEY";
       case "vertex":
@@ -151,52 +128,35 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
       ""
     : "";
   const currentCustomUrl = llmConfig.CUSTOM_LLM_URL || "";
-  const currentDeepseekBaseUrl = (llmConfig.DEEPSEEK_BASE_URL || "").trim();
   const currentLitellmUrl = (llmConfig.LITELLM_BASE_URL || "").trim();
   const currentLmStudioUrl = (llmConfig.LMSTUDIO_BASE_URL || "").trim();
   const currentFireworksUrl = (llmConfig.FIREWORKS_BASE_URL || "").trim();
   const currentTogetherUrl = (llmConfig.TOGETHER_BASE_URL || "").trim();
   const currentOllamaUrl = llmConfig.OLLAMA_URL || "";
+  const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
   const modelLabel = selectedProviderMeta?.label || selectedProvider;
-  const modelOptions = useMemo(() => {
-    if (!currentModel) return availableModels;
-
-    return [
-      {
-        value: currentModel,
-        label: currentModel,
-      },
-      ...availableModels.filter((model) => model.value !== currentModel),
-    ];
-  }, [availableModels, currentModel]);
   const providerApiKeyLabel =
     selectedProvider === "custom"
-      ? "Custom LLM API Key"
-      : selectedProvider === "deepseek"
-      ? "DeepSeek API Key"
+      ? "Custom LLM API 키"
       : selectedProvider === "vertex"
-      ? "Vertex API Key"
+      ? "Vertex API 키"
       : selectedProvider === "azure"
-      ? "Azure OpenAI API Key"
+      ? "Azure OpenAI API 키"
       : selectedProvider === "bedrock"
-      ? "Bedrock API Key (optional)"
+      ? "Bedrock API 키 (선택)"
       : selectedProvider === "openrouter"
-      ? "OpenRouter API Key"
+      ? "OpenRouter API 키"
       : selectedProvider === "fireworks"
-      ? "Fireworks API Key"
+      ? "Fireworks API 키"
       : selectedProvider === "together"
-      ? "Together API Key"
+      ? "Together API 키"
       : selectedProvider === "cerebras"
-      ? "Cerebras API Key"
+      ? "Cerebras API 키"
       : selectedProvider === "litellm"
-      ? "LiteLLM API key (optional)"
+      ? "LiteLLM API 키 (선택)"
       : selectedProvider === "lmstudio"
-      ? "LM Studio API key (optional)"
-      : `${selectedProvider} API Key`;
-
-  useEffect(() => {
-    if (currentDeepseekBaseUrl) setDeepseekAdvancedOpen(true);
-  }, [currentDeepseekBaseUrl]);
+      ? "LM Studio API 키 (선택)"
+      : `${selectedProvider} API 키`;
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -204,31 +164,22 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
       return;
     }
 
-    if (selectedProvider === "ollama") {
+    setAvailableModels((models) => (models.length === 0 ? models : []));
+    setModelsChecked((checked) => (checked ? false : checked));
+    if (currentModelField) {
+      onInputChange("", currentModelField);
+    }
+  }, [selectedProvider, currentApiKey, currentCustomUrl, currentLitellmUrl, currentLmStudioUrl, currentFireworksUrl, currentTogetherUrl, currentModelField, onInputChange]);
+
+  const onApiKeyChange = (llm: keyof typeof LLM_PROVIDERS, value: string) => {
+    if (llm === "ollama") {
+      onInputChange(value, "OLLAMA_URL");
       return;
     }
 
-    setAvailableModels([]);
-    setModelsChecked(false);
-  }, [
-    selectedProvider,
-    currentApiKey,
-    currentCustomUrl,
-    currentDeepseekBaseUrl,
-    currentLitellmUrl,
-    currentLmStudioUrl,
-    currentFireworksUrl,
-    currentTogetherUrl,
-    currentModelField,
-    onInputChange,
-  ]);
-
-  const onApiKeyChange = (llm: keyof typeof LLM_PROVIDERS, value: string) => {
     const keyField =
       llm === "openai"
         ? "OPENAI_API_KEY"
-        : llm === "deepseek"
-        ? "DEEPSEEK_API_KEY"
         : llm === "google"
         ? "GOOGLE_API_KEY"
         : llm === "vertex"
@@ -259,11 +210,9 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     }
   };
 
-  const fetchAvailableModels = async () => {
-    if (modelsLoading) return;
+  const fetchAvailableModels = useCallback(async () => {
     if (isManualModelProvider) return;
     if (selectedProvider === "openai" && !currentApiKey) return;
-    if (selectedProvider === "deepseek" && !currentApiKey) return;
     if (selectedProvider === "google" && !currentApiKey) return;
     if (selectedProvider === "anthropic" && !currentApiKey) return;
     if (selectedProvider === "openrouter" && !currentApiKey) return;
@@ -302,12 +251,14 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             }),
           }
         );
+      } else if (selectedProvider === "ollama") {
+        response = await fetch(
+          getApiUrl("/api/v1/ppt/ollama/models/supported")
+        );
       } else {
         const openAiCompatibleUrl =
           selectedProvider === "custom"
             ? currentCustomUrl
-            : selectedProvider === "deepseek"
-            ? currentDeepseekBaseUrl || selectedProviderMeta?.url || ""
             : selectedProvider === "litellm"
             ? currentLitellmUrl
             : selectedProvider === "lmstudio"
@@ -334,7 +285,39 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
 
       if (response.ok) {
         const data = await response.json();
-        const normalizedModels: ModelOption[] = Array.isArray(data)
+        const normalizedModels: ModelOption[] =
+          selectedProvider === "ollama"
+            ? Array.isArray(data)
+              ? data
+                  .map((model) => {
+                    if (typeof model === "string") {
+                      return {
+                        value: model,
+                        label: model,
+                      };
+                    }
+
+                    if (model && typeof model === "object") {
+                      const typedModel = model as {
+                        value?: string;
+                        label?: string;
+                        size?: string;
+                      };
+                      return {
+                        value: typedModel.value || typedModel.label || "",
+                        label: typedModel.label || typedModel.value || "",
+                        size: typedModel.size,
+                      };
+                    }
+
+                    return {
+                      value: "",
+                      label: "",
+                    };
+                  })
+                  .filter((model: ModelOption) => Boolean(model.value))
+              : []
+            : Array.isArray(data)
             ? data
                 .filter((model): model is string => typeof model === "string")
                 .map((model) => ({
@@ -356,8 +339,6 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
           const preferredDefault =
             selectedProvider === "openai"
               ? "gpt-4.1"
-              : selectedProvider === "deepseek"
-              ? "deepseek-chat"
               : selectedProvider === "google"
               ? "models/gemini-2.5-flash"
               : selectedProvider === "anthropic"
@@ -382,39 +363,46 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
           onInputChange(nextModel, currentModelField);
         }
       } else {
-        const message = await getApiErrorMessage(
-          response,
-          `The server could not list ${modelLabel} models. Check your API key or endpoint and try again.`
-        );
         console.error("Failed to fetch models");
         setAvailableModels([]);
         setModelsChecked(true);
-        notify.error("Could not load models", message);
+        notify.error(
+          "모델을 불러올 수 없습니다",
+          `서버에서 ${modelLabel} 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도하세요.`
+        );
       }
     } catch (error) {
       console.error("Error fetching models:", error);
       notify.error(
-        selectedProvider === "ollama" ? "Could not connect to Ollama" : "Could not load models",
-        error instanceof Error
-          ? error.message
-          : "Something went wrong while contacting the provider. Check your network and try again."
+        "모델을 불러올 수 없습니다",
+        "제공자에 연결하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 후 다시 시도하세요."
       );
       setAvailableModels([]);
       setModelsChecked(true);
-      if (selectedProvider === "ollama" && currentModelField) {
-        onInputChange("", currentModelField);
-      }
     } finally {
       setModelsLoading(false);
     }
-  };
+  }, [
+    currentApiKey,
+    currentCustomUrl,
+    currentFireworksUrl,
+    currentLitellmUrl,
+    currentLmStudioUrl,
+    currentModel,
+    currentModelField,
+    currentTogetherUrl,
+    isManualModelProvider,
+    modelLabel,
+    onInputChange,
+    selectedProvider,
+    selectedProviderMeta?.url,
+  ]);
 
-  const handleModelSelectOpenChange = (isOpen: boolean) => {
-    setOpenModelSelect(isOpen);
-    if (isOpen) {
+  useEffect(() => {
+    if (selectedProvider === "ollama" && !modelsChecked && !modelsLoading) {
       fetchAvailableModels();
     }
-  };
+  }, [selectedProvider, modelsChecked, modelsLoading, fetchAvailableModels]);
 
   return (
     <div className="space-y-6 bg-[#F9F8F8] p-7 rounded-[12px] ">
@@ -456,10 +444,10 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             </svg>
           </div>
           <h3 className="text-xl font-normal text-[#191919] py-2.5">
-            Text Generation Settings
+            텍스트 생성 설정
           </h3>
           <p className=" text-sm  text-gray-500">
-            Choosing where text content comes from
+            텍스트 콘텐츠를 어디서 생성할지 선택하세요
           </p>
         </div>
         <div className="flex min-w-0 flex-1 flex-col items-stretch justify-end gap-4 sm:items-end">
@@ -475,7 +463,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             >
               <div className="flex flex-col justify-start ">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Text Provider
+                  텍스트 제공자 선택
                 </label>
                 <Popover
                   open={openProviderSelect}
@@ -493,7 +481,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                           {llmConfig.LLM
                             ? LLM_PROVIDERS[llmConfig.LLM]?.label ||
                               llmConfig.LLM
-                            : "Select text provider"}
+                            : "텍스트 제공자 선택"}
                         </span>
                       </div>
                       <ChevronUp className="w-4 h-4 text-gray-500" />
@@ -505,9 +493,9 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                     style={{ width: "300px" }}
                   >
                     <Command>
-                      <CommandInput placeholder="Search provider..." />
+                      <CommandInput placeholder="제공자 검색..." />
                       <CommandList>
-                        <CommandEmpty>No provider found.</CommandEmpty>
+                        <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                         <CommandGroup>
                           {Object.values(LLM_PROVIDERS).map(
                             (provider, index) => (
@@ -515,14 +503,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                                 key={index}
                                 value={provider.value}
                                 onSelect={(value) => {
-                                  trackEvent(MixpanelEvent.Settings_Provider_Selected, {
-                                    section: "text_provider",
-                                    provider: value,
-                                  });
                                   onInputChange(value, "LLM");
-                                  if (value === "ollama" && !llmConfig.OLLAMA_URL?.trim()) {
-                                    onInputChange(getDefaultOllamaUrl(), "OLLAMA_URL");
-                                  }
                                   setOpenProviderSelect(false);
                                 }}
                               >
@@ -565,22 +546,55 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             >
               <div className="flex flex-col justify-start w-full ">
                 {selectedProvider === "ollama" ? (
-                  <div className="w-full">
-                    <OllamaConfig
-                      ollamaModel={llmConfig.OLLAMA_MODEL || ""}
-                      ollamaUrl={currentOllamaUrl}
-                      onInputChange={(value, field) => {
-                        if (typeof value !== "string") return;
-                        const normalizedField =
-                          field === "ollama_url"
-                            ? "OLLAMA_URL"
-                            : field === "ollama_model"
-                              ? "OLLAMA_MODEL"
-                              : field;
-                        onInputChange(value, normalizedField);
-                      }}
-                    />
-                  </div>
+                  <>
+                    {!useCustomOllamaUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onInputChange(true, "USE_CUSTOM_URL");
+                          if (!currentOllamaUrl) {
+                            onInputChange(
+                              "http://localhost:11434",
+                              "OLLAMA_URL"
+                            );
+                          }
+                        }}
+                        className="mt-8 py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        Ollama URL 사용
+                      </button>
+                    ) : (
+                      <>
+                        <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
+                          Ollama URL
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={currentOllamaUrl}
+                            onChange={(e) =>
+                              onApiKeyChange(selectedProvider, e.target.value)
+                            }
+                            className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                            placeholder="http://localhost:11434"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onInputChange(false, "USE_CUSTOM_URL");
+                            onInputChange(
+                              "http://localhost:11434",
+                              "OLLAMA_URL"
+                            );
+                          }}
+                          className="mt-2 text-xs font-medium text-[#4B5563] underline underline-offset-2"
+                        >
+                          기본 Ollama URL 사용
+                        </button>
+                      </>
+                    )}
+                  </>
                 ) : selectedProvider === "codex" ? (
                   <div className="w-full mt-0 rounded-[12px]  ">
                     <CodexConfig
@@ -617,8 +631,8 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                         className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                         placeholder={
                           selectedProvider === "litellm"
-                            ? "Optional if your proxy does not require auth"
-                            : `Enter your ${providerApiKeyLabel}`
+                            ? "프록시에 인증이 필요 없으면 선택 입력입니다"
+                            : `${providerApiKeyLabel} 입력`
                         }
                       />
                       <button
@@ -643,52 +657,13 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       onInputChange(e.target.value, "CUSTOM_LLM_URL")
                     }
                     className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                    placeholder="OpenAI-compatible URL"
+                    placeholder="OpenAI 호환 URL"
                   />
-                )}
-                {selectedProvider === "deepseek" && (
-                  <Collapsible
-                    open={deepseekAdvancedOpen}
-                    onOpenChange={setDeepseekAdvancedOpen}
-                    className="mt-3"
-                  >
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-gray-200 bg-[#F9F9FA] px-3 py-2.5 text-left text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100"
-                      >
-                        <span>Advanced settings</span>
-                        <ChevronDown
-                          className={cn(
-                            "h-4 w-4 shrink-0 text-gray-600 transition-transform duration-200",
-                            deepseekAdvancedOpen && "rotate-180"
-                          )}
-                          aria-hidden
-                        />
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-3 overflow-hidden">
-                      <div className="space-y-1.5 border-t border-gray-100 pt-3">
-                        <label className="block text-sm font-medium text-gray-700">
-                          DeepSeek base URL (optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={llmConfig.DEEPSEEK_BASE_URL || ""}
-                          onChange={(e) =>
-                            onInputChange(e.target.value, "DEEPSEEK_BASE_URL")
-                          }
-                          className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                          placeholder="https://api.deepseek.com/v1"
-                        />
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
                 )}
                 {selectedProvider === "litellm" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      LiteLLM base URL
+                      LiteLLM 기본 URL
                     </label>
                     <input
                       type="text"
@@ -697,19 +672,19 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                         onInputChange(e.target.value, "LITELLM_BASE_URL")
                       }
                       className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                      placeholder="e.g. http://host.docker.internal:4000/v1"
+                      placeholder="예: http://host.docker.internal:4000/v1"
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      OpenAI-compatible root (usually ends with /v1); /v1 is
-                      added if omitted. API key above is optional for local
-                      proxies with no auth.
+                      OpenAI 호환 루트 주소입니다(보통 /v1로 끝남). /v1을 생략하면
+                      자동으로 추가됩니다. 인증이 필요 없는 로컬 프록시의 경우
+                      위 API 키는 선택 사항입니다.
                     </p>
                   </>
                 )}
                 {selectedProvider === "lmstudio" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      LM Studio base URL
+                      LM Studio 기본 URL
                     </label>
                     <input
                       type="text"
@@ -721,15 +696,15 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       placeholder="http://localhost:1234/v1"
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      Defaults to localhost:1234/v1, and /v1 is added
-                      automatically when omitted.
+                      기본값은 localhost:1234/v1이며, /v1을 생략하면 자동으로
+                      추가됩니다.
                     </p>
                   </>
                 )}
                 {selectedProvider === "fireworks" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      Fireworks base URL (optional)
+                      Fireworks 기본 URL (선택)
                     </label>
                     <input
                       type="text"
@@ -745,7 +720,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                 {selectedProvider === "together" && (
                   <>
                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                      Together base URL (optional)
+                      Together 기본 URL (선택)
                     </label>
                     <input
                       type="text"
@@ -774,17 +749,15 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                 )}
               </div>
               {!isManualModelProvider &&
-                selectedProvider !== "codex" &&
                 selectedProvider !== "ollama" &&
-                !currentModel &&
+                selectedProvider !== "codex" &&
                 (!modelsChecked ||
-                  availableModels.length === 0) && (
+                  (modelsChecked && availableModels.length === 0)) && (
                   <button
                     onClick={fetchAvailableModels}
                     disabled={
                       modelsLoading ||
                       (selectedProvider === "openai" && !currentApiKey) ||
-                      (selectedProvider === "deepseek" && !currentApiKey) ||
                       (selectedProvider === "google" && !currentApiKey) ||
                       (selectedProvider === "anthropic" && !currentApiKey) ||
                       (selectedProvider === "openrouter" && !currentApiKey) ||
@@ -803,10 +776,10 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                     {modelsLoading ? (
                       <span className="flex items-center justify-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Checking for models...
+                        모델 확인 중...
                       </span>
                     ) : (
-                      "Check models"
+                      "모델 확인"
                     )}
                   </button>
                 )}
@@ -815,19 +788,19 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
           {/* Model Selection - only show if models are available */}
           {!isManualModelProvider &&
           selectedProvider !== "codex" &&
-          selectedProvider !== "ollama" &&
-          (currentModel || (modelsChecked && modelOptions.length > 0)) ? (
+          modelsChecked &&
+          availableModels.length > 0 ? (
             <div className="w-[262px]">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   {selectedProvider === "ollama"
-                    ? "Choose an Ollama model"
-                    : `Select ${modelLabel} Model`}
+                    ? "지원되는 모델 선택"
+                    : `${modelLabel} 모델 선택`}
                 </label>
                 <div className="w-full">
                   <Popover
                     open={openModelSelect}
-                    onOpenChange={handleModelSelectOpenChange}
+                    onOpenChange={setOpenModelSelect}
                   >
                     <PopoverTrigger asChild>
                       <Button
@@ -838,8 +811,8 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       >
                         <span className="text-sm truncate font-medium text-gray-900">
                           {(() => {
-                            if (!currentModel) return "Select a model";
-                            const selectedModel = modelOptions.find(
+                            if (!currentModel) return "모델 선택";
+                            const selectedModel = availableModels.find(
                               (model) => model.value === currentModel
                             );
                             if (!selectedModel) return currentModel;
@@ -862,26 +835,16 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                       style={{ width: "var(--radix-popover-trigger-width)" }}
                     >
                       <Command>
-                        <CommandInput placeholder="Search models..." />
+                        <CommandInput placeholder="모델 검색..." />
                         <CommandList>
-                          <CommandEmpty>No model found.</CommandEmpty>
+                          <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
                           <CommandGroup>
-                            {modelsLoading ? (
-                              <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-600">
-                                <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                                Fetching models...
-                              </div>
-                            ) : null}
-                            {modelOptions.map((model) => (
+                            {availableModels.map((model) => (
                               <CommandItem
                                 key={model.value}
                                 value={model.value}
                                 onSelect={() => {
                                   if (currentModelField) {
-                                    trackEvent(MixpanelEvent.Settings_Model_Selected, {
-                                      provider: selectedProvider,
-                                      model: model.value,
-                                    });
                                     onInputChange(
                                       model.value,
                                       currentModelField
@@ -910,31 +873,6 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                                           {model.size}
                                         </span>
                                       ) : null}
-                                      {selectedProvider === "ollama" ? (
-                                        <span
-                                          title={
-                                            model.tested === false
-                                              ? "Experimental"
-                                              : "Recommended"
-                                          }
-                                          aria-label={
-                                            model.tested === false
-                                              ? "Experimental"
-                                              : "Recommended"
-                                          }
-                                          className={cn(
-                                            "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                                            model.tested === false
-                                              ? "border-amber-200 bg-amber-50 text-amber-700"
-                                              : "border-green-200 bg-green-50 text-green-700"
-                                          )}
-                                        >
-                                          <Check
-                                            className="h-3 w-3"
-                                            aria-hidden="true"
-                                          />
-                                        </span>
-                                      ) : null}
                                     </div>
                                   </div>
                                 </div>
@@ -952,11 +890,11 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
         </div>
       </div>
       {/* Show message if no models found */}
-      {selectedProvider !== "ollama" && modelsChecked && availableModels.length === 0 && (
+      {modelsChecked && availableModels.length === 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800">
-            No models found. Please make sure your provider credentials are
-            valid and the selected provider is reachable.
+            모델을 찾을 수 없습니다. 제공자 인증 정보가 올바른지, 선택한
+            제공자에 연결할 수 있는지 확인하세요.
           </p>
         </div>
       )}

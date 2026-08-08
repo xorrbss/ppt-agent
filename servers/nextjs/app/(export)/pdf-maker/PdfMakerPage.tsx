@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import "@/app/(presentation-generator)/utils/prism-languages";
@@ -10,16 +10,18 @@ import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
+import type { PresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
+import { applyPresentationThemeTokens } from "@/app/(presentation-generator)/presentation/utils/presentationThemeTokens";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
-import {
-  shouldRenderTemplateV2HtmlPreview,
-  TemplateV2HtmlSlidePreview,
-} from "@/app/(presentation-generator)/components/TemplateV2HtmlSlidePreview";
 import { normalizeBackendAssetUrls } from "@/utils/api";
+import {
+  resolvePersistedExportStrategy,
+  type PersistedPresentation,
+} from "@/lib/presentation-export-strategy";
+import TemplateV2GeneralSlide from "./TemplateV2GeneralSlide";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
 
 const PDF_PRINT_STYLE = `
@@ -93,42 +95,90 @@ const PDF_PRINT_STYLE = `
   }
 `;
 
+/**
+ * Point SVG <img> icons at the PNG-rasterizing route. The "editable PPTX"
+ * converter embeds each <img> as a real picture via Pillow, which can read
+ * neither SVG nor data-URIs — only real raster served over http/file. So rewrite
+ * every /static or /app_data *.svg icon src to /api/rasterize-icon, which
+ * returns a PNG (via sharp); the converter then downloads and embeds it.
+ */
+function rasterizeSvgIconsForExport(root: HTMLElement): void {
+  const imgs = Array.from(root.querySelectorAll("img")).filter((img) => {
+    const s = img.getAttribute("src") || "";
+    return (
+      /\.svg(\?|#|$)/i.test(s) &&
+      !s.startsWith("data:") &&
+      !s.includes("/api/rasterize-icon")
+    );
+  });
+
+  imgs.forEach((img) => {
+    const raw = img.getAttribute("src");
+    if (!raw) return;
+    const u = new URL(raw, window.location.href);
+    // Only known, server-served icon paths — avoids turning the route into an
+    // open image proxy.
+    if (!/^\/(static|app_data)\//i.test(u.pathname)) return;
+    img.setAttribute(
+      "src",
+      `/api/rasterize-icon?src=${encodeURIComponent(u.pathname + u.search)}`
+    );
+  });
+}
+
 type PresentationPageProps = {
   presentation_id: string;
-  exportCookie?: string;
+  initialPresentationData?: PresentationData;
 };
 
-const PresentationPage = ({ presentation_id, exportCookie }: PresentationPageProps) => {
+const PresentationPage = ({
+  presentation_id,
+  initialPresentationData,
+}: PresentationPageProps) => {
   const pathname = usePathname();
-  const [contentLoading, setContentLoading] = useState(true);
-  const exportCookieFromHash =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.hash.replace(/^#/, "")).get(
-          "exportCookie"
-        ) ?? undefined
-      : undefined;
-  const effectiveExportCookie = exportCookie ?? exportCookieFromHash;
-
+  const normalizedInitialPresentationData = useMemo(
+    () =>
+      initialPresentationData
+        ? normalizeBackendAssetUrls(initialPresentationData)
+        : undefined,
+    [initialPresentationData]
+  );
+  const [contentLoading, setContentLoading] = useState(
+    !normalizedInitialPresentationData
+  );
   const dispatch = useDispatch();
-  const { presentationData } = useSelector(
+  const { presentationData: storedPresentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  useEffect(() => {
+    const presentation = storedPresentationData ?? normalizedInitialPresentationData;
+    if (
+      presentation?.slides?.some(
+        (slide: { layout?: unknown }) =>
+          typeof slide?.layout === "string" && slide.layout.includes("custom")
+      )
+    ) {
+      ensureTailwindBrowserScript();
+    }
+  }, [normalizedInitialPresentationData, storedPresentationData]);
+  const presentationData =
+    normalizedInitialPresentationData ?? storedPresentationData;
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (presentationData?.slides?.[0]?.layout?.includes("custom")) {
-      ensureTailwindBrowserScript();
+    if (normalizedInitialPresentationData) {
+      dispatch(setPresentationData(normalizedInitialPresentationData as any));
+      if ((normalizedInitialPresentationData as any).fonts) {
+        useFontLoader((normalizedInitialPresentationData as any).fonts);
+      }
+      return;
     }
-  }, [presentationData]);
-  useEffect(() => {
     fetchUserSlides();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- route id and initial SSR payload are immutable for this render
 
   const fetchUserSlides = async () => {
     try {
-      const data = effectiveExportCookie
-        ? await fetchPresentationForExport(presentation_id, effectiveExportCookie)
-        : await DashboardApi.getPresentation(presentation_id);
+      const data = await DashboardApi.getPresentation(presentation_id);
       const normalizedData = normalizeBackendAssetUrls(data);
       dispatch(setPresentationData(normalizedData));
 
@@ -145,29 +195,11 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
       }
     } catch (error) {
       setError(true);
-      notify.error("Failed to load presentation", "The presentation could not be loaded. Please try again.");
+      notify.error("프레젠테이션을 불러오지 못했습니다", "프레젠테이션을 불러올 수 없습니다. 다시 시도해 주세요.");
       console.error("Error fetching user slides:", error);
     } finally {
       setContentLoading(false);
     }
-  };
-
-  const fetchPresentationForExport = async (
-    id: string,
-    cookieHeader: string
-  ) => {
-    const response = await fetch(`/api/export-presentation-data/${id}`, {
-      method: "GET",
-      headers: {
-        "x-export-cookie": cookieHeader,
-      },
-      cache: "no-store",
-    });
-
-    return ApiResponseHandler.handleResponse(
-      response,
-      "Presentation not found"
-    );
   };
 
   const applyTheme = (theme: Theme) => {
@@ -199,16 +231,54 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
     Object.entries(cssVariables).forEach(([key, value]) => {
       element.style.setProperty(key, value);
     });
-    const textFontName = theme.data.fonts.textFont.name;
-    const textFontUrl = theme.data.fonts.textFont.url;
-    useFontLoader({ [textFontName]: textFontUrl });
-    element.style.setProperty("font-family", `"${textFontName}"`);
-    element.style.setProperty("--heading-font-family", `"${textFontName}"`);
-    element.style.setProperty("--body-font-family", `"${textFontName}"`);
+    // Heading/body font split (v2 themes): optional headingFont/bodyFont; v1
+    // themes carry only textFont, so heading=body=textFont (unchanged).
+    const fonts = theme.data.fonts;
+    const headingFont = fonts.headingFont ?? fonts.textFont;
+    const bodyFont = fonts.bodyFont ?? fonts.textFont;
+    useFontLoader({
+      [fonts.textFont.name]: fonts.textFont.url,
+      [headingFont.name]: headingFont.url,
+      [bodyFont.name]: bodyFont.url,
+    });
+    element.style.setProperty("font-family", `"${bodyFont.name}"`);
+    element.style.setProperty("--heading-font-family", `"${headingFont.name}"`);
+    element.style.setProperty("--body-font-family", `"${bodyFont.name}"`);
+    // Additive tone & manner tokens (consumed only by the adaptive renderer).
+    applyPresentationThemeTokens(element, theme);
   };
 
   const slides = presentationData?.slides ?? [];
   const isLoading = contentLoading || slides.length === 0;
+  const exportStrategy = useMemo(
+    () =>
+      slides.length > 0
+        ? resolvePersistedExportStrategy(
+            presentationData as PersistedPresentation
+          )
+        : null,
+    [presentationData, slides.length]
+  );
+
+  // Once slides are rendered, rasterize SVG icons to PNG so the PPTX converter
+  // can embed them. Mutating <img> src keeps the converter's image/DOM-idle
+  // waits pending until this settles, so it reads the rasterized DOM.
+  useEffect(() => {
+    if (isLoading) return;
+    const el = document.getElementById("presentation-slides-wrapper");
+    if (!el) return;
+    let cancelled = false;
+    const run = async () => {
+      // one frame so the layout has placed the icon <img> elements
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      if (cancelled) return;
+      await rasterizeSvgIconsForExport(el);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading]);
 
   return (
     <div className="m-0 flex flex-col overflow-visible p-0">
@@ -219,12 +289,12 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
             role="alert"
           >
             <AlertCircle className="w-16 h-16 mb-4 text-red-500" />
-            <strong className="font-bold text-4xl mb-2">Oops!</strong>
+            <strong className="font-bold text-4xl mb-2">이런!</strong>
             <p className="block text-2xl py-2">
-              We encountered an issue loading your presentation.
+              프레젠테이션을 불러오는 중 문제가 발생했습니다.
             </p>
             <p className="text-lg py-2">
-              Please check your internet connection or try again later.
+              인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요.
             </p>
             <Button
               className="mt-4 bg-red-500 text-white hover:bg-red-600 focus:ring-4 focus:ring-red-300"
@@ -233,7 +303,7 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
                 window.location.reload();
               }}
             >
-              Retry
+              다시 시도
             </Button>
           </div>
         </div>
@@ -257,43 +327,31 @@ const PresentationPage = ({ presentation_id, exportCookie }: PresentationPagePro
               </div>
             ) : (
               <div className="slides-export-stack font-inter">
-                {slides.map((slide: any, index: number) => {
-                  const useTemplateV2HtmlPreview =
-                    shouldRenderTemplateV2HtmlPreview(
-                      slide,
-                      presentationData?.version
-                    );
-
-                  return (
+                {slides.map((slide: any, index: number) => (
+                  <div
+                    key={`${slide.type}-${index}-${slide.index}`}
+                    id={`slide-${slide.index}`}
+                    className="main-slide relative flex items-center justify-center"
+                    data-speaker-note={slide.speaker_note ?? ""}
+                  >
                     <div
-                      key={`${slide.type}-${index}-${slide.index}`}
-                      id={`slide-${slide.index}`}
-                      className="main-slide relative flex items-center justify-center"
-                      data-speaker-note={slide.speaker_note ?? ""}
+                      className="slide-export-inner group font-syne"
+                      data-layout={slide.layout}
+                      data-group={slide.layout_group}
                     >
-                      <div
-                        className="slide-export-inner group font-syne"
-                        data-layout={slide.layout}
-                        data-group={slide.layout_group}
-                      >
-                        {useTemplateV2HtmlPreview ? (
-                          <TemplateV2HtmlSlidePreview
-                            slide={slide}
-                            fonts={presentationData?.fonts}
-                            fixedSize
-                          />
-                        ) : (
-                          <SlideScale
-                            slide={slide}
-                            theme={presentationData?.theme ?? null}
-                            isEditMode={false}
-                            fixedSize
-                          />
-                        )}
-                      </div>
+                      {exportStrategy === "template-v2-general" ? (
+                        <TemplateV2GeneralSlide slide={slide} />
+                      ) : (
+                        <SlideScale
+                          slide={slide}
+                          theme={presentationData?.theme ?? null}
+                          isEditMode={false}
+                          fixedSize
+                        />
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </div>

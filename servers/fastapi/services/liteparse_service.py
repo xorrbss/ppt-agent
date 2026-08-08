@@ -83,6 +83,9 @@ class LiteParseService:
         """Build environment for Node subprocesses."""
         env = os.environ.copy()
 
+        # LiteParse checks ImageMagick availability with `which magick`.
+        # On macOS app launches, PATH often excludes Homebrew bins, even when
+        # IMAGEMAGICK_BINARY is configured to an absolute executable path.
         path_entries = [p for p in (env.get("PATH") or "").split(os.pathsep) if p]
         additional_entries = []
 
@@ -92,9 +95,11 @@ class LiteParseService:
             if magick_dir:
                 additional_entries.append(magick_dir)
 
-        magick_home = (env.get("MAGICK_HOME") or "").strip()
-        if magick_home:
-            additional_entries.extend([magick_home, os.path.join(magick_home, "bin")])
+        soffice_binary = (env.get("SOFFICE_PATH") or "").strip()
+        if soffice_binary:
+            soffice_dir = os.path.dirname(soffice_binary)
+            if soffice_dir:
+                additional_entries.append(soffice_dir)
 
         if os.name != "nt":
             additional_entries.extend([
@@ -124,7 +129,6 @@ class LiteParseService:
         candidates = [
             self.runner_dir,
             os.path.abspath(os.path.join(self.runner_dir, "..")),
-            os.path.abspath(os.path.join(self.runner_dir, "..", "..")),
             os.path.abspath(os.path.join(os.getcwd(), "..", "..", "document-extraction-liteparse")),
             os.path.abspath(os.path.join(os.getcwd(), "..", "..")),
             "/app/document-extraction-liteparse",
@@ -148,6 +152,32 @@ class LiteParseService:
         candidates = [
             # Dedicated Docker runtime path
             "/app/document-extraction-liteparse/liteparse_runner.mjs",
+            # Local (non-Docker) fork layout: the runner ships under
+            # electron/resources/document-extraction even when the web backend is
+            # run from servers/fastapi. cwd-relative and file-relative forms.
+            os.path.abspath(
+                os.path.join(
+                    cwd,
+                    "..",
+                    "..",
+                    "electron",
+                    "resources",
+                    "document-extraction",
+                    "liteparse_runner.mjs",
+                )
+            ),
+            os.path.abspath(
+                os.path.join(
+                    service_dir,
+                    "..",
+                    "..",
+                    "..",
+                    "electron",
+                    "resources",
+                    "document-extraction",
+                    "liteparse_runner.mjs",
+                )
+            ),
             # servers/fastapi (repo root layout) → resources/...
             os.path.abspath(
                 os.path.join(
@@ -175,17 +205,6 @@ class LiteParseService:
             os.path.abspath(
                 os.path.join(
                     cwd, "..", "..", "app", "resources", "document-extraction", "liteparse_runner.mjs"
-                )
-            ),
-            os.path.abspath(
-                os.path.join(
-                    cwd,
-                    "..",
-                    "..",
-                    "electron",
-                    "resources",
-                    "document-extraction",
-                    "liteparse_runner.mjs",
                 )
             ),
         ]
@@ -241,6 +260,45 @@ class LiteParseService:
 
         return True, "ok"
 
+    def _resolve_tessdata_path(self) -> str:
+        """Locate a bundled `tessdata/` directory for offline OCR.
+
+        LiteParse/tesseract.js downloads `<lang>.traineddata` from a CDN when no
+        local path is given, so OCR silently needs network access. To support
+        offline / air-gapped runs (and to actually use the committed eng/kor
+        models) point it at a bundled `tessdata/` directory. Explicit env
+        overrides win; returns "" when nothing suitable is found so the runner
+        falls back to its own env/CDN handling.
+        """
+        env_path = (
+            os.getenv("LITEPARSE_TESSDATA_PATH") or os.getenv("TESSDATA_PREFIX") or ""
+        ).strip()
+        if env_path:
+            return env_path
+
+        service_dir = os.path.dirname(os.path.abspath(__file__))
+        app_root = (os.getenv("PRESENTON_APP_ROOT") or "").strip()
+        candidates = []
+        if app_root:
+            candidates.append(os.path.join(app_root, "tessdata"))
+        candidates.extend(
+            [
+                # Repo-root layout: servers/fastapi/services -> <repo>/tessdata
+                os.path.abspath(os.path.join(service_dir, "..", "..", "..", "tessdata")),
+                # Next to the LiteParse runner (Electron packaged bundle)
+                os.path.join(self.runner_dir, "tessdata"),
+                "/app/tessdata",
+            ]
+        )
+        for candidate in candidates:
+            if (
+                candidate
+                and os.path.isdir(candidate)
+                and any(name.endswith(".traineddata") for name in os.listdir(candidate))
+            ):
+                return candidate
+        return ""
+
     @staticmethod
     def _use_json_runner_output() -> bool:
         """If true, expect one JSON line on stdout (legacy). Default is plain UTF-8 text (better for large PDFs)."""
@@ -291,7 +349,7 @@ class LiteParseService:
         ocr_server = (os.getenv("LITEPARSE_OCR_SERVER_URL") or "").strip()
         if ocr_server:
             command.extend(["--ocr-server-url", ocr_server])
-        tessdata = (os.getenv("LITEPARSE_TESSDATA_PATH") or "").strip()
+        tessdata = self._resolve_tessdata_path()
         if tessdata:
             command.extend(["--tessdata-path", tessdata])
 
@@ -413,6 +471,8 @@ class LiteParseService:
     def _run_plain_bridge_to_text(self, command: list[str]) -> subprocess.CompletedProcess[str]:
         stdout_path = ""
         stderr_tail = BoundedTextBuffer()
+        process: subprocess.Popen[bytes] | None = None
+        stderr_thread: threading.Thread | None = None
         try:
             with tempfile.NamedTemporaryFile(prefix="liteparse-stdout-", delete=False) as stdout_file:
                 stdout_path = stdout_file.name
@@ -456,6 +516,14 @@ class LiteParseService:
                 stderr=stderr_tail.get(),
             )
         finally:
+            if process is not None:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+                if stderr_thread is not None and stderr_thread.is_alive():
+                    stderr_thread.join(timeout=5)
+                if process.stderr is not None:
+                    process.stderr.close()
             if stdout_path:
                 try:
                     os.unlink(stdout_path)

@@ -4,27 +4,26 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, PlainTextResponse
 
+from api.error_handling import install_api_error_handling
 from api.lifespan import app_lifespan
 from api.middlewares import SessionAuthMiddleware, UserConfigEnvUpdateMiddleware
-from api.v1.async_tasks.router import API_V1_ASYNC_TASKS_ROUTER
 from api.v1.auth.router import API_V1_AUTH_ROUTER
 from api.v1.admin.router import API_V1_ADMIN_ROUTER
+from api.v1.async_tasks.router import API_V1_ASYNC_TASKS_ROUTER
 from api.v1.mock.router import API_V1_MOCK_ROUTER
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
+from services.workspace_metrics import WORKSPACE_METRICS
 from utils.get_env import (
     get_app_data_directory_env,
+    get_enable_mock_endpoints_env,
     get_sentry_dsn_env,
     get_sentry_send_default_pii_env,
     get_sentry_traces_sample_rate_env,
 )
-from utils.mime_types import init_sandbox_safe_mimetypes
 from utils.path_helpers import get_resource_path
-
-
-init_sandbox_safe_mimetypes()
 
 
 def _maybe_init_sentry() -> None:
@@ -61,14 +60,17 @@ def _maybe_init_sentry() -> None:
 _maybe_init_sentry()
 
 app = FastAPI(lifespan=app_lifespan)
+install_api_error_handling(app)
 
 # Routers
 app.include_router(API_V1_PPT_ROUTER)
+app.include_router(API_V1_ASYNC_TASKS_ROUTER)
 app.include_router(API_V1_WEBHOOK_ROUTER)
-app.include_router(API_V1_MOCK_ROUTER)
+# Mock endpoints are a dev-only surface; keep them off production deployments.
+if (get_enable_mock_endpoints_env() or "").lower() == "true":
+    app.include_router(API_V1_MOCK_ROUTER)
 app.include_router(API_V1_AUTH_ROUTER)
 app.include_router(API_V1_ADMIN_ROUTER)
-app.include_router(API_V1_ASYNC_TASKS_ROUTER)
 
 # Mount app_data and static assets (direct FastAPI access; nginx also serves /static in Docker).
 app_data_dir = get_app_data_directory_env()
@@ -80,22 +82,54 @@ static_dir = get_resource_path("static")
 if os.path.isdir(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Electron serves Next.js and FastAPI from separate loopback ports. When its
-# runtime Next.js origin is available, use that exact origin so credentialed
-# requests remain standards-compliant. Docker stays same-origin behind nginx;
-# the wildcard fallback preserves standalone FastAPI development behavior.
-next_public_origin = (os.getenv("NEXT_PUBLIC_URL") or "").strip().rstrip("/")
-origins = [next_public_origin] if next_public_origin else ["*"]
+# Middlewares
+# CORS was allow_origins=["*"] WITH allow_credentials=True — Starlette then reflects
+# any caller's Origin and returns Access-Control-Allow-Credentials:true, so any site
+# could make credentialed calls. The UI is same-origin (nginx / the local proxy), so
+# CORS is only needed for local dev cross-origin; use a tight allowlist (extend via
+# CORS_ALLOWED_ORIGINS, comma-separated) instead of a credentialed wildcard.
+def _cors_origins() -> list[str]:
+    raw = (os.getenv("CORS_ALLOWED_ORIGINS") or "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+    ]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Chat-First-Workspace-Projected"],
 )
 
 app.add_middleware(UserConfigEnvUpdateMiddleware)
 app.add_middleware(SessionAuthMiddleware)
+
+
+@app.get(
+    "/metrics/workspace",
+    response_class=PlainTextResponse,
+    include_in_schema=False,
+)
+async def workspace_metrics_scrape() -> PlainTextResponse:
+    """Expose only the closed, metadata-free workspace Prometheus schema.
+
+    The path intentionally lives outside ``/api`` so Prometheus does not need
+    an interactive user session.  Deployment network policy remains the
+    authorization boundary for this aggregate-only scrape endpoint.
+    """
+
+    return PlainTextResponse(
+        WORKSPACE_METRICS.prometheus_text(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @app.middleware("http")

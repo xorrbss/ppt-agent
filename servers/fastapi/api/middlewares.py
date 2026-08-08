@@ -1,3 +1,5 @@
+import posixpath
+
 from fastapi import Request
 from sqlalchemy import func, select
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -5,7 +7,7 @@ from starlette.responses import JSONResponse
 
 from api.v1.auth.assets import is_app_data_path_authorized
 from api.v1.auth.principal import resolve_request_principal
-from api.v1.auth.context import (
+from utils.owner_context import (
     reset_current_owner_id,
     reset_current_owner_is_admin,
     set_current_owner_id,
@@ -26,24 +28,33 @@ class UserConfigEnvUpdateMiddleware(BaseHTTPMiddleware):
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):
-    _PUBLIC_AUTH_PATHS = {
-        "/api/v1/auth/status",
-        "/api/v1/auth/verify",
-        "/api/v1/auth/setup",
-        "/api/v1/auth/login",
-        "/api/v1/auth/logout",
-    }
-    _PUBLIC_APP_DATA_PREFIXES = (
-        "/app_data/fonts/",
-        "/app_data/templates/",
+    # Public, unauthenticated endpoints. The share endpoint is read-only and
+    # reachable ONLY by an unguessable token (never a presentation id); the check
+    # runs on the NORMALIZED path so a traversal segment can't ride this prefix to
+    # a protected route. Only GET-by-token lives under this prefix.
+    _EXEMPT_PREFIXES = (
+        "/api/v1/auth/",
+        "/api/v1/ppt/presentation/public/",
     )
-    _PROTECTED_NON_API_PATHS = {"/docs", "/openapi.json", "/redoc"}
+    _PROTECTED_NON_API_PATHS = {
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+    }
+
+    @staticmethod
+    def _normalize(path: str) -> str:
+        # Collapse dot-segments before any prefix/exemption test so routing and
+        # authorization cannot disagree about which protected path was requested.
+        normalized = posixpath.normpath(path)
+        return normalized if normalized.startswith("/") else "/" + normalized
+
+    def _is_exempt(self, path: str) -> bool:
+        return any(path.startswith(prefix) for prefix in self._EXEMPT_PREFIXES)
 
     def _requires_auth(self, path: str) -> bool:
         if path.startswith("/api/"):
             return True
-        if any(path.startswith(prefix) for prefix in self._PUBLIC_APP_DATA_PREFIXES):
-            return False
         if path.startswith("/app_data/"):
             return True
         return path in self._PROTECTED_NON_API_PATHS
@@ -52,11 +63,14 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if is_disable_auth_enabled():
             return await call_next(request)
 
-        path = request.url.path
+        # Decide auth on the NORMALIZED path so dot-segment traversal can't slip a
+        # protected path past the exemptions (routing still uses the real path).
+        path = self._normalize(request.url.path)
+
         if (
             request.method == "OPTIONS"
             or not self._requires_auth(path)
-            or path in self._PUBLIC_AUTH_PATHS
+            or self._is_exempt(path)
         ):
             return await call_next(request)
 

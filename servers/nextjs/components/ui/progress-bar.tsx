@@ -4,14 +4,23 @@ import React, { useEffect, useState, useRef } from 'react';
 interface ProgressBarProps {
     duration: number;
     onComplete?: () => void;
+    value?: number;
+    label?: string;
 }
 
-export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
+export const ProgressBar = ({ duration, onComplete, value, label }: ProgressBarProps) => {
     const [progress, setProgress] = useState(0);
     const progressInterval = useRef<NodeJS.Timeout | null>(null);
     const startTime = useRef<number>(Date.now());
+    const isControlled = typeof value === "number" && Number.isFinite(value);
+    const displayedProgress = isControlled
+        ? Math.min(100, Math.max(0, value))
+        : progress;
 
     useEffect(() => {
+        if (isControlled) return;
+        startTime.current = Date.now();
+
         const updateProgress = () => {
             const currentTime = Date.now();
             const elapsedTime = currentTime - startTime.current;
@@ -26,13 +35,7 @@ export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
                 return;
             }
 
-            // Slow down progress after 90%
-            if (calculatedProgress > 90) {
-                const remainingProgress = Math.min(99 - progress, 0.1);
-                setProgress(prev => prev + remainingProgress);
-            } else {
-                setProgress(Math.min(calculatedProgress, 90));
-            }
+            setProgress(Math.min(calculatedProgress, 95));
         };
 
         progressInterval.current = setInterval(updateProgress, 50);
@@ -42,19 +45,30 @@ export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
                 clearInterval(progressInterval.current);
             }
         };
-    }, [duration, onComplete]);
+    }, [duration, isControlled, onComplete]);
 
     return (
         <div className="w-full space-y-2">
-            <div className="flex justify-end items-center  text-sm">
-                {/* <span>Processing...</span> */}
-                <span className='font-inter text-[#191919]/80 text-end font-medium text-xs'>{Math.round(progress)}%</span>
+            <div className="flex justify-between items-center text-sm">
+                {label ? (
+                    <span data-cy="progress-label" className="font-inter text-[#191919]/80 font-medium text-xs">
+                        {label}
+                    </span>
+                ) : <span />}
+                <span className='font-inter text-[#191919]/80 text-end font-medium text-xs'>{Math.round(displayedProgress)}%</span>
             </div>
-            <div className="w-full bg-white/40 rounded-full h-2 overflow-hidden">
+            <div
+                className="w-full bg-white/40 rounded-full h-2 overflow-hidden"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(displayedProgress)}
+                aria-label={label || "Presentation generation progress"}
+            >
                 <div
                     className="h-full bg-gradient-to-r from-[#9034EA] via-[#5146E5] to-[#9034EA] rounded-full animate-gradient transition-all duration-300 ease-out"
                     style={{
-                        width: `${progress}%`,
+                        width: `${displayedProgress}%`,
                         backgroundSize: '200% 100%',
                     }}
                 />
@@ -77,4 +91,4 @@ export const ProgressBar = ({ duration, onComplete }: ProgressBarProps) => {
             `}</style>
         </div>
     );
-}; 
+};

@@ -1,24 +1,26 @@
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
-import {
-  limitOutlines,
-  MAX_NUMBER_OF_SLIDES,
-} from "@/utils/presentationLimits";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import {
+  setAdaptiveBlockText,
+  setAdaptiveChartBlock,
+  deleteAdaptiveUnit as crudDeleteUnit,
+  moveAdaptiveUnit as crudMoveUnit,
+  addAdaptiveUnit as crudAddUnit,
+} from "@/lib/adaptiveBlockEdit";
 
 export interface PresentationData {
   id: string;
-
   language: string;
-  layout: any;
+  layout: {
+    name: string;
+    ordered: boolean;
+    slides: any[];
+  };
   n_slides: number;
   title: string;
   slides: any;
   theme: Theme | null;
-  version?: string;
-  components?: any;
-  fonts?: any;
-  structure?: any;
 }
 
 interface PresentationGenerationState {
@@ -80,7 +82,7 @@ const presentationGenerationSlice = createSlice({
     },
     // Set outlines
     setOutlines: (state, action: PayloadAction<{ content: string }[]>) => {
-      state.outlines = limitOutlines(action.payload);
+      state.outlines = action.payload;
     },
     // Set presentation data
     setPresentationData: (state, action: PayloadAction<PresentationData>) => {
@@ -105,10 +107,6 @@ const presentationGenerationSlice = createSlice({
       action: PayloadAction<{ slide: Slide; index: number }>
     ) => {
       if (state.presentationData?.slides) {
-        if (state.presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
-          return;
-        }
-
         // Insert the new slide at the specified index
         state.presentationData.slides.splice(
           action.payload.index,
@@ -123,93 +121,17 @@ const presentationGenerationSlice = createSlice({
             index: idx,
           })
         );
-        state.presentationData.n_slides = state.presentationData.slides.length;
       }
     },
     deletePresentationSlide: (state, action: PayloadAction<number>) => {
-      if (state.presentationData?.slides) {
-        const slides = state.presentationData.slides;
-        if (
-          slides.length <= 1 ||
-          action.payload < 0 ||
-          action.payload >= slides.length
-        ) {
-          return;
-        }
-
-        slides.splice(action.payload, 1);
+      if (state.presentationData) {
+        state.presentationData.slides.splice(action.payload, 1);
         state.presentationData.slides = state.presentationData.slides.map(
           (slide: any, idx: number) => ({
             ...slide,
             index: idx,
           })
         );
-        state.presentationData.n_slides = state.presentationData.slides.length;
-      }
-    },
-    replaceSlidesWithBlankFallback: (
-      state,
-      action: PayloadAction<{ slideData: any }>
-    ) => {
-      if (state.presentationData) {
-        state.presentationData.slides = [
-          { ...action.payload.slideData, index: 0 },
-        ];
-        state.presentationData.n_slides = 1;
-      }
-    },
-    duplicatePresentationSlide: (
-      state,
-      action: PayloadAction<{ index: number; slideId: string }>
-    ) => {
-      if (state.presentationData?.slides) {
-        const slides = state.presentationData.slides;
-        if (slides.length >= MAX_NUMBER_OF_SLIDES) {
-          return;
-        }
-
-        const sourceSlide = slides[action.payload.index];
-        if (!sourceSlide) {
-          return;
-        }
-
-        const duplicatedSlide = {
-          ...JSON.parse(JSON.stringify(sourceSlide)),
-          id: action.payload.slideId,
-          index: action.payload.index + 1,
-        };
-
-        slides.splice(action.payload.index + 1, 0, duplicatedSlide);
-        state.presentationData.slides = slides.map((slide: any, idx: number) => ({
-          ...slide,
-          index: idx,
-        }));
-        state.presentationData.n_slides = state.presentationData.slides.length;
-      }
-    },
-    movePresentationSlide: (
-      state,
-      action: PayloadAction<{ fromIndex: number; toIndex: number }>
-    ) => {
-      if (state.presentationData?.slides) {
-        const slides = state.presentationData.slides;
-        const { fromIndex, toIndex } = action.payload;
-        if (
-          fromIndex === toIndex ||
-          fromIndex < 0 ||
-          toIndex < 0 ||
-          fromIndex >= slides.length ||
-          toIndex >= slides.length
-        ) {
-          return;
-        }
-
-        const [movedSlide] = slides.splice(fromIndex, 1);
-        slides.splice(toIndex, 0, movedSlide);
-        state.presentationData.slides = slides.map((slide: any, idx: number) => ({
-          ...slide,
-          index: idx,
-        }));
       }
     },
     updateSlide: (
@@ -224,16 +146,37 @@ const presentationGenerationSlice = createSlice({
           action.payload.slide;
       }
     },
-    updateSlideUi: (
+
+    // Update a slide's speaker note (presenter-only text; persisted by autosave).
+    updateSlideSpeakerNote: (
       state,
-      action: PayloadAction<{ index: number; ui: Record<string, unknown> | null }>
+      action: PayloadAction<{ slideIndex: number; speakerNote: string }>
     ) => {
       if (
         state.presentationData &&
-        state.presentationData.slides[action.payload.index]
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
       ) {
-        state.presentationData.slides[action.payload.index].ui =
-          action.payload.ui;
+        state.presentationData.slides[action.payload.slideIndex].speaker_note =
+          action.payload.speakerNote;
+      }
+    },
+
+    // Replace a slide's chart object (type + data points) wholesale. Used by the
+    // in-tree chart editor: type switches and adding/removing points change the
+    // array shape, which the path-based updateSlideContent can't express, and the
+    // values must stay numbers (not the strings updateSlideContent stores).
+    updateSlideChart: (
+      state,
+      action: PayloadAction<{ slideIndex: number; chart: any }>
+    ) => {
+      if (
+        state.presentationData &&
+        state.presentationData.slides &&
+        state.presentationData.slides[action.payload.slideIndex]
+      ) {
+        const slide = state.presentationData.slides[action.payload.slideIndex];
+        slide.content = { ...slide.content, chart: action.payload.chart };
       }
     },
 
@@ -294,12 +237,65 @@ const presentationGenerationSlice = createSlice({
       }
     },
 
+    // Deterministic text edit for adaptive slides, keyed by data-block-id (no
+    // fragile string matching). blockId is one of: a top-level block id (e.g.
+    // "title"), a nested item id (bullets/column items, e.g. "b1"/"col1.1"), or
+    // a dotted block field (e.g. "s1.value", "card1.title", "step1.label").
+    updateAdaptiveBlock: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        blockId: string;
+        content: string;
+      }>
+    ) => {
+      const { slideIndex, blockId, content } = action.payload;
+      const slide = state.presentationData?.slides?.[slideIndex];
+      setAdaptiveBlockText(slide?.content?.blocks, blockId, content);
+    },
+
+    // Update an adaptive chart block's type / data / series by block id. Chart
+    // shape changes (add/remove rows or series, type switch) can't go through the
+    // text-only updateAdaptiveBlock.
+    updateAdaptiveBlockChart: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        blockId: string;
+        patch: { chartType?: string; data?: any[]; series?: string[] };
+      }>
+    ) => {
+      const { slideIndex, blockId, patch } = action.payload;
+      const slide = state.presentationData?.slides?.[slideIndex];
+      setAdaptiveChartBlock(slide?.content?.blocks, blockId, patch);
+    },
+
+    // Adaptive block/item CRUD (P4b) — unitId is a top-level block id or a
+    // nested item id; helpers locate the owning array (blocks[] or items[]).
+    deleteAdaptiveUnit: (
+      state,
+      action: PayloadAction<{ slideIndex: number; unitId: string }>
+    ) => {
+      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
+      crudDeleteUnit(slide?.content?.blocks, action.payload.unitId);
+    },
+    moveAdaptiveUnit: (
+      state,
+      action: PayloadAction<{ slideIndex: number; unitId: string; delta: number }>
+    ) => {
+      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
+      crudMoveUnit(slide?.content?.blocks, action.payload.unitId, action.payload.delta);
+    },
+    addAdaptiveUnit: (
+      state,
+      action: PayloadAction<{ slideIndex: number; afterUnitId: string }>
+    ) => {
+      const slide = state.presentationData?.slides?.[action.payload.slideIndex];
+      crudAddUnit(slide?.content?.blocks, action.payload.afterUnitId);
+    },
+
     addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
       if (state.presentationData?.slides) {
-        if (state.presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
-          return;
-        }
-
         // Insert the new slide at the specified index + 1 (after current slide)
         state.presentationData.slides.splice(action.payload.index + 1, 0, action.payload.slideData);
 
@@ -310,7 +306,6 @@ const presentationGenerationSlice = createSlice({
             index: idx,
           })
         );
-        state.presentationData.n_slides = state.presentationData.slides.length;
       }
     },
 
@@ -467,9 +462,6 @@ const presentationGenerationSlice = createSlice({
           } else {
             current[Number(finalKey)] = updatedValue;
           }
-
-          // Add debugging
-          console.log('Redux: Updated slide icon at path:', path, 'with URL:', url);
         };
 
         // Update the slide icon
@@ -511,12 +503,15 @@ export const {
   // slides operations
   addSlide,
   updateSlide,
-  updateSlideUi,
   deletePresentationSlide,
-  replaceSlidesWithBlankFallback,
-  duplicatePresentationSlide,
-  movePresentationSlide,
   updateSlideContent,
+  updateSlideSpeakerNote,
+  updateSlideChart,
+  updateAdaptiveBlock,
+  updateAdaptiveBlockChart,
+  deleteAdaptiveUnit,
+  moveAdaptiveUnit,
+  addAdaptiveUnit,
   updateSlideImage,
   updateImageProperties,
   updateSlideIcon,

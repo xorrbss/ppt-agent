@@ -17,8 +17,6 @@ export interface IconSearch {
 
   limit: number;
 
-  icon_type?: string;
-
   icon_weight?: string;
 }
 

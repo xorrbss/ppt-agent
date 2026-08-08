@@ -1,0 +1,83 @@
+id: osb-smart-banking
+name: OSB 스마트뱅킹
+description: 딥 네이비와 코발트 블루, 정교한 표·프로세스·모바일 화면으로 금융 IT 재구축 전략을 설득력 있게 전달하는 제안서 스타일입니다.
+category: business
+tags:
+  - 금융 IT
+  - 스마트뱅킹
+  - 사업 제안서
+  - 블루 인포그래픽
+use_cases:
+  - 금융·핀테크 시스템 재구축 제안
+  - 모바일 뱅킹 UX 전략
+  - 사업 수행 방안 및 로드맵 보고
+preview:
+  bg: "#FFFFFF"
+  accent: "#0879B7"
+  palette:
+    - "#FFFFFF"
+    - "#173A63"
+    - "#0879B7"
+    - "#DCECF6"
+    - "#E7352A"
+  variant: banking-proposal-blue
+  image: osb-smart-banking/cover.png
+design_tokens:
+  primary: "#0879B7"
+  background: "#FFFFFF"
+  heading_font: Noto Sans KR
+  body_font: Noto Sans KR
+  mono_font: IBM Plex Mono
+illustration:
+  style_prompt: >-
+    premium Korean financial IT proposal infographic, clean white canvas,
+    deep navy typography and structural panels, cobalt blue process lines,
+    pale blue information zones, restrained red emphasis, polished mobile
+    banking interface motifs, precise tables and timelines, consulting-grade
+    information design, generous whitespace, no readable text inside images,
+    no logos, no watermark, no clip art, no photorealistic banking stock image
+reference_images:
+  cover:
+    - osb-smart-banking/cover.png
+  content:
+    - osb-smart-banking/content.png
+  data:
+    - osb-smart-banking/data.png
+  timeline:
+    - osb-smart-banking/timeline.png
+  architecture:
+    - osb-smart-banking/architecture.png
+  closing:
+    - osb-smart-banking/closing.png
+brief: |-
+  MOOD
+  Create a rigorous, trustworthy Korean financial-technology proposal that feels ready for an executive review at a bank. Balance institutional stability with a confident digital-transformation tone. Every slide should communicate one defensible business claim through disciplined information design.
+
+  PALETTE
+  Use white #FFFFFF as the primary canvas, deep navy #173A63 for headings and structural anchors, and cobalt #0879B7 for the main reading path, section bars, and diagrams. Use pale blue #DCECF6 for information zones and table fills. Reserve red #E7352A for one critical warning, exception, or priority signal per slide. Dark section dividers may invert to navy with white type.
+
+  TYPOGRAPHY
+  Use Noto Sans KR throughout. Titles are bold, compact, and phrased as conclusions. Use medium-weight labels and regular body copy with clear hierarchy. Keep body copy short, align numerals carefully in tables, and use IBM Plex Mono only for small system identifiers or technical metadata. All meaningful text must remain editable HTML rather than being embedded in generated images.
+
+  LAYOUT SYSTEM
+  Use a wide 16:9 corporate grid with generous outer margins, a stable top title zone, and a thin section or progress indicator when useful. White content slides should combine one dominant diagram or table with concise supporting copy. Dark navy slides should feature a single central solution system with surrounding modules. Keep alignment strict, grouping obvious, and reading order left-to-right or top-to-bottom.
+
+  SIGNATURE ELEMENTS
+  Use slim blue section bars, rounded pale-blue panels, navy headline bands, precise connector lines, numbered process nodes, restrained iconography, smartphone interface frames, and small red priority markers. Tables should use blue header fills and subtle row rules. Treat every visual element as part of one connected argument rather than as decoration.
+
+  DATA VISUALIZATION
+  Favor comparison tables, grouped bars, progress rails, maturity matrices, and timeline bands that can be read quickly by executives. Direct-label important values, use blue intensity to encode hierarchy, and keep axes and legends minimal but unambiguous. Use a single red marker only to identify risk or required attention. Charts, tables, and values must be editable HTML or inline SVG.
+
+  IMAGE DIRECTION
+  Use polished mobile-banking UI frames, abstract secure-data networks, and restrained professional human imagery only when they directly support the slide claim. Prefer original vector-like financial IT illustrations over generic stock photography. Reference images define composition and visual hierarchy only; never reproduce their wording, logos, company marks, watermarks, or exact object arrangement.
+
+  SLIDE ARCHETYPES
+  cover: Place a bold proposal title and concise subtitle in a clean left-aligned field, balanced by one focused mobile-banking or secure-digital visual.
+  content: Combine one structured process, comparison, or priority framework with short evidence labels and a clear bottom-line takeaway.
+  architecture: Use one central navy solution platform with three to six connected domains, visible data flow, and a concise implication ribbon.
+  data: Build one dominant comparison table or chart family with direct labels, blue hierarchy, and a short interpretation panel.
+  timeline: Use a single horizontal program rail with four to six phases, aligned milestone labels, and one highlighted current or critical phase.
+  closing: Present three decisive priorities or outcomes beside one memorable digital-banking system visual and one clear next action.
+
+  AVOID
+  Avoid generic card mosaics, playful consumer-app styling, excessive gradients, decorative 3D objects, mismatched icon styles, dense paragraphs, oversized logos, unexplained abbreviations, ambiguous arrows, more than one red emphasis signal, unreadable table text, text inside generated images, copied source wording, copied brand marks, and conclusions unsupported by the visual evidence.

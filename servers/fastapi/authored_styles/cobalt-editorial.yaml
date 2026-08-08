@@ -1,0 +1,58 @@
+id: cobalt-editorial
+name: 코발트 에디토리얼
+description: 깊은 코발트 블루와 날카로운 판면으로 문화·기술·비평 주제를 선명하게 편집하는 스타일
+category: editorial
+tags:
+  - editorial
+  - culture
+  - technology
+use_cases:
+  - 트렌드 리포트
+  - 디자인 비평
+  - 기술 에세이
+preview:
+  bg: "#071B4F"
+  accent: "#FFCB47"
+  palette:
+    - "#071B4F"
+    - "#1848C8"
+    - "#DCE8FF"
+    - "#FFFFFF"
+    - "#FFCB47"
+  variant: cobalt-plate
+brief: >-
+  MOOD: Build a lucid, cultured editorial deck with deep cobalt fields, luminous
+  paper-colored type, and decisive composition. It should feel closer to a designed
+  quarterly or critical journal than to a warm tritone magazine.
+
+  PALETTE: Use midnight navy (#071B4F) and cobalt (#1848C8) as principal fields,
+  ice blue (#DCE8FF) and white (#FFFFFF) for type and quiet surfaces, and signal
+  yellow (#FFCB47) for sparing emphasis. Never use more than one bright accent on a slide.
+
+  TYPOGRAPHY: Use a high-character display serif or precise grotesk for headlines and
+  a neutral sans-serif for reading text. Set large, confident titles with compact
+  supporting copy; preserve generous leading and strong color contrast.
+
+  LAYOUT SYSTEM: Use bold editorial frames, offset text blocks, full-bleed cobalt
+  panels, and a strict underlying column grid. Alternate dramatic image-led slides
+  with quiet paper panels so the deck has rhythm without visual noise.
+
+  SIGNATURE ELEMENTS: Use yellow index marks, blue-on-paper folios, cropped image
+  windows, oversized section numerals, and short marginal annotations.
+
+  DATA VISUALIZATION: Use paper-background charts framed by cobalt, line and column
+  marks in cobalt and sky blue, and yellow only for the decisive comparison. Directly
+  label values and keep axes, units, dates, and sources unmistakable.
+
+  IMAGE DIRECTION: Use high-contrast editorial photography, architectural geometry,
+  cultural artifacts, and bold monochrome crops with cobalt overlays. Keep image
+  treatment crisp and intentional, never nostalgic or scrapbook-like.
+
+  SLIDE ARCHETYPES: cover: cobalt field, oversized title, and yellow index mark;
+  content: a paper text panel cutting into a cobalt frame; data: a crisp chart with a
+  single yellow finding; timeline: numbered eras on alternating cobalt and paper
+  cards; closing: a concise editorial verdict with a final image crop or index cue.
+
+  AVOID: Avoid cream-coral-black tritone, soft blush palettes, rounded pastel cards,
+  generic tech gradients, illegible blue-on-blue text, excessive yellow, and crowded
+  collage spreads.

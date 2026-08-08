@@ -1,10 +1,9 @@
 
 export const useFontLoader = ( fonts:string[]) => {
     const injectFonts = (fontUrls: string[]) => {
-        const appOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:5001";
         fontUrls.forEach((fontUrl) => {
           if (!fontUrl) return;
-          let newFontUrl = fontUrl.includes('fonts.googleapis') ? fontUrl : `${appOrigin}${fontUrl}`;
+          let newFontUrl = fontUrl.includes('fonts.googleapis') ? fontUrl : `https://localhost:5000${fontUrl}`;
           const existingStyle = document.querySelector(`style[data-font-url="${newFontUrl}"]`);
           if (existingStyle) return;
           const style = document.createElement("style");

@@ -38,6 +38,10 @@ def is_gpt_image_1_5_selected() -> bool:
     return ImageProvider.GPT_IMAGE_1_5 == get_selected_image_provider()
 
 
+def is_gpt_image_2_selected() -> bool:
+    return ImageProvider.GPT_IMAGE_2 == get_selected_image_provider()
+
+
 def is_comfyui_selected() -> bool:
     return ImageProvider.COMFYUI == get_selected_image_provider()
 

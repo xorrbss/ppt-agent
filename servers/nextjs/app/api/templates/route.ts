@@ -7,12 +7,6 @@ export async function GET() {
     try {
         // Get the path to the presentation-templates directory
         const templatesDirectory = path.join(process.cwd(), 'app', 'presentation-templates')
-
-        try {
-            await fs.access(templatesDirectory)
-        } catch {
-            return NextResponse.json([])
-        }
         
         // Read all directories in the presentation-templates directory
         const items = await fs.readdir(templatesDirectory, { withFileTypes: true })
@@ -45,7 +39,7 @@ export async function GET() {
                 try {
                     const settingsContent = await fs.readFile(settingsPath, 'utf-8')
                     settings = JSON.parse(settingsContent) as TemplateSetting
-                } catch (settingsError) {
+                } catch {
                     
                     console.warn(`No settings.json found for template ${templateName} or invalid JSON`)
                     // Provide default settings if settings.json is missing or invalid
@@ -53,7 +47,6 @@ export async function GET() {
                         description: `${templateName} presentation layouts`,
                         ordered: false,
                         default: false,
-                        icon_type: 'bold',
                         icon_weight: 'bold'
                     }
                    

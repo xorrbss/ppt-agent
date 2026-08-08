@@ -3,232 +3,131 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { v4 as uuidv4 } from "uuid";
+import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
-import { cn } from "@/lib/utils";
 import "../../utils/prism-languages";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OverlayLoader } from "@/components/ui/overlay-loader";
 import PresentationMode from "./PresentationMode";
 import SidePanel from "./SidePanel";
 import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { AlertCircle, Sparkles, X } from "lucide-react";
+import { AlertCircle, Layers } from "lucide-react";
 import {
   usePresentationStreaming,
   usePresentationData,
   usePresentationNavigation,
   useAutoSave,
+  useHybridExportWarmup,
 } from "../hooks";
 import { PresentationPageProps } from "../types";
+import LoadingState from "./LoadingState";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
+import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
 
-import { replaceSlidesWithBlankFallback } from "@/store/slices/presentationGeneration";
-import { addToHistory } from "@/store/slices/undoRedoSlice";
-import {
-  createBlankPresentationSlide,
-  getPresentationTemplateId,
-  isTemplateV2Slide,
-  isTemplateV2TemplateId,
-} from "../../_shared/blank-slide";
 import PresentationHeader from "./PresentationHeader";
-import PresentationActions from "./PresentationActions";
+import Chat from "./Chat";
 import {
-  TEMPLATE_V2_ACTIVATE_SURFACE_EVENT,
-  TEMPLATE_V2_SURFACE_SELECTED_EVENT,
-  type TemplateV2ActivateSurfaceDetail,
-  type TemplateV2SurfaceSelectedDetail,
-} from "@/components/slide-editor/events/events";
-
-function hasTemplateV2Layouts(layout: unknown): boolean {
-  if (!layout || typeof layout !== "object") return false;
-  const layouts = (layout as any).layouts;
-  if (Array.isArray(layouts)) return true;
-  return Boolean(
-    layouts &&
-    typeof layouts === "object" &&
-    Array.isArray((layouts as any).layouts)
-  );
-}
-
-function hasTemplateV2Slides(slides: unknown): boolean {
-  return (
-    Array.isArray(slides) &&
-    slides.some((slide) => isTemplateV2Slide(slide))
-  );
-}
-
-function collectTemplateV2Ids(value: unknown): string[] {
-  const ids = new Set<string>();
-  const visit = (item: unknown, depth = 0) => {
-    if (depth > 4 || !item) return;
-    if (Array.isArray(item)) {
-      item.forEach((entry) => visit(entry, depth + 1));
-      return;
-    }
-    if (typeof item !== "object") return;
-    const record = item as Record<string, unknown>;
-    ["layout_group", "layout", "template_id", "templateV2Id", "template_v2_id", "id"].forEach(
-      (key) => {
-        const value = record[key];
-        if (isTemplateV2TemplateId(value)) {
-          ids.add(value);
-        }
-      }
-    );
-    visit(record.layout, depth + 1);
-    visit(record.layouts, depth + 1);
-    visit(record.slides, depth + 1);
-  };
-  visit(value);
-  return Array.from(ids);
-}
-
-interface LoadingState {
-  isLoading: boolean;
-  message: string;
-  showProgress: boolean;
-  duration: number;
-  extra_info?: string;
-}
-
-type SlideAddedOptions = {
-  promptOverlaySlideId?: string;
-  promptOverlayKind?: "blank" | "layout";
-};
-
-const DEFAULT_LOADING_STATE: LoadingState = {
-  isLoading: true,
-  message: "Loading presentation",
-  showProgress: false,
-  duration: 0,
-  extra_info: "",
-};
-
-const STREAM_LOADING_STATE: LoadingState = {
-  isLoading: true,
-  message: "Creating your presentation",
-  showProgress: true,
-  duration: 90,
-  extra_info: "This can take a few minutes depending on slide count.",
-};
-
-const IDLE_LOADING_STATE: LoadingState = {
-  isLoading: false,
-  message: "",
-  showProgress: false,
-  duration: 0,
-  extra_info: "",
-};
+  WorkspaceChatPanel,
+  type WorkspaceCommandDispatcher,
+  type WorkspacePageRemakeRequester,
+  type WorkspacePresentationChange,
+  type WorkspaceQualityReviewRequester,
+} from "../workspace";
+import { useChatFirstWorkbenchRollout } from "@/lib/use-chat-first-workbench-rollout";
+import { canReadChatFirstWorkspace } from "@/lib/chat-first-workbench";
+import { findMostVisibleSlideIndex } from "../utils/slideScrollSync";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
 }) => {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const dispatch = useDispatch();
   // State management
   const [loading, setLoading] = useState(true);
-  const [loadingState, setLoadingState] =
-    useState<LoadingState>(DEFAULT_LOADING_STATE);
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isChatSending, setIsChatSending] = useState(false);
-  const [isChatMutating, setIsChatMutating] = useState(false);
   const [isFollowModeEnabled, setIsFollowModeEnabled] = useState(true);
-  const [agentFocusedSlide, setAgentFocusedSlide] = useState<number | null>(
-    null
-  );
-  const [agentFocusEventId, setAgentFocusEventId] = useState<string | null>(
-    null
-  );
-  const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(
-    null
-  );
+  const [agentFocusedSlide, setAgentFocusedSlide] = useState<number | null>(null);
+  const [agentFocusEventId, setAgentFocusEventId] = useState<string | null>(null);
+  const [glowingSlideIndex, setGlowingSlideIndex] = useState<number | null>(null);
   const [chatTargetedSlides, setChatTargetedSlides] = useState<number[]>([]);
-  const [blankPromptSlideIds, setBlankPromptSlideIds] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [templatePromptSlideIds, setTemplatePromptSlideIds] = useState<
-    Set<string>
-  >(() => new Set());
-  const [isMobileAssistantOpen, setIsMobileAssistantOpen] = useState(false);
   const [error, setError] = useState(false);
+  const [compactWorkspacePane, setCompactWorkspacePane] = useState<
+    "slides" | "chat"
+  >("chat");
+  const [workspaceDrawerOpen, setWorkspaceDrawerOpen] = useState(true);
+  const [legacyWorkspacePane, setLegacyWorkspacePane] = useState<
+    "chat" | "history"
+  >("chat");
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const mobileAssistantTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const mobileAssistantCloseRef = useRef<HTMLButtonElement | null>(null);
-  const templateV2EditorLoadedKeyRef = useRef<string | null>(null);
+  const slideScrollSyncFrameRef = useRef<number | null>(null);
   const router = useRouter();
-  const shouldPreloadTemplateV2Presentation =
-    searchParams.get("editor") === "v2";
+  const chatFirstRollout = useChatFirstWorkbenchRollout(undefined, presentation_id);
+  const chatFirstEnabled = chatFirstRollout.mode === "chat";
+  const workspaceShellEnabled = chatFirstRollout.mode !== "legacy";
+  const legacyMutationsEnabled = chatFirstRollout.mode === "legacy";
+  const workspaceCapability = chatFirstRollout.capability;
+  const legacyWorkspaceHistoryEnabled =
+    chatFirstRollout.mode === "legacy" &&
+    canReadChatFirstWorkspace(workspaceCapability);
+  const [workspaceCommandDispatcher, setWorkspaceCommandDispatcher] =
+    useState<WorkspaceCommandDispatcher | null>(null);
+  const [workspaceQualityReviewRequester, setWorkspaceQualityReviewRequester] =
+    useState<WorkspaceQualityReviewRequester | null>(null);
+  const [workspacePageRemakeRequester, setWorkspacePageRemakeRequester] =
+    useState<WorkspacePageRemakeRequester | null>(null);
+  const handleWorkspaceCommandDispatcherReady = useCallback(
+    (dispatcher: WorkspaceCommandDispatcher | null) => {
+      setWorkspaceCommandDispatcher(() => dispatcher);
+    },
+    [],
+  );
+  const handleWorkspacePageRemakeRequest = useCallback(
+    (slideIndex: number) => {
+      setCompactWorkspacePane("chat");
+      setWorkspaceDrawerOpen(true);
+      workspacePageRemakeRequester?.(slideIndex);
+    },
+    [workspacePageRemakeRequester],
+  );
+
+  useEffect(() => {
+    if (chatFirstRollout.mode !== "legacy") setLegacyWorkspacePane("chat");
+  }, [chatFirstRollout.mode]);
+
+
 
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  const presentationDataRef = useRef(presentationData);
+  // Current decks use mode/theme; legacy saved decks are detected from their
+  // authored slide sentinels.
+  const isAuthoredDeck = isAuthoredPresentation(presentationData as any);
   const slidesLength = presentationData?.slides?.length ?? 0;
-  const isTemplateV2Presentation =
-    presentationData?.version === "v2-standard" ||
-    hasTemplateV2Layouts(presentationData?.layout) ||
-    hasTemplateV2Slides(presentationData?.slides);
-  const editingDisabled = isStreaming === true;
+  const lastStreamingSlideIndex =
+    slidesLength > 0
+      ? presentationData?.slides?.[slidesLength - 1]?.index
+      : undefined;
 
-  useEffect(() => {
-    presentationDataRef.current = presentationData;
-  }, [presentationData]);
+  const scheduleHybridExportWarmup = useHybridExportWarmup({
+    presentationId: presentation_id,
+    title: presentationData?.title,
+    presentationData,
+    isAuthoredDeck,
+    isStreaming,
+  });
 
-  const closeMobileAssistant = useCallback(() => {
-    setIsMobileAssistantOpen(false);
-    window.requestAnimationFrame(() => {
-      mobileAssistantTriggerRef.current?.focus();
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isMobileAssistantOpen) return;
-    mobileAssistantCloseRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeMobileAssistant();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closeMobileAssistant, isMobileAssistantOpen]);
-
-  useEffect(() => {
-    const desktopQuery = window.matchMedia("(min-width: 1280px)");
-    const closeDrawerOnDesktop = () => {
-      if (desktopQuery.matches) {
-        setIsMobileAssistantOpen(false);
-      }
-    };
-
-    closeDrawerOnDesktop();
-    desktopQuery.addEventListener("change", closeDrawerOnDesktop);
-    return () =>
-      desktopQuery.removeEventListener("change", closeDrawerOnDesktop);
-  }, []);
-
-  // Auto-save functionality.
-  // Pause while the chat assistant is mutating the deck: the assistant edits
-  // slide.ui directly in the database, so a debounced autosave firing with the
-  // pre-edit Redux state would overwrite (revert) the assistant's change.
-  const { isSaving } = useAutoSave({
+  // Auto-save functionality
+  const { isSaving, saveFailed } = useAutoSave({
     debounceMs: 2000,
-    enabled:
-      !!presentationData &&
-      !isStreaming &&
-      !isChatSending &&
-      !isChatMutating,
+    enabled: legacyMutationsEnabled && !!presentationData && !isStreaming,
+    onSaveSuccess: scheduleHybridExportWarmup,
   });
 
   // Custom hooks
@@ -242,7 +141,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     isPresentMode,
     stream,
     currentSlide: presentSlideFromUrl,
-    scrollToSlide,
     handleSlideClick,
     toggleFullscreen,
     handlePresentExit,
@@ -260,50 +158,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     stream,
     setLoading,
     setError,
-    fetchUserSlides,
-    { preloadPresentationData: shouldPreloadTemplateV2Presentation }
+    fetchUserSlides
   );
-
-  useEffect(() => {
-    if (
-      !presentationData ||
-      loading ||
-      error ||
-      stream ||
-      !isTemplateV2Presentation ||
-      slidesLength > 0
-    ) {
-      return;
-    }
-
-    const blankSlide = createBlankPresentationSlide({
-      id: uuidv4(),
-      index: 0,
-      presentationId: presentation_id,
-      templateId: getPresentationTemplateId(presentationData),
-      isTemplateV2: true,
-    });
-    dispatch(replaceSlidesWithBlankFallback({ slideData: blankSlide }));
-    setSelectedSlide(0);
-  }, [
-    dispatch,
-    error,
-    isTemplateV2Presentation,
-    loading,
-    presentationData,
-    presentation_id,
-    slidesLength,
-    stream,
-  ]);
-
-  useEffect(() => {
-    if (!loading) {
-      setLoadingState(IDLE_LOADING_STATE);
-      return;
-    }
-
-    setLoadingState(stream ? STREAM_LOADING_STATE : DEFAULT_LOADING_STATE);
-  }, [loading, stream]);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -317,11 +173,26 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         return;
       }
 
-      scrollToSlide(slidesLength - 1, 2, "smooth");
+      if (lastStreamingSlideIndex === undefined) return;
+
+      const slideElement = document.getElementById(
+        `slide-${lastStreamingSlideIndex}`
+      );
+      if (!slideElement) return;
+
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const slideRect = slideElement.getBoundingClientRect();
+      const slideTop =
+        slideRect.top - containerRect.top + scrollContainer.scrollTop;
+
+      scrollContainer.scrollTo({
+        top: Math.max(slideTop, 0),
+        behavior: "smooth",
+      });
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [isStreaming, scrollToSlide, slidesLength]);
+  }, [isStreaming, lastStreamingSlideIndex, slidesLength]);
 
   useEffect(() => {
     trackEvent(MixpanelEvent.Presentation_Editor_Viewed, {
@@ -331,30 +202,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       presentation_mode: isPresentMode ? "present" : "edit",
     });
   }, [pathname, presentation_id, stream, isPresentMode]);
-
-  useEffect(() => {
-    if (!presentationData || !isTemplateV2Presentation || loading || error) {
-      return;
-    }
-    if (templateV2EditorLoadedKeyRef.current === presentation_id) {
-      return;
-    }
-    templateV2EditorLoadedKeyRef.current = presentation_id;
-    trackEvent(MixpanelEvent.TemplateV2_Editor_Loaded, {
-      presentation_id,
-      slide_count: slidesLength,
-      stream_mode: !!stream,
-      template_id_candidates: collectTemplateV2Ids(presentationData),
-    });
-  }, [
-    error,
-    isTemplateV2Presentation,
-    loading,
-    presentationData,
-    presentation_id,
-    slidesLength,
-    stream,
-  ]);
 
   /** Editor tree unmounts in present mode; remount loses inline theme CSS — re-apply from Redux. */
   useLayoutEffect(() => {
@@ -369,90 +216,37 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     handleSlideChange(newSlide, presentationData);
   };
 
-  const handleEditorSlideNavigation = useCallback(
-    (index: number, options?: SlideAddedOptions) => {
-      handleSlideClick(index);
-      if (!options?.promptOverlayKind || !options.promptOverlaySlideId) {
-        return;
-      }
-      if (options.promptOverlayKind === "blank") {
-        setBlankPromptSlideIds((current) => {
-          const next = new Set(current);
-          next.add(options.promptOverlaySlideId!);
-          return next;
-        });
-        return;
-      }
-      if (options.promptOverlayKind === "layout") {
-        setTemplatePromptSlideIds((current) => {
-          const next = new Set(current);
-          next.add(options.promptOverlaySlideId!);
-          return next;
-        });
-      }
-    },
-    [handleSlideClick],
-  );
-
-  const dismissBlankPromptOverlay = useCallback((slideId: unknown) => {
-    if (typeof slideId !== "string" || !slideId) return;
-    setBlankPromptSlideIds((current) => {
-      if (!current.has(slideId)) return current;
-      const next = new Set(current);
-      next.delete(slideId);
-      return next;
-    });
-  }, []);
-
-  const dismissTemplatePromptOverlay = useCallback((slideId: unknown) => {
-    if (typeof slideId !== "string" || !slideId) return;
-    setTemplatePromptSlideIds((current) => {
-      if (!current.has(slideId)) return current;
-      const next = new Set(current);
-      next.delete(slideId);
-      return next;
-    });
-  }, []);
-
-  const handlePresentationChanged = useCallback(async () => {
-    const currentPresentationData = presentationDataRef.current;
-    if (currentPresentationData?.slides) {
-      dispatch(
-        addToHistory({
-          slides: currentPresentationData.slides,
-          actionType: "CHAT_ASSISTANT_BEFORE_REFRESH",
-        })
-      );
+  const handlePresentationChanged = useCallback(async (
+    change?: WorkspacePresentationChange,
+  ) => {
+    const refreshed = await fetchUserSlides({ clearHistory: false });
+    if (!refreshed) {
+      throw new Error("The committed presentation revision could not be loaded.");
+    }
+    const slideCount = refreshed?.slides?.length ?? 0;
+    if (
+      slideCount === 0 ||
+      (selectedSlide >= 0 && selectedSlide < slideCount)
+    ) {
+      return;
     }
 
-    const updatedPresentation = await fetchUserSlides({ clearHistory: false });
-    if (updatedPresentation) {
-      presentationDataRef.current = updatedPresentation;
-    }
-    if (updatedPresentation?.slides) {
-      dispatch(
-        addToHistory({
-          slides: updatedPresentation.slides,
-          actionType: "CHAT_ASSISTANT_REFRESH",
-        })
-      );
-    }
-  }, [dispatch, fetchUserSlides]);
+    // A revision can remove/reorder slides. Keep the user's selection whenever
+    // it remains valid; only then fall back to the first slide that was changed.
+    const fallbackIndex = change?.fixedSlideIndexes?.find(
+      (index) => index >= 0 && index < slideCount,
+    ) ?? 0;
+    window.requestAnimationFrame(() => handleSlideClick(fallbackIndex));
+  }, [fetchUserSlides, handleSlideClick, selectedSlide]);
 
   const handleChatSendingStateChange = useCallback((sending: boolean) => {
     setIsChatSending(sending);
     if (sending) {
-      setChatTargetedSlides((previous) =>
-        previous.length === 0 ? previous : []
-      );
+      setChatTargetedSlides((previous) => (previous.length === 0 ? previous : []));
       return;
     }
     setAgentFocusedSlide(null);
     setAgentFocusEventId(null);
-  }, []);
-
-  const handleChatMutationStateChange = useCallback((mutating: boolean) => {
-    setIsChatMutating(mutating);
   }, []);
 
   const handleAgentSlideFocus = useCallback(
@@ -470,18 +264,43 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   );
 
   const totalSlides = presentationData?.slides?.length ?? 0;
-  // Mutation traces normally identify the exact slide. Fall back to the slide
-  // the user is viewing so an active edit never happens without feedback.
-  const updatingSlideIndex = isChatMutating
-    ? agentFocusedSlide ?? selectedSlide
-    : null;
+  const highlightedSlideIndex = glowingSlideIndex;
+  const targetedSlidesSet = useMemo(
+    () => new Set(chatTargetedSlides),
+    [chatTargetedSlides]
+  );
 
-  useEffect(() => {
-    if (totalSlides <= 0 || selectedSlide <= totalSlides - 1) {
-      return;
-    }
-    setSelectedSlide(totalSlides - 1);
-  }, [selectedSlide, totalSlides]);
+  const handleSlidesScroll = useCallback(() => {
+    if (slideScrollSyncFrameRef.current !== null) return;
+    slideScrollSyncFrameRef.current = window.requestAnimationFrame(() => {
+      slideScrollSyncFrameRef.current = null;
+      const container = slidesScrollContainerRef.current;
+      if (!container) return;
+      const viewport = container.getBoundingClientRect();
+      const candidates = Array.from(
+        container.querySelectorAll<HTMLElement>("[data-slide-position]"),
+      ).flatMap((element) => {
+        const index = Number(element.dataset.slidePosition);
+        if (!Number.isInteger(index)) return [];
+        const rect = element.getBoundingClientRect();
+        return [{ index, top: rect.top, bottom: rect.bottom }];
+      });
+      const visibleIndex = findMostVisibleSlideIndex(viewport, candidates);
+      if (visibleIndex === null) return;
+      setSelectedSlide((current) =>
+        current === visibleIndex ? current : visibleIndex,
+      );
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (slideScrollSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(slideScrollSyncFrameRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isFollowModeEnabled || !isChatSending || totalSlides <= 0) {
@@ -491,10 +310,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       return;
     }
 
-    const clampedIndex = Math.min(
-      Math.max(agentFocusedSlide, 0),
-      totalSlides - 1
-    );
+    const clampedIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
     if (clampedIndex !== selectedSlide) {
       handleSlideClick(clampedIndex);
     }
@@ -535,10 +351,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       return;
     }
 
-    const targetIndex = Math.min(
-      Math.max(agentFocusedSlide, 0),
-      totalSlides - 1
-    );
+    const targetIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
     setGlowingSlideIndex(targetIndex);
   }, [
     isChatSending,
@@ -550,54 +363,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     glowingSlideIndex,
   ]);
 
-  useEffect(() => {
-    const handleTemplateV2SurfaceSelected = (event: Event) => {
-      const detail = (event as CustomEvent<TemplateV2SurfaceSelectedDetail>)
-        .detail;
-      const slideIndex = detail?.slideIndex;
-      if (typeof slideIndex !== "number") return;
-      if (slideIndex < 0 || slideIndex >= totalSlides) return;
-      setSelectedSlide((current) =>
-        current === slideIndex ? current : slideIndex
-      );
-    };
-
-    window.addEventListener(
-      TEMPLATE_V2_SURFACE_SELECTED_EVENT,
-      handleTemplateV2SurfaceSelected
-    );
-    return () => {
-      window.removeEventListener(
-        TEMPLATE_V2_SURFACE_SELECTED_EVENT,
-        handleTemplateV2SurfaceSelected
-      );
-    };
-  }, [totalSlides]);
-
-  useEffect(() => {
-    if (
-      isPresentMode ||
-      !isTemplateV2Presentation ||
-      typeof window === "undefined"
-    ) {
-      return;
-    }
-    delete document.documentElement.dataset.templateV2KonvaActiveSurface;
-    delete document.documentElement.dataset.templateV2KonvaActiveSlideIndex;
-    const frame = window.requestAnimationFrame(() => {
-      window.dispatchEvent(
-        new CustomEvent<TemplateV2ActivateSurfaceDetail>(
-          TEMPLATE_V2_ACTIVATE_SURFACE_EVENT,
-          {
-            detail: {
-              slideIndex: selectedSlide,
-            },
-          }
-        )
-      );
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [isPresentMode, isTemplateV2Presentation, selectedSlide]);
 
   // Presentation Mode View
   if (isPresentMode) {
@@ -606,7 +371,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         slides={presentationData?.slides!}
         currentSlide={presentSlideFromUrl}
         theme={presentationData?.theme ?? undefined}
-        fonts={presentationData?.fonts}
         isFullscreen={isFullscreen}
         onFullscreenToggle={toggleFullscreen}
         onExit={handlePresentExit}
@@ -623,33 +387,14 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           role="alert"
         >
           <AlertCircle className="w-16 h-16 mb-4 text-red-500" />
-          <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
+          <h2 className="text-xl font-semibold mb-2">문제가 발생했습니다</h2>
           <p className="text-center mb-4">
-            We couldn't load your presentation. Please try again.
+            발표자료를 불러오지 못했습니다. 다시 시도해 주세요.
           </p>
           <div className="flex gap-2 justify-center items-center">
-            <Button
-              onClick={() => {
-                trackEvent(
-                  MixpanelEvent.PresentationPage_Refresh_Page_Button_Clicked,
-                  { pathname }
-                );
-                window.location.reload();
-              }}
-            >
-              Refresh Page
-            </Button>
-            <Button
-              onClick={() => {
-                trackEvent(MixpanelEvent.Navigation, {
-                  from: pathname,
-                  to: "/upload",
-                });
-                router.push("/upload");
-              }}
-            >
-              Go to Upload
-            </Button>
+
+            <Button onClick={() => { trackEvent(MixpanelEvent.PresentationPage_Refresh_Page_Button_Clicked, { pathname }); window.location.reload(); }}>페이지 새로고침</Button>
+            <Button onClick={() => { trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" }); router.push("/upload"); }}>업로드로 이동</Button>
           </div>
         </div>
       </div>
@@ -657,46 +402,135 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   }
 
   return (
-    <div className="h-screen overflow-hidden font-syne">
-      <OverlayLoader
-        show={loadingState.isLoading}
-        text={loadingState.message}
-        showProgress={loadingState.showProgress}
-        duration={loadingState.duration}
-        extra_info={loadingState.extra_info}
-      />
+    <main
+      className="h-screen w-full max-w-full overflow-clip font-syne"
+      aria-labelledby="presentation-editor-title"
+    >
+      <h1 id="presentation-editor-title" className="sr-only">
+        {presentationData?.title ?? "프레젠테이션 편집기"}
+      </h1>
       <div
         style={{
           background: "#EDEEEF",
         }}
         id="presentation-slides-wrapper"
-        className="relative flex h-full flex-col overflow-hidden"
+        className="relative flex h-full w-full min-w-0 max-w-full flex-col overflow-clip"
       >
         <PresentationHeader
           presentation_id={presentation_id}
           isPresentationSaving={isSaving}
+          isPresentationSaveFailed={saveFailed}
           currentSlide={selectedSlide}
+          isAuthoredDeck={isAuthoredDeck}
+          onReload={() => fetchUserSlides({ clearHistory: true })}
+          mutationsEnabled={legacyMutationsEnabled}
+          chatFirstEnabled={chatFirstEnabled}
+          workspaceCommandsEnabled={
+            chatFirstEnabled &&
+            workspaceCapability.commands &&
+            workspaceCommandDispatcher !== null
+          }
+          onWorkspaceCommand={workspaceCommandDispatcher ?? undefined}
+          onWorkspaceQualityReviewRequest={
+            workspaceQualityReviewRequester ?? undefined
+          }
+          onWorkspacePageRemakeRequest={
+            workspacePageRemakeRequester
+              ? handleWorkspacePageRemakeRequest
+              : undefined
+          }
         />
-        <div className="flex flex-1 min-h-0 gap-3 overflow-hidden xl:gap-5 2xl:gap-6">
-          <div className="hidden h-full w-[120px] shrink-0 self-start sticky top-0 pt-[18px] md:block">
+        {isAuthoredDeck && (
+          <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
+            이 발표자료는 <span className="font-bold">AI 저작(고품질)</span> 모드입니다 — 인앱은 보기 전용입니다. 내보낸 PPTX를 PowerPoint에서 편집하세요.
+          </div>
+        )}
+        {workspaceShellEnabled && (
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 py-2 xl:hidden">
+            <div
+              className="flex min-w-0 flex-1 gap-1 lg:hidden"
+              role="tablist"
+              aria-label="작업 영역"
+            >
+              <button
+                type="button"
+                id="compact-slides-tab"
+                role="tab"
+                aria-selected={compactWorkspacePane === "slides"}
+                aria-controls="presentation-slides-pane"
+                data-testid="responsive-slides-tab"
+                onClick={() => setCompactWorkspacePane("slides")}
+                className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
+                  compactWorkspacePane === "slides"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                슬라이드
+              </button>
+              <button
+                type="button"
+                id="compact-chat-tab"
+                role="tab"
+                aria-selected={compactWorkspacePane === "chat"}
+                aria-controls="workspace-chat-pane"
+                data-testid="responsive-chat-tab"
+                onClick={() => setCompactWorkspacePane("chat")}
+                className={`min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium ${
+                  compactWorkspacePane === "chat"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                작업 대화
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-expanded={workspaceDrawerOpen}
+              aria-controls="workspace-chat-pane"
+              data-testid="workspace-drawer-toggle"
+              onClick={() => setWorkspaceDrawerOpen((isOpen) => !isOpen)}
+              className="ml-auto hidden rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 lg:inline-flex xl:hidden"
+            >
+              {workspaceDrawerOpen ? "작업 대화 닫기" : "작업 대화 열기"}
+            </button>
+          </div>
+        )}
+        <div className="relative flex flex-1 min-h-0 gap-6 overflow-hidden">
+          <div
+            id="presentation-slides-pane"
+            role={workspaceShellEnabled ? "tabpanel" : undefined}
+            aria-labelledby={workspaceShellEnabled ? "compact-slides-tab" : undefined}
+            className={`min-w-0 flex-1 gap-6 ${
+              workspaceShellEnabled
+                ? compactWorkspacePane === "slides"
+                  ? "flex"
+                  : "hidden lg:flex"
+                : "flex"
+            }`}
+          >
+          <div className="hidden md:block w-[120px] h-full shrink-0 self-start sticky top-0 pt-[18px]">
             <SidePanel
               selectedSlide={selectedSlide}
-              onSlideClick={handleEditorSlideNavigation}
+              onSlideClick={handleSlideClick}
               presentationId={presentation_id}
               loading={loading}
+              mutationsEnabled={legacyMutationsEnabled}
             />
           </div>
-          <div className="w-full min-w-0 h-full flex-1 pt-[18px] max-md:ml-6 max-xl:mr-6">
+          <div className="w-full min-w-0 h-full flex-1 pt-[18px]">
             <div
               ref={slidesScrollContainerRef}
-              data-presentation-slides-scroll-container="true"
+              data-testid="slides-scroll-container"
+              onScroll={handleSlidesScroll}
               className="font-inter h-full overflow-y-auto hide-scrollbar scroll-pt-[18px]"
             >
               <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
                 {!presentationData ||
                   loading ||
                   !presentationData?.slides ||
-                  presentationData?.slides.length === 0 ? (
+                  (presentationData.slides.length === 0 && stream) ? (
                   <div className="relative w-full h-[calc(100vh-120px)] mx-auto hide-scrollbar">
                     <div className="">
                       {Array.from({ length: 2 }).map((_, index) => (
@@ -706,126 +540,215 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                         />
                       ))}
                     </div>
+                    {stream && <LoadingState />}
+                  </div>
+                ) : presentationData.slides.length === 0 ? (
+                  // Loaded, not streaming, but the deck has 0 slides. Previously
+                  // this fell into the skeleton branch and showed permanent gray
+                  // bars with no message — a dead-end. Show a recoverable empty
+                  // state instead (the header's 재생성/regenerate button stays
+                  // available above this area).
+                  <div className="flex w-full h-[calc(100vh-160px)] flex-col items-center justify-center text-center">
+                    <div className="flex max-w-md flex-col items-center rounded-lg border border-gray-200 bg-white px-6 py-8 shadow-sm">
+                      <Layers className="mb-4 h-14 w-14 text-gray-400" />
+                      <h2 className="mb-2 text-lg font-semibold text-gray-800">
+                        슬라이드가 없습니다
+                      </h2>
+                      <p className="mb-5 text-sm text-gray-500">
+                        이 발표자료에는 아직 생성된 슬라이드가 없습니다. 다시
+                        불러오거나 상단의 재생성 버튼으로 슬라이드를 만들 수
+                        있습니다.
+                      </p>
+                      <div className="flex items-center justify-center gap-2">
+                        <Button
+                          onClick={() =>
+                            fetchUserSlides({ clearHistory: false })
+                          }
+                        >
+                          다시 불러오기
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            trackEvent(MixpanelEvent.Navigation, {
+                              from: pathname,
+                              to: "/dashboard",
+                            });
+                            router.push("/dashboard");
+                          }}
+                        >
+                          대시보드로 이동
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <>
                     {presentationData &&
                       presentationData.slides &&
                       presentationData.slides.length > 0 &&
-                      presentationData.slides.map(
-                        (slide: any, index: number) => (
-                          <SlideContent
-                            key={
-                              slide.id ??
-                              `${slide.type ?? "slide"}-${slide.index ?? index}`
-                            }
-                            slide={slide}
-                            index={index}
-                            selected={selectedSlide === index}
-                            presentationId={presentation_id}
-                            onSlideAdded={handleEditorSlideNavigation}
-                            theme={presentationData?.theme}
-                            fonts={presentationData?.fonts}
-                            editingDisabled={editingDisabled}
-                            isStreaming={isStreaming}
-                            showBlankPromptOverlay={
-                              typeof slide?.id === "string" &&
-                              blankPromptSlideIds.has(slide.id)
-                            }
-                            onBlankPromptOverlayDismiss={() =>
-                              dismissBlankPromptOverlay(slide?.id)
-                            }
-                            showTemplatePromptOverlay={
-                              typeof slide?.id === "string" &&
-                              templatePromptSlideIds.has(slide.id)
-                            }
-                            onTemplatePromptOverlayDismiss={() =>
-                              dismissTemplatePromptOverlay(slide?.id)
-                            }
-                            isChatEditing={
-                              updatingSlideIndex !== null &&
-                              index === updatingSlideIndex
-                            }
-                          />
-                          // <div></div>
-                        )
-                      )}
+                      presentationData.slides.map((slide: any, index: number) => (
+                        <SlideContent
+                          key={`${slide.type}-${index}-${slide.index}`}
+                          slide={slide}
+                          index={index}
+                          presentationId={presentation_id}
+                          mutationsEnabled={legacyMutationsEnabled}
+                          isChatEditing={
+                            highlightedSlideIndex !== null &&
+                            index === highlightedSlideIndex
+                          }
+                          isChatTargeted={
+                            isChatSending &&
+                            highlightedSlideIndex !== index &&
+                            targetedSlidesSet.has(index)
+                          }
+                        />
+                      ))}
                   </>
                 )}
               </div>
             </div>
           </div>
-          <button
-            ref={mobileAssistantTriggerRef}
-            type="button"
-            aria-controls="presentation-mobile-assistant"
-            aria-expanded={isMobileAssistantOpen}
-            onClick={() => setIsMobileAssistantOpen(true)}
-            className="fixed bottom-5 right-5 z-40 inline-flex h-11 items-center gap-2 rounded-full border border-white/70 px-4 text-sm font-semibold text-[#101323] shadow-[0_8px_24px_rgba(74,58,155,0.24)] transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2 xl:hidden"
-            style={{
-              background:
-                "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
-            }}
-          >
-            <Sparkles className="h-4 w-4 text-[#7A5AF8]" aria-hidden="true" />
-            AI Assistant
-          </button>
-
-          <button
-            type="button"
-            aria-label="Close AI Assistant"
-            onClick={closeMobileAssistant}
-            className={cn(
-              "inset-0 z-[60] bg-black/35 xl:hidden",
-              isMobileAssistantOpen ? "fixed" : "hidden"
-            )}
-          />
-
+          </div>
           <div
-            id="presentation-mobile-assistant"
-            role={isMobileAssistantOpen ? "dialog" : undefined}
-            aria-label={isMobileAssistantOpen ? "AI Assistant" : undefined}
-            aria-modal={isMobileAssistantOpen ? true : undefined}
-            className={cn(
-              "h-screen w-[calc(100vw-16px)] max-w-[375px] shrink-0 flex-col bg-white shadow-[-12px_0_32px_rgba(16,24,40,0.18)] xl:static xl:z-auto xl:flex xl:h-full xl:w-[375px] xl:max-w-none xl:self-start xl:shadow-none",
-              isMobileAssistantOpen
-                ? "fixed inset-y-0 right-0 z-[70] flex"
-                : "hidden"
-            )}
+            id="workspace-chat-pane"
+            role={workspaceShellEnabled ? "tabpanel" : undefined}
+            aria-labelledby={workspaceShellEnabled ? "compact-chat-tab" : undefined}
+            data-testid="workspace-chat-pane"
+            className={`h-full min-w-0 overflow-hidden ${
+              workspaceShellEnabled
+                ? `${
+                    compactWorkspacePane === "chat" ? "flex" : "hidden"
+                  } ${workspaceDrawerOpen ? "lg:flex" : "lg:hidden"} xl:flex flex-1 lg:absolute lg:inset-y-0 lg:right-0 lg:z-40 lg:w-[min(440px,100%)] lg:max-w-[440px] lg:flex-none lg:shadow-2xl xl:sticky xl:top-0 xl:z-auto xl:w-full xl:max-w-[clamp(360px,30vw,560px)] xl:shrink-0 xl:self-start xl:shadow-none`
+                : "w-full max-w-[370px] shrink-0 self-start sticky top-0"
+            }`}
           >
-            <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#EDEEEF] px-4 xl:hidden">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[#101323]">
-                <Sparkles className="h-4 w-4 text-[#7A5AF8]" aria-hidden="true" />
-                AI Assistant
-              </div>
-              <button
-                ref={mobileAssistantCloseRef}
-                type="button"
-                aria-label="Close AI Assistant"
-                onClick={closeMobileAssistant}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[#667085] transition hover:bg-[#F6F6F9] hover:text-[#101323] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1">
-              <PresentationActions
+            {chatFirstEnabled ? (
+              <WorkspaceChatPanel
                 presentationId={presentation_id}
-                variant={isTemplateV2Presentation ? "template-v2" : "presentation"}
                 currentSlide={selectedSlide}
-                presentationData={presentationData}
+                commandsEnabled={workspaceCapability.commands}
                 onPresentationChanged={handlePresentationChanged}
-                onChatSendingStateChange={handleChatSendingStateChange}
-                onChatMutationStateChange={handleChatMutationStateChange}
-                onFollowModeChange={setIsFollowModeEnabled}
-                onAgentSlideFocus={handleAgentSlideFocus}
-                editingDisabled={editingDisabled}
+                onSlideFocus={handleSlideClick}
+                onCommandDispatcherReady={handleWorkspaceCommandDispatcherReady}
+                onQualityReviewRequesterReady={(requester) =>
+                  setWorkspaceQualityReviewRequester(() => requester)
+                }
+                onPageRemakeRequesterReady={(requester) =>
+                  setWorkspacePageRemakeRequester(() => requester)
+                }
               />
-            </div>
+            ) : chatFirstRollout.mode === "checking" ? (
+              <div
+                className="flex h-full items-center justify-center border-l border-slate-200 bg-white text-sm text-slate-500"
+                role="status"
+                aria-live="polite"
+              >
+                작업 대화를 연결하는 중입니다.
+              </div>
+            ) : chatFirstRollout.mode === "blocked" ? (
+              <div
+                className="flex h-full flex-col items-center justify-center gap-3 border-l border-slate-200 bg-white px-6 text-center"
+                role="alert"
+              >
+                <AlertCircle className="h-5 w-5 text-amber-600" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-medium text-slate-800">
+                    작업 대화를 연결할 수 없습니다.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    안전을 위해 이전 채팅의 수정 기능으로 전환하지 않았습니다.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void chatFirstRollout.refresh()}
+                >
+                  다시 연결
+                </Button>
+              </div>
+            ) : (
+              <div className="flex h-full min-h-0 w-full flex-col bg-white">
+                {legacyWorkspaceHistoryEnabled ? (
+                  <div
+                    className="flex shrink-0 gap-1 border-b border-slate-200 p-2"
+                    role="tablist"
+                    aria-label="프레젠테이션 대화 및 작업 기록"
+                  >
+                    <button
+                      id="legacy-chat-tab"
+                      type="button"
+                      role="tab"
+                      aria-selected={legacyWorkspacePane === "chat"}
+                      aria-controls="legacy-chat-panel"
+                      data-testid="legacy-chat-tab"
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                        legacyWorkspacePane === "chat"
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                      onClick={() => setLegacyWorkspacePane("chat")}
+                    >
+                      이전 채팅
+                    </button>
+                    <button
+                      id="legacy-history-tab"
+                      type="button"
+                      role="tab"
+                      aria-selected={legacyWorkspacePane === "history"}
+                      aria-controls="legacy-history-panel"
+                      data-testid="legacy-history-tab"
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                        legacyWorkspacePane === "history"
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                      onClick={() => setLegacyWorkspacePane("history")}
+                    >
+                      작업 기록
+                    </button>
+                  </div>
+                ) : null}
+                <div
+                  id="legacy-chat-panel"
+                  role={legacyWorkspaceHistoryEnabled ? "tabpanel" : undefined}
+                  aria-labelledby={legacyWorkspaceHistoryEnabled ? "legacy-chat-tab" : undefined}
+                  hidden={legacyWorkspaceHistoryEnabled && legacyWorkspacePane !== "chat"}
+                  className="min-h-0 flex-1"
+                >
+                  <Chat
+                    presentationId={presentation_id}
+                    currentSlide={selectedSlide}
+                    onPresentationChanged={handlePresentationChanged}
+                    onChatSendingStateChange={handleChatSendingStateChange}
+                    onFollowModeChange={setIsFollowModeEnabled}
+                    onAgentSlideFocus={handleAgentSlideFocus}
+                  />
+                </div>
+                {legacyWorkspaceHistoryEnabled ? (
+                  <div
+                    id="legacy-history-panel"
+                    role="tabpanel"
+                    aria-labelledby="legacy-history-tab"
+                    hidden={legacyWorkspacePane !== "history"}
+                    className="min-h-0 flex-1"
+                  >
+                    <WorkspaceChatPanel
+                      presentationId={presentation_id}
+                      currentSlide={selectedSlide}
+                      commandsEnabled={false}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 };
 

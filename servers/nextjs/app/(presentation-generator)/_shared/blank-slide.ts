@@ -41,19 +41,13 @@ export function cloneBlankTemplateV2Layout() {
 
 export function isTemplateV2TemplateId(value: unknown): value is string {
   if (typeof value !== "string") return false;
-
-  const templateId = value.trim();
-  return templateId.startsWith("template-v2");
+  return value.trim().startsWith("template-v2");
 }
 
 export function hasTemplateV2SlideUi(slide: any): boolean {
   const ui = slide?.ui;
   if (!ui || typeof ui !== "object" || Array.isArray(ui)) return false;
-
-  return (
-    Array.isArray(ui.components) ||
-    Array.isArray(ui.elements)
-  );
+  return Array.isArray(ui.components) || Array.isArray(ui.elements);
 }
 
 export function getSlideTemplateId(slide: any): string {
@@ -62,9 +56,7 @@ export function getSlideTemplateId(slide: any): string {
   const layout = typeof slide?.layout === "string" ? slide.layout.trim() : "";
   const layoutTemplateId = layout.split(":")[0] || "";
 
-  if (isTemplateV2TemplateId(layoutGroup)) {
-    return layoutGroup;
-  }
+  if (isTemplateV2TemplateId(layoutGroup)) return layoutGroup;
   return layoutGroup || layoutTemplateId;
 }
 
@@ -94,7 +86,6 @@ export function getPresentationTemplateId(presentation: {
       return "template-v2";
     }
   }
-
   return "general";
 }
 
@@ -129,7 +120,6 @@ export function isBlankPresentationSlide(slide: {
   layout?: unknown;
 } | null | undefined) {
   if (!slide || typeof slide.layout !== "string") return false;
-
   return (
     slide.layout === BLANK_SLIDE_LAYOUT_ID ||
     slide.layout.endsWith(`:${BLANK_SLIDE_LAYOUT_ID}`)
@@ -147,12 +137,10 @@ export function isTemplateFreePresentation(presentation: unknown) {
 
   const slides = (presentation as { slides?: unknown }).slides;
   if (!Array.isArray(slides) || slides.length === 0) return false;
-
   const firstSlide = slides[0];
   if (!firstSlide || typeof firstSlide !== "object" || Array.isArray(firstSlide)) {
     return false;
   }
-
   return (
     (firstSlide as { layout_group?: unknown }).layout_group ===
     BLANK_SLIDE_LAYOUT_GROUP

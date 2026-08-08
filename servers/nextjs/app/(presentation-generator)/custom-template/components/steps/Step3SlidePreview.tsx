@@ -5,22 +5,18 @@
 
 import React from "react";
 import { SlidePreviewSection } from "../SlidePreviewSection";
-import { FontUploadPreviewResponse, TemplateCreationMetadata } from "../../types";
+import { FontUploadPreviewResponse } from "../../types";
 
 interface Step3SlidePreviewProps {
     previewData: FontUploadPreviewResponse | null;
-    onInitTemplate: (metadata?: TemplateCreationMetadata) => void;
+    onInitTemplate: () => void;
     isLoading: boolean;
-    defaultTemplateName: string;
-    requiresTemplateMetadata?: boolean;
 }
 
 export const Step3SlidePreview: React.FC<Step3SlidePreviewProps> = ({
     previewData,
     onInitTemplate,
     isLoading,
-    defaultTemplateName,
-    requiresTemplateMetadata,
 }) => {
     if (!previewData) return null;
 
@@ -29,8 +25,7 @@ export const Step3SlidePreview: React.FC<Step3SlidePreviewProps> = ({
             previewData={previewData}
             onInitTemplate={onInitTemplate}
             isLoading={isLoading}
-            defaultTemplateName={defaultTemplateName}
-            requiresTemplateMetadata={requiresTemplateMetadata}
         />
     );
 };
+

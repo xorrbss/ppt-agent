@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
 from llmai.shared import ResponseStreamCompletionChunk, ResponseStreamContentChunk
 
 from utils.llm_utils import generate_structured_with_schema_retries
@@ -98,11 +99,7 @@ def test_connected_request_uses_stream_completion_content(monkeypatch):
         def generate(self, **kwargs):
             self.calls.append(kwargs)
             return iter(
-                [
-                    ResponseStreamCompletionChunk(
-                        content={"result": "complete"}
-                    )
-                ]
+                [ResponseStreamCompletionChunk(content={"result": "complete"})]
             )
 
     client = CompletedClient()
@@ -161,3 +158,109 @@ def test_connected_request_keeps_schema_validation_retries(monkeypatch):
     assert asyncio.run(run()) == {"result": "fixed"}
     assert len(client.calls) == 2
     assert all(call["stream"] is True for call in client.calls)
+
+
+def test_upper_bound_validation_error_is_compacted_without_llm_retry(monkeypatch):
+    monkeypatch.setenv("LLM", "ollama")
+
+    class OverlongClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, **kwargs):
+            self.calls.append(kwargs)
+            return SimpleNamespace(content={"result": "x" * 8})
+
+    client = OverlongClient()
+    result = asyncio.run(
+        generate_structured_with_schema_retries(
+            client,
+            "test-model",
+            messages=[],
+            response_format=object(),
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "result": {"type": "string", "maxLength": 5},
+                },
+                "required": ["result"],
+            },
+            validate_schema=True,
+        )
+    )
+
+    assert result == {"result": "xxxx…"}
+    assert len(client.calls) == 1
+
+
+def test_transient_provider_errors_use_exponential_backoff_then_recover(monkeypatch):
+    monkeypatch.setenv("LLM", "ollama")
+
+    class TransientError(Exception):
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+    class RecoveringClient:
+        def __init__(self):
+            self.calls = 0
+
+        def generate(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise TransientError(500)
+            if self.calls == 2:
+                raise TransientError(503)
+            return SimpleNamespace(content={"result": "ok"})
+
+    client = RecoveringClient()
+    sleep = AsyncMock()
+    with patch("utils.llm_utils.asyncio.sleep", new=sleep):
+        result = asyncio.run(
+            generate_structured_with_schema_retries(
+                client,
+                "test-model",
+                messages=[],
+                response_format=object(),
+                json_schema={},
+            )
+        )
+
+    assert result == {"result": "ok"}
+    assert client.calls == 3
+    assert [call.args[0] for call in sleep.await_args_list] == [1.0, 2.0]
+
+
+def test_exhausted_transient_provider_errors_are_mapped_to_retryable_503(
+    monkeypatch,
+):
+    monkeypatch.setenv("LLM", "ollama")
+
+    class UnavailableClient:
+        def __init__(self):
+            self.calls = 0
+
+        def generate(self, **kwargs):
+            self.calls += 1
+            raise HTTPException(status_code=500, detail="provider overloaded")
+
+    client = UnavailableClient()
+    sleep = AsyncMock()
+    with (
+        patch("utils.llm_utils.asyncio.sleep", new=sleep),
+        pytest.raises(HTTPException) as error,
+    ):
+        asyncio.run(
+            generate_structured_with_schema_retries(
+                client,
+                "test-model",
+                messages=[],
+                response_format=object(),
+                json_schema={},
+            )
+        )
+
+    assert client.calls == 4
+    assert error.value.status_code == 503
+    assert error.value.headers == {"Retry-After": "10"}
+    assert "temporarily unavailable" in error.value.detail
+    assert [call.args[0] for call in sleep.await_args_list] == [1.0, 2.0, 4.0]

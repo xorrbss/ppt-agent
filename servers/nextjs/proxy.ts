@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAuthDisabled } from "@/utils/auth";
 
 /**
- * API-only: session required for all /api/* except auth, telemetry, public
- * image transforms, and the authenticated export-runtime bridge.
+ * API-only: session required for all /api/* except auth, telemetry, and
+ * /api/template (server-to-server template layout for FastAPI fallback).
  * Page routes are protected in server layouts (unknown URLs still 404; login uses relative redirects).
  */
 function getFastApiBaseUrl(): string {
@@ -30,15 +29,6 @@ function isFastApiApiPath(pathname: string): boolean {
   );
 }
 
-function isFastApiAssetPath(pathname: string): boolean {
-  return (
-    pathname === "/app_data" ||
-    pathname.startsWith("/app_data/") ||
-    pathname === "/static" ||
-    pathname.startsWith("/static/")
-  );
-}
-
 function rewriteToFastApi(request: NextRequest): NextResponse {
   const destination = new URL(
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
@@ -47,16 +37,15 @@ function rewriteToFastApi(request: NextRequest): NextResponse {
   return NextResponse.rewrite(destination);
 }
 
-function continueRequest(request: NextRequest): NextResponse {
-  return isFastApiApiPath(request.nextUrl.pathname)
-    ? rewriteToFastApi(request)
-    : NextResponse.next();
-}
-
 type AuthStatus = {
   configured: boolean;
   authenticated: boolean;
 };
+
+function isAuthDisabled(): boolean {
+  const raw = process.env.DISABLE_AUTH?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
 
 const SESSION_COOKIE_NAME = "presenton_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -87,21 +76,18 @@ function isApiAuthExempt(pathname: string): boolean {
   return (
     pathname.startsWith("/api/v1/auth/") ||
     pathname === "/api/telemetry-status" ||
-    /** Public image transform used as a browser/Konva image source. */
-    pathname === "/api/update-svg" ||
-    pathname.startsWith("/api/export-presentation-data/")
+    /** FastAPI `get_layout_by_name` fallback (no browser cookie in Docker). */
+    pathname === "/api/template" ||
+    pathname === "/api/template/custom" ||
+    pathname.startsWith("/api/export-presentation-data/") ||
+    /** Read-only public share view (token-scoped; FastAPI re-checks on the
+     * normalized path, so a traversal here still fails auth there). */
+    pathname.startsWith("/api/v1/ppt/presentation/public/")
   );
 }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  // Docker handles these paths in nginx. Electron has no nginx and chooses
-  // random loopback ports, so proxy them at request time instead of baking a
-  // build-time destination into Next.js' routes manifest.
-  if (isFastApiAssetPath(pathname)) {
-    return rewriteToFastApi(request);
-  }
 
   if (pathname === "/pdf-maker") {
     const exportSession = request.nextUrl.searchParams.get("exportSession");
@@ -128,11 +114,11 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthDisabled()) {
-    return continueRequest(request);
+    return NextResponse.next();
   }
 
   if (request.method === "OPTIONS" || isApiAuthExempt(pathname)) {
-    return continueRequest(request);
+    return NextResponse.next();
   }
 
   const authorization = request.headers.get("authorization") || "";
@@ -149,7 +135,7 @@ export async function proxy(request: NextRequest) {
 
   const authStatus = await getAuthStatus(request);
   if (authStatus.authenticated) {
-    return continueRequest(request);
+    return NextResponse.next();
   }
   if (!authStatus.configured) {
     return NextResponse.json(
@@ -164,5 +150,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/app_data/:path*", "/static/:path*", "/pdf-maker"],
+  matcher: ["/api/:path*", "/pdf-maker"],
 };

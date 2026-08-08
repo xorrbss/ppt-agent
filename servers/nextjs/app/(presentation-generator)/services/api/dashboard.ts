@@ -4,11 +4,8 @@ import {
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { getApiUrl } from "@/utils/api";
 
-export type PresentationVersion = "v1-standard" | "v2-standard";
-
 export interface PresentationResponse {
   id: string;
-  version?: PresentationVersion;
   title: string;
   created_at: string;
   updated_at: string;
@@ -23,30 +20,34 @@ export interface PresentationResponse {
   vector_store: any;
 
   thumbnail: string;
-  layout?: any;
-  structure?: any;
-  components?: any;
-  fonts?: any;
   slides: any[];
+}
+
+export interface PresentationGenerationSettings {
+  n_slides: number;
+  language: string;
+  tone: string | null;
+  verbosity: string | null;
+  instructions: string | null;
+  include_table_of_contents: boolean;
+  include_title_slide: boolean;
+  web_search: boolean;
+  mode: string | null;
+  version: string;
+}
+
+export interface PresentationGenerationInfo {
+  prompt: string;
+  attachment_file_names: string[];
+  settings: PresentationGenerationSettings;
 }
 
 export class DashboardApi {
 
-  static async getPresentations(
-    version?: PresentationVersion,
-    options?: { includeSlides?: boolean }
-  ): Promise<PresentationResponse[]> {
+  static async getPresentations(): Promise<PresentationResponse[]> {
     try {
-      const params = new URLSearchParams();
-      if (version) {
-        params.set("version", version);
-      }
-      if (options?.includeSlides === false) {
-        params.set("include_slides", "false");
-      }
-      const query = params.toString();
       const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/all${query ? `?${query}` : ""}`),
+        getApiUrl(`/api/v1/ppt/presentation/all`),
         {
           method: "GET",
         }
@@ -66,18 +67,35 @@ export class DashboardApi {
   }
 
   static async getPresentation(id: string) {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${id}`),
+      {
+        method: "GET",
+        credentials: "include",
+      }
+    );
+
+    return await ApiResponseHandler.handleResponse(response, "Presentation not found");
+  }
+
+  static async getPresentationGenerationInfo(
+    id: string
+  ): Promise<PresentationGenerationInfo> {
     try {
       const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/${id}`),
+        getApiUrl(`/api/v1/ppt/presentation/${id}/generation-info`),
         {
           method: "GET",
           credentials: "include",
         }
       );
 
-      return await ApiResponseHandler.handleResponse(response, "Presentation not found");
+      return await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to fetch presentation generation info"
+      );
     } catch (error) {
-      console.error("Error fetching presentation:", error);
+      console.error("Error fetching presentation generation info:", error);
       throw error;
     }
   }
@@ -99,23 +117,6 @@ export class DashboardApi {
         success: false,
         message: error instanceof Error ? error.message : "Failed to delete presentation",
       };
-    }
-  }
-
-  static async duplicatePresentation(presentation_id: string) {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/${presentation_id}/duplicate`),
-        {
-          method: "POST",
-          headers: getHeader(),
-        }
-      );
-
-      return await ApiResponseHandler.handleResponse(response, "Failed to duplicate presentation");
-    } catch (error) {
-      console.error("Error duplicating presentation:", error);
-      throw error;
     }
   }
 }

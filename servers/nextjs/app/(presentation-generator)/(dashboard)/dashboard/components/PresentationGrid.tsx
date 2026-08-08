@@ -1,32 +1,30 @@
 import React from "react";
+import Image from "next/image";
 import { PresentationCard } from "./PresentationCard";
 import { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
 import { EmptyState } from "./EmptyState";
 
 interface PresentationGridProps {
   presentations: PresentationResponse[];
-  viewMode?: "grid" | "list";
   isLoading?: boolean;
   error?: string | null;
   onPresentationDeleted?: (presentationId: string) => void;
-  onPresentationDuplicated?: (presentation: PresentationResponse) => void;
 }
 
 export const PresentationGrid = ({
   presentations,
-  viewMode = "grid",
   isLoading = false,
   error = null,
   onPresentationDeleted,
-  onPresentationDuplicated,
 }: PresentationGridProps) => {
   const ShimmerCard = () => (
     <div className="flex min-h-[216px] flex-col overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-[#F8FBFB] shadow-none animate-pulse">
       <div className="relative flex-1 overflow-hidden p-4">
-        <img
+        <Image
           src="/card_bg.svg"
           alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-70"
+          fill
+          className="absolute object-cover opacity-70"
         />
         <div className="relative mx-auto mt-2 aspect-video w-[88%] rounded-lg border border-gray-200 bg-gray-200" />
       </div>
@@ -61,7 +59,7 @@ export const PresentationGrid = ({
             onClick={() => window.location.reload()}
             className="text-primary hover:text-primary/80 underline"
           >
-            Try again
+            재시도
           </button>
         </div>
       </div>
@@ -73,23 +71,14 @@ export const PresentationGrid = ({
   }
 
   return (
-    <div
-      className={
-        viewMode === "grid"
-          ? "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4"
-          : "grid grid-cols-1 gap-4"
-      }
-    >
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {presentations.map((presentation) => (
-
         <PresentationCard
           key={presentation.id}
           id={presentation.id}
           title={presentation.title}
           presentation={presentation}
-          viewMode={viewMode}
           onDeleted={onPresentationDeleted}
-          onDuplicated={onPresentationDuplicated}
         />
       ))}
     </div>

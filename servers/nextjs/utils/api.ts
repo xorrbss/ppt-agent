@@ -1,24 +1,5 @@
-import { extractApiErrorMessage } from "@/utils/apiErrorMessages";
-
 function isAbsoluteHttpUrl(path: string): boolean {
   return /^https?:\/\//i.test(path);
-}
-
-export async function getApiErrorMessage(
-  response: Response,
-  fallbackMessage: string
-): Promise<string> {
-  try {
-    const errorData: unknown = await response.clone().json();
-    return extractApiErrorMessage(errorData, fallbackMessage, response.status);
-  } catch {
-    try {
-      const text = await response.text();
-      return extractApiErrorMessage(text, fallbackMessage, response.status);
-    } catch {
-      return fallbackMessage;
-    }
-  }
 }
 
 function withLeadingSlash(path: string): string {
@@ -93,7 +74,7 @@ export function getFastAPIUrl(): string {
     return window.location.origin;
   }
 
-  return getConfiguredFastApiUrl() || "http://127.0.0.1:5001";
+  return getConfiguredFastApiUrl() || "http://127.0.0.1:5000";
 }
 
 // Utility to construct API URL for Docker/web runtime.
@@ -103,9 +84,7 @@ export function getApiUrl(path: string): string {
   }
 
   const normalizedPath = withLeadingSlash(path);
-  const isFastApiEndpoint =
-    normalizedPath.startsWith("/api/v1/") ||
-    normalizedPath.startsWith("/api/v2/");
+  const isFastApiEndpoint = normalizedPath.startsWith("/api/v1/");
   if (!isFastApiEndpoint) {
     return normalizedPath;
   }
@@ -125,9 +104,9 @@ export function getApiUrl(path: string): string {
 export function buildAbsoluteApiRequestUrl(
   path: string,
   baseForRelative: string = typeof window !== "undefined" &&
-    window.location?.origin
+  window.location?.origin
     ? window.location.origin
-    : "http://127.0.0.1:5001"
+    : "http://127.0.0.1:5000"
 ): string {
   const resolved = getApiUrl(path);
   if (isAbsoluteHttpUrl(resolved)) {
@@ -244,6 +223,27 @@ export function resolveBackendAssetUrl(path?: string): string {
   return trimmedPath;
 }
 
+/**
+ * Authored slide and remake-candidate images are persisted as bare references
+ * relative to the backend image root (e.g.
+ * `users/<id>/authored/<deck>/slide_4_<hash>.png`). Only a rooted path or an
+ * explicit scheme is resolvable as-is; anything else must be anchored to
+ * `/app_data/images/` first, otherwise the browser resolves it against the
+ * current document and the image 404s.
+ */
+export function resolveAuthoredImageUrl(
+  reference?: string | null
+): string {
+  if (typeof reference !== "string") return "";
+  const trimmed = reference.trim();
+  if (!trimmed) return "";
+
+  const isAlreadyResolvable = /^(?:[a-z][a-z\d+.-]*:|\/)/i.test(trimmed);
+  return resolveBackendAssetUrl(
+    isAlreadyResolvable ? trimmed : `/app_data/images/${trimmed}`
+  );
+}
+
 export type BackendAssetLike = {
   file_url?: string | null;
   path?: string | null;
@@ -270,30 +270,6 @@ export function resolveBackendAssetSource(
   return resolveBackendAssetUrl(getBackendAssetSource(asset));
 }
 
-function isAssetLikeString(value: string): boolean {
-  const candidate = value.trim();
-  if (!candidate) return false;
-
-  if (/^(?:https?:|data:|blob:|file:)/i.test(candidate)) {
-    return true;
-  }
-
-  const { path } = splitPathAndSuffix(candidate);
-  const normalizedPath = path.replace(/\\/g, "/");
-  const startsLikePath =
-    normalizedPath.startsWith("/") ||
-    normalizedPath.startsWith("./") ||
-    normalizedPath.startsWith("../") ||
-    /^[A-Za-z]:\//.test(normalizedPath) ||
-    /^(?:static|app_data|images|uploads|fonts)\//.test(normalizedPath);
-
-  if (!startsLikePath) return false;
-
-  return hasBackendAssetPrefix(
-    toBackendServedPath(withLeadingSlash(normalizedPath))
-  );
-}
-
 export const normalizeBackendAssetUrls = <T,>(input: T): T => {
   if (Array.isArray(input)) {
     return input.map((item) => normalizeBackendAssetUrls(item)) as T;
@@ -306,9 +282,7 @@ export const normalizeBackendAssetUrls = <T,>(input: T): T => {
     )) {
       normalized[key] =
         typeof value === "string"
-          ? isAssetLikeString(value)
-            ? resolveBackendAssetUrl(value)
-            : value
+          ? resolveBackendAssetUrl(value)
           : normalizeBackendAssetUrls(value);
     }
     return normalized as T;
