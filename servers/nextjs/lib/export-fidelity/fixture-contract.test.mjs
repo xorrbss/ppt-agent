@@ -66,6 +66,8 @@ test("Template V2 fidelity corpus keeps persisted template-only cases", async ()
       assert.match(source, /data-chart-grid="y"/);
       assert.match(source, /data-chart-data-label="mid"/);
       assert.match(source, /data-chart-source/);
+      assert.match(source, /data-template-v2-element="math"/);
+      assert.match(source, /<math[^>]*display="block"/);
     }
   }
   assert.deepEqual(

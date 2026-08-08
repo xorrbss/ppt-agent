@@ -203,6 +203,17 @@
             "colors": ["#2563eb", "#dbeafe"],
             "decorative": false,
             "name": "progress"
+          },
+          {
+            "type": "math",
+            "position": { "x": 790, "y": 550 },
+            "size": { "width": 420, "height": 80 },
+            "latex": "\\frac{a+b}{c}=x^2",
+            "display_mode": true,
+            "font": { "size": 28, "family": "Arial", "color": "#172554" },
+            "alignment": { "horizontal": "center", "vertical": "middle" },
+            "decorative": false,
+            "name": "formula"
           }
         ]
       }]
