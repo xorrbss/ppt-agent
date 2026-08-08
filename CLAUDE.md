@@ -53,7 +53,7 @@ npm run dev                                     # localhost:3000; set NEXT_PUBLI
 - **한글 UI / 기본값:** 앱 화면(chrome)이 번역되어 있고, 기본 프레젠테이션 언어는 한국어다(`upload/components/UploadPage.tsx`). API 값, 프로바이더/모델 ID, 로직 리터럴은 영어로 유지한다.
 - **단일 오리진 프록시 (로컬에서 nginx 대체):** `node scripts/presenton-local-proxy.mjs`가 `nginx.conf`를 그대로 반영하여 `http://localhost:5000` → Next.js:3000 / FastAPI:8000 / MCP:8001로 라우팅한다. 브라우저 프론트엔드는 단일 오리진을 전제로 하므로, web 플로우에서는 (raw `npm run start`가 아니라) 이 프록시를 실행한다.
 - **Windows 백엔드는** `APP_DATA_DIRECTORY` **와** `USER_CONFIG_PATH` **둘 다 필요**하며, uvicorn은 `--reload false`로 실행한다(이 포크에서 reloader 비활성화).
-- **`npm run dev` (electron)** 는 크로스플랫폼이다 — `rm -rf` 대신 `node scripts/rmrf.cjs`를 써서 Windows에서도 동작한다. Electron은 `DISABLE_AUTH=true`로 실행된다. LiteParse가 시스템 Node에서 동작하도록 `PRESENTON_DEV_NODE_BINARY`에 시스템 `node.exe` 경로를 설정한다.
+- **`npm run dev` (electron)** 는 크로스플랫폼이다 — `rm -rf` 대신 `node scripts/rmrf.cjs`(`electron/scripts/rmrf.cjs`)를 써서 Windows에서도 동작한다. Electron은 `DISABLE_AUTH=true`로 실행된다. LiteParse가 시스템 Node에서 동작하도록 `PRESENTON_DEV_NODE_BINARY`에 시스템 `node.exe` 경로를 설정한다.
 - **Export 수정:** `utils/export_utils.py`가 Next.js 프록시를 통해 export 세션 쿠키를 주입한다(최신 Chromium은 CDP로 설정한 `Cookie` 헤더를 무시함).
 - **자동화 CLI:** `scripts/ppt-agent.mjs`는 `POST /api/v1/ppt/presentation/generate`를 호출하는 의존성 없는 Node 18+ 클라이언트다(기본 한국어). 단건 또는 `--batch <파일>`, `--slides <n|auto>`, `--export pptx|pdf`, `--base`, `--user`/`--password`, `--out <디렉터리>` 지원. Electron/`DISABLE_AUTH` 백엔드 대상에서는 자격 증명이 필요 없다.
 
@@ -95,8 +95,8 @@ npx cypress run --component                     # component tests (Cypress; no J
 
 ## Conventions & gotchas
 
-- Next.js build artifacts go to **`.next-build`**, not `.next` — the Dockerfile and `next.config.mjs` depend on this.
+- Next.js build artifacts go to **`.next-build`**, not `.next` — the Dockerfile and `next.config.mjs` depend on this. (Fidelity tests override it via `PRESENTON_TEST_NEXT_DIST_DIR` to isolate their distDir per run; normal builds must leave it unset.)
 - Running FastAPI (directly or via `start.js`) **requires `APP_DATA_DIRECTORY`**; generated files, uploads, fonts, exports, and `userConfig.json` all live under it.
 - The PPTX/PDF export runtime is an external, versioned package synced by `scripts/sync-presentation-export.cjs`. If export breaks after a checkout, run `npm run sync:presentation-export` (root) or rebuild the image.
 - When changing public LLM/image config knobs, keep four places consistent: `utils/get_env.py`, `start.js` (`setupUserConfigFromEnv`), `docker-compose.yml`, and the env table in `README.md`.
-- Honor the global engineering invariants in the user's `~/.claude/CLAUDE.md` (KISS/YAGNI, prefer extending existing structure, keep files within ~500 lines, no hidden hacks — stop and leave a `TODO: [BLOCKED]` on principle conflicts).
+- Honor the global instructions in the user's `~/.claude/CLAUDE.md` (auto-loaded every session; do not duplicate its contents here).
