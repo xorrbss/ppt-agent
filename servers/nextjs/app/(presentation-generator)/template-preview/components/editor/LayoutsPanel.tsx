@@ -10,7 +10,7 @@ import {
   readLayoutDescription,
   readLayoutId,
   readLayoutIdValue,
-} from "./templatePreviewUtils";
+} from "@/lib/template-v2-preview";
 
 const LAYOUT_ID_MAX_LENGTH = 80;
 const LAYOUT_DESCRIPTION_MAX_LENGTH = 300;
