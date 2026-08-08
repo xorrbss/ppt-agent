@@ -95,6 +95,13 @@ describe("<StructuredTemplateLayoutEditor />", () => {
       .click();
     cy.wait("@generateLayout");
 
+    // Wait for async chart rendering to complete if present
+    cy.get('body').then(($body) => {
+      if ($body.find('[data-presenton-charts]').length > 0) {
+        cy.get('[data-presenton-charts]', { timeout: 10000 }).should("have.attr", "data-presenton-charts", "ready");
+      }
+    });
+
     cy.get('input[placeholder^="Start with your idea"]').should("not.exist");
     cy.then(() => expect(saveRequests).to.equal(0));
     cy.contains("저장하지 않은 변경 사항").should("be.visible");
