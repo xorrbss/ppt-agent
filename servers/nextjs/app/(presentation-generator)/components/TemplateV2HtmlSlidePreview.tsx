@@ -118,11 +118,6 @@ function formatChartValue(value: number): string {
     : String(Math.round(value * 10) / 10).replace(/\.0$/, "");
 }
 
-function formatAxisTick(value: unknown): string {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? formatChartValue(numeric) : String(value);
-}
-
 function hydrateScales(scales: unknown): void {
   const scaleRecords = readRecord(scales);
   Object.values(scaleRecords).forEach((scaleValue) => {
