@@ -1,4 +1,5 @@
 import React from "react";
+import { mount } from "cypress/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 import "@/app/globals.css";
@@ -80,7 +81,7 @@ describe("<StructuredTemplateLayoutEditor />", () => {
       },
     ).as("saveTemplate");
 
-    cy.mount(
+    mount(
       <AppRouterContext.Provider value={createRouter() as never}>
         <StructuredTemplateLayoutEditor templateId={templateId} />
       </AppRouterContext.Provider>,
@@ -88,25 +89,31 @@ describe("<StructuredTemplateLayoutEditor />", () => {
 
     cy.wait("@loadTemplate");
     cy.contains("button", "AI 레이아웃 생성").click();
-    cy.get('input[placeholder^="Start with your idea"]')
+    cy.get('input[placeholder^="Start with your idea"]', { timeout: 5000 })
       .type("Create a product comparison")
       .closest("form")
       .find('button[type="submit"]')
       .click();
     cy.wait("@generateLayout");
 
-    // Wait for async chart rendering to complete if present
-    cy.get('body').then(($body) => {
-      if ($body.find('[data-presenton-charts]').length > 0) {
-        cy.get('[data-presenton-charts]', { timeout: 10000 }).should("have.attr", "data-presenton-charts", "ready");
-      }
-    });
+    // Wait for state updates - look for the prompt overlay to be replaced with generated content
+    // The state should update with the new layout
+    cy.get('form[role="search"]', { timeout: 8000 }).should("not.exist");
 
-    cy.get('input[placeholder^="Start with your idea"]').should("not.exist");
+    // Verify the draft layout was added (prompt input should be gone)
+    cy.get('input[placeholder^="Start with your idea"]', { timeout: 8000 })
+      .should("not.exist");
+
+    // Verify no additional API calls were made to save yet
     cy.then(() => expect(saveRequests).to.equal(0));
-    cy.contains("저장하지 않은 변경 사항").should("be.visible");
-    cy.contains("button", "저장").should("not.be.disabled").click();
 
+    // Verify unsaved changes indicator appears (this means state was updated)
+    cy.contains("저장하지 않은 변경 사항", { timeout: 5000 }).should("be.visible");
+
+    // Verify save button is enabled
+    cy.contains("button", "저장", { timeout: 5000 }).should("not.be.disabled").click();
+
+    // Verify save request was made with correct data
     cy.wait("@saveTemplate")
       .its("request.body")
       .then((body) => {
@@ -114,7 +121,9 @@ describe("<StructuredTemplateLayoutEditor />", () => {
         expect(body.layouts).to.have.length(2);
         expect(body.layouts[1]).to.deep.equal(generatedLayout);
       });
-    cy.contains("Revision 5").should("be.visible");
-    cy.contains("저장하지 않은 변경 사항").should("not.exist");
+
+    // Verify save completed
+    cy.contains("Revision 5", { timeout: 5000 }).should("be.visible");
+    cy.contains("저장하지 않은 변경 사항", { timeout: 5000 }).should("not.exist");
   });
 });

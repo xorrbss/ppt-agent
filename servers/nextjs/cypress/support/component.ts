@@ -23,6 +23,7 @@ import '../../app/globals.css'
 import 'katex/dist/katex.min.css'
 
 import { mount } from 'cypress/react'
+import { ApiMockManager, waitForChartsToRender } from './testHelpers'
 
 // Augment the Cypress namespace to include type definitions for
 // your custom command.
@@ -32,11 +33,23 @@ declare global {
   namespace Cypress {
     interface Chainable {
       mount: typeof mount
+      waitForChartsToRender: typeof waitForChartsToRender
     }
   }
 }
 
 Cypress.Commands.add('mount', mount)
+Cypress.Commands.add('waitForChartsToRender', waitForChartsToRender)
+
+// Global test isolation: Clean up stubs and spies after each test
+afterEach(() => {
+  // Restore all stubbed and spied methods
+  cy.window().then((win) => {
+    if (win.sinon) {
+      win.sinon.restore();
+    }
+  });
+});
 
 // Example use:
 // cy.mount(<MyComponent />)
