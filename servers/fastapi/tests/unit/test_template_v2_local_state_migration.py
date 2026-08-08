@@ -152,11 +152,15 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
 
         with engine.connect() as connection:
             inspector = inspect(connection)
+            # Upgrading to head stamps head, which moves with every new
+            # revision - unlike `_infer_revision_from_schema` below, which
+            # reports the newest revision the physical schema can be told apart
+            # at and so stays put when a revision adds no new schema state.
             assert (
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS
+                == migrations.HEAD_REVISION
             )
             assert set(inspector.get_table_names()) >= {
                 "presentation_generation_jobs",

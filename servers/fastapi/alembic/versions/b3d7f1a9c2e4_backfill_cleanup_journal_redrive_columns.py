@@ -80,16 +80,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Only drop what this revision could have added, and only where the table
-    # exists: a database that already had the columns before this revision ran
-    # would otherwise lose them on the way down.
-    present = _existing_columns()
-    if not present:
-        return
-    for column in (
-        "last_redriven_by_snapshot",
-        "last_redriven_at",
-        "redrive_count",
-    ):
-        if column in present:
-            op.drop_column(CLEANUP_JOURNAL, column)
+    """Deliberately a no-op.
+
+    The columns belong to `f8b0d3e5a7c9`'s schema, and that revision's own
+    downgrade drops the whole table.  Presence is not evidence that *this*
+    revision added them: on a database that got its table complete, dropping
+    them here both loses schema this revision never created and fails outright,
+    because SQLite refuses to drop a column named by the table's
+    `ck_workspace_cleanup_journal_redrive_count` check constraint.
+
+    Leaving the repair in place on the way down keeps a drifted database and a
+    healthy one on the same schema, which is the whole point of the revision.
+    """

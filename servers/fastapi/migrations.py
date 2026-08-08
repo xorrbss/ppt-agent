@@ -57,6 +57,11 @@ REVISION_DURABLE_DELETION = "f8b0d3e5a7c9"
 REVISION_ACCOUNT_DELETION_FENCE = "fa1b2c3d4e5f"
 REVISION_SLIDESPEC_ARTIFACT_BUNDLES = "fb2c4d6e8a0b"
 REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS = "fc3d5e7f9a1b"
+# Repairs a cleanup journal that predates the redrive columns.  It adds no new
+# schema of its own, so no `_schema_revision` step detects it: a database is
+# stamped at the revision above and this one then tops up whatever is missing.
+REVISION_CLEANUP_JOURNAL_REDRIVE = "b3d7f1a9c2e4"
+HEAD_REVISION = REVISION_CLEANUP_JOURNAL_REDRIVE
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {
