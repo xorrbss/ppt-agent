@@ -4,6 +4,13 @@ definitions:
   caches:
     uv: ~/.cache/uv
   steps:
+    - step: &upstream-byte-parity-check
+        name: Upstream byte-parity verification
+        size: 1x
+        max-time: 10
+        script:
+          - npm ci
+          - node scripts/verify-upstream-byte-parity.mjs
     - step: &workspace-chat-first-e2e
         name: Workspace chat-first browser E2E
         size: 2x
@@ -34,7 +41,9 @@ definitions:
 pipelines:
   pull-requests:
     "**":
+      - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   branches:
     main:
+      - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
