@@ -25,6 +25,10 @@ because prose is not covered by that check and would go stale silently.
 - `upstream-intake-policy.json` controls the separate, read-only observation of
   official `presenton/presenton:main`, including the pinned commit metadata,
   review categories, and contract-risk escalation rules.
+- `upstream-byte-parity.json` exhaustively classifies every path in the pinned
+  upstream Git tree as byte/mode identical or as a documented local exception,
+  and separately lists local-only extension paths. The CI verifier recomputes
+  that partition from Git objects, so drift cannot silently change classes.
 
 The verifier derives renderer, endpoint, and reviewed-test totals from these
 registries instead of pinning duplicate numeric counts. Baseline SHA,
@@ -38,6 +42,9 @@ The two commands deliberately have different responsibilities:
 - `node scripts/verify-upstream-compatibility.mjs` verifies the checked-out
   pinned local contract, migration ledger, test dispositions, and protected
   source anchors. It does not access the network.
+- `node scripts/verify-upstream-byte-parity.mjs` proves the exhaustive
+  byte-level partition against the pinned upstream commit. After a reviewed
+  classification change, regenerate it with the same command plus `--write`.
 - `node scripts/intake-upstream-main.mjs --fail-on-risk` resolves the official
   remote `main` ref to an exact SHA, verifies that commit's metadata, and, only
   when the SHA differs, classifies GitHub compare evidence. It does not modify
@@ -86,6 +93,23 @@ It records the live unchanged upstream observation, the non-destructive
 `origin/main` reconciliation, local patch dispositions, and the separate Sharp
 runtime blocker. Dated records are evidence snapshots; the executable
 compatibility registries above remain the gates.
+
+## Upstream-first integration branch
+
+`integration/presenton-upstream-first-20260808` starts at the pinned upstream
+commit, connects the previously verified local integration history as its
+second parent, and records the complete local tree replay as an ordinary,
+reviewable commit. This differs from preserving a local tree with an `ours`
+merge that merely claims upstream ancestry: upstream is the first-parent
+baseline here, and every later deviation is visible in Git and in
+`upstream-byte-parity.json`.
+
+The old `integration/presenton-upstream-20260808` baseline produced 253 total
+merge conflicts, including 82 in the editor/template/package path
+classification, when merged with the pinned upstream. The upstream-first
+branch produces 0 total and 0 editor-path conflicts for that same simulation.
+Future intake still reviews each new upstream delta; the ancestry only removes
+repeated conflicts for history that has already been reconciled.
 
 ## Git ancestry (merge base with upstream)
 

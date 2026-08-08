@@ -198,7 +198,19 @@ class ChatTools:
             # payloads (ui/element/style/position/size) are free-form objects.
             Tool(
                 name=name,
-                description=f"Revision-checked native slide UI operation: {name}.",
+                description=(
+                    "Revision-checked native slide UI read: getSlideUI. "
+                    "Compact math elements expose latex and display_mode."
+                    if name == "getSlideUI"
+                    else (
+                        f"Revision-checked native slide UI operation: {name}. "
+                        "For math elements, content accepts latex and display_mode; "
+                        "style accepts font, alignment, shadow, opacity, decorative, "
+                        "and name."
+                        if name in {"updateElement", "updateSlideElement"}
+                        else f"Revision-checked native slide UI operation: {name}."
+                    )
+                ),
                 schema=SlideUIToolInput,
                 strict=False,
             )

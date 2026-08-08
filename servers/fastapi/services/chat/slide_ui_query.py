@@ -154,6 +154,9 @@ def compact_slide_ui(
                 for run in element.get("runs", [])
                 if isinstance(run, dict)
             )
+        elif element.get("type") == "math":
+            entry["latex"] = element.get("latex")
+            entry["display_mode"] = element.get("display_mode")
         elif element.get("type") == "text-list":
             entry["items"] = [
                 "".join(

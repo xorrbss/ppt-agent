@@ -1,0 +1,2 @@
+# Digest-pinned replay fixtures must keep their exact Git blob bytes on every OS.
+servers/fastapi/tests/fixtures/slidespec_active_bundle_*_slide_*.html -text

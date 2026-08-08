@@ -19,6 +19,14 @@ _TYPE_STYLE_FIELDS: dict[str, set[str]] = {
         "shadow",
         "stroke",
     },
+    "math": {
+        "alignment",
+        "decorative",
+        "font",
+        "name",
+        "opacity",
+        "shadow",
+    },
     "text-list": {"decorative", "font", "marker", "name"},
     "image": {
         "border_radius",
@@ -96,6 +104,41 @@ def _bounded_text(element: dict[str, Any], text: str) -> None:
     ):
         prior_font = prior_runs[0]["font"]
     element["runs"] = _text_runs(text, prior_font)
+
+
+def _normalize_math_latex(value: Any) -> str:
+    if not isinstance(value, str):
+        raise TypeError("math_latex_must_be_string")
+    latex = value.strip()
+    if latex.startswith("$$") and latex.endswith("$$"):
+        latex = latex[2:-2].strip()
+    elif latex.startswith(r"\[") and latex.endswith(r"\]"):
+        latex = latex[2:-2].strip()
+    return latex
+
+
+def _update_math(element: dict[str, Any], content: dict[str, Any]) -> None:
+    unknown = set(content) - {"latex", "display_mode"}
+    if unknown:
+        raise ValueError(
+            f"math_content_fields_not_allowed:{','.join(sorted(unknown))}"
+        )
+
+    candidate: dict[str, Any] = {}
+    if "latex" in content:
+        latex = _normalize_math_latex(content["latex"])
+        minimum = int(element.get("min_length", 1))
+        maximum = int(element.get("max_length", 4000))
+        if not minimum <= len(latex) <= maximum:
+            raise ValueError(f"math_length_out_of_bounds:{minimum}:{maximum}")
+        candidate["latex"] = latex
+    if "display_mode" in content:
+        display_mode = content["display_mode"]
+        if not isinstance(display_mode, bool):
+            raise TypeError("math_display_mode_must_be_boolean")
+        candidate["display_mode"] = display_mode
+
+    element.update(candidate)
 
 
 def _update_text_run_range(
@@ -511,6 +554,9 @@ def apply_content_update(
         if set(content) - {"text", "run_selection"}:
             raise ValueError("text_content_fields_not_allowed")
         return
+    if element_type == "math":
+        _update_math(element, content)
+        return
     if element_type == "text-list":
         if set(content) != {"items"} or not isinstance(content["items"], list):
             raise ValueError("text_list_update_requires_items")
@@ -591,8 +637,11 @@ def update_element(
     size: dict[str, Any] | None = None,
     rotation: float | None = None,
 ) -> None:
+    candidate = deepcopy(element)
     if content is not None:
-        apply_content_update(element, content)
+        apply_content_update(candidate, content)
     if style is not None:
-        apply_style_patch(element, style)
-    apply_geometry(element, position=position, size=size, rotation=rotation)
+        apply_style_patch(candidate, style)
+    apply_geometry(candidate, position=position, size=size, rotation=rotation)
+    element.clear()
+    element.update(candidate)

@@ -31,6 +31,7 @@ from templates.v2.persistence import canonicalize_slide_ui
 TEXT_PATH = "components[0].elements[0]"
 CHART_PATH = "components[0].elements[1]"
 TABLE_PATH = "components[0].elements[2]"
+MATH_PATH = "components[0].elements[3]"
 
 
 def _native_ui() -> dict[str, Any]:
@@ -112,6 +113,35 @@ def _native_ui() -> dict[str, Any]:
                         "min_rows": 0,
                         "max_rows": 8,
                     },
+                    {
+                        "type": "math",
+                        "position": {"x": 160, "y": 520},
+                        "size": {"width": 720, "height": 120},
+                        "rotation": 0,
+                        "opacity": 0.9,
+                        "latex": r"x^2 + y^2 = z^2",
+                        "display_mode": True,
+                        "font": {
+                            "family": "KaTeX_Main",
+                            "size": 32,
+                            "color": "#0F172A",
+                        },
+                        "alignment": {
+                            "horizontal": "center",
+                            "vertical": "middle",
+                        },
+                        "shadow": {
+                            "color": "#000000",
+                            "opacity": 0.2,
+                            "blur": 4,
+                            "offset_x": 1,
+                            "offset_y": 2,
+                        },
+                        "decorative": False,
+                        "name": "pythagorean-equation",
+                        "min_length": 1,
+                        "max_length": 120,
+                    },
                 ],
             }
         ],
@@ -183,6 +213,8 @@ def test_query_paths_are_allowlisted_and_compact_results_are_detached() -> None:
     compact["ui"]["components"][0]["elements"][0]["runs"][0]["text"] = "changed"
     assert ui["components"][0]["elements"][0]["runs"][0]["text"] == "Revenue "
     assert compact["revision"] == slide_ui_revision(ui)
+    assert compact["elements"][3]["latex"] == r"x^2 + y^2 = z^2"
+    assert compact["elements"][3]["display_mode"] is True
 
 
 def test_bounded_text_run_style_preserves_unselected_and_existing_run_fonts() -> None:
@@ -460,6 +492,105 @@ def test_revision_conflict_and_malformed_ui_leave_slide_and_versions_unchanged(
                 assert reopened is not None
                 assert reopened.ui == expected_ui
                 assert versions == []
+        finally:
+            reset_current_owner_id(token)
+            await engine.dispose()
+
+    asyncio.run(runner())
+
+
+def test_math_update_normalizes_content_preserves_style_and_fails_closed(
+    tmp_path,
+) -> None:
+    async def runner() -> None:
+        owner_id = uuid.uuid4()
+        engine, maker, presentation_id, slide_id = await _database(
+            tmp_path / "math-update.db",
+            owner_id=owner_id,
+        )
+        before = canonicalize_slide_ui(_native_ui())
+        assert before is not None
+        original_math = before["components"][0]["elements"][3]
+        token = set_current_owner_id(owner_id)
+        try:
+            async with maker() as session:
+                service = SlideUIMutationService(session, presentation_id)
+                compact = await service.get_slide_ui(index=0)
+                assert compact["elements"][3]["latex"] == original_math["latex"]
+                assert compact["elements"][3]["display_mode"] is True
+
+                result = await service.update_element(
+                    index=0,
+                    path=MATH_PATH,
+                    expected_revision=compact["revision"],
+                    content={
+                        "latex": r"  $$ \frac{a + b}{c} $$  ",
+                        "display_mode": False,
+                    },
+                    style={
+                        "alignment": {
+                            "horizontal": "left",
+                            "vertical": "top",
+                        }
+                    },
+                )
+                assert result["updated"] is True
+
+            async with maker() as session:
+                reopened = await session.get(SlideModel, slide_id)
+                assert reopened is not None
+                math = reopened.ui["components"][0]["elements"][3]
+                assert math["latex"] == r"\frac{a + b}{c}"
+                assert math["display_mode"] is False
+                assert math["alignment"] == {
+                    "horizontal": "left",
+                    "vertical": "top",
+                }
+                assert math["font"] == original_math["font"]
+                assert math["shadow"] == original_math["shadow"]
+                committed = deepcopy(reopened.ui)
+                committed_revision = slide_ui_revision(committed)
+
+            async with maker() as session:
+                with pytest.raises(ValueError, match="math_length_out_of_bounds"):
+                    await SlideUIMutationService(
+                        session,
+                        presentation_id,
+                    ).update_element(
+                        index=0,
+                        path=MATH_PATH,
+                        expected_revision=committed_revision,
+                        content={"latex": "$$   $$"},
+                    )
+
+            async with maker() as session:
+                with pytest.raises(ValueError, match="style_fields_not_allowed"):
+                    await SlideUIMutationService(
+                        session,
+                        presentation_id,
+                    ).update_element(
+                        index=0,
+                        path=MATH_PATH,
+                        expected_revision=committed_revision,
+                        content={"latex": r"$$ must_not_persist $$"},
+                        style={"fill": {"color": "#FFFFFF"}},
+                    )
+
+            async with maker() as session:
+                reopened = await session.get(SlideModel, slide_id)
+                versions = list(
+                    await session.scalars(
+                        select(PresentationVersionModel).where(
+                            PresentationVersionModel.presentation_id
+                            == presentation_id
+                        )
+                    )
+                )
+                assert reopened is not None
+                assert reopened.ui == committed
+                assert len(versions) == 1
+                assert versions[0].label == "chat:updateElement"
+                assert versions[0].slides[0]["ui"] == before
         finally:
             reset_current_owner_id(token)
             await engine.dispose()

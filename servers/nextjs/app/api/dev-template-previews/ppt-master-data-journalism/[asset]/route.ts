@@ -91,6 +91,8 @@ export async function GET(
   const metadata = ASSETS[asset as PreviewAsset];
   try {
     const bytes = await readFile(path.join(ARTIFACT_DIRECTORY, metadata.filename));
+    // `readFile` yields a Buffer over an ArrayBufferLike, which BodyInit does
+    // not accept; the constructor copies into a plain ArrayBuffer that it does.
     return new Response(new Uint8Array(bytes), {
       headers: {
         "Cache-Control": "no-store",

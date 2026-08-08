@@ -20,6 +20,7 @@ import './commands'
 // the app stylesheet they mount with no geometry at all. Specs then fail on
 // overlaps and hit targets that no user ever meets.
 import '../../app/globals.css'
+import 'katex/dist/katex.min.css'
 
 import { mount } from 'cypress/react'
 
