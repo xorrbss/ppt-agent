@@ -37,6 +37,28 @@ definitions:
               paths:
                 - test-artifacts/workspace-e2e/**
               capture-on: always
+    - step: &upstream-intake-monitor
+        name: Check upstream main compatibility
+        max-time: 10
+        trigger: manual
+        script:
+          - apt-get update && apt-get install -y --no-install-recommends nodejs npm
+          - npm ci
+          - mkdir -p reports
+          - node scripts/intake-upstream-main.mjs \
+              --json \
+              --output reports/upstream-intake.md \
+              --fail-on-risk \
+              > reports/upstream-intake.json 2>&1 || true
+          - echo "=== Upstream intake report (first 50 lines) ==="
+          - cat reports/upstream-intake.json | head -50
+        artifacts:
+          upload:
+            - name: upstream-intake-reports
+              type: scoped
+              paths:
+                - reports/upstream-intake.*
+              capture-on: always
 
 pipelines:
   pull-requests:
@@ -47,3 +69,6 @@ pipelines:
     main:
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
+  custom:
+    Upstream compatibility check:
+      - step: *upstream-intake-monitor

@@ -41,6 +41,31 @@ Changes to the compatibility registries also trigger
 running the local verifier. That runtime-dependent verifier is intentionally
 not duplicated in the intake workflow's offline job.
 
+### Scheduled upstream monitoring
+
+The `live-intake` job in `upstream-intake.yml` runs on a daily schedule at
+**02:17 UTC** (`cron: "17 2 * * *"`). The job:
+
+- Queries the official `presenton/presenton:main` GitHub API branch head
+- Compares against the local baseline SHA in `compatibility/upstream-intake-policy.json`
+- Generates a JSON report and Markdown step summary in the `reports/` directory
+- Retains artifacts for 14 days
+- Opens or updates a single rolling issue (label: `upstream-intake`) when drift is detected
+- Posts to the external heartbeat URL `UPSTREAM_INTAKE_HEARTBEAT_URL` on success
+
+**Known limitation:** GitHub disables scheduled workflows automatically after
+~60 days of repository inactivity (no branch pushes, tags, or releases). If you
+suspect the nightly intake has stopped, check GitHub Actions > Workflows >
+upstream-intake.yml for a warning banner. To re-enable: navigate to any Actions
+page and manually trigger the workflow, or push a commit to `main`.
+
+**Heartbeat monitoring:** To detect stale cron automatically, configure an
+external uptime monitor (e.g., Cronitor, Betteruptime) to expect a POST to the
+secret `UPSTREAM_INTAKE_HEARTBEAT_URL` within a rolling 36-hour window. If no
+POST is received, the scheduled job has likely stopped.
+
+**Manual run:** Dispatch the workflow manually via GitHub Actions > upstream-intake.yml > "Run workflow" (requires `main` branch ref).
+
 ### Required status checks
 
 Protect `main` with these exact, always-present pull-request checks:
