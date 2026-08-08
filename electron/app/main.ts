@@ -1,5 +1,10 @@
 require("dotenv").config();
-import { app, BrowserWindow, globalShortcut } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  type BrowserWindowConstructorOptions,
+} from "electron";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
@@ -36,11 +41,7 @@ import {
 } from "./sentry/main";
 import { installSafeConsole, safeError, safeLog, safeStderrWrite, safeWarn } from "./utils/safe-console";
 import { memorySnapshotMb } from "./utils/memory";
-import {
-  isSupportedExternalUrl,
-  openExternalUrl,
-  showOpenTargetErrorDialog,
-} from "./utils/open-target";
+import { createWindowSecurityController } from "./utils/window-security";
 import {
   finishChromiumCacheRecovery,
   prepareChromiumCacheRecovery,
@@ -77,6 +78,7 @@ type ManagedServerProcess = Awaited<ReturnType<typeof startFastApiServer>>;
 var fastApiServer: ManagedServerProcess | undefined;
 var nextjsServer: ManagedServerProcess | undefined;
 let isStopping = false;
+let trustedAppOrigin: string | undefined;
 const startupStatus: Record<string, string> = {
   libreoffice: "checking",
   imagemagick: "checking",
@@ -191,34 +193,48 @@ safeLog("[Presenton] Startup memory:", {
   memory: memorySnapshotMb(),
 });
 
-const createWindow = () => {
-  const mainWindow = new BrowserWindow({
+function getAppWebPreferences(): Electron.WebPreferences {
+  return {
+    webSecurity: false,
+    // Ensure a known preload path and explicit isolation settings so
+    // the `contextBridge` API is exposed reliably to renderer pages.
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: false,
+    preload: (() => {
+      const preloadPath = path.join(__dirname, "preloads/index.js");
+      try {
+        if (!fs.existsSync(preloadPath)) {
+          safeWarn(`[Presenton] Preload not found at ${preloadPath}`);
+        }
+      } catch (error) {
+        safeWarn("[Presenton] Failed to stat preload path", error);
+      }
+      return preloadPath;
+    })(),
+  };
+}
+
+function getPresentationWindowOptions(): BrowserWindowConstructorOptions {
+  return {
     width: 1280,
     height: 720,
-    show: false, // Reveal once the launch screen has painted to avoid a blank flash.
+    show: false,
     backgroundColor: "#f3f5ff",
     icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
-    webPreferences: {
-        webSecurity: false,
-        // Ensure a known preload path and explicit isolation settings so
-        // the `contextBridge` API is exposed reliably to renderer pages.
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: false,
-        preload: (() => {
-          const p = path.join(__dirname, 'preloads/index.js');
-          try {
-            if (!fs.existsSync(p)) {
-              safeWarn(`[Presenton] Preload not found at ${p}`);
-            }
-          } catch (e) {
-            safeWarn('[Presenton] Failed to stat preload path', e);
-          }
-          return p;
-        })(),
-    },
-  });
+    webPreferences: getAppWebPreferences(),
+  };
+}
+
+const windowSecurity = createWindowSecurityController({
+  getTrustedAppOrigin: () => trustedAppOrigin,
+  getPresentationWindowOptions,
+});
+
+const createWindow = () => {
+  const mainWindow = new BrowserWindow(getPresentationWindowOptions());
   win = mainWindow;
+  windowSecurity.attach(mainWindow, { scope: "app" });
 
   mainWindow.on("closed", () => {
     if (win === mainWindow) {
@@ -228,35 +244,6 @@ const createWindow = () => {
 
   mainWindow.webContents.on("render-process-gone", (_event, details) => {
     recordProcessGone("renderer", details);
-  });
-
-  // Open external links (e.g. "Download update") in the system browser so the user
-  // sees download progress and can manage downloads normally.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!isSupportedExternalUrl(url)) {
-      safeWarn("[Presenton] Blocked unsupported window open URL.");
-      return { action: "deny" };
-    }
-
-    void openExternalUrl(url)
-      .then(async (result) => {
-        if (result.success) {
-          return;
-        }
-
-        safeWarn(`[Presenton] Failed to open external URL: ${result.message || "Unknown error"}`);
-        await showOpenTargetErrorDialog({
-          parent: mainWindow,
-          title: "Could Not Open Link",
-          message: "Presenton could not open this link in your browser.",
-          detail: `${result.message || "No application is registered to open this link."}\n\n${url}`,
-        });
-      })
-      .catch((error) => {
-        safeWarn("[Presenton] Failed to handle external URL open:", error);
-      });
-
-    return { action: "deny" };
   });
 
   mainWindow.once("ready-to-show", () => {
@@ -567,6 +554,7 @@ app.whenReady().then(async () => {
 
   const [fastApiPort, nextjsPort] = await findUnusedPorts();
   safeLog(`FastAPI port: ${fastApiPort}, NextJS port: ${nextjsPort}`);
+  trustedAppOrigin = new URL(`${localhost}:${nextjsPort}`).origin;
 
   //? Setup environment variables to be used in the preloads
   setupEnv(fastApiPort, nextjsPort);

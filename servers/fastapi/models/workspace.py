@@ -292,6 +292,25 @@ class WorkspaceCommandRequest(BaseModel):
         return _reject_sensitive_workspace_keys(value)
 
 
+class WorkspaceTemplateApplicationRequest(BaseModel):
+    """Explicit confirmation contract for an AI-authored template change."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_revision: int = Field(ge=0)
+    prompt: str = Field(min_length=1, max_length=100_000)
+    authored_style: str = Field(min_length=1, max_length=255)
+    vision_qa: bool = False
+
+    @field_validator("prompt", "authored_style")
+    @classmethod
+    def strip_template_application_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value must not be blank")
+        return normalized
+
+
 class WorkspaceOperationActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -617,6 +636,22 @@ class WorkspaceBootstrapResponse(BaseModel):
 
     schema_version: Literal[1] = 1
     receipt_id: uuid.UUID
+    conversation_id: uuid.UUID
+    first_user_message_id: uuid.UUID
+    operation_id: uuid.UUID
+    status: str
+    operation_state: str
+    duplicate: bool = False
+    timeline: WorkspaceTimelineResponse
+
+
+class WorkspaceTemplateApplicationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    source_presentation_id: uuid.UUID
+    source_revision: int = Field(ge=0)
+    target_presentation_id: uuid.UUID
     conversation_id: uuid.UUID
     first_user_message_id: uuid.UUID
     operation_id: uuid.UUID

@@ -13,4 +13,5 @@ export interface StreamState {
 
 export interface PresentationPageProps {
   presentation_id: string;
-} 
+  workspaceStaging?: boolean;
+}

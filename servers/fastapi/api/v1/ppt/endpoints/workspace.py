@@ -36,7 +36,12 @@ from models.workspace import (
     WorkspaceErrorEnvelopeResponse,
     WorkspaceOperationActionRequest,
     WorkspaceSLOResponse,
+    WorkspaceTemplateApplicationRequest,
+    WorkspaceTemplateApplicationResponse,
     WorkspaceTimelineResponse,
+)
+from services.workspace_authored_template_confirmation_service import (
+    confirm_authored_template_application,
 )
 from services.workspace_api_contract import (
     project_workspace_event_page,
@@ -64,6 +69,7 @@ from services.workspace_metrics import WORKSPACE_METRICS
 from services.workspace_rollout_policy import (
     WorkspaceWriteRolloutDecision,
     resolve_workspace_write_rollout,
+    workspace_cohort_bucket,
 )
 from services.workspace_shadow_parity import (
     observe_workspace_timeline_shadow_parity,
@@ -83,6 +89,7 @@ from services.workspace_service import (
     workspace_events,
     workspace_timeline,
 )
+from services.workspace_operation_runner import wake_workspace_operation_runner
 
 
 def _workspace_error_responses() -> dict[int, dict[str, object]]:
@@ -178,6 +185,34 @@ def _require_workspace_writes(
     raise WorkspaceAPIException(
         error_code,
         status_code=(501 if error_code == "chat_first_runtime_unsupported" else 503),
+    )
+
+
+def _template_application_target_id(
+    *,
+    source_presentation_id: uuid.UUID,
+    idempotency_key: str,
+    source_decision: WorkspaceWriteRolloutDecision,
+) -> uuid.UUID:
+    """Choose a target cohort no narrower than the admitted source cohort."""
+
+    source_bucket = source_decision.cohort_bucket
+    if source_bucket is None:
+        return uuid.uuid4()
+    namespace = uuid.uuid5(
+        source_presentation_id,
+        f"workspace-template-application:{idempotency_key}",
+    )
+    for ordinal in range(1_000_000):
+        candidate = uuid.uuid5(namespace, str(ordinal))
+        if (
+            candidate != source_presentation_id
+            and workspace_cohort_bucket(candidate) <= source_bucket
+        ):
+            return candidate
+    raise WorkspaceAPIException(
+        "chat_first_cohort_excluded",
+        status_code=503,
     )
 
 
@@ -492,6 +527,67 @@ async def bootstrap_presentation_workspace(
         presentation_id=presentation_id,
         request=request,
         session=session,
+    )
+
+
+@WORKSPACE_ROUTER.post(
+    "/presentations/{source_presentation_id}/template-applications",
+    response_model=WorkspaceTemplateApplicationResponse,
+    status_code=202,
+)
+async def confirm_presentation_template_application(
+    source_presentation_id: uuid.UUID,
+    request: WorkspaceTemplateApplicationRequest,
+    idempotency_key: str = Header(
+        ...,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=255,
+    ),
+    session: AsyncSession = Depends(get_async_session),
+) -> WorkspaceTemplateApplicationResponse:
+    """Confirm one target-owned authored template application."""
+
+    source_decision = _require_workspace_writes(source_presentation_id)
+    target_presentation_id = _template_application_target_id(
+        source_presentation_id=source_presentation_id,
+        idempotency_key=idempotency_key,
+        source_decision=source_decision,
+    )
+    try:
+        confirmed = await confirm_authored_template_application(
+            session,
+            source_presentation_id=source_presentation_id,
+            request=request,
+            idempotency_key=idempotency_key,
+            target_presentation_id=target_presentation_id,
+        )
+        _record_operation_admission(
+            "template.apply",
+            duplicate=confirmed.duplicate,
+        )
+        timeline = await workspace_timeline(
+            session,
+            presentation_id=confirmed.target_presentation_id,
+        )
+    except WorkspaceServiceError as error:
+        _raise_service_error(error)
+    wake_workspace_operation_runner()
+    projected_timeline = project_workspace_timeline(
+        timeline,
+        presentation_id=confirmed.target_presentation_id,
+    )
+    return WorkspaceTemplateApplicationResponse(
+        source_presentation_id=confirmed.source_presentation_id,
+        source_revision=confirmed.source_revision,
+        target_presentation_id=confirmed.target_presentation_id,
+        conversation_id=confirmed.conversation.id,
+        first_user_message_id=confirmed.message.id,
+        operation_id=confirmed.operation.id,
+        status=confirmed.operation.state,
+        operation_state=confirmed.operation.state,
+        duplicate=confirmed.duplicate,
+        timeline=projected_timeline,
     )
 
 

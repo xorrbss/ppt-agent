@@ -506,7 +506,7 @@ describe("WorkspaceChatPanel", () => {
       .and("contain.text", "대상 버전 version-7");
   });
 
-  it("renders template generation progress and keeps the new deck behind an explicit link", () => {
+  it("renders template generation progress without a redundant source-timeline link", () => {
     cy.mount(
       <WorkspaceOperationCard
         operation={{
@@ -565,9 +565,8 @@ describe("WorkspaceChatPanel", () => {
     cy.get('[data-testid="template-apply-result"]')
       .should("contain.text", "새 AI 저작 자료가 준비되었습니다")
       .and("contain.text", "원본 자료는 변경되지 않았습니다");
-    cy.get('[data-testid="template-apply-open-result"]')
-      .should("have.attr", "href", "/presentation?id=new-deck-7&type=standard")
-      .and("contain.text", "새 자료 열기");
+    cy.get('[data-testid="template-apply-open-result"]').should("not.exist");
+    cy.contains("새 자료 열기").should("not.exist");
   });
 
   it("expires a visible artifact at its TTL boundary without waiting for a server response", () => {
