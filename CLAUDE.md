@@ -99,4 +99,5 @@ npx cypress run --component                     # component tests (Cypress; no J
 - Running FastAPI (directly or via `start.js`) **requires `APP_DATA_DIRECTORY`**; generated files, uploads, fonts, exports, and `userConfig.json` all live under it.
 - The PPTX/PDF export runtime is an external, versioned package synced by `scripts/sync-presentation-export.cjs`. If export breaks after a checkout, run `npm run sync:presentation-export` (root) or rebuild the image.
 - When changing public LLM/image config knobs, keep four places consistent: `utils/get_env.py`, `start.js` (`setupUserConfigFromEnv`), `docker-compose.yml`, and the env table in `README.md`.
+- Keep source files at or under **500 lines** (aim ≤350). When a file outgrows this, split it by concern — see `servers/nextjs/lib/template-v2-preview/` and `template-preview/components/editor/` for the pattern. Many legacy files still violate this; don't grow them further, and prefer extracting when you touch them.
 - Honor the global instructions in the user's `~/.claude/CLAUDE.md` (auto-loaded every session; do not duplicate its contents here).
