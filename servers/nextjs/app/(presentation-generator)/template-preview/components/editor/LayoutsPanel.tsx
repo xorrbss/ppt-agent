@@ -134,7 +134,17 @@ export const LayoutsPanel = React.memo(function LayoutsPanel({
   );
 });
 
-type LayoutRowProps = {
+function LayoutRow({
+  description,
+  displayName,
+  idValue,
+  index,
+  isActive,
+  onCopy,
+  onDescriptionChange,
+  onIdChange,
+  onSelect,
+}: {
   description: string;
   displayName: string;
   idValue: string;
@@ -144,105 +154,91 @@ type LayoutRowProps = {
   onDescriptionChange: (value: string) => void;
   onIdChange: (value: string) => void;
   onSelect: () => void;
-};
+}) {
+  return (
+    <div
+      className={cn(
+        "w-full rounded-[12px]",
+        isActive
+          ? "border border-[#EDEEEF] bg-white px-[10px] py-3"
+          : "bg-white px-[10px] py-3",
+      )}
+    >
+      <div className="flex min-h-[20px] items-center justify-between gap-[10px]">
+        <button
+          className="flex min-w-0 flex-1 items-center gap-[10px] text-left text-[14px] font-normal leading-normal text-[#191919]"
+          onClick={onSelect}
+          type="button"
+        >
+          <span className="shrink-0 font-manrope">{index + 1}.</span>
+          <span className="min-w-0 flex-1 truncate">{displayName}</span>
+        </button>
 
-const LayoutRow = React.memo(
-  ({
-    description,
-    displayName,
-    idValue,
-    index,
-    isActive,
-    onCopy,
-    onDescriptionChange,
-    onIdChange,
-    onSelect,
-  }: LayoutRowProps) => {
-    return (
-      <div
-        className={cn(
-          "w-full rounded-[12px]",
-          isActive
-            ? "border border-[#EDEEEF] bg-white px-[10px] py-3"
-            : "bg-white px-[10px] py-3",
-        )}
-      >
-        <div className="flex min-h-[20px] items-center justify-between gap-[10px]">
+        <div className="flex shrink-0 items-center gap-[10px]">
           <button
-            className="flex min-w-0 flex-1 items-center gap-[10px] text-left text-[14px] font-normal leading-normal text-[#191919]"
+            aria-label={`Copy layout ${index + 1} ID`}
+            className="flex h-[18px] w-[18px] items-center justify-center rounded-[4px] text-[#191919] transition-colors hover:bg-[#F7F6F9] hover:text-[#7A5AF8]"
+            onClick={(event) => {
+              event.stopPropagation();
+              onCopy();
+            }}
+            title="Copy ID"
+            type="button"
+          >
+            <Copy className="h-[14px] w-[14px]" />
+          </button>
+          <button
+            aria-label={`Select layout ${index + 1}`}
+            className="flex h-[18px] w-[18px] items-center justify-center rounded-[4px] text-[#191919] transition-colors hover:bg-[#F7F6F9]"
             onClick={onSelect}
             type="button"
           >
-            <span className="shrink-0 font-manrope">{index + 1}.</span>
-            <span className="min-w-0 flex-1 truncate">{displayName}</span>
+            <ChevronDown
+              className={cn(
+                "h-[14px] w-[14px] transition-transform",
+                isActive ? "rotate-0" : "-rotate-90",
+              )}
+            />
           </button>
-
-          <div className="flex shrink-0 items-center gap-[10px]">
-            <button
-              aria-label={`Copy layout ${index + 1} ID`}
-              className="flex h-[18px] w-[18px] items-center justify-center rounded-[4px] text-[#191919] transition-colors hover:bg-[#F7F6F9] hover:text-[#7A5AF8]"
-              onClick={(event) => {
-                event.stopPropagation();
-                onCopy();
-              }}
-              title="Copy ID"
-              type="button"
-            >
-              <Copy className="h-[14px] w-[14px]" />
-            </button>
-            <button
-              aria-label={`Select layout ${index + 1}`}
-              className="flex h-[18px] w-[18px] items-center justify-center rounded-[4px] text-[#191919] transition-colors hover:bg-[#F7F6F9]"
-              onClick={onSelect}
-              type="button"
-            >
-              <ChevronDown
-                className={cn(
-                  "h-[14px] w-[14px] transition-transform",
-                  isActive ? "rotate-0" : "-rotate-90",
-                )}
-              />
-            </button>
-          </div>
         </div>
-
-        {isActive ? (
-          <div className="mt-5 flex flex-col gap-[14px]">
-            <label className="flex flex-col gap-2 text-[14px] font-normal text-[#333333]">
-              Slide ID
-              <div className="relative min-h-[52px] rounded-[8px] border border-[rgba(219,219,219,0.6)] bg-white px-[10px] pb-[20px] pt-[10px]">
-                <input
-                  className="w-full bg-transparent pr-[48px] text-[14px] font-normal leading-normal text-[#191919] outline-none placeholder:text-[#191919]"
-                  maxLength={LAYOUT_ID_MAX_LENGTH}
-                  onChange={(event) => onIdChange(event.target.value)}
-                  placeholder="Add Slide ID"
-                  type="text"
-                  value={idValue}
-                />
-                <span className="pointer-events-none absolute bottom-[5px] right-[10px] text-[10px] leading-none text-[#666666]">
-                  {idValue.length}/{LAYOUT_ID_MAX_LENGTH}
-                </span>
-              </div>
-            </label>
-
-            <label className="flex flex-col gap-2 text-[14px] font-normal text-[#333333]">
-              Slide Description
-              <div className="relative">
-                <Textarea
-                  className="min-h-[70px] resize-none rounded-[8px] border-[rgba(219,219,219,0.6)] bg-white px-[10px] pb-[22px] pt-[10px] text-[14px] font-normal leading-[18px] text-[#191919] shadow-none placeholder:text-[#191919] focus-visible:ring-0"
-                  maxLength={LAYOUT_DESCRIPTION_MAX_LENGTH}
-                  onChange={(event) => onDescriptionChange(event.target.value)}
-                  placeholder="Add Source Text"
-                  value={description}
-                />
-                <span className="pointer-events-none absolute bottom-[8px] right-[10px] text-[10px] leading-none text-[#666666]">
-                  {description.length}/{LAYOUT_DESCRIPTION_MAX_LENGTH}
-                </span>
-              </div>
-            </label>
-          </div>
-        ) : null}
       </div>
-    );
-  },
-);
+
+      {isActive ? (
+        <div className="mt-5 flex flex-col gap-[14px]">
+          <label className="flex flex-col gap-2 text-[14px] font-normal text-[#333333]">
+            Slide ID
+            <div className="relative min-h-[52px] rounded-[8px] border border-[rgba(219,219,219,0.6)] bg-white px-[10px] pb-[20px] pt-[10px]">
+              <input
+                className="w-full bg-transparent pr-[48px] text-[14px] font-normal leading-normal text-[#191919] outline-none placeholder:text-[#191919]"
+                maxLength={LAYOUT_ID_MAX_LENGTH}
+                onChange={(event) => onIdChange(event.target.value)}
+                placeholder="Add Slide ID"
+                type="text"
+                value={idValue}
+              />
+              <span className="pointer-events-none absolute bottom-[5px] right-[10px] text-[10px] leading-none text-[#666666]">
+                {idValue.length}/{LAYOUT_ID_MAX_LENGTH}
+              </span>
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-2 text-[14px] font-normal text-[#333333]">
+            Slide Description
+            <div className="relative">
+              <Textarea
+                className="min-h-[70px] resize-none rounded-[8px] border-[rgba(219,219,219,0.6)] bg-white px-[10px] pb-[22px] pt-[10px] text-[14px] font-normal leading-[18px] text-[#191919] shadow-none placeholder:text-[#191919] focus-visible:ring-0"
+                maxLength={LAYOUT_DESCRIPTION_MAX_LENGTH}
+                onChange={(event) => onDescriptionChange(event.target.value)}
+                placeholder="Add Source Text"
+                value={description}
+              />
+              <span className="pointer-events-none absolute bottom-[8px] right-[10px] text-[10px] leading-none text-[#666666]">
+                {description.length}/{LAYOUT_DESCRIPTION_MAX_LENGTH}
+              </span>
+            </div>
+          </label>
+        </div>
+      ) : null}
+    </div>
+  );
+}

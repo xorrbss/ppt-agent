@@ -133,6 +133,10 @@ export class ApiMockManager {
 
   /**
    * Set up HTTP intercept for an error response
+   * @param pattern - URL pattern to match
+   * @param statusCode - HTTP status code (default 500)
+   * @param message - Error message body
+   * @param alias - Cypress alias for cy.wait()
    */
   setupErrorIntercept(
     pattern: string,
@@ -140,10 +144,23 @@ export class ApiMockManager {
     message: string = 'Internal Server Error',
     alias: string = 'errorRequest'
   ): void {
-    cy.intercept('*', pattern, {
+    // Intercept any HTTP method to the given pattern with error response
+    cy.intercept('GET', pattern, {
       statusCode,
       body: { error: message },
     }).as(alias);
+    cy.intercept('POST', pattern, {
+      statusCode,
+      body: { error: message },
+    });
+    cy.intercept('PATCH', pattern, {
+      statusCode,
+      body: { error: message },
+    });
+    cy.intercept('DELETE', pattern, {
+      statusCode,
+      body: { error: message },
+    });
     this.aliases.push(alias);
   }
 

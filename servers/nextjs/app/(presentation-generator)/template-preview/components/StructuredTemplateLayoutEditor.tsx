@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Save, Sparkles } from "lucide-react";
 
@@ -504,7 +504,6 @@ export function StructuredTemplateLayoutEditor({
             activeLayout={activeLayout}
             isPrompting={state.promptLayoutIndex === state.activeLayoutIndex}
             isGenerating={state.generating}
-            promptLayoutIndex={state.promptLayoutIndex}
             activeLayoutIndex={state.activeLayoutIndex}
             onDismissPrompt={dismissPrompt}
             onSubmitPrompt={generatePromptedLayout}
@@ -622,7 +621,6 @@ type PreviewSectionProps = {
   activeLayout: TemplateV2Layout | null;
   isPrompting: boolean;
   isGenerating: boolean;
-  promptLayoutIndex: number | null;
   activeLayoutIndex: number;
   onDismissPrompt: () => void;
   onSubmitPrompt: (prompt: string) => Promise<boolean>;
@@ -633,7 +631,6 @@ function PreviewSection({
   activeLayout,
   isPrompting,
   isGenerating,
-  promptLayoutIndex,
   activeLayoutIndex,
   onDismissPrompt,
   onSubmitPrompt,
