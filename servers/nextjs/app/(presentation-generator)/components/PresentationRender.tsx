@@ -6,6 +6,33 @@ import { V1ContentRender } from '../../(presentation-generator)/components/V1Con
 const BASE_WIDTH = 1280;
 const BASE_HEIGHT = 720;
 
+// Fit-to-container constants for the default (non-present, non-fixed) path.
+// The stage is scaled by ((containerWidth + BLEED) / BASE_WIDTH) * SAFETY, capped at 1.
+const FIT_WIDTH_BLEED = 20;
+const FIT_SAFETY = 0.98;
+const FIT_RATIO = (BASE_HEIGHT / BASE_WIDTH) * FIT_SAFETY;
+
+/**
+ * A CSS length equal to the laid-out height of a default <SlideScale> whose
+ * container is the element this is applied to, for use as `padding-top` (a
+ * percentage there resolves against the *container width*, which is the only
+ * input to the fit math above).
+ *
+ *   height = BASE_HEIGHT * min((w + BLEED) / BASE_WIDTH * SAFETY, 1)
+ *          = min(FIT_RATIO * w + FIT_RATIO * BLEED, BASE_HEIGHT)
+ *
+ * Callers that must reserve the stage's box before the stage exists — the
+ * dashboard defers mounting slide stages until a card is near the viewport —
+ * use this so the reserved box and the mounted stage are exactly the same size
+ * and nothing reflows when the stage materialises. Keep it derived from the
+ * constants above so it cannot drift from `scale` below.
+ */
+export const SLIDE_SCALE_RESERVED_HEIGHT_CSS = `min(calc(${(
+    FIT_RATIO * 100
+).toFixed(4)}% + ${(FIT_RATIO * FIT_WIDTH_BLEED).toFixed(
+    4
+)}px), ${BASE_HEIGHT}px)`;
+
 const SlideScale = ({
     slide,
     theme,
@@ -39,9 +66,9 @@ const SlideScale = ({
             const sy = (h / BASE_HEIGHT) * 0.995;
             return Math.min(sx, sy);
         }
-        const safeWidth = Math.max(0, box.w + 20);
+        const safeWidth = Math.max(0, box.w + FIT_WIDTH_BLEED);
         if (!safeWidth) return 1;
-        return Math.min((safeWidth / BASE_WIDTH) * 0.98, 1);
+        return Math.min((safeWidth / BASE_WIDTH) * FIT_SAFETY, 1);
     }, [fixedSize, presentMode, box]);
 
     useEffect(() => {
