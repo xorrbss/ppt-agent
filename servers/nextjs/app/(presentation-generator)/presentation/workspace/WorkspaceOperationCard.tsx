@@ -499,10 +499,6 @@ export function WorkspaceOperationCard({
   const isTemplateApply =
     operation.operationType === "template.apply" ||
     result.kind === "template.apply";
-  const newPresentationId = stringValue(
-    result.presentation_id,
-    result.presentationId,
-  );
   const templateProgressMessage =
     progress === undefined
       ? "템플릿 변경 작업을 준비하고 있습니다."
@@ -911,23 +907,6 @@ export function WorkspaceOperationCard({
           <p className="mt-1 text-violet-800">
             원본 자료는 변경되지 않았습니다.
           </p>
-          {newPresentationId ? (
-            <a
-              href={`/presentation?id=${encodeURIComponent(newPresentationId)}&type=standard`}
-              className="mt-2 inline-flex rounded-lg bg-violet-700 px-3 py-1.5 font-semibold text-white hover:bg-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700 focus-visible:ring-offset-2"
-              data-testid="template-apply-open-result"
-            >
-              새 자료 열기
-            </a>
-          ) : (
-            <p
-              className="mt-2 rounded-md bg-red-100 px-2 py-1.5 text-red-800"
-              role="alert"
-            >
-              생성된 자료의 위치를 확인할 수 없습니다. 작업을 다시 시도해
-              주세요.
-            </p>
-          )}
         </section>
       )}
       {operation.status === "succeeded" && isQualityReview && (

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { LayoutTemplate, Loader2, Search, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
@@ -27,6 +27,10 @@ import type {
 } from "../../services/api/authored";
 import AuthoredStyleCard from "../../outline/components/AuthoredStyleCard";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import {
+  getWorkspaceTimeline,
+  postWorkspaceTemplateApplication,
+} from "../../services/api/workspace";
 import type { WorkspaceCommandDispatcher } from "../workspace";
 
 const POLL_INTERVAL_MS = 2_000;
@@ -44,6 +48,27 @@ const CATEGORY_LABELS: Record<AuthoredStyleCategory, string> = {
 
 function normalizeSearchText(value: string) {
   return value.normalize("NFKC").trim().toLocaleLowerCase("ko-KR");
+}
+
+function createIdempotencyKey(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function targetPresentationUrl(presentationId: string): string {
+  return `/presentation?id=${encodeURIComponent(presentationId)}&workspace_staging=template`;
+}
+
+interface WorkspaceTemplateAttempt {
+  signature: string;
+  idempotencyKey: string;
+  promise: Promise<void>;
+  settled: boolean;
 }
 
 export default function AuthoredTemplateChanger({
@@ -66,6 +91,7 @@ export default function AuthoredTemplateChanger({
   const [isLoadingStyles, setIsLoadingStyles] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [visionQa, setVisionQa] = useState(false);
+  const workspaceAttemptRef = useRef<WorkspaceTemplateAttempt | null>(null);
   const router = useRouter();
   const dispatch = useDispatch();
 
@@ -119,28 +145,97 @@ export default function AuthoredTemplateChanger({
   }, [searchQuery, styles]);
 
   const changeTemplate = async () => {
-    if (!selectedStyleId || isGenerating) return;
+    if (!selectedStyleId) return;
+
+    if (onWorkspaceCommand) {
+      const signature = JSON.stringify({ selectedStyleId, visionQa });
+      const existing = workspaceAttemptRef.current;
+      if (existing?.signature === signature && !existing.settled) {
+        return existing.promise;
+      }
+
+      const selectedStyle = styles.find((style) => style.id === selectedStyleId);
+      const prompt = `${selectedStyle?.name || "선택한"} AI 저작 템플릿으로 새 자료를 만들어 줘`;
+      // A replay after an ambiguous failure must reuse the original key so the
+      // server can return the already-created target instead of allocating a
+      // second presentation. Only a changed template choice starts a new key.
+      const idempotencyKey =
+        existing?.signature === signature
+          ? existing.idempotencyKey
+          : createIdempotencyKey();
+      let targetWindow: Window | null = null;
+      try {
+        targetWindow = window.open("about:blank", "_blank");
+        if (targetWindow) {
+          targetWindow.opener = null;
+          targetWindow.document.title = "새 AI 저작 자료 준비 중";
+          targetWindow.document.body.textContent =
+            "새 AI 저작 자료의 작업공간을 준비하고 있습니다…";
+        }
+      } catch {
+        targetWindow = null;
+      }
+      if (!targetWindow) {
+        notify.warning(
+          "새 창을 열 수 없습니다",
+          "팝업이 차단되어 새 자료가 준비되면 현재 탭에서 안전하게 이동합니다.",
+        );
+      }
+
+      setIsGenerating(true);
+      setOpen(false);
+      let attempt: WorkspaceTemplateAttempt;
+      const promise = (async () => {
+        const sourceTimeline = await getWorkspaceTimeline(presentationId, {
+          limit: 1,
+        });
+        if (sourceTimeline.revision === undefined) {
+          throw new Error("원본 자료의 최신 리비전을 확인할 수 없습니다.");
+        }
+        const receipt = await postWorkspaceTemplateApplication(presentationId, {
+          sourceRevision: sourceTimeline.revision,
+          prompt,
+          authoredStyle: selectedStyleId,
+          visionQa,
+          idempotencyKey,
+        });
+        const targetUrl = targetPresentationUrl(receipt.targetPresentationId);
+        if (targetWindow && !targetWindow.closed) {
+          targetWindow.location.replace(targetUrl);
+        } else {
+          notify.info(
+            "현재 탭에서 새 자료를 엽니다",
+            "새 창을 사용할 수 없어 준비된 작업공간으로 이동합니다.",
+          );
+          window.location.assign(targetUrl);
+        }
+      })()
+        .catch((error) => {
+          if (targetWindow && !targetWindow.closed) targetWindow.close();
+          console.error("Error confirming AI-authored template", error);
+          notify.error(
+            "AI 저작 템플릿 변경 실패",
+            error instanceof Error
+              ? error.message
+              : "템플릿 변경 요청 중 오류가 발생했습니다.",
+          );
+          setOpen(true);
+        })
+        .finally(() => {
+          setIsGenerating(false);
+          if (workspaceAttemptRef.current === attempt) {
+            attempt.settled = true;
+          }
+        });
+      attempt = { signature, idempotencyKey, promise, settled: false };
+      workspaceAttemptRef.current = attempt;
+      return promise;
+    }
+
+    if (isGenerating) return;
 
     setIsGenerating(true);
     try {
-      if (onWorkspaceCommand) {
-        const selectedStyle = styles.find((style) => style.id === selectedStyleId);
-        // The durable chat timeline owns progress and errors from this point.
-        // Close the chooser immediately so generation never blocks the canvas.
-        setOpen(false);
-        await onWorkspaceCommand(
-          `${selectedStyle?.name || "선택한"} AI 저작 템플릿으로 새 자료를 만들어 줘`,
-          {
-            commandType: "template.apply",
-            context: {
-              authored_style: selectedStyleId,
-              vision_qa: visionQa,
-            },
-          }
-        );
-        return;
-      }
-
       const started =
         await PresentationGenerationApi.retemplateAuthoredPresentation(
           presentationId,

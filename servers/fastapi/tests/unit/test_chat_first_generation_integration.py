@@ -1235,7 +1235,12 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
     asyncio.run(scenario())
 
 
-async def _seed_running_operation(maker):
+async def _seed_running_operation(
+    maker,
+    *,
+    kind="presentation.generate",
+    request_payload=None,
+):
     async with maker() as session, session.begin():
         presentation = PresentationModel(
             content="artifact publication",
@@ -1253,11 +1258,11 @@ async def _seed_running_operation(maker):
             conversation_id=conversation.id,
             presentation_id=presentation.id,
             anchor_position=1,
-            kind="presentation.generate",
+            kind=kind,
             state="running",
             idempotency_key_hash="a" * 64,
             request_hash="b" * 64,
-            request_payload={},
+            request_payload=request_payload or {},
             expected_revision=0,
             attempt_token="attempt-1",
         )
@@ -1334,6 +1339,71 @@ def test_artifact_publication_hashes_and_commits_one_revision(
                 assert stored_artifact is not None
                 assert stored_artifact.status == "ready"
                 assert artifact.absolute_path.read_bytes() == payload
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_template_application_publication_completes_same_target_with_source_metadata(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "template-application-publish.db")
+        app_data = tmp_path / "app-data-template-application"
+        export = app_data / "exports" / "deck.pptx"
+        export.parent.mkdir(parents=True)
+        export.write_bytes(b"target-owned-template-application")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        source_id = uuid.uuid4()
+        try:
+            presentation_id, operation_id = await _seed_running_operation(
+                maker,
+                kind="template.apply",
+                request_payload={
+                    "generation_settings": {
+                        "source_presentation_id": str(source_id),
+                        "source_revision": 7,
+                        "authored_style": "signal",
+                        "vision_qa": True,
+                    }
+                },
+            )
+            async with maker() as prepare_session:
+                artifact = await prepare_workspace_generation_artifact(
+                    prepare_session,
+                    source_path=str(export),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=1,
+                )
+            async with maker() as session:
+                revision = await publish_workspace_generation_artifact(
+                    session,
+                    artifact=artifact,
+                    expected_revision=0,
+                    attempt_token="attempt-1",
+                )
+            assert revision == 1
+
+            async with maker() as session:
+                target = await session.get(PresentationModel, presentation_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+            assert target is not None
+            assert target.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
+            assert target.revision == 1
+            assert operation is not None
+            assert operation.presentation_id == presentation_id
+            assert operation.result == {
+                **artifact.result_payload(),
+                "kind": "template.apply",
+                "source_presentation_id": str(source_id),
+                "source_revision": 7,
+                "target_presentation_id": str(presentation_id),
+                "presentation_id": str(presentation_id),
+                "authored_style": "signal",
+            }
         finally:
             await engine.dispose()
 

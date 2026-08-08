@@ -45,6 +45,7 @@ import { findMostVisibleSlideIndex } from "../utils/slideScrollSync";
 
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
+  workspaceStaging = false,
 }) => {
   const pathname = usePathname();
   // State management
@@ -110,6 +111,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   // authored slide sentinels.
   const isAuthoredDeck = isAuthoredPresentation(presentationData as any);
   const slidesLength = presentationData?.slides?.length ?? 0;
+  const showWorkspaceStaging = workspaceStaging && slidesLength === 0;
   const lastStreamingSlideIndex =
     slidesLength > 0
       ? presentationData?.slides?.[slidesLength - 1]?.index
@@ -530,6 +532,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 {!presentationData ||
                   loading ||
                   !presentationData?.slides ||
+                  showWorkspaceStaging ||
                   (presentationData.slides.length === 0 && stream) ? (
                   <div className="relative w-full h-[calc(100vh-120px)] mx-auto hide-scrollbar">
                     <div className="">
@@ -540,7 +543,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                         />
                       ))}
                     </div>
-                    {stream && <LoadingState />}
+                    {(stream || showWorkspaceStaging) && (
+                      <div data-testid="workspace-staging-loading">
+                        <LoadingState />
+                      </div>
+                    )}
                   </div>
                 ) : presentationData.slides.length === 0 ? (
                   // Loaded, not streaming, but the deck has 0 slides. Previously

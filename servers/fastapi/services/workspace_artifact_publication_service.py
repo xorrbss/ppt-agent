@@ -1790,6 +1790,54 @@ async def publish_workspace_generation_artifact(
 
     now = datetime.now(timezone.utc)
     result_payload = artifact.result_payload()
+    operation_metadata = (
+        await session.execute(
+            select(
+                WorkspaceOperation.kind,
+                WorkspaceOperation.request_payload,
+            ).where(
+                WorkspaceOperation.id == artifact.operation_id,
+                WorkspaceOperation.presentation_id == artifact.presentation_id,
+                WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+            )
+        )
+    ).one_or_none()
+    if operation_metadata is not None and operation_metadata.kind == "template.apply":
+        request_payload = (
+            operation_metadata.request_payload
+            if isinstance(operation_metadata.request_payload, dict)
+            else {}
+        )
+        settings = request_payload.get("generation_settings")
+        settings = settings if isinstance(settings, dict) else {}
+        try:
+            source_presentation_id = str(
+                uuid.UUID(str(settings.get("source_presentation_id")))
+            )
+            source_revision = int(settings.get("source_revision"))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceArtifactPublicationError(
+                "authored_template_request_invalid"
+            ) from error
+        authored_style = settings.get("authored_style")
+        if (
+            source_presentation_id == str(artifact.presentation_id)
+            or source_revision < 0
+            or not isinstance(authored_style, str)
+            or not authored_style.strip()
+        ):
+            raise WorkspaceArtifactPublicationError(
+                "authored_template_request_invalid"
+            )
+        result_payload = {
+            **result_payload,
+            "kind": "template.apply",
+            "source_presentation_id": source_presentation_id,
+            "source_revision": source_revision,
+            "target_presentation_id": str(artifact.presentation_id),
+            "presentation_id": str(artifact.presentation_id),
+            "authored_style": authored_style.strip(),
+        }
     try:
         # Lock the active account generation before any operation, job or
         # presentation projection is mutated. Account deletion takes the same

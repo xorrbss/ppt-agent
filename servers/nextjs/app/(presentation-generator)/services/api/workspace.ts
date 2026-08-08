@@ -17,6 +17,8 @@ import type {
   WorkspaceOperationActionRequest,
   WorkspaceOperationEvent,
   WorkspaceTimelinePage,
+  WorkspaceTemplateApplicationReceipt,
+  WorkspaceTemplateApplicationRequest,
 } from "../../presentation/workspace/types";
 
 const ROOT = "/api/v1/ppt/workspace";
@@ -204,6 +206,78 @@ export async function postWorkspaceCommand(
     },
   );
   return normalizeWorkspaceActionReceipt(await parseResponse(response));
+}
+
+function requiredString(
+  payload: Record<string, unknown>,
+  key: string,
+): string {
+  const value = payload[key];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new WorkspaceApiError(
+      `Workspace template application response is missing ${key}`,
+      502,
+      "invalid_template_application_receipt",
+      false,
+    );
+  }
+  return value;
+}
+
+export async function postWorkspaceTemplateApplication(
+  sourcePresentationId: string,
+  request: WorkspaceTemplateApplicationRequest,
+  signal?: AbortSignal,
+): Promise<WorkspaceTemplateApplicationReceipt> {
+  const response = await fetch(
+    getApiUrl(
+      `${ROOT}/presentations/${encodeURIComponent(sourcePresentationId)}/template-applications`,
+    ),
+    {
+      method: "POST",
+      headers: {
+        ...getHeader(),
+        "Content-Type": "application/json",
+        "Idempotency-Key": request.idempotencyKey,
+      },
+      body: JSON.stringify({
+        source_revision: request.sourceRevision,
+        prompt: request.prompt,
+        authored_style: request.authoredStyle,
+        vision_qa: request.visionQa,
+      }),
+      signal,
+    },
+  );
+  const raw = (await parseResponse(response)) as Record<string, unknown>;
+  const sourceRevision = raw.source_revision;
+  const schemaVersion = raw.schema_version;
+  if (
+    typeof sourceRevision !== "number" ||
+    !Number.isFinite(sourceRevision) ||
+    typeof schemaVersion !== "number" ||
+    !Number.isFinite(schemaVersion)
+  ) {
+    throw new WorkspaceApiError(
+      "Workspace template application response has an invalid revision",
+      502,
+      "invalid_template_application_receipt",
+      false,
+    );
+  }
+  return {
+    schemaVersion,
+    sourcePresentationId: requiredString(raw, "source_presentation_id"),
+    sourceRevision,
+    targetPresentationId: requiredString(raw, "target_presentation_id"),
+    conversationId: requiredString(raw, "conversation_id"),
+    firstUserMessageId: requiredString(raw, "first_user_message_id"),
+    operationId: requiredString(raw, "operation_id"),
+    status: requiredString(raw, "status"),
+    operationState: requiredString(raw, "operation_state"),
+    duplicate: raw.duplicate === true,
+    timeline: normalizeTimelinePage(raw.timeline),
+  };
 }
 
 export async function postWorkspaceOperationAction(

@@ -171,6 +171,28 @@ export interface WorkspaceActionReceipt {
   timeline: WorkspaceTimelinePage;
 }
 
+export interface WorkspaceTemplateApplicationRequest {
+  sourceRevision: number;
+  prompt: string;
+  authoredStyle: string;
+  visionQa: boolean;
+  idempotencyKey: string;
+}
+
+export interface WorkspaceTemplateApplicationReceipt {
+  schemaVersion: number;
+  sourcePresentationId: string;
+  sourceRevision: number;
+  targetPresentationId: string;
+  conversationId: string;
+  firstUserMessageId: string;
+  operationId: string;
+  status: string;
+  operationState: string;
+  duplicate: boolean;
+  timeline: WorkspaceTimelinePage;
+}
+
 export interface WorkspaceEventPage {
   events: WorkspaceOperationEvent[];
   eventHighWatermark?: string;
