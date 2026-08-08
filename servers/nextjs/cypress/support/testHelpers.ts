@@ -191,9 +191,12 @@ export class ApiMockManager {
 export function waitForChartsToRender(): Cypress.Chainable<void> {
   return cy.get('body').then(($body) => {
     if ($body.find('[data-presenton-charts]').length > 0) {
-      return cy.get('[data-presenton-charts]', { timeout: 10000 })
+      // Commands enqueued here are awaited before the outer .then() resolves.
+      cy.get('[data-presenton-charts]', { timeout: 10000 })
         .should('have.attr', 'data-presenton-charts', 'ready');
     }
+    // Yield undefined so the command's subject matches Chainable<void>.
+    return cy.wrap<void>(undefined, { log: false });
   });
 }
 
