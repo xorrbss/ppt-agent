@@ -22,6 +22,7 @@ from services.chat.service import (
     ChatTurnResult,
     PresentationChatService,
     _refused_authored_page_index,
+    _tool_call_payload,
 )
 from services.workspace_chat_operation_handler import chat_turn_result_payload
 
@@ -65,8 +66,12 @@ def _service(results: list[dict[str, Any]], rounds: list[_Response]):
         def get_tool_definitions(self) -> list[Any]:
             return []
 
-        async def execute_tool_call(self, _call: _ToolCall) -> dict[str, Any]:
-            return pending.pop(0)
+        async def execute_tool_call(self, call: _ToolCall) -> dict[str, Any]:
+            # The real registry hands back an envelope, never the tool's own
+            # dict.  A stub that returned the bare dict let a loop that could
+            # not read an envelope pass these tests while the feature never
+            # fired against a live backend.
+            return {"ok": True, "tool": call.name, "result": pending.pop(0)}
 
     service._tools = _Tools()  # type: ignore[attr-defined]
     return service, _Client(rounds)
@@ -123,6 +128,55 @@ def test_the_first_refused_page_wins(monkeypatch):
         ],
     )
     assert refused_index == 4
+
+
+def test_a_failed_tool_call_offers_nothing(monkeypatch):
+    """A call that raised carries an error, not a payload to read a page from."""
+
+    service, client = _service(
+        [], [_Response([_ToolCall("deleteSlide", "1")]), _Response([], "실패했습니다")]
+    )
+
+    class _FailingTools:
+        def get_tool_definitions(self) -> list[Any]:
+            return []
+
+        async def execute_tool_call(self, call: _ToolCall) -> dict[str, Any]:
+            return {"ok": False, "tool": call.name, "error": "boom"}
+
+    service._tools = _FailingTools()  # type: ignore[attr-defined]
+    monkeypatch.setattr("services.chat.service.get_client", lambda **_: client)
+    monkeypatch.setattr("services.chat.service.get_model", lambda: "stub-model")
+    monkeypatch.setattr("services.chat.service.get_llm_config", lambda: None)
+    monkeypatch.setattr(
+        "services.chat.service.build_chat_llm_tools", lambda _definitions: []
+    )
+    monkeypatch.setattr(
+        "services.chat.service.get_generate_kwargs", lambda **kwargs: kwargs
+    )
+
+    _text, _tools, refused_index = asyncio.run(service._run_llm_with_tools([]))
+    assert refused_index is None
+
+
+def test_the_tool_registry_envelope_is_unwrapped():
+    """Pins the shape the loop actually receives.
+
+    `ChatToolRegistry.execute_tool_call` wraps every result; reading a tool's
+    own keys off the envelope finds nothing, which is what kept the offer from
+    ever reaching the client.
+    """
+
+    assert (
+        _tool_call_payload({"ok": True, "tool": "deleteSlide", "result": REFUSAL})
+        is REFUSAL
+    )
+    assert (
+        _tool_call_payload({"ok": False, "tool": "deleteSlide", "error": "boom"})
+        is None
+    )
+    # A bare tool dict is not an envelope - accepting one is what hid the bug.
+    assert _tool_call_payload(REFUSAL) is None
 
 
 def test_the_insert_refusal_names_no_page():

@@ -25,6 +25,39 @@ from utils.validators import validate_files
 
 FILES_ROUTER = APIRouter(prefix="/files", tags=["Files"])
 
+_FASOO_DRM_PROBE_BYTES = 512
+
+
+def _is_fasoo_drm_protected(file_path: str) -> bool:
+    """Return True for Fasoo-wrapped files before an office converter sees them."""
+
+    try:
+        with open(file_path, "rb") as uploaded_file:
+            header = uploaded_file.read(_FASOO_DRM_PROBE_BYTES)
+    except OSError:
+        return False
+
+    return b"DRMONE" in header and b"Fasoo DRM" in header
+
+
+def _reject_known_drm_file(file_path: str, original_filename: str) -> None:
+    if not _is_fasoo_drm_protected(file_path):
+        return
+
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "DOCUMENT_DRM_PROTECTED",
+            "message": (
+                f"'{original_filename}' 파일은 Fasoo DRM으로 보호되어 내용을 읽을 수 없습니다. "
+                "DRM을 해제하거나 PowerPoint에서 DRM 없는 .pptx 파일로 다시 저장한 뒤 "
+                "업로드해 주세요."
+            ),
+            "filename": original_filename,
+            "retryable": False,
+        },
+    )
+
 @FILES_ROUTER.get("/upload-limits")
 async def get_upload_limits():
     """Expose effective limits so clients can validate and explain them."""
@@ -76,6 +109,10 @@ async def upload_files(files: Optional[List[UploadFile]]):
                 temp_path,
                 limit_bytes=single_limit,
                 label="Document",
+            )
+            _reject_known_drm_file(
+                temp_path,
+                each_file.filename or "uploaded document",
             )
             if actual_total > total_limit:
                 raise HTTPException(

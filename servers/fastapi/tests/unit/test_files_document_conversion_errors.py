@@ -1,7 +1,8 @@
 import asyncio
+from io import BytesIO
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 from api.v1.ppt.endpoints import files as files_endpoint
 from services.document_conversion_service import (
@@ -76,3 +77,31 @@ def test_conversion_error_uses_safe_default_public_message():
     assert detail["message"] == "Document conversion failed. Check the file and try again."
     assert "/private/path" not in str(detail)
     assert "credential" not in str(detail)
+
+
+def test_upload_rejects_fasoo_drm_with_original_filename_and_actionable_message(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(files_endpoint.TEMP_FILE_SERVICE, "base_dir", str(tmp_path))
+    filename = "운영자매뉴얼.pptx"
+    protected_payload = (
+        b"\xff DRMONE  This Document is encrypted and protected by Fasoo DRM "
+        b"\x00" * 32
+    )
+    upload = UploadFile(file=BytesIO(protected_payload), filename=filename)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(files_endpoint.upload_files([upload]))
+
+    assert exc.value.status_code == 422
+    assert exc.value.detail == {
+        "code": "DOCUMENT_DRM_PROTECTED",
+        "message": (
+            f"'{filename}' 파일은 Fasoo DRM으로 보호되어 내용을 읽을 수 없습니다. "
+            "DRM을 해제하거나 PowerPoint에서 DRM 없는 .pptx 파일로 다시 저장한 뒤 "
+            "업로드해 주세요."
+        ),
+        "filename": filename,
+        "retryable": False,
+    }
+    assert list(tmp_path.rglob("*.pptx")) == []

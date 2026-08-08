@@ -52,20 +52,39 @@ class ChatTurnResult:
     page_remake_slide_index: int | None = None
 
 
-def _refused_authored_page_index(tool_result: object) -> int | None:
+def _tool_call_payload(tool_result: object) -> Mapping[str, Any] | None:
+    """Return the tool's own result from the tool registry's envelope.
+
+    ``ChatToolRegistry.execute_tool_call`` never hands back what the tool
+    returned: it wraps every call as ``{"ok", "tool", "result"}``, and a call
+    that raised carries an ``error`` with no payload to read at all.  Anything
+    reading a tool's own keys has to come through here first.
+    """
+    if not isinstance(tool_result, Mapping):
+        return None
+    if not tool_result.get("ok"):
+        return None
+    payload = tool_result.get("result")
+    return payload if isinstance(payload, Mapping) else None
+
+
+def _refused_authored_page_index(tool_payload: object) -> int | None:
     """Return the page a tool refused to edit because it is authored.
+
+    Takes the tool's own payload, not the registry envelope around it - see
+    ``_tool_call_payload``.
 
     ``None`` covers both "not that refusal" and "that refusal, but about no
     particular page" - the insert case, which names no target to remake.
     """
-    if not isinstance(tool_result, Mapping):
+    if not isinstance(tool_payload, Mapping):
         return None
-    validation_errors = tool_result.get("validation_errors")
+    validation_errors = tool_payload.get("validation_errors")
     if not isinstance(validation_errors, list):
         return None
     if AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE not in validation_errors:
         return None
-    index = tool_result.get("index")
+    index = tool_payload.get("index")
     # `bool` is an `int`; a stray flag here must not become a page number.
     if not isinstance(index, int) or isinstance(index, bool) or index < 0:
         return None
@@ -383,7 +402,7 @@ class PresentationChatService:
                 last_tool_results.append(tool_result)
                 if page_remake_slide_index is None:
                     page_remake_slide_index = _refused_authored_page_index(
-                        tool_result
+                        _tool_call_payload(tool_result)
                     )
                 tool_response_content = json.dumps(tool_result, ensure_ascii=False)
                 messages.append(

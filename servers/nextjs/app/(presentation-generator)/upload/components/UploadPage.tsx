@@ -561,8 +561,12 @@ const UploadPage = () => {
       duration: 0,
       showProgress: false,
     });
+    const errorTitle =
+      error?.code === "DOCUMENT_DRM_PROTECTED"
+        ? "DRM 보호 파일을 읽을 수 없습니다"
+        : "생성에 실패했습니다";
     notify.error(
-      "생성에 실패했습니다",
+      errorTitle,
       error.message || "발표자료를 시작하는 중 문제가 발생했습니다."
     );
   };
