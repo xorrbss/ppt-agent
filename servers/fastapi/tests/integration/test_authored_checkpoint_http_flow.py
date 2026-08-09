@@ -37,6 +37,10 @@ from models.sql.workspace import (
 from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_service as authored
 from services import database
+from services import workspace_operation_runner as workspace_runner
+from services.presentation_generation_operation_handler import (
+    register_presentation_generation_operation_handler,
+)
 from services import presentation_generation_job_service as jobs
 
 
@@ -218,6 +222,22 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
         monkeypatch.setattr(authored, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored, "is_fallback_slide_html", lambda _: False)
         monkeypatch.setattr(authored, "render_html_to_png", fake_render)
+
+        # Chat-first generation is executed by the workspace operation runner
+        # rather than by a per-request background task, and this loopback app
+        # runs with `lifespan="off"`, so start one here and point both it and the
+        # generation handler at the test engine.
+        generation_handler = register_presentation_generation_operation_handler(
+            replace=True
+        )
+        monkeypatch.setattr(generation_handler, "_session_factory", maker)
+        runner = workspace_runner.WorkspaceOperationRunner(
+            session_factory=maker, poll_seconds=0.02
+        )
+        monkeypatch.setattr(
+            workspace_runner, "_workspace_operation_runner", runner
+        )
+        await runner.start()
 
         server = None
         server_task = None
@@ -409,6 +429,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                 for checkpoint in durable_checkpoints
             )
         finally:
+            await runner.stop()
             for active in list(jobs._active_jobs.values()):
                 if not active.done():
                     active.cancel()

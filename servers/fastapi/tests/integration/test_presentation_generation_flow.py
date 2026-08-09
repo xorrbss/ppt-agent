@@ -179,11 +179,14 @@ def test_prepare_presentation_preserves_payload_icon_weight():
         "store_generated_outlines",
         new=AsyncMock(),
     ):
+        # Exercise the gate-free boundary: the HTTP route now always requires a
+        # workspace command, while composition itself stays directly callable.
         response = _run(
-            presentation_core.prepare_presentation(
+            presentation_core.apply_presentation_prepare(
                 presentation_id=presentation_id,
                 outlines=[SlideOutlineModel(content="## Causes")],
                 layout=layout,
+                title=None,
                 sql_session=session,
             )
         )

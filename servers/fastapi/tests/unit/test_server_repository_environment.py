@@ -112,29 +112,30 @@ def test_importing_the_server_module_does_not_touch_the_environment():
 
 
 def test_the_real_repository_env_reaches_the_chat_first_gate(restore_environment):
-    """Pin the actual failure: the deployed .env must enable the workspace.
+    """Pin the actual failure: the deployed .env must be able to host the workspace.
 
     Skipped when the checkout has no ``.env`` (CI), because the file is
     gitignored and carries provider credentials.
+
+    The workspace is no longer behind a rollout flag -- every mutation goes
+    through the operation store -- so the enable/disable pair this used to read
+    is gone. What the deployed environment still has to satisfy is the runtime
+    check that otherwise fails every write closed with 501.
     """
 
     repository_directory = SERVER_PATH.resolve().parents[2]
     if not (repository_directory / ".env").exists():
         pytest.skip("repository .env is not present in this checkout")
 
-    for name in (
-        "CHAT_FIRST_WORKSPACE_ENABLED",
-        "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE",
-    ):
-        os.environ.pop(name, None)
+    os.environ.pop("DATABASE_URL", None)
     _load_repository_environment()(repository_directory)
 
     from services.workspace_runtime_profile import (
-        resolve_chat_first_workspace_rollout,
+        require_supported_workspace_runtime,
     )
-    from services.workspace_service import workspace_commands_enabled
 
-    rollout = resolve_chat_first_workspace_rollout(
-        workspace_commands_enabled(), "sqlite"
+    # An unset DATABASE_URL leaves the app on its bundled SQLite file.
+    profile = require_supported_workspace_runtime(
+        os.environ.get("DATABASE_URL", "sqlite")
     )
-    assert rollout.enabled, rollout.reason
+    assert profile.supported, profile.dialect
