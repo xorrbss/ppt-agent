@@ -707,8 +707,21 @@ async def fail_workspace_linked_generation_job(
     """Record a safe terminal compatibility projection for a failed attempt."""
 
     now = utc_now()
-    safe_error = {"code": error_code}
     async with async_session_maker() as session:
+        # An authored stage failure has already recorded which slide and which
+        # stage failed. Replacing that with a bare code strips the only detail
+        # that tells a user where to look, so keep the richer record when the
+        # attempt left one behind.
+        recorded = await session.scalar(
+            select(PresentationGenerationJob.last_error).where(
+                PresentationGenerationJob.id == job_id
+            )
+        )
+        safe_error = (
+            recorded
+            if isinstance(recorded, dict) and recorded.get("code")
+            else {"code": error_code}
+        )
         result = await session.execute(
             update(PresentationGenerationJob)
             .where(PresentationGenerationJob.id == job_id)
