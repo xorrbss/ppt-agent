@@ -4,7 +4,7 @@ import { effectiveLineHeight } from "@/components/slide-editor/text/text-line-he
 import { textRunsContent } from "@/components/slide-editor/text/text-runs";
 import type { TemplateV2TextEditStyle } from "@/components/slide-editor/text/template-v2-text-editing";
 
-type UnknownRecord = Record<string, any>;
+type UnknownRecord = Record<string, unknown>;
 
 export type TemplateV2RawTextElement = UnknownRecord;
 export type RenderTextFont = Omit<

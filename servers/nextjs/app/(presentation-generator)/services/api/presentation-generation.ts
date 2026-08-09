@@ -49,6 +49,9 @@ export type GenerationStatusResponse = {
   status: string;
   message?: string | null;
   error?: GenerationFailure | Record<string, unknown> | null;
+  // Free-form task payload. Left as `any` values on purpose: consumers read
+  // fields such as `data.edit_path` directly, and narrowing them here would
+  // require edits in `outline/hooks/usePresentationGeneration.ts`.
   data?: Record<string, any> | null;
   request_id?: string;
   progress?: GenerationProgress | null;
@@ -476,7 +479,10 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async updatePresentationContent(body: any) {
+  // The payload is a partial presentation snapshot (full deck state from the
+  // editor, or just `{ id, theme }` from the theme picker); it is forwarded to
+  // the backend verbatim, so it is serialized rather than inspected here.
+  static async updatePresentationContent(body: unknown) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/update`),
@@ -802,7 +808,7 @@ export class PresentationGenerationApi {
     );
   }
 
-  static async presentationPrepare(presentationData: any) {
+  static async presentationPrepare(presentationData: unknown) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/prepare`),

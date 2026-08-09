@@ -12,6 +12,15 @@ const OUTLINE_RECOVERY_INTERVAL_MS = 5_000;
 
 export type OutlineEventSourceFactory = (url: string) => EventSource;
 
+type OutlineSlide = { content: string };
+
+/** SSE frames emitted by `/api/outline-stream/{id}`. */
+type OutlineStreamEvent =
+  | { type: "chunk"; chunk: string }
+  | { type: "complete"; presentation: { outlines: { slides: OutlineSlide[] } } }
+  | { type: "closing" }
+  | { type: "error"; detail?: string };
+
 const createBrowserEventSource: OutlineEventSourceFactory = (url) =>
   new EventSource(url);
 
@@ -158,9 +167,9 @@ export const useOutlineStreaming = (
       );
 
       eventSource.addEventListener("response", (event) => {
-        let data: any;
+        let data: OutlineStreamEvent;
         try {
-          data = JSON.parse(event.data);
+          data = JSON.parse(event.data) as OutlineStreamEvent;
         } catch {
           if (!scheduleRetry("invalid SSE payload")) {
             resetStreamingState();
@@ -174,10 +183,12 @@ export const useOutlineStreaming = (
             accumulatedChunks += data.chunk;
             try {
               const repairedJson = jsonrepair(accumulatedChunks);
-              const partialData = JSON.parse(repairedJson);
+              const partialData = JSON.parse(repairedJson) as {
+                slides?: OutlineSlide[];
+              };
 
               if (partialData.slides) {
-                const nextSlides: { content: string }[] = partialData.slides || [];
+                const nextSlides: OutlineSlide[] = partialData.slides || [];
                 try {
                   const prev = prevSlidesRef.current || [];
                   let changedIndex: number | null = null;

@@ -9,18 +9,18 @@ export interface PresentationResponse {
   title: string;
   created_at: string;
   updated_at: string;
-  data: any | null;
+  data: Record<string, unknown> | null;
   file: string;
   n_slides: number;
   prompt: string;
   summary: string | null;
-  theme: Record<string, any> | null;
+  theme: Record<string, unknown> | null;
   titles: string[];
   user_id: string;
-  vector_store: any;
+  vector_store: unknown;
 
   thumbnail: string;
-  slides: any[];
+  slides: unknown[];
 }
 
 export interface PresentationGenerationSettings {

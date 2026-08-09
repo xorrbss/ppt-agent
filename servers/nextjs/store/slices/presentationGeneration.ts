@@ -7,7 +7,25 @@ import {
   deleteAdaptiveUnit as crudDeleteUnit,
   moveAdaptiveUnit as crudMoveUnit,
   addAdaptiveUnit as crudAddUnit,
+  type AdaptiveChartPatch,
 } from "@/lib/adaptiveBlockEdit";
+import type { ImageEditorProperties } from "@/components/slide-editor/images/imageCrop";
+
+/** Object/array container addressed by a dotted+indexed content data path. */
+type PathContainer = Record<string | number, unknown>;
+
+/** Chart object stored at `slide.content.chart`. Structural mirror of the
+ *  in-tree editor's ChartData (kept local so the store does not depend on a
+ *  component module). */
+interface SlideChart {
+  type?: "bar" | "line" | "area";
+  data: Array<{ name?: string; value?: number }>;
+}
+
+/** A stored slide as the editor keeps it. The concrete shape depends on the
+ *  template family (classic `content.*`, adaptive `content.blocks[]`,
+ *  template-v2), so re-indexing only relies on it being an object. */
+type SlideRecord = Record<string, unknown>;
 
 export interface PresentationData {
   id: string;
@@ -15,10 +33,13 @@ export interface PresentationData {
   layout: {
     name: string;
     ordered: boolean;
-    slides: any[];
+    slides: unknown[];
   };
   n_slides: number;
   title: string;
+  // Deliberately untyped: every consumer reads template-family-specific paths
+  // off `slides[i].content` (classic fields, adaptive `blocks[]`, template-v2
+  // elements). Narrowing this needs a discriminated slide model first.
   slides: any;
   theme: Theme | null;
 }
@@ -116,7 +137,7 @@ const presentationGenerationSlice = createSlice({
 
         // Update indices for all slides to ensure they remain sequential
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide: any, idx: number) => ({
+          (slide: SlideRecord, idx: number) => ({
             ...slide,
             index: idx,
           })
@@ -127,7 +148,7 @@ const presentationGenerationSlice = createSlice({
       if (state.presentationData) {
         state.presentationData.slides.splice(action.payload, 1);
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide: any, idx: number) => ({
+          (slide: SlideRecord, idx: number) => ({
             ...slide,
             index: idx,
           })
@@ -168,7 +189,7 @@ const presentationGenerationSlice = createSlice({
     // values must stay numbers (not the strings updateSlideContent stores).
     updateSlideChart: (
       state,
-      action: PayloadAction<{ slideIndex: number; chart: any }>
+      action: PayloadAction<{ slideIndex: number; chart: SlideChart }>
     ) => {
       if (
         state.presentationData &&
@@ -198,7 +219,11 @@ const presentationGenerationSlice = createSlice({
         const { dataPath, content } = action.payload;
 
         // Helper function to set nested property value
-        const setNestedValue = (obj: any, path: string, value: string) => {
+        const setNestedValue = (
+          obj: PathContainer,
+          path: string,
+          value: string
+        ) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
 
@@ -210,14 +235,14 @@ const presentationGenerationSlice = createSlice({
               if (!current[key]) {
                 current[key] = {};
               }
-              current = current[key];
+              current = current[key] as PathContainer;
             } else {
               // Array index
               const index = Number(key);
               if (!current[index]) {
                 current[index] = {};
               }
-              current = current[index];
+              current = current[index] as PathContainer;
             }
           }
 
@@ -262,7 +287,7 @@ const presentationGenerationSlice = createSlice({
       action: PayloadAction<{
         slideIndex: number;
         blockId: string;
-        patch: { chartType?: string; data?: any[]; series?: string[] };
+        patch: AdaptiveChartPatch;
       }>
     ) => {
       const { slideIndex, blockId, patch } = action.payload;
@@ -294,14 +319,14 @@ const presentationGenerationSlice = createSlice({
       crudAddUnit(slide?.content?.blocks, action.payload.afterUnitId);
     },
 
-    addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
+    addNewSlide: (state, action: PayloadAction<{ slideData: SlideRecord; index: number }>) => {
       if (state.presentationData?.slides) {
         // Insert the new slide at the specified index + 1 (after current slide)
         state.presentationData.slides.splice(action.payload.index + 1, 0, action.payload.slideData);
 
         // Update indices for all slides to ensure they remain sequential
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide: any, idx: number) => ({
+          (slide: SlideRecord, idx: number) => ({
             ...slide,
             index: idx,
           })
@@ -328,7 +353,12 @@ const presentationGenerationSlice = createSlice({
         const { dataPath, imageUrl, prompt } = action.payload;
 
         // Helper function to set nested property value for images
-        const setNestedImageValue = (obj: any, path: string, url: string, promptText?: string) => {
+        const setNestedImageValue = (
+          obj: PathContainer,
+          path: string,
+          url: string,
+          promptText?: string
+        ) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
 
@@ -339,25 +369,29 @@ const presentationGenerationSlice = createSlice({
               if (!current[key]) {
                 current[key] = {};
               }
-              current = current[key];
+              current = current[key] as PathContainer;
             } else {
               const index = Number(key);
               if (!current[index]) {
                 current[index] = {};
               }
-              current = current[index];
+              current = current[index] as PathContainer;
             }
           }
 
           // Set the image properties
           const finalKey = keys[keys.length - 1];
           const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
+          const targetRecord =
+            target && typeof target === 'object'
+              ? (target as PathContainer)
+              : undefined;
 
           // Preserve existing properties if the target already exists
           const updatedValue = {
-            ...(target && typeof target === 'object' ? target : {}),
+            ...(targetRecord ?? {}),
             __image_url__: url,
-            __image_prompt__: promptText || (target?.__image_prompt__) || ''
+            __image_prompt__: promptText || (targetRecord?.__image_prompt__) || ''
           };
 
           if (isNaN(Number(finalKey))) {
@@ -388,7 +422,7 @@ const presentationGenerationSlice = createSlice({
       action: PayloadAction<{
         slideIndex: number;
         itemIndex: number;
-        properties: any;
+        properties: ImageEditorProperties;
       }>
     ) => {
       if (
@@ -425,7 +459,12 @@ const presentationGenerationSlice = createSlice({
         const { dataPath, iconUrl, query } = action.payload;
 
         // Helper function to set nested property value for icons
-        const setNestedIconValue = (obj: any, path: string, url: string, queryText?: string) => {
+        const setNestedIconValue = (
+          obj: PathContainer,
+          path: string,
+          url: string,
+          queryText?: string
+        ) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
 
@@ -436,25 +475,29 @@ const presentationGenerationSlice = createSlice({
               if (!current[key]) {
                 current[key] = {};
               }
-              current = current[key];
+              current = current[key] as PathContainer;
             } else {
               const index = Number(key);
               if (!current[index]) {
                 current[index] = {};
               }
-              current = current[index];
+              current = current[index] as PathContainer;
             }
           }
 
           // Set the icon properties
           const finalKey = keys[keys.length - 1];
           const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
+          const targetRecord =
+            target && typeof target === 'object'
+              ? (target as PathContainer)
+              : undefined;
 
           // Preserve existing properties if the target already exists
           const updatedValue = {
-            ...(target && typeof target === 'object' ? target : {}),
+            ...(targetRecord ?? {}),
             __icon_url__: url,
-            __icon_query__: queryText || (target?.__icon_query__) || ''
+            __icon_query__: queryText || (targetRecord?.__icon_query__) || ''
           };
 
           if (isNaN(Number(finalKey))) {

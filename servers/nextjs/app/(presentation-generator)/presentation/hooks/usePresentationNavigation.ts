@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { PresentationData } from "@/store/slices/presentationGeneration";
 
 export const usePresentationNavigation = (
   presentationId: string,
@@ -42,7 +43,10 @@ export const usePresentationNavigation = (
     router.push(`/presentation?id=${presentationId}`);
   }, [router, presentationId, setIsFullscreen]);
 
-  const handleSlideChange = useCallback((newSlide: number, presentationData: any) => {
+  const handleSlideChange = useCallback((
+    newSlide: number,
+    presentationData: PresentationData | null | undefined
+  ) => {
     if (newSlide >= 0 && newSlide < presentationData?.slides.length!) {
       setSelectedSlide(newSlide);
       router.push(

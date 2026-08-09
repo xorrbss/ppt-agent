@@ -10,14 +10,14 @@
 
 /** All content paths whose string value equals `targetText`, in traversal order. */
 export function collectMatchingPaths(
-  data: any,
+  data: unknown,
   targetText: string,
   path = ""
 ): string[] {
   if (!data || typeof data !== "object") return [];
   const target = targetText.trim();
   const out: string[] = [];
-  for (const [key, value] of Object.entries(data)) {
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
     const currentPath = path ? `${path}.${key}` : key;
     if (typeof value === "string") {
       if (value.trim() === target) out.push(currentPath);

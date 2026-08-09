@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 
-type KeyboardEvent = {
+/** Structural subset of the DOM KeyboardEvent this hook needs. */
+type ShortcutKeyboardEvent = {
   key: string;
   ctrlKey: boolean;
   shiftKey: boolean;
@@ -25,10 +26,10 @@ function isEditableTarget(target: EventTarget | null | undefined): boolean {
 
 export const useKeyboardShortcut = (
   keys: string[],
-  callback: (e: KeyboardEvent) => void
+  callback: (e: ShortcutKeyboardEvent) => void
 ) => {
   const handleKeyPress = useCallback(
-    (event: KeyboardEvent) => {
+    (event: ShortcutKeyboardEvent) => {
       const isCtrlPressed = event.ctrlKey;
 
       if (
@@ -44,9 +45,9 @@ export const useKeyboardShortcut = (
   );
 
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyPress as any);
+    document.addEventListener('keydown', handleKeyPress);
     return () => {
-      document.removeEventListener('keydown', handleKeyPress as any);
+      document.removeEventListener('keydown', handleKeyPress);
     };
   }, [handleKeyPress]);
 };

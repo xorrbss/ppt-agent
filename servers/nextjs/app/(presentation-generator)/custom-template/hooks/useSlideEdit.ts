@@ -7,7 +7,7 @@ import { getApiUrl } from "@/utils/api";
 export const useSlideEdit = (
   slide: ProcessedSlide,
   index: number,
-  onSlideUpdate?: (updatedSlideData: any) => void,
+  onSlideUpdate?: (updatedSlideData: Partial<ProcessedSlide>) => void,
   setSlides?: React.Dispatch<React.SetStateAction<ProcessedSlide[]>>
 ) => {
   const [isEditMode, setIsEditMode] = useState(false);
@@ -38,8 +38,9 @@ export const useSlideEdit = (
         throw new Error(`API call failed: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      const updatedSlideData = {
+      // EditSlideLayoutResponse: { react_component: str }
+      const data = (await response.json()) as { react_component: string };
+      const updatedSlideData: Partial<ProcessedSlide> = {
         slide_number: slide.slide_number,
         react: data.react_component,
         processed: true,

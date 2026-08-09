@@ -23,8 +23,8 @@ export class ImagesApi {
       body: formData,
     });
     return await ApiResponseHandler.handleResponse(response, "Failed to upload image") as ImageAssetResponse;
-  } catch (error:any) {
-    console.log("Upload error:", error.message);
+  } catch (error) {
+    console.log("Upload error:", error instanceof Error ? error.message : error);
     throw error;
   }
   }
@@ -33,7 +33,7 @@ export class ImagesApi {
     try {
     const response = await fetch(getApiUrl(`/api/v1/ppt/images/uploaded`));
    return await ApiResponseHandler.handleResponse(response, "Failed to get uploaded images") as ImageAssetResponse[];
-  } catch (error:any) {
+  } catch (error) {
     console.log("Get uploaded images error:", error);
     throw error;
   }
@@ -45,7 +45,7 @@ export class ImagesApi {
         method: "DELETE"
       });
       return await ApiResponseHandler.handleResponse(response, "Failed to delete image") as {success: boolean, message?: string};
-    } catch (error:any) {
+    } catch (error) {
       console.log("Delete image error:", error);
       throw error;
     }
@@ -80,7 +80,7 @@ export class ImagesApi {
         headers,
       });
       return await ApiResponseHandler.handleResponse(response, "Failed to search stock images") as string[];
-    } catch (error:any) {
+    } catch (error) {
       console.log("Stock image search error:", error);
       throw error;
     }

@@ -12,6 +12,7 @@ import { notify } from "@/components/ui/sonner";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { getApiUrl, normalizeBackendAssetUrls } from "@/utils/api";
 import { store } from "@/store/store";
+import type { Slide } from "@/app/(presentation-generator)/types/slide";
 
 const MAX_STREAM_RETRIES = 3;
 const STREAM_RETRY_DELAY_MS = 1_000;
@@ -30,7 +31,21 @@ function isPlaceholderAssetUrl(url: unknown): boolean {
   return PLACEHOLDER_ASSET_MARKERS.some((m) => u.includes(m));
 }
 
-function mergeContentPreservingResolvedAssets(prev: any, incoming: any): any {
+/** Slides arrive as plain JSON; only `content` is inspected while merging. */
+type StreamedSlide = Record<string, unknown> & { content?: unknown };
+
+/** SSE frames emitted by `/api/v1/ppt/presentation/stream/{id}`. */
+type PresentationStreamEvent =
+  | { type: "chunk"; chunk: string }
+  | { type: "slide_assets"; slide_index: unknown; slide: Slide | null }
+  | { type: "complete"; presentation: PresentationData }
+  | { type: "closing"; presentation: PresentationData }
+  | { type: "error"; detail?: string };
+
+function mergeContentPreservingResolvedAssets(
+  prev: unknown,
+  incoming: unknown
+): unknown {
   if (incoming === undefined || incoming === null) return prev;
   if (prev === undefined || prev === null) return incoming;
 
@@ -44,11 +59,13 @@ function mergeContentPreservingResolvedAssets(prev: any, incoming: any): any {
   if (typeof incoming !== "object") return incoming;
   if (typeof prev !== "object") return incoming;
 
-  const result: Record<string, unknown> = { ...incoming };
+  const incomingRecord = incoming as Record<string, unknown>;
+  const prevRecord = prev as Record<string, unknown>;
+  const result: Record<string, unknown> = { ...incomingRecord };
 
-  for (const key of Object.keys(incoming)) {
-    const pv = prev[key];
-    const iv = incoming[key];
+  for (const key of Object.keys(incomingRecord)) {
+    const pv = prevRecord[key];
+    const iv = incomingRecord[key];
 
     if (iv !== null && typeof iv === "object") {
       if (Array.isArray(iv) && Array.isArray(pv)) {
@@ -90,9 +107,9 @@ function mergeContentPreservingResolvedAssets(prev: any, incoming: any): any {
 }
 
 function mergeSlidesPreservingResolvedAssets(
-  prevSlides: any[] | undefined,
-  incomingSlides: any[]
-): any[] {
+  prevSlides: StreamedSlide[] | undefined,
+  incomingSlides: StreamedSlide[]
+): StreamedSlide[] {
   if (!prevSlides?.length) return incomingSlides;
   return incomingSlides.map((incoming, idx) => {
     const prev = prevSlides[idx];
@@ -190,9 +207,9 @@ export const usePresentationStreaming = (
       eventSource = new EventSource(getApiUrl(streamPath));
 
       eventSource.addEventListener("response", (event) => {
-        let data: any;
+        let data: PresentationStreamEvent;
         try {
-          data = JSON.parse(event.data);
+          data = JSON.parse(event.data) as PresentationStreamEvent;
         } catch {
           if (!scheduleRetry("invalid SSE payload")) {
             finalizeFailure("스트림 응답을 해석하지 못했습니다.");
@@ -205,7 +222,9 @@ export const usePresentationStreaming = (
             accumulatedChunks += data.chunk;
             try {
               const repairedJson = jsonrepair(accumulatedChunks);
-              const partialData = JSON.parse(repairedJson);
+              const partialData = JSON.parse(
+                repairedJson
+              ) as Partial<PresentationData>;
               const normalizedPartialData = normalizeBackendAssetUrls(partialData);
 
               if (
