@@ -642,16 +642,22 @@ async def stream_presentation(
     return StreamingResponse(inner(), media_type="text/event-stream")
 
 
-@PRESENTATION_ROUTER.patch("/update", response_model=PresentationWithSlides)
-async def update_presentation(
-    id: Annotated[uuid.UUID, Body()],
-    n_slides: Annotated[Optional[int], Body()] = None,
-    title: Annotated[Optional[str], Body()] = None,
-    theme: Annotated[Optional[dict], Body()] = None,
-    slides: Annotated[Optional[List[SlideModel]], Body()] = None,
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    require_legacy_presentation_write_path(id)
+async def apply_presentation_update(
+    id: uuid.UUID,
+    sql_session: AsyncSession,
+    *,
+    n_slides: Optional[int] = None,
+    title: Optional[str] = None,
+    theme: Optional[dict] = None,
+    slides: Optional[List[SlideModel]] = None,
+) -> PresentationWithSlides:
+    """Validate and persist a full presentation update.
+
+    This boundary intentionally performs no route/write-gate check, mirroring
+    `build_authored_retemplate_generation_request`: the HTTP route applies the
+    runner-only gate, while an already-authorized caller reaches the same
+    validation and persistence directly.
+    """
     presentation = await require_live_presentation(sql_session, id)
 
     presentation_update_dict = {}
@@ -731,6 +737,26 @@ async def update_presentation(
         **presentation.model_dump(),
         slides=response_slides,
         fonts=fonts,
+    )
+
+
+@PRESENTATION_ROUTER.patch("/update", response_model=PresentationWithSlides)
+async def update_presentation(
+    id: Annotated[uuid.UUID, Body()],
+    n_slides: Annotated[Optional[int], Body()] = None,
+    title: Annotated[Optional[str], Body()] = None,
+    theme: Annotated[Optional[dict], Body()] = None,
+    slides: Annotated[Optional[List[SlideModel]], Body()] = None,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    require_legacy_presentation_write_path(id)
+    return await apply_presentation_update(
+        id,
+        sql_session,
+        n_slides=n_slides,
+        title=title,
+        theme=theme,
+        slides=slides,
     )
 
 

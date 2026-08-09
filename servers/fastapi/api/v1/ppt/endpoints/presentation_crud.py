@@ -212,11 +212,17 @@ async def get_presentation_generation_info(
     )
 
 
-@PRESENTATION_CRUD_ROUTER.delete("/{id}", status_code=204)
-async def delete_presentation(
-    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
-):
-    require_legacy_presentation_write_path(id)
+async def apply_presentation_delete(
+    id: uuid.UUID,
+    sql_session: AsyncSession,
+) -> None:
+    """Delete a deck and its dependants, mapping service errors to HTTP status.
+
+    This boundary intentionally performs no route/write-gate check: the HTTP
+    route applies the runner-only gate, while the durable
+    `presentation.delete` operation reaches the same rollback semantics from
+    its already-authorized handler.
+    """
     try:
         presentation = await require_live_presentation(sql_session, id)
     except OperationalError as error:
@@ -252,6 +258,14 @@ async def delete_presentation(
             },
             headers={"Retry-After": "1"},
         ) from error
+
+
+@PRESENTATION_CRUD_ROUTER.delete("/{id}", status_code=204)
+async def delete_presentation(
+    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
+):
+    require_legacy_presentation_write_path(id)
+    await apply_presentation_delete(id, sql_session)
 
 
 @PRESENTATION_CRUD_ROUTER.post("/create", response_model=PresentationModel)

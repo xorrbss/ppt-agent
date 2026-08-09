@@ -65,6 +65,7 @@ def test_stream_outlines_stops_after_content_brief_usage_limit(tmp_path):
     presentation_id = uuid.uuid4()
     presentation = PresentationModel(
         id=presentation_id,
+        lifecycle_status="staging",
         content="Create a deck.",
         n_slides=1,
         language="English",
@@ -72,7 +73,12 @@ def test_stream_outlines_stops_after_content_brief_usage_limit(tmp_path):
         verbosity="standard",
         instructions=None,
     )
-    session = FakeAsyncSession(get_results={presentation_id: presentation})
+    session = FakeAsyncSession(
+        get_results={presentation_id: presentation},
+        # The outline writer admits only a staged deck whose generate operation
+        # is still awaiting activation; this is that deck.
+        scalar_result=uuid.uuid4(),
+    )
     request = types.SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
     generate_outline = MagicMock()
 
@@ -132,6 +138,7 @@ def test_stream_outlines_preserves_markdown_document_in_brief_outline_and_memory
     presentation_id = uuid.uuid4()
     presentation = PresentationModel(
         id=presentation_id,
+        lifecycle_status="staging",
         content="Create a deck from the source document.",
         n_slides=1,
         language="English",
@@ -140,7 +147,12 @@ def test_stream_outlines_preserves_markdown_document_in_brief_outline_and_memory
         verbosity="standard",
         instructions=None,
     )
-    session = FakeAsyncSession(get_results={presentation_id: presentation})
+    session = FakeAsyncSession(
+        get_results={presentation_id: presentation},
+        # The outline writer admits only a staged deck whose generate operation
+        # is still awaiting activation; this is that deck.
+        scalar_result=uuid.uuid4(),
+    )
     request = types.SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
 
     async def fake_generate_ppt_outline(*_args, **_kwargs):

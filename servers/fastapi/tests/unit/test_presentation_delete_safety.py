@@ -1,17 +1,19 @@
 import asyncio
 import sqlite3
+import uuid
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import event, func, select, text
 from sqlalchemy.ext.asyncio import (
+    AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlmodel import SQLModel
 
 from api.v1.ppt.endpoints.presentation_crud import (
-    PRESENTATION_CRUD_ROUTER,
+    apply_presentation_delete,
 )
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -44,8 +46,18 @@ def _test_app(database_path, *, sqlite_timeout: float = 5.0):
         async with session_factory() as session:
             yield session
 
+    # The published DELETE route is runner-only, so the rollback and retry
+    # semantics under test are exercised at the same seam the durable
+    # `presentation.delete` operation uses, mounted on the same path.
     app = FastAPI()
-    app.include_router(PRESENTATION_CRUD_ROUTER, prefix="/api/v1/ppt")
+
+    @app.delete("/api/v1/ppt/presentation/{id}", status_code=204)
+    async def _delete_presentation(
+        id: uuid.UUID,
+        sql_session: AsyncSession = Depends(get_async_session),
+    ) -> None:
+        await apply_presentation_delete(id, sql_session)
+
     app.dependency_overrides[get_async_session] = session_dependency
     return app, engine, session_factory
 

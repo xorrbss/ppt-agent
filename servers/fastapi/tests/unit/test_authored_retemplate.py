@@ -5,7 +5,9 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 from starlette.requests import Request
 
-from api.v1.ppt.endpoints.presentation import retemplate_authored_presentation
+from api.v1.ppt.endpoints.presentation import (
+    build_authored_retemplate_generation_request,
+)
 from models.presentation_from_template import RetemplatePresentationRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
@@ -57,36 +59,24 @@ def _http_request() -> Request:
     return Request({"type": "http", "headers": []})
 
 
-def test_retemplate_queues_new_authored_deck_from_saved_llm_manuscript(
+def test_retemplate_builds_new_authored_deck_from_saved_llm_manuscript(
     fake_async_session,
 ):
     source = _source_presentation()
     original_snapshot = source.model_dump(mode="json")
     fake_async_session._get_results[source.id] = source
-    queued = AsyncPresentationGenerationTaskModel(
-        id="task-retemplate",
-        status="pending",
-        message="Queued for generation",
+
+    generation_request = asyncio.run(
+        build_authored_retemplate_generation_request(
+            source.id,
+            _request(),
+            fake_async_session,
+        )
     )
 
-    with patch(
-        "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
-        new=AsyncMock(return_value=queued),
-    ) as queue:
-        result = asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request(),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
-            )
-        )
-
-    assert result is queued
+    # The source deck is read, never rewritten.
     assert source.model_dump(mode="json") == original_snapshot
 
-    generation_request = queue.await_args.args[0]
     assert generation_request.template == "authored"
     assert generation_request.authored_style == "signal"
     assert generation_request.vision_qa is True
@@ -97,8 +87,6 @@ def test_retemplate_queues_new_authored_deck_from_saved_llm_manuscript(
     assert generation_request.include_title_slide is False
     assert generation_request.include_table_of_contents is False
     assert generation_request.n_slides is None
-    assert queue.await_args.args[1].tasks == []
-    assert queue.await_args.args[2] is fake_async_session
 
 
 def test_retemplate_exact_snapshots_fresh_html_before_queue(fake_async_session):
@@ -134,12 +122,7 @@ def test_retemplate_exact_snapshots_fresh_html_before_queue(fake_async_session):
         brief="Preserve source pixels.",
         reference_mode=EXACT_RECONSTRUCTION,
     )
-    queued = AsyncPresentationGenerationTaskModel(
-        id="task-exact-retemplate",
-        status="pending",
-    )
     snapshot = AsyncMock(return_value="a" * 32)
-    queue = AsyncMock(return_value=queued)
 
     with (
         patch(
@@ -153,28 +136,20 @@ def test_retemplate_exact_snapshots_fresh_html_before_queue(fake_async_session):
             "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
             new=snapshot,
         ),
-        patch(
-            "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
-            new=queue,
-        ),
     ):
-        result = asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request("exact-private"),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
+        generation_request = asyncio.run(
+            build_authored_retemplate_generation_request(
+                source.id,
+                _request("exact-private"),
+                fake_async_session,
             )
         )
 
-    assert result is queued
     snapshot.assert_awaited_once_with(
         "exact-private",
         slides,
         expected_slide_count=2,
     )
-    generation_request = queue.await_args.args[0]
     assert generation_request._authored_exact_snapshot_id == "a" * 32
     assert generation_request.slides_markdown == [
         slide.content for slide in source.get_presentation_outline().slides
@@ -188,30 +163,20 @@ def test_retemplate_style_reference_does_not_snapshot_current_html(
 ):
     source = _source_presentation()
     fake_async_session._get_results[source.id] = source
-    queued = AsyncPresentationGenerationTaskModel(id="task-style", status="pending")
     snapshot = AsyncMock()
 
-    with (
-        patch(
-            "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
-            new=snapshot,
-        ),
-        patch(
-            "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
-            new=AsyncMock(return_value=queued),
-        ),
+    with patch(
+        "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
+        new=snapshot,
     ):
-        result = asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request(),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
+        asyncio.run(
+            build_authored_retemplate_generation_request(
+                source.id,
+                _request(),
+                fake_async_session,
             )
         )
 
-    assert result is queued
     snapshot.assert_not_awaited()
 
 
@@ -247,8 +212,6 @@ def test_retemplate_exact_snapshot_failure_is_422_before_queue(fake_async_sessio
         brief="Preserve source pixels.",
         reference_mode=EXACT_RECONSTRUCTION,
     )
-    queue = AsyncMock()
-
     with (
         patch(
             "api.v1.ppt.endpoints.presentation.load_authored_styles",
@@ -261,25 +224,18 @@ def test_retemplate_exact_snapshot_failure_is_422_before_queue(fake_async_sessio
             "api.v1.ppt.endpoints.presentation.create_exact_source_snapshot",
             new=AsyncMock(side_effect=ValueError("private source failure")),
         ),
-        patch(
-            "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
-            new=queue,
-        ),
         pytest.raises(HTTPException) as exc_info,
     ):
         asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request("exact-private"),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
+            build_authored_retemplate_generation_request(
+                source.id,
+                _request("exact-private"),
+                fake_async_session,
             )
         )
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.detail == "authored_exact_source_snapshot_invalid"
-    queue.assert_not_awaited()
 
 
 def test_retemplate_rejects_non_authored_deck(fake_async_session):
@@ -290,12 +246,10 @@ def test_retemplate_rejects_non_authored_deck(fake_async_session):
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request(),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
+            build_authored_retemplate_generation_request(
+                source.id,
+                _request(),
+                fake_async_session,
             )
         )
 
@@ -308,12 +262,10 @@ def test_retemplate_rejects_unknown_authored_style(fake_async_session):
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request("not-a-real-authored-style"),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
+            build_authored_retemplate_generation_request(
+                source.id,
+                _request("not-a-real-authored-style"),
+                fake_async_session,
             )
         )
 
@@ -346,27 +298,15 @@ def test_retemplate_accepts_legacy_authored_deck_from_slide_sentinel(
             return [authored_slide]
 
     fake_async_session.execute = AsyncMock(return_value=_SlideResult())
-    queued = AsyncPresentationGenerationTaskModel(
-        id="task-legacy",
-        status="pending",
+    generation_request = asyncio.run(
+        build_authored_retemplate_generation_request(
+            source.id,
+            _request(),
+            fake_async_session,
+        )
     )
 
-    with patch(
-        "api.v1.ppt.endpoints.presentation.queue_presentation_generation",
-        new=AsyncMock(return_value=queued),
-    ) as queue:
-        result = asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request(),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
-            )
-        )
-
-    assert result is queued
-    assert queue.await_args.args[0].slides_markdown == [
+    assert generation_request.slides_markdown == [
         "2026년 매출은 125억 원이며 전년 대비 18% 증가했다.",
         "핵심 고객은 공공기관 12곳이며 계약 갱신율은 94%다.",
     ]
@@ -380,12 +320,10 @@ def test_retemplate_rejects_missing_semantic_manuscript(fake_async_session):
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            retemplate_authored_presentation(
-                id=source.id,
-                request=_request(),
-                request_http=_http_request(),
-                background_tasks=BackgroundTasks(),
-                sql_session=fake_async_session,
+            build_authored_retemplate_generation_request(
+                source.id,
+                _request(),
+                fake_async_session,
             )
         )
 
