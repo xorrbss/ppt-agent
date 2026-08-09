@@ -21,6 +21,7 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
+    PRESENTATION_LIFECYCLE_STAGING,
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -321,7 +322,11 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                     presentation = await session.get(
                         PresentationModel, failed_job.presentation_id
                     )
-                assert presentation is None
+                # A bare generate bootstraps its deck up front, so the row now
+                # outlives a failed attempt. What must not happen is publication:
+                # the deck stays staging until the run succeeds.
+                assert presentation is not None
+                assert presentation.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING
                 assert not list((app_data / "exports").glob("*.pptx"))
 
                 # Prove that recovery does not depend on in-process task state:
