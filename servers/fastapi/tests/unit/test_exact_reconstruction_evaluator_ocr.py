@@ -199,12 +199,15 @@ def test_timed_out_child_is_reaped(tmp_path: Path) -> None:
         "time.sleep(30)"
     )
 
-    # Give Windows process startup enough time to create the PID rendezvous file;
-    # this makes the reaping assertion deterministic rather than scheduler-racy.
-    result = evaluator._run_process((sys.executable, "-c", child), timeout_seconds=1)
+    # The child must start CPython and write the PID rendezvous file before the
+    # timeout fires, or there is nothing to assert reaping against. Five seconds
+    # keeps this deterministic on a contended Windows host while remaining well
+    # below the child's own 30-second lifetime.
+    result = evaluator._run_process((sys.executable, "-c", child), timeout_seconds=5)
 
     assert result.status == "timeout"
     assert result.returncode is not None
+    assert 5 <= result.elapsed_seconds < 30
     pid = pid_file.read_text(encoding="utf-8")
     if sys.platform == "win32":
         listing = subprocess.run(
