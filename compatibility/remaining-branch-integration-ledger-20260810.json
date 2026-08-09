@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-08-10",
+  "policy": "semantic-diff-selective-integration-only",
+  "target": {
+    "baseRef": "origin/main",
+    "baseSha": "eaa7f827edd19f0e38b5ec0289b0348b0b0bcbc9",
+    "integrationBranch": "codex/remaining-branch-integration-20260810",
+    "worktree": "C:/project/PPT-agent/worktrees/remaining-branch-integration",
+    "wholeBranchMergeUsed": false,
+    "mergeCommitCreated": false,
+    "directCherryPickUsed": false,
+    "method": "commit-ledger-plus-bounded-manual-port"
+  },
+  "branches": [
+    {
+      "name": "codex/agent-font-release-gate-20260728",
+      "tip": "9634f756d5c39ac1b6f69daf97f2e724fe4ef700",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 10,
+      "conclusion": "Release gates and the shared authored repair were already replaced; branch merge/sync commits carry no independent patch."
+    },
+    {
+      "name": "codex/agent-ppt-com-calibration-20260728",
+      "tip": "e21f92344a70f2cc573d8128c97f4fe8c91aed05",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 10,
+      "conclusion": "The PowerPoint Desktop probe and shared repairs are already present; final sync removed only duplicate integration state."
+    },
+    {
+      "name": "codex/agent-semantic-profiles-20260728",
+      "tip": "e8570bea43e935b6a79f5d9aefd9285455324dee",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 10,
+      "conclusion": "The experimental calibrated profiles regressed visual gates, became zero transforms, and were removed by this branch's own final sync."
+    },
+    {
+      "name": "codex/agent-visual-qa-20260728",
+      "tip": "7348e8d0824a4babaf6db67973e1faabd9295267",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 10,
+      "conclusion": "The fidelity aggregation report and tests are already present through patch-equivalent main commits."
+    },
+    {
+      "name": "codex/authored-hybrid-repair-20260728",
+      "tip": "2e1073df79c06791f97300e9251df14011342a26",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 8,
+      "conclusion": "Rich-run spacing, semantic whitespace, and signed charset behavior are already present in the split authored-hybrid implementation."
+    },
+    {
+      "name": "codex/powerpoint-font-fidelity-20260728",
+      "tip": "de8337c5dacf29f58aa1c5026887581bf1db3791",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 17,
+      "conclusion": "Stable repair, probe, QA, and release-gate slices are already present; the no-op calibrated runtime mode was intentionally removed."
+    },
+    {
+      "name": "codex/upload-policy-limits-20260728",
+      "tip": "85b5c17e1ea76b4069aac70909500649230d9604",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 3,
+      "conclusion": "Shared configurable upload limits are already present and subsequently hardened."
+    },
+    {
+      "name": "fix/slide-text-schema-budgets-20260728",
+      "tip": "6b4cc28a2a7be622132a8e57a67fae1dd8366af4",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 19,
+      "conclusion": "Schema-derived text guidance and compaction are already present; inherited fidelity experiments remain excluded."
+    },
+    {
+      "name": "fix/test-process-leak-and-suspense-boundary",
+      "tip": "b4e27a460c06878f3d78b4b21867d4aae7d374e0",
+      "mergeBase": "af474529514bc4fa2e32b0c6379bb4d7ddd04970",
+      "uniqueCommitCount": 4,
+      "conclusion": "Three still-needed fixes were manually ported; the restart-process cleanup is superseded by a broader main implementation."
+    },
+    {
+      "name": "integration/presenton-upstream-merge-20260731",
+      "tip": "4e397d034563ad724b7164ad6c89b9bfc307bd1d",
+      "mergeBase": "0b38f8f933adc1c37bc073471221c22251cfd47e",
+      "uniqueCommitCount": 3,
+      "conclusion": "The source commit was a bounded nine-file selective port, not a wholesale upstream merge, and is already patch-equivalent in main."
+    },
+    {
+      "name": "integration/upstream-realignment-20260724",
+      "tip": "6f1902548fe7a70fdd4ca1c2bfb4c31a5e2af1fe",
+      "mergeBase": "57b194b234b42c8b28f8a507a30322de200e3e83",
+      "uniqueCommitCount": 1,
+      "conclusion": "Historical baseline audit only; superseded by compatibility/upstream-intake-policy.json and later ledgers."
+    },
+    {
+      "name": "remediation/chat-first-audit-20260803",
+      "tip": "5c08d8baea3ce25deee86e0d47e3d7be857810e8",
+      "mergeBase": "1133caac96d7ef715b8eb091c4312a5028f8b647",
+      "uniqueCommitCount": 3,
+      "conclusion": "The two substantive commits were replayed in the opposite order and the hardening commit is patch-identical in main; restoring the later-removed legacy dual-writer would regress the current workspace-only contract."
+    }
+  ],
+  "semanticUnits": [
+    {
+      "id": "authored-text-and-charset-repair",
+      "sourceCommits": [
+        "02a382818af1c03e4c5e51a9e1232193a5258fd7",
+        "fecf97484892ccba774155991943cf39dfee41ed",
+        "9de891a9367e8a7a92da9da7a984a7c8f9fb71f2"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "dfdb642c471691889dfe0d718bd059369d18a926",
+        "fbb4ba60",
+        "f401b0579fd57926bf50e070bcf0df4962cc551f",
+        "6daf4e82f54f99dd8386a6df961ede4eac586c57",
+        "1b86733280ced8385a66fea3dc8fa6a6d6412d8b"
+      ],
+      "evidence": "Current native-plan and split font-embedding code preserves rich CJK/Latin spacing, xml:space, line semantics, embedded-face scoping, and signed OOXML charset bytes; focused tests cover each contract."
+    },
+    {
+      "id": "shared-upload-policy",
+      "sourceCommits": [
+        "d2b23e7bfd74e95f58346853d9f51bd2880296cc"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "d039490d57bdad2278cb580d9f512f24f9a9c6ec"
+      ],
+      "evidence": "Stable patch-id matches main. FastAPI streaming limits, client limit discovery, NGINX/Docker policy, and upload tests remain in the current tree with later hardening."
+    },
+    {
+      "id": "authored-release-gates",
+      "sourceCommits": [
+        "5b6f52d71e7a836e1308a44ff08e6c7400ccda10",
+        "e497a22f51a52227cd686cc18a846e40c0f4cc2d"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "f5042ce1aab996a2890df7a96963811d181cfdf7"
+      ],
+      "evidence": "The two source commits are patch-equivalent siblings; current hard gates fail closed on visual, semantic, OOXML, round-trip, editability, and fallback regressions."
+    },
+    {
+      "id": "powerpoint-desktop-calibration-probe",
+      "sourceCommits": [
+        "b476daa276ede32bfb1175a2e6d3247c9ae854c6",
+        "904c68c993b9b9d91606966abaacac53b3ddc7b9"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "73ba412e72a9412f9fcfad43a20a1a7641aed3d8"
+      ],
+      "evidence": "Probe source, tests, PowerShell COM runner, and exports are present; core blobs are identical to the historical implementations."
+    },
+    {
+      "id": "authored-fidelity-reporting",
+      "sourceCommits": [
+        "6f113fc5029f0a7697ab4978d07b1c5d786544b8",
+        "843183dbf4e2d7759f41692a4787641e3763522e",
+        "3539d448d6fa39dd04597076812403caf9c686a9"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "d24d882e3e871272bf7d064f706176db00ceb302",
+        "fc51b535af78c194db546f8b477782b0fd26a7d1"
+      ],
+      "evidence": "Add-report siblings and cleanup have patch-identical main equivalents; current report source and tests retain the 20-slide visual and semantic aggregation gates."
+    },
+    {
+      "id": "semantic-calibration-runtime-experiment",
+      "sourceCommits": [
+        "0e5f33837725715146992b27d18937fca436bfcc",
+        "4c836fc21d736fa29f937a4557885e8b9d917c5f",
+        "abec8fee8b4e4b7d9c5a153e9dea42aa9a13c047",
+        "f265b0b0b70183f17949d38199e5b35bf0dfe347",
+        "4e1fa72ccb9b90ca562556df09ff86540cdde3d8"
+      ],
+      "disposition": "unnecessary",
+      "replacementCommits": [],
+      "evidence": "Visual A/B gates found caption-heavy regressions, all profile targets were reduced to ZERO_TRANSFORM, and the semantic and aggregate branches then removed text-fidelity files plus textFidelityMode plumbing in their own sync commits. Restoring it would add a no-op API and revive known wrapping/clipping risk."
+    },
+    {
+      "id": "slide-text-schema-budgets",
+      "sourceCommits": [
+        "6d1af2e1a2dfb6a69e95d87f1deb2d677e4b4ae0"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "0696934a"
+      ],
+      "evidence": "Stable patch-id matches main. Both slide-generation prompts use schema-derived guidance, with semantic compaction and clamp safety nets covered by current tests."
+    },
+    {
+      "id": "checkpoint-restart-process-ownership",
+      "sourceCommits": [
+        "d974e25a1269065bd5e7ad94f4901a50719839cd"
+      ],
+      "disposition": "superseded",
+      "replacementCommits": [
+        "5fa6225887f06f3f89249860401ab9e2fd564997",
+        "eaa7f827edd19f0e38b5ec0289b0348b0b0bcbc9"
+      ],
+      "evidence": "Current _start_server kills its subprocess tree on address collisions and every other BaseException, retries ports, and uses a 180-second readiness deadline. Porting the older narrow patch would overwrite broader stabilization."
+    },
+    {
+      "id": "evaluator-child-reaping",
+      "sourceCommits": [
+        "bd7a48a9e27c98b1dc1a023e266cd4e9409cff81"
+      ],
+      "disposition": "integrated-manual-port",
+      "integrationCommits": [
+        "e80dbd8d"
+      ],
+      "evidence": "The current test still used a scheduler-racy one-second timeout. The port gives the child five seconds to publish its PID and asserts elapsed time proves the timeout path performed the reap."
+    },
+    {
+      "id": "application-console-logging",
+      "sourceCommits": [
+        "8879cece2c760b8d3246dfa99fe7aaff2fc86524"
+      ],
+      "disposition": "integrated-manual-port",
+      "integrationCommits": [
+        "7ddcc320"
+      ],
+      "evidence": "The file handler still preempted lifespan basicConfig, leaving application records in backend.log only. The port establishes the console sink first and adds a dual-sink regression test."
+    },
+    {
+      "id": "root-suspense-fallback",
+      "sourceCommits": [
+        "b4e27a460c06878f3d78b4b21867d4aae7d374e0"
+      ],
+      "disposition": "integrated-manual-port",
+      "integrationCommits": [
+        "92e5a982"
+      ],
+      "evidence": "The root loading boundary still wrapped async layouts and could remain dehydrated in hidden tabs. Only the root fallback was removed; eight route-level loading boundaries remain for soft navigation."
+    },
+    {
+      "id": "chat-first-and-document-decomposition",
+      "sourceCommits": [
+        "82260680c0007fbac96152b40d617f5d110beb75",
+        "7692a736a8757be8a2bdf55ca297c272c8a7306c",
+        "5c08d8baea3ce25deee86e0d47e3d7be857810e8"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "742cff18",
+        "e5dac771",
+        "880d630b"
+      ],
+      "evidence": "Main replayed the first two slices in the opposite order and has a patch-identical hardening commit. Current workspace is intentionally the only writer; porting the old branch would revive the removed rollout/legacy dual-writer path."
+    },
+    {
+      "id": "presenton-upstream-through-ca7d183e",
+      "sourceCommits": [
+        "adde96c839b806c4175ca72dc02e8735f6304b45"
+      ],
+      "disposition": "already-replaced",
+      "replacementCommits": [
+        "7039a008"
+      ],
+      "evidence": "This was a single-parent nine-file selective integration, not a wholesale upstream merge. Its baseline metadata, intake fixtures, contract tests, and ImageFit.COVER normalization have a patch-identical main equivalent."
+    },
+    {
+      "id": "upstream-realignment-history",
+      "sourceCommits": [
+        "6f1902548fe7a70fdd4ca1c2bfb4c31a5e2af1fe"
+      ],
+      "disposition": "unnecessary",
+      "replacementCommits": [],
+      "evidence": "The 2026-07-24 document records a pre-common-ancestor NO-GO snapshot. The newer upstream intake policy and selective-integration ledgers are authoritative, so reviving this historical baseline would misstate current policy."
+    },
+    {
+      "id": "branch-merge-and-sync-glue",
+      "sourceCommits": [
+        "c3d4a38f3c176faff7cbc5181bdf61eaf71977d6",
+        "710c986b91f97987edc7c79faddae98f53ae8429",
+        "9d18115586dafbaf1ca7333e1b9090a0f91f52e6",
+        "6e723c08cf0f825efb6c84d67f0caeba8ea2e26d",
+        "9634f756d5c39ac1b6f69daf97f2e724fe4ef700",
+        "1d9bc65a4e08eb79f0d650d66e88fe3a4f64f346",
+        "e21f92344a70f2cc573d8128c97f4fe8c91aed05",
+        "a9333a42077d39cc50f4b8feac9feb647bac5b12",
+        "e8570bea43e935b6a79f5d9aefd9285455324dee",
+        "eb1a9d999ce5ee3068d3411c9aa962c59226f4ee",
+        "7348e8d0824a4babaf6db67973e1faabd9295267",
+        "b98cd19e4e70d0d13249fc593564d9822166b5a5",
+        "2e1073df79c06791f97300e9251df14011342a26",
+        "5bb87b58764e2cca7ddd26a5434ba7bb3345013b",
+        "de8337c5dacf29f58aa1c5026887581bf1db3791",
+        "fb03f469b3fc8907fc7c1daf10bc1e7737341ac5",
+        "85b5c17e1ea76b4069aac70909500649230d9604",
+        "bf690a581732c6638114b70c02dee90c5b251493",
+        "a3d8530e6283490852a8f6fb4d796b5bb960c1fc",
+        "6b4cc28a2a7be622132a8e57a67fae1dd8366af4",
+        "11e7d5bf93b9f0267aaa839a7be634afc571ddfe",
+        "4e397d034563ad724b7164ad6c89b9bfc307bd1d"
+      ],
+      "disposition": "ancestry-only-do-not-port",
+      "replacementCommits": [],
+      "evidence": "These commits merge historical collaboration lines or reset branch trees to the already-reviewed 0b38f8f9 state. They contain no independent current-main behavior and are explicitly excluded from cherry-pick or merge."
+    }
+  ],
+  "commitCoverage": {
+    "rule": "Every distinct commit reachable from at least one reviewed branch and not from origin/main appears exactly once in semanticUnits.sourceCommits.",
+    "verification": "48 expected, 48 covered, 48 unique; 0 missing, 0 extra, 0 duplicate"
+  },
+  "notIntegrated": [
+    {
+      "item": "semantic textFidelityMode and profile transforms",
+      "reason": "Known visual regression followed by zero transforms and self-removal."
+    },
+    {
+      "item": "legacy chat rollout, dual-writer, and rollback surface",
+      "reason": "Superseded by the fail-closed workspace-only writer contract."
+    },
+    {
+      "item": "old upstream branches or merge/sync commits",
+      "reason": "Would bypass the report-only intake policy and reintroduce stale tree state."
+    },
+    {
+      "item": "older checkpoint restart harness patch",
+      "reason": "A broader later implementation already owns and reaps every spawned process path."
+    }
+  ],
+  "verification": {
+    "fastapiFocused": "15 passed",
+    "fastapiHistoricalFeatureAudit": "32 passed",
+    "ruffChangedPython": "passed",
+    "authoredFidelityNode": "69 passed",
+    "nextCiNode": "446 passed",
+    "authoredHybridE2ERetry": "1 passed",
+    "nextProductionBuild": {
+      "passed": true,
+      "staticPagesGenerated": 31
+    },
+    "nextProductionSmoke": {
+      "route": "/dashboard",
+      "status": 200,
+      "htmlBytes": 101196,
+      "rootSuspenseTemplatePresent": false,
+      "reactRevealHandshakePresent": false,
+      "dashboardPayloadPresent": true
+    },
+    "presentationExport": {
+      "release": "v0.4.2",
+      "sha256": "62f143101e88c2e4bd5abff19f78c3010b3d0e7e4fca2aed432889f75c1bc84d",
+      "focusedE2EPassed": true
+    }
+  }
+}
