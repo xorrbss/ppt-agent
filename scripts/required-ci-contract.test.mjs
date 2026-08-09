@@ -98,6 +98,33 @@ test("the required FastAPI job runs production-lifecycle Gate E exactly once", (
   assert.match(lifecycleTest, /alembic/u);
 });
 
+test("Ruff is a required locked Python lint gate on both CI providers", () => {
+  const workflow = read(".github/workflows/test-all.yml");
+  const githubFastApiJob = workflowJob(workflow, "test-fastapi");
+  const pipeline = read("bitbucket-pipelines.yml");
+  const pyproject = read("servers/fastapi/pyproject.toml");
+  const lockfile = read("servers/fastapi/uv.lock");
+
+  assert.match(pyproject, /"ruff>=0\.16\.2"/u);
+  assert.match(pyproject, /select\s*=\s*\["E",\s*"F",\s*"B",\s*"ASYNC"\]/u);
+  assert.doesNotMatch(pyproject, /^ignore\s*=/mu);
+  assert.match(lockfile, /name = "ruff"\s*\nversion = "0\.16\.2"/u);
+  assert.match(githubFastApiJob, /name: Run Ruff lint gate \(E, F, B, ASYNC\)/u);
+  assert.match(githubFastApiJob, /uv run ruff check \./u);
+  assert.match(
+    pipeline,
+    /uv sync --frozen --directory servers\/fastapi[\s\S]*uv run --directory servers\/fastapi ruff check \./u,
+  );
+  assert.match(
+    pipeline,
+    /pull-requests:\s*\n\s*"\*\*":\s*[\s\S]*\*workspace-chat-first-e2e/u,
+  );
+  assert.match(
+    pipeline,
+    /branches:\s*\n\s*main:\s*[\s\S]*\*workspace-chat-first-e2e/u,
+  );
+});
+
 test("workspace E2E is an always-captured PR gate on Bitbucket", () => {
   const pipeline = read("bitbucket-pipelines.yml");
 
@@ -133,9 +160,21 @@ test("chat-first deployment configuration is required by both CI providers", () 
     rootPackage.scripts["test:chat-first-deployment-config"],
     "node scripts/check-chat-first-deployment-config.mjs",
   );
+  assert.equal(
+    rootPackage.scripts["test:file-size-ratchet"],
+    "node scripts/check-file-size-ratchet.mjs",
+  );
+  assert.match(
+    rootPackage.scripts["test:next-ci"],
+    /npm run test:file-size-ratchet/u,
+  );
   assert.match(
     rootPackage.scripts["test:next-ci"],
     /npm run test:chat-first-deployment-config/u,
+  );
+  assert.match(
+    rootPackage.scripts["test:next-ci"],
+    /scripts\/check-file-size-ratchet\.test\.mjs/u,
   );
   assert.match(nextCiRunner, /ROOTS = \[.*"tests".*\]/u);
   assert.ok(nextCiRunner.includes("const TEST_RE = /\\.test\\.(ts|tsx|mjs)$/"));

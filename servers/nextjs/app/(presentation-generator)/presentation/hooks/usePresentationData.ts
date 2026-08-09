@@ -6,7 +6,7 @@ import { DashboardApi } from '../../services/api/dashboard';
 import { clearHistory } from "@/store/slices/undoRedoSlice";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 import { normalizeBackendAssetUrls } from "@/utils/api";
-import { useFontLoader } from "../../hooks/useFontLoad";
+import { loadFonts } from "../../hooks/useFontLoad";
 import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
 
 
@@ -30,7 +30,7 @@ export const usePresentationData = (
         }
         setLoading(false);
         if (normalizedData.fonts) {
-          useFontLoader(normalizedData.fonts);
+          loadFonts(normalizedData.fonts);
         }
         if (normalizedData.theme) {
           const el = document.getElementById("presentation-slides-wrapper");

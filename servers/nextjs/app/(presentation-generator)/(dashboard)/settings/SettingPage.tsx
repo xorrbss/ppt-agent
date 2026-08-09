@@ -31,6 +31,8 @@ const SettingsPage = () => {
     handleSaveConfig,
   } = useSettingsPageState();
 
+  useUnsavedModelGuard(llmConfig, pathname, canChangeKeys);
+
   if (!canChangeKeys) {
     return null;
   }
@@ -38,10 +40,6 @@ const SettingsPage = () => {
   const textSummary = getTextSummary(llmConfig);
 
   const imageSummary = getImageSummary(llmConfig);
-
-
-  useUnsavedModelGuard(llmConfig, pathname);
-
 
 
   return (

@@ -4,12 +4,9 @@ import { useSearchParams } from "next/navigation";
 import { validate as uuidValidate } from 'uuid';
 import { getCustomTemplateDetails } from "../hooks/useCustomTemplates";
 import { getSchemaByTemplateId, getSettingsByTemplateId } from "../presentation-templates";
-const page = () => {
+const SchemaPage = () => {
   const searchParams = useSearchParams();
   const templateID = searchParams.get("group");
-  if (!templateID) {
-    return <div>No templateID provided</div>;
-  }
   const [loading, setLoading] = useState(true);
   const [layout, setLayout] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({
@@ -18,9 +15,13 @@ const page = () => {
     default: false,
     icon_weight: "bold",
   });
-  const isCustomTemplate = templateID.startsWith("custom-") || uuidValidate(templateID);
+  const isCustomTemplate = Boolean(
+    templateID && (templateID.startsWith("custom-") || uuidValidate(templateID))
+  );
 
   useEffect(() => {
+    if (!templateID) return;
+
     const fetchLayoutsAndSettings = async () => {
       if (isCustomTemplate) {
         const customTemplateDetails = await getCustomTemplateDetails(
@@ -66,6 +67,9 @@ const page = () => {
 
   }, [isCustomTemplate, templateID]);
 
+  if (!templateID) {
+    return <div>No templateID provided</div>;
+  }
 
 
 
@@ -91,4 +95,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default SchemaPage;

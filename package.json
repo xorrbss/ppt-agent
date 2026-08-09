@@ -11,7 +11,8 @@
     "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only",
     "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs",
     "test:chat-first-deployment-config": "node scripts/check-chat-first-deployment-config.mjs",
-    "test:next-ci": "npm run test:chat-first-deployment-config && node --test scripts/ppt-agent.test.mjs scripts/required-ci-contract.test.mjs scripts/verify-upstream-byte-parity.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:file-size-ratchet": "node scripts/check-file-size-ratchet.mjs",
+    "test:next-ci": "npm run test:file-size-ratchet && npm run test:chat-first-deployment-config && node --test scripts/ppt-agent.test.mjs scripts/check-file-size-ratchet.test.mjs scripts/required-ci-contract.test.mjs scripts/verify-upstream-byte-parity.test.mjs && npm --prefix servers/nextjs run test:ci-node",
     "test:upstream-byte-parity": "node --test scripts/verify-upstream-byte-parity.test.mjs",
     "test:workspace-e2e": "npm --prefix servers/nextjs run test:workspace-e2e",
     "test:local": "node scripts/test-local.mjs"

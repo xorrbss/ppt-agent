@@ -33,6 +33,7 @@ definitions:
           - .bitbucket-uv/bin/python -m pip install --disable-pip-version-check uv==0.11.17
           - npm ci --prefix servers/nextjs
           - .bitbucket-uv/bin/uv sync --frozen --directory servers/fastapi
+          - .bitbucket-uv/bin/uv run --directory servers/fastapi ruff check .
           - export CI=true
           - export PATH="$BITBUCKET_CLONE_DIR/.bitbucket-uv/bin:$PATH"
           - export WORKSPACE_E2E_ARTIFACT_DIR="$BITBUCKET_CLONE_DIR/test-artifacts/workspace-e2e"

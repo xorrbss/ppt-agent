@@ -51,6 +51,9 @@ jobs:
     - name: Install locked Python dependencies
       run: uv sync --frozen
 
+    - name: Run Ruff lint gate (E, F, B, ASYNC)
+      run: uv run ruff check .
+
     - name: Prepare runtime directories
       run: uv run python -c "from pathlib import Path; import os; [Path(os.environ[key]).mkdir(parents=True, exist_ok=True) for key in ('APP_DATA_DIRECTORY', 'TEMP_DIRECTORY')]"
 

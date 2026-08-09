@@ -4,7 +4,7 @@ import PresentationPage from "./components/PresentationPage";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 import "../utils/prism-languages";
-const page = () => {
+const PresentationRoute = () => {
 
   const router = useRouter();
   const params = useSearchParams();
@@ -28,4 +28,4 @@ const page = () => {
 
   );
 };
-export default page;
+export default PresentationRoute;

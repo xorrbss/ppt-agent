@@ -21,7 +21,7 @@ import { SaveLayoutButton } from "./components/SaveLayoutButton";
 import { SaveLayoutModal } from "./components/SaveLayoutModal";
 import { FileUploadSection } from "./components/FileUploadSection";
 
-import { useFontLoader } from "../hooks/useFontLoad";
+import { loadFonts } from "../hooks/useFontLoad";
 import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
 
@@ -85,7 +85,7 @@ const CustomTemplatePage = () => {
         if (selectedFile) {
             const data = await fontUploadAndPreview(selectedFile);
             if (data) {
-                useFontLoader(data.fonts);
+                loadFonts(data.fonts);
             }
         }
     }, [selectedFile, fontUploadAndPreview]);

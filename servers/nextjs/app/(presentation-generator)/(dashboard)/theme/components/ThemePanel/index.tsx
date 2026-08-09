@@ -30,7 +30,7 @@ import { getTemplatesByTemplateName } from '@/app/presentation-templates'
 import { usePathname, useSearchParams } from 'next/navigation'
 import CustomTabEmpty from './CustomTabEmpty'
 import ThemeApi from '@/app/(presentation-generator)/services/api/theme'
-import { useFontLoader } from '@/app/(presentation-generator)/hooks/useFontLoad'
+import { loadFonts } from '@/app/(presentation-generator)/hooks/useFontLoad'
 import Link from 'next/link'
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel'
 
@@ -148,7 +148,7 @@ const ThemePanel: React.FC = () => {
 
         const fontMap = fonts.map(font => ({ name: font.name, url: font.url }))
         fontMap.forEach(font => {
-          useFontLoader({ [font.name]: font.url })
+          loadFonts({ [font.name]: font.url })
         })
       } catch (error) {
         console.error('Failed to load custom themes', error)
@@ -261,7 +261,7 @@ const ThemePanel: React.FC = () => {
       slideContainerRef.current!.style.setProperty('font-family', `"${theme.data.fonts.textFont.name}"`)
       slideContainerRef.current!.style.setProperty('--heading-font-family', `"${theme.data.fonts.textFont.name}"`)
       // Load font
-      useFontLoader({ [theme.data.fonts.textFont.name]: theme.data.fonts.textFont.url })
+      loadFonts({ [theme.data.fonts.textFont.name]: theme.data.fonts.textFont.url })
     }
   }
 

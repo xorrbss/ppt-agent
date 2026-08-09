@@ -4,6 +4,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse
 
@@ -191,7 +192,7 @@ async def setup_credentials(
         raise HTTPException(
             status_code=409,
             detail="Credentials already configured",
-        )
+        ) from None
     await session.commit()
     await session.refresh(user)
     persist_admin_credentials(username, password_hash)

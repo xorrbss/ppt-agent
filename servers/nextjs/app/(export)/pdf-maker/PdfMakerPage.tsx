@@ -12,7 +12,7 @@ import { AlertCircle } from "lucide-react";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import type { PresentationData } from "@/store/slices/presentationGeneration";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { useFontLoader } from "@/app/(presentation-generator)/hooks/useFontLoad";
+import { loadFonts } from "@/app/(presentation-generator)/hooks/useFontLoad";
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { applyPresentationThemeTokens } from "@/app/(presentation-generator)/presentation/utils/presentationThemeTokens";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
@@ -169,7 +169,7 @@ const PresentationPage = ({
     if (normalizedInitialPresentationData) {
       dispatch(setPresentationData(normalizedInitialPresentationData as any));
       if ((normalizedInitialPresentationData as any).fonts) {
-        useFontLoader((normalizedInitialPresentationData as any).fonts);
+        loadFonts((normalizedInitialPresentationData as any).fonts);
       }
       return;
     }
@@ -183,7 +183,7 @@ const PresentationPage = ({
       dispatch(setPresentationData(normalizedData));
 
       if (normalizedData.fonts) {
-        useFontLoader(normalizedData.fonts);
+        loadFonts(normalizedData.fonts);
       }
       if (normalizedData?.theme) {
         try {
@@ -236,7 +236,7 @@ const PresentationPage = ({
     const fonts = theme.data.fonts;
     const headingFont = fonts.headingFont ?? fonts.textFont;
     const bodyFont = fonts.bodyFont ?? fonts.textFont;
-    useFontLoader({
+    loadFonts({
       [fonts.textFont.name]: fonts.textFont.url,
       [headingFont.name]: headingFont.url,
       [bodyFont.name]: bodyFont.url,

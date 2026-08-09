@@ -233,11 +233,11 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
             return null;
         }
 
-        const wrappedComponent: React.ComponentType<{ data: unknown }> = ({ data, ...props }) => {
+        const WrappedComponent: React.ComponentType<{ data: unknown }> = ({ data, ...props }) => {
             const normalizedData = React.useMemo(() => normalizeLayoutAssetUrls(data), [data]);
             return React.createElement(layoutComponent, { ...props, data: normalizedData });
         };
-        wrappedComponent.displayName = `CompiledTemplateLayout(${result.layoutName || result.layoutId || "Custom"})`;
+        WrappedComponent.displayName = `CompiledTemplateLayout(${result.layoutName || result.layoutId || "Custom"})`;
 
         // Parse schema to get sample data
         let sampleData: CompiledLayoutData = {};
@@ -258,7 +258,7 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
         const schemaJSON = z.toJSONSchema(result.Schema);
 
         return {
-            component: wrappedComponent,
+            component: WrappedComponent,
             layoutId: result.layoutId,
             layoutName: result.layoutName,
             layoutDescription: result.layoutDescription,

@@ -6,8 +6,13 @@ import { LLMConfig } from "@/types/llm_config";
  * Keeps the user on the settings page while the selected provider still has no
  * model chosen. Extracted verbatim from SettingPage.
  */
-export const useUnsavedModelGuard = (llmConfig: LLMConfig, pathname: string) => {
+export const useUnsavedModelGuard = (
+  llmConfig: LLMConfig,
+  pathname: string,
+  enabled = true
+) => {
   useEffect(() => {
+    if (!enabled) return;
 
     if (
       (llmConfig.LLM === "codex" && !llmConfig.CODEX_MODEL) ||
@@ -79,5 +84,5 @@ export const useUnsavedModelGuard = (llmConfig: LLMConfig, pathname: string) => 
       };
     }
 
-  }, [llmConfig, pathname]);
+  }, [enabled, llmConfig, pathname]);
 };

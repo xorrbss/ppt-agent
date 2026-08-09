@@ -1,4 +1,4 @@
-import { useFontLoader } from "../../hooks/useFontLoad";
+import { loadFonts } from "../../hooks/useFontLoad";
 import type { Theme } from "../../services/api/types";
 import { applyPresentationThemeTokens } from "./presentationThemeTokens";
 
@@ -69,7 +69,7 @@ export function applyPresentationThemeToElement(
   const fonts = theme.data.fonts;
   const headingFont = fonts.headingFont ?? fonts.textFont;
   const bodyFont = fonts.bodyFont ?? fonts.textFont;
-  useFontLoader({
+  loadFonts({
     [fonts.textFont.name]: fonts.textFont.url,
     [headingFont.name]: headingFont.url,
     [bodyFont.name]: bodyFont.url,

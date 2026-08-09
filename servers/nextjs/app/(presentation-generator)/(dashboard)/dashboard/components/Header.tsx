@@ -20,13 +20,7 @@ function pathMatches(pathname: string | null, base: string) {
 }
 
 const Header = () => {
-  let pathname: string | null = null;
-  try {
-    pathname = usePathname();
-  } catch {
-    // In test environments without PathnamContext, usePathname may fail.
-    // Gracefully degrade to no pathname-based features.
-  }
+  const pathname = usePathname();
   const showHeaderBack = PATHS_WITH_HEADER_BACK.some((p) => pathMatches(pathname, p));
 
   const backToUpload =

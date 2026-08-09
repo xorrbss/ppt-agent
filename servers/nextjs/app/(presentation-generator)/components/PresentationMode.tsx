@@ -22,7 +22,7 @@ interface PresentationModeProps {
   onSlideChange: (slideNumber: number) => void;
 }
 
-const PresentationMode: React.FC<PresentationModeProps> = ({
+const PresentationModeContent: React.FC<PresentationModeProps> = ({
 
   slides,
   currentSlide,
@@ -34,12 +34,6 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
 
 
 }) => {
-  if (slides === undefined || slides === null || slides.length === 0) {
-    return null;
-  }
-
-
-
   // Modify the handleKeyPress to prevent default behavior
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -224,6 +218,14 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       </div>
     </div>
   );
+};
+
+const PresentationMode: React.FC<PresentationModeProps> = (props) => {
+  if (!props.slides?.length) {
+    return null;
+  }
+
+  return <PresentationModeContent {...props} />;
 };
 
 export default PresentationMode;

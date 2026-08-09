@@ -64,10 +64,14 @@ describe("<SettingsPage />", () => {
   });
 
   it("redirects to the dashboard and renders nothing when keys are locked", () => {
-    mountSettings(validConfig, false);
+    mountSettings({
+      LLM: "openai",
+      IMAGE_PROVIDER: "gpt-image-1.5",
+    }, false);
 
     cy.contains("설정 저장").should("not.exist");
     cy.get("h3").should("not.exist");
+    cy.get("[data-sonner-toast]").should("not.exist");
     cy.wrap(null).should(() => {
       expect(router.push).to.have.been.calledWith("/dashboard");
     });

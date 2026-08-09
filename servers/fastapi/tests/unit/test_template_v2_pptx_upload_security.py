@@ -242,12 +242,13 @@ def test_malware_scanner_contract_is_bounded_and_secret_free(
         calls.append((command, options))
         return subprocess.CompletedProcess(command, returncode)
 
-    action = lambda: scan_private_pptx(
-        source,
-        environ={"TEMPLATE_V2_PPTX_MALWARE_SCAN_MODE": "required"},
-        runner=runner,
-        which=lambda _name: "bounded-clamscan",
-    )
+    def action():
+        return scan_private_pptx(
+            source,
+            environ={"TEMPLATE_V2_PPTX_MALWARE_SCAN_MODE": "required"},
+            runner=runner,
+            which=lambda _name: "bounded-clamscan",
+        )
     if returncode == 0:
         assert action() == expected
     else:

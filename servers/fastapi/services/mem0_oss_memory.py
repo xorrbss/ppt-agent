@@ -143,7 +143,7 @@ def memory_from_config(config: dict[str, Any], *, telemetry_base: str) -> Any:
     import mem0.memory.main as mem0_main  # type: ignore[import-untyped]
 
     mem0_main.mem0_dir = telemetry_base
-    memory_cls = getattr(import_module("mem0"), "Memory")
+    memory_cls = import_module("mem0").Memory
     return memory_cls.from_config(config)
 
 
