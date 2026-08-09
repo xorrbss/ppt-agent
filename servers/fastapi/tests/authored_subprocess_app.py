@@ -121,14 +121,22 @@ llm_provider.get_llm_provider = lambda: SimpleNamespace(
 )
 llm_provider.get_model = lambda: "stub-model"
 
-# A short lease makes a hard-killed attempt recoverable without slowing the
-# regression test. Keep the live worker heartbeat comfortably inside that
-# lease so a contended Windows host cannot expire a healthy attempt before it
-# reaches the forced-crash checkpoint. Once the process tree is killed, no
-# heartbeat remains and the existing 2.5-second wait still proves expiry.
-jobs.GENERATION_JOB_LEASE_SECONDS = 2
+# The lease is what lets a different process take over a hard-killed attempt,
+# so the parent test sizes it per runtime: short in the runtime it is about to
+# kill (the expiry it polls for arrives quickly) and long in the runtime that
+# has to finish the deck (a contended host must not evict a healthy attempt
+# mid-resume; the production default is 300 seconds). The heartbeat stays well
+# inside the shorter of the two so a live worker keeps renewing its own lease.
+jobs.GENERATION_JOB_LEASE_SECONDS = float(
+    os.getenv("AUTHORED_SUBPROCESS_LEASE_SECONDS", "8")
+)
 jobs.GENERATION_JOB_HEARTBEAT_SECONDS = 0.5
-jobs.GENERATION_JOB_DISPATCH_SECONDS = 0.05
+# Both jobs in this test require an export cookie, so the dispatcher never
+# launches them; its only work here is the expired-lease sweep. Sweeping every
+# 50ms opened a write transaction twenty times a second on the same SQLite
+# file the worker uses for checkpoints and heartbeats, which is exactly the
+# contention that could starve a heartbeat under suite load.
+jobs.GENERATION_JOB_DISPATCH_SECONDS = 0.5
 
 
 @asynccontextmanager
