@@ -71,14 +71,31 @@ function getLucideBindingLines(): string {
     return lucideBindingLinesCache;
 }
 
-export interface CompiledLayout {
-    component: React.ComponentType<{ data: any }>;
+/** Sample/default data derived from a compiled layout's Zod schema. */
+export type CompiledLayoutData = Record<string, unknown>;
+
+/** JSON Schema emitted for a compiled layout's Zod schema. */
+export type CompiledLayoutSchemaJSON = ReturnType<typeof z.toJSONSchema<z.ZodTypeAny>>;
+
+/** Shape returned by the sandboxed factory built in `compileCustomLayout`.
+ *  The layout renders caller-supplied content, so its `data` prop is unknown
+ *  to everything outside the compiled template itself. */
+interface LayoutModuleExports {
+    component?: React.ComponentType<{ data: unknown }>;
     layoutId: string;
     layoutName: string;
     layoutDescription: string;
-    schema: any;
-    sampleData: Record<string, any>;
-    schemaJSON: any;
+    Schema: z.ZodTypeAny | null;
+}
+
+export interface CompiledLayout {
+    component: React.ComponentType<{ data: unknown }>;
+    layoutId: string;
+    layoutName: string;
+    layoutDescription: string;
+    schema: z.ZodTypeAny;
+    sampleData: CompiledLayoutData;
+    schemaJSON: CompiledLayoutSchemaJSON;
 }
 
 function isLikelyBackendAssetPath(value: string): boolean {
@@ -208,27 +225,35 @@ export function compileCustomLayout(layoutCode: string): CompiledLayout | null {
         );
 
         // Execute the factory
-        const result = factory(React, z, Recharts, d3, LucideReact);
+        const result = factory(React, z, Recharts, d3, LucideReact) as LayoutModuleExports;
 
-        if (!result.component) {
+        const layoutComponent = result.component;
+        if (!layoutComponent) {
             console.error("No component found in compiled code");
             return null;
         }
 
-        const wrappedComponent: React.ComponentType<{ data: any }> = ({ data, ...props }) => {
+        const wrappedComponent: React.ComponentType<{ data: unknown }> = ({ data, ...props }) => {
             const normalizedData = React.useMemo(() => normalizeLayoutAssetUrls(data), [data]);
-            return React.createElement(result.component, { ...(props as any), data: normalizedData });
+            return React.createElement(layoutComponent, { ...props, data: normalizedData });
         };
         wrappedComponent.displayName = `CompiledTemplateLayout(${result.layoutName || result.layoutId || "Custom"})`;
 
         // Parse schema to get sample data
-        let sampleData: Record<string, any> = {};
+        let sampleData: CompiledLayoutData = {};
         if (result.Schema) {
             try {
-                sampleData = normalizeLayoutAssetUrls(result.Schema.parse({}));
+                sampleData = normalizeLayoutAssetUrls(
+                    result.Schema.parse({}) as CompiledLayoutData
+                );
             } catch (e) {
                 console.warn("Could not parse schema defaults:", e);
             }
+        }
+        if (!result.Schema) {
+            // Matches the previous behaviour of calling z.toJSONSchema(null):
+            // it throws, the outer catch logs it and compilation yields null.
+            throw new Error("No schema found in compiled code");
         }
         const schemaJSON = z.toJSONSchema(result.Schema);
 

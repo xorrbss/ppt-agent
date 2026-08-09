@@ -12,6 +12,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -24,6 +25,7 @@ import {
   setPresentationData,
 } from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
+import type { Slide } from "../../types/slide";
 import { Separator } from "@/components/ui/separator";
 import { notify } from "@/components/ui/sonner";
 import { usePathname } from "next/navigation";
@@ -151,7 +153,7 @@ const SidePanel = ({
     }),
   );
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     if (!mutationsEnabled) return;
     const { active, over } = event;
 
@@ -160,21 +162,21 @@ const SidePanel = ({
     if (active.id !== over.id) {
       // Find the indices of the dragged and target items
       const oldIndex = presentationData?.slides.findIndex(
-        (item: any) => item.id === active.id,
+        (item: Slide) => item.id === active.id,
       );
       const newIndex = presentationData?.slides.findIndex(
-        (item: any) => item.id === over.id,
+        (item: Slide) => item.id === over.id,
       );
 
       // Reorder the array
-      const reorderedArray = arrayMove(
+      const reorderedArray = arrayMove<Slide>(
         presentationData?.slides,
         oldIndex,
         newIndex,
       );
 
       // Update indices of all slides
-      const updatedArray = reorderedArray.map((slide: any, index: number) => ({
+      const updatedArray = reorderedArray.map((slide: Slide, index: number) => ({
         ...slide,
         index: index,
       }));
@@ -256,7 +258,7 @@ const SidePanel = ({
             >
               {isStreaming || !mutationsEnabled ? (
                 presentationData &&
-                presentationData?.slides.map((slide: any, index: number) => (
+                presentationData?.slides.map((slide: Slide, index: number) => (
                   <SlideThumbnailCard
                     key={`${slide.id}-${index}`}
                     slide={slide}
@@ -269,14 +271,14 @@ const SidePanel = ({
                 <SortableContext
                   items={
                     presentationData?.slides.map(
-                      (slide: any) => slide.id || `${slide.index}`,
+                      (slide: Slide) => slide.id || `${slide.index}`,
                     ) || []
                   }
                   strategy={verticalListSortingStrategy}
                 >
                   {presentationData &&
                     presentationData?.slides.map(
-                      (slide: any, index: number) => (
+                      (slide: Slide, index: number) => (
                         <SortableSlide
                           key={`${slide.id}-${index}`}
                           slide={slide}

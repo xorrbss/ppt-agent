@@ -5,14 +5,25 @@ import { addNewSlide } from "@/store/slices/presentationGeneration";
 import { Loader2, X } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { notify } from "@/components/ui/sonner";
-import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
+import {
+  getCustomTemplateDetails,
+  type CustomTemplateLayout,
+} from "@/app/hooks/useCustomTemplates";
 import { getTemplatesByTemplateName } from "@/app/presentation-templates";
+import type { TemplateWithData } from "@/app/presentation-templates/utils";
 import { usePathname } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
+/** A selectable layout: either a built-in template entry or a compiled
+ *  custom-template layout. Both expose component/sampleData/layoutId/layoutName. */
+type SelectableLayout = TemplateWithData | CustomTemplateLayout;
+
+/** Schema-shaped default content copied into the new slide. */
+type LayoutSampleData = Record<string, unknown>;
+
 interface LayoutItemProps {
-  layout: any;
-  onSelect: (sampleData: any, layoutId: string) => void;
+  layout: SelectableLayout;
+  onSelect: (sampleData: LayoutSampleData, layoutId: string) => void;
   disabled?: boolean;
 }
 
@@ -107,7 +118,7 @@ const NewSlideV1 = ({
 }: NewSlideV1Props) => {
   const dispatch = useDispatch();
   const pathname = usePathname();
-  const [layouts, setLayouts] = useState<any[]>([]);
+  const [layouts, setLayouts] = useState<SelectableLayout[]>([]);
   const [loading, setLoading] = useState(true);
 
   const isCustomTemplate = templateID.startsWith("custom-");
@@ -122,7 +133,7 @@ const NewSlideV1 = ({
   }, [setShowNewSlideSelection]);
 
   const handleNewSlide = useCallback(
-    (sampleData: any, id: string) => {
+    (sampleData: LayoutSampleData, id: string) => {
       if (!mutationsEnabled) return;
       try {
         const newSlide = {
@@ -143,7 +154,7 @@ const NewSlideV1 = ({
           is_custom_template: isCustomTemplate,
         });
         setShowNewSlideSelection(false);
-      } catch (error: any) {
+      } catch (error) {
         console.error(error);
         notify.error(
           "슬라이드를 추가할 수 없습니다",
@@ -236,7 +247,7 @@ const NewSlideV1 = ({
           </div>
         ) : layouts.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {layouts.map((layout: any) => (
+            {layouts.map((layout) => (
               <LayoutItem
                 key={layout.layoutId}
                 layout={layout}

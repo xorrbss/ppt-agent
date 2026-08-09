@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { DEFAULT_THEMES } from "@/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "@/app/(presentation-generator)/services/api/theme";
+import type { ThemeColors } from "@/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/types";
+import type { Theme } from "@/app/(presentation-generator)/services/api/types";
 
 // Theme-preset gallery for the new-deck flow. Picking a preset stores its id; the
 // upload handler PATCHes the full theme onto the created deck so it renders with
@@ -8,16 +10,32 @@ import ThemeApi from "@/app/(presentation-generator)/services/api/theme";
 // the dimensions that distinguish the v2 presets — without loading every font.
 // Built-in presets plus the user's saved custom themes (best-effort fetch).
 
-const swatchRadius = (theme: any): string =>
+/**
+ * What a swatch needs from a theme. Built-in presets (`DEFAULT_THEMES`) and saved
+ * themes (`ThemeApi.getThemes()` → `Theme`) both satisfy it; the tone & manner
+ * sections are optional because v1 themes carry only colours and fonts.
+ */
+type GalleryTheme = {
+  id: string;
+  name: string;
+  description?: string | null;
+  data: {
+    colors: ThemeColors;
+    shape?: { radiusScale?: number } | null;
+    elevation?: { flat?: boolean; shadowMd?: string } | null;
+  };
+};
+
+const swatchRadius = (theme: GalleryTheme): string =>
   `${Math.round(14 * (theme?.data?.shape?.radiusScale ?? 1))}px`;
 
-const swatchShadow = (theme: any): string => {
+const swatchShadow = (theme: GalleryTheme): string => {
   const el = theme?.data?.elevation;
   if (el?.flat) return "none";
   return el?.shadowMd ?? "0 4px 12px rgba(0,0,0,0.12)";
 };
 
-const Swatch: React.FC<{ theme: any }> = ({ theme }) => {
+const Swatch: React.FC<{ theme: GalleryTheme }> = ({ theme }) => {
   const c = theme.data.colors;
   return (
     <div
@@ -46,7 +64,7 @@ const cellClass = (active: boolean) =>
     active ? "border-[#5141E5] ring-2 ring-[#5141E5]/25" : "border-[#EAECF0] hover:border-[#5141E5]/40"
   }`;
 
-const ThemeCell: React.FC<{ theme: any; active: boolean; onSelect: () => void }> = ({ theme, active, onSelect }) => (
+const ThemeCell: React.FC<{ theme: GalleryTheme; active: boolean; onSelect: () => void }> = ({ theme, active, onSelect }) => (
   <button
     type="button"
     role="radio"
@@ -65,7 +83,7 @@ export const ThemeGallery: React.FC<{
   selectedTheme: string | null;
   onSelectTheme: (themeId: string | null) => void;
 }> = ({ selectedTheme, onSelectTheme }) => {
-  const [customThemes, setCustomThemes] = useState<any[]>([]);
+  const [customThemes, setCustomThemes] = useState<Theme[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +91,7 @@ export const ThemeGallery: React.FC<{
     // offline) just keep the built-in presets.
     ThemeApi.getThemes()
       .then((list) => {
-        if (!cancelled) setCustomThemes((list || []).filter((t: any) => t?.data?.colors?.background));
+        if (!cancelled) setCustomThemes((list || []).filter((t) => t?.data?.colors?.background));
       })
       .catch(() => {});
     return () => {
@@ -98,7 +116,7 @@ export const ThemeGallery: React.FC<{
           <span className="truncate px-1 text-xs font-medium text-[#344054]">없음</span>
         </button>
 
-        {DEFAULT_THEMES.map((theme: any) => (
+        {DEFAULT_THEMES.map((theme: GalleryTheme) => (
           <ThemeCell key={theme.id} theme={theme} active={selectedTheme === theme.id} onSelect={() => onSelectTheme(theme.id)} />
         ))}
       </div>
@@ -107,7 +125,7 @@ export const ThemeGallery: React.FC<{
         <div className="mt-4" data-testid="theme-gallery-custom">
           <p className="mb-2 text-xs font-medium text-[#667085]">내 테마</p>
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {customThemes.map((theme: any) => (
+            {customThemes.map((theme) => (
               <ThemeCell key={theme.id} theme={theme} active={selectedTheme === theme.id} onSelect={() => onSelectTheme(theme.id)} />
             ))}
           </div>

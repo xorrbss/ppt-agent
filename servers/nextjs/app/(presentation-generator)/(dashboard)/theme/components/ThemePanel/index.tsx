@@ -34,6 +34,10 @@ import { useFontLoader } from '@/app/(presentation-generator)/hooks/useFontLoad'
 import Link from 'next/link'
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel'
 
+/** API failures surface as `ApiError extends Error`; anything else has no message. */
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : ''
+
 // Fallback theme used before defaults are loaded from API (unified Theme type)
 const FALLBACK_THEME: Theme = {
   id: 'standard',
@@ -146,11 +150,11 @@ const ThemePanel: React.FC = () => {
         fontMap.forEach(font => {
           useFontLoader({ [font.name]: font.url })
         })
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to load custom themes', error)
         notify.error(
           '테마를 불러오지 못했습니다',
-          error?.message || '저장된 테마를 불러올 수 없습니다. 기본 제공 테마는 계속 사용할 수 있습니다.'
+          errorMessage(error) || '저장된 테마를 불러올 수 없습니다. 기본 제공 테마는 계속 사용할 수 있습니다.'
         )
       }
     }
@@ -158,11 +162,11 @@ const ThemePanel: React.FC = () => {
       try {
         const userFonts = await ThemeApi.getUserFonts()
         setUserFonts(userFonts)
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to load user fonts', error)
         notify.error(
           '폰트를 불러오지 못했습니다',
-          error?.message || '업로드한 폰트를 지금 불러올 수 없습니다.'
+          errorMessage(error) || '업로드한 폰트를 지금 불러올 수 없습니다.'
         )
       }
     }
@@ -185,7 +189,7 @@ const ThemePanel: React.FC = () => {
         setCustomColors(first.data.colors)
         setCustomFonts(first.data.fonts)
         setCustomBrandLogo(first.logo_url || null)
-        setCustomBrandLogoId((first as any).logo || '')
+        setCustomBrandLogoId(first.logo || '')
         applyTheme(first)
       }
     }
@@ -214,7 +218,7 @@ const ThemePanel: React.FC = () => {
       setCustomColors(selectedTheme.data.colors)
       setCustomFonts(selectedTheme.data.fonts)
       setCustomBrandLogo(selectedTheme.logo_url || '')
-      setCustomBrandLogoId((selectedTheme as any).logo || '')
+      setCustomBrandLogoId(selectedTheme.logo || '')
 
     }
   }, [selectedTheme, selectedTheme.id])
@@ -318,11 +322,11 @@ const ThemePanel: React.FC = () => {
         file_name: file.name,
         file_size_bytes: file.size,
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to upload logo', error)
       notify.error(
         '로고를 업로드하지 못했습니다',
-        error?.message || '로고를 업로드하는 중 문제가 발생했습니다. 다시 시도해 주세요.'
+        errorMessage(error) || '로고를 업로드하는 중 문제가 발생했습니다. 다시 시도해 주세요.'
       )
     } finally {
       setIsLogoUploading(false)
@@ -472,11 +476,11 @@ const ThemePanel: React.FC = () => {
             font_name: updated.data?.fonts?.textFont?.name || "",
           })
           notify.success('테마가 업데이트되었습니다', '테마 변경 사항이 저장되었습니다.')
-        } catch (error: any) {
+        } catch (error) {
           console.error('Failed to update theme', error)
           notify.error(
             '테마를 업데이트하지 못했습니다',
-            error?.message || '테마 변경 사항을 저장하는 중 문제가 발생했습니다.'
+            errorMessage(error) || '테마 변경 사항을 저장하는 중 문제가 발생했습니다.'
           )
         }
       })()
@@ -517,11 +521,11 @@ const ThemePanel: React.FC = () => {
         font_name: created.data?.fonts?.textFont?.name || "",
       })
       notify.success('테마가 저장되었습니다', '새 테마가 생성되어 사용할 준비가 되었습니다.')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to save theme', error)
       notify.error(
         '테마를 저장하지 못했습니다',
-        error?.message || '테마를 생성하는 중 문제가 발생했습니다.'
+        errorMessage(error) || '테마를 생성하는 중 문제가 발생했습니다.'
       )
     }
   }
@@ -538,11 +542,11 @@ const ThemePanel: React.FC = () => {
         theme_id: themeId,
       })
       notify.success("테마가 삭제되었습니다", "라이브러리에서 테마가 제거되었습니다.")
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete theme', error)
       notify.error(
         '테마를 삭제하지 못했습니다',
-        error?.message || '테마를 삭제하는 중 문제가 발생했습니다.'
+        errorMessage(error) || '테마를 삭제하는 중 문제가 발생했습니다.'
       )
     }
   }
@@ -579,11 +583,11 @@ const ThemePanel: React.FC = () => {
         '폰트가 업로드되었습니다',
         `이제 "${font_name}" 폰트를 테마에서 사용할 수 있습니다.`
       )
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to upload font', error)
       notify.error(
         '폰트를 업로드하지 못했습니다',
-        error?.message || '폰트 파일을 업로드하는 중 문제가 발생했습니다.'
+        errorMessage(error) || '폰트 파일을 업로드하는 중 문제가 발생했습니다.'
       )
     } finally {
       setIsFontUploading(false)

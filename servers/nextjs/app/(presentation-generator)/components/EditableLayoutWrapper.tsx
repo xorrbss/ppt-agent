@@ -10,17 +10,42 @@ import AdaptivePropertyControls from './AdaptivePropertyControls';
 import {
     cropScaleFromProperties,
     imageCropDomStyle,
+    type imageCropProperties,
     normalizeImageFocusPoint,
     resolveImageEditorProperties,
 } from '@/components/slide-editor/images/imageCrop';
 
+/** A node of the slide content tree. Its shape is template-family specific, so
+ *  it is only walked generically; asset nodes carry the `__image_url__` /
+ *  `__icon_url__` markers. */
+type SlideDataNode = Record<string, unknown>;
+
+/** A located image/icon node plus its dotted+indexed path in the slide data. */
+interface DataPathMatch {
+    path: string;
+    type: 'image' | 'icon';
+    data: SlideDataNode;
+}
+
+/** Payload ImageEditor emits when focus point / fit / crop are saved. */
+type FocusPointProperties = ReturnType<typeof imageCropProperties>;
+
+/** Cleanup closure stashed on the DOM node that was made editable. */
+type EditableCleanupCarrier = { _editableCleanup?: () => void };
+
+/** Reads a string marker (e.g. `__image_prompt__`) off an asset node. */
+const readMarker = (data: SlideDataNode | undefined, key: string): string => {
+    const value = data?.[key];
+    return typeof value === 'string' ? value : '';
+};
+
 interface EditableLayoutWrapperProps {
     children: ReactNode;
     slideIndex: number;
-    slideData: any;
+    slideData: SlideDataNode | null;
     isEditMode?: boolean;
-    properties?: any;
-    
+    properties?: unknown;
+
 }
 
 interface EditableElement {
@@ -28,7 +53,7 @@ interface EditableElement {
     type: 'image' | 'icon';
     src: string;
     dataPath: string;
-    data: any;
+    data: SlideDataNode;
     element: HTMLImageElement | SVGElement;
     propertyIndex: number;
 }
@@ -49,22 +74,25 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     /**
      * Recursively searches for ALL image/icon data paths in the slide data structure
      */
-    const findAllDataPaths = useCallback((targetUrl: string, data: any, path: string = ''): { path: string; type: 'image' | 'icon'; data: any }[] => {
+    const findAllDataPaths = useCallback((targetUrl: string, data: unknown, path: string = ''): DataPathMatch[] => {
         if (!data || typeof data !== 'object') return [];
 
-        const matches: { path: string; type: 'image' | 'icon'; data: any }[] = [];
+        const node = data as SlideDataNode;
+        const matches: DataPathMatch[] = [];
 
         // Check current level for __image_url__ or __icon_url__
-        if (data.__image_url__ && targetUrl.includes(data.__image_url__)) {
-            matches.push({ path, type: 'image', data });
+        const imageUrl = node.__image_url__;
+        if (typeof imageUrl === 'string' && imageUrl && targetUrl.includes(imageUrl)) {
+            matches.push({ path, type: 'image', data: node });
         }
 
-        if (data.__icon_url__ && targetUrl.includes(data.__icon_url__)) {
-            matches.push({ path, type: 'icon', data });
+        const iconUrl = node.__icon_url__;
+        if (typeof iconUrl === 'string' && iconUrl && targetUrl.includes(iconUrl)) {
+            matches.push({ path, type: 'icon', data: node });
         }
 
         // Recursively check nested objects and arrays
-        for (const [key, value] of Object.entries(data)) {
+        for (const [key, value] of Object.entries(node)) {
             const newPath = path ? `${path}.${key}` : key;
 
             if (Array.isArray(value)) {
@@ -84,7 +112,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     /**
      * Finds the best matching data path for a specific DOM element
      */
-    const findBestDataPath = useCallback((targetUrl: string, imgElement: HTMLImageElement | SVGElement, data: any): { path: string; type: 'image' | 'icon'; data: any } | null => {
+    const findBestDataPath = useCallback((targetUrl: string, imgElement: HTMLImageElement | SVGElement, data: unknown): DataPathMatch | null => {
         const allMatches = findAllDataPaths(targetUrl, data);
 
         if (allMatches.length === 0) return null;
@@ -248,7 +276,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     htmlImg.addEventListener('mouseleave', mouseLeaveHandler);
 
                     // Store cleanup functions
-                    (htmlImg as any)._editableCleanup = () => {
+                    (htmlImg as HTMLImageElement & EditableCleanupCarrier)._editableCleanup = () => {
                         htmlImg.removeEventListener('click', clickHandler);
                         htmlImg.removeEventListener('mouseenter', mouseEnterHandler);
                         htmlImg.removeEventListener('mouseleave', mouseLeaveHandler);
@@ -314,14 +342,14 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         (svgEl as unknown as HTMLElement).style.opacity = '1';
                     };
 
-                    svgEl.addEventListener('mouseenter', mouseEnterHandler as any);
-                    svgEl.addEventListener('mouseleave', mouseLeaveHandler as any);
+                    svgEl.addEventListener('mouseenter', mouseEnterHandler);
+                    svgEl.addEventListener('mouseleave', mouseLeaveHandler);
 
                     // Store cleanup functions
-                    (svgEl as any)._editableCleanup = () => {
+                    (svgEl as SVGElement & EditableCleanupCarrier)._editableCleanup = () => {
                         svgEl.removeEventListener('click', clickHandler);
-                        svgEl.removeEventListener('mouseenter', mouseEnterHandler as any);
-                        svgEl.removeEventListener('mouseleave', mouseLeaveHandler as any);
+                        svgEl.removeEventListener('mouseenter', mouseEnterHandler);
+                        svgEl.removeEventListener('mouseleave', mouseLeaveHandler);
                         (svgEl as unknown as HTMLElement).style.cursor = '';
                         (svgEl as unknown as HTMLElement).style.transition = '';
                         (svgEl as unknown as HTMLElement).style.opacity = '';
@@ -345,8 +373,10 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      */
     const cleanupElements = useCallback(() => {
         editableElementsRef.current.forEach(({ element }) => {
-            if ((element as any)._editableCleanup) {
-                (element as any)._editableCleanup();
+            const cleanup = (element as EditableElement['element'] & EditableCleanupCarrier)
+                ._editableCleanup;
+            if (cleanup) {
+                cleanup();
             }
         });
         editableElementsRef.current = [];
@@ -416,7 +446,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 slideIndex,
                 dataPath: activeEditor.dataPath,
                 imageUrl: newImageUrl,
-                prompt: prompt || activeEditor.data?.__image_prompt__ || ''
+                prompt: prompt || readMarker(activeEditor.data, '__image_prompt__')
             }));
             setActiveEditor(null);
         }
@@ -431,14 +461,14 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 slideIndex,
                 dataPath: activeEditor.dataPath,
                 iconUrl: newIconUrl,
-                query: query || activeEditor.data?.__icon_query__ || ''
+                query: query || readMarker(activeEditor.data, '__icon_query__')
             }));
 
 
 
         }
     };
-    const handleFocusPointClick = (propertiesData: any) => {
+    const handleFocusPointClick = (propertiesData: FocusPointProperties) => {
         if (!activeEditor || activeEditor.type !== 'image') return;
         const editableId = activeEditor.element;
 
@@ -462,17 +492,19 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
     };
 
+    const iconQuery = readMarker(activeEditor?.data, '__icon_query__');
+
     return (
         <div ref={containerRef} className="editable-layout-wrapper w-full relative">
             {children}
 
             {/* Adaptive structural-editing controls (edit-mode only; adaptive content
                 is detected by archetype + blocks[]). Never rendered in readOnly export. */}
-            {slideData?.archetype && Array.isArray(slideData?.blocks) && (
-                <AdaptiveBlockControls slideIndex={slideIndex} blocks={slideData.blocks} />
+            {Boolean(slideData?.archetype) && Array.isArray(slideData?.blocks) && (
+                <AdaptiveBlockControls slideIndex={slideIndex} blocks={slideData?.blocks} />
             )}
-            {slideData?.archetype && Array.isArray(slideData?.blocks) && (
-                <AdaptivePropertyControls slideIndex={slideIndex} blocks={slideData.blocks} />
+            {Boolean(slideData?.archetype) && Array.isArray(slideData?.blocks) && (
+                <AdaptivePropertyControls slideIndex={slideIndex} blocks={slideData?.blocks} />
             )}
 
             {/* Render ImageEditor when an image is being edited */}
@@ -480,7 +512,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 <ImageEditor
                     initialImage={activeEditor.src}
                     slideIndex={slideIndex}
-                    promptContent={activeEditor.data?.__image_prompt__ || ''}
+                    promptContent={readMarker(activeEditor.data, '__image_prompt__')}
                     imageIdx={0}
                     properties={resolveImageEditorProperties(
                         properties,
@@ -496,7 +528,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
             {/* Render IconsEditor when an icon is being edited */}
             {activeEditor && activeEditor.type === 'icon' && (
                 <IconsEditor
-                    icon_prompt={activeEditor.data?.__icon_query__ ? [activeEditor.data.__icon_query__] : []}
+                    icon_prompt={iconQuery ? [iconQuery] : []}
                     currentIconUrl={activeEditor.src}
                     onClose={handleEditorClose}
                     onIconChange={handleIconChange}

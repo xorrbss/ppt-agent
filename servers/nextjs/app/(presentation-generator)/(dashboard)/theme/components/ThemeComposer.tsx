@@ -6,6 +6,21 @@ import ThemeApi from "@/app/(presentation-generator)/services/api/theme";
 import { composeStyledTheme } from "@/app/(presentation-generator)/presentation/utils/composeStyledTheme";
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
 import { notify } from "@/components/ui/sonner";
+import type { Theme, ThemeData } from "@/app/(presentation-generator)/services/api/types";
+
+// Palette keys previewed as swatches; all are real `ThemeColors` keys.
+const PREVIEW_COLOR_KEYS = [
+  "primary",
+  "background",
+  "card",
+  "stroke",
+  "background_text",
+  "graph_2",
+  "graph_5",
+] as const;
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "";
 
 // C2: compose a new theme = a curated STYLE preset (fonts + typography/shape/
 // elevation/density) + a brand COLOUR palette generated from primary/background
@@ -16,16 +31,26 @@ const ThemeComposer: React.FC = () => {
   const [primary, setPrimary] = useState("#1f6feb");
   const [background, setBackground] = useState("#ffffff");
   const [name, setName] = useState("");
-  const [composedData, setComposedData] = useState<any>(null);
+  const [composedData, setComposedData] = useState<ThemeData | null>(null);
   const [busy, setBusy] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const style = DEFAULT_THEMES.find((t: any) => t.id === styleId) ?? DEFAULT_THEMES[0];
+  const style = DEFAULT_THEMES.find((t) => t.id === styleId) ?? DEFAULT_THEMES[0];
 
   // Live preview: apply the composed theme's tokens to the preview box.
+  // `applyPresentationThemeToElement` reads only `.data`; the rest of the Theme
+  // fields are placeholders for this throwaway preview object.
   useEffect(() => {
     if (composedData && previewRef.current) {
-      applyPresentationThemeToElement(previewRef.current, { data: composedData } as any);
+      const previewTheme: Theme = {
+        id: "composer-preview",
+        name: "",
+        description: "",
+        user: "local",
+        logo: "",
+        data: composedData,
+      };
+      applyPresentationThemeToElement(previewRef.current, previewTheme);
     }
   }, [composedData]);
 
@@ -33,9 +58,11 @@ const ThemeComposer: React.FC = () => {
     setBusy(true);
     try {
       const colors = await ThemeApi.generateTheme({ primary, background });
-      setComposedData(composeStyledTheme(style as any, colors));
-    } catch (e: any) {
-      notify.error("팔레트 생성 실패", e?.message || "색상 팔레트를 생성하지 못했습니다.");
+      // composeStyledTheme returns an untyped bag; it always carries the palette
+      // it was handed plus the preset's fonts, which is exactly ThemeData.
+      setComposedData(composeStyledTheme(style, colors) as ThemeData);
+    } catch (e) {
+      notify.error("팔레트 생성 실패", errorMessage(e) || "색상 팔레트를 생성하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -51,10 +78,10 @@ const ThemeComposer: React.FC = () => {
         logo: null,
         data: composedData,
         company_name: null,
-      } as any);
+      });
       notify.success("테마 저장됨", "내 테마에 추가되었습니다.");
-    } catch (e: any) {
-      notify.error("테마 저장 실패", e?.message || "테마를 저장하지 못했습니다.");
+    } catch (e) {
+      notify.error("테마 저장 실패", errorMessage(e) || "테마를 저장하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -67,7 +94,7 @@ const ThemeComposer: React.FC = () => {
 
       <label className="mb-2 block text-xs font-medium text-[#344054]">스타일</label>
       <div className="mb-4 flex flex-wrap gap-2" role="radiogroup" aria-label="스타일">
-        {DEFAULT_THEMES.map((t: any) => (
+        {DEFAULT_THEMES.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -105,16 +132,16 @@ const ThemeComposer: React.FC = () => {
       {composedData && (
         <div className="mb-4">
           <div className="mb-2 flex flex-wrap gap-1" data-testid="composer-palette">
-            {["primary", "background", "card", "stroke", "background_text", "graph_2", "graph_5"].map((k) => (
+            {PREVIEW_COLOR_KEYS.map((k) => (
               <span key={k} title={k} className="h-6 w-6 rounded border border-black/10" style={{ background: composedData.colors?.[k] }} />
             ))}
           </div>
           <div ref={previewRef} className="rounded-lg p-4" style={{ background: "var(--background-color)" }} data-testid="composer-preview">
             <div className="p-4" style={{ background: "var(--card-color)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-md)" }}>
-              <div style={{ fontFamily: "var(--heading-font-family)", color: "var(--background-text)", fontSize: "var(--fs-h3)", fontWeight: "var(--fw-heading)" as any, letterSpacing: "var(--ls-heading)" }}>
+              <div style={{ fontFamily: "var(--heading-font-family)", color: "var(--background-text)", fontSize: "var(--fs-h3)", fontWeight: "var(--fw-heading)", letterSpacing: "var(--ls-heading)" }}>
                 미리보기 제목
               </div>
-              <p style={{ fontFamily: "var(--body-font-family)", color: "var(--muted-color)", fontSize: "var(--fs-body)", lineHeight: "var(--lh-body)" as any }}>
+              <p style={{ fontFamily: "var(--body-font-family)", color: "var(--muted-color)", fontSize: "var(--fs-body)", lineHeight: "var(--lh-body)" }}>
                 이 스타일과 브랜드 색이 적응형 슬라이드에 이렇게 적용됩니다.
               </p>
               <div className="mt-2 inline-block rounded-full px-3 py-1 text-xs" style={{ background: "var(--primary-color)", color: "var(--primary-text)" }}>

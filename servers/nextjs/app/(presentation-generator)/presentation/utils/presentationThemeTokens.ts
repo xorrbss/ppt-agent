@@ -5,6 +5,16 @@ import type { Theme } from "../../services/api/types";
 // (which read only the original --primary-color/etc.) are unaffected. Only the
 // adaptive renderer consumes these extended tokens.
 
+/**
+ * The optional tone & manner sections (`typography`/`shape`/`elevation`/`motif`)
+ * arrive as `unknown` through `ThemeData`'s index signature. Read them as plain
+ * key/value bags; anything that is not an object contributes no keys, so every
+ * token falls back to its v1 default.
+ */
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
 export function deriveThemeTokens(theme: Theme | null | undefined): Record<string, string> {
   const c = (theme?.data?.colors ?? {}) as Record<string, string>;
   const primary = c["primary"] || "#2563eb";
@@ -22,7 +32,8 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
     comfortable: { padX: 80, padY: 64, section: 32, block: 20, inline: 12 },
     spacious: { padX: 112, padY: 84, section: 44, block: 28, inline: 16 },
   };
-  const sp = SPACING[((theme?.data as any)?.density as string) ?? ""] ?? SPACING.comfortable;
+  const density = typeof theme?.data?.density === "string" ? theme.data.density : "";
+  const sp = SPACING[density] ?? SPACING.comfortable;
 
   // Tone & manner typography / shape / elevation (v2 — backlog #3). All OPTIONAL
   // and ADDITIVE: a theme that omits these renders byte-identically to v1 (the
@@ -30,24 +41,28 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
   // look). This is what lets curated presets feel like distinct "templates"
   // (tight editorial type + sharp/flat vs. airy rounded/elevated) without any new
   // layout code. Only the adaptive renderer reads these tokens.
-  const ty = ((theme?.data as any)?.typography ?? {}) as Record<string, any>;
+  const ty = asRecord(theme?.data?.typography);
   const tScale = Number(ty.scale) > 0 ? Number(ty.scale) : 1;
   const fs = (rem: number) => `${Math.round(rem * tScale * 1000) / 1000}rem`;
 
-  const sh = ((theme?.data as any)?.shape ?? {}) as Record<string, any>;
+  const sh = asRecord(theme?.data?.shape);
   const rScale = Number(sh.radiusScale) >= 0 ? Number(sh.radiusScale) : 1;
   const rad = (px: number) => `${Math.round(px * rScale)}px`;
 
-  const el = ((theme?.data as any)?.elevation ?? {}) as Record<string, any>;
+  const el = asRecord(theme?.data?.elevation);
   const flat = el.flat === true;
-  const shadow = (key: string, def: string) => el[key] ?? (flat ? "none" : def);
+  const shadow = (key: string, def: string) => {
+    const value = el[key];
+    return value == null ? (flat ? "none" : def) : String(value);
+  };
 
-  const mo = ((theme?.data as any)?.motif ?? {}) as Record<string, any>;
+  const mo = asRecord(theme?.data?.motif);
+  const motifColor = typeof mo.color === "string" && mo.color !== "" ? mo.color : accent;
 
   // Length tokens must carry a unit; a bare number (e.g. borderWidth: 2) would
   // emit unitless "2" → invalid CSS length → the property silently breaks. Coerce
   // numbers to px; strings (e.g. "2px", "-0.02em") and the default pass through.
-  const len = (v: any, def: string) =>
+  const len = (v: unknown, def: string) =>
     v == null ? def : typeof v === "number" ? `${v}px` : String(v);
 
   return {
@@ -95,7 +110,7 @@ export function deriveThemeTokens(theme: Theme | null | undefined): Record<strin
     "--shadow-md": shadow("shadowMd", "0 4px 12px rgba(0,0,0,0.06)"),
     "--shadow-lg": shadow("shadowLg", "0 12px 32px rgba(0,0,0,0.08)"),
     // motif (subtle decoration; theme.data.motif can override colour/opacity)
-    "--motif-color": mo.color || accent,
+    "--motif-color": motifColor,
     "--motif-opacity": mo.opacity != null ? String(mo.opacity) : "0.07",
   };
 }

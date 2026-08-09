@@ -12,7 +12,7 @@ import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 
-const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setLlmConfig: (config: any) => void }) => {
+const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setLlmConfig: React.Dispatch<React.SetStateAction<LLMConfig>> }) => {
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
     const [openaiCompatListMeta, setOpenaiCompatListMeta] = useState<{
@@ -27,13 +27,13 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
     }, [llmConfig.IMAGE_PROVIDER])
     const isImageGenerationDisabled = llmConfig.DISABLE_IMAGE_GENERATION ?? false;
     const handleChangeImageGenerationDisabled = (value: boolean) => {
-        setLlmConfig((prev: any) => ({
+        setLlmConfig((prev) => ({
             ...prev,
             DISABLE_IMAGE_GENERATION: value
         }));
     }
     const input_field_changed = (value: string, field: string) => {
-        setLlmConfig((prev: any) => ({
+        setLlmConfig((prev) => ({
             ...prev,
             [field]: value
         }));
@@ -49,7 +49,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
     const updateFieldValue = (field: string | undefined, value: string) => {
         if (!field) return;
-        setLlmConfig((prev: any) => ({
+        setLlmConfig((prev) => ({
             ...prev,
             [field]: value,
         }));
@@ -269,13 +269,13 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                         apiKey={llmConfig.OPENAI_COMPAT_IMAGE_API_KEY || ""}
                                                         model={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
                                                         onBaseUrlChange={(v) => {
-                                                            setLlmConfig((prev: any) => ({ ...prev, OPENAI_COMPAT_IMAGE_BASE_URL: v }));
+                                                            setLlmConfig((prev) => ({ ...prev, OPENAI_COMPAT_IMAGE_BASE_URL: v }));
                                                         }}
                                                         onApiKeyChange={(v) => {
-                                                            setLlmConfig((prev: any) => ({ ...prev, OPENAI_COMPAT_IMAGE_API_KEY: v }));
+                                                            setLlmConfig((prev) => ({ ...prev, OPENAI_COMPAT_IMAGE_API_KEY: v }));
                                                         }}
                                                         onModelChange={(v) => {
-                                                            setLlmConfig((prev: any) => ({ ...prev, OPENAI_COMPAT_IMAGE_MODEL: v }));
+                                                            setLlmConfig((prev) => ({ ...prev, OPENAI_COMPAT_IMAGE_MODEL: v }));
                                                         }}
                                                         onModelListMetaChange={setOpenaiCompatListMeta}
                                                     />
@@ -445,7 +445,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                                     value={llmConfig.OPENAI_COMPAT_IMAGE_MODEL || ""}
                                     onChange={(e) => {
-                                        setLlmConfig((prev: any) => ({
+                                        setLlmConfig((prev) => ({
                                             ...prev,
                                             OPENAI_COMPAT_IMAGE_MODEL: e.target.value,
                                         }));

@@ -138,7 +138,7 @@ export const CoverSpecSchema = z.object({
     { id: "eyebrow", type: "eyebrow", text: "2026 사업 전략" },
     { id: "title", type: "title", text: "프레젠테이션 제목" },
     { id: "subtitle", type: "subtitle", text: "부제목 또는 한 줄 요약을 입력하세요" },
-  ] as any),
+  ]),
 });
 
 export const OneColumnBulletsSpecSchema = z.object({
@@ -156,7 +156,7 @@ export const OneColumnBulletsSpecSchema = z.object({
         { id: "b3", text: "세 번째 근거 또는 요점을 구체적으로 설명합니다" },
       ],
     },
-  ] as any),
+  ]),
 });
 
 export const StatHeroSpecSchema = z.object({
@@ -167,7 +167,7 @@ export const StatHeroSpecSchema = z.object({
     { id: "s1", type: "stat", value: "37%", label: "연평균 성장률", delta: "+5%p" },
     { id: "s2", type: "stat", value: "4.2조", label: "시장 규모", caption: "2025년 기준" },
     { id: "s3", type: "stat", value: "1위", label: "국내 점유율" },
-  ] as any),
+  ]),
 });
 
 export const SectionDividerSpecSchema = z.object({
@@ -176,7 +176,7 @@ export const SectionDividerSpecSchema = z.object({
   blocks: z.array(BlockSchema).default([
     { id: "eyebrow", type: "eyebrow", text: "01" },
     { id: "title", type: "title", text: "시장 분석" },
-  ] as any),
+  ]),
 });
 
 export const BigStatementSpecSchema = z.object({
@@ -189,7 +189,7 @@ export const BigStatementSpecSchema = z.object({
       text: "고객 경험의 혁신이 곧 시장 지배력입니다.",
       attribution: "대표이사 김OO",
     },
-  ] as any),
+  ]),
 });
 
 export const AgendaSpecSchema = z.object({
@@ -207,7 +207,7 @@ export const AgendaSpecSchema = z.object({
         { id: "a4", text: "기대 효과" },
       ],
     },
-  ] as any),
+  ]),
 });
 
 export const ClosingSpecSchema = z.object({
@@ -224,7 +224,7 @@ export const ClosingSpecSchema = z.object({
         { id: "c2", text: "www.company.com" },
       ],
     },
-  ] as any),
+  ]),
 });
 
 export const CardGridSpecSchema = z.object({
@@ -235,7 +235,7 @@ export const CardGridSpecSchema = z.object({
     { id: "card1", type: "card", title: "빠른 배포", text: "CI/CD로 출시 주기를 단축합니다." },
     { id: "card2", type: "card", title: "강력한 보안", text: "금융권 인증 체계를 충족합니다." },
     { id: "card3", type: "card", title: "무중단 확장", text: "트래픽 급증에도 안정적으로 확장합니다." },
-  ] as any),
+  ]),
 });
 
 export const ComparisonSpecSchema = z.object({
@@ -249,7 +249,7 @@ export const ComparisonSpecSchema = z.object({
     { id: "col2", type: "column", heading: "신규 방식", items: [
       { id: "col2.1", text: "운영 자동화" }, { id: "col2.2", text: "장애 60% 감소" },
     ] },
-  ] as any),
+  ]),
 });
 
 export const TimelineSpecSchema = z.object({
@@ -260,7 +260,7 @@ export const TimelineSpecSchema = z.object({
     { id: "step1", type: "step", label: "1단계", title: "설계", text: "아키텍처와 표준을 확정합니다." },
     { id: "step2", type: "step", label: "2단계", title: "구축", text: "핵심 기능 MVP를 개발합니다." },
     { id: "step3", type: "step", label: "3단계", title: "확산", text: "전사 적용 및 안정화를 진행합니다." },
-  ] as any),
+  ]),
 });
 
 export const TwoColumnSpecSchema = z.object({
@@ -279,7 +279,7 @@ export const TwoColumnSpecSchema = z.object({
       ],
     },
     { id: "image", type: "image", image: { __image_url__: "", __image_prompt__: "modern city skyline at dusk, blue tones" } },
-  ] as any),
+  ]),
 });
 
 export const ImageLedSpecSchema = z.object({
@@ -289,7 +289,7 @@ export const ImageLedSpecSchema = z.object({
     { id: "image", type: "image", image: { __image_url__: "", __image_prompt__: "wind turbines on a green hill, clear sky" } },
     { id: "title", type: "title", text: "친환경 에너지 전환" },
     { id: "caption", type: "text", text: "재생에너지 비중을 2030년까지 50%로 확대합니다." },
-  ] as any),
+  ]),
 });
 
 export const ChartInsightSpecSchema = z.object({
@@ -315,7 +315,7 @@ export const ChartInsightSpecSchema = z.object({
         { id: "t2", text: "신규 사업이 성장 견인" },
       ],
     },
-  ] as any),
+  ]),
 });
 
 export const TableSpecSchema = z.object({
@@ -333,5 +333,5 @@ export const TableSpecSchema = z.object({
         ["사용자", "5명", "50명", "무제한"],
       ],
     },
-  ] as any),
+  ]),
 });
