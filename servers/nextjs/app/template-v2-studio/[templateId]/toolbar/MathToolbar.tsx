@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import { normalizeMathLatex } from "@/lib/math";
 import { ToolbarField, toolbarInputClass } from "./ToolbarPrimitives";
@@ -15,13 +17,14 @@ export default function MathToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const t = useTranslations("studio");
   const latex = typeof element.latex === "string" ? element.latex : "";
 
   return (
     <div className="flex items-center gap-2">
-      <ToolbarField label="LaTeX expression">
+      <ToolbarField label={t("toolbar.math.latexExpression")}>
         <input
-          aria-label="LaTeX expression"
+          aria-label={t("toolbar.math.latexExpression")}
           className={`${toolbarInputClass} w-72 font-mono`}
           value={latex}
           maxLength={4000}
@@ -35,7 +38,7 @@ export default function MathToolbar({
       </ToolbarField>
       <label className="flex items-center gap-1 text-[11px] text-slate-300">
         <input
-          aria-label="Display math"
+          aria-label={t("toolbar.math.displayMath")}
           type="checkbox"
           checked={element.display_mode !== false}
           onChange={(event) =>
@@ -45,7 +48,7 @@ export default function MathToolbar({
             )
           }
         />
-        Display
+        {t("toolbar.math.display")}
       </label>
     </div>
   );

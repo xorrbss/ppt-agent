@@ -16,10 +16,9 @@ import {
 } from "@/app/hooks/useStructuredTemplates";
 import {
   ApiError,
-  getApiErrorDisplayMessage,
-  getRetryablePresentationGenerationMessage,
   isRetryablePresentationGenerationError,
 } from "../../services/api/api-error-handler";
+import { useTranslations } from "next-intl";
 import {
   clearDurableGenerationTask,
   createDurableGenerationTask,
@@ -75,6 +74,7 @@ export const usePresentationGeneration = (
   selectedTemplate: TemplateLayoutsWithSettings | string | null,
   setActiveTab: (tab: string) => void
 ) => {
+  const t = useTranslations("generation");
   const dispatch = useDispatch();
   const router = useRouter();
   const pathname = usePathname();
@@ -116,22 +116,22 @@ export const usePresentationGeneration = (
   const validateInputs = useCallback(() => {
     if (!outlines || outlines.length === 0) {
       notify.warning(
-        "개요가 준비되지 않았습니다",
-        "계속하기 전에 개요 생성이 완료될 때까지 기다려 주세요."
+        t("outlineNotReadyTitle"),
+        t("outlineNotReadyDescription")
       );
       return false;
     }
 
     if (!selectedTemplate) {
       notify.warning(
-        "레이아웃이 선택되지 않았습니다",
-        "프레젠테이션을 생성하기 전에 레이아웃 그룹을 선택하세요."
+        t("layoutNotSelectedTitle"),
+        t("layoutNotSelectedDescription")
       );
       return false;
     }
 
     return true;
-  }, [outlines, selectedTemplate]);
+  }, [outlines, selectedTemplate, t]);
 
   const clearTheme = useCallback(() => {
     const element = document.getElementById("presentation-page");
@@ -197,35 +197,35 @@ export const usePresentationGeneration = (
         // re-POST, so only they can truthfully promise saved progress.
         const progress =
           task.mode === "authored" ? task.lastProgress : undefined;
-        const resumeNote =
+        const description =
           progress &&
           Number.isFinite(progress.completed_slides) &&
           Number.isFinite(progress.total_slides) &&
           progress.total_slides > 0
-            ? ` 슬라이드 ${progress.completed_slides}/${progress.total_slides}까지 저장되었습니다. 다시 시도하면 이어서 생성됩니다.`
-            : "";
+            ? t("resumeProgress", {
+                completed: progress.completed_slides,
+                total: progress.total_slides,
+              })
+            : t("interruptedDescription");
         notify.error(
-          "생성이 일시 중단되었습니다",
-          `${getRetryablePresentationGenerationMessage(error)}${resumeNote}`,
+          t("interruptedTitle"),
+          description,
           {
             duration: 12_000,
             action: {
-              label: "다시 시도",
+              label: t("retry"),
               onClick: () => retrySubmitRef.current?.(),
             },
           }
         );
       } else {
         notify.error(
-          "생성 오류",
-          getApiErrorDisplayMessage(
-            error,
-            "프레젠테이션 생성 중 오류가 발생했습니다."
-          )
+          t("errorTitle"),
+          t("errorDescription")
         );
       }
     },
-    []
+    [t]
   );
 
   // The workspace timeline reports generation progress, so a reload never
@@ -242,8 +242,8 @@ export const usePresentationGeneration = (
     if (!validateInputs()) return;
     if (!presentationId) {
       notify.error(
-        "Presentation unavailable",
-        "Reload the presentation and try again."
+        t("presentationUnavailableTitle"),
+        t("presentationUnavailableDescription")
       );
       return;
     }
@@ -274,7 +274,7 @@ export const usePresentationGeneration = (
         .map((o) => o.content)
         .filter((c) => c && c.trim().length > 0);
       if (slides_markdown.length === 0) {
-        notify.warning("개요가 비어 있습니다", "먼저 개요를 생성하세요.");
+        notify.warning(t("outlineEmptyTitle"), t("outlineEmptyDescription"));
         return;
       }
       const base = Math.max(120, slides_markdown.length * 25);
@@ -362,8 +362,8 @@ export const usePresentationGeneration = (
       !templateV2Selection
     ) {
       notify.error(
-        "템플릿 오류",
-        "구조화 템플릿 선택 정보가 올바르지 않습니다. 템플릿을 다시 선택해 주세요."
+        t("templateErrorTitle"),
+        t("templateErrorDescription")
       );
       return;
     }
@@ -372,7 +372,7 @@ export const usePresentationGeneration = (
         .map((outline) => outline.content)
         .filter((content) => content && content.trim().length > 0);
       if (slides_markdown.length === 0) {
-        notify.warning("개요가 비어 있습니다", "먼저 개요를 생성해 주세요.");
+        notify.warning(t("outlineEmptyTitle"), t("outlineEmptyDescription"));
         return;
       }
 
@@ -472,8 +472,8 @@ export const usePresentationGeneration = (
       .filter((content) => content && content.trim().length > 0);
     if (slides_markdown.length === 0) {
       notify.warning(
-        "Outline is empty",
-        "Add outline content before generating the presentation."
+        t("outlineEmptyTitle"),
+        t("outlineEmptyDescription")
       );
       return;
     }
@@ -512,23 +512,20 @@ export const usePresentationGeneration = (
       if (openRecoverableWorkspace(error)) return;
       if (isRetryableGenerationStartError(error)) {
         notify.error(
-          "Presentation generation was interrupted",
-          getRetryablePresentationGenerationMessage(error),
+          t("interruptedTitle"),
+          t("interruptedDescription"),
           {
             duration: 12_000,
             action: {
-              label: "Retry",
+              label: t("retry"),
               onClick: () => retrySubmitRef.current?.(),
             },
           }
         );
       } else {
         notify.error(
-          "Generation error",
-          getApiErrorDisplayMessage(
-            error,
-            "A problem occurred while starting presentation generation."
-          )
+          t("errorTitle"),
+          t("errorDescription")
         );
       }
     }
@@ -546,6 +543,7 @@ export const usePresentationGeneration = (
     openWorkspace,
     openRecoverableWorkspace,
     reportDurableGenerationFailure,
+    t,
   ]);
 
   useEffect(() => {

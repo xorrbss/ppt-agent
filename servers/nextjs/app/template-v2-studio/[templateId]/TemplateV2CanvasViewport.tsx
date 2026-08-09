@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
+import { useTranslations } from "next-intl";
 
 import {
   fitTemplateV2Viewport,
@@ -131,11 +132,13 @@ export function TemplateV2CanvasZoomControls({
   zoomBy: (factor: number) => void;
   fit: () => void;
 }) {
+  const t = useTranslations("studio");
+
   return (
     <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg bg-slate-950/90 p-1 text-xs text-slate-200">
       <button
         type="button"
-        aria-label="Zoom out"
+        aria-label={t("canvas.zoomOut")}
         className="rounded px-2 py-1 hover:bg-slate-700"
         onClick={() => zoomBy(1 / ZOOM_STEP)}
       >
@@ -146,7 +149,7 @@ export function TemplateV2CanvasZoomControls({
       </span>
       <button
         type="button"
-        aria-label="Zoom in"
+        aria-label={t("canvas.zoomIn")}
         className="rounded px-2 py-1 hover:bg-slate-700"
         onClick={() => zoomBy(ZOOM_STEP)}
       >
@@ -154,11 +157,11 @@ export function TemplateV2CanvasZoomControls({
       </button>
       <button
         type="button"
-        aria-label="Fit slide to view"
+        aria-label={t("canvas.fitSlideToView")}
         className="rounded px-2 py-1 hover:bg-slate-700"
         onClick={fit}
       >
-        Fit
+        {t("canvas.fit")}
       </button>
     </div>
   );

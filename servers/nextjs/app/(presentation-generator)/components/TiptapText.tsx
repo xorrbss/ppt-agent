@@ -35,7 +35,7 @@ const TiptapText: React.FC<TiptapTextProps> = ({
 
     editorProps: {
       attributes: {
-        class: `outline-none focus:outline-none transition-all duration-200 ${className}`,
+        class: `outline-none focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-[-3px] focus-visible:outline-[#6D28D9] transition-all duration-200 ${className}`,
         "data-placeholder": placeholder,
       },
     },
@@ -87,6 +87,8 @@ const TiptapText: React.FC<TiptapTextProps> = ({
           className="flex text-black bg-white  rounded-lg shadow-lg p-2 gap-1 border border-gray-200 z-50"
         >
           <button
+            type="button"
+            aria-label="굵게"
             onClick={() => editor?.chain().focus().toggleBold().run()}
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("bold") ? "bg-blue-100 text-blue-600" : ""
@@ -96,6 +98,8 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             <Bold className="h-4 w-4" />
           </button>
           <button
+            type="button"
+            aria-label="기울임"
             onClick={() => editor?.chain().focus().toggleItalic().run()}
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("italic") ? "bg-blue-100 text-blue-600" : ""
@@ -105,6 +109,8 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             <Italic className="h-4 w-4" />
           </button>
           <button
+            type="button"
+            aria-label="밑줄"
             onClick={() => editor?.chain().focus().toggleUnderline().run()}
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("underline") ? "bg-blue-100 text-blue-600" : ""
@@ -114,6 +120,8 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             <UnderlinedIcon className="h-4 w-4" />
           </button>
           <button
+            type="button"
+            aria-label="취소선"
             onClick={() => editor?.chain().focus().toggleStrike().run()}
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("strike") ? "bg-blue-100 text-blue-600" : ""
@@ -123,6 +131,8 @@ const TiptapText: React.FC<TiptapTextProps> = ({
             <Strikethrough className="h-4 w-4" />
           </button>
           <button
+            type="button"
+            aria-label="코드"
             onClick={() => editor?.chain().focus().toggleCode().run()}
             className={`p-1 rounded hover:bg-gray-100 transition-colors ${
               editor?.isActive("code") ? "bg-blue-100 text-blue-600" : ""

@@ -1,6 +1,7 @@
 import React from "react";
 
 import TemplateV2PptxImportPanel from "./TemplateV2PptxImportPanel";
+import { mountWithStudioI18n } from "./studioI18nTestUtils.cy";
 
 const importId = "3f979bee-ab86-48ac-83cf-fc689364367e";
 
@@ -134,7 +135,7 @@ describe("TemplateV2PptxImportPanel", () => {
     ).as("confirmImport");
     cy.stub(window, "confirm").returns(true).as("explicitConfirm");
 
-    cy.mount(
+    mountWithStudioI18n(
       <TemplateV2PptxImportPanel currentTemplateId="existing-template" />
     );
     cy.contains("button", "Open reviewed PPTX import").click();

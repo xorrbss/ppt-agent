@@ -24,6 +24,7 @@ import {
   ShortcutKeys,
   useAppleShortcutPlatform,
 } from "@/components/slide-editor/shortcuts/ShortcutKeys";
+import { useTranslations } from "next-intl";
 
 const SECTION_ICONS: Record<EditorShortcutSection["id"], LucideIcon> = {
   selection: MousePointer2,
@@ -39,6 +40,7 @@ export function KeyboardShortcutsDialog({
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }) {
+  const t = useTranslations("shortcuts");
   const detectedApplePlatform = useAppleShortcutPlatform();
   const [platformOverride, setPlatformOverride] = useState<boolean | null>(null);
   const applePlatform = platformOverride ?? detectedApplePlatform;
@@ -82,27 +84,26 @@ export function KeyboardShortcutsDialog({
               </span>
               <div>
                 <DialogTitle className="text-[18px] font-semibold leading-6 text-[#101323]">
-                  Keyboard shortcuts
+                  {t("title")}
                 </DialogTitle>
                 <DialogDescription className="mt-1 text-[13px] leading-5 text-[#667085]">
-                  Work faster while the slide canvas is active. Shortcuts pause
-                  while you are typing in a text field.
+                  {t("description")}
                 </DialogDescription>
               </div>
             </div>
             <div
-              aria-label="Shortcut platform"
+              aria-label={t("platformLabel")}
               className="inline-flex w-fit shrink-0 rounded-[9px] border border-[#E1E3E9] bg-[#F6F6F9] p-1"
               role="group"
             >
               <PlatformButton
                 active={!applePlatform}
-                label="Windows / Linux"
+                label={t("windowsLinux")}
                 onClick={() => setPlatformOverride(false)}
               />
               <PlatformButton
                 active={applePlatform}
-                label="macOS"
+                label={t("macos")}
                 onClick={() => setPlatformOverride(true)}
               />
             </div>
@@ -126,11 +127,11 @@ export function KeyboardShortcutsDialog({
                         strokeWidth={1.8}
                       />
                       <h3 className="text-[14px] font-semibold text-[#101323]">
-                        {section.title}
+                        {t(`sections.${section.id}.title`)}
                       </h3>
                     </div>
                     <p className="mt-1 text-[11px] leading-4 text-[#7A8295]">
-                      {section.description}
+                      {t(`sections.${section.id}.description`)}
                     </p>
                   </div>
                   <div className="divide-y divide-[#EAECF0]">
@@ -141,10 +142,10 @@ export function KeyboardShortcutsDialog({
                       >
                         <div className="min-w-0">
                           <p className="text-[13px] font-semibold text-[#344054]">
-                            {shortcut.label}
+                            {t(`items.${shortcut.id}.label`)}
                           </p>
                           <p className="mt-0.5 text-[11px] leading-4 text-[#7A8295]">
-                            {shortcut.description}
+                            {t(`items.${shortcut.id}.description`)}
                           </p>
                         </div>
                         <ShortcutKeys
@@ -161,7 +162,9 @@ export function KeyboardShortcutsDialog({
         </div>
 
         <div className="border-t border-[#EAECF0] bg-[#FCFCFD] px-6 py-3 text-center text-[11px] text-[#7A8295]">
-          Showing shortcuts for {applePlatform ? "macOS" : "Windows and Linux"}.
+          {t("footer", {
+            platform: applePlatform ? t("macos") : t("windowsAndLinux"),
+          })}
         </div>
       </DialogContent>
     </Dialog>

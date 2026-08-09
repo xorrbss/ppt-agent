@@ -3,13 +3,15 @@ import hmac
 import re
 import secrets
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from sqlalchemy import func, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -22,6 +24,7 @@ from models.sql.presentation import (
 )
 from models.sql.slide import SlideModel
 from services.database import get_async_session
+from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_app_data_directory_env
 
 PRESENTATION_SHARE_ROUTER = APIRouter(
@@ -42,6 +45,24 @@ _PUBLIC_IMAGE_EXTENSIONS = {".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"}
 class ShareInfo(BaseModel):
     shared: bool
     share_token: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    view_count: int = 0
+    expired: bool = False
+
+
+class ShareSettings(BaseModel):
+    expires_at: Optional[datetime] = None
+
+    @field_validator("expires_at")
+    @classmethod
+    def require_timezone_and_normalize_utc(
+        cls, value: Optional[datetime]
+    ) -> Optional[datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("expires_at must include a timezone")
+        return value.astimezone(timezone.utc)
 
 
 def _validate_share_token(share_token: str) -> None:
@@ -49,22 +70,99 @@ def _validate_share_token(share_token: str) -> None:
         raise HTTPException(status_code=404, detail="Shared presentation not found")
 
 
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Return an aware UTC timestamp, including values loaded from SQLite."""
+
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _share_is_expired(
+    presentation: PresentationModel,
+    now: Optional[datetime] = None,
+) -> bool:
+    expires_at = _as_utc(presentation.expires_at)
+    return expires_at is not None and expires_at <= (now or get_current_utc_datetime())
+
+
+def _share_info(presentation: PresentationModel, *, shared: Optional[bool] = None) -> ShareInfo:
+    expired = bool(presentation.share_token) and _share_is_expired(presentation)
+    return ShareInfo(
+        shared=(bool(presentation.share_token) and not expired)
+        if shared is None
+        else shared,
+        share_token=presentation.share_token,
+        expires_at=_as_utc(presentation.expires_at),
+        view_count=int(presentation.view_count or 0),
+        expired=expired,
+    )
+
+
+def _active_share_predicates(share_token: str, now: datetime):
+    return (
+        PresentationModel.share_token == share_token,
+        PresentationModel.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED,
+        or_(
+            PresentationModel.expires_at.is_(None),
+            PresentationModel.expires_at > now,
+        ),
+    )
+
+
 async def _shared_presentation(
     share_token: str,
     sql_session: AsyncSession,
+    *,
+    not_found_detail: str = "Shared presentation not found",
 ) -> PresentationModel:
-    _validate_share_token(share_token)
+    try:
+        _validate_share_token(share_token)
+    except HTTPException as error:
+        raise HTTPException(status_code=404, detail=not_found_detail) from error
+    now = get_current_utc_datetime()
     result = await sql_session.scalars(
-        select(PresentationModel).where(
-            PresentationModel.share_token == share_token,
-            PresentationModel.lifecycle_status
-            == PRESENTATION_LIFECYCLE_PUBLISHED,
-        )
+        select(PresentationModel).where(*_active_share_predicates(share_token, now))
     )
     presentation = result.first()
     if presentation is None or not presentation.share_token:
-        raise HTTPException(status_code=404, detail="Shared presentation not found")
+        raise HTTPException(status_code=404, detail=not_found_detail)
     return presentation
+
+
+async def _increment_shared_presentation_view(
+    share_token: str,
+    sql_session: AsyncSession,
+) -> PresentationModel:
+    """Validate the live token and increment exactly once in one SQL write."""
+
+    _validate_share_token(share_token)
+    now = get_current_utc_datetime()
+    result = await sql_session.execute(
+        update(PresentationModel)
+        .where(*_active_share_predicates(share_token, now))
+        .values(
+            view_count=func.coalesce(PresentationModel.view_count, 0) + 1,
+            # Sharing metrics are not deck edits and must not reorder the
+            # dashboard through PresentationModel.updated_at's onupdate hook.
+            updated_at=PresentationModel.updated_at,
+        )
+        .returning(PresentationModel)
+    )
+    presentation = result.scalar_one_or_none()
+    if presentation is None:
+        await sql_session.rollback()
+        raise HTTPException(status_code=404, detail="Shared presentation not found")
+    await sql_session.commit()
+    return presentation
+
+
+def _owner_predicate(presentation: PresentationModel):
+    if presentation.owner_id is None:
+        return PresentationModel.owner_id.is_(None)
+    return PresentationModel.owner_id == presentation.owner_id
 
 
 async def _presentation_slides(
@@ -213,15 +311,14 @@ async def get_share_status(
         or presentation.lifecycle_status != PRESENTATION_LIFECYCLE_PUBLISHED
     ):
         raise HTTPException(status_code=404, detail="Presentation not found")
-    return ShareInfo(
-        shared=bool(presentation.share_token), share_token=presentation.share_token
-    )
+    return _share_info(presentation)
 
 
 @PRESENTATION_SHARE_ROUTER.post("/{id}/share", response_model=ShareInfo)
 async def enable_share(
     id: uuid.UUID,
     regenerate: bool = False,
+    settings: Annotated[Optional[ShareSettings], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     """Enable read-only sharing (idempotent). `regenerate=true` rotates the token,
@@ -236,11 +333,44 @@ async def enable_share(
     ):
         raise HTTPException(status_code=404, detail="Presentation not found")
 
-    if regenerate or not presentation.share_token:
-        presentation.share_token = secrets.token_urlsafe(32)
-        sql_session.add(presentation)
+    now = get_current_utc_datetime()
+    if settings is not None and settings.expires_at is not None:
+        if settings.expires_at <= now:
+            raise HTTPException(
+                status_code=422,
+                detail="share_expiry_must_be_in_future",
+            )
+
+    expired = bool(presentation.share_token) and _share_is_expired(presentation, now)
+    rotate = regenerate or not presentation.share_token or expired
+    values = {}
+    if rotate:
+        values.update(
+            share_token=secrets.token_urlsafe(32),
+            view_count=0,
+        )
+        # An expired link is never silently reactivated.  With no explicit
+        # settings, its replacement follows the legacy permanent-link default.
+        if expired and settings is None:
+            values["expires_at"] = None
+    if settings is not None:
+        values["expires_at"] = settings.expires_at
+
+    if values:
+        values["updated_at"] = PresentationModel.updated_at
+        await sql_session.execute(
+            update(PresentationModel)
+            .where(
+                PresentationModel.id == id,
+                _owner_predicate(presentation),
+                PresentationModel.lifecycle_status
+                == PRESENTATION_LIFECYCLE_PUBLISHED,
+            )
+            .values(**values)
+        )
         await sql_session.commit()
-    return ShareInfo(shared=True, share_token=presentation.share_token)
+        await sql_session.refresh(presentation)
+    return _share_info(presentation)
 
 
 @PRESENTATION_SHARE_ROUTER.delete("/{id}/share", response_model=ShareInfo)
@@ -254,11 +384,25 @@ async def disable_share(
     ):
         raise HTTPException(status_code=404, detail="Presentation not found")
 
-    if presentation.share_token is not None:
-        presentation.share_token = None
-        sql_session.add(presentation)
+    if presentation.share_token is not None or presentation.expires_at is not None:
+        await sql_session.execute(
+            update(PresentationModel)
+            .where(
+                PresentationModel.id == id,
+                _owner_predicate(presentation),
+                PresentationModel.lifecycle_status
+                == PRESENTATION_LIFECYCLE_PUBLISHED,
+            )
+            .values(
+                share_token=None,
+                expires_at=None,
+                view_count=0,
+                updated_at=PresentationModel.updated_at,
+            )
+        )
         await sql_session.commit()
-    return ShareInfo(shared=False, share_token=None)
+        await sql_session.refresh(presentation)
+    return _share_info(presentation, shared=False)
 
 
 @PRESENTATION_SHARE_ROUTER.get(
@@ -271,7 +415,9 @@ async def get_shared_presentation(
     token (never by presentation id), and exempt from the admin session in
     SessionAuthMiddleware. Returns 404 for any token that is blank, too short, or
     not currently shared — so nothing about other decks is observable."""
-    presentation = await _shared_presentation(share_token, sql_session)
+    presentation = await _increment_shared_presentation_view(
+        share_token, sql_session
+    )
     projection = await _public_presentation_projection(presentation, sql_session)
     rewritten = _rewrite_public_image_references(
         projection.model_dump(mode="json"),
@@ -290,7 +436,11 @@ async def get_shared_presentation_asset(
 
     if re.fullmatch(r"[0-9a-f]{64}", asset_id) is None:
         raise HTTPException(status_code=404, detail="Shared asset not found")
-    presentation = await _shared_presentation(share_token, sql_session)
+    presentation = await _shared_presentation(
+        share_token,
+        sql_session,
+        not_found_detail="Shared asset not found",
+    )
     projection = await _public_presentation_projection(presentation, sql_session)
     allowed_paths = {
         path

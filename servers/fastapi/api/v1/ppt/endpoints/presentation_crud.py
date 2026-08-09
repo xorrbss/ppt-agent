@@ -7,9 +7,9 @@ operations on a PresentationModel (no generation or export pipeline).
 import json
 import uuid
 from pathlib import PurePosixPath
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any, List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -17,6 +17,7 @@ from pydantic import (
     ValidationError,
     field_validator,
 )
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
@@ -155,30 +156,89 @@ def _list_slide_without_html(slide: SlideModel) -> SlideModel:
     return SlideModel(**carried, html_content=None)
 
 
-@PRESENTATION_CRUD_ROUTER.get("/all", response_model=List[PresentationWithSlides])
-async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
-    query = (
-        select(PresentationModel, SlideModel)
-        .where(
-            PresentationModel.lifecycle_status
-            == PRESENTATION_LIFECYCLE_PUBLISHED
-        )
-        .join(
-            SlideModel,
-            (SlideModel.presentation == PresentationModel.id) & (SlideModel.index == 0),
-        )
-        .order_by(PresentationModel.created_at.desc())
-        # Keep the column out of the SELECT rather than fetching and discarding
-        # it; ``raiseload`` turns an accidental read into a loud error instead of
-        # a silent per-row lazy load.
-        .options(defer(SlideModel.html_content, raiseload=True))
-    )
+class PresentationListPage(BaseModel):
+    items: List[PresentationWithSlides]
+    total: int
+    page: int
+    page_size: int
 
-    results = await sql_session.execute(query)
-    rows = results.all()
+
+def _escaped_like_fragment(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+@PRESENTATION_CRUD_ROUTER.get(
+    "/all",
+    response_model=List[PresentationWithSlides] | PresentationListPage,
+)
+async def get_all_presentations(
+    sql_session: AsyncSession = Depends(get_async_session),
+    q: Annotated[Optional[str], Query(max_length=200)] = None,
+    page: Annotated[Optional[int], Query(ge=1)] = None,
+    page_size: Annotated[Optional[int], Query(ge=1, le=100)] = None,
+    sort: Annotated[Optional[Literal["asc", "desc"]], Query()] = None,
+):
+    """List published decks with optional server search and pagination.
+
+    The original no-query call keeps returning a bare list for older clients.
+    Supplying any list option enables the paginated envelope used by the
+    dashboard.  Count and page queries share the exact same predicates, while
+    cover slides are fetched in one bounded query so missing/duplicate covers
+    cannot skew ``total``.
+    """
+
+    legacy_response = q is None and page is None and page_size is None and sort is None
+    normalized_q = (q or "").strip()
+    resolved_page = page or 1
+    resolved_page_size = page_size or 24
+    resolved_sort = sort or "desc"
+
+    filters = [
+        PresentationModel.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
+    ]
+    if normalized_q:
+        pattern = f"%{_escaped_like_fragment(normalized_q)}%"
+        filters.append(
+            or_(
+                PresentationModel.title.ilike(pattern, escape="\\"),
+                PresentationModel.content.ilike(pattern, escape="\\"),
+            )
+        )
+
+    order_columns = (
+        (PresentationModel.updated_at.asc(), PresentationModel.id.asc())
+        if resolved_sort == "asc"
+        else (PresentationModel.updated_at.desc(), PresentationModel.id.desc())
+    )
+    presentation_query = select(PresentationModel).where(*filters).order_by(*order_columns)
+    if not legacy_response:
+        presentation_query = presentation_query.offset(
+            (resolved_page - 1) * resolved_page_size
+        ).limit(resolved_page_size)
+
+    presentations = list(await sql_session.scalars(presentation_query))
+    cover_by_presentation: dict[uuid.UUID, SlideModel] = {}
+    if presentations:
+        cover_query = (
+            select(SlideModel)
+            .where(
+                SlideModel.presentation.in_(
+                    [presentation.id for presentation in presentations]
+                ),
+                SlideModel.index == 0,
+            )
+            .order_by(SlideModel.presentation, SlideModel.id)
+            # Keep the column out of the SELECT rather than fetching and
+            # discarding it. ``raiseload`` makes accidental reads fail loudly.
+            .options(defer(SlideModel.html_content, raiseload=True))
+        )
+        for cover in await sql_session.scalars(cover_query):
+            cover_by_presentation.setdefault(cover.presentation, cover)
+
     presentations_with_slides = []
-    for presentation, first_slide in rows:
-        slides = [_list_slide_without_html(first_slide)]
+    for presentation in presentations:
+        first_slide = cover_by_presentation.get(presentation.id)
+        slides = [] if first_slide is None else [_list_slide_without_html(first_slide)]
         fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
         presentations_with_slides.append(
             PresentationWithSlides(
@@ -187,7 +247,23 @@ async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_se
                 fonts=fonts,
             )
         )
-    return presentations_with_slides
+
+    if legacy_response:
+        return presentations_with_slides
+    total = int(
+        (
+            await sql_session.scalar(
+                select(func.count(PresentationModel.id)).where(*filters)
+            )
+        )
+        or 0
+    )
+    return PresentationListPage(
+        items=presentations_with_slides,
+        total=total,
+        page=resolved_page,
+        page_size=resolved_page_size,
+    )
 
 
 @PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)

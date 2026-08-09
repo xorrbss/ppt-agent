@@ -294,14 +294,17 @@ const IconsEditor = ({
       >
         <SheetContent
           side="right"
-          className="flex h-full w-[370px] max-w-[calc(100vw-16px)] flex-col gap-0 border-l border-[#EDEEEF] bg-white p-0 font-syne shadow-xl sm:max-w-[370px] [&>button]:right-4 [&>button]:top-4"
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          aria-describedby="icons-editor-description"
+          className="flex h-full w-[370px] max-w-[calc(100vw-16px)] flex-col gap-0 border-l border-[#EDEEEF] bg-white p-0 font-syne shadow-xl sm:max-w-[370px] [&>button]:right-2 [&>button]:top-2 [&>button]:h-11 [&>button]:w-11 sm:[&>button]:right-4 sm:[&>button]:top-4"
           onClick={(e) => e.stopPropagation()}
         >
           <SheetHeader className="border-b border-[#EDEEEF] px-4 py-4 text-left">
             <SheetTitle className="text-sm font-semibold text-[#191919]">
               아이콘 편집
             </SheetTitle>
+            <p id="icons-editor-description" className="sr-only">
+              Choose a replacement for the selected icon.
+            </p>
           </SheetHeader>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -314,7 +317,8 @@ const IconsEditor = ({
                   <ToolTip content="아이콘 검색 및 교체에 사용할 시각적 두께를 선택하세요.">
                     <button
                       type="button"
-                      className="inline-flex h-4 w-4 items-center justify-center text-[#A1A1AA]"
+                      aria-label="아이콘 두께 도움말"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded text-[#A1A1AA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                     >
                       <Info className="h-3 w-3" />
                     </button>
@@ -333,11 +337,12 @@ const IconsEditor = ({
                         key={weight}
                         type="button"
                         aria-pressed={isSelected}
+                        aria-label={`${ICON_WEIGHT_LABELS[weight]} 아이콘 두께`}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleWeightSelect(weight);
                         }}
-                        className="group flex min-w-0 flex-col items-center gap-1"
+                        className="group flex min-w-0 flex-col items-center gap-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] focus-visible:ring-offset-2"
                       >
                         <span
                           className={cn(
@@ -377,6 +382,7 @@ const IconsEditor = ({
                   발표자료 전체에 스타일 적용
                 </p>
                 <Switch
+                  aria-label="발표자료 전체에 아이콘 두께 적용"
                   checked={applyStylesToPresentation}
                   onCheckedChange={setApplyStylesToPresentation}
                   className="h-5 w-9 data-[state=checked]:bg-[#7C3AED] data-[state=unchecked]:bg-[#DDDEE3]"
@@ -426,7 +432,7 @@ const IconsEditor = ({
                           setSelectedIconUrl(iconSrc);
                         }}
                         className={cn(
-                          "flex h-9 w-9 p-1 items-center justify-center rounded-[8px] border border-transparent  transition-colors hover:bg-[#F6F6F9]",
+                          "flex h-9 w-9 p-1 items-center justify-center rounded-[8px] border border-transparent transition-colors hover:bg-[#F6F6F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] focus-visible:ring-offset-2",
                           isSelected && "border-[#becff5] bg-[#e4ecfd]"
                         )}
                       >

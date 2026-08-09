@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 
+import { mountWithStudioI18n } from "../studioI18nTestUtils.cy";
 import TemplateV2SelectionToolbar from "./TemplateV2SelectionToolbar";
 import type {
   TemplateV2SelectionToolbarProps,
@@ -89,7 +90,7 @@ function StatefulToolbar({
 
 describe("TemplateV2SelectionToolbar", () => {
   it("routes no selection to nothing and renders an accessible multi-selection toolbar", () => {
-    cy.mount(
+    mountWithStudioI18n(
       <TemplateV2SelectionToolbar
         selectionCount={0}
         element={null}
@@ -112,7 +113,7 @@ describe("TemplateV2SelectionToolbar", () => {
     const duplicate = cy.spy().as("duplicate");
     const remove = cy.spy().as("remove");
 
-    cy.mount(
+    mountWithStudioI18n(
       <div
         onPointerDown={parentPointerDown}
         onMouseDown={parentMouseDown}
@@ -178,7 +179,7 @@ describe("TemplateV2SelectionToolbar", () => {
     cy.get("@parentMouseDown").should("not.have.been.called");
     cy.get("@parentClick").should("not.have.been.called");
 
-    cy.mount(<div data-testid="replacement">Replacement mount</div>);
+    mountWithStudioI18n(<div data-testid="replacement">Replacement mount</div>);
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
   });
 
@@ -187,7 +188,7 @@ describe("TemplateV2SelectionToolbar", () => {
     const cropMode = cy.spy().as("cropMode");
     const cropDraft = cy.spy().as("cropDraft");
 
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         selectionPath={[0]}
@@ -275,7 +276,7 @@ describe("TemplateV2SelectionToolbar", () => {
     const iconPatch = cy.spy().as("iconPatch");
     const changeIcon = cy.spy().as("changeIcon");
 
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         initialElement={{
@@ -316,7 +317,7 @@ describe("TemplateV2SelectionToolbar", () => {
     cy.get("@changeIcon").should("have.been.calledOnce");
 
     const textPatch = cy.spy().as("textPatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         initialElement={{
@@ -384,7 +385,7 @@ describe("TemplateV2SelectionToolbar", () => {
 
   it("renders proven vector, chart, and table controls without replacing nested selections", () => {
     const shapePatch = cy.spy().as("shapePatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         selectionPath={["children", 2, "children", 1]}
@@ -416,7 +417,7 @@ describe("TemplateV2SelectionToolbar", () => {
     cy.get('button[aria-label="Add vector point after"]').should("not.exist");
 
     const chartPatch = cy.spy().as("chartPatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         initialElement={{
@@ -453,7 +454,7 @@ describe("TemplateV2SelectionToolbar", () => {
     });
 
     const tablePatch = cy.spy().as("tablePatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         initialElement={{
@@ -505,7 +506,7 @@ describe("TemplateV2SelectionToolbar", () => {
       upstream_element_extension: "vector-vNext",
     };
 
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         selectionPath={path}
@@ -545,7 +546,7 @@ describe("TemplateV2SelectionToolbar", () => {
     // This mirrors an optimistic save followed by a reload: the controller
     // supplies the same ElementPath and persisted rich element without a
     // toolbar-specific state channel.
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         selectionPath={path}
@@ -579,7 +580,7 @@ describe("TemplateV2SelectionToolbar", () => {
       retained_root: { owner: "template" },
     };
 
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         selectionPath={path}
@@ -602,7 +603,7 @@ describe("TemplateV2SelectionToolbar", () => {
     cy.get('input[aria-label="Infographic value"]').should("have.value", "64");
     cy.wrap(path).should("deep.equal", ["children", 4]);
 
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulToolbar
         selectionCount={1}
         selectionPath={path}
@@ -617,7 +618,7 @@ describe("TemplateV2SelectionToolbar", () => {
     );
     cy.get('input[aria-label="Infographic value"]').should("have.value", "64");
 
-    cy.mount(<div data-testid="infographic-replacement">Replacement</div>);
+    mountWithStudioI18n(<div data-testid="infographic-replacement">Replacement</div>);
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
   });
 });

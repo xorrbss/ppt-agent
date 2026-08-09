@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { TemplateV2StudioJournalEntry } from "@/lib/template-v2-studio-journal";
 
 export default function TemplateV2DraftRecovery({
@@ -15,6 +17,7 @@ export default function TemplateV2DraftRecovery({
   onRestore: () => void;
   onDiscard: () => void;
 }) {
+  const t = useTranslations("studio");
   const capturedAt = new Date(draft.capturedAt);
   const capturedLabel = Number.isNaN(capturedAt.getTime())
     ? draft.capturedAt
@@ -22,19 +25,21 @@ export default function TemplateV2DraftRecovery({
 
   return (
     <section
-      aria-label="Recovered browser draft"
+      aria-label={t("draftRecovery.ariaLabel")}
       className="mx-6 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-100"
     >
       <div>
-        <p className="font-semibold">Unsaved browser draft found</p>
+        <p className="font-semibold">{t("draftRecovery.title")}</p>
         <p className="mt-1 text-amber-200">
-          Captured {capturedLabel} from revision {draft.baseRevision}. The
-          server is now at revision {serverRevision}.
+          {t("draftRecovery.revisionSummary", {
+            capturedAt: capturedLabel,
+            baseRevision: draft.baseRevision,
+            serverRevision,
+          })}
         </p>
         {!safeToRestore ? (
           <p className="mt-1 text-red-200">
-            Server layouts changed too, so automatic recovery is blocked to
-            prevent an overwrite. Download the draft before discarding it.
+            {t("draftRecovery.blocked")}
           </p>
         ) : null}
       </div>
@@ -45,7 +50,7 @@ export default function TemplateV2DraftRecovery({
           onClick={onRestore}
           disabled={!safeToRestore}
         >
-          Restore draft
+          {t("draftRecovery.restore")}
         </button>
         <button
           type="button"
@@ -67,22 +72,18 @@ export default function TemplateV2DraftRecovery({
             URL.revokeObjectURL(url);
           }}
         >
-          Download draft
+          {t("draftRecovery.download")}
         </button>
         <button
           type="button"
           className="rounded border border-amber-300/30 px-3 py-1.5"
           onClick={() => {
-            if (
-              window.confirm(
-                "Discard this browser draft? This cannot be undone."
-              )
-            ) {
+            if (window.confirm(t("draftRecovery.discardConfirm"))) {
               onDiscard();
             }
           }}
         >
-          Discard draft
+          {t("draftRecovery.discard")}
         </button>
       </div>
     </section>

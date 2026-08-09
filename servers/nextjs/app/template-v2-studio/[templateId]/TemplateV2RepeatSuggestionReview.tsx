@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 export interface RepeatSuggestion {
   id?: string;
   status?: string;
@@ -17,12 +21,34 @@ export default function TemplateV2RepeatSuggestionReview({
   acceptedIds: string[];
   onAcceptedIdsChange: (ids: string[]) => void;
 }) {
+  const t = useTranslations("studio");
   if (!suggestions.length) return null;
+
+  function axisLabel(axis: string | undefined) {
+    if (axis === "horizontal") {
+      return t("repeatSuggestions.axes.horizontal");
+    }
+    if (axis === "vertical") return t("repeatSuggestions.axes.vertical");
+    return t("repeatSuggestions.axes.unknown");
+  }
+
+  function statusLabel(status: string | undefined) {
+    if (status === "suggested") {
+      return t("repeatSuggestions.statuses.suggested");
+    }
+    if (status === "applied") {
+      return t("repeatSuggestions.statuses.applied");
+    }
+    if (status === "unapplied") {
+      return t("repeatSuggestions.statuses.unapplied");
+    }
+    return t("repeatSuggestions.statuses.unknown");
+  }
 
   return (
     <div>
       <p className="text-xs font-semibold text-amber-200">
-        Repeat-block suggestions
+        {t("repeatSuggestions.title")}
       </p>
       <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-slate-300">
         {suggestions.map((suggestion, index) => {
@@ -51,12 +77,20 @@ export default function TemplateV2RepeatSuggestionReview({
                   }}
                 />
                 <span>
-                  {suggestion.axis ?? "unknown"} ·{" "}
-                  {suggestion.source_ids?.length ?? 0} elements · confidence{" "}
-                  {typeof suggestion.confidence === "number"
-                    ? suggestion.confidence.toFixed(2)
-                    : "unknown"}
-                  {suggestion.status ? ` · ${suggestion.status}` : ""}
+                  {t(
+                    suggestion.status
+                      ? "repeatSuggestions.summaryWithStatus"
+                      : "repeatSuggestions.summary",
+                    {
+                      axis: axisLabel(suggestion.axis),
+                      count: suggestion.source_ids?.length ?? 0,
+                      confidence:
+                        typeof suggestion.confidence === "number"
+                          ? suggestion.confidence.toFixed(2)
+                          : t("repeatSuggestions.confidenceUnknown"),
+                      status: statusLabel(suggestion.status),
+                    },
+                  )}
                 </span>
               </label>
             </li>

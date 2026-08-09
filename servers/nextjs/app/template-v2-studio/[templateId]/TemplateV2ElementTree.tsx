@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import {
   isJsonRecord,
   records,
@@ -188,6 +190,7 @@ function ElementBranch({
   lockedPathKeys: ReadonlySet<string>;
   onSelect(path: ElementPath, additive: boolean): void;
 }) {
+  const t = useTranslations("studio");
   const children = elementChildren(element, path);
   const key = JSON.stringify(path);
   const selected = selectedPathKeys.has(key);
@@ -207,11 +210,17 @@ function ElementBranch({
             : "text-slate-300 hover:bg-slate-800"
         }`}
       >
-        {stringValue(element.name, stringValue(element.type, "element"))}
+        {stringValue(
+          element.name,
+          stringValue(element.type, t("elementTree.defaultElement"))
+        )}
         <span className="ml-1 text-slate-500">({pathLabel(path)})</span>
         {locked ? (
-          <span className="ml-1 text-amber-300" aria-label="Locked">
-            Locked
+          <span
+            className="ml-1 text-amber-300"
+            aria-label={t("elementTree.locked")}
+          >
+            {t("elementTree.locked")}
           </span>
         ) : null}
       </button>

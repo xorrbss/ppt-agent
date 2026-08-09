@@ -3,6 +3,7 @@ import React from "react";
 import TemplateV2ImageReplacementPanel, {
   type TemplateV2ImageReplacementApplyIntent,
 } from "./TemplateV2ImageReplacementPanel";
+import { mountWithStudioI18n } from "./studioI18nTestUtils.cy";
 
 const ONE_PIXEL_PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADElEQVR42mNk+M8AAAICAQB7CYspAAAAAElFTkSuQmCC";
@@ -13,7 +14,7 @@ function mountPanel(
     historyKey: string,
   ) => void,
 ) {
-  cy.mount(
+  mountWithStudioI18n(
     <TemplateV2ImageReplacementPanel
       element={{
         type: "image",

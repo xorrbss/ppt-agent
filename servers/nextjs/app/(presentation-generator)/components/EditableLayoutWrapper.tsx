@@ -54,7 +54,7 @@ interface EditableElement {
     src: string;
     dataPath: string;
     data: SlideDataNode;
-    element: HTMLImageElement | SVGElement;
+    element: HTMLElement;
     propertyIndex: number;
 }
 
@@ -239,14 +239,42 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
                     newEditableElements.push(editableElement);
 
-                    // Add click handler directly to the image
-                    const clickHandler = (e: Event) => {
+                    const originalAttributes = {
+                        tabIndex: htmlImg.getAttribute('tabindex'),
+                        role: htmlImg.getAttribute('role'),
+                        ariaLabel: htmlImg.getAttribute('aria-label'),
+                        ariaHasPopup: htmlImg.getAttribute('aria-haspopup'),
+                        ariaExpanded: htmlImg.getAttribute('aria-expanded'),
+                        editableAsset: htmlImg.getAttribute('data-editable-asset'),
+                    };
+                    const assetName = type === 'icon' ? 'icon' : 'image';
+                    const accessibleName = htmlImg.alt.trim()
+                        ? `Edit ${assetName}: ${htmlImg.alt.trim()}`
+                        : `Edit ${assetName} ${index + 1} on slide ${slideIndex + 1}`;
+
+                    htmlImg.setAttribute('tabindex', '0');
+                    htmlImg.setAttribute('role', 'button');
+                    htmlImg.setAttribute('aria-label', accessibleName);
+                    htmlImg.setAttribute('aria-haspopup', 'dialog');
+                    htmlImg.setAttribute('aria-expanded', 'false');
+                    htmlImg.setAttribute('data-editable-asset', assetName);
+
+                    const activateEditor = (e: Event) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setActiveEditor(editableElement);
+                        setActiveEditor((previous) => {
+                            previous?.element.setAttribute('aria-expanded', 'false');
+                            editableElement.element.setAttribute('aria-expanded', 'true');
+                            return editableElement;
+                        });
+                    };
+                    const keyDownHandler = (e: KeyboardEvent) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        activateEditor(e);
                     };
 
-                    htmlImg.addEventListener('click', clickHandler);
+                    htmlImg.addEventListener('click', activateEditor);
+                    htmlImg.addEventListener('keydown', keyDownHandler);
 
                     const propertiesData = resolveImageEditorProperties(properties, index);
                     const fit = propertiesData.initialObjectFit || 'cover';
@@ -277,7 +305,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
 
                     // Store cleanup functions
                     (htmlImg as HTMLImageElement & EditableCleanupCarrier)._editableCleanup = () => {
-                        htmlImg.removeEventListener('click', clickHandler);
+                        htmlImg.removeEventListener('click', activateEditor);
+                        htmlImg.removeEventListener('keydown', keyDownHandler);
                         htmlImg.removeEventListener('mouseenter', mouseEnterHandler);
                         htmlImg.removeEventListener('mouseleave', mouseLeaveHandler);
                         htmlImg.style.cursor = '';
@@ -286,6 +315,16 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         htmlImg.style.transform = '';
                         htmlImg.style.transformOrigin = '';
                         htmlImg.removeAttribute('data-editable-processed');
+                        const restoreAttribute = (name: string, value: string | null) => {
+                            if (value === null) htmlImg.removeAttribute(name);
+                            else htmlImg.setAttribute(name, value);
+                        };
+                        restoreAttribute('tabindex', originalAttributes.tabIndex);
+                        restoreAttribute('role', originalAttributes.role);
+                        restoreAttribute('aria-label', originalAttributes.ariaLabel);
+                        restoreAttribute('aria-haspopup', originalAttributes.ariaHasPopup);
+                        restoreAttribute('aria-expanded', originalAttributes.ariaExpanded);
+                        restoreAttribute('data-editable-asset', originalAttributes.editableAsset);
                     };
                 }
             }
@@ -306,6 +345,8 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                     // Mark as processed to prevent re-processing
                     svgEl.setAttribute('data-editable-processed', 'true');
 
+                    const activationElement = wrapperWithUrl ?? (svgEl as unknown as HTMLElement);
+
                     // Add a unique identifier to help with debugging
                     svgEl.setAttribute('data-editable-id', `${slideIndex}-icon-${dataPath}-svg-${index}`);
 
@@ -315,46 +356,90 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         src,
                         dataPath,
                         data,
-                        element: svgEl,
+                        element: activationElement,
                         propertyIndex: index
                     };
 
                     newEditableElements.push(editableElement);
 
-                    // Add click handler directly to the svg
-                    const clickHandler = (e: Event) => {
+                    const originalAttributes = {
+                        tabIndex: activationElement.getAttribute('tabindex'),
+                        role: activationElement.getAttribute('role'),
+                        ariaLabel: activationElement.getAttribute('aria-label'),
+                        ariaHasPopup: activationElement.getAttribute('aria-haspopup'),
+                        ariaExpanded: activationElement.getAttribute('aria-expanded'),
+                        editableAsset: activationElement.getAttribute('data-editable-asset'),
+                        editableId: activationElement.getAttribute('data-editable-id'),
+                    };
+                    const existingName = originalAttributes.ariaLabel?.trim();
+
+                    activationElement.setAttribute('data-editable-id', `${slideIndex}-icon-${dataPath}-${index}`);
+                    activationElement.setAttribute('tabindex', '0');
+                    activationElement.setAttribute('role', 'button');
+                    activationElement.setAttribute(
+                        'aria-label',
+                        existingName
+                            ? `Edit icon: ${existingName}`
+                            : `Edit icon ${index + 1} on slide ${slideIndex + 1}`
+                    );
+                    activationElement.setAttribute('aria-haspopup', 'dialog');
+                    activationElement.setAttribute('aria-expanded', 'false');
+                    activationElement.setAttribute('data-editable-asset', 'icon');
+
+                    const activateEditor = (e: Event) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setActiveEditor(editableElement);
+                        setActiveEditor((previous) => {
+                            previous?.element.setAttribute('aria-expanded', 'false');
+                            editableElement.element.setAttribute('aria-expanded', 'true');
+                            return editableElement;
+                        });
+                    };
+                    const keyDownHandler = (e: KeyboardEvent) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        activateEditor(e);
                     };
 
-                    svgEl.addEventListener('click', clickHandler);
+                    activationElement.addEventListener('click', activateEditor);
+                    activationElement.addEventListener('keydown', keyDownHandler);
 
                     // Add hover effects without changing layout
-                    (svgEl as unknown as HTMLElement).style.cursor = 'pointer';
-                    (svgEl as unknown as HTMLElement).style.transition = 'opacity 0.2s, transform 0.2s';
+                    activationElement.style.cursor = 'pointer';
+                    activationElement.style.transition = 'opacity 0.2s, transform 0.2s';
 
                     const mouseEnterHandler = () => {
-                        (svgEl as unknown as HTMLElement).style.opacity = '0.8';
+                        activationElement.style.opacity = '0.8';
                     };
 
                     const mouseLeaveHandler = () => {
-                        (svgEl as unknown as HTMLElement).style.opacity = '1';
+                        activationElement.style.opacity = '1';
                     };
 
-                    svgEl.addEventListener('mouseenter', mouseEnterHandler);
-                    svgEl.addEventListener('mouseleave', mouseLeaveHandler);
+                    activationElement.addEventListener('mouseenter', mouseEnterHandler);
+                    activationElement.addEventListener('mouseleave', mouseLeaveHandler);
 
                     // Store cleanup functions
-                    (svgEl as SVGElement & EditableCleanupCarrier)._editableCleanup = () => {
-                        svgEl.removeEventListener('click', clickHandler);
-                        svgEl.removeEventListener('mouseenter', mouseEnterHandler);
-                        svgEl.removeEventListener('mouseleave', mouseLeaveHandler);
-                        (svgEl as unknown as HTMLElement).style.cursor = '';
-                        (svgEl as unknown as HTMLElement).style.transition = '';
-                        (svgEl as unknown as HTMLElement).style.opacity = '';
-                        (svgEl as unknown as HTMLElement).style.transform = '';
+                    (activationElement as HTMLElement & EditableCleanupCarrier)._editableCleanup = () => {
+                        activationElement.removeEventListener('click', activateEditor);
+                        activationElement.removeEventListener('keydown', keyDownHandler);
+                        activationElement.removeEventListener('mouseenter', mouseEnterHandler);
+                        activationElement.removeEventListener('mouseleave', mouseLeaveHandler);
+                        activationElement.style.cursor = '';
+                        activationElement.style.transition = '';
+                        activationElement.style.opacity = '';
+                        activationElement.style.transform = '';
                         svgEl.removeAttribute('data-editable-processed');
+                        const restoreAttribute = (name: string, value: string | null) => {
+                            if (value === null) activationElement.removeAttribute(name);
+                            else activationElement.setAttribute(name, value);
+                        };
+                        restoreAttribute('tabindex', originalAttributes.tabIndex);
+                        restoreAttribute('role', originalAttributes.role);
+                        restoreAttribute('aria-label', originalAttributes.ariaLabel);
+                        restoreAttribute('aria-haspopup', originalAttributes.ariaHasPopup);
+                        restoreAttribute('aria-expanded', originalAttributes.ariaExpanded);
+                        restoreAttribute('data-editable-asset', originalAttributes.editableAsset);
+                        restoreAttribute('data-editable-id', originalAttributes.editableId);
                     };
                 }
             }
@@ -428,7 +513,16 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
      * Handles closing the active editor
      */
     const handleEditorClose = () => {
+        const returnTarget = activeEditor?.element;
+        returnTarget?.setAttribute('aria-expanded', 'false');
         setActiveEditor(null);
+        if (returnTarget) {
+            window.requestAnimationFrame(() => {
+                if (document.contains(returnTarget)) {
+                    returnTarget.focus();
+                }
+            });
+        }
     };
 
     /**
@@ -448,7 +542,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                 imageUrl: newImageUrl,
                 prompt: prompt || readMarker(activeEditor.data, '__image_prompt__')
             }));
-            setActiveEditor(null);
+            handleEditorClose();
         }
     };
     /**
@@ -495,7 +589,10 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     const iconQuery = readMarker(activeEditor?.data, '__icon_query__');
 
     return (
-        <div ref={containerRef} className="editable-layout-wrapper w-full relative">
+        <div
+            ref={containerRef}
+            className="editable-layout-wrapper relative w-full [&_[data-editable-asset]]:outline-none [&_[data-editable-asset]]:focus-visible:outline [&_[data-editable-asset]]:focus-visible:outline-[3px] [&_[data-editable-asset]]:focus-visible:outline-offset-[-3px] [&_[data-editable-asset]]:focus-visible:outline-[#6D28D9]"
+        >
             {children}
 
             {/* Adaptive structural-editing controls (edit-mode only; adaptive content

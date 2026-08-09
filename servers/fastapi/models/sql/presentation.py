@@ -2,7 +2,18 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 import uuid
-from sqlalchemy import BigInteger, CheckConstraint, JSON, Column, DateTime, ForeignKey, String, Uuid, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Uuid,
+    text,
+)
 from sqlmodel import Boolean, Field, SQLModel
 
 from models.presentation_outline_model import PresentationOutlineModel
@@ -28,6 +39,13 @@ class PresentationModel(SQLModel, table=True):
     __tablename__ = "presentations"
     __table_args__ = (
         CheckConstraint("revision >= 0", name="ck_presentations_revision_nonnegative"),
+        Index(
+            "ix_presentations_owner_lifecycle_updated_id",
+            "owner_id",
+            "lifecycle_status",
+            "updated_at",
+            "id",
+        ),
     )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
@@ -126,6 +144,22 @@ class PresentationModel(SQLModel, table=True):
     # without the admin session (see SessionAuthMiddleware exemption).
     share_token: Optional[str] = Field(
         sa_column=Column(String, unique=True, index=True), default=None
+    )
+    # Optional expiry and read counter for the current share token.  NULL expiry
+    # preserves the permanent-link behaviour of rows created before this schema
+    # was introduced.  A new/rotated token resets its counter to zero.
+    expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    view_count: int = Field(
+        default=0,
+        sa_column=Column(
+            BigInteger,
+            nullable=False,
+            default=0,
+            server_default=text("0"),
+        ),
     )
 
     def get_new_presentation(self):

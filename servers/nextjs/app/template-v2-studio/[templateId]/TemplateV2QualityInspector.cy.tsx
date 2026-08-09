@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import type { TemplateV2QualityApplyResult } from "@/lib/template-v2-quality-inspector";
 import type { JsonRecord } from "@/lib/template-v2-studio";
 import TemplateV2QualityInspector from "./TemplateV2QualityInspector";
+import { mountWithStudioI18n } from "./studioI18nTestUtils.cy";
 
 function fixture(): JsonRecord {
   return {
@@ -91,7 +92,7 @@ function Harness({
 describe("TemplateV2QualityInspector", () => {
   it("keeps inspection separate and requires diff preview plus explicit apply", () => {
     const onApplied = cy.stub().as("onApplied");
-    cy.mount(<Harness onApplied={onApplied} />);
+    mountWithStudioI18n(<Harness onApplied={onApplied} />);
 
     cy.get("@onApplied").should("not.have.been.called");
     cy.get('[data-testid="quality-inspection-run"]').click();

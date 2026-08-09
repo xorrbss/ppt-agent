@@ -1,6 +1,8 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -47,18 +49,7 @@ export interface StructuredTemplate {
 
 const TEMPLATE_V2_AUTOSAVE_DEBOUNCE_MS = 800;
 
-function errorMessage(status: number, payload: unknown): string {
-  if (isJsonRecord(payload)) {
-    if (typeof payload.detail === "string") return payload.detail;
-    if (
-      isJsonRecord(payload.detail) &&
-      payload.detail.code === "template_v2_revision_conflict"
-    ) {
-      return "This template changed in another session. Your local edits were preserved.";
-    }
-  }
-  return `Request failed (${status})`;
-}
+class TemplateV2PersistenceError extends Error {}
 
 async function readResponse(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -76,6 +67,7 @@ export function useTemplateV2StudioPersistence({
   state: TemplateV2StudioState;
   dispatch: Dispatch<TemplateV2StudioAction>;
 }) {
+  const t = useTranslations("studio");
   const [template, setTemplate] = useState<StructuredTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -103,6 +95,38 @@ export function useTemplateV2StudioPersistence({
     null
   );
 
+  const requestError = useCallback(
+    (status: number, payload: unknown) => {
+      if (
+        isJsonRecord(payload) &&
+        isJsonRecord(payload.detail) &&
+        payload.detail.code === "template_v2_revision_conflict"
+      ) {
+        return new TemplateV2PersistenceError(
+          t("persistence.revisionConflict")
+        );
+      }
+      return new TemplateV2PersistenceError(
+        t("persistence.requestFailed", { status })
+      );
+    },
+    [t]
+  );
+
+  const userError = useCallback(
+    (
+      caught: unknown,
+      fallbackKey:
+        | "persistence.loadFailed"
+        | "persistence.saveFailed"
+        | "persistence.rebaseFailed"
+    ) =>
+      caught instanceof TemplateV2PersistenceError
+        ? caught.message
+        : t(fallbackKey),
+    [t]
+  );
+
   useEffect(() => {
     templateRef.current = template;
     stateRef.current = state;
@@ -124,14 +148,16 @@ export function useTemplateV2StudioPersistence({
     )
       .then(async (response) => {
         const payload = await readResponse(response);
-        if (!response.ok) throw new Error(errorMessage(response.status, payload));
+        if (!response.ok) throw requestError(response.status, payload);
         if (
           !isJsonRecord(payload) ||
           typeof payload.id !== "string" ||
           typeof payload.name !== "string" ||
           typeof payload.revision !== "number"
         ) {
-          throw new Error("Structured template response is invalid");
+          throw new TemplateV2PersistenceError(
+            t("persistence.invalidResponse")
+          );
         }
         const layoutsDocument =
           adaptUpstreamTemplateV2LayoutsToStudio(payload.layouts);
@@ -175,17 +201,13 @@ export function useTemplateV2StudioPersistence({
         ) {
           return;
         }
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load structured template"
-        );
+        setError(userError(requestError, "persistence.loadFailed"));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [dispatch, templateId, reloadKey]);
+  }, [dispatch, reloadKey, requestError, t, templateId, userError]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -270,7 +292,9 @@ export function useTemplateV2StudioPersistence({
     context: TemplateV2AutosaveContext
   ) {
     const currentTemplate = templateRef.current;
-    if (!currentTemplate) throw new Error("Structured template is unavailable");
+    if (!currentTemplate) {
+      throw new TemplateV2PersistenceError(t("persistence.unavailable"));
+    }
     const saveToken = ++saveTokenRef.current;
     const revisionSnapshot = currentTemplate.revision;
     dispatch({
@@ -331,10 +355,12 @@ export function useTemplateV2StudioPersistence({
             });
           }
         }
-        throw new Error(errorMessage(response.status, payload));
+        throw requestError(response.status, payload);
       }
       if (!isJsonRecord(payload) || typeof payload.revision !== "number") {
-        throw new Error("Structured template save response is invalid");
+        throw new TemplateV2PersistenceError(
+          t("persistence.invalidSaveResponse")
+        );
       }
       const layoutsDocument =
         adaptUpstreamTemplateV2LayoutsToStudio(payload.layouts);
@@ -376,18 +402,14 @@ export function useTemplateV2StudioPersistence({
         }
         setNotice(
           context.trigger === "debounce" || context.trigger === "queued"
-            ? "Saved automatically"
-            : "Saved"
+            ? t("persistence.savedAutomatically")
+            : t("persistence.saved")
         );
       }
     } catch (saveError) {
       dispatch({ type: "save-failed", token: saveToken });
       if (mountedRef.current) {
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Unable to save structured template"
-        );
+        setError(userError(saveError, "persistence.saveFailed"));
       }
       throw saveError;
     } finally {
@@ -426,13 +448,13 @@ export function useTemplateV2StudioPersistence({
     if (!recoveryDraft || !template) return;
     if (!templateV2LayoutsEqual(recoveryDraft.baseLayouts, template.layouts)) {
       setError(
-        "Automatic draft recovery was blocked because server layouts changed."
+        t("persistence.draftRecoveryBlocked")
       );
       return;
     }
     dispatch({ type: "restore-draft", layouts: recoveryDraft.layouts });
     setRecoveryDraft(null);
-    setNotice("Browser draft restored");
+    setNotice(t("persistence.draftRestored"));
   }
 
   function discardRecoveryDraft() {
@@ -442,7 +464,7 @@ export function useTemplateV2StudioPersistence({
       // The in-memory prompt can still be dismissed.
     }
     setRecoveryDraft(null);
-    setNotice("Browser draft discarded");
+    setNotice(t("persistence.draftDiscarded"));
   }
 
   async function rebaseConflict() {
@@ -460,7 +482,7 @@ export function useTemplateV2StudioPersistence({
       );
       const payload = await readResponse(response);
       if (!response.ok) {
-        throw new Error(errorMessage(response.status, payload));
+        throw requestError(response.status, payload);
       }
       if (
         !isJsonRecord(payload) ||
@@ -468,7 +490,9 @@ export function useTemplateV2StudioPersistence({
         typeof payload.name !== "string" ||
         typeof payload.revision !== "number"
       ) {
-        throw new Error("Structured template response is invalid");
+        throw new TemplateV2PersistenceError(
+          t("persistence.invalidResponse")
+        );
       }
       const latestDocument = adaptUpstreamTemplateV2LayoutsToStudio(
         payload.layouts
@@ -481,8 +505,8 @@ export function useTemplateV2StudioPersistence({
           latestDocument.studioLayouts
         )
       ) {
-        throw new Error(
-          "Automatic rebase stopped because server layouts also changed. Download the local edits and resolve them manually."
+        throw new TemplateV2PersistenceError(
+          t("persistence.rebaseServerChanged")
         );
       }
       const localDocument = adaptUpstreamTemplateV2LayoutsToStudio(
@@ -510,14 +534,12 @@ export function useTemplateV2StudioPersistence({
         layouts: localDocument.studioLayouts,
       });
       setNotice(
-        `Local draft rebased onto revision ${latestTemplate.revision}; saving…`
+        t("persistence.rebaseSuccess", {
+          revision: latestTemplate.revision,
+        })
       );
     } catch (rebaseError) {
-      setError(
-        rebaseError instanceof Error
-          ? rebaseError.message
-          : "Unable to rebase local edits"
-      );
+      setError(userError(rebaseError, "persistence.rebaseFailed"));
     } finally {
       setRebasing(false);
     }

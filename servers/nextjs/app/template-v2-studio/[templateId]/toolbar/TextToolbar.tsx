@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import {
   ToolbarButton,
@@ -89,6 +91,7 @@ export default function TextToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const t = useTranslations("studio");
   const font = representativeFont(element);
   const family =
     typeof font.family === "string" && font.family ? font.family : "Arial";
@@ -110,9 +113,9 @@ export default function TextToolbar({
 
   return (
     <div className="flex items-center gap-1.5">
-      <ToolbarField label="Font family">
+      <ToolbarField label={t("toolbar.text.fontFamily")}>
         <ToolbarSelect
-          aria-label="Font family"
+          aria-label={t("toolbar.text.fontFamily")}
           value={family}
           onChange={(event) => patchFont("family", event.target.value)}
         >
@@ -123,10 +126,10 @@ export default function TextToolbar({
           ))}
         </ToolbarSelect>
       </ToolbarField>
-      <ToolbarField label="Font size">
+      <ToolbarField label={t("toolbar.text.fontSize")}>
         <input
           className={`${toolbarInputClass} w-16`}
-          aria-label="Font size"
+          aria-label={t("toolbar.text.fontSize")}
           type="number"
           min={1}
           max={400}
@@ -139,10 +142,10 @@ export default function TextToolbar({
           }
         />
       </ToolbarField>
-      <ToolbarField label="Text color">
+      <ToolbarField label={t("toolbar.text.color")}>
         <input
           className={`${toolbarInputClass} w-24`}
-          aria-label="Text color"
+          aria-label={t("toolbar.text.color")}
           type="text"
           value={typeof font.color === "string" ? font.color : ""}
           placeholder="#000000"
@@ -157,16 +160,16 @@ export default function TextToolbar({
           className={
             font[style] === true ? "border-violet-400 bg-violet-500/20" : ""
           }
-          aria-label={`${style[0].toUpperCase()}${style.slice(1)} text`}
+          aria-label={t(`toolbar.text.styles.${style}`)}
           aria-pressed={font[style] === true}
           onClick={() => patchFont(style, font[style] !== true)}
         >
-          {style === "bold" ? "B" : style === "italic" ? "I" : "U"}
+          {t(`toolbar.text.styleShort.${style}`)}
         </ToolbarButton>
       ))}
-      <ToolbarField label="Text alignment">
+      <ToolbarField label={t("toolbar.text.alignment")}>
         <ToolbarSelect
-          aria-label="Text alignment"
+          aria-label={t("toolbar.text.alignment")}
           value={
             alignment.horizontal === "center" ||
             alignment.horizontal === "right"
@@ -185,15 +188,15 @@ export default function TextToolbar({
             )
           }
         >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
+          <option value="left">{t("toolbar.common.left")}</option>
+          <option value="center">{t("toolbar.common.center")}</option>
+          <option value="right">{t("toolbar.common.right")}</option>
         </ToolbarSelect>
       </ToolbarField>
       {element.type === "text-list" && (
-        <ToolbarField label="List marker">
+        <ToolbarField label={t("toolbar.text.listMarker")}>
           <ToolbarSelect
-            aria-label="List marker"
+            aria-label={t("toolbar.text.listMarker")}
             value={
               element.marker === "number" || element.marker === "none"
                 ? element.marker
@@ -205,17 +208,17 @@ export default function TextToolbar({
               })
             }
           >
-            <option value="bullet">Bullets</option>
-            <option value="number">Numbers</option>
-            <option value="none">None</option>
+            <option value="bullet">{t("toolbar.text.bullets")}</option>
+            <option value="number">{t("toolbar.text.numbers")}</option>
+            <option value="none">{t("toolbar.common.none")}</option>
           </ToolbarSelect>
         </ToolbarField>
       )}
-      <ToolbarField label="Letter spacing">
-        <span aria-hidden="true">Tracking</span>
+      <ToolbarField label={t("toolbar.text.letterSpacing")}>
+        <span aria-hidden="true">{t("toolbar.text.tracking")}</span>
         <input
           className={`${toolbarInputClass} w-16`}
-          aria-label="Letter spacing"
+          aria-label={t("toolbar.text.letterSpacing")}
           type="number"
           min={-200}
           max={600}
@@ -228,11 +231,11 @@ export default function TextToolbar({
           }
         />
       </ToolbarField>
-      <ToolbarField label="Line height">
-        <span aria-hidden="true">Line</span>
+      <ToolbarField label={t("toolbar.text.lineHeight")}>
+        <span aria-hidden="true">{t("toolbar.text.line")}</span>
         <input
           className={`${toolbarInputClass} w-16`}
-          aria-label="Line height"
+          aria-label={t("toolbar.text.lineHeight")}
           type="number"
           min={0.5}
           max={5}
@@ -247,11 +250,11 @@ export default function TextToolbar({
           }
         />
       </ToolbarField>
-      <ToolbarField label="Text opacity">
-        <span aria-hidden="true">Opacity</span>
+      <ToolbarField label={t("toolbar.text.opacity")}>
+        <span aria-hidden="true">{t("toolbar.common.opacity")}</span>
         <input
           className="w-20 accent-violet-400"
-          aria-label="Text opacity"
+          aria-label={t("toolbar.text.opacity")}
           type="range"
           min={0}
           max={1}

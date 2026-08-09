@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 
 import { resolveTemplateV2ToolbarRoute } from "@/lib/template-v2-toolbar";
 import ChartToolbar from "./ChartToolbar";
@@ -29,6 +30,7 @@ export function TemplateV2SelectionToolbar({
   onReplaceImage,
   onChangeIcon,
 }: TemplateV2SelectionToolbarProps) {
+  const t = useTranslations("studio");
   const [mounted, setMounted] = useState(false);
   const route = resolveTemplateV2ToolbarRoute({
     selectionCount,
@@ -100,7 +102,7 @@ export function TemplateV2SelectionToolbar({
   return createPortal(
     <div
       role="toolbar"
-      aria-label="Selection toolbar"
+      aria-label={t("toolbar.selection.toolbar")}
       data-testid="template-v2-selection-toolbar"
       data-template-v2-floating-toolbar="true"
       className="fixed z-[10000] flex max-w-[calc(100vw-16px)] items-center gap-2 overflow-x-auto rounded-lg border border-slate-600 bg-slate-950/95 p-2 text-slate-100 shadow-2xl backdrop-blur"

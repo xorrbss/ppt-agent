@@ -155,19 +155,21 @@ const SlideContent = ({
           </div>
           {mutationsEnabled && !showNewSlideSelection && (
             <div
-              className="group-hover:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300"
+              className="group-hover:opacity-100 group-focus-within:opacity-100 hidden md:block opacity-0 transition-opacity my-4 duration-300"
               data-testid="slide-add-control"
             >
               <ToolTip content="아래에 새 슬라이드 추가">
                 {!isStreaming && (
-                  <div
+                  <button
+                    type="button"
+                    aria-label="아래에 새 슬라이드 추가"
                     onClick={() => {
                       setShowNewSlideSelection(true);
                     }}
-                    className="  bg-white shadow-md w-[80px] py-2 border hover:border-[#5141e5] duration-300  flex items-center justify-center rounded-lg cursor-pointer mx-auto"
+                    className="mx-auto flex w-[80px] cursor-pointer items-center justify-center rounded-lg border bg-white py-2 shadow-md duration-300 hover:border-[#5141e5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9] focus-visible:ring-offset-2"
                   >
-                    <PlusIcon className="text-gray-500 text-base cursor-pointer" />
-                  </div>
+                    <PlusIcon aria-hidden="true" className="text-gray-500 text-base cursor-pointer" />
+                  </button>
                 )}
               </ToolTip>
             </div>
@@ -199,7 +201,7 @@ const SlideContent = ({
               className={`absolute right-3 top-3 z-30 hidden md:flex flex-row items-center gap-2 rounded-[28px] border border-gray-200/80 bg-white/95 px-2.5 py-2 ${
                 isEditPopoverOpen || isSpeakerPopoverOpen
                   ? "opacity-100 pointer-events-auto"
-                  : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+                  : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto"
               }`}
               style={{
                 boxShadow: "0 2px 13.2px 0 rgba(0, 0, 0, 0.10)",
@@ -212,7 +214,8 @@ const SlideContent = ({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="flex px-3.5 py-2.5 items-center justify-center rounded-full bg-[#F7F6F9] font-syne"
+                    aria-label="프롬프트로 슬라이드 수정"
+                    className="flex px-3.5 py-2.5 items-center justify-center rounded-full bg-[#F7F6F9] font-syne focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
                   >
                     <ToolTip content="프롬프트로 슬라이드 수정">
                       <Pencil className="h-4 w-4" />
@@ -279,11 +282,12 @@ const SlideContent = ({
                   <PopoverTrigger asChild>
                     <button
                       type="button"
+                      aria-label={slide?.speaker_note ? "발표자 노트 편집" : "발표자 노트 추가"}
                       style={{
                         background:
                           "linear-gradient(270deg, #D5CAFC 2.4%, #E3D2EB 27.88%, #F4DCD3 69.23%, #FDE4C2 100%)",
                       }}
-                      className={`flex px-4 py-2.5 items-center justify-center rounded-full border font-syne ${
+                      className={`flex px-4 py-2.5 items-center justify-center rounded-full border font-syne focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9] ${
                         slide?.speaker_note
                           ? "border-violet-200 bg-violet-50 text-violet-700"
                           : "border-gray-200 bg-white text-gray-600"
@@ -356,8 +360,9 @@ const SlideContent = ({
 
               <button
                 type="button"
+                aria-label="슬라이드 삭제"
                 onClick={onDeleteSlide}
-                className="flex px-4 py-2.5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 font-syne"
+                className="flex px-4 py-2.5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 font-syne focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9]"
               >
                 <ToolTip content="슬라이드 삭제">
                   <Trash className="h-4 w-4" />

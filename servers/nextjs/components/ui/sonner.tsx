@@ -46,16 +46,24 @@ export const notify = {
   dismiss: (id?: string | number) => sonnerToast.dismiss(id),
 } as const
 
-type ToasterProps = React.ComponentProps<typeof Sonner>
+type ToasterProps = React.ComponentProps<typeof Sonner> & {
+  closeButtonAriaLabel?: string
+  closeLabel?: string
+}
 
-const Toaster = ({ icons, ...props }: ToasterProps) => {
+const Toaster = ({
+  closeButtonAriaLabel = "Dismiss notification",
+  closeLabel = "Got it!",
+  icons,
+  ...props
+}: ToasterProps) => {
   const defaultIcons: NonNullable<ToasterProps["icons"]> = {
     success: <BadgeCheck aria-hidden="true" />,
     error: <ShieldAlert aria-hidden="true" />,
     info: <NeutralToastIcon />,
     warning: <TriangleAlert aria-hidden="true" />,
     loading: <Loader2 aria-hidden="true" className="animate-spin" />,
-    close: <span aria-hidden="true">Got it!</span>,
+    close: <span aria-hidden="true">{closeLabel}</span>,
   }
 
   return (
@@ -211,43 +219,6 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
           background: rgb(248 250 252) !important; /* slate-50 */
         }
 
-        /* Dark mode — same radius, border weight, shadow; frosted dark surface */
-        .dark [data-sonner-toast][data-styled="true"] {
-          border-radius: 10px !important;
-          border: 1px solid rgba(148, 163, 184, 0.22) !important;
-          background: rgba(2, 6, 23, 0.6) !important;
-          box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.06) !important;
-          backdrop-filter: blur(6px) !important;
-          -webkit-backdrop-filter: blur(6px) !important;
-        }
-
-        .dark [data-sonner-toast][data-styled="true"] [data-title] {
-          color: rgb(248 250 252) !important; /* slate-50 */
-        }
-
-        .dark [data-sonner-toast][data-styled="true"] [data-description] {
-          color: rgb(148 163 184) !important; /* slate-400 */
-        }
-
-        .dark [data-sonner-toast][data-styled="true"] [data-button] {
-          background: rgb(2 6 23) !important;
-          color: rgb(248 250 252) !important;
-          border: 1px solid rgba(148, 163, 184, 0.26) !important;
-        }
-
-        .dark [data-sonner-toast][data-styled="true"] [data-close-button] {
-          background: rgb(2 6 23) !important;
-          color: rgb(248 250 252) !important;
-          border: 1px solid rgba(148, 163, 184, 0.26) !important;
-        }
-
-        .dark [data-sonner-toast][data-styled="true"] [data-button]:hover {
-          background: rgb(15 23 42) !important; /* slate-900 */
-        }
-
-        .dark [data-sonner-toast][data-styled="true"] [data-close-button]:hover {
-          background: rgb(15 23 42) !important; /* slate-900 */
-        }
       `}</style>
       <Sonner
         style={{ zIndex: 999999999 }}
@@ -256,7 +227,7 @@ const Toaster = ({ icons, ...props }: ToasterProps) => {
         closeButton
         toastOptions={{
           closeButton: true,
-          closeButtonAriaLabel: "Dismiss notification",
+          closeButtonAriaLabel,
           classNames: {
             toast: "group toast",
             description: "group-[.toast]:text-muted-foreground",

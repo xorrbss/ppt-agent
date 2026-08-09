@@ -1,3 +1,7 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import {
   editTemplateV2VectorPointTopology,
@@ -18,6 +22,7 @@ export default function VectorToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const t = useTranslations("studio");
   const firstPointCapability =
     templateV2ProvenVectorEditCapability(element);
   const wrapCapability =
@@ -35,8 +40,8 @@ export default function VectorToolbar({
       {firstPointCapability && (
         <ToolbarButton
           className="px-1.5"
-          aria-label="Add vector point after"
-          title="Add a point after the first point"
+          aria-label={t("toolbar.vector.addPointAfter")}
+          title={t("toolbar.vector.addPointAfterTitle")}
           onClick={() => {
             const edit = editTemplateV2VectorPointTopology(element, {
               type: "add-after",
@@ -55,8 +60,8 @@ export default function VectorToolbar({
       {wrapCapability && (
         <ToolbarButton
           className="px-1.5"
-          aria-label="Add wrap vector point after last"
-          title="Add a midpoint after the last point, wrapping to the first"
+          aria-label={t("toolbar.vector.addWrapPointAfterLast")}
+          title={t("toolbar.vector.addWrapPointAfterLastTitle")}
           onClick={() => {
             const edit = editTemplateV2VectorPointTopology(element, {
               type: "add-after",
@@ -75,8 +80,8 @@ export default function VectorToolbar({
       {wrapRemovalCapability && (
         <ToolbarButton
           className="px-1.5"
-          aria-label="Remove proven wrap vector midpoint"
-          title="Remove the midpoint from the proven wrap insertion"
+          aria-label={t("toolbar.vector.removeWrapMidpoint")}
+          title={t("toolbar.vector.removeWrapMidpointTitle")}
           onClick={() => {
             const edit = editTemplateV2VectorPointTopology(element, {
               type: "remove-proven-wrap-midpoint",

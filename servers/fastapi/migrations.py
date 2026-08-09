@@ -61,7 +61,8 @@ REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS = "fc3d5e7f9a1b"
 # schema of its own, so no `_schema_revision` step detects it: a database is
 # stamped at the revision above and this one then tops up whatever is missing.
 REVISION_CLEANUP_JOURNAL_REDRIVE = "b3d7f1a9c2e4"
-HEAD_REVISION = REVISION_CLEANUP_JOURNAL_REDRIVE
+REVISION_PRESENTATION_SEARCH_AND_SHARE_METRICS = "c4e8f0a2b6d9"
+HEAD_REVISION = REVISION_PRESENTATION_SEARCH_AND_SHARE_METRICS
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {

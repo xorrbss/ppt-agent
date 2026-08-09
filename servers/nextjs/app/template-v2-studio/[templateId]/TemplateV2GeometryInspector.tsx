@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type KeyboardEvent } from "react";
+import { useTranslations } from "next-intl";
 
 import { elementCapabilities } from "@/lib/template-v2-konva";
 import {
@@ -16,13 +17,13 @@ interface TemplateV2GeometryInspectorProps {
   onChange: (geometry: ElementGeometry) => void;
 }
 
-const LABELS: Record<TemplateV2GeometryField, string> = {
-  x: "X",
-  y: "Y",
-  width: "Width",
-  height: "Height",
-  rotation: "Rotation",
-};
+const LABEL_KEYS = {
+  x: "geometryInspector.fields.x",
+  y: "geometryInspector.fields.y",
+  width: "geometryInspector.fields.width",
+  height: "geometryInspector.fields.height",
+  rotation: "geometryInspector.fields.rotation",
+} as const satisfies Record<TemplateV2GeometryField, string>;
 
 function geometryDrafts(element: JsonRecord) {
   const geometry = currentTemplateV2Geometry(element);
@@ -40,6 +41,7 @@ export default function TemplateV2GeometryInspector({
   disabled,
   onChange,
 }: TemplateV2GeometryInspectorProps) {
+  const t = useTranslations("studio");
   const capabilities = elementCapabilities(element);
   const [drafts, setDrafts] = useState(() => geometryDrafts(element));
 
@@ -85,17 +87,19 @@ export default function TemplateV2GeometryInspector({
 
   return (
     <section className="mt-5">
-      <p className="text-sm font-medium">Geometry</p>
+      <p className="text-sm font-medium">{t("geometryInspector.title")}</p>
       <div className="mt-2 grid grid-cols-2 gap-2">
         {fields.map((field) => (
           <label key={field} className="text-xs text-slate-400">
-            {LABELS[field]}
+            {t(LABEL_KEYS[field])}
             <input
               type="number"
               step="0.01"
               value={drafts[field]}
               disabled={disabled}
-              aria-label={`${LABELS[field]} geometry`}
+              aria-label={t("geometryInspector.fieldAria", {
+                field: t(LABEL_KEYS[field]),
+              })}
               onChange={(event) =>
                 setDrafts((current) => ({
                   ...current,

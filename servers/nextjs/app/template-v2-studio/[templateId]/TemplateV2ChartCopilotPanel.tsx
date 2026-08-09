@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   TEMPLATE_V2_CHART_COPILOT_LIMITS,
@@ -36,26 +37,52 @@ const AXIS_CONTROLS: readonly TemplateV2ChartControl[] = [
   "grid_color",
 ];
 
-const CONTROL_LABELS: ReadonlyArray<{
-  control: Extract<
-    TemplateV2ChartControl,
-    "legend" | "x_axis" | "y_axis" | "x_axis_grid" | "y_axis_grid"
-  >;
-  label: string;
-  axis?: boolean;
-}> = [
-  { control: "legend", label: "Show legend" },
-  { control: "x_axis", label: "Show X axis", axis: true },
-  { control: "y_axis", label: "Show Y axis", axis: true },
-  { control: "x_axis_grid", label: "Show X grid", axis: true },
-  { control: "y_axis_grid", label: "Show Y grid", axis: true },
-];
+const CONTROL_LABELS = [
+  {
+    control: "legend",
+    labelKey: "chartCopilot.controls.legend",
+    axis: false,
+  },
+  { control: "x_axis", labelKey: "chartCopilot.controls.xAxis", axis: true },
+  { control: "y_axis", labelKey: "chartCopilot.controls.yAxis", axis: true },
+  {
+    control: "x_axis_grid",
+    labelKey: "chartCopilot.controls.xGrid",
+    axis: true,
+  },
+  {
+    control: "y_axis_grid",
+    labelKey: "chartCopilot.controls.yGrid",
+    axis: true,
+  },
+] as const;
 
-function errorMessage(error: unknown): string {
+function errorKey(error: unknown) {
   if (error instanceof TemplateV2ChartCopilotError) {
-    return `${error.code} (${error.path})`;
+    if (error.code === "template_v2_chart_copilot_invalid_chart") {
+      return "chartCopilot.errors.invalidChart";
+    }
+    if (error.code === "template_v2_chart_copilot_invalid_operation") {
+      return "chartCopilot.errors.invalidOperation";
+    }
+    if (error.code === "template_v2_chart_copilot_unsupported_control") {
+      return "chartCopilot.errors.unsupportedControl";
+    }
+    if (error.code === "template_v2_chart_copilot_incompatible_control") {
+      return "chartCopilot.errors.incompatibleControl";
+    }
+    if (error.code === "template_v2_chart_copilot_limit_exceeded") {
+      return "chartCopilot.errors.limitExceeded";
+    }
+    if (error.code === "template_v2_chart_copilot_invalid_import") {
+      return "chartCopilot.errors.invalidImport";
+    }
+    if (error.code === "template_v2_chart_copilot_provider_unavailable") {
+      return "chartCopilot.errors.providerUnavailable";
+    }
+    return "chartCopilot.errors.invalidProviderResponse";
   }
-  return "template_v2_chart_copilot_invalid_operation";
+  return "chartCopilot.errors.unavailable";
 }
 
 function chartPreview(
@@ -78,8 +105,8 @@ function replaceLatestControl(
   ];
 }
 
-function formatDiffValue(value: unknown): string {
-  if (value === undefined) return "unset";
+function formatDiffValue(value: unknown, unsetLabel: string): string {
+  if (value === undefined) return unsetLabel;
   const formatted = JSON.stringify(value);
   return formatted.length > 90 ? `${formatted.slice(0, 87)}...` : formatted;
 }
@@ -136,6 +163,7 @@ export default function TemplateV2ChartCopilotPanel({
   disabled: boolean;
   onApply(chart: JsonRecord, historyKey: string): void;
 }) {
+  const t = useTranslations("studio");
   const [operations, setOperations] = useState<
     TemplateV2ChartCopilotOperation[]
   >([]);
@@ -159,20 +187,25 @@ export default function TemplateV2ChartCopilotPanel({
   if (element.type !== "chart") return null;
 
   if (!current) {
-    let contractError = "template_v2_chart_copilot_invalid_chart";
+    let contractErrorKey: ReturnType<typeof errorKey> =
+      "chartCopilot.errors.invalidChart";
     try {
       chartPreview(element, operations);
     } catch (caught) {
-      contractError = errorMessage(caught);
+      contractErrorKey = errorKey(caught);
     }
     return (
       <section
-        aria-label="AI chart copilot"
+        aria-label={t("chartCopilot.ariaLabel")}
         className="mt-5 rounded-xl border border-red-500/30 bg-red-950/20 p-3"
       >
-        <h3 className="text-sm font-semibold text-red-100">AI chart copilot</h3>
+        <h3 className="text-sm font-semibold text-red-100">
+          {t("chartCopilot.title")}
+        </h3>
         <p role="alert" className="mt-2 text-xs text-red-300">
-          Chart editing is blocked by the strict contract: {contractError}
+          {t("chartCopilot.contractBlocked", {
+            reason: t(contractErrorKey),
+          })}
         </p>
       </section>
     );
@@ -193,7 +226,7 @@ export default function TemplateV2ChartCopilotPanel({
       setError(null);
       setStatus(nextStatus ?? null);
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(t(errorKey(caught)));
       setStatus(null);
     }
   }
@@ -232,11 +265,11 @@ export default function TemplateV2ChartCopilotPanel({
       setError(null);
       setStatus(
         next.diff.length
-          ? "Preview ready. No chart data has been changed yet."
-          : "There are no changes to preview.",
+          ? t("chartCopilot.status.previewReady")
+          : t("chartCopilot.status.noChanges"),
       );
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(t(errorKey(caught)));
     }
   }
 
@@ -245,7 +278,7 @@ export default function TemplateV2ChartCopilotPanel({
     setOperations([]);
     setReview(null);
     setError(null);
-    setStatus("Draft canceled. No chart data changed.");
+    setStatus(t("chartCopilot.status.canceled"));
   }
 
   function apply() {
@@ -258,7 +291,7 @@ export default function TemplateV2ChartCopilotPanel({
     setOperations([]);
     setReview(null);
     setError(null);
-    setStatus("Chart patch applied. Autosave and global undo remain available.");
+    setStatus(t("chartCopilot.status.applied"));
   }
 
   function importData() {
@@ -269,10 +302,13 @@ export default function TemplateV2ChartCopilotPanel({
       });
       append({ kind: "replace-data", ...imported });
       setStatus(
-        `Imported ${imported.categories.length} categories and ${imported.series.length} series into the draft.`,
+        t("chartCopilot.status.imported", {
+          categories: imported.categories.length,
+          series: imported.series.length,
+        }),
       );
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(t(errorKey(caught)));
       setStatus(null);
     }
   }
@@ -282,56 +318,62 @@ export default function TemplateV2ChartCopilotPanel({
       const recommendation = recommendTemplateV2Chart(current);
       setControl("chart_type", recommendation.chartType);
       setStatus(
-        `Recommendation: ${recommendation.chartType} (${recommendation.reasonCode}, ${recommendation.confidence}). Review before applying.`,
+        t("chartCopilot.status.recommendation", {
+          chartType: t(`chartCopilot.chartTypes.${recommendation.chartType}`),
+          reason: t(
+            `chartCopilot.recommendationReasons.${recommendation.reasonCode}`,
+          ),
+          confidence: t(`chartCopilot.confidence.${recommendation.confidence}`),
+        }),
       );
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(t(errorKey(caught)));
     }
   }
 
   return (
     <section
-      aria-label="AI chart copilot"
+      aria-label={t("chartCopilot.ariaLabel")}
       className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-3"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-cyan-100">
-            AI chart copilot
+            {t("chartCopilot.title")}
           </h3>
           <p className="mt-1 text-xs text-slate-400">
-            Deterministic local draft · bounded patch only · no provider call
+            {t("chartCopilot.description")}
           </p>
         </div>
         <span className="rounded bg-slate-950 px-2 py-1 text-[10px] text-emerald-300">
-          strict
+          {t("chartCopilot.strict")}
         </span>
       </div>
 
       <fieldset className="mt-3 space-y-3" disabled={controlsDisabled}>
         <legend className="text-xs font-medium text-slate-200">
-          Chart controls
+          {t("chartCopilot.controlsLegend")}
         </legend>
         <label className="block text-xs text-slate-300">
-          Chart type
+          {t("chartCopilot.chartTypeLabel")}
           <select
-            aria-label="Chart copilot chart type"
+            aria-label={t("chartCopilot.chartTypeAria")}
             className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-2"
             value={current.chart_type}
             onChange={(event) => setControl("chart_type", event.target.value)}
           >
             {TEMPLATE_V2_CHART_TYPES.map((chartType) => (
               <option key={chartType} value={chartType}>
-                {chartType}
+                {t(`chartCopilot.chartTypes.${chartType}`)}
               </option>
             ))}
           </select>
         </label>
 
         <label className="block text-xs text-slate-300">
-          Title
+          {t("chartCopilot.titleLabel")}
           <input
-            aria-label="Chart copilot title"
+            aria-label={t("chartCopilot.titleAria")}
             className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-2"
             value={typeof current.title === "string" ? current.title : ""}
             maxLength={TEMPLATE_V2_CHART_COPILOT_LIMITS.maxTitleCharacters}
@@ -340,7 +382,7 @@ export default function TemplateV2ChartCopilotPanel({
         </label>
 
         <div className="grid grid-cols-2 gap-2">
-          {CONTROL_LABELS.map(({ control, label, axis }) => (
+          {CONTROL_LABELS.map(({ control, labelKey, axis }) => (
             <label
               key={control}
               className={`flex items-center gap-2 rounded border border-slate-800 p-2 text-xs ${
@@ -349,28 +391,33 @@ export default function TemplateV2ChartCopilotPanel({
             >
               <input
                 type="checkbox"
-                aria-label={`Chart copilot ${label}`}
+                aria-label={t("chartCopilot.controlAria", {
+                  label: t(labelKey),
+                })}
                 checked={current[control] === true}
                 disabled={controlsDisabled || (axis && !axisCompatible)}
                 onChange={(event) => setControl(control, event.target.checked)}
               />
-              {label}
+              {t(labelKey)}
             </label>
           ))}
         </div>
 
         {!axisCompatible ? (
           <p className="rounded bg-amber-950/30 p-2 text-xs text-amber-300">
-            Axis and grid controls are incompatible with {current.chart_type}{" "}
-            and are fail-closed.
+            {t("chartCopilot.axisIncompatible", {
+              chartType: t(`chartCopilot.chartTypes.${current.chart_type}`),
+            })}
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-2">
             {(["x", "y"] as const).map((axis) => (
               <label key={axis} className="text-xs text-slate-300">
-                {axis.toUpperCase()} axis title
+                {t("chartCopilot.axisTitle", { axis: axis.toUpperCase() })}
                 <input
-                  aria-label={`Chart copilot ${axis.toUpperCase()} axis title`}
+                  aria-label={t("chartCopilot.axisTitleAria", {
+                    axis: axis.toUpperCase(),
+                  })}
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-2"
                   value={
                     typeof current[`${axis}_axis_title`] === "string"
@@ -389,20 +436,22 @@ export default function TemplateV2ChartCopilotPanel({
         <div className="grid grid-cols-2 gap-2">
           {(
             [
-              ["title_color", "Title color"],
-              ["legend_color", "Legend color"],
-              ["axis_color", "Axis color"],
-              ["grid_color", "Grid color"],
+              ["title_color", "chartCopilot.colors.title"],
+              ["legend_color", "chartCopilot.colors.legend"],
+              ["axis_color", "chartCopilot.colors.axis"],
+              ["grid_color", "chartCopilot.colors.grid"],
             ] as const
-          ).map(([control, label]) => {
+          ).map(([control, labelKey]) => {
             const incompatible =
               (control === "axis_color" || control === "grid_color") &&
               !axisCompatible;
             return (
               <label key={control} className="text-xs text-slate-300">
-                {label}
+                {t(labelKey)}
                 <input
-                  aria-label={`Chart copilot ${label}`}
+                  aria-label={t("chartCopilot.colorAria", {
+                    label: t(labelKey),
+                  })}
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-2"
                   value={
                     typeof current[control] === "string"
@@ -410,7 +459,7 @@ export default function TemplateV2ChartCopilotPanel({
                       : ""
                   }
                   disabled={controlsDisabled || incompatible}
-                  placeholder="#334155"
+                  placeholder={t("chartCopilot.colorPlaceholder")}
                   onChange={(event) =>
                     event.target.value &&
                     setControl(control, event.target.value)
@@ -422,24 +471,24 @@ export default function TemplateV2ChartCopilotPanel({
         </div>
 
         <label className="block text-xs text-slate-300">
-          Data labels
+          {t("chartCopilot.dataLabels.label")}
           <select
-            aria-label="Chart copilot data labels"
+            aria-label={t("chartCopilot.dataLabels.aria")}
             className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-2"
             value={
-              typeof current.data_labels === "string"
-                ? current.data_labels
-                : ""
+              typeof current.data_labels === "string" ? current.data_labels : ""
             }
             onChange={(event) =>
               setControl("data_labels", event.target.value || null)
             }
           >
-            <option value="">None</option>
-            <option value="base">Base</option>
-            <option value="mid">Middle</option>
-            <option value="top">Top</option>
-            <option value="outside">Outside</option>
+            <option value="">{t("chartCopilot.dataLabels.none")}</option>
+            <option value="base">{t("chartCopilot.dataLabels.base")}</option>
+            <option value="mid">{t("chartCopilot.dataLabels.mid")}</option>
+            <option value="top">{t("chartCopilot.dataLabels.top")}</option>
+            <option value="outside">
+              {t("chartCopilot.dataLabels.outside")}
+            </option>
           </select>
         </label>
       </fieldset>
@@ -449,7 +498,7 @@ export default function TemplateV2ChartCopilotPanel({
         disabled={controlsDisabled}
       >
         <legend className="px-1 text-xs font-medium text-slate-200">
-          Series
+          {t("chartCopilot.series.legend")}
         </legend>
         {current.series.map((series, seriesIndex) => (
           <div
@@ -458,7 +507,9 @@ export default function TemplateV2ChartCopilotPanel({
           >
             <div className="flex gap-1">
               <input
-                aria-label={`Chart copilot series ${seriesIndex + 1} name`}
+                aria-label={t("chartCopilot.series.nameAria", {
+                  number: seriesIndex + 1,
+                })}
                 className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs"
                 value={series.name}
                 maxLength={
@@ -476,7 +527,9 @@ export default function TemplateV2ChartCopilotPanel({
               />
               <button
                 type="button"
-                aria-label={`Move chart series ${seriesIndex + 1} up`}
+                aria-label={t("chartCopilot.series.moveUpAria", {
+                  number: seriesIndex + 1,
+                })}
                 disabled={controlsDisabled || seriesIndex === 0}
                 className="rounded border border-slate-700 px-2 text-xs disabled:opacity-30"
                 onClick={() =>
@@ -491,7 +544,9 @@ export default function TemplateV2ChartCopilotPanel({
               </button>
               <button
                 type="button"
-                aria-label={`Move chart series ${seriesIndex + 1} down`}
+                aria-label={t("chartCopilot.series.moveDownAria", {
+                  number: seriesIndex + 1,
+                })}
                 disabled={
                   controlsDisabled || seriesIndex === current.series.length - 1
                 }
@@ -508,12 +563,14 @@ export default function TemplateV2ChartCopilotPanel({
               </button>
               <button
                 type="button"
-                aria-label={`Delete chart series ${seriesIndex + 1}`}
+                aria-label={t("chartCopilot.series.deleteAria", {
+                  number: seriesIndex + 1,
+                })}
                 disabled={controlsDisabled || current.series.length === 1}
                 className="rounded border border-red-800 px-2 text-xs text-red-300 disabled:opacity-30"
                 onClick={() => append({ kind: "remove-series", seriesIndex })}
               >
-                Delete
+                {t("chartCopilot.series.delete")}
               </button>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-1">
@@ -524,7 +581,10 @@ export default function TemplateV2ChartCopilotPanel({
                 >
                   {current.categories[categoryIndex]}
                   <SeriesValueInput
-                    label={`Chart copilot series ${seriesIndex + 1} value ${categoryIndex + 1}`}
+                    label={t("chartCopilot.series.valueAria", {
+                      series: seriesIndex + 1,
+                      category: categoryIndex + 1,
+                    })}
                     value={value}
                     disabled={controlsDisabled}
                     onCommit={(nextValue) => {
@@ -555,13 +615,15 @@ export default function TemplateV2ChartCopilotPanel({
             append({
               kind: "add-series",
               series: {
-                name: `Series ${current.series.length + 1}`,
+                name: t("chartCopilot.series.defaultName", {
+                  number: current.series.length + 1,
+                }),
                 values: current.categories.map(() => 0),
               },
             })
           }
         >
-          Add series
+          {t("chartCopilot.series.add")}
         </button>
       </fieldset>
 
@@ -570,25 +632,25 @@ export default function TemplateV2ChartCopilotPanel({
         disabled={controlsDisabled}
       >
         <legend className="px-1 text-xs font-medium text-slate-200">
-          Bounded CSV / TSV import
+          {t("chartCopilot.import.legend")}
         </legend>
         <select
-          aria-label="Chart copilot import format"
+          aria-label={t("chartCopilot.import.formatAria")}
           className="mt-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs"
           value={importFormat}
           onChange={(event) =>
             setImportFormat(event.target.value as "csv" | "tsv")
           }
         >
-          <option value="csv">CSV</option>
-          <option value="tsv">TSV</option>
+          <option value="csv">{t("chartCopilot.import.csv")}</option>
+          <option value="tsv">{t("chartCopilot.import.tsv")}</option>
         </select>
         <textarea
-          aria-label="Chart copilot import data"
+          aria-label={t("chartCopilot.import.dataAria")}
           className="mt-2 min-h-24 w-full rounded border border-slate-700 bg-slate-950 px-2 py-2 text-xs"
           value={importText}
           maxLength={TEMPLATE_V2_CHART_COPILOT_LIMITS.maxInputBytes}
-          placeholder={"Category,Revenue\nQ1,10\nQ2,12"}
+          placeholder={t("chartCopilot.import.placeholder")}
           onChange={(event) => setImportText(event.target.value)}
         />
         <button
@@ -597,7 +659,7 @@ export default function TemplateV2ChartCopilotPanel({
           disabled={!importText}
           onClick={importData}
         >
-          Validate and stage import
+          {t("chartCopilot.import.validate")}
         </button>
       </fieldset>
 
@@ -608,7 +670,7 @@ export default function TemplateV2ChartCopilotPanel({
           disabled={controlsDisabled}
           onClick={useRecommendation}
         >
-          Stage deterministic recommendation
+          {t("chartCopilot.recommendationButton")}
         </button>
         <button
           type="button"
@@ -616,7 +678,7 @@ export default function TemplateV2ChartCopilotPanel({
           disabled={disabled || review !== null || operations.length === 0}
           onClick={previewChanges}
         >
-          Preview draft
+          {t("chartCopilot.previewButton")}
         </button>
       </div>
 
@@ -633,18 +695,20 @@ export default function TemplateV2ChartCopilotPanel({
 
       {review ? (
         <div
-          aria-label="Chart copilot preview"
+          aria-label={t("chartCopilot.previewAria")}
           className="mt-4 rounded-lg border border-cyan-600/50 bg-slate-950 p-3"
         >
           <p className="text-xs font-semibold text-cyan-100">
-            Patch preview · {review.diff.length} changed field
-            {review.diff.length === 1 ? "" : "s"}
+            {t("chartCopilot.previewSummary", {
+              count: review.diff.length,
+            })}
           </p>
           <ul className="mt-2 space-y-1">
             {review.diff.map((item) => (
               <li key={item.path} className="text-[11px] text-slate-300">
-                <strong>{item.path}</strong>: {formatDiffValue(item.before)} →{" "}
-                {formatDiffValue(item.after)}
+                <strong>{item.path}</strong>:{" "}
+                {formatDiffValue(item.before, t("chartCopilot.unset"))} →{" "}
+                {formatDiffValue(item.after, t("chartCopilot.unset"))}
               </li>
             ))}
           </ul>
@@ -655,14 +719,14 @@ export default function TemplateV2ChartCopilotPanel({
               disabled={disabled || review.diff.length === 0}
               onClick={apply}
             >
-              Apply chart patch
+              {t("chartCopilot.apply")}
             </button>
             <button
               type="button"
               className="rounded border border-slate-600 px-3 py-2 text-xs"
               onClick={cancel}
             >
-              Cancel
+              {t("chartCopilot.cancel")}
             </button>
           </div>
         </div>
@@ -672,7 +736,7 @@ export default function TemplateV2ChartCopilotPanel({
           className="mt-2 w-full rounded border border-slate-700 px-3 py-2 text-xs"
           onClick={cancel}
         >
-          Cancel draft
+          {t("chartCopilot.cancelDraft")}
         </button>
       ) : null}
     </section>

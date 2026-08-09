@@ -1,5 +1,6 @@
 import React from "react";
 import { Provider } from "react-redux";
+import { NextIntlClientProvider } from "next-intl";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import {
   PathnameContext,
@@ -14,6 +15,9 @@ import {
   testViewports,
 } from "@/cypress/support/testHelpers";
 import PresentationPage from "./PresentationPage";
+import enMessages from "@/i18n/messages/en.json";
+
+type AxeRuntime = typeof import("axe-core");
 
 const presentationId = "deck-1";
 const presentationUrl = `**/api/v1/ppt/presentation/${presentationId}`;
@@ -36,6 +40,36 @@ const buildDeck = (slideCount: number) => ({
   ),
 });
 
+function assertNoSevereAxeViolations() {
+  cy.readFile("node_modules/axe-core/axe.min.js", "utf8")
+    .then((source: string) =>
+      cy.window().then((window) => {
+        window.Function(source)();
+        const pageAxe = (window as typeof window & { axe?: AxeRuntime }).axe;
+        if (!pageAxe) throw new Error("axe-core did not attach to the component window");
+        const drawer = window.document.querySelector(
+          '[data-testid="mobile-thumbnail-drawer"]',
+        );
+        if (!drawer) throw new Error("Thumbnail drawer was not mounted for the axe audit");
+        return pageAxe.run(drawer);
+      }),
+    )
+    .then((results) => {
+      const severe = results.violations.filter(
+        ({ impact }) => impact === "serious" || impact === "critical",
+      );
+      const summary = severe
+        .map(
+          (violation) =>
+            `${violation.id}: ${violation.nodes
+              .map((node) => node.target.join(" > "))
+              .join(", ")}`,
+        )
+        .join("\n");
+      expect(severe, summary).to.have.length(0);
+    });
+}
+
 describe("<PresentationPage />", () => {
   let apiMocks: ApiMockManager;
   let router: ReturnType<typeof createMockRouter>;
@@ -43,17 +77,19 @@ describe("<PresentationPage />", () => {
   const mountPage = () => {
     router = createMockRouter();
     cy.mount(
-      <AppRouterContext.Provider value={router as never}>
-        <PathnameContext.Provider value="/presentation">
-          <SearchParamsContext.Provider
-            value={new URLSearchParams(`id=${presentationId}`) as never}
-          >
-            <Provider store={makeStore()}>
-              <PresentationPage presentation_id={presentationId} />
-            </Provider>
-          </SearchParamsContext.Provider>
-        </PathnameContext.Provider>
-      </AppRouterContext.Provider>,
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AppRouterContext.Provider value={router as never}>
+          <PathnameContext.Provider value="/presentation">
+            <SearchParamsContext.Provider
+              value={new URLSearchParams(`id=${presentationId}`) as never}
+            >
+              <Provider store={makeStore()}>
+                <PresentationPage presentation_id={presentationId} />
+              </Provider>
+            </SearchParamsContext.Provider>
+          </PathnameContext.Provider>
+        </AppRouterContext.Provider>
+      </NextIntlClientProvider>,
     );
   };
 
@@ -148,5 +184,57 @@ describe("<PresentationPage />", () => {
     cy.wrap(null).should(() => {
       expect(router.push).to.have.been.calledWith("/upload");
     });
+  });
+
+  it("uses a focus-safe thumbnail drawer on mobile and returns focus on Escape", () => {
+    cy.viewport(testViewports.mobile.width, testViewports.mobile.height);
+    apiMocks.setupGetIntercept(presentationUrl, buildDeck(3), "loadDeck");
+
+    mountPage();
+    cy.wait("@loadDeck");
+
+    cy.get('[data-thumbnail-display="rail"]').should("not.be.visible");
+    cy.get('[data-testid="mobile-thumbnail-drawer-trigger"]')
+      .should("be.visible")
+      .focus()
+      .click()
+      .should("have.attr", "aria-expanded", "true");
+    cy.get('[data-testid="mobile-thumbnail-drawer"]')
+      .should("be.visible")
+      .and("have.attr", "role", "dialog")
+      .should(($dialog) => {
+        expect($dialog[0].contains($dialog[0].ownerDocument.activeElement)).to.eq(true);
+      });
+    cy.get('[data-testid="mobile-thumbnail-drawer"] > button').first().should(
+      ($button) => {
+        const bounds = $button[0].getBoundingClientRect();
+        expect(bounds.width).to.be.at.least(44);
+        expect(bounds.height).to.be.at.least(44);
+      },
+    );
+    assertNoSevereAxeViolations();
+
+    cy.press(Cypress.Keyboard.Keys.ESC);
+    cy.get('[data-testid="mobile-thumbnail-drawer"]').should("not.exist");
+    cy.get('[data-testid="mobile-thumbnail-drawer-trigger"]').should("be.focused");
+
+    cy.get('[data-testid="mobile-thumbnail-drawer-trigger"]').click();
+    cy.get('[data-thumbnail-display="drawer"] [data-testid="slide-thumbnail-select-1"]').click();
+    cy.get('[data-testid="mobile-thumbnail-drawer"]').should("not.exist");
+    cy.get("#presentation-slides-pane").should("be.visible");
+
+    cy.get('[data-testid="mobile-thumbnail-drawer-trigger"]').click();
+    cy.get('[data-thumbnail-display="drawer"] [data-testid="slide-thumbnail-select-1"]')
+      .should("have.attr", "aria-current", "page");
+  });
+
+  it("keeps the desktop thumbnail rail and hides the mobile drawer trigger", () => {
+    apiMocks.setupGetIntercept(presentationUrl, buildDeck(2), "loadDeck");
+
+    mountPage();
+    cy.wait("@loadDeck");
+
+    cy.get('[data-thumbnail-display="rail"]').should("be.visible");
+    cy.get('[data-testid="mobile-thumbnail-drawer-trigger"]').should("not.be.visible");
   });
 });

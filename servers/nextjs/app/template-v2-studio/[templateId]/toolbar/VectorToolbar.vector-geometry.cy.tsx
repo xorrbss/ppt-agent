@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
+import { mountWithStudioI18n } from "../studioI18nTestUtils.cy";
 import VectorToolbar from "./VectorToolbar";
 import type { TemplateV2ToolbarPatch } from "./types";
 
@@ -76,7 +77,7 @@ const pinnedUpstreamVector: TemplateV2ToolbarRecord = {
 describe("VectorToolbar proven upstream edit contract", () => {
   it("exposes only the pinned add-after operation and closes after one edit", () => {
     const patch = cy.spy().as("patch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulVectorToolbar
         initialElement={pinnedUpstreamVector}
         observedPatch={patch}
@@ -132,7 +133,7 @@ describe("VectorToolbar proven upstream edit contract", () => {
 
   it("applies only the witnessed last-to-first wrap midpoint edit", () => {
     const patch = cy.spy().as("wrapPatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulVectorToolbar
         initialElement={pinnedUpstreamVector}
         observedPatch={patch}
@@ -209,7 +210,7 @@ describe("VectorToolbar proven upstream edit contract", () => {
       },
     ];
 
-    cy.mount(
+    mountWithStudioI18n(
       <div>
         {unsupported.map((element, index) => (
           <VectorToolbar

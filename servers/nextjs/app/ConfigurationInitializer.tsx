@@ -11,6 +11,8 @@ import { getApiUrl } from '@/utils/api';
 import Image from 'next/image';
 import { notify } from '@/components/ui/sonner';
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/app/(presentation-generator)/services/api/api-error-handler';
+import { UiLocaleSwitcher } from '@/components/i18n/UiLocaleSwitcher';
+import { useTranslations } from 'next-intl';
 
 const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
   try {
@@ -34,6 +36,7 @@ const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
 
 export function ConfigurationInitializer({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
+  const t = useTranslations();
 
   const route = usePathname();
   const [isLoading, setIsLoading] = useState(
@@ -154,8 +157,8 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
           dispatch(setLLMConfig(runtimeConfig));
           if (!runtime.configured) {
             notify.error(
-              "Instance not configured",
-              "Ask the administrator to configure the AI providers in Settings."
+              t("initialization.instanceNotConfiguredTitle"),
+              t("initialization.instanceNotConfiguredDescription")
             );
             setIsLoading(false);
             return;
@@ -171,7 +174,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
         setIsLoading(false);
       }
     }
-  }, [dispatch, route, router, setLoadingToFalseAfterNavigatingTo]);
+  }, [dispatch, route, router, setLoadingToFalseAfterNavigatingTo, t]);
 
   // Fetch user config state
   useEffect(() => {
@@ -184,6 +187,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
       <div className="flex min-h-screen items-center justify-center bg-white p-4">
         <div className="w-full max-w-md">
           <div className="rounded-2xl border border-[#EDEEEF] bg-white p-8 text-center shadow-xl">
+            <UiLocaleSwitcher className="mb-5 ml-auto" />
             {/* Logo/Branding */}
             <div className="mb-6">
               <Image
@@ -200,10 +204,10 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
             {/* Loading Text */}
             <div className="space-y-2">
               <h3 className="text-lg font-semibold text-gray-800 font-inter">
-                Initializing Application
+                {t("initialization.title")}
               </h3>
               <p className="text-sm text-gray-600 font-inter">
-                Loading configuration and checking model availability...
+                {t("initialization.description")}
               </p>
             </div>
 

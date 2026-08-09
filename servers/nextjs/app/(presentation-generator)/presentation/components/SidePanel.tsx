@@ -47,6 +47,7 @@ interface SidePanelProps {
   presentationId: string;
   loading: boolean;
   mutationsEnabled?: boolean;
+  displayMode?: "rail" | "drawer";
 }
 
 const SidePanel = ({
@@ -55,6 +56,7 @@ const SidePanel = ({
   presentationId,
   loading,
   mutationsEnabled = true,
+  displayMode = "rail",
 }: SidePanelProps) => {
   const pathname = usePathname();
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
@@ -73,6 +75,7 @@ const SidePanel = ({
     ? presentationData.slides[lastSlideIndex].layout.split(":")[0]
     : "";
   const isTemplateFree = isTemplateFreePresentation(presentationData);
+  const previewScale = displayMode === "drawer" ? 0.18 : undefined;
 
   useEffect(() => {
     const container = thumbnailScrollRef.current;
@@ -160,6 +163,7 @@ const SidePanel = ({
     if (!active || !over || !presentationData?.slides) return;
 
     if (active.id !== over.id) {
+      const selectedSlideId = presentationData.slides[selectedSlide]?.id;
       // Find the indices of the dragged and target items
       const oldIndex = presentationData?.slides.findIndex(
         (item: Slide) => item.id === active.id,
@@ -185,6 +189,14 @@ const SidePanel = ({
       dispatch(
         setPresentationData({ ...presentationData, slides: updatedArray }),
       );
+      if (selectedSlideId) {
+        const nextSelectedIndex = updatedArray.findIndex(
+          (slide) => slide.id === selectedSlideId,
+        );
+        if (nextSelectedIndex >= 0 && nextSelectedIndex !== selectedSlide) {
+          requestAnimationFrame(() => onSlideClick(nextSelectedIndex));
+        }
+      }
       trackEvent(MixpanelEvent.Presentation_Slides_Reordered, {
         pathname,
         presentation_id: presentationId,
@@ -238,7 +250,10 @@ const SidePanel = ({
     : null;
 
   return (
-    <div className="px-4 w-[120px] h-full">
+    <div
+      data-thumbnail-display={displayMode}
+      className={displayMode === "drawer" ? "h-full w-full px-2" : "h-full w-[120px] px-4"}
+    >
       <div
         className={`
           relative  h-full z-50 xl:z-auto 
@@ -254,16 +269,19 @@ const SidePanel = ({
             <div
               ref={thumbnailScrollRef}
               data-testid="slide-thumbnail-scroll"
+              role="navigation"
+              aria-label="Slide thumbnails"
               className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5"
             >
               {isStreaming || !mutationsEnabled ? (
                 presentationData &&
                 presentationData?.slides.map((slide: Slide, index: number) => (
                   <SlideThumbnailCard
-                    key={`${slide.id}-${index}`}
+                    key={slide.id || String(index)}
                     slide={slide}
                     index={index}
                     selected={selectedSlide === index}
+                    previewScale={previewScale}
                     onClick={() => onSlideClick(slide.index ?? index)}
                   />
                 ))
@@ -280,11 +298,12 @@ const SidePanel = ({
                     presentationData?.slides.map(
                       (slide: Slide, index: number) => (
                         <SortableSlide
-                          key={`${slide.id}-${index}`}
+                          key={slide.id || String(index)}
                           slide={slide}
                           index={index}
                           selectedSlide={selectedSlide}
                           onSlideClick={onSlideClick}
+                          previewScale={previewScale}
                         />
                       ),
                     )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -14,36 +15,36 @@ import {
 } from "@/lib/template-v2-quality-inspector";
 import type { JsonRecord } from "@/lib/template-v2-studio";
 
-const FINDING_LABELS: Record<string, string> = {
-  TEXT_OVERFLOW: "Text overflow",
-  TEXT_BELOW_9PT: "Text below 9 pt",
-  TEXT_LOW_CONTRAST: "Low text contrast",
-  SLIDE_OVERDENSE: "Overcrowded slide",
-  CHART_UNIT_UNSPECIFIED: "Chart unit missing",
-  CHART_LEGEND_MISSING: "Chart legend missing",
-  TABLE_TOO_MANY_COLUMNS: "Too many table columns",
-  ELEMENT_UNSUPPORTED: "Unsupported element",
-  ELEMENT_RASTER_ONLY: "Raster-only element",
-};
+const FINDING_KEYS = {
+  TEXT_OVERFLOW: "qualityInspector.findings.textOverflow",
+  TEXT_BELOW_9PT: "qualityInspector.findings.textBelow9pt",
+  TEXT_LOW_CONTRAST: "qualityInspector.findings.lowTextContrast",
+  SLIDE_OVERDENSE: "qualityInspector.findings.overcrowdedSlide",
+  CHART_UNIT_UNSPECIFIED: "qualityInspector.findings.chartUnitMissing",
+  CHART_LEGEND_MISSING: "qualityInspector.findings.chartLegendMissing",
+  TABLE_TOO_MANY_COLUMNS: "qualityInspector.findings.tooManyTableColumns",
+  ELEMENT_UNSUPPORTED: "qualityInspector.findings.unsupportedElement",
+  ELEMENT_RASTER_ONLY: "qualityInspector.findings.rasterOnlyElement",
+} as const satisfies Record<TemplateV2QualityFinding["reasonCode"], string>;
 
-function valueLabel(value: unknown): string {
-  if (value === undefined) return "undefined";
-  return typeof value === "string" ? value : JSON.stringify(value);
-}
+const DETAIL_KEYS = {
+  actual: "qualityInspector.details.actual",
+  minimum: "qualityInspector.details.minimum",
+  actual_length: "qualityInspector.details.actualLength",
+  maximum: "qualityInspector.details.maximum",
+  background: "qualityInspector.details.background",
+  ratio: "qualityInspector.details.ratio",
+  required: "qualityInspector.details.required",
+  series_count: "qualityInspector.details.seriesCount",
+  recommended_maximum: "qualityInspector.details.recommendedMaximum",
+  reason: "qualityInspector.details.reason",
+} as const;
 
-function errorLabel(error: unknown): string {
-  if (!(error instanceof TemplateV2QualityInspectorError)) {
-    return "Quality inspection failed closed.";
-  }
-  if (
-    error.code === "template_v2_quality_stale_revision" ||
-    error.code === "template_v2_quality_preview_stale" ||
-    error.code === "template_v2_quality_inspection_stale"
-  ) {
-    return "The template changed. Run a fresh inspection.";
-  }
-  return `Quality inspection unavailable (${error.code}).`;
-}
+const SEVERITY_KEYS = {
+  error: "qualityInspector.severity.error",
+  warning: "qualityInspector.severity.warning",
+  info: "qualityInspector.severity.info",
+} as const;
 
 function FindingCard({
   finding,
@@ -54,6 +55,19 @@ function FindingCard({
   disabled: boolean;
   onPreview(finding: TemplateV2QualityFinding): void;
 }) {
+  const t = useTranslations("studio");
+
+  function detailValue(value: string | number | boolean) {
+    if (typeof value === "boolean") {
+      return t(
+        value
+          ? "qualityInspector.details.trueValue"
+          : "qualityInspector.details.falseValue",
+      );
+    }
+    return String(value);
+  }
+
   return (
     <li
       data-testid={`quality-finding-${finding.reasonCode}`}
@@ -62,7 +76,7 @@ function FindingCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium text-slate-100">
-            {FINDING_LABELS[finding.reasonCode]}
+            {t(FINDING_KEYS[finding.reasonCode])}
           </p>
           <code className="mt-1 block text-[10px] text-violet-300">
             {finding.reasonCode}
@@ -77,7 +91,7 @@ function FindingCard({
                 : "bg-sky-950 text-sky-200"
           }`}
         >
-          {finding.severity}
+          {t(SEVERITY_KEYS[finding.severity])}
         </span>
       </div>
       <p className="mt-2 break-all text-[10px] text-slate-500">
@@ -87,8 +101,14 @@ function FindingCard({
         <dl className="mt-2 grid grid-cols-2 gap-x-2 text-[10px] text-slate-400">
           {Object.entries(finding.details).map(([key, value]) => (
             <div key={key} className="contents">
-              <dt>{key}</dt>
-              <dd className="text-right text-slate-300">{String(value)}</dd>
+              <dt>
+                {Object.prototype.hasOwnProperty.call(DETAIL_KEYS, key)
+                  ? t(DETAIL_KEYS[key as keyof typeof DETAIL_KEYS])
+                  : t("qualityInspector.details.unknown")}
+              </dt>
+              <dd className="text-right text-slate-300">
+                {detailValue(value)}
+              </dd>
             </div>
           ))}
         </dl>
@@ -100,11 +120,11 @@ function FindingCard({
           onClick={() => onPreview(finding)}
           className="mt-3 w-full rounded border border-violet-500/60 px-2 py-1.5 text-xs text-violet-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Preview fix
+          {t("qualityInspector.previewFix")}
         </button>
       ) : (
         <p className="mt-2 text-[10px] text-slate-500">
-          Review only — no deterministic safe fix.
+          {t("qualityInspector.reviewOnly")}
         </p>
       )}
     </li>
@@ -122,6 +142,7 @@ export default function TemplateV2QualityInspector({
   disabled?: boolean;
   onApply(result: TemplateV2QualityApplyResult): void;
 }) {
+  const t = useTranslations("studio");
   const [inspection, setInspection] =
     useState<TemplateV2QualityInspection | null>(null);
   const [preview, setPreview] = useState<TemplateV2QualityFixPreview | null>(
@@ -130,6 +151,25 @@ export default function TemplateV2QualityInspector({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const counter = useRef(0);
+
+  function valueLabel(value: unknown): string {
+    if (value === undefined) return t("qualityInspector.undefinedValue");
+    return typeof value === "string" ? value : JSON.stringify(value);
+  }
+
+  function errorLabel(caught: unknown): string {
+    if (!(caught instanceof TemplateV2QualityInspectorError)) {
+      return t("qualityInspector.errors.failedClosed");
+    }
+    if (
+      caught.code === "template_v2_quality_stale_revision" ||
+      caught.code === "template_v2_quality_preview_stale" ||
+      caught.code === "template_v2_quality_inspection_stale"
+    ) {
+      return t("qualityInspector.errors.stale");
+    }
+    return t("qualityInspector.errors.unavailable");
+  }
 
   useEffect(() => {
     setInspection(null);
@@ -146,8 +186,10 @@ export default function TemplateV2QualityInspector({
       setError(null);
       setStatus(
         result.findings.length
-          ? `${result.findings.length} deterministic finding(s).`
-          : "No deterministic findings."
+          ? t("qualityInspector.findingsFound", {
+              count: result.findings.length,
+            })
+          : t("qualityInspector.noFindings")
       );
     } catch (caught) {
       setInspection(null);
@@ -173,7 +215,7 @@ export default function TemplateV2QualityInspector({
         })
       );
       setError(null);
-      setStatus("Fix preview ready. No changes have been applied.");
+      setStatus(t("qualityInspector.previewReady"));
     } catch (caught) {
       setPreview(null);
       setError(errorLabel(caught));
@@ -194,7 +236,7 @@ export default function TemplateV2QualityInspector({
       setPreview(null);
       setInspection(null);
       setError(null);
-      setStatus("Fix applied locally. Autosave is required.");
+      setStatus(t("qualityInspector.fixApplied"));
     } catch (caught) {
       setError(errorLabel(caught));
     }
@@ -207,9 +249,11 @@ export default function TemplateV2QualityInspector({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-medium">AI quality inspection</h3>
+          <h3 className="text-sm font-medium">
+            {t("qualityInspector.title")}
+          </h3>
           <p className="mt-1 text-xs text-slate-500">
-            Deterministic local checks. Inspection never edits the template.
+            {t("qualityInspector.description")}
           </p>
         </div>
         <button
@@ -219,7 +263,7 @@ export default function TemplateV2QualityInspector({
           onClick={runInspection}
           className="shrink-0 rounded border border-slate-600 px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Run inspection
+          {t("qualityInspector.runInspection")}
         </button>
       </div>
 
@@ -253,20 +297,24 @@ export default function TemplateV2QualityInspector({
           className="mt-3 rounded border border-violet-500/50 bg-violet-950/20 p-3"
         >
           <p className="text-xs font-medium text-violet-200">
-            Explicit fix preview
+            {t("qualityInspector.explicitPreview")}
           </p>
           <code className="mt-1 block break-all text-[10px] text-slate-400">
             {preview.patch.reasonCode} · {preview.patch.path.join(" / ")}
           </code>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded bg-red-950/50 p-2">
-              <p className="text-[10px] uppercase text-red-300">Before</p>
+              <p className="text-[10px] uppercase text-red-300">
+                {t("qualityInspector.before")}
+              </p>
               <p className="mt-1 break-all text-red-100">
                 {valueLabel(preview.patch.before)}
               </p>
             </div>
             <div className="rounded bg-emerald-950/50 p-2">
-              <p className="text-[10px] uppercase text-emerald-300">After</p>
+              <p className="text-[10px] uppercase text-emerald-300">
+                {t("qualityInspector.after")}
+              </p>
               <p className="mt-1 break-all text-emerald-100">
                 {valueLabel(preview.patch.after)}
               </p>
@@ -278,11 +326,11 @@ export default function TemplateV2QualityInspector({
               data-testid="quality-fix-cancel"
               onClick={() => {
                 setPreview(null);
-                setStatus("Fix preview canceled. No changes were applied.");
+                setStatus(t("qualityInspector.previewCanceled"));
               }}
               className="rounded border border-slate-600 px-2 py-1.5 text-xs"
             >
-              Cancel
+              {t("qualityInspector.cancel")}
             </button>
             <button
               type="button"
@@ -291,7 +339,7 @@ export default function TemplateV2QualityInspector({
               onClick={applyFix}
               className="rounded bg-violet-600 px-2 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Apply fix
+              {t("qualityInspector.applyFix")}
             </button>
           </div>
         </div>

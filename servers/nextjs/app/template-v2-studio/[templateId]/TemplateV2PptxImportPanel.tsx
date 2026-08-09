@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 
 import { getApiUrl } from "@/utils/api";
 import { useUploadLimits } from "@/lib/use-upload-limits";
@@ -11,6 +12,50 @@ import TemplateV2RepeatSuggestionReview, {
 
 const IMPORT_ENDPOINT = "/api/v1/ppt/structured-templates/imports";
 const ACTIVE_STATES = new Set(["queued", "processing", "finalizing"]);
+
+const IMPORT_STATE_KEYS = {
+  queued: "pptxImport.states.queued",
+  processing: "pptxImport.states.processing",
+  finalizing: "pptxImport.states.finalizing",
+  confirming: "pptxImport.states.confirming",
+  review_required: "pptxImport.states.reviewRequired",
+  failed: "pptxImport.states.failed",
+  confirmed: "pptxImport.states.confirmed",
+  cancelled: "pptxImport.states.cancelled",
+} as const;
+
+const ANALYSIS_STATUS_KEYS = {
+  available: "pptxImport.analysisStatuses.available",
+  unavailable: "pptxImport.analysisStatuses.unavailable",
+  not_provided: "pptxImport.analysisStatuses.notProvided",
+  not_run: "pptxImport.analysisStatuses.notRun",
+  completed: "pptxImport.analysisStatuses.completed",
+  passed: "pptxImport.analysisStatuses.passed",
+  failed: "pptxImport.analysisStatuses.failed",
+  not_evaluated: "pptxImport.analysisStatuses.notEvaluated",
+} as const;
+
+type ImportStateKey =
+  | (typeof IMPORT_STATE_KEYS)[keyof typeof IMPORT_STATE_KEYS]
+  | "pptxImport.states.unknown";
+type AnalysisStatusKey =
+  | (typeof ANALYSIS_STATUS_KEYS)[keyof typeof ANALYSIS_STATUS_KEYS]
+  | "pptxImport.analysisStatuses.unknown";
+
+function importStateKey(state: string): ImportStateKey {
+  return (
+    (IMPORT_STATE_KEYS as Readonly<Record<string, ImportStateKey>>)[state] ??
+    "pptxImport.states.unknown"
+  );
+}
+
+function analysisStatusKey(status: string | undefined): AnalysisStatusKey {
+  return status
+    ? ((ANALYSIS_STATUS_KEYS as Readonly<Record<string, AnalysisStatusKey>>)[
+        status
+      ] ?? "pptxImport.analysisStatuses.unknown")
+    : "pptxImport.analysisStatuses.unknown";
+}
 
 interface ImportRecord {
   id: string;
@@ -59,7 +104,7 @@ function newIdempotencyKey(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join(
-    ""
+    "",
   );
 }
 
@@ -70,21 +115,9 @@ async function responsePayload(response: Response): Promise<unknown> {
     : response.text();
 }
 
-function requestError(status: number, payload: unknown): string {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "detail" in payload &&
-    typeof payload.detail === "string"
-  ) {
-    return payload.detail;
-  }
-  return `Request failed (${status})`;
-}
-
 async function readImportResponse(response: Response): Promise<ImportRecord> {
   const payload = await responsePayload(response);
-  if (!response.ok) throw new Error(requestError(response.status, payload));
+  if (!response.ok) throw new Error();
   return payload as ImportRecord;
 }
 
@@ -93,10 +126,11 @@ export default function TemplateV2PptxImportPanel({
 }: {
   currentTemplateId: string;
 }) {
+  const t = useTranslations("studio");
   const uploadLimits = useUploadLimits();
   const [expanded, setExpanded] = useState(false);
   const [newTemplateId, setNewTemplateId] = useState(
-    `${currentTemplateId.slice(0, 115)}-import`
+    `${currentTemplateId.slice(0, 115)}-import`,
   );
   const [file, setFile] = useState<File | null>(null);
   const [record, setRecord] = useState<ImportRecord | null>(null);
@@ -115,18 +149,14 @@ export default function TemplateV2PptxImportPanel({
         try {
           const response = await fetch(
             getApiUrl(
-              `${IMPORT_ENDPOINT}/${encodeURIComponent(activeImportId)}`
-            )
+              `${IMPORT_ENDPOINT}/${encodeURIComponent(activeImportId)}`,
+            ),
           );
           const next = await readImportResponse(response);
           if (!stopped) setRecord(next);
-        } catch (pollError) {
+        } catch {
           if (!stopped) {
-            setError(
-              pollError instanceof Error
-                ? pollError.message
-                : "Unable to refresh import status"
-            );
+            setError(t("pptxImport.errors.refresh"));
           }
         }
       })();
@@ -135,37 +165,36 @@ export default function TemplateV2PptxImportPanel({
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [activeImportId]);
+  }, [activeImportId, t]);
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     if (!file) {
-      setError("Choose a .pptx file.");
+      setError(t("pptxImport.errors.chooseFile"));
       return;
     }
     if (!file.name.toLowerCase().endsWith(".pptx")) {
-      setError("Only .pptx files are accepted.");
+      setError(t("pptxImport.errors.invalidFileType"));
       return;
     }
     if (file.size > uploadLimits.document.bytes) {
       setError(
-        `The PPTX exceeds the ${uploadLimits.document.mb} MB upload limit.`
+        t("pptxImport.errors.fileTooLarge", {
+          limit: uploadLimits.document.mb,
+        }),
       );
       return;
     }
     const templateId = newTemplateId.trim();
     if (!templateId || templateId.length > 128) {
-      setError("New template ID must be between 1 and 128 characters.");
+      setError(t("pptxImport.errors.templateIdLength"));
       return;
     }
 
-    const identity = [
-      templateId,
-      file.name,
-      file.size,
-      file.lastModified,
-    ].join("\u0000");
+    const identity = [templateId, file.name, file.size, file.lastModified].join(
+      "\u0000",
+    );
     if (uploadKey.current?.identity !== identity) {
       uploadKey.current = { identity, key: newIdempotencyKey() };
     }
@@ -182,12 +211,8 @@ export default function TemplateV2PptxImportPanel({
       });
       setAcceptedRepeatIds([]);
       setRecord(await readImportResponse(response));
-    } catch (uploadError) {
-      setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : "Unable to upload PPTX"
-      );
+    } catch {
+      setError(t("pptxImport.errors.upload"));
     } finally {
       setBusy(false);
     }
@@ -197,9 +222,7 @@ export default function TemplateV2PptxImportPanel({
     if (!record) return;
     if (
       action === "confirm" &&
-      !window.confirm(
-        "Create a new Template V2 from this reviewed deterministic candidate? Existing templates and presentations will not be converted."
-      )
+      !window.confirm(t("pptxImport.confirmCreate"))
     ) {
       return;
     }
@@ -208,7 +231,7 @@ export default function TemplateV2PptxImportPanel({
     try {
       const response = await fetch(
         getApiUrl(
-          `${IMPORT_ENDPOINT}/${encodeURIComponent(record.id)}/${action}`
+          `${IMPORT_ENDPOINT}/${encodeURIComponent(record.id)}/${action}`,
         ),
         {
           method: "POST",
@@ -219,15 +242,11 @@ export default function TemplateV2PptxImportPanel({
               ? { accepted_repeat_suggestion_ids: acceptedRepeatIds }
               : {}),
           }),
-        }
+        },
       );
       setRecord(await readImportResponse(response));
-    } catch (mutationError) {
-      setError(
-        mutationError instanceof Error
-          ? mutationError.message
-          : `Unable to ${action} import`
-      );
+    } catch {
+      setError(t(`pptxImport.errors.${action}`));
     } finally {
       setBusy(false);
     }
@@ -244,21 +263,23 @@ export default function TemplateV2PptxImportPanel({
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
       >
-        {expanded ? "Hide" : "Open"} reviewed PPTX import
+        {expanded
+          ? t("pptxImport.hideReviewedImport")
+          : t("pptxImport.openReviewedImport")}
       </button>
       {!expanded ? null : (
         <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
           <form className="space-y-3" onSubmit={upload}>
             <p className="text-xs text-slate-400">
-              Analysis is local and deterministic. It does not run Vision,
-              OCR, or an external AI provider.
+              {t("pptxImport.localAnalysisDescription")}
             </p>
             <p className="text-xs text-slate-400">
-              Maximum PPTX size: {uploadLimits.document.mb} MB. The limit
-              protects memory, temporary disk, and conversion time.
+              {t("pptxImport.uploadLimitDescription", {
+                limit: uploadLimits.document.mb,
+              })}
             </p>
             <label className="block text-xs text-slate-300">
-              New template ID
+              {t("pptxImport.newTemplateId")}
               <input
                 value={newTemplateId}
                 maxLength={128}
@@ -267,7 +288,7 @@ export default function TemplateV2PptxImportPanel({
               />
             </label>
             <label className="block text-xs text-slate-300">
-              PPTX source
+              {t("pptxImport.pptxSource")}
               <input
                 type="file"
                 accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -283,7 +304,9 @@ export default function TemplateV2PptxImportPanel({
               disabled={busy}
               className="rounded bg-violet-500 px-4 py-2 text-sm font-semibold disabled:opacity-40"
             >
-              {busy ? "Working…" : "Upload and analyze"}
+              {busy
+                ? t("pptxImport.working")
+                : t("pptxImport.uploadAndAnalyze")}
             </button>
           </form>
 
@@ -294,23 +317,25 @@ export default function TemplateV2PptxImportPanel({
               </p>
             ) : null}
             {!record ? (
-              <p className="text-slate-400">
-                No import in this review session. Uploading never converts the
-                current presentation.
-              </p>
+              <p className="text-slate-400">{t("pptxImport.emptySession")}</p>
             ) : (
               <div className="space-y-3">
                 <div>
                   <p className="font-semibold">
-                    {record.source_filename} · {record.state}
+                    {record.source_filename} · {t(importStateKey(record.state))}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {(record.source_size_bytes / 1024).toFixed(1)} KB ·{" "}
-                    {record.pipeline_version} · revision {record.revision}
+                    {t("pptxImport.fileMetadata", {
+                      size: (record.source_size_bytes / 1024).toFixed(1),
+                      pipeline: record.pipeline_version,
+                      revision: record.revision,
+                    })}
                   </p>
                   {record.task_message ? (
                     <p role="status" aria-live="polite" className="mt-1">
-                      {record.task_message}
+                      {t("pptxImport.taskMessageFallback", {
+                        state: t(importStateKey(record.state)),
+                      })}
                     </p>
                   ) : null}
                 </div>
@@ -318,48 +343,68 @@ export default function TemplateV2PptxImportPanel({
                 {analysis ? (
                   <>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      <dt className="text-slate-400">Analyzer</dt>
-                      <dd>{analysis.provider?.id ?? "unknown"}</dd>
-                      <dt className="text-slate-400">External AI</dt>
+                      <dt className="text-slate-400">
+                        {t("pptxImport.analyzer")}
+                      </dt>
+                      <dd>
+                        {analysis.provider?.id ?? t("pptxImport.unknown")}
+                      </dd>
+                      <dt className="text-slate-400">
+                        {t("pptxImport.externalAi")}
+                      </dt>
                       <dd>
                         {analysis.provider?.external_ai === false
-                          ? "not used"
-                          : "unknown"}
+                          ? t("pptxImport.notUsed")
+                          : t("pptxImport.unknown")}
                       </dd>
-                      <dt className="text-slate-400">Slides / shapes</dt>
+                      <dt className="text-slate-400">
+                        {t("pptxImport.slidesShapes")}
+                      </dt>
                       <dd>
                         {summary?.slide_count ?? 0} /{" "}
                         {summary?.shape_count ?? 0}
                       </dd>
-                      <dt className="text-slate-400">Unsupported shapes</dt>
+                      <dt className="text-slate-400">
+                        {t("pptxImport.unsupportedShapes")}
+                      </dt>
                       <dd>{summary?.unsupported_shape_count ?? 0}</dd>
-                      <dt className="text-slate-400">Preview / render</dt>
+                      <dt className="text-slate-400">
+                        {t("pptxImport.previewRender")}
+                      </dt>
                       <dd>
-                        {analysis.preview?.status ?? "unknown"} /{" "}
-                        {analysis.render?.status ?? "unknown"}
+                        {t(analysisStatusKey(analysis.preview?.status))} /{" "}
+                        {t(analysisStatusKey(analysis.render?.status))}
                       </dd>
-                      <dt className="text-slate-400">Visual fidelity</dt>
+                      <dt className="text-slate-400">
+                        {t("pptxImport.visualFidelity")}
+                      </dt>
                       <dd>
-                        {summary?.visual_fidelity_status ?? "not_evaluated"}
+                        {t(analysisStatusKey(summary?.visual_fidelity_status))}
                       </dd>
                       {analysis.visual_fidelity ? (
                         <>
-                          <dt className="text-slate-400">Pixel diff</dt>
+                          <dt className="text-slate-400">
+                            {t("pptxImport.pixelDiff")}
+                          </dt>
                           <dd>
-                            MAE{" "}
-                            {analysis.visual_fidelity.metrics
-                              ?.mean_absolute_error ?? "unknown"}
-                            {" / "}bad pixels{" "}
-                            {typeof analysis.visual_fidelity.metrics
-                              ?.bad_pixel_ratio === "number"
-                              ? `${(
-                                  analysis.visual_fidelity.metrics
-                                    .bad_pixel_ratio * 100
-                                ).toFixed(2)}%`
-                              : "unknown"}
-                            {" / "}largest region{" "}
-                            {analysis.visual_fidelity.metrics
-                              ?.largest_bad_component ?? "unknown"}
+                            {t("pptxImport.pixelDiffValue", {
+                              mae:
+                                analysis.visual_fidelity.metrics
+                                  ?.mean_absolute_error ??
+                                t("pptxImport.unknown"),
+                              badPixels:
+                                typeof analysis.visual_fidelity.metrics
+                                  ?.bad_pixel_ratio === "number"
+                                  ? `${(
+                                      analysis.visual_fidelity.metrics
+                                        .bad_pixel_ratio * 100
+                                    ).toFixed(2)}%`
+                                  : t("pptxImport.unknown"),
+                              largestRegion:
+                                analysis.visual_fidelity.metrics
+                                  ?.largest_bad_component ??
+                                t("pptxImport.unknown"),
+                            })}
                           </dd>
                         </>
                       ) : null}
@@ -383,7 +428,7 @@ export default function TemplateV2PptxImportPanel({
                       className="rounded bg-emerald-600 px-3 py-2 text-xs font-semibold disabled:opacity-40"
                       onClick={() => void mutate("confirm")}
                     >
-                      Confirm and create new Template V2
+                      {t("pptxImport.confirmAndCreate")}
                     </button>
                   ) : null}
                   {record.state === "failed" ? (
@@ -393,7 +438,7 @@ export default function TemplateV2PptxImportPanel({
                       className="rounded border border-slate-600 px-3 py-2 text-xs disabled:opacity-40"
                       onClick={() => void mutate("retry")}
                     >
-                      Retry analysis
+                      {t("pptxImport.retryAnalysis")}
                     </button>
                   ) : null}
                   {[
@@ -409,18 +454,17 @@ export default function TemplateV2PptxImportPanel({
                       className="rounded border border-red-700 px-3 py-2 text-xs text-red-200 disabled:opacity-40"
                       onClick={() => void mutate("cancel")}
                     >
-                      Cancel
+                      {t("pptxImport.cancel")}
                     </button>
                   ) : null}
-                  {record.state === "confirmed" &&
-                  record.draft_template_id ? (
+                  {record.state === "confirmed" && record.draft_template_id ? (
                     <a
                       className="rounded bg-violet-500 px-3 py-2 text-xs font-semibold"
                       href={`/template-v2-studio/${encodeURIComponent(
-                        record.draft_template_id
+                        record.draft_template_id,
                       )}`}
                     >
-                      Open confirmed template
+                      {t("pptxImport.openConfirmedTemplate")}
                     </a>
                   ) : null}
                 </div>

@@ -1,33 +1,52 @@
-import { buildTemplateV2ImportReview } from "@/lib/template-v2-import-review";
+"use client";
 
-const OUTCOME_LABELS = {
-  "editable-text": "Editable text",
-  "editable-container": "Editable shape",
-  "manual-review": "Manual review",
-} as const;
+import { useTranslations } from "next-intl";
+
+import {
+  buildTemplateV2ImportReview,
+  type TemplateV2ImportReviewOutcome,
+} from "@/lib/template-v2-import-review";
 
 export default function TemplateV2ImportReview({
   analysis,
 }: {
   analysis: unknown;
 }) {
+  const t = useTranslations("studio");
   const review = buildTemplateV2ImportReview(analysis);
   if (!review || review.total === 0) return null;
+
+  function outcomeLabel(outcome: TemplateV2ImportReviewOutcome) {
+    if (outcome === "editable-text") {
+      return t("importReview.outcomes.editableText");
+    }
+    if (outcome === "editable-container") {
+      return t("importReview.outcomes.editableShape");
+    }
+    return t("importReview.outcomes.manualReview");
+  }
+
+  function kindLabel(kind: string) {
+    if (kind === "text") return t("importReview.kinds.text");
+    if (kind === "container") return t("importReview.kinds.container");
+    if (kind === "unsupported") return t("importReview.kinds.unsupported");
+    return t("importReview.kinds.unknown");
+  }
 
   return (
     <details className="rounded border border-slate-800 p-3">
       <summary className="cursor-pointer text-xs font-semibold text-slate-200">
-        Review candidate differences ({review.total})
+        {t("importReview.summary", { count: review.total })}
       </summary>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-xs">
           <thead className="text-slate-400">
             <tr>
-              <th className="py-1 pr-3">Slide</th>
-              <th className="py-1 pr-3">Candidate</th>
-              <th className="py-1 pr-3">Geometry</th>
-              <th className="py-1 pr-3">Confidence</th>
-              <th className="py-1">Import result</th>
+              <th className="py-1 pr-3">{t("importReview.slide")}</th>
+              <th className="py-1 pr-3">{t("importReview.candidate")}</th>
+              <th className="py-1 pr-3">{t("importReview.geometry")}</th>
+              <th className="py-1 pr-3">{t("importReview.confidence")}</th>
+              <th className="py-1">{t("importReview.result")}</th>
             </tr>
           </thead>
           <tbody>
@@ -38,12 +57,20 @@ export default function TemplateV2ImportReview({
               >
                 <td className="py-1 pr-3">{row.slide}</td>
                 <td className="py-1 pr-3">
-                  <span className="block">{row.name}</span>
+                  <span className="block">
+                    {row.name === "Unnamed shape"
+                      ? t("importReview.unnamedShape")
+                      : row.name}
+                  </span>
                   <span className="text-slate-500">
-                    {row.sourceId} · {row.kind}
+                    {row.sourceId} · {kindLabel(row.kind)}
                   </span>
                 </td>
-                <td className="py-1 pr-3 font-mono">{row.geometry}</td>
+                <td className="py-1 pr-3 font-mono">
+                  {row.geometry === "unknown"
+                    ? t("importReview.unknownGeometry")
+                    : row.geometry}
+                </td>
                 <td className="py-1 pr-3">
                   {(row.confidence * 100).toFixed(0)}%
                 </td>
@@ -55,10 +82,12 @@ export default function TemplateV2ImportReview({
                         : "text-emerald-200"
                     }
                   >
-                    {OUTCOME_LABELS[row.outcome]}
+                    {outcomeLabel(row.outcome)}
                   </span>
                   {row.reason ? (
-                    <span className="ml-1 text-slate-400">({row.reason})</span>
+                    <span className="ml-1 text-slate-400">
+                      ({t("importReview.unsupportedReason")})
+                    </span>
                   ) : null}
                 </td>
               </tr>
@@ -67,7 +96,7 @@ export default function TemplateV2ImportReview({
         </table>
         {review.truncated ? (
           <p className="mt-2 text-xs text-amber-200">
-            Showing the first {review.rows.length} candidates.
+            {t("importReview.showingFirst", { count: review.rows.length })}
           </p>
         ) : null}
       </div>

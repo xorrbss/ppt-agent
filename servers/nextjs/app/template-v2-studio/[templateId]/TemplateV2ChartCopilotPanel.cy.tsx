@@ -1,6 +1,7 @@
 import React from "react";
 
 import TemplateV2ChartCopilotPanel from "./TemplateV2ChartCopilotPanel";
+import { mountWithStudioI18n } from "./studioI18nTestUtils.cy";
 
 function chart(overrides: Record<string, unknown> = {}) {
   return {
@@ -28,7 +29,7 @@ describe("TemplateV2ChartCopilotPanel", () => {
   it("stages strict controls and series edits, previews, cancels, and applies losslessly", () => {
     const applied: Array<{ chart: Record<string, unknown>; historyKey: string }> =
       [];
-    cy.mount(
+    mountWithStudioI18n(
       <TemplateV2ChartCopilotPanel
         element={chart()}
         disabled={false}
@@ -73,7 +74,7 @@ describe("TemplateV2ChartCopilotPanel", () => {
 
   it("validates bounded imports and stages imported table data before apply", () => {
     const applied: Record<string, unknown>[] = [];
-    cy.mount(
+    mountWithStudioI18n(
       <TemplateV2ChartCopilotPanel
         element={chart()}
         disabled={false}
@@ -118,7 +119,7 @@ describe("TemplateV2ChartCopilotPanel", () => {
   });
 
   it("uses deterministic recommendations and fails closed for radar axes", () => {
-    cy.mount(
+    mountWithStudioI18n(
       <TemplateV2ChartCopilotPanel
         element={chart({
           chart_type: "radar",

@@ -1,6 +1,7 @@
 import React from "react";
 
 import TemplateV2Studio from "./TemplateV2Studio";
+import { mountWithStudioI18n } from "./studioI18nTestUtils.cy";
 
 const templateId = "phase-one-template";
 
@@ -137,7 +138,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveAiTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadAiTemplate");
     cy.contains("button[aria-pressed]", /^title/).click({
       waitForAnimations: false,
@@ -222,7 +223,7 @@ describe("TemplateV2Studio API integration", () => {
       { statusCode: 200, body: response(constrainedLayouts) }
     ).as("loadConstrainedTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadConstrainedTemplate");
     cy.contains("button[aria-pressed]", /^title/).click({
       waitForAnimations: false,
@@ -284,7 +285,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveVariantTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadVariantTemplate");
     cy.contains("button", "Compare slide variants")
       .should("be.visible")
@@ -376,7 +377,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveNestedTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadNestedTemplate");
     cy.get('[data-testid="open-ai-layout-editor"]').should(
       "have.attr",
@@ -419,7 +420,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveInsertTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadInsertTemplate");
     cy.contains("button", "Add math").click();
     cy.get('[aria-label="LaTeX expression"]')
@@ -464,7 +465,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     );
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadMalformedTemplate");
     cy.contains("Template V2 Studio unavailable").should("be.visible");
     cy.contains("template_v2_upstream_layouts_invalid").should("be.visible");
@@ -490,7 +491,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     // Konva draws the unsupported image placeholder on a canvas, so assert
     // its presence via the inspector count and preserve it in the PATCH body.
@@ -615,7 +616,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveEditableTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadEditableTemplate");
     cy.contains("button[aria-pressed]", /^revenue/).click({
       waitForAnimations: false,
@@ -783,7 +784,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveToolbarTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadToolbarTemplate");
     cy.contains("button[aria-pressed]", /^hero/).click();
     cy.get('[data-testid="template-v2-selection-toolbar"]')
@@ -809,9 +810,9 @@ describe("TemplateV2Studio API integration", () => {
         expect(element.size).to.deep.equal({ width: 320, height: 180 });
       });
 
-    cy.mount(<div data-testid="toolbar-unmounted" />);
+    mountWithStudioI18n(<div data-testid="toolbar-unmounted" />);
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadToolbarTemplate");
     cy.contains("button[aria-pressed]", /^hero/).click();
     cy.get(
@@ -857,7 +858,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("saveDesignVariableTemplate");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadDesignVariableTemplate");
     cy.contains("button[aria-pressed]", /^title/).click();
     cy.contains("1 selected").should("be.visible");
@@ -890,13 +891,13 @@ describe("TemplateV2Studio API integration", () => {
         });
       });
 
-    cy.mount(<div data-testid="design-variable-unmounted" />);
+    mountWithStudioI18n(<div data-testid="design-variable-unmounted" />);
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
     cy.get('[role="toolbar"][aria-label="Selection toolbar"]').should(
       "not.exist"
     );
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadDesignVariableTemplate");
     cy.contains("button[aria-pressed]", /^title/).click();
     cy.get('textarea[aria-label$=" content"]').first().should("have.value", "Edited bound title");
@@ -925,7 +926,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("conflictedSave");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button", "Add rectangle").click();
     cy.contains("button", "Save").click();
@@ -969,7 +970,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     );
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button", "Add rectangle").click();
 
@@ -1029,7 +1030,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     );
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button", "Add rectangle").click();
 
@@ -1077,7 +1078,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     );
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button", "Add rectangle").click();
     cy.get("dt").contains(/^Elements$/).next("dd").should("have.text", "3");
@@ -1126,7 +1127,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     );
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button[aria-pressed]", /^title/).click();
     cy.get('[aria-label="X geometry"]').should("have.value", "1");
@@ -1191,7 +1192,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     );
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button", "Add rectangle").click();
     cy.contains("button[aria-pressed]", /^title/).click();
@@ -1249,7 +1250,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("queuedAutosave");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button", "Add rectangle").click();
     cy.wait(850);
@@ -1284,7 +1285,7 @@ describe("TemplateV2Studio API integration", () => {
       }
     ).as("pagehideSave");
 
-    cy.mount(<TemplateV2Studio templateId={templateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadTemplate");
     cy.contains("button", "Add rectangle").click();
     cy.window().then((window) => {

@@ -1,6 +1,12 @@
 import React from 'react';
 
-export const EmptyState = () => {
+export const EmptyState = ({
+    title = "아직 발표자료가 없습니다.",
+    description = "첫 발표자료를 만들어 보세요.",
+}: {
+    title?: string;
+    description?: string;
+}) => {
     return (
         <div className="flex flex-col items-center justify-center min-h-[70vh] bg-white/50 rounded-lg">
             <div className="mb-4">
@@ -12,11 +18,11 @@ export const EmptyState = () => {
                 </svg>
             </div>
             <h3 className="text-[#101828] text-lg font-roboto font-medium mb-1">
-                아직 발표자료가 없습니다.
+                {title}
             </h3>
             <p className="text-[#667085] text-base font-roboto">
-                첫 발표자료를 만들어 보세요.
+                {description}
             </p>
         </div>
     );
-}; 
+};

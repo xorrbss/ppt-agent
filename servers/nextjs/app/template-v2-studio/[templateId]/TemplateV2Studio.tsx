@@ -72,6 +72,8 @@ import {
   createElementInsertElements,
   createTextInsertElements,
 } from "@/components/slide-editor/insert/insert-elements";
+import { useTranslations } from "next-intl";
+import { UiLocaleSwitcher } from "@/components/i18n/UiLocaleSwitcher";
 
 const TEMPLATE_V2_TOOLBAR_WIDTH = 760;
 const TEMPLATE_V2_TOOLBAR_HEIGHT = 56;
@@ -129,6 +131,7 @@ export default function TemplateV2Studio({
 }: {
   templateId: string;
 }) {
+  const t = useTranslations("studio");
   const [state, dispatch] = useReducer(
     templateV2StudioReducer,
     EMPTY_TEMPLATE_V2_STUDIO_STATE
@@ -461,8 +464,8 @@ export default function TemplateV2Studio({
     }
     const replacement = window.prompt(
       label === "icon"
-        ? "Paste an app-relative icon SVG path or data URL"
-        : "Paste an app-relative image path or data URL",
+        ? t("root.replaceIconPrompt")
+        : t("root.replaceImagePrompt"),
       typeof selectedElement.data === "string" ? selectedElement.data : ""
     );
     if (replacement === null || replacement.trim() === "") return;
@@ -480,7 +483,7 @@ export default function TemplateV2Studio({
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-950 text-slate-200">
-        Loading structured template…
+        {t("root.loadingStructured")}
       </main>
     );
   }
@@ -489,8 +492,8 @@ export default function TemplateV2Studio({
     return (
       <main className="grid min-h-screen place-items-center bg-slate-950 p-8 text-slate-200">
         <section className="max-w-xl rounded-xl border border-red-500/40 bg-red-950/30 p-6">
-          <h1 className="text-xl font-semibold">Template V2 Studio unavailable</h1>
-          <p className="mt-2 text-red-200">{error}</p>
+          <h1 className="text-xl font-semibold">{t("root.unavailableTitle")}</h1>
+          <p className="mt-2 text-red-200">{t("loadFailed")}</p>
         </section>
       </main>
     );
@@ -507,18 +510,19 @@ export default function TemplateV2Studio({
             data-testid="studio-back-to-templates"
             className="mb-1 inline-flex items-center gap-1 text-sm text-slate-400 transition hover:text-slate-200"
           >
-            ← 템플릿 목록
+            ← {t("root.backToTemplates")}
           </Link>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
-            Template V2 Studio · Experimental
+            {t("root.experimental")}
           </p>
           <h1 className="mt-1 text-xl font-semibold">{template.name}</h1>
           <p className="text-sm text-slate-400">
-            Revision {template.revision}
-            {state.dirty ? " · Unsaved changes" : ""}
+            {t("root.revision", { revision: template.revision })}
+            {state.dirty ? ` · ${t("root.unsavedChanges")}` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <UiLocaleSwitcher />
           <Link
             href={`/template-preview?templateV2Id=${encodeURIComponent(
               templateId
@@ -526,7 +530,7 @@ export default function TemplateV2Studio({
             data-testid="open-ai-layout-editor"
             className="rounded-lg border border-violet-400/60 bg-violet-500/10 px-3 py-2 text-sm font-medium text-violet-200 transition hover:bg-violet-500/20"
           >
-            AI Layout
+            {t("root.aiLayout")}
           </Link>
           {notice ? (
             <span
@@ -541,21 +545,21 @@ export default function TemplateV2Studio({
             type="button"
             onClick={() => dispatch({ type: "undo" })}
             disabled={!state.past.length}
-            aria-label="Undo (Ctrl or Command plus Z)"
-            title="Undo · Ctrl/Cmd+Z"
+            aria-label={t("root.undoAria")}
+            title={t("root.undoTitle")}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm disabled:opacity-40"
           >
-            Undo
+            {t("root.undo")}
           </button>
           <button
             type="button"
             onClick={() => dispatch({ type: "redo" })}
             disabled={!state.future.length}
-            aria-label="Redo (Ctrl or Command plus Shift plus Z, or Ctrl plus Y)"
-            title="Redo · Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y"
+            aria-label={t("root.redoAria")}
+            title={t("root.redoTitle")}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm disabled:opacity-40"
           >
-            Redo
+            {t("root.redo")}
           </button>
           <button
             type="button"
@@ -572,7 +576,7 @@ export default function TemplateV2Studio({
             disabled={!scene}
             className="rounded-lg border border-slate-600 px-4 py-2 text-sm disabled:opacity-40"
           >
-            Add rectangle
+            {t("root.addRectangle")}
           </button>
           <button
             type="button"
@@ -591,10 +595,10 @@ export default function TemplateV2Studio({
             disabled={!scene}
             className="rounded-lg border border-slate-600 px-4 py-2 text-sm disabled:opacity-40"
           >
-            Add math
+            {t("root.addMath")}
           </button>
           <select
-            aria-label="Add vector shape"
+            aria-label={t("root.addVectorShape")}
             defaultValue=""
             disabled={!scene}
             className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm disabled:opacity-40"
@@ -612,7 +616,7 @@ export default function TemplateV2Studio({
               setNotice(null);
             }}
           >
-            <option value="">Add shape…</option>
+            <option value="">{t("root.addShape")}</option>
             {ELEMENT_INSERT_GROUPS.map((group) => (
               <optgroup key={group.label} label={group.label}>
                 {group.items.map((item) => (
@@ -629,12 +633,16 @@ export default function TemplateV2Studio({
             disabled={!state.dirty || saving || Boolean(conflict)}
             title={
               conflict
-                ? "Reload the server version before saving again."
-                : "Flush pending autosave now"
+                ? t("root.reloadBeforeSaving")
+                : t("root.flushAutosave")
             }
             className="rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold disabled:opacity-40"
           >
-            {saving ? "Saving…" : error && !conflict ? "Retry save" : "Save now"}
+            {saving
+              ? t("saving")
+              : error && !conflict
+                ? t("root.retrySave")
+                : t("root.saveNow")}
           </button>
         </div>
       </header>
@@ -656,7 +664,7 @@ export default function TemplateV2Studio({
           role="alert"
           className="flex items-center justify-between gap-4 border-b border-red-500/30 bg-red-950/40 px-6 py-3 text-sm text-red-200"
         >
-          <span>{error}</span>
+          <span>{t("saveFailed")}</span>
           {conflict ? (
             <TemplateV2ConflictRecovery
               snapshot={conflict}
@@ -670,7 +678,7 @@ export default function TemplateV2Studio({
 
       <div className="grid gap-4 p-4 xl:grid-cols-[230px_minmax(0,1fr)_300px]">
         <nav className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <h2 className="font-semibold">Layouts</h2>
+          <h2 className="font-semibold">{t("root.layouts")}</h2>
           <div className="mt-3 space-y-2">
             {listTemplateV2Layouts(state.layouts).map((layout) => {
               const layoutId = String(layout.id);
@@ -722,7 +730,7 @@ export default function TemplateV2Studio({
                       })}
                       {!components.length ? (
                         <p className="px-2 py-1 text-xs text-slate-500">
-                          No components
+                          {t("root.noComponents")}
                         </p>
                       ) : null}
                     </div>
@@ -733,7 +741,7 @@ export default function TemplateV2Studio({
           </div>
           {scene ? (
             <>
-              <h3 className="mt-6 text-sm font-semibold">Elements</h3>
+              <h3 className="mt-6 text-sm font-semibold">{t("root.elements")}</h3>
               <div className="mt-2">
                 <TemplateV2ElementTree
                   elements={scene.elements}
@@ -787,7 +795,7 @@ export default function TemplateV2Studio({
             />
           ) : (
             <div className="grid h-[68vh] min-h-[360px] place-items-center text-slate-500">
-              Select a layout with a component.
+              {t("root.selectLayout")}
             </div>
           )}
         </section>
@@ -864,7 +872,7 @@ export default function TemplateV2Studio({
         />
 
         <aside className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h2 className="font-semibold">Inspector</h2>
+          <h2 className="font-semibold">{t("root.inspector")}</h2>
           {scene ? (
             <p className="mt-1 text-xs text-slate-400">
               {String(scene.layout.id)} / {String(scene.component.id)}
@@ -872,22 +880,20 @@ export default function TemplateV2Studio({
           ) : null}
           <section className="mt-5 border-t border-slate-800 pt-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-medium">Selection</h3>
+              <h3 className="text-sm font-medium">{t("root.selection")}</h3>
               <span className="text-xs text-slate-400">
-                {state.selectionSet.length} selected
+                {t("root.selectedCount", { count: state.selectionSet.length })}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Ctrl/Cmd-click adds a sibling. Ctrl/Cmd+G groups,
-              Ctrl/Cmd+Shift+G ungroups, Ctrl/Cmd+D duplicates, and Delete
-              removes unlocked selections.
+              {t("root.selectionHelp")}
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {[
-                ["Bring to front", "front", selectionControls.canBringToFront],
-                ["Bring forward", "forward", selectionControls.canMoveForward],
-                ["Send backward", "backward", selectionControls.canMoveBackward],
-                ["Send to back", "back", selectionControls.canSendToBack],
+                [t("root.bringToFront"), "front", selectionControls.canBringToFront],
+                [t("root.bringForward"), "forward", selectionControls.canMoveForward],
+                [t("root.sendBackward"), "backward", selectionControls.canMoveBackward],
+                [t("root.sendToBack"), "back", selectionControls.canSendToBack],
               ].map(([label, direction, enabled]) => (
                 <button
                   key={String(direction)}
@@ -896,7 +902,7 @@ export default function TemplateV2Studio({
                   title={
                     enabled
                       ? undefined
-                      : "Select unlocked siblings that can move in this direction."
+                      : t("root.cannotMove")
                   }
                   onClick={() =>
                     executeSelectionCommand(
@@ -914,12 +920,12 @@ export default function TemplateV2Studio({
                 title={
                   selectionControls.canGroup
                     ? undefined
-                    : "Select at least two unlocked sibling elements."
+                    : t("root.selectTwo")
                 }
                 onClick={() => executeSelectionCommand("group-siblings")}
                 className="rounded border border-slate-700 px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Group
+                {t("root.group")}
               </button>
               <button
                 type="button"
@@ -927,12 +933,12 @@ export default function TemplateV2Studio({
                 title={
                   selectionControls.canUngroup
                     ? undefined
-                    : "Select one or more unlocked groups."
+                    : t("root.selectGroups")
                 }
                 onClick={() => executeSelectionCommand("ungroup")}
                 className="rounded border border-slate-700 px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Ungroup
+                {t("root.ungroup")}
               </button>
               <button
                 type="button"
@@ -943,21 +949,23 @@ export default function TemplateV2Studio({
                 className="col-span-2 rounded border border-amber-500/50 px-2 py-1.5 text-xs text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {selectionControls.allLocked
-                  ? "Unlock selected"
-                  : "Lock selected"}
+                  ? t("root.unlockSelected")
+                  : t("root.lockSelected")}
               </button>
             </div>
             <div className="mt-3">
-              <h4 className="text-xs font-medium text-slate-300">Align</h4>
+              <h4 className="text-xs font-medium text-slate-300">
+                {t("root.align")}
+              </h4>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {(
                   [
-                    ["Align left", "left"],
-                    ["Align center", "center"],
-                    ["Align right", "right"],
-                    ["Align top", "top"],
-                    ["Align middle", "middle"],
-                    ["Align bottom", "bottom"],
+                    [t("root.alignLeft"), "left"],
+                    [t("root.alignCenter"), "center"],
+                    [t("root.alignRight"), "right"],
+                    [t("root.alignTop"), "top"],
+                    [t("root.alignMiddle"), "middle"],
+                    [t("root.alignBottom"), "bottom"],
                   ] as const
                 ).map(([label, direction]) => (
                   <button
@@ -967,7 +975,7 @@ export default function TemplateV2Studio({
                     title={
                       selectionControls.canAlign
                         ? undefined
-                        : "Select at least two unlocked sibling elements."
+                        : t("root.selectTwo")
                     }
                     onClick={() =>
                       executeSelectionCommand(`align-${direction}`)
@@ -980,12 +988,14 @@ export default function TemplateV2Studio({
               </div>
             </div>
             <div className="mt-3">
-              <h4 className="text-xs font-medium text-slate-300">Distribute</h4>
+              <h4 className="text-xs font-medium text-slate-300">
+                {t("root.distribute")}
+              </h4>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {(
                   [
-                    ["Distribute horizontally", "horizontal"],
-                    ["Distribute vertically", "vertical"],
+                    [t("root.distributeHorizontally"), "horizontal"],
+                    [t("root.distributeVertically"), "vertical"],
                   ] as const
                 ).map(([label, direction]) => (
                   <button
@@ -995,7 +1005,7 @@ export default function TemplateV2Studio({
                     title={
                       selectionControls.canDistribute
                         ? undefined
-                        : "Select at least three unlocked sibling elements."
+                        : t("root.selectThree")
                     }
                     onClick={() =>
                       executeSelectionCommand(`distribute-${direction}`)
@@ -1009,7 +1019,7 @@ export default function TemplateV2Studio({
             </div>
             {selectionControls.lockConflict ? (
               <p className="mt-2 text-xs text-amber-300">
-                Locked elements cannot be transformed, reordered, or grouped.
+                {t("root.lockedNotice")}
               </p>
             ) : null}
           </section>
@@ -1021,7 +1031,7 @@ export default function TemplateV2Studio({
               if (
                 result.autosave.expected_revision !== template.revision
               ) {
-                setNotice("Quality fix rejected: the revision is stale.");
+                setNotice(t("notices.qualityStale"));
                 return;
               }
               dispatch({
@@ -1030,7 +1040,7 @@ export default function TemplateV2Studio({
                 expectedDigest: templateV2VariantDigest(state.layouts),
                 historyKey: result.historyKey,
               });
-              setNotice("Quality fix applied. Autosave scheduled.");
+              setNotice(t("notices.qualityApplied"));
             }}
           />
           {activeLayout && state.activeLayoutId ? (
@@ -1081,7 +1091,7 @@ export default function TemplateV2Studio({
                     currentRevision: template.revision,
                     historyKey,
                   });
-                  setNotice("Chart patch applied. Autosave scheduled.");
+                  setNotice(t("notices.chartApplied"));
                 }}
               />
               <TemplateV2TableEditorPanel
@@ -1090,7 +1100,7 @@ export default function TemplateV2Studio({
                 disabled={selectionControls.lockConflict || Boolean(conflict)}
                 onApply={(replacement, mutation) => {
                   if (mutation.expectedRevision !== template.revision) {
-                    setNotice("Table change rejected: the revision is stale.");
+                    setNotice(t("notices.tableStale"));
                     return;
                   }
                   dispatch({
@@ -1103,7 +1113,7 @@ export default function TemplateV2Studio({
                     currentRevision: template.revision,
                     historyKey: mutation.historyKey,
                   });
-                  setNotice("Table patch applied. Autosave scheduled.");
+                  setNotice(t("notices.tableApplied"));
                 }}
               />
               <TemplateV2ImageReplacementPanel
@@ -1112,7 +1122,7 @@ export default function TemplateV2Studio({
                 disabled={selectionControls.lockConflict || Boolean(conflict)}
                 onApply={(intent, historyKey) => {
                   if (intent.expectedRevision !== template.revision) {
-                    setNotice("Image replacement rejected: the revision is stale.");
+                    setNotice(t("notices.imageStale"));
                     return;
                   }
                   dispatch({
@@ -1128,7 +1138,7 @@ export default function TemplateV2Studio({
                     currentRevision: template.revision,
                     historyKey,
                   });
-                  setNotice("Local image replacement applied. Autosave scheduled.");
+                  setNotice(t("notices.imageApplied"));
                 }}
               />
               <TemplateV2AiRewritePanel
@@ -1148,7 +1158,7 @@ export default function TemplateV2Studio({
                     patch,
                     historyKey,
                   });
-                  setNotice("AI rewrite applied. Autosave scheduled.");
+                  setNotice(t("notices.rewriteApplied"));
                 }}
               />
               <TemplateV2ContentInspector
@@ -1175,25 +1185,24 @@ export default function TemplateV2Studio({
             </>
           ) : (
             <p className="mt-5 rounded-lg bg-slate-950 p-3 text-sm text-slate-400">
-              Select a text, container, image, or group. Groups are move-only;
-              unsupported elements remain lossless.
+              {t("root.unsupportedSelection")}
             </p>
           )}
           {scene ? (
             <dl className="mt-6 space-y-3 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-400">Elements</dt>
+                <dt className="text-slate-400">{t("root.elements")}</dt>
                 <dd>{scene.elements.length}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-400">Component X/Y</dt>
+                <dt className="text-slate-400">{t("root.componentPosition")}</dt>
                 <dd>
                   {elementPosition(scene.component).x} /{" "}
                   {elementPosition(scene.component).y}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-400">History</dt>
+                <dt className="text-slate-400">{t("root.history")}</dt>
                 <dd>
                   {state.past.length} / {state.future.length}
                 </dd>
@@ -1201,7 +1210,7 @@ export default function TemplateV2Studio({
             </dl>
           ) : null}
           {!activeLayout ? (
-            <p className="mt-4 text-sm text-slate-500">No layouts available.</p>
+            <p className="mt-4 text-sm text-slate-500">{t("root.noLayouts")}</p>
           ) : null}
         </aside>
       </div>

@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import {
   serializeTemplateV2ConflictRecoveryBundle,
   templateV2ConflictRecoveryFilename,
@@ -17,6 +19,8 @@ export default function TemplateV2ConflictRecovery({
   onRebase: () => void;
   rebasing: boolean;
 }) {
+  const t = useTranslations("studio");
+
   function downloadLocalEdits() {
     const capturedAt = new Date();
     const blob = new Blob(
@@ -43,31 +47,29 @@ export default function TemplateV2ConflictRecovery({
         className="rounded border border-red-300/40 px-3 py-1 disabled:opacity-50"
         onClick={onRebase}
         disabled={rebasing}
-        title="Only succeeds when the latest server layouts still match the revision you edited"
+        title={t("conflictRecovery.rebaseTitle")}
       >
-        {rebasing ? "Checking latest revision…" : "Rebase local draft"}
+        {rebasing
+          ? t("conflictRecovery.checkingRevision")
+          : t("conflictRecovery.rebase")}
       </button>
       <button
         type="button"
         className="rounded border border-red-300/40 px-3 py-1"
         onClick={downloadLocalEdits}
       >
-        Download local edits
+        {t("conflictRecovery.download")}
       </button>
       <button
         type="button"
         className="rounded border border-red-300/40 px-3 py-1"
         onClick={() => {
-          if (
-            window.confirm(
-              "Reload the server version? Unsaved local edits will be discarded."
-            )
-          ) {
+          if (window.confirm(t("conflictRecovery.reloadConfirm"))) {
             onReload();
           }
         }}
       >
-        Reload server version
+        {t("conflictRecovery.reload")}
       </button>
     </div>
   );

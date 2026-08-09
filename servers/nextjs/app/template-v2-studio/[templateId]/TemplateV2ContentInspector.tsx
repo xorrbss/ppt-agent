@@ -1,14 +1,36 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type ChangeEvent } from "react";
 
 import { isJsonRecord, type JsonRecord } from "@/lib/template-v2-studio";
 import { type TemplateV2RunTarget } from "@/lib/template-v2-studio-content";
 import { stringValue } from "@/lib/template-v2-konva";
 
+const FIELD_LABEL_KEYS = {
+  run: "contentInspector.fields.run",
+  listItemRun: "contentInspector.fields.listItemRun",
+  tableHeaderAlignment: "contentInspector.fields.tableHeaderAlignment",
+  tableHeaderFill: "contentInspector.fields.tableHeaderFill",
+  tableHeaderRun: "contentInspector.fields.tableHeaderRun",
+  tableCellAlignment: "contentInspector.fields.tableCellAlignment",
+  tableCellFill: "contentInspector.fields.tableCellFill",
+  tableCellRun: "contentInspector.fields.tableCellRun",
+  chartTitle: "contentInspector.fields.chartTitle",
+  chartCategory: "contentInspector.fields.chartCategory",
+  chartSeriesName: "contentInspector.fields.chartSeriesName",
+  chartSeriesValue: "contentInspector.fields.chartSeriesValue",
+  assetSource: "contentInspector.fields.assetSource",
+  assetFit: "contentInspector.fields.assetFit",
+  horizontalFocus: "contentInspector.fields.horizontalFocus",
+  verticalFocus: "contentInspector.fields.verticalFocus",
+  cropScale: "contentInspector.fields.cropScale",
+} as const;
+
 interface EditableField {
   key: string;
-  label: string;
+  labelKey: keyof typeof FIELD_LABEL_KEYS;
+  labelValues?: Record<string, string | number>;
   value: string;
   target: TemplateV2RunTarget;
   control: "text" | "number" | "textarea" | "fit" | "alignment" | "color";
@@ -35,7 +57,8 @@ function textRuns(element: JsonRecord): EditableField[] {
       ? [
           {
             key: `text-${runIndex}`,
-            label: `Run ${runIndex + 1}`,
+            labelKey: "run",
+            labelValues: { run: runIndex + 1 },
             value: stringValue(run.text, ""),
             target: { kind: "text" as const, runIndex },
             control: "textarea" as const,
@@ -54,7 +77,11 @@ function listRuns(element: JsonRecord): EditableField[] {
             ? [
                 {
                   key: `item-${itemIndex}-${runIndex}`,
-                  label: `Item ${itemIndex + 1} · Run ${runIndex + 1}`,
+                  labelKey: "listItemRun",
+                  labelValues: {
+                    item: itemIndex + 1,
+                    run: runIndex + 1,
+                  },
                   value: stringValue(run.text, ""),
                   target: {
                     kind: "list-item" as const,
@@ -62,7 +89,7 @@ function listRuns(element: JsonRecord): EditableField[] {
                     runIndex,
                   },
                   control: "textarea" as const,
-                },
+                } satisfies EditableField,
               ]
             : [],
         )
@@ -85,14 +112,16 @@ function colorInputValue(value: unknown): string {
 function tableCellStyleFields(
   cell: JsonRecord,
   key: string,
-  label: string,
+  labelKeyPrefix: "tableHeader" | "tableCell",
+  labelValues: Record<string, number>,
   alignmentTarget: TemplateV2RunTarget,
   colorTarget: TemplateV2RunTarget,
 ): EditableField[] {
   return [
     {
       key: `${key}-alignment`,
-      label: `${label} alignment`,
+      labelKey: `${labelKeyPrefix}Alignment`,
+      labelValues,
       value: ["left", "center", "right"].includes(String(cell.alignment))
         ? String(cell.alignment)
         : "left",
@@ -101,7 +130,8 @@ function tableCellStyleFields(
     },
     {
       key: `${key}-color`,
-      label: `${label} fill`,
+      labelKey: `${labelKeyPrefix}Fill`,
+      labelValues,
       value: colorInputValue(cell.color),
       target: colorTarget,
       control: "color",
@@ -117,7 +147,8 @@ function tableRuns(element: JsonRecord): EditableField[] {
       ? tableCellStyleFields(
           column,
           `header-${columnIndex}`,
-          `Header ${columnIndex + 1}`,
+          "tableHeader",
+          { column: columnIndex + 1 },
           {
             kind: "table-column-style",
             columnIndex,
@@ -140,7 +171,11 @@ function tableRuns(element: JsonRecord): EditableField[] {
             ? [
                 {
                   key: `header-${columnIndex}-${runIndex}`,
-                  label: `Header ${columnIndex + 1} · Run ${runIndex + 1}`,
+                  labelKey: "tableHeaderRun",
+                  labelValues: {
+                    column: columnIndex + 1,
+                    run: runIndex + 1,
+                  },
                   value: stringValue(run.text, ""),
                   target: {
                     kind: "table-column" as const,
@@ -148,7 +183,7 @@ function tableRuns(element: JsonRecord): EditableField[] {
                     runIndex,
                   },
                   control: "textarea" as const,
-                },
+                } satisfies EditableField,
               ]
             : [],
         )
@@ -162,7 +197,8 @@ function tableRuns(element: JsonRecord): EditableField[] {
             ? tableCellStyleFields(
                 cell,
                 `cell-${rowIndex}-${columnIndex}`,
-                `Row ${rowIndex + 1}, cell ${columnIndex + 1}`,
+                "tableCell",
+                { row: rowIndex + 1, column: columnIndex + 1 },
                 {
                   kind: "table-cell-style",
                   rowIndex,
@@ -191,7 +227,12 @@ function tableRuns(element: JsonRecord): EditableField[] {
                   ? [
                       {
                         key: `cell-${rowIndex}-${columnIndex}-${runIndex}`,
-                        label: `Row ${rowIndex + 1}, cell ${columnIndex + 1} · Run ${runIndex + 1}`,
+                        labelKey: "tableCellRun",
+                        labelValues: {
+                          row: rowIndex + 1,
+                          column: columnIndex + 1,
+                          run: runIndex + 1,
+                        },
                         value: stringValue(run.text, ""),
                         target: {
                           kind: "table-cell" as const,
@@ -200,7 +241,7 @@ function tableRuns(element: JsonRecord): EditableField[] {
                           runIndex,
                         },
                         control: "textarea" as const,
-                      },
+                      } satisfies EditableField,
                     ]
                   : [],
               )
@@ -215,7 +256,7 @@ function chartFields(element: JsonRecord): EditableField[] {
   if (element.type !== "chart") return [];
   const title: EditableField = {
     key: "chart-title",
-    label: "Chart title",
+    labelKey: "chartTitle",
     value: stringValue(element.title, ""),
     target: { kind: "chart-title" },
     control: "text",
@@ -226,7 +267,8 @@ function chartFields(element: JsonRecord): EditableField[] {
           ? [
               {
                 key: `chart-category-${categoryIndex}`,
-                label: `Category ${categoryIndex + 1}`,
+                labelKey: "chartCategory",
+                labelValues: { category: categoryIndex + 1 },
                 value: category,
                 target: {
                   kind: "chart-category" as const,
@@ -243,7 +285,8 @@ function chartFields(element: JsonRecord): EditableField[] {
         if (!isJsonRecord(item)) return [];
         const name: EditableField = {
           key: `chart-series-${seriesIndex}-name`,
-          label: `Series ${seriesIndex + 1} name`,
+          labelKey: "chartSeriesName",
+          labelValues: { series: seriesIndex + 1 },
           value: stringValue(item.name, ""),
           target: { kind: "chart-series-name", seriesIndex },
           control: "text",
@@ -254,7 +297,11 @@ function chartFields(element: JsonRecord): EditableField[] {
                 ? [
                     {
                       key: `chart-series-${seriesIndex}-value-${valueIndex}`,
-                      label: `Series ${seriesIndex + 1}, value ${valueIndex + 1}`,
+                      labelKey: "chartSeriesValue",
+                      labelValues: {
+                        series: seriesIndex + 1,
+                        value: valueIndex + 1,
+                      },
                       value: String(value),
                       target: {
                         kind: "chart-series-value" as const,
@@ -278,14 +325,14 @@ function assetFields(element: JsonRecord): EditableField[] {
   return [
     {
       key: "asset-data",
-      label: "Asset source",
+      labelKey: "assetSource",
       value: stringValue(element.data, ""),
       target: { kind: "asset-data" },
       control: "textarea",
     },
     {
       key: "asset-fit",
-      label: "Asset fit",
+      labelKey: "assetFit",
       value: ["fill", "contain", "cover"].includes(String(element.fit))
         ? String(element.fit)
         : "fill",
@@ -294,7 +341,7 @@ function assetFields(element: JsonRecord): EditableField[] {
     },
     {
       key: "asset-focus-x",
-      label: "Horizontal focus (%)",
+      labelKey: "horizontalFocus",
       value: String(
         typeof element.focus_x === "number" ? element.focus_x : 50,
       ),
@@ -305,7 +352,7 @@ function assetFields(element: JsonRecord): EditableField[] {
     },
     {
       key: "asset-focus-y",
-      label: "Vertical focus (%)",
+      labelKey: "verticalFocus",
       value: String(
         typeof element.focus_y === "number" ? element.focus_y : 50,
       ),
@@ -316,7 +363,7 @@ function assetFields(element: JsonRecord): EditableField[] {
     },
     {
       key: "asset-crop-scale",
-      label: "Crop scale",
+      labelKey: "cropScale",
       value: String(
         typeof element.crop_scale === "number" ? element.crop_scale : 1,
       ),
@@ -345,6 +392,7 @@ export default function TemplateV2ContentInspector({
   onBlur,
   onEdit,
 }: TemplateV2ContentInspectorProps) {
+  const t = useTranslations("studio");
   const [transaction, setTransaction] = useState(0);
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
   const handleFocus = (key: string, value: string) => {
@@ -370,19 +418,20 @@ export default function TemplateV2ContentInspector({
   if (fields.length === 0) {
     return (
       <p className="mt-5 rounded-lg bg-slate-950 p-3 text-sm text-slate-400">
-        This element has no editable text, table, chart, or asset fields.
-        Unsupported fields remain lossless.
+        {t("contentInspector.noEditableFields")}
       </p>
     );
   }
 
   return (
     <div className="mt-5 space-y-4">
-      <p className="text-sm font-medium">Editable content · {pathLabel}</p>
+      <p className="text-sm font-medium">
+        {t("contentInspector.editableContent", { path: pathLabel })}
+      </p>
       {series.length > 1 ? (
         <fieldset className="space-y-2 rounded-lg border border-slate-800 p-3">
           <legend className="px-1 text-xs font-medium text-slate-400">
-            Series order
+            {t("contentInspector.seriesOrder")}
           </legend>
           {series.map((item, seriesIndex) => (
             <div
@@ -392,14 +441,23 @@ export default function TemplateV2ContentInspector({
               <span className="truncate">
                 {seriesIndex + 1}.{" "}
                 {isJsonRecord(item)
-                  ? stringValue(item.name, `Series ${seriesIndex + 1}`)
-                  : `Series ${seriesIndex + 1}`}
+                  ? stringValue(
+                      item.name,
+                      t("contentInspector.series", {
+                        series: seriesIndex + 1,
+                      }),
+                    )
+                  : t("contentInspector.series", {
+                      series: seriesIndex + 1,
+                    })}
               </span>
               <span className="flex shrink-0 gap-1">
                 <button
                   type="button"
                   disabled={disabled || seriesIndex === 0}
-                  aria-label={`Move series ${seriesIndex + 1} up`}
+                  aria-label={t("contentInspector.moveSeriesUpAria", {
+                    series: seriesIndex + 1,
+                  })}
                   onClick={() =>
                     onEdit(
                       { kind: "chart-series-order", seriesIndex },
@@ -408,12 +466,14 @@ export default function TemplateV2ContentInspector({
                   }
                   className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
                 >
-                  Up
+                  {t("contentInspector.up")}
                 </button>
                 <button
                   type="button"
                   disabled={disabled || seriesIndex === series.length - 1}
-                  aria-label={`Move series ${seriesIndex + 1} down`}
+                  aria-label={t("contentInspector.moveSeriesDownAria", {
+                    series: seriesIndex + 1,
+                  })}
                   onClick={() =>
                     onEdit(
                       { kind: "chart-series-order", seriesIndex },
@@ -422,76 +482,100 @@ export default function TemplateV2ContentInspector({
                   }
                   className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
                 >
-                  Down
+                  {t("contentInspector.down")}
                 </button>
               </span>
             </div>
           ))}
         </fieldset>
       ) : null}
-      {fields.map(({ key, label, value, target, control, min, max }) => {
-        const shared = {
-          value: draftValues[key] ?? value,
-          disabled,
-          "aria-label": `${label} content`,
-          onFocus: () => handleFocus(key, value),
-          onBlur: () => handleBlur(key),
-          onChange: (
-            event: ChangeEvent<
-              HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-            >,
-          ) => {
-            const nextValue = event.target.value;
-            setDraftValues((current) => ({ ...current, [key]: nextValue }));
-            handleEdit(target, nextValue);
-          },
-          className:
-            "mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-400",
-        };
-        return (
-          <label key={key} className="block text-xs text-slate-400">
-            {label}
-            {control === "textarea" ? (
-              <textarea {...shared} className={`${shared.className} min-h-20`} />
-            ) : control === "fit" || control === "alignment" ? (
-              <select {...shared}>
-                {control === "fit" ? (
-                  <>
-                    <option value="fill">Fill</option>
-                    <option value="contain">Contain</option>
-                    <option value="cover">Cover</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                  </>
-                )}
-              </select>
-            ) : (
-              <input
-                {...shared}
-                type={control}
-                step={control === "number" ? "any" : undefined}
-                min={min}
-                max={max}
-              />
-            )}
-          </label>
-        );
-      })}
+      {fields.map(
+        ({
+          key,
+          labelKey,
+          labelValues,
+          value,
+          target,
+          control,
+          min,
+          max,
+        }) => {
+          const label = t(FIELD_LABEL_KEYS[labelKey], labelValues);
+          const shared = {
+            value: draftValues[key] ?? value,
+            disabled,
+            "aria-label": t("contentInspector.fieldContentAria", { label }),
+            onFocus: () => handleFocus(key, value),
+            onBlur: () => handleBlur(key),
+            onChange: (
+              event: ChangeEvent<
+                HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+              >,
+            ) => {
+              const nextValue = event.target.value;
+              setDraftValues((current) => ({ ...current, [key]: nextValue }));
+              handleEdit(target, nextValue);
+            },
+            className:
+              "mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-400",
+          };
+          return (
+            <label key={key} className="block text-xs text-slate-400">
+              {label}
+              {control === "textarea" ? (
+                <textarea
+                  {...shared}
+                  className={`${shared.className} min-h-20`}
+                />
+              ) : control === "fit" || control === "alignment" ? (
+                <select {...shared}>
+                  {control === "fit" ? (
+                    <>
+                      <option value="fill">
+                        {t("contentInspector.fit.fill")}
+                      </option>
+                      <option value="contain">
+                        {t("contentInspector.fit.contain")}
+                      </option>
+                      <option value="cover">
+                        {t("contentInspector.fit.cover")}
+                      </option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="left">
+                        {t("contentInspector.alignment.left")}
+                      </option>
+                      <option value="center">
+                        {t("contentInspector.alignment.center")}
+                      </option>
+                      <option value="right">
+                        {t("contentInspector.alignment.right")}
+                      </option>
+                    </>
+                  )}
+                </select>
+              ) : (
+                <input
+                  {...shared}
+                  type={control}
+                  step={control === "number" ? "any" : undefined}
+                  min={min}
+                  max={max}
+                />
+              )}
+            </label>
+          );
+        },
+      )}
       {element.type === "image" ? (
         <p className="text-xs text-slate-500">
-          Asset sources must be an app-relative path or an inline image data URI.
-          Remote URLs are rejected. Focus is bounded to 0–100% and crop scale
-          to 1–6; tinted icons cannot be cropped.
+          {t("contentInspector.assetHelp")}
         </p>
       ) : null}
       {element.type === "table" ? (
         <p className="text-xs text-slate-500">
-          Table fills use a schema-safe color picker. Existing opacity and
-          unsupported cell metadata remain lossless.
+          {t("contentInspector.tableHelp")}
         </p>
       ) : null}
     </div>

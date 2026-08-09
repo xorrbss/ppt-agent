@@ -46,6 +46,15 @@ function createDeck(index: number) {
   };
 }
 
+function pageOf(items: ReturnType<typeof createDeck>[], total = items.length) {
+  return {
+    items,
+    total,
+    page: 1,
+    page_size: 24,
+  };
+}
+
 const DECK_COUNT = 60;
 
 describe("DashboardPage", () => {
@@ -64,7 +73,7 @@ describe("DashboardPage", () => {
     // A real fetch failure must NOT be rendered as "no presentations yet" —
     // that reads as account-wide data loss. The grid's retry UI should show.
     apiMocks.setupErrorIntercept(
-      "**/api/v1/ppt/presentation/all",
+      "**/api/v1/ppt/presentation/all*",
       500,
       "Internal Server Error",
       "presentationsFail"
@@ -82,8 +91,8 @@ describe("DashboardPage", () => {
 
   it("shows the empty state when there are genuinely no presentations", () => {
     apiMocks.setupGetIntercept(
-      "**/api/v1/ppt/presentation/all",
-      [],
+      "**/api/v1/ppt/presentation/all*",
+      pageOf([]),
       "presentationsEmpty"
     );
 
@@ -101,7 +110,7 @@ describe("DashboardPage", () => {
     // once. Cards must still all exist (layout, title, date, Ctrl+F), but the
     // expensive stage may only be built for cards the user can nearly see.
     cy.stub(DashboardApi, "getPresentations").resolves(
-      Array.from({ length: DECK_COUNT }, (_, index) => createDeck(index))
+      pageOf(Array.from({ length: DECK_COUNT }, (_, index) => createDeck(index)))
     );
 
     mountDashboard();
@@ -130,7 +139,7 @@ describe("DashboardPage", () => {
 
   it("reserves the mounted stage's exact box, so materialising a card cannot reflow the grid", () => {
     cy.stub(DashboardApi, "getPresentations").resolves(
-      Array.from({ length: DECK_COUNT }, (_, index) => createDeck(index))
+      pageOf(Array.from({ length: DECK_COUNT }, (_, index) => createDeck(index)))
     );
 
     mountDashboard();
@@ -178,5 +187,63 @@ describe("DashboardPage", () => {
           );
         });
       });
+  });
+
+  it("sends debounced search, sort, and pagination to the server", () => {
+    const getPresentations = cy
+      .stub(DashboardApi, "getPresentations")
+      .callsFake(async (options) => {
+        if (options.page === 2) {
+          return { ...pageOf([createDeck(24)], 25), page: 2 };
+        }
+        if (options.q) {
+          return pageOf([createDeck(7)]);
+        }
+        return pageOf(Array.from({ length: 24 }, (_, index) => createDeck(index)), 25);
+      });
+
+    mountDashboard();
+
+    cy.contains("25개").should("be.visible");
+    cy.get('[data-testid="dashboard-presentation-search"]').type("분기 계획");
+    cy.wait(350).then(() => {
+      expect(getPresentations.lastCall.args[0]).to.deep.include({
+        q: "분기 계획",
+        page: 1,
+        pageSize: 24,
+        sort: "desc",
+      });
+    });
+
+    cy.get('[aria-label="정렬 순서 전환"]').click();
+    cy.then(() => {
+      expect(getPresentations.lastCall.args[0]).to.deep.include({
+        q: "분기 계획",
+        page: 1,
+        sort: "asc",
+      });
+    });
+
+    cy.get('[data-testid="dashboard-presentation-search"]').clear();
+    cy.wait(350);
+    cy.get('[aria-label="다음 페이지"]').click();
+    cy.then(() => {
+      expect(getPresentations.lastCall.args[0]).to.deep.include({
+        page: 2,
+        sort: "asc",
+      });
+    });
+  });
+
+  it("shows a search-specific empty state", () => {
+    cy.stub(DashboardApi, "getPresentations").callsFake(async (options) =>
+      options.q ? pageOf([]) : pageOf([createDeck(0)]),
+    );
+
+    mountDashboard();
+    cy.get('[data-testid="dashboard-presentation-search"]').type("없는 자료");
+    cy.wait(350);
+    cy.contains("검색 결과가 없습니다.").should("be.visible");
+    cy.contains("아직 발표자료가 없습니다.").should("not.exist");
   });
 });

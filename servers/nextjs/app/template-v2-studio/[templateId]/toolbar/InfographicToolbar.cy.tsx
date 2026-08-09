@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
+import { mountWithStudioI18n } from "../studioI18nTestUtils.cy";
 import InfographicToolbar from "./InfographicToolbar";
 import type {
   TemplateV2ToolbarPatch,
@@ -94,7 +95,7 @@ const infographic: TemplateV2ToolbarRecord = {
 describe("InfographicToolbar", () => {
   it("edits only the bounded value leaf and preserves unknown persisted JSON", () => {
     const patch = cy.spy().as("infographicPatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulInfographicToolbar
         initialElement={infographic}
         observedPatch={patch}
@@ -164,7 +165,7 @@ describe("InfographicToolbar", () => {
   });
 
   it("renders no controls when called with an invalid contract", () => {
-    cy.mount(
+    mountWithStudioI18n(
       <InfographicToolbar
         element={{
           ...infographic,

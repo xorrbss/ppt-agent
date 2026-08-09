@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   createTemplateV2AiRewriteWorkflow,
@@ -15,16 +16,16 @@ import {
 
 type ActionKind = TemplateV2AiRewriteAction["kind"];
 
-const ACTION_LABELS: ReadonlyArray<{ kind: ActionKind; label: string }> = [
-  { kind: "shorten", label: "Shorter" },
-  { kind: "expand", label: "Longer" },
-  { kind: "tone-report", label: "Report tone" },
-  { kind: "tone-proposal", label: "Proposal tone" },
-  { kind: "translate", label: "Translate" },
+const ACTION_KINDS: readonly ActionKind[] = [
+  "shorten",
+  "expand",
+  "tone-report",
+  "tone-proposal",
+  "translate",
 ];
 
 function textRuns(
-  element: JsonRecord
+  element: JsonRecord,
 ): Array<{ runIndex: number; text: string }> {
   if (element.type !== "text" || !Array.isArray(element.runs)) return [];
   return element.runs.flatMap((run, runIndex) =>
@@ -33,7 +34,7 @@ function textRuns(
     !Array.isArray(run) &&
     typeof (run as JsonRecord).text === "string"
       ? [{ runIndex, text: String((run as JsonRecord).text) }]
-      : []
+      : [],
   );
 }
 
@@ -45,7 +46,7 @@ function graphemes(text: string): string[] {
 }
 
 export function generateTemplateV2StudioRewriteCandidates(
-  request: TemplateV2AiRewriteProviderRequest
+  request: TemplateV2AiRewriteProviderRequest,
 ): readonly string[] {
   const source = request.selectedText;
   const compact = graphemes(source)
@@ -97,20 +98,20 @@ export function generateTemplateV2StudioRewriteCandidates(
   return unique;
 }
 
-function errorMessage(code: string): string {
+function errorKey(code: string) {
   if (code === "template_v2_ai_rewrite_not_grapheme_boundary") {
-    return "Adjust the selection so it does not split an emoji or combined character.";
+    return "aiRewrite.errors.selectionBoundary";
   }
   if (code === "template_v2_ai_rewrite_stale_revision") {
-    return "The template revision changed. Generate a fresh preview.";
+    return "aiRewrite.errors.staleRevision";
   }
   if (code === "template_v2_ai_rewrite_source_changed") {
-    return "The source run changed. Select the text again.";
+    return "aiRewrite.errors.sourceChanged";
   }
   if (code === "template_v2_ai_rewrite_candidate_overflow") {
-    return "This candidate would overflow the text box and cannot be applied.";
+    return "aiRewrite.errors.overflow";
   }
-  return `Rewrite unavailable (${code}).`;
+  return "aiRewrite.errors.unavailable";
 }
 
 function CandidateDiff({
@@ -149,14 +150,18 @@ export default function TemplateV2AiRewritePanel({
   disabled: boolean;
   onApply(patch: TemplateV2TextSelectionPatch, historyKey: string): void;
 }) {
+  const t = useTranslations("studio");
   const runs = textRuns(element);
   const [runIndex, setRunIndex] = useState(0);
-  const [selection, setSelection] = useState<{ start: number; end: number } | null>(
-    null
-  );
+  const [selection, setSelection] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
   const [actionKind, setActionKind] = useState<ActionKind>("shorten");
   const [targetLocale, setTargetLocale] = useState("en");
-  const [preview, setPreview] = useState<TemplateV2AiRewritePreview | null>(null);
+  const [preview, setPreview] = useState<TemplateV2AiRewritePreview | null>(
+    null,
+  );
   const [candidateId, setCandidateId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,10 +171,10 @@ export default function TemplateV2AiRewritePanel({
     () =>
       createTemplateV2AiRewriteWorkflow(
         createTemplateV2FakeAiRewriteProvider(
-          generateTemplateV2StudioRewriteCandidates
-        )
+          generateTemplateV2StudioRewriteCandidates,
+        ),
       ),
-    []
+    [],
   );
 
   if (!runs.length) return null;
@@ -177,7 +182,8 @@ export default function TemplateV2AiRewritePanel({
   const selectedRun = runs[safeRunIndex];
   const runText = selectedRun.text;
   const selectedCandidate =
-    preview?.candidates.find((candidate) => candidate.id === candidateId) ?? null;
+    preview?.candidates.find((candidate) => candidate.id === candidateId) ??
+    null;
 
   function closePreview() {
     if (preview) {
@@ -207,7 +213,7 @@ export default function TemplateV2AiRewritePanel({
 
   async function generatePreview() {
     if (!selection || selection.end <= selection.start) {
-      setError("Select a bounded range in the source run first.");
+      setError(t("aiRewrite.errors.selectRange"));
       return;
     }
     closePreview();
@@ -228,14 +234,14 @@ export default function TemplateV2AiRewritePanel({
     });
     setBusy(false);
     if (!result.ok) {
-      setError(errorMessage(result.code));
+      setError(t(errorKey(result.code)));
       return;
     }
     setPreview(result.preview);
     setCandidateId(
       result.preview.candidates.find((candidate) => candidate.applyable)?.id ??
         result.preview.candidates[0]?.id ??
-        null
+        null,
     );
   }
 
@@ -250,7 +256,7 @@ export default function TemplateV2AiRewritePanel({
       idempotencyKey: preview.idempotencyKey,
     });
     if (!result.ok) {
-      setError(errorMessage(result.code));
+      setError(t(errorKey(result.code)));
       return;
     }
     onApply(result.patch, result.historyKey);
@@ -258,33 +264,33 @@ export default function TemplateV2AiRewritePanel({
     setCandidateId(null);
     setSelection(null);
     setError(null);
-    setStatus("Candidate applied. Autosave and global undo are available.");
+    setStatus(t("aiRewrite.status.applied"));
   }
 
   return (
     <section
-      aria-label="AI rewrite selected text"
+      aria-label={t("aiRewrite.ariaLabel")}
       className="mt-5 rounded-xl border border-violet-500/30 bg-violet-950/20 p-3"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-violet-100">
-            AI rewrite · selected run only
+            {t("aiRewrite.title")}
           </h3>
           <p className="mt-1 text-xs text-slate-400">
-            Local deterministic preview · no network or paid provider
+            {t("aiRewrite.description")}
           </p>
         </div>
         <span className="rounded bg-slate-950 px-2 py-1 text-[10px] text-emerald-300">
-          fail-closed
+          {t("aiRewrite.failClosed")}
         </span>
       </div>
 
       {runs.length > 1 ? (
         <label className="mt-3 block text-xs text-slate-300">
-          Text run
+          {t("aiRewrite.textRunLabel")}
           <select
-            aria-label="AI rewrite text run"
+            aria-label={t("aiRewrite.textRunAria")}
             className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-2"
             value={safeRunIndex}
             disabled={disabled || busy}
@@ -298,7 +304,7 @@ export default function TemplateV2AiRewritePanel({
           >
             {runs.map((run, index) => (
               <option key={run.runIndex} value={index}>
-                Run {run.runIndex + 1}
+                {t("aiRewrite.runOption", { number: run.runIndex + 1 })}
               </option>
             ))}
           </select>
@@ -306,10 +312,12 @@ export default function TemplateV2AiRewritePanel({
       ) : null}
 
       <label className="mt-3 block text-xs text-slate-300">
-        Select text in source
+        {t("aiRewrite.sourceLabel")}
         <textarea
           readOnly
-          aria-label={`AI rewrite source run ${selectedRun.runIndex + 1}`}
+          aria-label={t("aiRewrite.sourceRunAria", {
+            number: selectedRun.runIndex + 1,
+          })}
           className="mt-1 min-h-20 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-violet-400"
           value={runText}
           disabled={disabled || busy}
@@ -320,31 +328,44 @@ export default function TemplateV2AiRewritePanel({
       </label>
       <p className="mt-1 text-[11px] text-slate-500" aria-live="polite">
         {selection
-          ? `Selected UTF-16 range ${selection.start}–${selection.end}`
-          : "No range selected"}
+          ? t("aiRewrite.selectedRange", {
+              start: selection.start,
+              end: selection.end,
+            })
+          : t("aiRewrite.noRangeSelected")}
       </p>
 
       <fieldset className="mt-3" disabled={disabled || busy}>
-        <legend className="text-xs text-slate-300">Rewrite action</legend>
+        <legend className="text-xs text-slate-300">
+          {t("aiRewrite.actionLegend")}
+        </legend>
         <div className="mt-1 flex flex-wrap gap-1">
-          {ACTION_LABELS.map((item) => (
+          {ACTION_KINDS.map((kind) => (
             <button
-              key={item.kind}
+              key={kind}
               type="button"
-              aria-pressed={actionKind === item.kind}
+              aria-pressed={actionKind === kind}
               onClick={() => {
                 closePreview();
-                setActionKind(item.kind);
+                setActionKind(kind);
                 setError(null);
                 setStatus(null);
               }}
               className={`rounded border px-2 py-1 text-xs ${
-                actionKind === item.kind
+                actionKind === kind
                   ? "border-violet-400 bg-violet-500/30 text-violet-100"
                   : "border-slate-700 text-slate-300"
               }`}
             >
-              {item.label}
+              {t(
+                `aiRewrite.actions.${
+                  kind === "tone-report"
+                    ? "toneReport"
+                    : kind === "tone-proposal"
+                      ? "toneProposal"
+                      : kind
+                }`,
+              )}
             </button>
           ))}
         </div>
@@ -352,9 +373,9 @@ export default function TemplateV2AiRewritePanel({
 
       {actionKind === "translate" ? (
         <label className="mt-3 block text-xs text-slate-300">
-          Target locale
+          {t("aiRewrite.targetLocaleLabel")}
           <input
-            aria-label="AI rewrite target locale"
+            aria-label={t("aiRewrite.targetLocaleAria")}
             className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
             value={targetLocale}
             disabled={disabled || busy}
@@ -377,7 +398,9 @@ export default function TemplateV2AiRewritePanel({
         }
         onClick={() => void generatePreview()}
       >
-        {busy ? "Generating local preview…" : "Generate 3 candidates"}
+        {busy
+          ? t("aiRewrite.generating")
+          : t("aiRewrite.generateCandidates", { count: 3 })}
       </button>
 
       {error ? (
@@ -392,9 +415,12 @@ export default function TemplateV2AiRewritePanel({
       ) : null}
 
       {preview ? (
-        <div className="mt-4 space-y-2" aria-label="AI rewrite candidates">
+        <div
+          className="mt-4 space-y-2"
+          aria-label={t("aiRewrite.candidatesAria")}
+        >
           <p className="text-xs font-medium text-slate-200">
-            Before: “{preview.selectedText}”
+            {t("aiRewrite.before", { text: preview.selectedText })}
           </p>
           {preview.candidates.map((candidate, index) => (
             <label
@@ -414,7 +440,7 @@ export default function TemplateV2AiRewritePanel({
                     checked={candidate.id === candidateId}
                     onChange={() => setCandidateId(candidate.id)}
                   />{" "}
-                  Candidate {index + 1}
+                  {t("aiRewrite.candidate", { number: index + 1 })}
                 </span>
                 <span
                   className={
@@ -422,8 +448,15 @@ export default function TemplateV2AiRewritePanel({
                   }
                 >
                   {candidate.applyable
-                    ? `Fits · ${candidate.preflight.estimatedLines}/${candidate.preflight.availableLines} lines`
-                    : "Overflow · apply blocked"}
+                    ? t("aiRewrite.fits", {
+                        estimated:
+                          candidate.preflight.estimatedLines ??
+                          t("aiRewrite.unknown"),
+                        available:
+                          candidate.preflight.availableLines ??
+                          t("aiRewrite.unknown"),
+                      })
+                    : t("aiRewrite.overflow")}
                 </span>
               </span>
               <CandidateDiff candidate={candidate} />
@@ -436,7 +469,7 @@ export default function TemplateV2AiRewritePanel({
               disabled={disabled || !selectedCandidate?.applyable}
               onClick={applyCandidate}
             >
-              Apply selected
+              {t("aiRewrite.applySelected")}
             </button>
             <button
               type="button"
@@ -444,10 +477,10 @@ export default function TemplateV2AiRewritePanel({
               onClick={() => {
                 closePreview();
                 setError(null);
-                setStatus("Preview canceled. No template data changed.");
+                setStatus(t("aiRewrite.status.canceled"));
               }}
             >
-              Cancel
+              {t("aiRewrite.cancel")}
             </button>
           </div>
         </div>

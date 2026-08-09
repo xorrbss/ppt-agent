@@ -1,16 +1,17 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Slide } from '../../types/slide';
-import { useRef } from 'react';
+import { useRef, type PointerEventHandler } from 'react';
 import { SlideThumbnailCard } from './SlideThumbnailCard';
 interface SortableSlideProps {
     slide: Slide;
     index: number;
     selectedSlide: number;
     onSlideClick: (index: any) => void;
+    previewScale?: number;
 }
 
-export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: SortableSlideProps) {
+export function SortableSlide({ slide, index, selectedSlide, onSlideClick, previewScale }: SortableSlideProps) {
     const lastClickTime = useRef(0);
     const {
         attributes,
@@ -18,7 +19,8 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
         setNodeRef,
         transform,
         transition,
-        isDragging
+        isDragging,
+        setActivatorNodeRef,
     } = useSortable({ id: slide.id || `${slide.index}` });
 
     const style = {
@@ -48,9 +50,16 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick }: Sor
             slide={slide}
             index={index}
             selected={selectedSlide === index}
+            previewScale={previewScale}
             style={style}
-            {...attributes}
-            {...listeners}
+            onPointerDown={listeners?.onPointerDown as PointerEventHandler<HTMLDivElement> | undefined}
+            dragHandleProps={{
+                ...attributes,
+                ...listeners,
+                onPointerDown: undefined,
+                ref: setActivatorNodeRef,
+                "aria-label": `Reorder slide ${index + 1}`,
+            }}
             onClick={handleClick}
         />
     );

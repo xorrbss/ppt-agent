@@ -9,6 +9,8 @@ interface PresentationGridProps {
   isLoading?: boolean;
   error?: string | null;
   onPresentationDeleted?: (presentationId: string) => void;
+  emptyTitle?: string;
+  emptyDescription?: string;
 }
 
 export const PresentationGrid = ({
@@ -16,6 +18,8 @@ export const PresentationGrid = ({
   isLoading = false,
   error = null,
   onPresentationDeleted,
+  emptyTitle,
+  emptyDescription,
 }: PresentationGridProps) => {
   const ShimmerCard = () => (
     <div className="flex min-h-[216px] flex-col overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-[#F8FBFB] shadow-none animate-pulse">
@@ -67,7 +71,7 @@ export const PresentationGrid = ({
   }
 
   if (!presentations || presentations.length === 0) {
-    return <EmptyState />;
+    return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
 
   return (

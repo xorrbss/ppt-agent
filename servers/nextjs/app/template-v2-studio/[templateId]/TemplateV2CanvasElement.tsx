@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, type ComponentProps } from "react";
+import { useTranslations } from "next-intl";
 import {
   Ellipse,
   Group,
@@ -115,6 +116,7 @@ function StudioVector({
 }
 
 function StudioImage(props: StudioElementProps) {
+  const t = useTranslations("studio.canvasElement");
   const { cropDraft, element, path } = props;
   const iconColor =
     element.is_icon === true ? stringValue(element.color, "") : null;
@@ -175,7 +177,7 @@ function StudioImage(props: StudioElementProps) {
           x={8}
           y={8}
           width={Math.max(40, size.width - 16)}
-          text="Image unavailable"
+          text={t("imageUnavailable")}
           fill="#64748b"
           fontSize={14}
           listening={false}
@@ -186,6 +188,7 @@ function StudioImage(props: StudioElementProps) {
 }
 
 function StudioMath(props: StudioElementProps) {
+  const t = useTranslations("studio.canvasElement");
   const { element } = props;
   const position = elementPosition(element);
   const size = elementSize(element, { width: 860, height: 150 });
@@ -223,7 +226,7 @@ function StudioMath(props: StudioElementProps) {
       ) : (
         <Text
           {...size}
-          text={stringValue(element.latex, "Math expression")}
+          text={stringValue(element.latex, t("mathExpression"))}
           fill={stringValue(font.color, "#111827")}
           fontSize={numberValue(font.size, 32)}
           align="center"
@@ -236,6 +239,7 @@ function StudioMath(props: StudioElementProps) {
 }
 
 function StudioElementView(props: StudioElementProps) {
+  const t = useTranslations("studio.canvasElement");
   const { element, path } = props;
   const position = elementPosition(element);
   const size = elementSize(element);
@@ -354,7 +358,7 @@ function StudioElementView(props: StudioElementProps) {
             x={8}
             y={8}
             width={Math.max(40, size.width - 16)}
-            text="Invalid: infographic"
+            text={t("invalid")}
             fill="#b91c1c"
             fontSize={14}
             listening={false}
@@ -403,7 +407,7 @@ function StudioElementView(props: StudioElementProps) {
             x={8}
             y={8}
             width={Math.max(40, size.width - 16)}
-            text={`Invalid: ${stringValue(element.type, "unknown")}`}
+            text={t("invalid")}
             fill="#b91c1c"
             fontSize={14}
             listening={false}
@@ -478,7 +482,7 @@ function StudioElementView(props: StudioElementProps) {
         x={8}
         y={8}
         width={Math.max(40, size.width - 16)}
-        text={`Unsupported: ${stringValue(element.type, "unknown")}`}
+        text={t("unsupported")}
         fill="#64748b"
         fontSize={14}
         listening={false}

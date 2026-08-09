@@ -4,7 +4,13 @@ import Image from "next/image";
 
 import { Card } from "@/components/ui/card";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import { AlertTriangle, EllipsisVertical, Loader2, Trash } from "lucide-react";
+import {
+  AlertTriangle,
+  EllipsisVertical,
+  Loader2,
+  Share2,
+  Trash,
+} from "lucide-react";
 import {
   Popover,
   PopoverTrigger,
@@ -17,6 +23,7 @@ import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/
 import { DeferredSlideThumbnail } from "./DeferredSlideThumbnail";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { SharePopover } from "./SharePopover";
 
 export const PresentationCard = ({
   id,
@@ -32,10 +39,12 @@ export const PresentationCard = ({
   const router = useRouter();
   const pathname = usePathname();
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [showShareDialog, setShowShareDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (showDeleteDialog || showShareDialog) return;
     trackEvent(MixpanelEvent.Dashboard_Presentation_Opened, {
       pathname,
       presentation_id: id,
@@ -112,6 +121,17 @@ export const PresentationCard = ({
               </PopoverTrigger>
               <PopoverContent align="end" className="bg-white w-[200px]">
                 <button
+                  className="flex w-full items-center justify-between px-2 py-1 hover:bg-gray-100"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowShareDialog(true);
+                  }}
+                >
+                  <p>공유</p>
+                  <Share2 className="h-4 w-4 text-[#5146E5]" />
+                </button>
+                <button
                   className="flex items-center justify-between w-full px-2 py-1 hover:bg-gray-100"
                   onClick={(e) => {
                     e.preventDefault();
@@ -184,6 +204,12 @@ export const PresentationCard = ({
           </div>
         </div>
       )}
+      <SharePopover
+        presentationId={id}
+        title={title}
+        open={showShareDialog}
+        onOpenChange={setShowShareDialog}
+      />
     </Card>
   );
 };

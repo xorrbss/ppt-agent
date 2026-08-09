@@ -36,7 +36,7 @@ export const SLIDE_SCALE_RESERVED_HEIGHT_CSS = `min(calc(${(
 const SlideScale = ({
     slide,
     theme,
-    isEditMode = true,
+    isEditMode = false,
     showEditScan = false,
     /** Fill viewport; scale may exceed 1 so slides appear larger in present mode */
     presentMode = false,

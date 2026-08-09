@@ -3,6 +3,16 @@ import {
 } from "@/app/(presentation-generator)/services/api/header";
 import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/api-error-handler";
 import { getApiUrl } from "@/utils/api";
+import {
+  buildPresentationListPath,
+  normalizePresentationListEnvelope,
+} from "./dashboard-list-query";
+import type {
+  PresentationListEnvelope,
+  PresentationListOptions,
+} from "./dashboard-list-query";
+
+export type PresentationListPage = PresentationListEnvelope<PresentationResponse>;
 
 export interface PresentationResponse {
   id: string;
@@ -42,24 +52,41 @@ export interface PresentationGenerationInfo {
   settings: PresentationGenerationSettings;
 }
 
+export interface ShareInfo {
+  shared: boolean;
+  share_token: string | null;
+  expires_at: string | null;
+  view_count: number;
+  expired: boolean;
+}
+
 export class DashboardApi {
 
-  static async getPresentations(): Promise<PresentationResponse[]> {
+  static async getPresentations(
+    options: PresentationListOptions = {},
+    signal?: AbortSignal,
+  ): Promise<PresentationListPage> {
     try {
       const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/all`),
+        getApiUrl(buildPresentationListPath(options)),
         {
           method: "GET",
+          credentials: "include",
+          signal,
         }
       );
 
       // Handle the special case where 404 means "no presentations found"
       if (response.status === 404) {
         console.log("No presentations found");
-        return [];
+        return normalizePresentationListEnvelope([], options);
       }
 
-      return await ApiResponseHandler.handleResponse(response, "Failed to fetch presentations");
+      const payload = await ApiResponseHandler.handleResponse(
+        response,
+        "Failed to fetch presentations",
+      );
+      return normalizePresentationListEnvelope(payload, options);
     } catch (error) {
       console.error("Error fetching presentations:", error);
       throw error;
@@ -118,5 +145,62 @@ export class DashboardApi {
         message: error instanceof Error ? error.message : "Failed to delete presentation",
       };
     }
+  }
+
+  static async getShareStatus(presentationId: string): Promise<ShareInfo> {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${presentationId}/share`),
+      {
+        method: "GET",
+        headers: getHeader(),
+        credentials: "include",
+        cache: "no-store",
+      },
+    );
+    return await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to load share status",
+    );
+  }
+
+  static async enableShare(
+    presentationId: string,
+    expiresAt: string | null,
+    regenerate = false,
+  ): Promise<ShareInfo> {
+    const response = await fetch(
+      getApiUrl(
+        `/api/v1/ppt/presentation/${presentationId}/share${
+          regenerate ? "?regenerate=true" : ""
+        }`,
+      ),
+      {
+        method: "POST",
+        headers: getHeader(),
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({ expires_at: expiresAt }),
+      },
+    );
+    return await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to enable sharing",
+    );
+  }
+
+  static async disableShare(presentationId: string): Promise<ShareInfo> {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${presentationId}/share`),
+      {
+        method: "DELETE",
+        headers: getHeader(),
+        credentials: "include",
+        cache: "no-store",
+      },
+    );
+    return await ApiResponseHandler.handleResponse(
+      response,
+      "Failed to disable sharing",
+    );
   }
 }

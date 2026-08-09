@@ -17,7 +17,15 @@ import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter } from "next/navigation";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { AlertCircle, Layers } from "lucide-react";
+import { AlertCircle, Layers, PanelLeft } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   usePresentationStreaming,
   usePresentationData,
@@ -68,6 +76,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     "slides" | "chat"
   >("chat");
   const [workspaceDrawerOpen, setWorkspaceDrawerOpen] = useState(true);
+  const [mobileThumbnailsOpen, setMobileThumbnailsOpen] = useState(false);
   const slidesScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const slideScrollSyncFrameRef = useRef<number | null>(null);
   const router = useRouter();
@@ -147,6 +156,25 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     setSelectedSlide,
     setIsFullscreen
   );
+
+  const handleMobileThumbnailSelect = useCallback(
+    (slideIndex: number) => {
+      setCompactWorkspacePane("slides");
+      setMobileThumbnailsOpen(false);
+      window.requestAnimationFrame(() => handleSlideClick(slideIndex));
+    },
+    [handleSlideClick],
+  );
+
+  useEffect(() => {
+    const desktopRail = window.matchMedia("(min-width: 768px)");
+    const closeMobileDrawer = (event: MediaQueryListEvent | MediaQueryList) => {
+      if (event.matches) setMobileThumbnailsOpen(false);
+    };
+    closeMobileDrawer(desktopRail);
+    desktopRail.addEventListener("change", closeMobileDrawer);
+    return () => desktopRail.removeEventListener("change", closeMobileDrawer);
+  }, []);
 
   // Initialize streaming
   usePresentationStreaming(
@@ -395,7 +423,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
 
   return (
     <main
-      className="h-screen w-full max-w-full overflow-clip font-syne"
+      className="h-screen h-dvh w-full max-w-full overflow-clip font-syne"
       aria-labelledby="presentation-editor-title"
     >
       <h1 id="presentation-editor-title" className="sr-only">
@@ -474,6 +502,41 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               작업 대화
             </button>
           </div>
+          <Sheet open={mobileThumbnailsOpen} onOpenChange={setMobileThumbnailsOpen}>
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                data-testid="mobile-thumbnail-drawer-trigger"
+                aria-label={mobileThumbnailsOpen ? "슬라이드 목록 닫기" : "슬라이드 목록 열기"}
+                className="ml-2 inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-violet-700 focus-visible:ring-offset-2 md:hidden"
+              >
+                <PanelLeft aria-hidden="true" className="h-4 w-4" />
+                <span className="hidden sm:inline">슬라이드 목록</span>
+              </button>
+            </SheetTrigger>
+            <SheetContent
+              side="left"
+              data-testid="mobile-thumbnail-drawer"
+              className="flex h-dvh w-[min(320px,calc(100vw-16px))] max-w-none flex-col gap-3 p-4 [&>button]:h-11 [&>button]:w-11"
+            >
+              <SheetHeader className="pr-12 text-left">
+                <SheetTitle>슬라이드 목록</SheetTitle>
+                <SheetDescription>
+                  이동할 슬라이드를 선택하세요.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-hidden pt-2">
+                <SidePanel
+                  selectedSlide={selectedSlide}
+                  onSlideClick={handleMobileThumbnailSelect}
+                  presentationId={presentation_id}
+                  loading={loading}
+                  mutationsEnabled={INLINE_MUTATIONS_ENABLED}
+                  displayMode="drawer"
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
           <button
             type="button"
             aria-expanded={workspaceDrawerOpen}

@@ -2,7 +2,7 @@ from copy import deepcopy
 from typing import Optional
 import uuid
 from pydantic import field_validator, model_validator
-from sqlalchemy import CheckConstraint, ForeignKey, Uuid
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Uuid
 from sqlalchemy.types import JSON, TypeDecorator
 from sqlmodel import Field, Column, SQLModel
 
@@ -33,6 +33,7 @@ class SlideModel(SQLModel, table=True):
             "ui IS NULL OR html_content IS NULL OR html_content = ''",
             name="ck_slides_native_ui_or_authored_html",
         ),
+        Index("ix_slides_presentation_index", "presentation", "index"),
     )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)

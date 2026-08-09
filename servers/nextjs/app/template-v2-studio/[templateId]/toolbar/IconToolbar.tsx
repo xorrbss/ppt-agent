@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import {
   ToolbarButton,
@@ -20,13 +22,15 @@ export default function IconToolbar({
   ) => void;
   onChangeIcon?: () => void;
 }) {
+  const t = useTranslations("studio");
+
   return (
     <div className="flex items-center gap-2">
-      <ToolbarField label="Icon color">
-        <span aria-hidden="true">Color</span>
+      <ToolbarField label={t("toolbar.icon.color")}>
+        <span aria-hidden="true">{t("toolbar.common.color")}</span>
         <input
           className={`${toolbarInputClass} w-24`}
-          aria-label="Icon color"
+          aria-label={t("toolbar.icon.color")}
           type="text"
           value={typeof element.color === "string" ? element.color : ""}
           placeholder="#000000"
@@ -39,8 +43,11 @@ export default function IconToolbar({
         />
       </ToolbarField>
       {onChangeIcon && (
-        <ToolbarButton aria-label="Change icon" onClick={onChangeIcon}>
-          Change icon
+        <ToolbarButton
+          aria-label={t("toolbar.icon.change")}
+          onClick={onChangeIcon}
+        >
+          {t("toolbar.icon.change")}
         </ToolbarButton>
       )}
     </div>

@@ -199,13 +199,49 @@ const ImageEditor = ({
       Math.min(100, ((e.clientY - rect.top) / rect.height) * 100)
     );
 
-    setFocusPoint({ x, y });
-    saveImageProperties(objectFit, { x, y }, cropScale);
+    applyFocusPoint({ x, y });
+  };
 
-    // Apply the focus point in real-time
+  const applyFocusPoint = (nextFocusPoint: { x: number; y: number }) => {
+    const normalized = {
+      x: Math.max(0, Math.min(100, nextFocusPoint.x)),
+      y: Math.max(0, Math.min(100, nextFocusPoint.y)),
+    };
+    setFocusPoint(normalized);
+    saveImageProperties(objectFit, normalized, cropScale);
     if (imageRef.current) {
-      imageRef.current.style.objectPosition = `${x}% ${y}%`;
+      imageRef.current.style.objectPosition = `${normalized.x}% ${normalized.y}%`;
     }
+  };
+
+  const handleFocusPointKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((event.key === "Enter" || event.key === " ") && !isFocusPointMode) {
+      event.preventDefault();
+      setIsFocusPointMode(true);
+      return;
+    }
+    if (event.key === "Escape" && isFocusPointMode) {
+      event.preventDefault();
+      saveImageProperties(objectFit, focusPoint, cropScale);
+      setIsFocusPointMode(false);
+      return;
+    }
+    if (!isFocusPointMode) return;
+
+    const step = event.shiftKey ? 10 : 2;
+    const movement = {
+      ArrowLeft: { x: -step, y: 0 },
+      ArrowRight: { x: step, y: 0 },
+      ArrowUp: { x: 0, y: -step },
+      ArrowDown: { x: 0, y: step },
+    }[event.key];
+    if (!movement) return;
+
+    event.preventDefault();
+    applyFocusPoint({
+      x: focusPoint.x + movement.x,
+      y: focusPoint.y + movement.y,
+    });
   };
 
   /**
@@ -400,12 +436,15 @@ const ImageEditor = ({
       <Sheet open={isOpen} onOpenChange={() => handleClose()}>
         <SheetContent
           side="right"
-          className="w-[600px]"
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          aria-describedby="image-editor-description"
+          className="w-[calc(100vw-16px)] max-w-[600px] sm:w-[600px] [&>button]:h-11 [&>button]:w-11"
           onClick={(e) => e.stopPropagation()}
         >
           <SheetHeader>
             <SheetTitle>이미지 변경</SheetTitle>
+            <p id="image-editor-description" className="sr-only">
+              Replace the selected image or adjust its crop and focus point.
+            </p>
           </SheetHeader>
 
           <div className="mt-6">
@@ -477,12 +516,13 @@ const ImageEditor = ({
                                 className="aspect-[4/3] w-full rounded-lg"
                               />
                             ))
-                          : stockSearchResults.map((url) => (
+                          : stockSearchResults.map((url, index) => (
                               <button
                                 type="button"
                                 key={url}
+                                aria-label={`Use stock image ${index + 1}`}
                                 onClick={() => handleImageChange(url)}
-                                className="aspect-[4/3] w-full overflow-hidden rounded-lg border border-gray-200 cursor-pointer hover:border-blue-500 transition-colors text-left p-0 bg-transparent"
+                                className="aspect-[4/3] w-full overflow-hidden rounded-lg border border-gray-200 cursor-pointer hover:border-blue-500 transition-colors text-left p-0 bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                               >
                                 <img
                                   src={url}
@@ -510,9 +550,11 @@ const ImageEditor = ({
                             />
                           ))
                         ) : (
-                          <div
+                          <button
+                            type="button"
+                            aria-label="Use generated image"
                             onClick={() => handleImageChange(previewImages)}
-                            className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
+                            className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                           >
                             {previewImages && (
                               <img
@@ -521,7 +563,7 @@ const ImageEditor = ({
                                 className="w-full h-full object-cover"
                               />
                             )}
-                          </div>
+                          </button>
                         )}
                       </div>
                       {previousGeneratedImages.length > 0 && (
@@ -531,19 +573,21 @@ const ImageEditor = ({
                           </h3>
                           <div className="grid grid-cols-2 gap-4  ">
                             {previousGeneratedImages.map((image) => (
-                              <div
+                              <button
+                                type="button"
+                                aria-label={`Use previously generated image: ${image.extras.prompt}`}
                                 onClick={() =>
                                   handleImageChange(resolveEditorImageSource(image))
                                 }
                                 key={image.id}
-                                className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors"
+                                className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                               >
                                 <img
                                   src={resolveEditorImageSource(image)}
                                   alt={image.extras.prompt}
                                   className="w-full h-full object-cover"
                                 />
-                              </div>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -558,7 +602,7 @@ const ImageEditor = ({
                 <div className="space-y-4">
                   <div
                     className={cn(
-                      "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+                        "border-2 border-dashed rounded-lg p-8 text-center transition-colors focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2",
                       isUploading
                         ? "border-gray-400 bg-gray-50"
                         : "border-gray-300 hover:border-blue-400"
@@ -567,7 +611,7 @@ const ImageEditor = ({
                     <input
                       type="file"
                       id="file-upload"
-                      className="hidden"
+                      className="sr-only"
                       accept="image/png,image/jpeg,image/gif,image/webp"
                       onChange={handleFileUpload}
                       disabled={isUploading}
@@ -618,11 +662,13 @@ const ImageEditor = ({
                           </div>
                         ) : (
                           uploadedImageUrl && (
-                            <div
+                            <button
+                              type="button"
+                              aria-label="Use uploaded image"
                               onClick={() =>
                                 handleImageChange(uploadedImageUrl)
                               }
-                              className="cursor-pointer group w-full h-full"
+                              className="cursor-pointer group w-full h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
                             >
                               <img
                                 src={uploadedImageUrl}
@@ -635,7 +681,7 @@ const ImageEditor = ({
                                   이 이미지 사용하기
                                 </span>
                               </div>
-                            </div>
+                            </button>
                           )
                         )}
                       </div>
@@ -650,19 +696,20 @@ const ImageEditor = ({
                         </div>
                       ) : (
                         uploadedImages.map((image) => (
-                          <div key={image.id}>
-                            <div
+                          <div
+                            key={image.id}
+                            className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-gray-200"
+                          >
+                            <button
+                              type="button"
+                              aria-label={`Use uploaded image ${image.id}`}
                               onClick={() =>
                                 handleImageChange(resolveEditorImageSource(image))
                               }
-                              className="cursor-pointer group aspect-[4/3] rounded-lg overflow-hidden relative border border-gray-200"
+                              className="h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
                             >
-                              <Trash className="absolute group-hover:opacity-100 opacity-0 transition-opacity z-10 w-4 h-4 top-2 right-2 text-red-500" onClick={(e) =>{
-                                e.stopPropagation();
-                                handleDeleteImage(image.id)
-                              }}/>
                               <img
-                              src={resolveEditorImageSource(image)}
+                                src={resolveEditorImageSource(image)}
                                 alt="Uploaded preview"
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />
@@ -672,8 +719,18 @@ const ImageEditor = ({
                                   사용
                                 </span>
                               </div>
-                            </div>
-                          
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Delete uploaded image ${image.id}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteImage(image.id);
+                              }}
+                              className="absolute right-1 top-1 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-red-600 opacity-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                            >
+                              <Trash aria-hidden="true" className="h-4 w-4" />
+                            </button>
                           </div>
                         ))
                       )}
@@ -685,13 +742,22 @@ const ImageEditor = ({
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium mb-2">현재 이미지</h3>
                   <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={
+                      isFocusPointMode
+                        ? `Adjust image focus point. Horizontal ${Math.round(focusPoint.x)} percent, vertical ${Math.round(focusPoint.y)} percent. Use arrow keys; Escape finishes.`
+                        : "Adjust image focus point"
+                    }
+                    aria-pressed={isFocusPointMode}
+                    aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight Escape"
                     onClick={(e) => {
                       if (isFocusPointMode) {
                         handleFocusPointClick(e);
-                      } else {
                       }
                     }}
-                    className="aspect-[4/3] group  rounded-lg overflow-hidden relative border border-gray-200"
+                    onKeyDown={handleFocusPointKeyDown}
+                    className="aspect-[4/3] group rounded-lg overflow-hidden relative border border-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                   >
                     <p className="group-hover:opacity-100 opacity-0 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-center font-medium bg-black/50 text-white px-2 py-1 rounded">
                       클릭하여 초점 변경
@@ -720,15 +786,6 @@ const ImageEditor = ({
                           <p className="text-sm font-medium pointer-events-none">
                             아무 곳이나 클릭하여 초점을 설정하세요
                           </p>
-                          <button
-                            className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleFocusPointMode();
-                            }}
-                          >
-                            완료
-                          </button>
                         </div>
 
                         <div
@@ -756,6 +813,7 @@ const ImageEditor = ({
                       <div className="flex gap-4">
                         <Button
                           variant="outline"
+                          aria-pressed={objectFit === "cover"}
                           className={cn(
                             objectFit === "cover" &&
                               "bg-blue-50 border-blue-500"
@@ -766,6 +824,7 @@ const ImageEditor = ({
                         </Button>
                         <Button
                           variant="outline"
+                          aria-pressed={objectFit === "contain"}
                           className={cn(
                             objectFit === "contain" &&
                               "bg-blue-50 border-blue-500"
@@ -776,6 +835,7 @@ const ImageEditor = ({
                         </Button>
                         <Button
                           variant="outline"
+                          aria-pressed={objectFit === "fill"}
                           className={cn(
                             objectFit === "fill" && "bg-blue-50 border-blue-500"
                           )}
@@ -819,6 +879,11 @@ const ImageEditor = ({
                       </Button>
                     </div>
                   </div>
+                  {isFocusPointMode && (
+                    <Button type="button" size="sm" onClick={toggleFocusPointMode}>
+                      완료
+                    </Button>
+                  )}
                   {/* Focus Point */}
                   {}
                 </div>

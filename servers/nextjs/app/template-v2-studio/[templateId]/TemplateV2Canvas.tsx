@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type Konva from "konva";
+import { useTranslations } from "next-intl";
 import { Group, Layer, Rect, Stage, Transformer } from "react-konva";
 
 import {
@@ -114,6 +115,7 @@ export default function TemplateV2Canvas({
   onSelect,
   onGeometryBatch,
 }: TemplateV2CanvasProps) {
+  const t = useTranslations("studio");
   const {
     containerRef,
     dimensions,
@@ -506,7 +508,7 @@ export default function TemplateV2Canvas({
       data-konva-move-enabled={String(capabilities.move)}
       data-konva-resize-enabled={String(capabilities.resize)}
       data-konva-rotate-enabled={String(capabilities.rotate)}
-      aria-label="Slide canvas. Arrow keys nudge the selection, Shift plus arrow nudges by the grid step, Escape clears the selection, and holding Space pans the view."
+      aria-label={t("canvas.aria")}
       onKeyDown={(event) => {
         if (event.code === "Space") {
           event.preventDefault();

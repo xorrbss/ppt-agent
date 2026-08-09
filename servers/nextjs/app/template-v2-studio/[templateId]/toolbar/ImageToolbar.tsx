@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   normalizeImageCropScale,
@@ -57,6 +58,7 @@ export default function ImageToolbar({
   onCropDraftChange?: (draft: TemplateV2ImageCropDraft | null) => void;
   onReplaceImage?: () => void;
 }) {
+  const t = useTranslations("studio");
   const persistedDraft = cropDraftFromElement(element);
   const [cropping, setCropping] = useState(false);
   const [draft, setDraft] = useState(persistedDraft);
@@ -117,11 +119,13 @@ export default function ImageToolbar({
         className="flex items-center gap-2"
         data-testid="template-v2-image-crop-controls"
       >
-        <ToolbarField label="Crop horizontal focus">
-          <span aria-hidden="true">X</span>
+        <ToolbarField label={t("toolbar.image.cropHorizontalFocus")}>
+          <span aria-hidden="true">
+            {t("toolbar.image.horizontalAxisShort")}
+          </span>
           <input
             className="w-24 accent-violet-400"
-            aria-label="Crop horizontal focus"
+            aria-label={t("toolbar.image.cropHorizontalFocus")}
             type="range"
             min={0}
             max={100}
@@ -135,11 +139,13 @@ export default function ImageToolbar({
             }
           />
         </ToolbarField>
-        <ToolbarField label="Crop vertical focus">
-          <span aria-hidden="true">Y</span>
+        <ToolbarField label={t("toolbar.image.cropVerticalFocus")}>
+          <span aria-hidden="true">
+            {t("toolbar.image.verticalAxisShort")}
+          </span>
           <input
             className="w-24 accent-violet-400"
-            aria-label="Crop vertical focus"
+            aria-label={t("toolbar.image.cropVerticalFocus")}
             type="range"
             min={0}
             max={100}
@@ -153,11 +159,11 @@ export default function ImageToolbar({
             }
           />
         </ToolbarField>
-        <ToolbarField label="Crop scale">
-          <span aria-hidden="true">Scale</span>
+        <ToolbarField label={t("toolbar.image.cropScale")}>
+          <span aria-hidden="true">{t("toolbar.image.scale")}</span>
           <input
             className={`${toolbarInputClass} w-20`}
-            aria-label="Crop scale"
+            aria-label={t("toolbar.image.cropScale")}
             type="number"
             min={0.1}
             max={6}
@@ -172,22 +178,25 @@ export default function ImageToolbar({
           />
         </ToolbarField>
         <ToolbarButton
-          aria-label="Reset image crop"
+          aria-label={t("toolbar.image.resetCrop")}
           onClick={() =>
             publishDraft({ focusX: 50, focusY: 50, cropScale: 1 })
           }
         >
-          Reset
-        </ToolbarButton>
-        <ToolbarButton aria-label="Cancel image crop" onClick={closeCrop}>
-          Cancel
+          {t("toolbar.common.reset")}
         </ToolbarButton>
         <ToolbarButton
-          aria-label="Apply image crop"
+          aria-label={t("toolbar.image.cancelCrop")}
+          onClick={closeCrop}
+        >
+          {t("toolbar.common.cancel")}
+        </ToolbarButton>
+        <ToolbarButton
+          aria-label={t("toolbar.image.applyCrop")}
           className="border-violet-400 bg-violet-500/20"
           onClick={applyCrop}
         >
-          Apply
+          {t("toolbar.common.apply")}
         </ToolbarButton>
       </div>
     );
@@ -203,9 +212,9 @@ export default function ImageToolbar({
 
   return (
     <div className="flex items-center gap-2">
-      <ToolbarField label="Image fit">
+      <ToolbarField label={t("toolbar.image.fit")}>
         <ToolbarSelect
-          aria-label="Image fit"
+          aria-label={t("toolbar.image.fit")}
           value={fit}
           onChange={(event) =>
             onPatch([{ path: ["fit"], value: event.target.value }], {
@@ -213,16 +222,19 @@ export default function ImageToolbar({
             })
           }
         >
-          <option value="cover">Cover</option>
-          <option value="contain">Contain</option>
-          <option value="fill">Stretch</option>
+          <option value="cover">{t("toolbar.image.fitCover")}</option>
+          <option value="contain">{t("toolbar.image.fitContain")}</option>
+          <option value="fill">{t("toolbar.image.fitStretch")}</option>
         </ToolbarSelect>
       </ToolbarField>
-      <ToolbarButton aria-label="Crop image" onClick={beginCrop}>
-        Crop
+      <ToolbarButton
+        aria-label={t("toolbar.image.cropImage")}
+        onClick={beginCrop}
+      >
+        {t("toolbar.image.crop")}
       </ToolbarButton>
       <ToolbarButton
-        aria-label="Flip image horizontally"
+        aria-label={t("toolbar.image.flipHorizontal")}
         aria-pressed={booleanValue(element.flip_h)}
         onClick={() =>
           onPatch(
@@ -231,10 +243,10 @@ export default function ImageToolbar({
           )
         }
       >
-        Flip H
+        {t("toolbar.image.flipHorizontalShort")}
       </ToolbarButton>
       <ToolbarButton
-        aria-label="Flip image vertically"
+        aria-label={t("toolbar.image.flipVertical")}
         aria-pressed={booleanValue(element.flip_v)}
         onClick={() =>
           onPatch(
@@ -243,13 +255,13 @@ export default function ImageToolbar({
           )
         }
       >
-        Flip V
+        {t("toolbar.image.flipVerticalShort")}
       </ToolbarButton>
-      <ToolbarField label="Image corner radius">
-        <span aria-hidden="true">Radius</span>
+      <ToolbarField label={t("toolbar.image.cornerRadius")}>
+        <span aria-hidden="true">{t("toolbar.image.radius")}</span>
         <input
           className={`${toolbarInputClass} w-16`}
-          aria-label="Image corner radius"
+          aria-label={t("toolbar.image.cornerRadius")}
           type="number"
           min={0}
           step={1}
@@ -269,11 +281,11 @@ export default function ImageToolbar({
           }}
         />
       </ToolbarField>
-      <ToolbarField label="Image opacity">
-        <span aria-hidden="true">Opacity</span>
+      <ToolbarField label={t("toolbar.image.opacity")}>
+        <span aria-hidden="true">{t("toolbar.common.opacity")}</span>
         <input
           className="w-20 accent-violet-400"
-          aria-label="Image opacity"
+          aria-label={t("toolbar.image.opacity")}
           type="range"
           min={0}
           max={1}
@@ -291,8 +303,11 @@ export default function ImageToolbar({
         />
       </ToolbarField>
       {onReplaceImage && (
-        <ToolbarButton aria-label="Replace image" onClick={onReplaceImage}>
-          Replace
+        <ToolbarButton
+          aria-label={t("toolbar.image.replaceImage")}
+          onClick={onReplaceImage}
+        >
+          {t("toolbar.image.replace")}
         </ToolbarButton>
       )}
     </div>

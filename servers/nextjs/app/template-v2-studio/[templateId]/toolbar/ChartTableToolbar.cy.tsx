@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
+import { mountWithStudioI18n } from "../studioI18nTestUtils.cy";
 import ChartToolbar from "./ChartToolbar";
 import TableToolbar from "./TableToolbar";
 import type { TemplateV2ToolbarPatch } from "./types";
@@ -138,7 +139,7 @@ const table: TemplateV2ToolbarRecord = {
 describe("Chart and table toolbar contract", () => {
   it("renders chart controls and emits coalescible data patches while retaining selectors", () => {
     const patch = cy.spy().as("chartPatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulChartToolbar
         initialElement={chart}
         observedPatch={patch}
@@ -255,7 +256,7 @@ describe("Chart and table toolbar contract", () => {
 
   it("patches table text and bounded dimensions while retaining the cell selector", () => {
     const patch = cy.spy().as("tablePatch");
-    cy.mount(
+    mountWithStudioI18n(
       <StatefulTableToolbar
         initialElement={table}
         observedPatch={patch}
@@ -402,7 +403,7 @@ describe("Chart and table toolbar contract", () => {
   });
 
   it("disables all dimension changes for imported exact-bound tables", () => {
-    cy.mount(
+    mountWithStudioI18n(
       <TableToolbar
         element={{
           ...table,

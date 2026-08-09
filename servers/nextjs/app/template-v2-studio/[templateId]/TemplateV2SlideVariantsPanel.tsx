@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import {
@@ -13,25 +14,21 @@ import {
   type TemplateV2VariantKind,
 } from "@/lib/template-v2-slide-variants";
 
-const ERROR_MESSAGES: Record<string, string> = {
+const ERROR_KEYS = {
   template_v2_variant_candidate_count_invalid:
-    "This slide does not expose at least two compatible visual controls. No variant was generated.",
+    "slideVariants.errors.candidateCountInvalid",
   template_v2_variant_stale_revision:
-    "The server revision changed. Generate a fresh slide preview.",
-  template_v2_variant_preview_stale:
-    "The slide changed after preview. Generate fresh candidates.",
+    "slideVariants.errors.staleRevision",
+  template_v2_variant_preview_stale: "slideVariants.errors.previewStale",
   template_v2_variant_restore_source_stale:
-    "Restore is blocked because the slide changed after the variant was applied.",
-};
+    "slideVariants.errors.restoreSourceStale",
+} as const;
 
-function formatValue(value: unknown): string {
-  const serialized = JSON.stringify(value);
-  return serialized === undefined ? "undefined" : serialized;
-}
-
-function variantError(code: string): string {
-  return ERROR_MESSAGES[code] ?? `Variant unavailable (${code}).`;
-}
+const VARIANT_KEYS = {
+  data_focused: "slideVariants.kinds.data_focused",
+  image_focused: "slideVariants.kinds.image_focused",
+  executive_summary: "slideVariants.kinds.executive_summary",
+} as const satisfies Record<TemplateV2VariantKind, string>;
 
 export default function TemplateV2SlideVariantsPanel({
   layouts,
@@ -51,6 +48,7 @@ export default function TemplateV2SlideVariantsPanel({
     notice: string;
   }): void;
 }) {
+  const t = useTranslations("studio");
   const [preview, setPreview] =
     useState<TemplateV2SlideVariantPreview | null>(null);
   const [selectedKind, setSelectedKind] =
@@ -59,6 +57,24 @@ export default function TemplateV2SlideVariantsPanel({
     useState<TemplateV2SlideVariantJournalEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+
+  function formatValue(value: unknown): string {
+    const serialized = JSON.stringify(value);
+    return serialized === undefined
+      ? t("slideVariants.undefinedValue")
+      : serialized;
+  }
+
+  function variantError(code: string): string {
+    if (Object.prototype.hasOwnProperty.call(ERROR_KEYS, code)) {
+      return t(ERROR_KEYS[code as keyof typeof ERROR_KEYS]);
+    }
+    return t("slideVariants.errors.unavailable");
+  }
+
+  function variantLabel(kind: TemplateV2VariantKind): string {
+    return t(VARIANT_KEYS[kind]);
+  }
 
   function generatePreview() {
     const result = previewTemplateV2SlideVariants({
@@ -84,7 +100,7 @@ export default function TemplateV2SlideVariantsPanel({
     setPreview(null);
     setSelectedKind(null);
     setError(null);
-    setStatus("Preview canceled. No slide data changed.");
+    setStatus(t("slideVariants.previewCanceled"));
   }
 
   function applySelected() {
@@ -104,13 +120,13 @@ export default function TemplateV2SlideVariantsPanel({
       layouts: result.value.layouts,
       expectedDigest: result.value.sourceDigest,
       historyKey: `slide-variant:${preview.id}:${selectedKind}`,
-      notice: "Slide variant applied. Autosave and global undo are available.",
+      notice: t("slideVariants.appliedNotice"),
     });
     setJournalEntry(result.value.journalEntry);
     setPreview(null);
     setSelectedKind(null);
     setError(null);
-    setStatus("Applied one slide-scoped visual patch.");
+    setStatus(t("slideVariants.appliedStatus"));
   }
 
   function restoreOriginal() {
@@ -129,29 +145,29 @@ export default function TemplateV2SlideVariantsPanel({
       layouts: result.value.layouts,
       expectedDigest: result.value.sourceDigest,
       historyKey: `slide-variant-restore:${journalEntry.appliedDigest}`,
-      notice: "Original slide restored from the variant journal.",
+      notice: t("slideVariants.restoredNotice"),
     });
     setJournalEntry(null);
     setError(null);
-    setStatus("Restored the original slide-scoped snapshot.");
+    setStatus(t("slideVariants.restoredStatus"));
   }
 
   return (
     <section
-      aria-label="Slide variant comparison"
+      aria-label={t("slideVariants.ariaLabel")}
       className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-3"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-cyan-100">
-            Slide variants
+            {t("slideVariants.title")}
           </h3>
           <p className="mt-1 text-xs text-slate-400">
-            Deterministic, slide-scoped visual patches only
+            {t("slideVariants.description")}
           </p>
         </div>
         <span className="rounded bg-slate-950 px-2 py-1 text-[10px] text-emerald-300">
-          2–3 bounded
+          {t("slideVariants.boundedCount")}
         </span>
       </div>
 
@@ -161,7 +177,7 @@ export default function TemplateV2SlideVariantsPanel({
         disabled={disabled}
         onClick={generatePreview}
       >
-        Compare slide variants
+        {t("slideVariants.compare")}
       </button>
 
       {error ? (
@@ -176,7 +192,10 @@ export default function TemplateV2SlideVariantsPanel({
       ) : null}
 
       {preview ? (
-        <div className="mt-3 space-y-2" aria-label="Slide variant candidates">
+        <div
+          className="mt-3 space-y-2"
+          aria-label={t("slideVariants.candidatesAria")}
+        >
           {preview.candidates.map((candidate) => (
             <label
               key={candidate.kind}
@@ -193,11 +212,13 @@ export default function TemplateV2SlideVariantsPanel({
                   checked={selectedKind === candidate.kind}
                   onChange={() => setSelectedKind(candidate.kind)}
                 />
-                {candidate.label}
+                {variantLabel(candidate.kind)}
               </span>
               <span className="mt-1 block text-[10px] text-slate-500">
-                semantic {candidate.semanticDigest.slice(0, 12)} · render{" "}
-                {candidate.renderDigest.slice(0, 12)}
+                {t("slideVariants.digests", {
+                  semantic: candidate.semanticDigest.slice(0, 12),
+                  render: candidate.renderDigest.slice(0, 12),
+                })}
               </span>
               <ul className="mt-2 space-y-1 text-[11px] text-slate-300">
                 {candidate.patches.map((patch) => (
@@ -222,14 +243,14 @@ export default function TemplateV2SlideVariantsPanel({
               disabled={disabled || !selectedKind}
               onClick={applySelected}
             >
-              Apply selected
+              {t("slideVariants.applySelected")}
             </button>
             <button
               type="button"
               className="rounded border border-slate-600 px-3 py-2 text-xs"
               onClick={cancelPreview}
             >
-              Cancel
+              {t("slideVariants.cancel")}
             </button>
           </div>
         </div>
@@ -242,7 +263,7 @@ export default function TemplateV2SlideVariantsPanel({
           disabled={disabled}
           onClick={restoreOriginal}
         >
-          Restore original slide
+          {t("slideVariants.restoreOriginal")}
         </button>
       ) : null}
     </section>

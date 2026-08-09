@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import {
   buildTableContractEditPatches,
@@ -41,6 +42,7 @@ export default function TableToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const t = useTranslations("studio");
   const [targetIndex, setTargetIndex] = useState(0);
   const validated = validateTableContract(element);
   const contractElement = validated.ok ? validated.value : null;
@@ -62,7 +64,10 @@ export default function TableToolbar({
                     runIndex,
                     value: value.text,
                   },
-                  label: `Header ${columnIndex + 1}, run ${runIndex + 1}`,
+                  label: t("toolbar.table.headerTarget", {
+                    column: columnIndex + 1,
+                    run: runIndex + 1,
+                  }),
                   text: value.text,
                   cell,
                 }]
@@ -85,7 +90,11 @@ export default function TableToolbar({
                       runIndex,
                       value: value.text,
                     },
-                    label: `Row ${rowIndex + 1}, column ${columnIndex + 1}, run ${runIndex + 1}`,
+                    label: t("toolbar.table.bodyTarget", {
+                      row: rowIndex + 1,
+                      column: columnIndex + 1,
+                      run: runIndex + 1,
+                    }),
                     text: value.text,
                     cell,
                   }]
@@ -141,10 +150,10 @@ export default function TableToolbar({
     <div className="flex items-center gap-2">
       {selectedTarget && (
         <>
-          <ToolbarField label="Table text target">
-            <span aria-hidden="true">Cell</span>
+          <ToolbarField label={t("toolbar.table.textTarget")}>
+            <span aria-hidden="true">{t("toolbar.table.cell")}</span>
             <ToolbarSelect
-              aria-label="Table text target"
+              aria-label={t("toolbar.table.textTarget")}
               value={safeTargetIndex}
               onChange={(event) => setTargetIndex(Number(event.target.value))}
             >
@@ -155,10 +164,10 @@ export default function TableToolbar({
               ))}
             </ToolbarSelect>
           </ToolbarField>
-          <ToolbarField label="Table cell text">
+          <ToolbarField label={t("toolbar.table.cellText")}>
             <input
               className={`${toolbarInputClass} w-32`}
-              aria-label="Table cell text"
+              aria-label={t("toolbar.table.cellText")}
               type="text"
               value={selectedTarget.text}
               onChange={(event) =>
@@ -170,11 +179,11 @@ export default function TableToolbar({
               }
             />
           </ToolbarField>
-          <ToolbarField label="Table cell font size">
-            <span aria-hidden="true">Size</span>
+          <ToolbarField label={t("toolbar.table.cellFontSize")}>
+            <span aria-hidden="true">{t("toolbar.table.size")}</span>
             <input
               className={`${toolbarInputClass} w-16`}
-              aria-label="Table cell font size"
+              aria-label={t("toolbar.table.cellFontSize")}
               type="number"
               step="any"
               value={numberValue(selectedFont?.size, 18)}
@@ -194,11 +203,11 @@ export default function TableToolbar({
               }
             />
           </ToolbarField>
-          <ToolbarField label="Table cell font family">
-            <span aria-hidden="true">Font</span>
+          <ToolbarField label={t("toolbar.table.cellFontFamily")}>
+            <span aria-hidden="true">{t("toolbar.table.font")}</span>
             <input
               className={`${toolbarInputClass} w-28`}
-              aria-label="Table cell font family"
+              aria-label={t("toolbar.table.cellFontFamily")}
               type="text"
               value={
                 typeof selectedFont?.family === "string"
@@ -221,10 +230,10 @@ export default function TableToolbar({
               }
             />
           </ToolbarField>
-          <ToolbarField label="Table cell alignment">
-            <span aria-hidden="true">Align</span>
+          <ToolbarField label={t("toolbar.table.cellAlignment")}>
+            <span aria-hidden="true">{t("toolbar.table.align")}</span>
             <ToolbarSelect
-              aria-label="Table cell alignment"
+              aria-label={t("toolbar.table.cellAlignment")}
               value={
                 selectedTarget.cell.alignment === "center" ||
                 selectedTarget.cell.alignment === "right"
@@ -244,16 +253,16 @@ export default function TableToolbar({
                 )
               }
             >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
+              <option value="left">{t("toolbar.common.left")}</option>
+              <option value="center">{t("toolbar.common.center")}</option>
+              <option value="right">{t("toolbar.common.right")}</option>
             </ToolbarSelect>
           </ToolbarField>
-          <ToolbarField label="Table cell font color">
-            <span aria-hidden="true">Text</span>
+          <ToolbarField label={t("toolbar.table.cellFontColor")}>
+            <span aria-hidden="true">{t("toolbar.table.text")}</span>
             <input
               className={`${toolbarInputClass} w-24`}
-              aria-label="Table cell font color"
+              aria-label={t("toolbar.table.cellFontColor")}
               type="text"
               value={
                 typeof selectedFont?.color === "string"
@@ -280,7 +289,7 @@ export default function TableToolbar({
           {(["bold", "italic", "underline"] as const).map((field) => (
             <ToolbarButton
               key={field}
-              aria-label={`Toggle table cell ${field}`}
+              aria-label={t(`toolbar.table.toggleStyles.${field}`)}
               aria-pressed={selectedFont?.[field] === true}
               onClick={() =>
                 applyContractEdit(
@@ -296,15 +305,17 @@ export default function TableToolbar({
                 )
               }
             >
-              {field === "bold" ? "B" : field === "italic" ? "I" : "U"}
+              {t(`toolbar.table.styleShort.${field}`)}
             </ToolbarButton>
           ))}
         </>
       )}
-      <ToolbarField label="Table body row count">
-        <span aria-hidden="true">Rows {rows.length}</span>
+      <ToolbarField label={t("toolbar.table.bodyRowCount")}>
+        <span aria-hidden="true">
+          {t("toolbar.table.rowsCount", { count: rows.length })}
+        </span>
         <ToolbarButton
-          aria-label="Remove table row"
+          aria-label={t("toolbar.table.removeRow")}
           disabled={rows.length <= minRows}
           onClick={() =>
             applyContractEdit(
@@ -316,7 +327,7 @@ export default function TableToolbar({
           −
         </ToolbarButton>
         <ToolbarButton
-          aria-label="Add table row"
+          aria-label={t("toolbar.table.addRow")}
           disabled={rows.length >= maxRows}
           onClick={() =>
             applyContractEdit(
@@ -328,10 +339,12 @@ export default function TableToolbar({
           +
         </ToolbarButton>
       </ToolbarField>
-      <ToolbarField label="Table column count">
-        <span aria-hidden="true">Columns {columns.length}</span>
+      <ToolbarField label={t("toolbar.table.columnCount")}>
+        <span aria-hidden="true">
+          {t("toolbar.table.columnsCount", { count: columns.length })}
+        </span>
         <ToolbarButton
-          aria-label="Remove table column"
+          aria-label={t("toolbar.table.removeColumn")}
           disabled={columns.length <= minColumns}
           onClick={() =>
             applyContractEdit(
@@ -343,7 +356,7 @@ export default function TableToolbar({
           −
         </ToolbarButton>
         <ToolbarButton
-          aria-label="Add table column"
+          aria-label={t("toolbar.table.addColumn")}
           disabled={columns.length >= maxColumns}
           onClick={() =>
             applyContractEdit(
@@ -355,33 +368,33 @@ export default function TableToolbar({
           +
         </ToolbarButton>
       </ToolbarField>
-      <ToolbarField label="Table header fill color">
-        <span aria-hidden="true">Header</span>
+      <ToolbarField label={t("toolbar.table.headerFillColor")}>
+        <span aria-hidden="true">{t("toolbar.table.header")}</span>
         <input
           className={`${toolbarInputClass} w-24`}
-          aria-label="Table header fill color"
+          aria-label={t("toolbar.table.headerFillColor")}
           type="text"
           value={headerColor}
           placeholder="#f1f5f9"
           onChange={(event) => patchHeader(event.target.value)}
         />
       </ToolbarField>
-      <ToolbarField label="Table body fill color">
-        <span aria-hidden="true">Body</span>
+      <ToolbarField label={t("toolbar.table.bodyFillColor")}>
+        <span aria-hidden="true">{t("toolbar.table.body")}</span>
         <input
           className={`${toolbarInputClass} w-24`}
-          aria-label="Table body fill color"
+          aria-label={t("toolbar.table.bodyFillColor")}
           type="text"
           value={bodyColor}
           placeholder="#ffffff"
           onChange={(event) => patchBody(event.target.value)}
         />
       </ToolbarField>
-      <ToolbarField label="Table opacity">
-        <span aria-hidden="true">Opacity</span>
+      <ToolbarField label={t("toolbar.table.opacity")}>
+        <span aria-hidden="true">{t("toolbar.common.opacity")}</span>
         <input
           className="w-20 accent-violet-400"
-          aria-label="Table opacity"
+          aria-label={t("toolbar.table.opacity")}
           type="range"
           min={0}
           max={1}

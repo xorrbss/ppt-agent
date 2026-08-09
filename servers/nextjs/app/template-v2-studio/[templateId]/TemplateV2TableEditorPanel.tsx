@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
 import {
@@ -42,37 +43,51 @@ interface TemplateV2TableEditorPanelProps {
 
 const CHART_TYPES = ["bar", "line", "area", "pie", "donut"] as const;
 
-const REASON_MESSAGES: Record<TemplateV2TableReasonCode, string> = {
-  table_invalid_contract: "The selected element is not a valid bounded table.",
-  table_operation_invalid_index: "That row or column is no longer available.",
-  table_operation_no_change: "The requested operation would not change the table.",
-  table_min_rows_exceeded: "The table must retain its minimum number of rows.",
-  table_max_rows_exceeded: "The table has reached its maximum number of rows.",
-  table_min_columns_exceeded:
-    "The table must retain its minimum number of columns.",
-  table_max_columns_exceeded:
-    "The table has reached its maximum number of columns.",
-  table_max_cells_exceeded: "The table would exceed the bounded cell limit.",
-  table_import_empty: "Paste CSV or TSV data before creating a preview.",
-  table_import_too_large: "The delimited input exceeds the bounded byte limit.",
-  table_import_malformed_quotes:
-    "The delimited input contains malformed quoted cells.",
-  table_import_ragged_rows:
-    "Every imported row must have the same number of cells.",
-  table_import_cell_too_large: "An imported cell exceeds the character limit.",
-  table_paste_out_of_bounds:
-    "The pasted range does not fit inside the current table.",
-  table_preview_stale:
-    "The table changed after this preview. Create a fresh preview.",
-  table_preview_tampered:
-    "The preview digest is invalid. Create a fresh preview.",
-  table_chart_requires_data:
-    "Table-to-chart needs a category column and numeric data.",
-  table_chart_non_numeric_value:
-    "Every chart value cell must contain a finite number.",
-  table_chart_incompatible_type:
-    "Pie and donut charts require exactly one numeric series.",
-};
+const REASON_KEYS = {
+  table_invalid_contract: "tableEditor.errors.invalidContract",
+  table_operation_invalid_index: "tableEditor.errors.invalidIndex",
+  table_operation_no_change: "tableEditor.errors.noChange",
+  table_min_rows_exceeded: "tableEditor.errors.minRows",
+  table_max_rows_exceeded: "tableEditor.errors.maxRows",
+  table_min_columns_exceeded: "tableEditor.errors.minColumns",
+  table_max_columns_exceeded: "tableEditor.errors.maxColumns",
+  table_max_cells_exceeded: "tableEditor.errors.maxCells",
+  table_import_empty: "tableEditor.errors.emptyImport",
+  table_import_too_large: "tableEditor.errors.inputTooLarge",
+  table_import_malformed_quotes: "tableEditor.errors.malformedQuotes",
+  table_import_ragged_rows: "tableEditor.errors.raggedRows",
+  table_import_cell_too_large: "tableEditor.errors.cellTooLarge",
+  table_paste_out_of_bounds: "tableEditor.errors.pasteOutOfBounds",
+  table_preview_stale: "tableEditor.errors.stalePreview",
+  table_preview_tampered: "tableEditor.errors.tamperedPreview",
+  table_chart_requires_data: "tableEditor.errors.chartRequiresData",
+  table_chart_non_numeric_value: "tableEditor.errors.chartNonNumeric",
+  table_chart_incompatible_type: "tableEditor.errors.chartIncompatibleType",
+} as const satisfies Record<TemplateV2TableReasonCode, string>;
+
+const OPERATION_KEYS = {
+  "insert-row": "tableEditor.operations.insertRow",
+  "delete-row": "tableEditor.operations.deleteRow",
+  "move-row": "tableEditor.operations.moveRow",
+  "insert-column": "tableEditor.operations.insertColumn",
+  "delete-column": "tableEditor.operations.deleteColumn",
+  "move-column": "tableEditor.operations.moveColumn",
+  "promote-first-row-to-header": "tableEditor.operations.promoteHeader",
+  "demote-header-to-first-row": "tableEditor.operations.demoteHeader",
+  transpose: "tableEditor.operations.transpose",
+  "import-tsv": "tableEditor.operations.importTsv",
+  "import-csv": "tableEditor.operations.importCsv",
+  "paste-delimited": "tableEditor.operations.pasteDelimited",
+  "table-to-chart": "tableEditor.operations.tableToChart",
+} as const;
+
+const CHART_TYPE_KEYS = {
+  bar: "tableEditor.chartTypes.bar",
+  line: "tableEditor.chartTypes.line",
+  area: "tableEditor.chartTypes.area",
+  pie: "tableEditor.chartTypes.pie",
+  donut: "tableEditor.chartTypes.donut",
+} as const satisfies Record<(typeof CHART_TYPES)[number], string>;
 
 function isRecord(value: unknown): value is TemplateV2TableRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -107,6 +122,7 @@ export default function TemplateV2TableEditorPanel({
   disabled,
   onApply,
 }: TemplateV2TableEditorPanelProps) {
+  const t = useTranslations("studio");
   const [pending, setPending] = useState<PendingPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -138,22 +154,40 @@ export default function TemplateV2TableEditorPanel({
     },
   ) {
     const details = [
-      result.path ? `Field: ${result.path}.` : "",
-      typeof result.limit === "number" ? `Limit: ${result.limit}.` : "",
+      result.path
+        ? t("tableEditor.errors.field", { path: result.path })
+        : "",
+      typeof result.limit === "number"
+        ? t("tableEditor.errors.limit", { limit: result.limit })
+        : "",
     ]
       .filter(Boolean)
       .join(" ");
     setPending(null);
     setStatus(null);
+    const message = t(REASON_KEYS[result.reasonCode]);
     setError(
-      `${REASON_MESSAGES[result.reasonCode]}${details ? ` ${details}` : ""}`,
+      details
+        ? t("tableEditor.errors.withDetails", { message, details })
+        : message,
     );
+  }
+
+  function operationLabel(operation: string) {
+    if (Object.prototype.hasOwnProperty.call(OPERATION_KEYS, operation)) {
+      return t(OPERATION_KEYS[operation as keyof typeof OPERATION_KEYS]);
+    }
+    return t("tableEditor.operations.unknown");
+  }
+
+  function chartTypeLabel(type: (typeof CHART_TYPES)[number]) {
+    return t(CHART_TYPE_KEYS[type]);
   }
 
   function accept(preview: PendingPreview) {
     setPending(preview);
     setError(null);
-    setStatus("Preview ready. No template data has changed.");
+    setStatus(t("tableEditor.previewReady"));
   }
 
   function previewOperation(operation: TemplateV2TableOperation) {
@@ -219,7 +253,7 @@ export default function TemplateV2TableEditorPanel({
     setPending(null);
     setError(null);
     setStatus(
-      "Change applied locally. Autosave, revision CAS, undo, and redo remain authoritative.",
+      t("tableEditor.changeApplied"),
     );
   }
 
@@ -229,20 +263,20 @@ export default function TemplateV2TableEditorPanel({
 
   return (
     <section
-      aria-label="Table structure editor"
+      aria-label={t("tableEditor.ariaLabel")}
       className="mt-5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-3"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-cyan-100">
-            Table structure
+            {t("tableEditor.title")}
           </h3>
           <p className="mt-1 text-xs text-slate-400">
-            Bounded patches only · preview before apply
+            {t("tableEditor.description")}
           </p>
         </div>
         <span className="rounded bg-slate-950 px-2 py-1 text-[10px] text-emerald-300">
-          lossless
+          {t("tableEditor.lossless")}
         </span>
       </div>
 
@@ -256,7 +290,8 @@ export default function TemplateV2TableEditorPanel({
                   key={columnIndex}
                   className="min-w-24 border-b border-r border-slate-800 p-2 text-left"
                 >
-                  {cellText(column) || `Column ${columnIndex + 1}`}
+                  {cellText(column) ||
+                    t("tableEditor.column", { column: columnIndex + 1 })}
                 </th>
               ))}
             </tr>
@@ -285,7 +320,7 @@ export default function TemplateV2TableEditorPanel({
 
       <fieldset className="mt-3 space-y-2" disabled={disabled || !!pending}>
         <legend className="text-xs font-medium text-slate-300">
-          Rows
+          {t("tableEditor.rows")}
         </legend>
         <button
           type="button"
@@ -294,14 +329,18 @@ export default function TemplateV2TableEditorPanel({
           }
           className="w-full rounded border border-slate-700 px-2 py-1.5 text-xs"
         >
-          Add row
+          {t("tableEditor.addRow")}
         </button>
         {rows.map((_, rowIndex) => (
           <div key={rowIndex} className="flex items-center gap-1 text-xs">
-            <span className="mr-auto text-slate-400">Row {rowIndex + 1}</span>
+            <span className="mr-auto text-slate-400">
+              {t("tableEditor.row", { row: rowIndex + 1 })}
+            </span>
             <button
               type="button"
-              aria-label={`Move row ${rowIndex + 1} up`}
+              aria-label={t("tableEditor.moveRowUpAria", {
+                row: rowIndex + 1,
+              })}
               disabled={rowIndex === 0}
               onClick={() =>
                 previewOperation({
@@ -312,11 +351,13 @@ export default function TemplateV2TableEditorPanel({
               }
               className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
             >
-              Up
+              {t("tableEditor.up")}
             </button>
             <button
               type="button"
-              aria-label={`Move row ${rowIndex + 1} down`}
+              aria-label={t("tableEditor.moveRowDownAria", {
+                row: rowIndex + 1,
+              })}
               disabled={rowIndex === rows.length - 1}
               onClick={() =>
                 previewOperation({
@@ -327,17 +368,19 @@ export default function TemplateV2TableEditorPanel({
               }
               className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
             >
-              Down
+              {t("tableEditor.down")}
             </button>
             <button
               type="button"
-              aria-label={`Delete row ${rowIndex + 1}`}
+              aria-label={t("tableEditor.deleteRowAria", {
+                row: rowIndex + 1,
+              })}
               onClick={() =>
                 previewOperation({ type: "delete-row", index: rowIndex })
               }
               className="rounded border border-red-800 px-2 py-1 text-red-200"
             >
-              Delete
+              {t("tableEditor.delete")}
             </button>
           </div>
         ))}
@@ -345,7 +388,7 @@ export default function TemplateV2TableEditorPanel({
 
       <fieldset className="mt-4 space-y-2" disabled={disabled || !!pending}>
         <legend className="text-xs font-medium text-slate-300">
-          Columns
+          {t("tableEditor.columns")}
         </legend>
         <button
           type="button"
@@ -353,21 +396,24 @@ export default function TemplateV2TableEditorPanel({
             previewOperation({
               type: "insert-column",
               index: columns.length,
-              header: `Column ${columns.length + 1}`,
+              header: t("tableEditor.column", { column: columns.length + 1 }),
             })
           }
           className="w-full rounded border border-slate-700 px-2 py-1.5 text-xs"
         >
-          Add column
+          {t("tableEditor.addColumn")}
         </button>
         {columns.map((column, columnIndex) => (
           <div key={columnIndex} className="flex items-center gap-1 text-xs">
             <span className="mr-auto truncate text-slate-400">
-              {cellText(column) || `Column ${columnIndex + 1}`}
+              {cellText(column) ||
+                t("tableEditor.column", { column: columnIndex + 1 })}
             </span>
             <button
               type="button"
-              aria-label={`Move column ${columnIndex + 1} left`}
+              aria-label={t("tableEditor.moveColumnLeftAria", {
+                column: columnIndex + 1,
+              })}
               disabled={columnIndex === 0}
               onClick={() =>
                 previewOperation({
@@ -378,11 +424,13 @@ export default function TemplateV2TableEditorPanel({
               }
               className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
             >
-              Left
+              {t("tableEditor.left")}
             </button>
             <button
               type="button"
-              aria-label={`Move column ${columnIndex + 1} right`}
+              aria-label={t("tableEditor.moveColumnRightAria", {
+                column: columnIndex + 1,
+              })}
               disabled={columnIndex === columns.length - 1}
               onClick={() =>
                 previewOperation({
@@ -393,11 +441,13 @@ export default function TemplateV2TableEditorPanel({
               }
               className="rounded border border-slate-700 px-2 py-1 disabled:opacity-40"
             >
-              Right
+              {t("tableEditor.right")}
             </button>
             <button
               type="button"
-              aria-label={`Delete column ${columnIndex + 1}`}
+              aria-label={t("tableEditor.deleteColumnAria", {
+                column: columnIndex + 1,
+              })}
               onClick={() =>
                 previewOperation({
                   type: "delete-column",
@@ -406,7 +456,7 @@ export default function TemplateV2TableEditorPanel({
               }
               className="rounded border border-red-800 px-2 py-1 text-red-200"
             >
-              Delete
+              {t("tableEditor.delete")}
             </button>
           </div>
         ))}
@@ -417,7 +467,7 @@ export default function TemplateV2TableEditorPanel({
         disabled={disabled || !!pending}
       >
         <legend className="text-xs font-medium text-slate-300">
-          Header and orientation
+          {t("tableEditor.headerAndOrientation")}
         </legend>
         <button
           type="button"
@@ -426,7 +476,7 @@ export default function TemplateV2TableEditorPanel({
           }
           className="rounded border border-slate-700 px-2 py-1.5 text-xs"
         >
-          Promote first row to header
+          {t("tableEditor.promoteFirstRow")}
         </button>
         <button
           type="button"
@@ -435,41 +485,41 @@ export default function TemplateV2TableEditorPanel({
           }
           className="rounded border border-slate-700 px-2 py-1.5 text-xs"
         >
-          Demote header to first row
+          {t("tableEditor.demoteHeader")}
         </button>
         <button
           type="button"
           onClick={() => previewOperation({ type: "transpose" })}
           className="rounded border border-slate-700 px-2 py-1.5 text-xs"
         >
-          Transpose
+          {t("tableEditor.transpose")}
         </button>
       </fieldset>
 
       <fieldset className="mt-4 space-y-2" disabled={disabled || !!pending}>
         <legend className="text-xs font-medium text-slate-300">
-          CSV / TSV
+          {t("tableEditor.delimitedData")}
         </legend>
         <textarea
-          aria-label="Delimited table data"
+          aria-label={t("tableEditor.delimitedDataAria")}
           value={delimited}
           onChange={(event) => setDelimited(event.target.value)}
-          placeholder={"Quarter,Revenue\nQ1,42"}
+          placeholder={t("tableEditor.delimitedPlaceholder")}
           className="min-h-24 w-full rounded border border-slate-700 bg-slate-950 p-2 text-xs"
         />
         <label className="block text-xs text-slate-400">
-          Delimiter
+          {t("tableEditor.delimiter")}
           <select
-            aria-label="Delimited data delimiter"
+            aria-label={t("tableEditor.delimiterAria")}
             value={delimiter}
             onChange={(event) =>
               setDelimiter(event.target.value as "," | "\t" | "auto")
             }
             className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-2"
           >
-            <option value="auto">Auto-detect</option>
-            <option value=",">CSV comma</option>
-            <option value={"\t"}>TSV tab</option>
+            <option value="auto">{t("tableEditor.autoDetect")}</option>
+            <option value=",">{t("tableEditor.csvComma")}</option>
+            <option value={"\t"}>{t("tableEditor.tsvTab")}</option>
           </select>
         </label>
         <label className="flex items-center gap-2 text-xs text-slate-400">
@@ -478,20 +528,20 @@ export default function TemplateV2TableEditorPanel({
             checked={firstRowIsHeader}
             onChange={(event) => setFirstRowIsHeader(event.target.checked)}
           />
-          First imported row is the header
+          {t("tableEditor.firstRowIsHeader")}
         </label>
         <button
           type="button"
           onClick={previewImport}
           className="w-full rounded border border-cyan-700 px-2 py-1.5 text-xs text-cyan-100"
         >
-          Preview replace import
+          {t("tableEditor.previewReplaceImport")}
         </button>
         <div className="grid grid-cols-2 gap-2">
           <label className="text-xs text-slate-400">
-            Start row
+            {t("tableEditor.startRow")}
             <input
-              aria-label="Paste start row"
+              aria-label={t("tableEditor.pasteStartRowAria")}
               type="number"
               min={0}
               value={pasteRow}
@@ -501,9 +551,9 @@ export default function TemplateV2TableEditorPanel({
             />
           </label>
           <label className="text-xs text-slate-400">
-            Start column
+            {t("tableEditor.startColumn")}
             <input
-              aria-label="Paste start column"
+              aria-label={t("tableEditor.pasteStartColumnAria")}
               type="number"
               min={0}
               value={pasteColumn}
@@ -518,23 +568,23 @@ export default function TemplateV2TableEditorPanel({
             checked={pasteIncludesHeader}
             onChange={(event) => setPasteIncludesHeader(event.target.checked)}
           />
-          Paste begins in header row
+          {t("tableEditor.pasteBeginsInHeader")}
         </label>
         <button
           type="button"
           onClick={previewPaste}
           className="w-full rounded border border-cyan-700 px-2 py-1.5 text-xs text-cyan-100"
         >
-          Preview bounded paste
+          {t("tableEditor.previewBoundedPaste")}
         </button>
       </fieldset>
 
       <fieldset className="mt-4 space-y-2" disabled={disabled || !!pending}>
         <legend className="text-xs font-medium text-slate-300">
-          Convert table to chart
+          {t("tableEditor.convertToChart")}
         </legend>
         <select
-          aria-label="Table chart type"
+          aria-label={t("tableEditor.chartTypeAria")}
           value={chartType}
           onChange={(event) =>
             setChartType(
@@ -545,15 +595,15 @@ export default function TemplateV2TableEditorPanel({
         >
           {CHART_TYPES.map((type) => (
             <option key={type} value={type}>
-              {type}
+              {chartTypeLabel(type)}
             </option>
           ))}
         </select>
         <input
-          aria-label="Table chart title"
+          aria-label={t("tableEditor.chartTitleAria")}
           value={chartTitle}
           onChange={(event) => setChartTitle(event.target.value)}
-          placeholder="Optional chart title"
+          placeholder={t("tableEditor.chartTitlePlaceholder")}
           className="w-full rounded border border-slate-700 bg-slate-950 p-2 text-xs"
         />
         <button
@@ -561,17 +611,18 @@ export default function TemplateV2TableEditorPanel({
           onClick={previewChart}
           className="w-full rounded border border-violet-700 px-2 py-1.5 text-xs text-violet-100"
         >
-          Preview chart conversion
+          {t("tableEditor.previewChartConversion")}
         </button>
       </fieldset>
 
       {split.ok && split.value ? (
         <aside className="mt-4 rounded border border-amber-700/60 bg-amber-950/20 p-2 text-xs text-amber-100">
-          <p className="font-medium">Long table split suggested</p>
+          <p className="font-medium">{t("tableEditor.splitSuggested")}</p>
           <p className="mt-1">
-            {split.value.totalRows} rows · {split.value.segments.length} slide
-            segments · repeat the header on every segment. This suggestion does
-            not create or clone slides.
+            {t("tableEditor.splitSummary", {
+              rows: split.value.totalRows,
+              segments: split.value.segments.length,
+            })}
           </p>
         </aside>
       ) : null}
@@ -589,34 +640,36 @@ export default function TemplateV2TableEditorPanel({
 
       {pending ? (
         <div
-          aria-label="Table change preview"
+          aria-label={t("tableEditor.previewAria")}
           className="mt-4 rounded-lg border border-cyan-600 bg-slate-950 p-3"
         >
           <p className="text-xs font-semibold text-cyan-100">
-            Preview · {operationName(pending)}
+            {t("tableEditor.previewOperation", {
+              operation: operationLabel(operationName(pending)),
+            })}
           </p>
           {pending.kind === "table" ? (
             <dl className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-300">
-              <dt>Rows</dt>
+              <dt>{t("tableEditor.rows")}</dt>
               <dd>
                 {pending.value.diff.beforeRows} →{" "}
                 {pending.value.diff.afterRows}
               </dd>
-              <dt>Columns</dt>
+              <dt>{t("tableEditor.columns")}</dt>
               <dd>
                 {pending.value.diff.beforeColumns} →{" "}
                 {pending.value.diff.afterColumns}
               </dd>
-              <dt>Changed cells</dt>
+              <dt>{t("tableEditor.changedCells")}</dt>
               <dd>{pending.value.diff.changedCells}</dd>
             </dl>
           ) : (
             <dl className="mt-2 grid grid-cols-2 gap-1 text-xs text-slate-300">
-              <dt>Chart type</dt>
-              <dd>{pending.value.diff.chartType}</dd>
-              <dt>Categories</dt>
+              <dt>{t("tableEditor.chartType")}</dt>
+              <dd>{chartTypeLabel(pending.value.diff.chartType)}</dd>
+              <dt>{t("tableEditor.categories")}</dt>
               <dd>{pending.value.diff.categories}</dd>
-              <dt>Series</dt>
+              <dt>{t("tableEditor.series")}</dt>
               <dd>{pending.value.diff.series}</dd>
             </dl>
           )}
@@ -627,18 +680,18 @@ export default function TemplateV2TableEditorPanel({
               onClick={applyPending}
               className="flex-1 rounded bg-emerald-600 px-3 py-2 text-xs font-semibold disabled:opacity-40"
             >
-              Apply preview
+              {t("tableEditor.applyPreview")}
             </button>
             <button
               type="button"
               onClick={() => {
                 setPending(null);
                 setError(null);
-                setStatus("Preview canceled. No template data changed.");
+                setStatus(t("tableEditor.previewCanceled"));
               }}
               className="rounded border border-slate-600 px-3 py-2 text-xs"
             >
-              Cancel
+              {t("tableEditor.cancel")}
             </button>
           </div>
         </div>

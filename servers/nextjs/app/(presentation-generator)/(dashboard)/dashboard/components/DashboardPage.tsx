@@ -3,17 +3,23 @@
 import React, {
   useState,
   useEffect,
-  useMemo,
   useCallback,
   useRef,
 } from "react";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
+import type { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 import { PresentationGenerationApi } from "@/app/(presentation-generator)/services/api/presentation-generation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowUpDown, Loader2 } from "lucide-react";
+import {
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Search,
+} from "lucide-react";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
@@ -21,6 +27,7 @@ import { sanitizeAnalyticsError } from "@/utils/analytics";
 
 const actionCardBase =
   "absolute aspect-[16/9] h-[46.238px] w-[82.201px] rounded-[4.474px] border border-white/50 bg-cover bg-center bg-no-repeat shadow-[0_8px_18px_rgba(16,24,40,0.18)] transition-all duration-500 ease-out opacity-100 translate-y-0 scale-100";
+const PRESENTATIONS_PER_PAGE = 24;
 
 const FloatingActionCards = () => (
   <div className="pointer-events-none absolute right-[14px] top-[-36px] z-0 block h-[64px] w-[158px]">
@@ -75,7 +82,13 @@ const BlankPresentationGraphic = ({ loading }: { loading: boolean }) => (
 const DashboardPage: React.FC = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const [presentations, setPresentations] = useState<any>(null);
+  const [presentations, setPresentations] = useState<
+    PresentationResponse[] | null
+  >(null);
+  const [presentationTotal, setPresentationTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingBlankPresentation, setIsCreatingBlankPresentation] =
     useState(false);
@@ -84,50 +97,67 @@ const DashboardPage: React.FC = () => {
     "desc"
   );
   const blankPresentationRequestInFlight = useRef(false);
+  const activeListRequest = useRef<AbortController | null>(null);
+  const listRequestSequence = useRef(0);
 
-  const sortedPresentations = useMemo(() => {
-    if (!presentations) return presentations;
-
-    return [...presentations].sort((a: any, b: any) => {
-      const first = new Date(a.updated_at ?? a.created_at).getTime();
-      const second = new Date(b.updated_at ?? b.created_at).getTime();
-
-      return deckSortDirection === "desc" ? second - first : first - second;
-    });
-  }, [presentations, deckSortDirection]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setDebouncedSearchQuery(searchQuery.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchPresentations = useCallback(async () => {
     let fetchedCount = 0;
     let hasError = false;
+    activeListRequest.current?.abort();
+    const controller = new AbortController();
+    activeListRequest.current = controller;
+    const requestSequence = ++listRequestSequence.current;
     try {
       setIsLoading(true);
       setError(null);
-      const data = await DashboardApi.getPresentations();
-      fetchedCount = data.length;
-      data.sort(
-        (a: any, b: any) =>
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      const data = await DashboardApi.getPresentations(
+        {
+          q: debouncedSearchQuery || undefined,
+          page,
+          pageSize: PRESENTATIONS_PER_PAGE,
+          sort: deckSortDirection,
+        },
+        controller.signal,
       );
-      setPresentations(data);
+      if (requestSequence !== listRequestSequence.current) return;
+      fetchedCount = data.total;
+      setPresentations(data.items);
+      setPresentationTotal(data.total);
     } catch {
+      if (controller.signal.aborted) return;
       // A real fetch failure (500, timeout, backend unreachable) — NOT an empty
       // list. getPresentations() already returns [] for a genuine 404. Surface a
       // recoverable error so the grid shows its retry UI instead of the
       // "no presentations yet" empty state, which reads as account-wide data loss.
       hasError = true;
       setError("발표자료를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setPresentationTotal(0);
     } finally {
-      trackEvent(MixpanelEvent.Dashboard_Page_Viewed, {
-        pathname,
-        presentation_count: fetchedCount,
-        load_failed: hasError,
-      });
-      setIsLoading(false);
+      if (requestSequence === listRequestSequence.current) {
+        trackEvent(MixpanelEvent.Dashboard_Page_Viewed, {
+          pathname,
+          presentation_count: fetchedCount,
+          load_failed: hasError,
+        });
+        setIsLoading(false);
+        if (activeListRequest.current === controller) {
+          activeListRequest.current = null;
+        }
+      }
     }
-  }, [pathname]);
+  }, [debouncedSearchQuery, deckSortDirection, page, pathname]);
 
   useEffect(() => {
     void fetchPresentations();
+    return () => activeListRequest.current?.abort();
   }, [fetchPresentations]);
 
   const createBlankPresentation = useCallback(async () => {
@@ -167,11 +197,18 @@ const DashboardPage: React.FC = () => {
     }
   }, [pathname, router]);
 
-  const removePresentation = (presentationId: string) => {
-    setPresentations((prev: any) =>
-      prev ? prev.filter((p: any) => p.id !== presentationId) : []
-    );
+  const removePresentation = () => {
+    if ((presentations?.length ?? 0) <= 1 && page > 1) {
+      setPage((current) => Math.max(1, current - 1));
+      return;
+    }
+    void fetchPresentations();
   };
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(presentationTotal / PRESENTATIONS_PER_PAGE),
+  );
 
   return (
     <div className="min-h-screen w-full px-3 pb-10 sm:px-6 relative">
@@ -237,34 +274,97 @@ const DashboardPage: React.FC = () => {
         </div>
       </section>
       <section className="relative z-10 mt-12">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-syne text-base font-medium  text-[#333333] ">
-            발표자료
-          </h2>
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[#2F3033] transition-colors hover:bg-[#F3F3F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
-            title="정렬 순서 전환"
-            aria-label="정렬 순서 전환"
-            onClick={() =>
-              setDeckSortDirection((current) =>
-                current === "desc" ? "asc" : "desc"
-              )
-            }
-          >
-            <ArrowUpDown
-              className={`h-4 w-4 transition-transform duration-300 ${
-                deckSortDirection === "asc" ? "rotate-180" : ""
-              }`}
-            />
-          </button>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-baseline gap-2">
+            <h2 className="font-syne text-base font-medium text-[#333333]">
+              발표자료
+            </h2>
+            {!isLoading && (
+              <span className="text-xs text-[#808080]" aria-live="polite">
+                {presentationTotal}개
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="relative block min-w-0 flex-1 sm:w-[280px]">
+              <span className="sr-only">발표자료 검색</span>
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#808080]"
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="제목 또는 내용 검색"
+                data-testid="dashboard-presentation-search"
+                className="h-9 w-full rounded-lg border border-[#D9D9DF] bg-white pl-9 pr-3 text-sm text-[#191919] outline-none transition focus:border-[#7A5AF8] focus:ring-2 focus:ring-[#7A5AF8]/20"
+              />
+            </label>
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#D9D9DF] bg-white text-[#2F3033] transition-colors hover:bg-[#F3F3F6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
+              title="정렬 순서 전환"
+              aria-label="정렬 순서 전환"
+              onClick={() => {
+                setPage(1);
+                setDeckSortDirection((current) =>
+                  current === "desc" ? "asc" : "desc"
+                );
+              }}
+            >
+              <ArrowUpDown
+                className={`h-4 w-4 transition-transform duration-300 ${
+                  deckSortDirection === "asc" ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+          </div>
         </div>
         <PresentationGrid
-          presentations={sortedPresentations}
+          presentations={presentations ?? []}
           isLoading={isLoading}
           error={error}
           onPresentationDeleted={removePresentation}
+          emptyTitle={
+            debouncedSearchQuery ? "검색 결과가 없습니다." : undefined
+          }
+          emptyDescription={
+            debouncedSearchQuery
+              ? "다른 검색어로 다시 시도해 보세요."
+              : undefined
+          }
         />
+        {!isLoading && !error && presentationTotal > 0 && totalPages > 1 && (
+          <nav
+            className="mt-8 flex items-center justify-center gap-3"
+            aria-label="발표자료 페이지"
+          >
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page <= 1}
+              aria-label="이전 페이지"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#D9D9DF] bg-white text-[#333] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="min-w-[72px] text-center text-sm text-[#667085]">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={page >= totalPages}
+              aria-label="다음 페이지"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#D9D9DF] bg-white text-[#333] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </nav>
+        )}
       </section>
     </div>
   );

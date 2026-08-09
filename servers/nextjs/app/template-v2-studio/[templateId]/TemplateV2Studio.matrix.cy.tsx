@@ -6,6 +6,7 @@ import {
   templateV2MatrixTemplateId,
 } from "../../../cypress/fixtures/template-v2-matrix/templateV2MatrixFixtures";
 import TemplateV2Studio from "./TemplateV2Studio";
+import { mountWithStudioI18n } from "./studioI18nTestUtils.cy";
 
 function mountMatrix(persistedLayouts = templateV2MatrixLayouts(), revision = 1) {
   cy.intercept(
@@ -13,7 +14,7 @@ function mountMatrix(persistedLayouts = templateV2MatrixLayouts(), revision = 1)
     `**/api/v1/ppt/structured-templates/${templateV2MatrixTemplateId}`,
     (request) => request.reply({ statusCode: 200, body: templateV2MatrixResponse(persistedLayouts, revision) })
   ).as("loadMatrix");
-  cy.mount(<TemplateV2Studio templateId={templateV2MatrixTemplateId} />);
+  mountWithStudioI18n(<TemplateV2Studio templateId={templateV2MatrixTemplateId} />);
   cy.wait("@loadMatrix");
 }
 
@@ -90,7 +91,7 @@ describe("Template V2 source-backed E2E matrix", () => {
       }
     ).as("saveMatrix");
 
-    cy.mount(<TemplateV2Studio templateId={templateV2MatrixTemplateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateV2MatrixTemplateId} />);
     cy.wait("@loadMatrix");
     // Forty-five discrete commands exercise the user-visible forty-entry
     // history ceiling.
@@ -126,9 +127,9 @@ describe("Template V2 source-backed E2E matrix", () => {
     cy.wait("@saveMatrix");
     cy.then(() => expect(expectedRevisions).to.deep.equal([1, 2]));
 
-    cy.mount(<div data-testid="matrix-unmounted" />);
+    mountWithStudioI18n(<div data-testid="matrix-unmounted" />);
     cy.get('[data-testid="template-v2-selection-toolbar"]').should("not.exist");
-    cy.mount(<TemplateV2Studio templateId={templateV2MatrixTemplateId} />);
+    mountWithStudioI18n(<TemplateV2Studio templateId={templateV2MatrixTemplateId} />);
     cy.wait("@loadMatrix");
     cy.contains("button", "Add rectangle").should("be.enabled");
     cy.contains("button[aria-pressed]", /^title\s*\(0\)$/).click();

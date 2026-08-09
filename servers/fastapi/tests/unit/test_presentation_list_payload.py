@@ -10,6 +10,7 @@ the editor — still serves it in full.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 import uuid
@@ -26,6 +27,7 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.slide import SlideModel
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 TABLES = [
     PresentationModel.__table__,
@@ -246,6 +248,128 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             ]
         finally:
             await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_server_search_pagination_total_and_owner_scope_match(tmp_path: Path):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "server-search.db")
+        owner_id = uuid.uuid4()
+        other_owner_id = uuid.uuid4()
+        base_time = datetime(2026, 8, 10, tzinfo=timezone.utc)
+        deck_specs = [
+            ("Quarter Plan", "alpha", owner_id, base_time, True, True),
+            (
+                "Budget 100%_Plan",
+                "beta",
+                owner_id,
+                base_time + timedelta(minutes=1),
+                True,
+                True,
+            ),
+            (
+                "Other",
+                "quarter plan notes",
+                owner_id,
+                base_time + timedelta(minutes=2),
+                True,
+                False,
+            ),
+            (
+                "Budget 100XXOther",
+                "gamma",
+                owner_id,
+                base_time + timedelta(minutes=3),
+                True,
+                True,
+            ),
+            (
+                "Quarter Plan draft",
+                "hidden",
+                owner_id,
+                base_time + timedelta(minutes=4),
+                False,
+                True,
+            ),
+            (
+                "Quarter Plan other owner",
+                "hidden",
+                other_owner_id,
+                base_time + timedelta(minutes=5),
+                True,
+                True,
+            ),
+        ]
+        async with maker() as session, session.begin():
+            for title, content, deck_owner, updated_at, published, has_cover in deck_specs:
+                presentation = PresentationModel(
+                    owner_id=deck_owner,
+                    content=content,
+                    n_slides=1,
+                    language="ko",
+                    title=title,
+                    updated_at=updated_at,
+                    lifecycle_status=(
+                        PRESENTATION_LIFECYCLE_PUBLISHED
+                        if published
+                        else PRESENTATION_LIFECYCLE_STAGING
+                    ),
+                )
+                session.add(presentation)
+                if has_cover:
+                    session.add(
+                        SlideModel(
+                            owner_id=deck_owner,
+                            presentation=presentation.id,
+                            layout_group="native",
+                            layout="title",
+                            index=0,
+                            content={"title": title},
+                        )
+                    )
+
+        owner_token = set_current_owner_id(owner_id)
+        try:
+            async with maker() as session:
+                first_page = await presentation_crud.get_all_presentations(
+                    session,
+                    q="  PLAN  ",
+                    page=1,
+                    page_size=2,
+                    sort="asc",
+                )
+                second_page = await presentation_crud.get_all_presentations(
+                    session,
+                    q="plan",
+                    page=2,
+                    page_size=2,
+                    sort="asc",
+                )
+                literal_wildcards = await presentation_crud.get_all_presentations(
+                    session,
+                    q="%_",
+                    page=1,
+                    page_size=10,
+                    sort="desc",
+                )
+        finally:
+            reset_current_owner_id(owner_token)
+            await engine.dispose()
+
+        assert isinstance(first_page, presentation_crud.PresentationListPage)
+        assert first_page.total == 3
+        assert [item.title for item in first_page.items] == [
+            "Quarter Plan",
+            "Budget 100%_Plan",
+        ]
+        assert second_page.total == 3
+        assert [item.title for item in second_page.items] == ["Other"]
+        assert second_page.items[0].slides == []
+        assert literal_wildcards.total == 1
+        assert [item.title for item in literal_wildcards.items] == [
+            "Budget 100%_Plan"
+        ]
 
     asyncio.run(scenario())
 

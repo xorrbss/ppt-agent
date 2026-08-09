@@ -33,6 +33,7 @@ function mountSidePanel(mutationsEnabled: boolean, slideCount = 1) {
     const [selectedSlide, setSelectedSlide] = useState(0);
     return (
       <>
+        <output data-testid="selected-slide">{selectedSlide}</output>
         <button type="button" onClick={() => setSelectedSlide(slideCount - 1)}>
           마지막 슬라이드 선택
         </button>
@@ -52,6 +53,8 @@ function mountSidePanel(mutationsEnabled: boolean, slideCount = 1) {
       <Harness />
     </Provider>,
   );
+
+  return store;
 }
 
 describe("SidePanel mutation gate", () => {
@@ -93,5 +96,56 @@ describe("SidePanel mutation gate", () => {
       "have.been.calledWithMatch",
       { top: 158, behavior: "smooth" },
     );
+  });
+
+  it("selects read-only thumbnails with Enter, Space, and click", () => {
+    mountSidePanel(false, 3);
+
+    cy.get('[data-testid="slide-thumbnail-select-1"]').focus();
+    cy.press(Cypress.Keyboard.Keys.ENTER);
+    cy.get('[data-testid="selected-slide"]').should("have.text", "1");
+    cy.get('[data-testid="slide-thumbnail-select-1"]').should(
+      "have.attr",
+      "aria-current",
+      "page",
+    );
+
+    cy.get('[data-testid="slide-thumbnail-select-2"]').focus();
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('[data-testid="selected-slide"]').should("have.text", "2");
+
+    cy.get('[data-testid="slide-thumbnail-select-0"]').click();
+    cy.get('[data-testid="selected-slide"]').should("have.text", "0");
+  });
+
+  it("keeps keyboard reordering on a dedicated drag handle", () => {
+    const store = mountSidePanel(true, 3);
+
+    cy.get('[data-testid="slide-thumbnail-select-0"]').focus();
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('[data-testid="selected-slide"]').should("have.text", "0");
+
+    cy.get('button[aria-label="Reorder slide 1"]').as("firstDragHandle").focus();
+    cy.get("@firstDragHandle").type("{enter}");
+    cy.get("@firstDragHandle").should("have.attr", "aria-pressed", "true");
+    cy.get("@firstDragHandle").type("{downarrow}");
+    cy.get('[role="status"]').should("contain.text", "moved over droppable area");
+    cy.get("@firstDragHandle").type("{enter}");
+    cy.get("@firstDragHandle").should("not.have.attr", "aria-pressed", "true");
+    cy.get('[data-testid="selected-slide"]').should("have.text", "1");
+    cy.get('[data-testid="slide-thumbnail-select-1"]').should(
+      "have.attr",
+      "aria-current",
+      "page",
+    );
+    cy.focused().should("have.attr", "aria-label", "Reorder slide 2");
+
+    cy.then(() => {
+      expect(
+        store.getState().presentationGeneration.presentationData?.slides.map(
+          (slide) => slide.id,
+        ),
+      ).to.deep.equal(["s2", "s1", "s3"]);
+    });
   });
 });

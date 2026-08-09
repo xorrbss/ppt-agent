@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import {
-  TEMPLATE_V2_CHART_TYPES,
-  TEMPLATE_V2_CHART_TYPE_LABELS,
-} from "@/components/slide-editor/charts/chart-data";
+import { useTranslations } from "next-intl";
+import { TEMPLATE_V2_CHART_TYPES } from "@/components/slide-editor/charts/chart-data";
 import type { TemplateV2ToolbarRecord } from "@/lib/template-v2-toolbar";
 import {
   buildChartContractEditPatches,
@@ -35,6 +33,7 @@ export default function ChartToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const t = useTranslations("studio");
   const [categoryIndex, setCategoryIndex] = useState(0);
   const [seriesIndex, setSeriesIndex] = useState(0);
   const capabilities = chartContractCapabilities(element.chart_type);
@@ -81,10 +80,10 @@ export default function ChartToolbar({
 
   return (
     <div className="flex items-center gap-2">
-      <ToolbarField label="Chart type">
-        <span aria-hidden="true">Type</span>
+      <ToolbarField label={t("toolbar.chart.type")}>
+        <span aria-hidden="true">{t("toolbar.chart.typeShort")}</span>
         <ToolbarSelect
-          aria-label="Chart type"
+          aria-label={t("toolbar.chart.type")}
           value={typeof element.chart_type === "string" ? element.chart_type : ""}
           onChange={(event) =>
             applyContractEdit(
@@ -104,17 +103,21 @@ export default function ChartToolbar({
                 }).ok
               }
             >
-              {TEMPLATE_V2_CHART_TYPE_LABELS[chartType]}
+              {t(`toolbar.chart.types.${chartType}`)}
             </option>
           ))}
         </ToolbarSelect>
       </ToolbarField>
       {Array.isArray(element.categories) && Array.isArray(element.series) && (
         <>
-          <ToolbarField label="Chart category count">
-            <span aria-hidden="true">Categories {categories.length}</span>
+          <ToolbarField label={t("toolbar.chart.categoryCount")}>
+            <span aria-hidden="true">
+              {t("toolbar.chart.categoriesCount", {
+                count: categories.length,
+              })}
+            </span>
             <ToolbarButton
-              aria-label="Remove chart category"
+              aria-label={t("toolbar.chart.removeCategory")}
               disabled={categories.length === 0}
               onClick={() =>
                 applyContractEdit(
@@ -126,7 +129,7 @@ export default function ChartToolbar({
               -
             </ToolbarButton>
             <ToolbarButton
-              aria-label="Add chart category"
+              aria-label={t("toolbar.chart.addCategory")}
               disabled={categories.length >= CHART_CATEGORY_LIMIT}
               onClick={() =>
                 applyContractEdit(
@@ -138,10 +141,12 @@ export default function ChartToolbar({
               +
             </ToolbarButton>
           </ToolbarField>
-          <ToolbarField label="Chart series count">
-            <span aria-hidden="true">Series {series.length}</span>
+          <ToolbarField label={t("toolbar.chart.seriesCount")}>
+            <span aria-hidden="true">
+              {t("toolbar.chart.seriesCountValue", { count: series.length })}
+            </span>
             <ToolbarButton
-              aria-label="Remove chart series"
+              aria-label={t("toolbar.chart.removeSeries")}
               disabled={series.length === 0}
               onClick={() =>
                 applyContractEdit(
@@ -153,7 +158,7 @@ export default function ChartToolbar({
               -
             </ToolbarButton>
             <ToolbarButton
-              aria-label="Add chart series"
+              aria-label={t("toolbar.chart.addSeries")}
               disabled={series.length >= seriesLimit}
               onClick={() =>
                 applyContractEdit(
@@ -168,10 +173,10 @@ export default function ChartToolbar({
         </>
       )}
       {dataLabelPositions.length > 0 && (
-        <ToolbarField label="Chart data labels">
-          <span aria-hidden="true">Labels</span>
+        <ToolbarField label={t("toolbar.chart.dataLabels")}>
+          <span aria-hidden="true">{t("toolbar.chart.labels")}</span>
           <ToolbarSelect
-            aria-label="Chart data labels"
+            aria-label={t("toolbar.chart.dataLabels")}
             value={
               typeof element.data_labels === "string"
                 ? element.data_labels
@@ -187,10 +192,10 @@ export default function ChartToolbar({
               )
             }
           >
-            <option value="">None</option>
+            <option value="">{t("toolbar.common.none")}</option>
             {dataLabelPositions.map((position) => (
               <option key={position} value={position}>
-                {position}
+                {t(`toolbar.chart.dataLabelPositions.${position}`)}
               </option>
             ))}
           </ToolbarSelect>
@@ -198,24 +203,24 @@ export default function ChartToolbar({
       )}
       {categories.length > 0 && (
         <>
-          <ToolbarField label="Chart category">
-            <span aria-hidden="true">Category</span>
+          <ToolbarField label={t("toolbar.chart.category")}>
+            <span aria-hidden="true">{t("toolbar.chart.categoryShort")}</span>
             <ToolbarSelect
-              aria-label="Chart category"
+              aria-label={t("toolbar.chart.category")}
               value={safeCategoryIndex}
               onChange={(event) => setCategoryIndex(Number(event.target.value))}
             >
               {categories.map((label, index) => (
                 <option key={index} value={index}>
-                  {index + 1}: {label || "Untitled"}
+                  {index + 1}: {label || t("toolbar.common.untitled")}
                 </option>
               ))}
             </ToolbarSelect>
           </ToolbarField>
-          <ToolbarField label="Chart category label">
+          <ToolbarField label={t("toolbar.chart.categoryLabel")}>
             <input
               className={`${toolbarInputClass} w-28`}
-              aria-label="Chart category label"
+              aria-label={t("toolbar.chart.categoryLabel")}
               type="text"
               value={categories[safeCategoryIndex]}
               onChange={(event) =>
@@ -235,24 +240,27 @@ export default function ChartToolbar({
       )}
       {series.length > 0 && (
         <>
-          <ToolbarField label="Chart series">
-            <span aria-hidden="true">Series</span>
+          <ToolbarField label={t("toolbar.chart.series")}>
+            <span aria-hidden="true">{t("toolbar.chart.seriesShort")}</span>
             <ToolbarSelect
-              aria-label="Chart series"
+              aria-label={t("toolbar.chart.series")}
               value={safeSeriesIndex}
               onChange={(event) => setSeriesIndex(Number(event.target.value))}
             >
               {series.map((item, index) => (
                 <option key={index} value={index}>
-                  {index + 1}: {typeof item.name === "string" && item.name ? item.name : "Untitled"}
+                  {index + 1}:{" "}
+                  {typeof item.name === "string" && item.name
+                    ? item.name
+                    : t("toolbar.common.untitled")}
                 </option>
               ))}
             </ToolbarSelect>
           </ToolbarField>
-          <ToolbarField label="Chart series name">
+          <ToolbarField label={t("toolbar.chart.seriesName")}>
             <input
               className={`${toolbarInputClass} w-28`}
-              aria-label="Chart series name"
+              aria-label={t("toolbar.chart.seriesName")}
               type="text"
               value={typeof selectedSeries?.name === "string" ? selectedSeries.name : ""}
               onChange={(event) =>
@@ -272,11 +280,11 @@ export default function ChartToolbar({
       )}
       {selectedValues.length > safeCategoryIndex &&
         typeof selectedValues[safeCategoryIndex] === "number" && (
-          <ToolbarField label="Chart series value">
-            <span aria-hidden="true">Value</span>
+          <ToolbarField label={t("toolbar.chart.seriesValue")}>
+            <span aria-hidden="true">{t("toolbar.chart.value")}</span>
             <input
               className={`${toolbarInputClass} w-20`}
-              aria-label="Chart series value"
+              aria-label={t("toolbar.chart.seriesValue")}
               type="number"
               step="any"
               value={selectedValues[safeCategoryIndex] as number}
@@ -295,11 +303,11 @@ export default function ChartToolbar({
             />
           </ToolbarField>
         )}
-      <ToolbarField label="Chart title color">
-        <span aria-hidden="true">Title</span>
+      <ToolbarField label={t("toolbar.chart.titleColor")}>
+        <span aria-hidden="true">{t("toolbar.chart.title")}</span>
         <input
           className={`${toolbarInputClass} w-24`}
-          aria-label="Chart title color"
+          aria-label={t("toolbar.chart.titleColor")}
           type="text"
           value={typeof element.title_color === "string" ? element.title_color : ""}
           placeholder="#111827"
@@ -307,7 +315,7 @@ export default function ChartToolbar({
         />
       </ToolbarField>
       <ToolbarButton
-        aria-label="Toggle chart legend"
+        aria-label={t("toolbar.chart.toggleLegend")}
         aria-pressed={element.legend === true}
         onClick={() =>
           onPatch([{ path: ["legend"], value: element.legend !== true }], {
@@ -315,13 +323,13 @@ export default function ChartToolbar({
           })
         }
       >
-        Legend
+        {t("toolbar.chart.legend")}
       </ToolbarButton>
-      <ToolbarField label="Chart legend color">
-        <span aria-hidden="true">Legend</span>
+      <ToolbarField label={t("toolbar.chart.legendColor")}>
+        <span aria-hidden="true">{t("toolbar.chart.legend")}</span>
         <input
           className={`${toolbarInputClass} w-24`}
-          aria-label="Chart legend color"
+          aria-label={t("toolbar.chart.legendColor")}
           type="text"
           value={typeof element.legend_color === "string" ? element.legend_color : ""}
           placeholder="#374151"
@@ -330,22 +338,22 @@ export default function ChartToolbar({
       </ToolbarField>
       {supportsAxes && (
         <>
-          <ToolbarField label="Chart axis color">
-            <span aria-hidden="true">Axis</span>
+          <ToolbarField label={t("toolbar.chart.axisColor")}>
+            <span aria-hidden="true">{t("toolbar.chart.axis")}</span>
             <input
               className={`${toolbarInputClass} w-24`}
-              aria-label="Chart axis color"
+              aria-label={t("toolbar.chart.axisColor")}
               type="text"
               value={typeof element.axis_color === "string" ? element.axis_color : ""}
               placeholder="#6b7280"
               onChange={(event) => patchColor("axis_color", event.target.value)}
             />
           </ToolbarField>
-          <ToolbarField label="Chart grid color">
-            <span aria-hidden="true">Grid</span>
+          <ToolbarField label={t("toolbar.chart.gridColor")}>
+            <span aria-hidden="true">{t("toolbar.chart.grid")}</span>
             <input
               className={`${toolbarInputClass} w-24`}
-              aria-label="Chart grid color"
+              aria-label={t("toolbar.chart.gridColor")}
               type="text"
               value={typeof element.grid_color === "string" ? element.grid_color : ""}
               placeholder="#e5e7eb"
@@ -354,11 +362,11 @@ export default function ChartToolbar({
           </ToolbarField>
         </>
       )}
-      <ToolbarField label="Chart opacity">
-        <span aria-hidden="true">Opacity</span>
+      <ToolbarField label={t("toolbar.chart.opacity")}>
+        <span aria-hidden="true">{t("toolbar.common.opacity")}</span>
         <input
           className="w-20 accent-violet-400"
-          aria-label="Chart opacity"
+          aria-label={t("toolbar.chart.opacity")}
           type="range"
           min={0}
           max={1}

@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import {
   buildTemplateV2InfographicValuePatches,
   validateTemplateV2InfographicContract,
@@ -18,6 +20,7 @@ export default function InfographicToolbar({
     options?: { historyKey?: string; continuous?: boolean }
   ) => void;
 }) {
+  const t = useTranslations("studio");
   let contract: ReturnType<typeof validateTemplateV2InfographicContract>;
   try {
     contract = validateTemplateV2InfographicContract(element);
@@ -41,12 +44,14 @@ export default function InfographicToolbar({
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-slate-300">
-        {type === "gauge" ? "Gauge" : "Progress"}
+        {type === "gauge"
+          ? t("toolbar.infographic.gauge")
+          : t("toolbar.infographic.progress")}
       </span>
-      <ToolbarField label="Infographic value">
+      <ToolbarField label={t("toolbar.infographic.value")}>
         <input
           className={`${toolbarInputClass} w-24`}
-          aria-label="Infographic value"
+          aria-label={t("toolbar.infographic.value")}
           type="number"
           min={minimum}
           max={maximum}
@@ -55,10 +60,10 @@ export default function InfographicToolbar({
           onChange={(event) => patchValue(event.currentTarget.valueAsNumber)}
         />
       </ToolbarField>
-      <ToolbarField label="Infographic value slider">
+      <ToolbarField label={t("toolbar.infographic.valueSlider")}>
         <input
           className="w-28 accent-violet-400"
-          aria-label="Infographic value slider"
+          aria-label={t("toolbar.infographic.valueSlider")}
           type="range"
           min={minimum}
           max={maximum}
