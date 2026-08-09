@@ -19,6 +19,7 @@ from pydantic import (
 )
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 from sqlmodel import select
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
@@ -142,6 +143,30 @@ def _chat_first_create_enabled() -> bool:
     return True
 
 
+# The deck list renders each cover slide from ``content``/``properties``; it has
+# never read ``SlideModel.html_content``.  Authored decks store a whole HTML
+# document there, so carrying it made the list response ~93% authored HTML that
+# no caller used.  Every other column is carried by name, so a column added to
+# SlideModel later still reaches the list response.
+_LIST_SLIDE_CARRIED_FIELDS = tuple(
+    name for name in SlideModel.model_fields if name != "html_content"
+)
+
+
+def _list_slide_without_html(slide: SlideModel) -> SlideModel:
+    """Copy a cover slide for the list response, withholding authored HTML.
+
+    Returns a transient row instead of blanking the loaded one: assigning to a
+    persistent instance marks it dirty, and the next query on the same session
+    autoflushes ``UPDATE slides SET html_content=NULL`` — a read endpoint one
+    stray commit away from erasing authored decks.  ``html_content`` is never
+    read here, so the deferred column is never lazily loaded either.
+    """
+
+    carried = {name: getattr(slide, name) for name in _LIST_SLIDE_CARRIED_FIELDS}
+    return SlideModel(**carried, html_content=None)
+
+
 @PRESENTATION_CRUD_ROUTER.get("/all", response_model=List[PresentationWithSlides])
 async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_session)):
     query = (
@@ -155,13 +180,17 @@ async def get_all_presentations(sql_session: AsyncSession = Depends(get_async_se
             (SlideModel.presentation == PresentationModel.id) & (SlideModel.index == 0),
         )
         .order_by(PresentationModel.created_at.desc())
+        # Keep the column out of the SELECT rather than fetching and discarding
+        # it; ``raiseload`` turns an accidental read into a loud error instead of
+        # a silent per-row lazy load.
+        .options(defer(SlideModel.html_content, raiseload=True))
     )
 
     results = await sql_session.execute(query)
     rows = results.all()
     presentations_with_slides = []
     for presentation, first_slide in rows:
-        slides = [first_slide]
+        slides = [_list_slide_without_html(first_slide)]
         fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
         presentations_with_slides.append(
             PresentationWithSlides(

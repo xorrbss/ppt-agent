@@ -14,7 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
-import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
+import { DeferredSlideThumbnail } from "./DeferredSlideThumbnail";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 
@@ -92,7 +92,7 @@ export const PresentationCard = ({
         <Image src="/card_bg.svg" alt="" fill className="absolute object-cover" />
         <div className="scale-[0.75] mt-4  border border-gray-300 rounded-lg overflow-hidden">
 
-          <SlideScale slide={firstSlide} isClickable={false} />
+          <DeferredSlideThumbnail slide={firstSlide} />
         </div>
 
         <div className="w-full py-3 px-5 mt-auto z-40 relative bg-white  border-t border-[#EDEEEF]">
