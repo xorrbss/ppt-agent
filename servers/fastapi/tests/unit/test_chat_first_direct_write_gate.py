@@ -30,7 +30,6 @@ _GUARDED_ENDPOINTS = (
     "slide_edit_html",
     "restore",
     "delete",
-    "generate_sync",
     "generation_cancel",
 )
 
@@ -114,12 +113,6 @@ async def _call_guarded_endpoint(name: str, session: _ProbeSession):
         )
     if name == "delete":
         return await presentation_crud.delete_presentation(entity_id, session)
-    if name == "generate_sync":
-        return await presentation_generate.generate_presentation_sync(
-            SimpleNamespace(state=SimpleNamespace(request_id="request-id")),
-            SimpleNamespace(),
-            session,
-        )
     if name == "generation_cancel":
         return await presentation_generate.cancel_async_presentation_generation(
             "task-id"
@@ -140,8 +133,6 @@ def test_direct_presentation_writes_fail_closed_before_side_effects(
     monkeypatch,
     endpoint_name,
 ):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
     monkeypatch.setattr(
         presentation_endpoints,
         "queue_authored_quality_review",
@@ -165,41 +156,7 @@ def test_direct_presentation_writes_fail_closed_before_side_effects(
     assert caught.value.detail == CHAT_FIRST_COMMAND_REQUIRED
 
 
-@pytest.mark.parametrize("endpoint_name", _GUARDED_ENDPOINTS)
-def test_direct_presentation_writes_remain_available_for_flag_rollback(
-    monkeypatch,
-    endpoint_name,
-):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "false")
-    monkeypatch.setattr(
-        presentation_endpoints,
-        "queue_authored_quality_review",
-        _legacy_quality_review,
-    )
-    monkeypatch.setattr(
-        presentation_generate,
-        "check_if_api_request_is_valid",
-        _legacy_generation_path,
-    )
-    monkeypatch.setattr(
-        presentation_generate,
-        "cancel_generation_job",
-        _legacy_generation_path,
-    )
-
-    # Every endpoint reaches its pre-existing implementation when the rollout
-    # flag is disabled.  The probe deliberately stops it at the first legacy
-    # service/DB access so the test cannot mutate anything.
-    with pytest.raises(_LegacyPathReached):
-        asyncio.run(_call_guarded_endpoint(endpoint_name, _ProbeSession()))
-
-
-def test_write_gate_uses_workspace_feature_flag(monkeypatch):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "false")
-    assert require_legacy_presentation_write_path() is None
-
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
+def test_write_gate_has_no_opt_out():
     with pytest.raises(HTTPException) as caught:
         require_legacy_presentation_write_path()
 
@@ -221,12 +178,7 @@ def test_write_gate_uses_workspace_feature_flag(monkeypatch):
         ),
     ),
 )
-def test_read_only_presentation_routes_stay_available_when_chat_first_is_enabled(
-    monkeypatch,
-    read_call,
-):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-
+def test_read_only_presentation_routes_stay_available(read_call):
     # Read routes intentionally do not use the legacy write gate.  The probe
     # proves dispatch reached their existing database read instead of a 409.
     with pytest.raises(_LegacyPathReached):

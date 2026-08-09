@@ -43,8 +43,7 @@ from services.workspace_page_remake_operation_handler import (
 from services.workspace_authored_template_operation_handler import (
     register_workspace_authored_template_operation_handler,
 )
-from services.workspace_runtime_profile import validate_chat_first_workspace_rollout
-from services.workspace_service import workspace_commands_enabled
+from services.workspace_runtime_profile import require_supported_workspace_runtime
 from utils.get_env import get_app_data_directory_env
 
 
@@ -77,12 +76,7 @@ def register_workspace_operation_handlers() -> None:
 async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     if get_workspace_operation_worker_mode() != EXTERNAL_WORKER_MODE:
         raise RuntimeError("workspace_operation_external_worker_mode_required")
-    rollout = validate_chat_first_workspace_rollout(
-        workspace_commands_enabled(),
-        sql_engine.url,
-    )
-    if not rollout.enabled:
-        raise RuntimeError("chat_first_workspace_external_worker_disabled")
+    require_supported_workspace_runtime(sql_engine.url)
     require_workspace_asset_malware_scan_safety(feature_enabled=True)
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()

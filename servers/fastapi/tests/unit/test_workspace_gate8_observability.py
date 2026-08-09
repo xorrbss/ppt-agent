@@ -10,35 +10,10 @@ import yaml
 
 from api.v1.ppt.endpoints import workspace as workspace_endpoint
 from services.workspace_metrics import WorkspaceMetrics
-from services.workspace_shadow_parity import (
-    observe_workspace_timeline_shadow_parity,
-)
 
 
 PRESENTATION_ID = uuid.UUID("00000000-0000-0000-0000-000000000801")
 CONVERSATION_ID = uuid.UUID("00000000-0000-0000-0000-000000000802")
-
-
-def _shadow_timeline() -> dict[str, object]:
-    return {
-        "conversation_id": str(CONVERSATION_ID),
-        "items": [
-            {
-                "anchor_type": "message",
-                "position": 1,
-                "role": "user",
-                "content": "Make the title concise",
-            },
-            {
-                "anchor_type": "operation",
-                "position": 2,
-                "operation_type": "slide.edit",
-                "status": "succeeded",
-                "result": {"summary": "Updated the title"},
-                "events": [{"type": "operation.result"}],
-            },
-        ],
-    }
 
 
 def test_named_dead_letter_lease_and_conflict_slos_are_independent(monkeypatch):
@@ -199,83 +174,6 @@ def test_slo_http_response_exposes_cleanup_and_outbox_fields(monkeypatch):
     assert payload["outbox_lease_lost_ratio"] == 0.5
 
 
-def test_shadow_mode_off_skips_the_legacy_read(monkeypatch):
-    legacy_read = AsyncMock()
-    record = Mock()
-    monkeypatch.setattr(
-        "services.workspace_shadow_parity.resolve_active_workspace_write_rollout",
-        lambda _presentation_id: SimpleNamespace(shadow_mode=False),
-    )
-    monkeypatch.setattr("services.workspace_shadow_parity.load_messages", legacy_read)
-    monkeypatch.setattr(
-        "services.workspace_shadow_parity.WORKSPACE_METRICS.record_shadow_parity",
-        record,
-    )
-
-    asyncio.run(
-        observe_workspace_timeline_shadow_parity(
-            Mock(),
-            presentation_id=PRESENTATION_ID,
-            timeline=_shadow_timeline(),
-        )
-    )
-
-    legacy_read.assert_not_awaited()
-    record.assert_not_called()
-
-
-def test_shadow_mode_executes_live_dual_read_and_detects_silent_loss(monkeypatch):
-    legacy_read = AsyncMock(return_value=[])
-    record = Mock()
-    monkeypatch.setattr(
-        "services.workspace_shadow_parity.resolve_active_workspace_write_rollout",
-        lambda _presentation_id: SimpleNamespace(shadow_mode=True),
-    )
-    monkeypatch.setattr("services.workspace_shadow_parity.load_messages", legacy_read)
-    monkeypatch.setattr(
-        "services.workspace_shadow_parity.WORKSPACE_METRICS.record_shadow_parity",
-        record,
-    )
-    session = Mock()
-
-    asyncio.run(
-        observe_workspace_timeline_shadow_parity(
-            session,
-            presentation_id=PRESENTATION_ID,
-            timeline=_shadow_timeline(),
-        )
-    )
-
-    legacy_read.assert_awaited_once_with(
-        session,
-        presentation_id=PRESENTATION_ID,
-        conversation_id=CONVERSATION_ID,
-    )
-    record.assert_called_once_with(matched=False, silent_loss=True)
-
-
-def test_shadow_read_failure_emits_closed_signal_failure_without_content(monkeypatch):
-    legacy_read = AsyncMock(side_effect=RuntimeError("private SQL value"))
-    metrics = Mock()
-    monkeypatch.setattr(
-        "services.workspace_shadow_parity.resolve_active_workspace_write_rollout",
-        lambda _presentation_id: SimpleNamespace(shadow_mode=True),
-    )
-    monkeypatch.setattr("services.workspace_shadow_parity.load_messages", legacy_read)
-    monkeypatch.setattr("services.workspace_shadow_parity.WORKSPACE_METRICS", metrics)
-
-    asyncio.run(
-        observe_workspace_timeline_shadow_parity(
-            Mock(),
-            presentation_id=PRESENTATION_ID,
-            timeline=_shadow_timeline(),
-        )
-    )
-
-    metrics.record_signal_failure.assert_called_once_with("shadow_parity")
-    metrics.record_shadow_parity.assert_not_called()
-
-
 def test_gate8_alert_file_names_each_slo_and_metric():
     alert_path = (
         Path(__file__).resolve().parents[2]
@@ -306,7 +204,6 @@ def test_gate8_alert_file_names_each_slo_and_metric():
         "WorkspaceObservabilitySignalFailure": (
             "workspace_observability_signal_failure_total"
         ),
-        "WorkspaceShadowParityDivergence": "workspace_shadow_parity_total",
         "WorkspaceEventProcessingLagSLOBreach": "workspace_event_lag_ms_bucket",
         "WorkspaceEventLagSignalStalled": (
             'workspace_outbox_total{outcome="event_delivered"}'

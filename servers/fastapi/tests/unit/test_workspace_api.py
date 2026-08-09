@@ -13,7 +13,6 @@ from services.workspace_runtime_profile import (
     WorkspaceRuntimeKind,
     WorkspaceRuntimeProfile,
 )
-from services import workspace_rollout_policy
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
 )
@@ -32,114 +31,46 @@ def _profile(*, supported: bool) -> WorkspaceRuntimeProfile:
     )
 
 
-def test_capabilities_keep_read_only_timeline_during_feature_rollback(
+@pytest.mark.parametrize("supported", [True, False])
+def test_capabilities_track_the_sql_runtime_alone(
     monkeypatch: pytest.MonkeyPatch,
+    supported: bool,
 ):
     monkeypatch.setattr(
         workspace_endpoint,
         "_runtime_profile",
-        lambda: _profile(supported=True),
-    )
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "false")
-
-    capabilities = asyncio.run(workspace_endpoint.workspace_capabilities())
-
-    assert capabilities.supported is True
-    assert capabilities.enabled is False
-    assert capabilities.timeline is True
-    assert capabilities.events is True
-    assert capabilities.commands is False
-    assert capabilities.reason == "chat_first_feature_disabled"
-    workspace_endpoint._require_supported_runtime()
-    with pytest.raises(HTTPException) as disabled:
-        workspace_endpoint._require_workspace_writes()
-    assert disabled.value.status_code == 503
-    assert disabled.value.detail == "chat_first_feature_disabled"
-
-
-@pytest.mark.parametrize(
-    ("feature_enabled", "capability_reason"),
-    [
-        (False, "chat_first_feature_disabled"),
-        (True, "chat_first_runtime_unsupported"),
-    ],
-)
-def test_capabilities_fail_closed_for_unsupported_runtime(
-    monkeypatch: pytest.MonkeyPatch,
-    feature_enabled: bool,
-    capability_reason: str,
-):
-    monkeypatch.setattr(
-        workspace_endpoint,
-        "_runtime_profile",
-        lambda: _profile(supported=False),
-    )
-    monkeypatch.setenv(
-        "CHAT_FIRST_WORKSPACE_ENABLED",
-        "true" if feature_enabled else "false",
+        lambda: _profile(supported=supported),
     )
 
     capabilities = asyncio.run(workspace_endpoint.workspace_capabilities())
 
-    assert capabilities.supported is False
-    assert capabilities.enabled is False
-    assert capabilities.timeline is False
-    assert capabilities.events is False
-    assert capabilities.commands is False
-    assert capabilities.runtime_profile == "unsupported"
-    assert capabilities.reason == capability_reason
-    with pytest.raises(HTTPException) as unsupported_read:
+    # Reads and writes stand or fall together: the runner is the only writer,
+    # so there is no state where the timeline is readable but commands are not.
+    assert capabilities.supported is supported
+    assert capabilities.enabled is supported
+    assert capabilities.timeline is supported
+    assert capabilities.events is supported
+    assert capabilities.commands is supported
+    assert capabilities.kill_switch_active is False
+    assert capabilities.shadow_mode is False
+    assert capabilities.cohort_bucket is None
+
+    if supported:
+        assert capabilities.reason is None
         workspace_endpoint._require_supported_runtime()
-    assert unsupported_read.value.status_code == 501
-    assert unsupported_read.value.detail == "chat_first_runtime_unsupported"
-    with pytest.raises(HTTPException) as unsupported_write:
         workspace_endpoint._require_workspace_writes()
-    assert unsupported_write.value.status_code == (501 if feature_enabled else 503)
-    assert unsupported_write.value.detail == capability_reason
+        return
 
-
-def test_capabilities_keep_reads_available_for_missing_write_declaration(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr(
-        workspace_endpoint,
-        "_runtime_profile",
-        lambda: _profile(supported=True),
-    )
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    monkeypatch.delenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", raising=False)
-
-    capabilities = asyncio.run(workspace_endpoint.workspace_capabilities())
-
-    assert capabilities.supported is True
-    assert capabilities.timeline is True
-    assert capabilities.events is True
-    assert capabilities.enabled is False
-    assert capabilities.reason == "chat_first_runtime_profile_required"
-    workspace_endpoint._require_supported_runtime()
-    with pytest.raises(HTTPException) as error:
-        workspace_endpoint._require_workspace_writes()
-    assert error.value.status_code == 503
-    assert error.value.detail == "chat_first_runtime_profile_required"
-
-
-def test_capabilities_accept_matching_runtime_declaration(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr(
-        workspace_endpoint,
-        "_runtime_profile",
-        lambda: _profile(supported=True),
-    )
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
-
-    capabilities = asyncio.run(workspace_endpoint.workspace_capabilities())
-
-    assert capabilities.supported is True
-    assert capabilities.enabled is True
-    assert capabilities.reason is None
-    workspace_endpoint._require_supported_runtime()
+    assert capabilities.runtime_profile == "unsupported"
+    assert capabilities.reason == "chat_first_runtime_unsupported"
+    for guard in (
+        workspace_endpoint._require_supported_runtime,
+        workspace_endpoint._require_workspace_writes,
+    ):
+        with pytest.raises(HTTPException) as unsupported:
+            guard()
+        assert unsupported.value.status_code == 501
+        assert unsupported.value.detail == "chat_first_runtime_unsupported"
 
 
 def test_command_asset_ids_are_a_bounded_unique_uuid_openapi_contract():
@@ -202,92 +133,6 @@ def test_event_route_rejects_conflicting_query_and_last_event_id(
     assert conflict.value.status_code == 400
     assert conflict.value.detail == "invalid_event_cursor"
     assert conflict.value.retryable is False
-
-
-def test_partial_rollout_capability_matches_scoped_write_gate_truth_table(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    owner_id = uuid.UUID("00000000-0000-0000-0000-000000000321")
-    salt = "capability-write-gate-contract"
-    monkeypatch.setattr(
-        workspace_endpoint,
-        "_runtime_profile",
-        lambda: _profile(supported=True),
-    )
-    monkeypatch.setattr(
-        workspace_rollout_policy,
-        "get_current_owner_id",
-        lambda: owner_id,
-    )
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT", "50")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ROLLOUT_SALT", salt)
-    monkeypatch.delenv("CHAT_FIRST_WORKSPACE_KILL_SWITCH", raising=False)
-
-    candidates = (uuid.UUID(int=value) for value in range(1, 100))
-    buckets = {
-        presentation_id: workspace_rollout_policy.workspace_cohort_bucket(
-            presentation_id,
-            owner_id=owner_id,
-            salt=salt,
-        )
-        for presentation_id in candidates
-    }
-    included_id = next(
-        presentation_id
-        for presentation_id, bucket in buckets.items()
-        if bucket < 5_000
-    )
-    excluded_id = next(
-        presentation_id
-        for presentation_id, bucket in buckets.items()
-        if bucket >= 5_000
-    )
-
-    unscoped = asyncio.run(workspace_endpoint.workspace_capabilities())
-    assert unscoped.reads_supported is True
-    assert unscoped.timeline is True
-    assert unscoped.events is True
-    assert unscoped.writes_supported is False
-    assert unscoped.commands_enabled is False
-    assert unscoped.cohort_bucket is None
-    assert unscoped.cohort_eligible is False
-    assert unscoped.reason == "chat_first_presentation_scope_required"
-    with pytest.raises(HTTPException) as unscoped_write:
-        workspace_endpoint._require_workspace_writes()
-    assert unscoped_write.value.status_code == 503
-    assert unscoped_write.value.detail == unscoped.reason
-    assert unscoped_write.value.retryable is False
-
-    for presentation_id, expected_enabled, expected_reason in (
-        (included_id, True, None),
-        (excluded_id, False, "chat_first_cohort_excluded"),
-    ):
-        capabilities = asyncio.run(
-            workspace_endpoint.workspace_capabilities(presentation_id)
-        )
-        assert capabilities.reads_supported is True
-        assert capabilities.writes_supported is expected_enabled
-        assert capabilities.commands_enabled is expected_enabled
-        assert capabilities.cohort_eligible is expected_enabled
-        assert capabilities.cohort_bucket == buckets[presentation_id]
-        assert capabilities.reason == expected_reason
-
-        if expected_enabled:
-            decision = workspace_endpoint._require_workspace_writes(
-                presentation_id
-            )
-            assert decision.enabled is capabilities.writes_supported
-            assert decision.cohort_eligible is capabilities.cohort_eligible
-            assert decision.cohort_bucket == capabilities.cohort_bucket
-            assert decision.reason == capabilities.reason
-        else:
-            with pytest.raises(HTTPException) as excluded_write:
-                workspace_endpoint._require_workspace_writes(presentation_id)
-            assert excluded_write.value.status_code == 503
-            assert excluded_write.value.detail == capabilities.reason
-            assert excluded_write.value.retryable is False
 
 
 @pytest.mark.parametrize(

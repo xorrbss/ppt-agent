@@ -57,14 +57,13 @@ from services.workspace_asset_service import (
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
 )
-from services.workspace_rollout_policy import (
-    resolve_active_workspace_write_rollout,
+from services.workspace_runtime_profile import (
+    UnsupportedWorkspaceRuntimeError,
+    require_supported_workspace_runtime,
 )
-from services.workspace_runtime_profile import resolve_chat_first_workspace_rollout
 from services.workspace_service import (
     WorkspaceServiceError,
     bootstrap_workspace,
-    workspace_commands_enabled,
     workspace_idempotency_hash,
 )
 from utils.document_path_security import validate_document_paths
@@ -122,23 +121,12 @@ def _attachment_file_name(file_path: str) -> str:
 
 
 def _chat_first_create_enabled() -> bool:
-    """Resolve rollout intent before validation, file import, or database writes."""
+    """Fail closed when the SQL runtime cannot host the operation store."""
 
-    rollout = resolve_chat_first_workspace_rollout(
-        workspace_commands_enabled(),
-        sql_engine.url,
-    )
-    if not rollout.requested:
-        return False
-    if not rollout.enabled:
-        raise HTTPException(
-            status_code=(
-                501
-                if rollout.reason == "chat_first_runtime_unsupported"
-                else 503
-            ),
-            detail=rollout.reason,
-        )
+    try:
+        require_supported_workspace_runtime(sql_engine.url)
+    except UnsupportedWorkspaceRuntimeError as error:
+        raise HTTPException(status_code=501, detail=error.code) from error
     return True
 
 
@@ -286,13 +274,7 @@ async def create_presentation(
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     proposed_presentation_id = presentation_id or uuid.uuid4()
-    chat_first_runtime_enabled = _chat_first_create_enabled()
-    chat_first_enabled = bool(
-        chat_first_runtime_enabled
-        and resolve_active_workspace_write_rollout(
-            proposed_presentation_id
-        ).enabled
-    )
+    chat_first_enabled = _chat_first_create_enabled()
     resolved_theme = (
         _normalize_presentation_create_theme(theme) if chat_first_enabled else None
     )
@@ -323,14 +305,9 @@ async def create_presentation(
             detail="presentation_id_required_for_idempotency",
         )
 
-    # Once the runtime flag is requested, retain the proposed id even when a
-    # kill switch or cohort exclusion restores the legacy writer.  The stable
-    # owner+deck cohort must not be recomputed against a different persisted id.
-    resolved_presentation_id = (
-        proposed_presentation_id
-        if chat_first_runtime_enabled
-        else uuid.uuid4()
-    )
+    # The caller-proposed id is the durable identity the workspace bootstrap and
+    # every retry hash against, so it is always the one persisted.
+    resolved_presentation_id = proposed_presentation_id
     resolved_idempotency_key = (
         idempotency_key or f"presentation-create:{resolved_presentation_id}"
     )

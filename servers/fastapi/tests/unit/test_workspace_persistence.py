@@ -38,8 +38,7 @@ from services.workspace_db_adapter import (
 from services.workspace_runtime_profile import (
     UnsupportedWorkspaceRuntimeError,
     WorkspaceRuntimeKind,
-    require_chat_first_runtime,
-    resolve_chat_first_workspace_rollout,
+    require_supported_workspace_runtime,
     resolve_workspace_runtime_profile,
 )
 
@@ -223,7 +222,7 @@ async def _publication_revision_compare_and_swap(tmp_path: Path):
         await engine.dispose()
 
 
-def test_runtime_profile_fails_closed_only_when_enabled(monkeypatch):
+def test_runtime_profile_recognises_supported_dialects():
     assert (
         resolve_workspace_runtime_profile("sqlite+aiosqlite:///local.db").kind
         is WorkspaceRuntimeKind.SQLITE_LOCAL
@@ -232,130 +231,18 @@ def test_runtime_profile_fails_closed_only_when_enabled(monkeypatch):
         resolve_workspace_runtime_profile("postgresql+asyncpg://db/app").kind
         is WorkspaceRuntimeKind.POSTGRESQL_CLUSTER
     )
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "not-a-profile")
-    disabled = require_chat_first_runtime(False, "mysql+aiomysql://db/app")
-    assert not disabled.supported
-    with pytest.raises(UnsupportedWorkspaceRuntimeError) as exc_info:
-        require_chat_first_runtime(True, "mysql+aiomysql://db/app")
-    assert exc_info.value.code == "chat_first_runtime_unsupported"
+    assert not resolve_workspace_runtime_profile("mysql+aiomysql://db/app").supported
 
 
-@pytest.mark.parametrize(
-    ("declared", "expected_code"),
-    [
-        (None, "chat_first_runtime_profile_required"),
-        ("typo", "chat_first_runtime_profile_invalid"),
-        ("postgresql-cluster", "chat_first_runtime_profile_mismatch"),
-    ],
-)
-def test_runtime_profile_declaration_fails_closed(
-    declared, expected_code, monkeypatch
-):
-    monkeypatch.delenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", raising=False)
-    with pytest.raises(UnsupportedWorkspaceRuntimeError) as exc_info:
-        require_chat_first_runtime(
-            True,
-            "sqlite+aiosqlite:///local.db",
-            declared_profile=declared,
-        )
-    assert exc_info.value.code == expected_code
-
-
-def test_runtime_profile_declaration_matches_database():
-    sqlite = require_chat_first_runtime(
-        True,
-        "sqlite+aiosqlite:///local.db",
-        declared_profile="sqlite-local",
-    )
-    postgres = require_chat_first_runtime(
-        True,
-        "postgresql+asyncpg://db/app",
-        declared_profile="postgresql-cluster",
-    )
+def test_unsupported_dialect_fails_closed():
+    sqlite = require_supported_workspace_runtime("sqlite+aiosqlite:///local.db")
+    postgres = require_supported_workspace_runtime("postgresql+asyncpg://db/app")
     assert sqlite.kind is WorkspaceRuntimeKind.SQLITE_LOCAL
     assert postgres.kind is WorkspaceRuntimeKind.POSTGRESQL_CLUSTER
 
-
-@pytest.mark.parametrize(
-    (
-        "feature_enabled",
-        "database_url",
-        "declared_profile",
-        "enabled",
-        "reads_supported",
-        "reason",
-    ),
-    [
-        (
-            False,
-            "sqlite+aiosqlite:///local.db",
-            None,
-            False,
-            True,
-            "chat_first_feature_disabled",
-        ),
-        (
-            False,
-            "mysql+aiomysql://db/app",
-            "typo",
-            False,
-            False,
-            "chat_first_feature_disabled",
-        ),
-        (
-            True,
-            "sqlite+aiosqlite:///local.db",
-            None,
-            False,
-            True,
-            "chat_first_runtime_profile_required",
-        ),
-        (
-            True,
-            "sqlite+aiosqlite:///local.db",
-            "typo",
-            False,
-            True,
-            "chat_first_runtime_profile_invalid",
-        ),
-        (
-            True,
-            "sqlite+aiosqlite:///local.db",
-            "postgresql-cluster",
-            False,
-            True,
-            "chat_first_runtime_profile_mismatch",
-        ),
-        (
-            True,
-            "mysql+aiomysql://db/app",
-            "sqlite-local",
-            False,
-            False,
-            "chat_first_runtime_unsupported",
-        ),
-        (True, "sqlite+aiosqlite:///local.db", "sqlite-local", True, True, None),
-        (True, "postgresql+asyncpg://db/app", "postgresql-cluster", True, True, None),
-    ],
-)
-def test_chat_first_rollout_truth_table(
-    feature_enabled,
-    database_url,
-    declared_profile,
-    enabled,
-    reads_supported,
-    reason,
-):
-    rollout = resolve_chat_first_workspace_rollout(
-        feature_enabled,
-        database_url,
-        declared_profile=declared_profile,
-    )
-
-    assert rollout.requested is feature_enabled
-    assert rollout.enabled is enabled
-    assert rollout.workspace_reads_supported is reads_supported
-    assert rollout.reason == reason
+    with pytest.raises(UnsupportedWorkspaceRuntimeError) as exc_info:
+        require_supported_workspace_runtime("mysql+aiomysql://db/app")
+    assert exc_info.value.code == "chat_first_runtime_unsupported"
 
 
 def test_workspace_asset_state_constraint_is_enforced(tmp_path: Path):
