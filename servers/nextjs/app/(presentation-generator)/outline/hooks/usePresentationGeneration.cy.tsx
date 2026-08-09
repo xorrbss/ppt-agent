@@ -28,18 +28,15 @@ const router = {
 function GenerationHarness({
   selectedTemplate = AUTHORED_TEMPLATE_ID,
   presentationId = "outline-shell-test",
-  chatFirstEnabled = false,
 }: {
   selectedTemplate?: string;
   presentationId?: string | null;
-  chatFirstEnabled?: boolean;
 }) {
   const { handleSubmit, loadingState } = usePresentationGeneration(
     presentationId,
     [{ content: "# Selected outline" }],
     selectedTemplate,
-    () => undefined,
-    { chatFirstEnabled }
+    () => undefined
   );
 
   return (
@@ -62,8 +59,7 @@ function GenerationHarness({
 function mountHarness(
   selectedTemplate?: string,
   presentationId?: string | null,
-  generationKey = "initial",
-  chatFirstEnabled = false
+  generationKey = "initial"
 ) {
   return mount(
     <AppRouterContext.Provider value={router as any}>
@@ -72,7 +68,6 @@ function mountHarness(
           key={generationKey}
           selectedTemplate={selectedTemplate}
           presentationId={presentationId}
-          chatFirstEnabled={chatFirstEnabled}
         />
       </Provider>
     </AppRouterContext.Provider>
@@ -122,9 +117,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(
       AUTHORED_TEMPLATE_ID,
       sourcePresentationId,
-      "chat-first-authored",
-      true
-    );
+      "chat-first-authored");
     cy.contains("button", "Generate").click();
 
     cy.get("@replace").should(
@@ -169,9 +162,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(
       "c5f6f44a-9d2e-4eef-a44b-8f6389b43dac",
       sourcePresentationId,
-      "chat-first-standard",
-      true
-    );
+      "chat-first-standard");
     cy.contains("button", "Generate").click();
 
     cy.get("@generateStandard").should("have.been.calledOnceWith", {
@@ -204,9 +195,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(
       AUTHORED_TEMPLATE_ID,
       sourcePresentationId,
-      "chat-first-authored-admission-error",
-      true
-    );
+      "chat-first-authored-admission-error");
     cy.contains("button", "Generate").click();
 
     cy.get("@replace").should(
@@ -257,9 +246,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(
       "c5f6f44a-9d2e-4eef-a44b-8f6389b43dac",
       sourcePresentationId,
-      "chat-first-standard-admission-error",
-      true
-    );
+      "chat-first-standard-admission-error");
     cy.contains("button", "Generate").click();
 
     cy.get("@replace").should("not.have.been.called");
@@ -296,9 +283,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(
       "c5f6f44a-9d2e-4eef-a44b-8f6389b43dac",
       "chat-first-missing-bootstrap",
-      "chat-first-missing-bootstrap",
-      true
-    );
+      "chat-first-missing-bootstrap");
     cy.contains("button", "Generate").click();
 
     cy.get("@replace").should("not.have.been.called");
@@ -324,9 +309,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(
       AUTHORED_TEMPLATE_ID,
       "chat-first-idempotency-conflict",
-      "chat-first-idempotency-conflict",
-      true
-    );
+      "chat-first-idempotency-conflict");
     cy.contains("button", "Generate").click();
 
     cy.get("@replace").should("not.have.been.called");
@@ -379,9 +362,7 @@ describe("usePresentationGeneration async generation", () => {
     mountHarness(
       AUTHORED_TEMPLATE_ID,
       "chat-first-unmarked-503",
-      "chat-first-unmarked-503",
-      true
-    );
+      "chat-first-unmarked-503");
     cy.contains("button", "Generate").click();
 
     cy.get("@replace").should("not.have.been.called");

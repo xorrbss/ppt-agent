@@ -7,7 +7,7 @@ import { getApiUrl } from "@/utils/api";
 export const useSlideEdit = (
   slide: ProcessedSlide,
   index: number,
-  onSlideUpdate?: (updatedSlideData: any) => void,
+  onSlideUpdate?: (updatedSlideData: Partial<ProcessedSlide>) => void,
   setSlides?: React.Dispatch<React.SetStateAction<ProcessedSlide[]>>
 ) => {
   const [isEditMode, setIsEditMode] = useState(false);

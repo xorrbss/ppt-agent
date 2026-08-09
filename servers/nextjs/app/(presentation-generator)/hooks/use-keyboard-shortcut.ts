@@ -44,9 +44,12 @@ export const useKeyboardShortcut = (
   );
 
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyPress as any);
+    // The DOM KeyboardEvent structurally satisfies the local KeyboardEvent
+    // shape above, so the listener can forward it without a cast.
+    const listener = (event: globalThis.KeyboardEvent) => handleKeyPress(event);
+    document.addEventListener('keydown', listener);
     return () => {
-      document.removeEventListener('keydown', handleKeyPress as any);
+      document.removeEventListener('keydown', listener);
     };
   }, [handleKeyPress]);
 };

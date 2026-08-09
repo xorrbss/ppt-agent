@@ -9,18 +9,21 @@ export interface PresentationResponse {
   title: string;
   created_at: string;
   updated_at: string;
-  data: any | null;
+  // Opaque server-side payloads: the dashboard only lists decks, so these are
+  // carried through untouched rather than modelled. Narrow them at the point a
+  // consumer actually reads one.
+  data: unknown;
   file: string;
   n_slides: number;
   prompt: string;
   summary: string | null;
-  theme: Record<string, any> | null;
+  theme: Record<string, unknown> | null;
   titles: string[];
   user_id: string;
-  vector_store: any;
+  vector_store: unknown;
 
   thumbnail: string;
-  slides: any[];
+  slides: unknown[];
 }
 
 export interface PresentationGenerationSettings {
@@ -59,7 +62,10 @@ export class DashboardApi {
         return [];
       }
 
-      return await ApiResponseHandler.handleResponse(response, "Failed to fetch presentations");
+      return await ApiResponseHandler.handleResponse<PresentationResponse[]>(
+        response,
+        "Failed to fetch presentations"
+      );
     } catch (error) {
       console.error("Error fetching presentations:", error);
       throw error;
@@ -90,7 +96,7 @@ export class DashboardApi {
         }
       );
 
-      return await ApiResponseHandler.handleResponse(
+      return await ApiResponseHandler.handleResponse<PresentationGenerationInfo>(
         response,
         "Failed to fetch presentation generation info"
       );

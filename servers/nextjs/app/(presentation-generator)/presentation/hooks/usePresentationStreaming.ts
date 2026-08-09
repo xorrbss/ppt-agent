@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
+import type { Slide } from "@/app/(presentation-generator)/types/slide";
 import {
   clearPresentationData,
   setPresentationData,
@@ -30,7 +31,10 @@ function isPlaceholderAssetUrl(url: unknown): boolean {
   return PLACEHOLDER_ASSET_MARKERS.some((m) => u.includes(m));
 }
 
-function mergeContentPreservingResolvedAssets(prev: any, incoming: any): any {
+function mergeContentPreservingResolvedAssets(
+  prev: unknown,
+  incoming: unknown
+): unknown {
   if (incoming === undefined || incoming === null) return prev;
   if (prev === undefined || prev === null) return incoming;
 
@@ -44,11 +48,16 @@ function mergeContentPreservingResolvedAssets(prev: any, incoming: any): any {
   if (typeof incoming !== "object") return incoming;
   if (typeof prev !== "object") return incoming;
 
-  const result: Record<string, unknown> = { ...incoming };
+  // Both are non-null objects here; index them by key the same way the
+  // untyped version did (a string key on an array simply yields undefined).
+  const prevObject = prev as Record<string, unknown>;
+  const incomingObject = incoming as Record<string, unknown>;
 
-  for (const key of Object.keys(incoming)) {
-    const pv = prev[key];
-    const iv = incoming[key];
+  const result: Record<string, unknown> = { ...incomingObject };
+
+  for (const key of Object.keys(incomingObject)) {
+    const pv = prevObject[key];
+    const iv = incomingObject[key];
 
     if (iv !== null && typeof iv === "object") {
       if (Array.isArray(iv) && Array.isArray(pv)) {
@@ -89,10 +98,13 @@ function mergeContentPreservingResolvedAssets(prev: any, incoming: any): any {
   return result;
 }
 
+/** A slide as it arrives mid-stream: only `content` is read here. */
+type StreamedSlide = { content?: unknown; [key: string]: unknown };
+
 function mergeSlidesPreservingResolvedAssets(
-  prevSlides: any[] | undefined,
-  incomingSlides: any[]
-): any[] {
+  prevSlides: StreamedSlide[] | undefined,
+  incomingSlides: StreamedSlide[]
+): StreamedSlide[] {
   if (!prevSlides?.length) return incomingSlides;
   return incomingSlides.map((incoming, idx) => {
     const prev = prevSlides[idx];
@@ -106,6 +118,14 @@ function mergeSlidesPreservingResolvedAssets(
     };
   });
 }
+
+/** Payloads pushed on the `response` SSE event by `/presentation/stream/{id}`. */
+type PresentationStreamEvent =
+  | { type: "chunk"; chunk: string }
+  | { type: "slide_assets"; slide_index?: number; slide?: Slide }
+  | { type: "complete"; presentation: PresentationData }
+  | { type: "closing"; presentation: PresentationData }
+  | { type: "error"; detail?: string };
 
 export const usePresentationStreaming = (
   presentationId: string,
@@ -190,7 +210,7 @@ export const usePresentationStreaming = (
       eventSource = new EventSource(getApiUrl(streamPath));
 
       eventSource.addEventListener("response", (event) => {
-        let data: any;
+        let data: PresentationStreamEvent;
         try {
           data = JSON.parse(event.data);
         } catch {

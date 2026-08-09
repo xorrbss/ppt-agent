@@ -10,7 +10,7 @@
 
 /** All content paths whose string value equals `targetText`, in traversal order. */
 export function collectMatchingPaths(
-  data: any,
+  data: unknown,
   targetText: string,
   path = ""
 ): string[] {

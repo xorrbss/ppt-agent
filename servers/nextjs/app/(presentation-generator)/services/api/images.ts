@@ -22,9 +22,9 @@ export class ImagesApi {
       headers: getHeaderForFormData(),
       body: formData,
     });
-    return await ApiResponseHandler.handleResponse(response, "Failed to upload image") as ImageAssetResponse;
-  } catch (error:any) {
-    console.log("Upload error:", error.message);
+    return await ApiResponseHandler.handleResponse<ImageAssetResponse>(response, "Failed to upload image");
+  } catch (error: unknown) {
+    console.log("Upload error:", error instanceof Error ? error.message : error);
     throw error;
   }
   }
@@ -32,8 +32,8 @@ export class ImagesApi {
   static async getUploadedImages(): Promise<ImageAssetResponse[]> {
     try {
     const response = await fetch(getApiUrl(`/api/v1/ppt/images/uploaded`));
-   return await ApiResponseHandler.handleResponse(response, "Failed to get uploaded images") as ImageAssetResponse[];
-  } catch (error:any) {
+   return await ApiResponseHandler.handleResponse<ImageAssetResponse[]>(response, "Failed to get uploaded images");
+  } catch (error: unknown) {
     console.log("Get uploaded images error:", error);
     throw error;
   }
@@ -44,8 +44,8 @@ export class ImagesApi {
       const response = await fetch(getApiUrl(`/api/v1/ppt/images/${image_id}`), {
         method: "DELETE"
       });
-      return await ApiResponseHandler.handleResponse(response, "Failed to delete image") as {success: boolean, message?: string};
-    } catch (error:any) {
+      return await ApiResponseHandler.handleResponse<{success: boolean, message?: string}>(response, "Failed to delete image");
+    } catch (error: unknown) {
       console.log("Delete image error:", error);
       throw error;
     }
@@ -79,8 +79,8 @@ export class ImagesApi {
         method: "GET",
         headers,
       });
-      return await ApiResponseHandler.handleResponse(response, "Failed to search stock images") as string[];
-    } catch (error:any) {
+      return await ApiResponseHandler.handleResponse<string[]>(response, "Failed to search stock images");
+    } catch (error: unknown) {
       console.log("Stock image search error:", error);
       throw error;
     }

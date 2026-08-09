@@ -8,6 +8,13 @@ import {
   moveAdaptiveUnit as crudMoveUnit,
   addAdaptiveUnit as crudAddUnit,
 } from "@/lib/adaptiveBlockEdit";
+import type { AdaptiveChartPatch } from "@/lib/adaptiveBlockEdit";
+import type { ChartData } from "@/app/(presentation-generator)/components/EditableChart";
+import type { ImageEditorProperties } from "@/components/slide-editor/images/imageCrop";
+
+/** Mutable slide-content node walked by the path-based setters below: a plain
+ * object or an array, both indexed by the path segment (string key or number). */
+type ContentNode = Record<string | number, unknown>;
 
 export interface PresentationData {
   id: string;
@@ -15,7 +22,7 @@ export interface PresentationData {
   layout: {
     name: string;
     ordered: boolean;
-    slides: any[];
+    slides: unknown[];
   };
   n_slides: number;
   title: string;
@@ -116,7 +123,7 @@ const presentationGenerationSlice = createSlice({
 
         // Update indices for all slides to ensure they remain sequential
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide: any, idx: number) => ({
+          (slide: ContentNode, idx: number) => ({
             ...slide,
             index: idx,
           })
@@ -127,7 +134,7 @@ const presentationGenerationSlice = createSlice({
       if (state.presentationData) {
         state.presentationData.slides.splice(action.payload, 1);
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide: any, idx: number) => ({
+          (slide: ContentNode, idx: number) => ({
             ...slide,
             index: idx,
           })
@@ -168,7 +175,7 @@ const presentationGenerationSlice = createSlice({
     // values must stay numbers (not the strings updateSlideContent stores).
     updateSlideChart: (
       state,
-      action: PayloadAction<{ slideIndex: number; chart: any }>
+      action: PayloadAction<{ slideIndex: number; chart: ChartData }>
     ) => {
       if (
         state.presentationData &&
@@ -198,7 +205,7 @@ const presentationGenerationSlice = createSlice({
         const { dataPath, content } = action.payload;
 
         // Helper function to set nested property value
-        const setNestedValue = (obj: any, path: string, value: string) => {
+        const setNestedValue = (obj: ContentNode, path: string, value: string) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
 
@@ -210,14 +217,14 @@ const presentationGenerationSlice = createSlice({
               if (!current[key]) {
                 current[key] = {};
               }
-              current = current[key];
+              current = current[key] as ContentNode;
             } else {
               // Array index
               const index = Number(key);
               if (!current[index]) {
                 current[index] = {};
               }
-              current = current[index];
+              current = current[index] as ContentNode;
             }
           }
 
@@ -262,7 +269,7 @@ const presentationGenerationSlice = createSlice({
       action: PayloadAction<{
         slideIndex: number;
         blockId: string;
-        patch: { chartType?: string; data?: any[]; series?: string[] };
+        patch: AdaptiveChartPatch;
       }>
     ) => {
       const { slideIndex, blockId, patch } = action.payload;
@@ -294,14 +301,17 @@ const presentationGenerationSlice = createSlice({
       crudAddUnit(slide?.content?.blocks, action.payload.afterUnitId);
     },
 
-    addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
+    addNewSlide: (
+      state,
+      action: PayloadAction<{ slideData: ContentNode; index: number }>
+    ) => {
       if (state.presentationData?.slides) {
         // Insert the new slide at the specified index + 1 (after current slide)
         state.presentationData.slides.splice(action.payload.index + 1, 0, action.payload.slideData);
 
         // Update indices for all slides to ensure they remain sequential
         state.presentationData.slides = state.presentationData.slides.map(
-          (slide: any, idx: number) => ({
+          (slide: ContentNode, idx: number) => ({
             ...slide,
             index: idx,
           })
@@ -328,7 +338,7 @@ const presentationGenerationSlice = createSlice({
         const { dataPath, imageUrl, prompt } = action.payload;
 
         // Helper function to set nested property value for images
-        const setNestedImageValue = (obj: any, path: string, url: string, promptText?: string) => {
+        const setNestedImageValue = (obj: ContentNode, path: string, url: string, promptText?: string) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
 
@@ -339,19 +349,19 @@ const presentationGenerationSlice = createSlice({
               if (!current[key]) {
                 current[key] = {};
               }
-              current = current[key];
+              current = current[key] as ContentNode;
             } else {
               const index = Number(key);
               if (!current[index]) {
                 current[index] = {};
               }
-              current = current[index];
+              current = current[index] as ContentNode;
             }
           }
 
           // Set the image properties
           const finalKey = keys[keys.length - 1];
-          const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
+          const target = (isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)]) as ContentNode | undefined;
 
           // Preserve existing properties if the target already exists
           const updatedValue = {
@@ -388,7 +398,7 @@ const presentationGenerationSlice = createSlice({
       action: PayloadAction<{
         slideIndex: number;
         itemIndex: number;
-        properties: any;
+        properties: ImageEditorProperties;
       }>
     ) => {
       if (
@@ -425,7 +435,7 @@ const presentationGenerationSlice = createSlice({
         const { dataPath, iconUrl, query } = action.payload;
 
         // Helper function to set nested property value for icons
-        const setNestedIconValue = (obj: any, path: string, url: string, queryText?: string) => {
+        const setNestedIconValue = (obj: ContentNode, path: string, url: string, queryText?: string) => {
           const keys = path.split(/[.\[\]]+/).filter(Boolean);
           let current = obj;
 
@@ -436,19 +446,19 @@ const presentationGenerationSlice = createSlice({
               if (!current[key]) {
                 current[key] = {};
               }
-              current = current[key];
+              current = current[key] as ContentNode;
             } else {
               const index = Number(key);
               if (!current[index]) {
                 current[index] = {};
               }
-              current = current[index];
+              current = current[index] as ContentNode;
             }
           }
 
           // Set the icon properties
           const finalKey = keys[keys.length - 1];
-          const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
+          const target = (isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)]) as ContentNode | undefined;
 
           // Preserve existing properties if the target already exists
           const updatedValue = {

@@ -95,11 +95,13 @@ export function useWorkspaceCapability(
 ): {
   state: WorkspaceCapabilityState;
   capability: WorkspaceCapability;
+  refresh: () => void;
 } {
   const [state, setState] = useState<WorkspaceCapabilityState>(
     enabled ? "checking" : "disabled",
   );
   const [capability, setCapability] = useState(EMPTY_CAPABILITY);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -118,16 +120,18 @@ export function useWorkspaceCapability(
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         console.warn(
-          "Workspace capability check failed; chat-first writes remain disabled.",
+          "Workspace capability check failed; writes remain disabled.",
           error,
         );
         setCapability(EMPTY_CAPABILITY);
         setState("unavailable");
       });
     return () => controller.abort();
-  }, [enabled, presentationId]);
+  }, [enabled, presentationId, reloadToken]);
 
-  return { state, capability };
+  const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  return { state, capability, refresh };
 }
 
 function idempotencyKey(): string {

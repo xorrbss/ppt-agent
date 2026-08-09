@@ -1,9 +1,30 @@
 import { ApiResponseHandler } from "./api-error-handler"
 import { getHeader, getHeaderForFormData } from "./header"
 import { Theme, ThemeParams } from "./types"
+import type { ThemeColors } from "@/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/types"
 import { getApiUrl } from "@/utils/api"
 
 
+
+/**
+ * Response of `POST /theme/generate`: the 16 named colour roles. The index
+ * signature keeps it usable as a plain colour map by callers that compose a
+ * theme from an arbitrary palette.
+ */
+export interface GeneratedThemeColors extends ThemeColors {
+  [key: string]: string
+}
+
+/** Response of `POST /fonts/upload`. */
+export interface UploadedFontResponse {
+  font_name: string
+  font_url: string
+}
+
+/** Response of `GET /fonts/uploaded`. */
+export interface UserFontsResponse {
+  fonts: { name: string; url: string }[]
+}
 
 class ThemeApi {
 
@@ -13,7 +34,7 @@ class ThemeApi {
       headers: getHeader(),
       cache: "no-store",
     })
-    return await ApiResponseHandler.handleResponse(response, "Failed to get themes")
+    return await ApiResponseHandler.handleResponse<Theme[]>(response, "Failed to get themes")
   }
   static async createTheme(theme: ThemeParams) {
     try {
@@ -24,7 +45,7 @@ class ThemeApi {
         body: JSON.stringify(theme),
         cache: "no-store",
       })
-      return await ApiResponseHandler.handleResponse(response, "Failed to create theme")
+      return await ApiResponseHandler.handleResponse<Theme>(response, "Failed to create theme")
     }
     catch (error) {
       console.error("Error creating theme:", error)
@@ -39,7 +60,7 @@ class ThemeApi {
         body: JSON.stringify(theme),
         cache: "no-store",
       })
-      return await ApiResponseHandler.handleResponse(response, "Failed to update theme")
+      return await ApiResponseHandler.handleResponse<Theme>(response, "Failed to update theme")
     }
     catch (error) {
       console.error("Error updating theme:", error)
@@ -74,7 +95,7 @@ class ThemeApi {
         headers: getHeader(),
         body: JSON.stringify(body),
       })
-      return await ApiResponseHandler.handleResponse(response, "Failed to generate theme")
+      return await ApiResponseHandler.handleResponse<GeneratedThemeColors>(response, "Failed to generate theme")
     }
 
     catch (error) {
@@ -86,12 +107,12 @@ class ThemeApi {
     try {
       const formData = new FormData();
       formData.append("font_file", font);
-      const response: any = await fetch(getApiUrl(`/api/v1/ppt/fonts/upload`), {
+      const response = await fetch(getApiUrl(`/api/v1/ppt/fonts/upload`), {
         method: "POST",
         headers: getHeaderForFormData(),
         body: formData,
       })
-      return await ApiResponseHandler.handleResponse(response, "Failed to upload font")
+      return await ApiResponseHandler.handleResponse<UploadedFontResponse>(response, "Failed to upload font")
     }
     catch (error) {
       console.error("Error uploading font:", error)
@@ -104,7 +125,7 @@ class ThemeApi {
         method: "GET",
         headers: getHeader(),
       })
-      return await ApiResponseHandler.handleResponse(response, "Failed to get user fonts")
+      return await ApiResponseHandler.handleResponse<UserFontsResponse>(response, "Failed to get user fonts")
     }
     catch (error) {
       console.error("Error getting user fonts:", error)

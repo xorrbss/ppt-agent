@@ -54,7 +54,7 @@ const FinalStep = () => {
       if (window.electron?.setUserConfig) {
         await window.electron.setUserConfig({
           DISABLE_ANONYMOUS_TRACKING: enabled ? undefined : 'true',
-        } as any);
+        });
       } else {
         await fetch('/api/user-config', {
           method: 'POST',

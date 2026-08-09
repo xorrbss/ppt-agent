@@ -15,6 +15,16 @@ export type OutlineEventSourceFactory = (url: string) => EventSource;
 const createBrowserEventSource: OutlineEventSourceFactory = (url) =>
   new EventSource(url);
 
+/** Payloads pushed on the `response` SSE event by `/api/outline-stream/{id}`. */
+type OutlineStreamEvent =
+  | { type: "chunk"; chunk: string }
+  | {
+      type: "complete";
+      presentation: { outlines: { slides: { content: string }[] } };
+    }
+  | { type: "closing" }
+  | { type: "error"; detail?: string };
+
 export const useOutlineStreaming = (
   presentationId: string | null,
   createEventSource: OutlineEventSourceFactory = createBrowserEventSource
@@ -158,7 +168,7 @@ export const useOutlineStreaming = (
       );
 
       eventSource.addEventListener("response", (event) => {
-        let data: any;
+        let data: OutlineStreamEvent;
         try {
           data = JSON.parse(event.data);
         } catch {

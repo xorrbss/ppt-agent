@@ -22,7 +22,6 @@ import { findResumableGenerationTask } from "../hooks/durableGenerationTask";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
 import { resolveTemplateSelection } from "@/app/presentation-templates/select";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
 
 const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   const { presentation_id, outlines } = useSelector(
@@ -48,15 +47,7 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   const router = useRouter();
   const streamState = useOutlineStreaming(presentation_id);
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
-  const {
-    loadingState,
-    handleSubmit,
-    cancelGeneration,
-    resumableTask,
-    rolloutMode,
-    generationEnabled,
-    refreshRollout,
-  } =
+  const { loadingState, handleSubmit, cancelGeneration } =
     usePresentationGeneration(
       presentation_id,
       outlines,
@@ -97,7 +88,7 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   // completed auto flow), don't re-fire generation — show the outline instead.
   const outlinesPreexistingRef = useRef(outlines.length > 0);
   useEffect(() => {
-    if (!auto || autoSubmittedRef.current || !generationEnabled) return;
+    if (!auto || autoSubmittedRef.current) return;
     if (outlinesPreexistingRef.current) return;
     if (!presentation_id || streamState.isStreaming) return;
     if (!streamState.hasCompleted) return;
@@ -112,7 +103,6 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     streamState.hasCompleted,
     outlines,
     generationTemplate,
-    generationEnabled,
     handleSubmit,
   ]);
 
@@ -184,19 +174,6 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
 
   };
 
-  // Interrupted-but-resumable generation: a same-key re-submit resumes the
-  // server-side slide checkpoints, so the banner reuses handleSubmit as-is.
-  const resumeProgress = resumableTask?.lastProgress;
-  const resumeBannerText = resumableTask
-    ? resumeProgress &&
-      Number.isFinite(resumeProgress.completed_slides) &&
-      Number.isFinite(resumeProgress.total_slides) &&
-      resumeProgress.total_slides > 0
-      ? `이전 생성이 슬라이드 ${resumeProgress.completed_slides}/${resumeProgress.total_slides}에서 중단되었습니다. 이어서 생성할 수 있습니다.`
-      : "이전 생성이 중단되었습니다. 이어서 생성할 수 있습니다."
-    : null;
-
-
   return (
     <div className=" font-syne  pb-9">
 
@@ -236,39 +213,6 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
               </div>
             </div>
 
-            {resumeBannerText && !loadingState.isLoading && (
-              <div
-                data-cy="resume-generation-banner"
-                className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#EDEEEF] bg-[#F4F3FF] px-5 py-3"
-              >
-                <p className="text-sm font-medium text-[#2D2D2D]">
-                  {resumeBannerText}
-                </p>
-                <Button
-                  onClick={() => void handleSubmit()}
-                  disabled={!generationEnabled}
-                  className="h-9 rounded-full bg-[#7E3AF2] px-5 text-xs font-medium text-white shadow-none hover:bg-[#7E3AF2] hover:opacity-90"
-                >
-                  이어서 생성
-                </Button>
-              </div>
-            )}
-
-            {rolloutMode === "checking" ? (
-              <p className="mb-4 text-sm text-[#667085]" role="status" aria-live="polite">
-                작업 공간 연결을 확인하는 중입니다.
-              </p>
-            ) : rolloutMode === "blocked" ? (
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3" role="alert">
-                <p className="text-sm text-amber-800">
-                  작업 공간을 안전하게 연결할 수 없어 생성을 시작하지 않았습니다.
-                </p>
-                <Button type="button" variant="outline" size="sm" onClick={() => void refreshRollout()}>
-                  다시 확인
-                </Button>
-              </div>
-            ) : null}
-
             <div className="w-full mx-auto">
               <TabsContent value={TABS.OUTLINE} className="mt-0">
                 <OutlineContent
@@ -297,7 +241,6 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
               streamState={streamState}
               selectedTemplate={selectedTemplate}
               onSubmit={handleSubmit}
-              generationEnabled={generationEnabled}
             />
           </div>
         </div>

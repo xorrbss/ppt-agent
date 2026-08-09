@@ -187,10 +187,11 @@ export default function CodexConfig({
         "ChatGPT 로그인 완료",
         "ChatGPT 계정이 연결되어 사용할 준비가 되었습니다."
       );
-    } catch (err: any) {
+    } catch (err) {
       notify.error(
         "로그인 실패",
-        err.message || "인증 코드를 처리할 수 없습니다. 다시 시도해 주세요."
+        (err instanceof Error ? err.message : "") ||
+          "인증 코드를 처리할 수 없습니다. 다시 시도해 주세요."
       );
     } finally {
       setIsExchanging(false);

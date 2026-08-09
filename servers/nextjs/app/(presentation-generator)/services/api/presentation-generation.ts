@@ -18,6 +18,27 @@ export type BlankPresentationResponse = {
   slides: Array<Record<string, unknown>>;
 };
 
+/** Layout descriptor sent to `/presentation/prepare` (one entry per selectable layout). */
+export type PresentationPrepareLayoutSlide = {
+  id: string;
+  name: string;
+  description: string;
+  templateID: string;
+  templateName: string;
+  json_schema: unknown;
+};
+
+export type PresentationPrepareRequest = {
+  presentation_id: string;
+  outlines: { content: string }[] | null;
+  layout: {
+    name: string;
+    ordered: boolean;
+    icon_weight: string;
+    slides: PresentationPrepareLayoutSlide[];
+  };
+};
+
 export type GenerationStage =
   "author" | "illustrate" | "render" | "persist" | "finalize" | "completed";
 
@@ -49,7 +70,7 @@ export type GenerationStatusResponse = {
   status: string;
   message?: string | null;
   error?: GenerationFailure | Record<string, unknown> | null;
-  data?: Record<string, any> | null;
+  data?: Record<string, unknown> | null;
   request_id?: string;
   progress?: GenerationProgress | null;
   failure?: GenerationFailure | null;
@@ -476,7 +497,10 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async updatePresentationContent(body: any) {
+  // The payload is a presentation patch serialized as-is (callers send either a
+  // full PresentationData snapshot or a partial such as `{ id, theme }`), so the
+  // only contract this method relies on is "JSON-serializable".
+  static async updatePresentationContent(body: unknown) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/update`),
@@ -802,7 +826,9 @@ export class PresentationGenerationApi {
     );
   }
 
-  static async presentationPrepare(presentationData: any) {
+  static async presentationPrepare(
+    presentationData: PresentationPrepareRequest,
+  ) {
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/prepare`),

@@ -1,5 +1,6 @@
 export { default as WorkspaceChatPanel } from "./WorkspaceChatPanel";
 export { useWorkspaceCapability } from "./useWorkspace";
+export type { WorkspaceAgentSlideFocus } from "./useWorkspaceAgentFocus";
 export type {
   WorkspaceCommandDispatcher,
   WorkspaceCommandOptions,

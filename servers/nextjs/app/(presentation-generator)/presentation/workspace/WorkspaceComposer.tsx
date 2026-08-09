@@ -1,4 +1,4 @@
-import { FormEvent, RefObject, useState } from "react";
+import { FormEvent, RefObject } from "react";
 
 interface ComposerAsset {
   assetId: string;
@@ -12,6 +12,10 @@ interface WorkspaceComposerProps {
   uploadError?: string | null;
   assets?: ComposerAsset[];
   fileInputRef?: RefObject<HTMLInputElement | null>;
+  /** Owned by the panel so suggestion chips can seed the draft. */
+  value: string;
+  onValueChange: (value: string) => void;
+  textareaRef?: RefObject<HTMLTextAreaElement | null>;
   onFilesSelected?: (files: File[]) => Promise<void> | void;
   onRemoveAsset?: (assetId: string) => void;
   onSend: (command: string) => Promise<void>;
@@ -23,19 +27,20 @@ export function WorkspaceComposer({
   uploadError,
   assets = [],
   fileInputRef,
+  value,
+  onValueChange,
+  textareaRef,
   onFilesSelected,
   onRemoveAsset,
   onSend,
 }: WorkspaceComposerProps) {
-  const [value, setValue] = useState("");
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const command = value.trim();
     if (!command || disabled) return;
     try {
       await onSend(command);
-      setValue("");
+      onValueChange("");
     } catch {
       // The timeline hook renders the durable request error next to the input.
     }
@@ -93,10 +98,17 @@ export function WorkspaceComposer({
       </label>
       <textarea
         id="workspace-command"
+        ref={textareaRef}
         value={value}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => onValueChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
+          // Skip while an IME composition is active so confirming Korean input
+          // does not submit the half-written command.
+          if (
+            event.key === "Enter" &&
+            !event.shiftKey &&
+            !event.nativeEvent.isComposing
+          ) {
             event.preventDefault();
             event.currentTarget.form?.requestSubmit();
           }

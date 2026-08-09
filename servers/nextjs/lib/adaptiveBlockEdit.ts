@@ -14,7 +14,10 @@ export interface AdaptiveBlock {
   id?: string;
   text?: string;
   items?: AdaptiveBlock[];
-  [key: string]: any;
+  // Authored blocks carry arbitrary extra fields (type, heading, chartType,
+  // data, series, icon, …) whose set is template-defined, so the tail is
+  // untyped — `unknown` forces callers to narrow before use.
+  [key: string]: unknown;
 }
 
 /** Write `content` to the leaf addressed by `blockId`. Returns true if applied. */
@@ -54,9 +57,17 @@ export function setAdaptiveBlockText(
   return false;
 }
 
+/** One chart data point: a category name plus either a single `value`
+ *  (single-series) or a `values[]` aligned to the block's `series[]`. */
+export interface AdaptiveChartRow {
+  name?: string;
+  value?: number;
+  values?: number[];
+}
+
 export interface AdaptiveChartPatch {
   chartType?: string;
-  data?: any[];
+  data?: AdaptiveChartRow[];
   series?: string[];
 }
 
@@ -79,7 +90,7 @@ export function setAdaptiveChartBlock(
 
 /** Read the current value for `blockId` from a slide content object. */
 export function getAdaptiveBlockText(
-  content: any,
+  content: { blocks?: AdaptiveBlock[] } | null | undefined,
   blockId: string
 ): string | undefined {
   const blocks = content?.blocks;
@@ -88,15 +99,17 @@ export function getAdaptiveBlockText(
   for (const b of blocks) {
     if (b && b.id === blockId && typeof b.text === "string") return b.text;
     if (b && Array.isArray(b.items)) {
-      const item = b.items.find((x: any) => x && x.id === blockId);
+      const item = b.items.find((x) => x && x.id === blockId);
       if (item) return item.text;
     }
   }
 
   const dot = blockId.lastIndexOf(".");
   if (dot > 0) {
-    const b = blocks.find((x: any) => x && x.id === blockId.slice(0, dot));
-    if (b) return b[blockId.slice(dot + 1)];
+    const b = blocks.find((x) => x && x.id === blockId.slice(0, dot));
+    // Dotted fields are authored as text; the value is returned verbatim (the
+    // assertion keeps the pre-existing pass-through, no runtime narrowing).
+    if (b) return b[blockId.slice(dot + 1)] as string | undefined;
   }
   return undefined;
 }
@@ -137,10 +150,10 @@ function cloneEmptyUnit(sibling: AdaptiveBlock, freshId: string): AdaptiveBlock 
   const u: AdaptiveBlock = { ...sibling, id: freshId };
   for (const k of Object.keys(u)) {
     if (k === "id" || k === "type") continue;
-    const v = (u as any)[k];
-    if (typeof v === "string") (u as any)[k] = "";
-    else if (Array.isArray(v)) (u as any)[k] = [];
-    else delete (u as any)[k];
+    const v = u[k];
+    if (typeof v === "string") u[k] = "";
+    else if (Array.isArray(v)) u[k] = [];
+    else delete u[k];
   }
   return u;
 }
