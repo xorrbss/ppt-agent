@@ -76,6 +76,13 @@ def configure_file_logging(log_level: str) -> RotatingFileHandler | None:
             existing_handler.setLevel(numeric_level)
             return existing_handler
 
+    # Establish the normal console sink before adding the file sink. The
+    # lifespan later calls logging.basicConfig(), but that is a no-op once any
+    # root handler exists. Without this ordering, application records only
+    # reach backend.log while uvicorn's own handlers make the console appear
+    # healthy.
+    logging.basicConfig(level=numeric_level)
+
     handler = RotatingFileHandler(
         log_path,
         maxBytes=BACKEND_LOG_MAX_BYTES,

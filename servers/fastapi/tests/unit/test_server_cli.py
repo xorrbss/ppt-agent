@@ -76,3 +76,38 @@ def test_configure_file_logging_writes_rotating_backend_log(monkeypatch, tmp_pat
     finally:
         logging.getLogger().removeHandler(handler)
         handler.close()
+
+
+def test_configure_file_logging_keeps_console_and_file_sinks(
+    monkeypatch, tmp_path, capsys
+):
+    module, _ = load_server_module(monkeypatch)
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path))
+    root_logger = logging.getLogger()
+    monkeypatch.setattr(root_logger, "handlers", [])
+    original_level = root_logger.level
+
+    try:
+        file_handler = module.configure_file_logging("info")
+        assert file_handler is not None
+        console_handlers = [
+            handler
+            for handler in root_logger.handlers
+            if isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, module.RotatingFileHandler)
+        ]
+        assert len(console_handlers) == 1
+
+        logging.getLogger("services.dual_sink_probe").info("dual_sink_probe")
+        for handler in root_logger.handlers:
+            handler.flush()
+
+        assert "dual_sink_probe" in capsys.readouterr().err
+        assert "dual_sink_probe" in (
+            tmp_path / "logs" / "backend.log"
+        ).read_text(encoding="utf-8")
+    finally:
+        for handler in list(root_logger.handlers):
+            root_logger.removeHandler(handler)
+            handler.close()
+        root_logger.setLevel(original_level)
