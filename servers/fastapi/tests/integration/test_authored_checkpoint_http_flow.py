@@ -25,6 +25,15 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
+from models.sql.workspace import (
+    WorkspaceAsset,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceMessageAttachment,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
 from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_service as authored
 from services import database
@@ -97,6 +106,16 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                     AuthoredSlideCheckpoint.__table__,
                     PresentationModel.__table__,
                     SlideModel.__table__,
+                    # A bare generate (no presentation_id) now bootstraps its own
+                    # deck and workspace anchor, so this schema must carry the
+                    # workspace tables the real app creates.
+                    WorkspaceConversation.__table__,
+                    WorkspaceMessage.__table__,
+                    WorkspaceAsset.__table__,
+                    WorkspaceMessageAttachment.__table__,
+                    WorkspaceOperation.__table__,
+                    WorkspaceOperationEvent.__table__,
+                    WorkspaceOutbox.__table__,
                 ],
             )
         maker = async_sessionmaker(engine, expire_on_commit=False)

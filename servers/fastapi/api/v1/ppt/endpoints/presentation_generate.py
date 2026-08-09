@@ -19,6 +19,7 @@ import traceback
 import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from pathlib import PurePosixPath
 from time import perf_counter
 from typing import Any, List, Optional, Tuple
 
@@ -61,6 +62,7 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
 from models.sql.template import TemplateModel
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
+from models.workspace import WorkspaceBootstrapRequest
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     progress_for_task,
@@ -118,12 +120,17 @@ from services.workspace_artifact_publication_service import (
     stage_workspace_chat_artifacts_for_publication,
     workspace_chat_artifacts_were_published,
 )
+from services.workspace_asset_service import import_workspace_document_asset
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
 )
 from services.workspace_operation_runner import (
     append_operation_event,
     wake_workspace_operation_runner,
+)
+from services.workspace_service import (
+    WorkspaceServiceError,
+    bootstrap_workspace,
 )
 from services.workspace_runtime_profile import (
     UnsupportedWorkspaceRuntimeError,
@@ -2132,6 +2139,90 @@ async def _resume_failed_authored_job(
     return True
 
 
+async def _bootstrap_generation_workspace(
+    sql_session: AsyncSession,
+    request: GeneratePresentationRequest,
+) -> uuid.UUID:
+    """Mint the deck and awaiting-approval anchor an API-only generate needs.
+
+    The web client calls ``POST /presentation/create`` first, so it always has a
+    ``presentation_id`` to hand to generation. API and CLI callers post a bare
+    prompt; rejecting those would delete the documented one-call generate flow
+    that ``scripts/ppt-agent.mjs`` depends on. Create the same staging deck and
+    ``presentation.generate`` bootstrap operation here instead. The runner stays
+    the only writer -- it just receives its timeline anchor from this call rather
+    than from an earlier HTTP round trip.
+
+    Composes into the caller's transaction (``commit=False``): if enqueueing the
+    job then fails, the deck and its anchor roll back with it.
+    """
+
+    presentation_id = uuid.uuid4()
+    asset_ids: list[uuid.UUID] = []
+    durable_file_paths: list[str] = []
+    for path in request.files or []:
+        asset, durable_path = await import_workspace_document_asset(
+            sql_session,
+            source_path=path,
+            original_name=PurePosixPath(path.replace("\\", "/")).name,
+        )
+        durable_file_paths.append(str(durable_path))
+        asset_ids.append(asset.id)
+
+    presentation = PresentationModel(
+        id=presentation_id,
+        content=request.content,
+        # The column is an int; 0 is the internal marker for an auto slide count.
+        n_slides=request.n_slides if request.n_slides is not None else 0,
+        language=(request.language or "").strip(),
+        file_paths=durable_file_paths or None,
+        tone=request.tone.value,
+        verbosity=request.verbosity.value,
+        instructions=request.instructions,
+        include_table_of_contents=request.include_table_of_contents,
+        include_title_slide=request.include_title_slide,
+        web_search=request.web_search,
+        lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+    )
+    sql_session.add(presentation)
+    await sql_session.flush()
+
+    try:
+        await bootstrap_workspace(
+            sql_session,
+            presentation_id=presentation_id,
+            request=WorkspaceBootstrapRequest(
+                idempotency_key=f"presentation-generate:{presentation_id}",
+                prompt=(
+                    request.content
+                    if request.content.strip()
+                    else "Generate a presentation from the attached files."
+                ),
+                generation_settings={
+                    "n_slides": request.n_slides,
+                    "language": request.language,
+                    "tone": request.tone.value,
+                    "verbosity": request.verbosity.value,
+                    "instructions": request.instructions,
+                    "include_table_of_contents": request.include_table_of_contents,
+                    "include_title_slide": request.include_title_slide,
+                    "web_search": request.web_search,
+                },
+                asset_ids=asset_ids,
+                operation_type="presentation.generate",
+                expected_revision=presentation.revision,
+            ),
+            commit=False,
+            initial_operation_state="awaiting_approval",
+        )
+    except WorkspaceServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=error.code,
+        ) from error
+    return presentation_id
+
+
 async def queue_presentation_generation(
     request: GeneratePresentationRequest,
     background_tasks: BackgroundTasks,
@@ -2155,11 +2246,9 @@ async def queue_presentation_generation(
     # projected into that card.
     if not chat_first_enabled:
         _validate_authored_exact_admission(request)
-    if chat_first_enabled and request.presentation_id is None:
-        raise HTTPException(
-            status_code=422,
-            detail="chat_first_presentation_id_required",
-        )
+    # The fingerprint is taken before any deck is minted, so a replay under the
+    # same idempotency key matches the stored job instead of bootstrapping a
+    # second deck.
     submitted_payload = _durable_request_payload(request)
     fingerprint = request_sha256(submitted_payload)
     key_error: HTTPException | None = None
@@ -2237,7 +2326,13 @@ async def queue_presentation_generation(
     admitted_presentation: PresentationModel | None = None
     workspace_operation: WorkspaceOperation | None = None
     if chat_first_enabled:
-        assert request.presentation_id is not None
+        if request.presentation_id is None:
+            # A bare API/CLI generate carries no deck. Mint one plus its
+            # bootstrap anchor so the lookup below resolves exactly as it does
+            # for a web client that created the deck in an earlier request.
+            request.presentation_id = await _bootstrap_generation_workspace(
+                sql_session, request
+            )
         presentation_id = request.presentation_id
         admitted_presentation = await sql_session.get(
             PresentationModel,
