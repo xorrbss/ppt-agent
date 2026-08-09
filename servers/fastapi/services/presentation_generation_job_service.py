@@ -562,7 +562,13 @@ async def project_workspace_linked_generation_failed(
     job.lease_expires_at = None
     job.heartbeat_at = now
     job.failed_at = now
-    job.last_error = {"code": safe_code}
+    # An authored stage failure already recorded which slide and stage failed.
+    # Replacing that with a bare code strips the only detail that tells a user
+    # where to look, so keep the richer record whenever one exists.
+    recorded = job.last_error if isinstance(job.last_error, dict) else None
+    job.last_error = (
+        recorded if recorded and recorded.get("code") else {"code": safe_code}
+    )
     job.updated_at = now
     task.status = "error"
     task.message = "Presentation generation failed"

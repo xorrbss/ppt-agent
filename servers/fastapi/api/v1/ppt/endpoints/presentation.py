@@ -126,15 +126,20 @@ async def _notify_slide_assets_ready(
     await asset_events.put((slide_index, generated_assets))
 
 
-@PRESENTATION_ROUTER.post("/prepare", response_model=PresentationModel)
-async def prepare_presentation(
-    presentation_id: Annotated[uuid.UUID, Body()],
-    outlines: Annotated[List[SlideOutlineModel], Body()],
-    layout: Annotated[PresentationLayoutModel, Body()],
-    title: Annotated[Optional[str], Body()] = None,
-    sql_session: AsyncSession = Depends(get_async_session),
-):
-    require_legacy_presentation_write_path(presentation_id)
+async def apply_presentation_prepare(
+    presentation_id: uuid.UUID,
+    outlines: List[SlideOutlineModel],
+    layout: PresentationLayoutModel,
+    title: Optional[str],
+    sql_session: AsyncSession,
+) -> PresentationModel:
+    """Compose an outline into a deck's persisted structure.
+
+    This boundary intentionally performs no route/write-gate check, mirroring
+    `apply_presentation_update`: the HTTP route applies the runner-only gate,
+    while an already-authorized caller reaches the same composition and
+    persistence directly.
+    """
     if not outlines:
         raise HTTPException(status_code=400, detail="Outlines are required")
 
@@ -191,6 +196,24 @@ async def prepare_presentation(
     )
 
     return presentation
+
+
+@PRESENTATION_ROUTER.post("/prepare", response_model=PresentationModel)
+async def prepare_presentation(
+    presentation_id: Annotated[uuid.UUID, Body()],
+    outlines: Annotated[List[SlideOutlineModel], Body()],
+    layout: Annotated[PresentationLayoutModel, Body()],
+    title: Annotated[Optional[str], Body()] = None,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    require_legacy_presentation_write_path(presentation_id)
+    return await apply_presentation_prepare(
+        presentation_id,
+        outlines,
+        layout,
+        title,
+        sql_session,
+    )
 
 
 @PRESENTATION_ROUTER.get(
