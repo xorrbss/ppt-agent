@@ -1,3 +1,5 @@
+import type { TemplateV2DataLabelPosition } from "./template-v2-html/template-v2-contract.generated";
+
 export interface TemplateV2PlanFrame {
   x: number;
   y: number;
@@ -39,7 +41,7 @@ export interface TemplateV2RenderPlanNode {
     yAxisTitle: string | null;
     xAxisGrid: boolean;
     yAxisGrid: boolean;
-    dataLabels: "base" | "mid" | "top" | "outside" | null;
+    dataLabels: TemplateV2DataLabelPosition | null;
     legend: boolean;
     source: string | null;
     horizontal: boolean;

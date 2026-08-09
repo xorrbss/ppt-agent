@@ -12,6 +12,8 @@ import uuid
 
 import sqlalchemy as sa
 
+from templates.v2.models.elements import ChartType, DataLabelPosition
+
 
 SLIDE_UI_CHECK_CONSTRAINT = "ck_slides_native_ui_or_authored_html"
 SLIDE_UI_CHECK_SQL = "ui IS NULL OR html_content IS NULL OR html_content = ''"
@@ -963,22 +965,7 @@ def require_template_v2_legacy_provenance_drop_data_ready(connection) -> None:
 # Fail-closed chart/table mutation contract.
 # Unknown JSON fields are cloned and retained; only known unsafe state is
 # rejected or, for an explicit chart-type transition, deliberately cleared.
-CHART_TYPES = frozenset(
-    {
-        "area",
-        "bar",
-        "bubble",
-        "donut",
-        "horizontal_bar",
-        "horizontal_stacked_bar",
-        "line",
-        "pie",
-        "polar_area",
-        "radar",
-        "scatter",
-        "stacked_bar",
-    }
-)
+CHART_TYPES = frozenset(chart_type.value for chart_type in ChartType)
 AXIS_CHART_TYPES = frozenset(
     {
         "area",
@@ -989,7 +976,7 @@ AXIS_CHART_TYPES = frozenset(
         "stacked_bar",
     }
 )
-DATA_LABEL_POSITIONS = frozenset({"base", "mid", "top", "outside"})
+DATA_LABEL_POSITIONS = frozenset(position.value for position in DataLabelPosition)
 AXIS_FIELDS = (
     "x_axis",
     "y_axis",

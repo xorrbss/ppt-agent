@@ -59,6 +59,14 @@ test("uses git file discovery in a repository worktree", async () => {
   assert.deepEqual(await checkRatchet(root, baselinePath), []);
 });
 
+test("ignores tracked files deleted from the working tree", async () => {
+  const { root, baselinePath } = await fixture({ "src/deleted.ts": lines(501) }, {});
+  execFileSync("git", ["init", "--quiet"], { cwd: root });
+  execFileSync("git", ["add", "src/deleted.ts"], { cwd: root });
+  await rm(path.join(root, "src/deleted.ts"));
+  assert.deepEqual(await checkRatchet(root, baselinePath), []);
+});
+
 test("excludes tests, generated files, vendor files, and migrations", async () => {
   const { root, baselinePath } = await fixture({
     "src/example.test.ts": lines(501),

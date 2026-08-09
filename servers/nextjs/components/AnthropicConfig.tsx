@@ -19,7 +19,6 @@ import { getApiUrl } from "@/utils/api";
 interface AnthropicConfigProps {
   anthropicApiKey: string;
   anthropicModel: string;
-  extendedReasoning: boolean;
   webGrounding?: boolean;
   onInputChange: (value: string | boolean, field: string) => void;
 }
@@ -236,16 +235,6 @@ export default function AnthropicConfig({
                 웹 그라운딩 사용
               </label>
             </div>
-            {/* Extended Reasoning Toggle */}
-            {/* <div className="flex items-center  mb-4 gap-2.5 ">
-              <Switch
-                checked={extendedReasoning}
-                onCheckedChange={(checked) => onInputChange(checked, "extended_reasoning")}
-              />
-              <label className="text-sm font-medium text-gray-700">
-                Extended Reasoning
-              </label>
-            </div> */}
           </div>
           <div className="w-[295px]"></div>
         </div>

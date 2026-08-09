@@ -51,6 +51,9 @@ jobs:
     - name: Install locked Python dependencies
       run: uv sync --frozen
 
+    - name: Check generated Template V2 contracts
+      run: uv run python ../../contracts/template_v2/generate.py --check
+
     - name: Run Ruff lint gate (E, F, B, ASYNC)
       run: uv run ruff check .
 

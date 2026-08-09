@@ -35,9 +35,11 @@ def upstream_fixture() -> dict:
 
 def test_fixture_is_pinned_to_the_reviewed_upstream_contract(upstream_fixture):
     assert upstream_fixture["upstream_sha"] == UPSTREAM_TEMPLATE_V2_SHA
-    assert {
+    fixture_discriminators = {
         element["type"] for element in upstream_fixture["elements"]
-    } == ELEMENT_DISCRIMINATORS
+    }
+    assert fixture_discriminators < ELEMENT_DISCRIMINATORS
+    assert ELEMENT_DISCRIMINATORS - fixture_discriminators == {"math"}
     assert len(upstream_fixture["elements"]) == 11
 
 
@@ -57,6 +59,21 @@ def test_all_upstream_discriminators_round_trip_without_field_loss(
     assert wire.discriminator == source["type"]
     assert stored == source
     assert loaded.to_wire_value() == source
+
+
+def test_local_math_discriminator_uses_the_strict_pydantic_contract():
+    source = {
+        "type": "math",
+        "latex": "x^2",
+        "decorative": False,
+        "name": "equation",
+    }
+
+    wire = decode_wire_element(source)
+
+    assert wire.discriminator == "math"
+    assert wire.to_wire_value() == source
+    assert wire.validate_strict().type == "math"
 
 
 def test_unknown_fields_are_preserved_recursively_and_copies_are_isolated(

@@ -1,3 +1,9 @@
+import type {
+  TemplateV2ChartType,
+  TemplateV2DataLabelPosition,
+  TemplateV2InfographicType,
+} from "@/lib/template-v2-html/template-v2-contract.generated";
+
 // Template V2 editor geometry is stored in canvas pixels.
 export const EDITOR_STAGE_WIDTH = 1280;
 export const EDITOR_STAGE_HEIGHT = 720;
@@ -24,20 +30,8 @@ export type Marker = "bullet" | "number" | "none";
 export type FlexDirection = "row" | "column";
 export type ImageFit = "contain" | "cover" | "fill";
 export type IconType = "bold" | "duotone" | "fill" | "light" | "regular" | "thin";
-export type ChartType =
-  | "area"
-  | "bar"
-  | "bubble"
-  | "donut"
-  | "horizontal_bar"
-  | "horizontal_stacked_bar"
-  | "line"
-  | "pie"
-  | "polar_area"
-  | "radar"
-  | "scatter"
-  | "stacked_bar";
-export type InfographicType = "progress_bar" | "gauge";
+export type ChartType = TemplateV2ChartType;
+export type InfographicType = TemplateV2InfographicType;
 
 export type ProgressBarInfographicData = {
   type: "progress_bar";
@@ -146,7 +140,7 @@ export type ChartSeries = {
   values: number[];
 };
 
-export type DataLabelPosition = "base" | "mid" | "top" | "outside";
+export type DataLabelPosition = TemplateV2DataLabelPosition;
 
 export type TextRun = {
   text: string;

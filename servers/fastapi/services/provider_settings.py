@@ -1,13 +1,19 @@
+import asyncio
 import logging
 from typing import Any
+from weakref import WeakKeyDictionary
 
+from pydantic import ValidationError
 from sqlalchemy import create_engine, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.provider_settings import ProviderSettings
+from models.user_config import UserConfig
+from constants.settings_registry import get_settings_registry
 from utils.datetime_utils import get_current_utc_datetime
 from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
 from utils.get_env import get_user_config_path_env
+from utils.runtime_settings import coerce_runtime_setting
 from utils.user_config_store import read_user_config_file, update_user_config_file
 
 
@@ -28,14 +34,69 @@ EMPTY_VALUE_PRESERVED_FIELDS = {
     "OPEN_WEBUI_IMAGE_API_KEY",
     "CODEX_MODEL",
 }
+PROVIDER_SETTING_KEYS = frozenset(
+    entry["key"]
+    for entry in get_settings_registry()
+    if {
+        "start.user_config",
+        "user_config.managed",
+        "user_config.ui",
+    }.intersection(entry["targets"])
+)
+SECRET_SETTING_KEYS = frozenset(
+    entry["key"] for entry in get_settings_registry() if entry["secret"]
+)
+REDACTED_SECRET_PLACEHOLDER = "__configured__"
+_UPDATE_LOCKS: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
+    WeakKeyDictionary()
+)
+
+
+class ProviderSettingsValidationError(ValueError):
+    def __init__(self, key: str):
+        super().__init__(f"Invalid provider setting: {key}")
+
+
+def get_provider_settings_update_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _UPDATE_LOCKS.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _UPDATE_LOCKS[loop] = lock
+    return lock
 
 
 def sanitize_provider_settings(config: dict[str, Any]) -> dict[str, Any]:
-    """Keep provider/runtime settings and exclude every legacy auth field."""
-    return {
+    """Allow only registry-declared provider settings and validate their types."""
+    filtered = {
         key: value
         for key, value in config.items()
-        if not key.upper().startswith("AUTH_")
+        if key in PROVIDER_SETTING_KEYS
+    }
+    try:
+        validated = UserConfig(**filtered).model_dump(exclude_none=True)
+    except ValidationError as error:
+        location = error.errors()[0].get("loc", ("unknown",))
+        raise ProviderSettingsValidationError(str(location[0])) from None
+
+    result: dict[str, Any] = {}
+    for key, value in validated.items():
+        try:
+            coerced = coerce_runtime_setting(key, value)
+        except (TypeError, ValueError):
+            raise ProviderSettingsValidationError(key) from None
+        result[key] = value if value == "" else coerced
+    return result
+
+
+def redact_provider_settings(config: dict[str, Any]) -> dict[str, Any]:
+    """Return API-safe settings with configured secrets represented write-only."""
+    sanitized = sanitize_provider_settings(config)
+    return {
+        key: REDACTED_SECRET_PLACEHOLDER
+        if key in SECRET_SETTING_KEYS and value
+        else value
+        for key, value in sanitized.items()
     }
 
 
@@ -45,6 +106,13 @@ def merge_provider_settings(
     """Preserve the previous settings API's patch and managed-token behavior."""
     sanitized = sanitize_provider_settings(incoming)
     merged = {**sanitize_provider_settings(existing), **sanitized}
+
+    for key in SECRET_SETTING_KEYS:
+        if sanitized.get(key) == REDACTED_SECRET_PLACEHOLDER:
+            if existing.get(key):
+                merged[key] = existing[key]
+            else:
+                merged.pop(key, None)
 
     for key in CODEX_MANAGED_FIELDS:
         if key in existing:
@@ -83,7 +151,7 @@ async def migrate_provider_settings_from_file(session: AsyncSession) -> dict[str
     path = get_user_config_path_env()
 
     if row is None:
-        legacy_config = read_user_config_file(path) if path else {}
+        legacy_config = await asyncio.to_thread(read_user_config_file, path) if path else {}
         row = ProviderSettings(
             id=PROVIDER_SETTINGS_ID,
             config=sanitize_provider_settings(legacy_config),
@@ -100,7 +168,7 @@ async def migrate_provider_settings_from_file(session: AsyncSession) -> dict[str
             await session.commit()
 
     config = dict(row.config or {})
-    _mirror_to_legacy_file(config)
+    await asyncio.to_thread(_mirror_to_legacy_file, config)
     return config
 
 
@@ -128,7 +196,7 @@ async def save_provider_settings(
     await session.refresh(row)
 
     config = dict(row.config or {})
-    _mirror_to_legacy_file(config)
+    await asyncio.to_thread(_mirror_to_legacy_file, config)
     return config
 
 

@@ -6,6 +6,7 @@ import {
   renderTemplateV2GeneralPresentationHtml,
   renderTemplateV2GeneralSlideCanvasHtml,
 } from "./template-v2-general-renderer.mjs";
+import { TEMPLATE_V2_ELEMENT_TYPES } from "./template-v2-html/template-v2-contract.generated.mjs";
 
 const run = (text) => ({ text });
 const frame = { position: { x: 10, y: 20 }, size: { width: 240, height: 120 } };
@@ -20,20 +21,7 @@ function slideWith(elements) {
 }
 
 test("renderer covers every strict Template V2 element discriminator", () => {
-  assert.deepEqual(TEMPLATE_V2_RENDERED_ELEMENT_TYPES, [
-    "text",
-    "math",
-    "container",
-    "image",
-    "text-list",
-    "table",
-    "vector",
-    "chart",
-    "infographic",
-    "flex",
-    "grid",
-    "group",
-  ]);
+  assert.deepEqual(TEMPLATE_V2_RENDERED_ELEMENT_TYPES, TEMPLATE_V2_ELEMENT_TYPES);
 
   const elements = [
     { type: "text", ...frame, runs: [run("plain")], name: "text" },

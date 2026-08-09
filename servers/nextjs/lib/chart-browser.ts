@@ -1,3 +1,8 @@
+import {
+  TEMPLATE_V2_DATA_LABEL_POSITIONS,
+  type TemplateV2DataLabelPosition,
+} from "./template-v2-html/template-v2-contract.generated.ts";
+
 export const CHART_BROWSER_SCRIPT_URL = "/vendor/chart-4.5.1.umd.min.js";
 export const CHART_DATALABELS_SCRIPT_URL =
   "/vendor/chartjs-plugin-datalabels-2.2.0.min.js";
@@ -57,7 +62,9 @@ export type PresentonDataLabelOptions = {
   position?: DataLabelPosition;
 };
 
-export type DataLabelPosition = "base" | "mid" | "top" | "outside";
+export type DataLabelPosition = TemplateV2DataLabelPosition;
+
+const DATA_LABEL_POSITIONS = new Set<string>(TEMPLATE_V2_DATA_LABEL_POSITIONS);
 
 type Point = { x: number; y: number };
 type Bounds = { left: number; right: number; top: number; bottom: number };
@@ -472,11 +479,8 @@ function isArcType(type: string): boolean {
 }
 
 function readDataLabelPosition(value: unknown): DataLabelPosition {
-  return value === "base" ||
-    value === "mid" ||
-    value === "outside" ||
-    value === "top"
-    ? value
+  return typeof value === "string" && DATA_LABEL_POSITIONS.has(value)
+    ? (value as DataLabelPosition)
     : "top";
 }
 

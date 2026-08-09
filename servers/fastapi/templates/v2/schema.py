@@ -11,25 +11,13 @@ import copy
 import re
 from typing import Any, Mapping
 
+from .models.elements import ChartType
 from .models.layouts import RawSlideLayout
 
 
 JSON_SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
 CONTENT_TYPES = {"text", "math", "image", "text-list", "table", "chart", "infographic"}
-CHART_TYPE_VALUES = [
-    "area",
-    "bar",
-    "bubble",
-    "donut",
-    "horizontal_bar",
-    "horizontal_stacked_bar",
-    "line",
-    "pie",
-    "polar_area",
-    "radar",
-    "scatter",
-    "stacked_bar",
-]
+CHART_TYPE_VALUES = [chart_type.value for chart_type in ChartType]
 _REPEATED_SUFFIX = re.compile(r"_\d+$")
 
 

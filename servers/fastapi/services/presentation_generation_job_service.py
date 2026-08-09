@@ -23,6 +23,7 @@ from services.authored_generation_observability import (
 )
 from services.database import async_session_maker
 from utils.owner_context import get_current_owner_id
+from utils.runtime_settings import create_runtime_settings_task as create_config_task
 
 logger = logging.getLogger(__name__)
 
@@ -977,11 +978,10 @@ async def launch_generation_job(
         return
 
     from api.v1.ppt.endpoints.presentation_generate import run_generation_job
-
     existing = _active_jobs.get(job_id)
     if existing is not None and not existing.done():
         return
-    task = asyncio.create_task(run_generation_job(job_id, export_cookie_header))
+    task = create_config_task(run_generation_job(job_id, export_cookie_header))
     _active_jobs[job_id] = task
 
     def _discard(done: asyncio.Task[None]) -> None:

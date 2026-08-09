@@ -1,4 +1,3 @@
-import time
 from typing import Optional
 
 from fastapi import HTTPException
@@ -41,8 +40,6 @@ from utils.get_env import (
     get_codex_access_token_env,
     get_codex_account_id_env,
     get_codex_reasoning_effort_env,
-    get_codex_refresh_token_env,
-    get_codex_token_expires_env,
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
     get_disable_thinking_env,
@@ -68,24 +65,19 @@ from utils.get_env import (
 from utils.available_models import normalize_openai_compatible_base_url
 from utils.llm_provider import get_llm_provider
 from utils.parsers import parse_bool_or_none
-from utils.set_env import (
-    set_codex_access_token_env,
-    set_codex_account_id_env,
-    set_codex_refresh_token_env,
-    set_codex_token_expires_env,
-)
+from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 
 
-def enable_web_grounding() -> bool:
-    return parse_bool_or_none(get_web_grounding_env()) or False
+def enable_web_grounding(settings: RuntimeSettings | None = None) -> bool:
+    return parse_bool_or_none(get_web_grounding_env(settings)) or False
 
 
-def disable_thinking() -> bool:
-    return parse_bool_or_none(get_disable_thinking_env()) or False
+def disable_thinking(settings: RuntimeSettings | None = None) -> bool:
+    return parse_bool_or_none(get_disable_thinking_env(settings)) or False
 
 
-def _get_codex_access_token() -> str:
-    access_token = get_codex_access_token_env()
+def _get_codex_access_token(settings: RuntimeSettings) -> str:
+    access_token = get_codex_access_token_env(settings)
     if not access_token:
         raise HTTPException(
             status_code=400,
@@ -95,41 +87,16 @@ def _get_codex_access_token() -> str:
             ),
         )
 
-    expires_str = get_codex_token_expires_env()
-    if expires_str:
-        try:
-            expires_ms = int(expires_str)
-            now_ms = int(time.time() * 1000)
-            if now_ms >= expires_ms - 60_000:
-                refresh_token = get_codex_refresh_token_env()
-                if refresh_token:
-                    from utils.oauth.openai_codex import (
-                        TokenSuccess,
-                        get_account_id,
-                        refresh_access_token,
-                    )
-
-                    result = refresh_access_token(refresh_token)
-                    if isinstance(result, TokenSuccess):
-                        set_codex_access_token_env(result.access)
-                        set_codex_refresh_token_env(result.refresh)
-                        set_codex_token_expires_env(str(result.expires))
-                        account_id = get_account_id(result.access)
-                        if account_id:
-                            set_codex_account_id_env(account_id)
-                        access_token = result.access
-        except (TypeError, ValueError):
-            pass
-
     return access_token
 
 
-def get_llm_config() -> ClientConfig:
-    llm_provider = get_llm_provider()
+def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
+    snapshot = resolve_runtime_settings(settings)
+    llm_provider = get_llm_provider(snapshot)
 
     match llm_provider:
         case LLMProvider.OPENAI:
-            api_key = get_openai_api_key_env()
+            api_key = get_openai_api_key_env(snapshot)
             if not api_key:
                 raise HTTPException(status_code=400, detail="OpenAI API Key is not set")
             return OpenAIClientConfig(
@@ -137,15 +104,15 @@ def get_llm_config() -> ClientConfig:
                 api_type=OpenAIApiType.COMPLETIONS,
             )
         case LLMProvider.GOOGLE:
-            api_key = get_google_api_key_env()
+            api_key = get_google_api_key_env(snapshot)
             if not api_key:
                 raise HTTPException(status_code=400, detail="Google API Key is not set")
             return GoogleClientConfig(api_key=api_key)
         case LLMProvider.VERTEX:
-            api_key = get_vertex_api_key_env()
-            project = get_vertex_project_env()
-            location = get_vertex_location_env()
-            base_url = get_vertex_base_url_env()
+            api_key = get_vertex_api_key_env(snapshot)
+            project = get_vertex_project_env(snapshot)
+            location = get_vertex_location_env(snapshot)
+            base_url = get_vertex_base_url_env(snapshot)
 
             if api_key and (project or location):
                 raise HTTPException(
@@ -177,11 +144,11 @@ def get_llm_config() -> ClientConfig:
                 base_url=base_url or None,
             )
         case LLMProvider.AZURE:
-            api_key = get_azure_openai_api_key_env()
-            api_version = get_azure_openai_api_version_env()
-            endpoint = get_azure_openai_endpoint_env()
-            base_url = get_azure_openai_base_url_env()
-            deployment = get_azure_openai_deployment_env()
+            api_key = get_azure_openai_api_key_env(snapshot)
+            api_version = get_azure_openai_api_version_env(snapshot)
+            endpoint = get_azure_openai_endpoint_env(snapshot)
+            base_url = get_azure_openai_base_url_env(snapshot)
+            deployment = get_azure_openai_deployment_env(snapshot)
 
             if not api_key:
                 raise HTTPException(
@@ -210,12 +177,16 @@ def get_llm_config() -> ClientConfig:
                 deployment=deployment or None,
             )
         case LLMProvider.BEDROCK:
-            region = (get_bedrock_region_env() or "us-east-1").strip()
-            api_key = (get_bedrock_api_key_env() or "").strip()
-            aws_access_key_id = (get_bedrock_aws_access_key_id_env() or "").strip()
-            aws_secret_access_key = (get_bedrock_aws_secret_access_key_env() or "").strip()
-            aws_session_token = (get_bedrock_aws_session_token_env() or "").strip()
-            profile_name = (get_bedrock_profile_name_env() or "").strip()
+            region = (get_bedrock_region_env(snapshot) or "us-east-1").strip()
+            api_key = (get_bedrock_api_key_env(snapshot) or "").strip()
+            aws_access_key_id = (get_bedrock_aws_access_key_id_env(snapshot) or "").strip()
+            aws_secret_access_key = (
+                get_bedrock_aws_secret_access_key_env(snapshot) or ""
+            ).strip()
+            aws_session_token = (
+                get_bedrock_aws_session_token_env(snapshot) or ""
+            ).strip()
+            profile_name = (get_bedrock_profile_name_env(snapshot) or "").strip()
 
             kwargs = {
                 "region": region,
@@ -238,7 +209,7 @@ def get_llm_config() -> ClientConfig:
                 )
             return BedrockClientConfig(**kwargs)
         case LLMProvider.ANTHROPIC:
-            api_key = get_anthropic_api_key_env()
+            api_key = get_anthropic_api_key_env(snapshot)
             if not api_key:
                 raise HTTPException(
                     status_code=400,
@@ -246,81 +217,82 @@ def get_llm_config() -> ClientConfig:
                 )
             return AnthropicClientConfig(api_key=api_key)
         case LLMProvider.OPENROUTER:
-            api_key = get_openrouter_api_key_env()
+            api_key = get_openrouter_api_key_env(snapshot)
             if not api_key:
                 raise HTTPException(
                     status_code=400,
                     detail="OpenRouter API Key is not set",
                 )
-            base_url = get_openrouter_base_url_env()
+            base_url = get_openrouter_base_url_env(snapshot)
             return OpenRouterClientConfig(
                 api_key=api_key,
                 base_url=base_url or None,
             )
         case LLMProvider.FIREWORKS:
-            api_key = (get_fireworks_api_key_env() or "").strip()
+            api_key = (get_fireworks_api_key_env(snapshot) or "").strip()
             if not api_key:
                 raise HTTPException(
                     status_code=400,
                     detail="Fireworks API Key is not set",
                 )
-            base_url = (get_fireworks_base_url_env() or "").strip()
+            base_url = (get_fireworks_base_url_env(snapshot) or "").strip()
             return FireworksClientConfig(
                 api_key=api_key,
                 base_url=base_url or None,
             )
         case LLMProvider.TOGETHER:
-            api_key = (get_together_api_key_env() or "").strip()
+            api_key = (get_together_api_key_env(snapshot) or "").strip()
             if not api_key:
                 raise HTTPException(
                     status_code=400,
                     detail="Together API Key is not set",
                 )
-            base_url = (get_together_base_url_env() or "").strip()
+            base_url = (get_together_base_url_env(snapshot) or "").strip()
             return TogetherAIClientConfig(
                 api_key=api_key,
                 base_url=base_url or None,
             )
         case LLMProvider.CEREBRAS:
-            api_key = get_cerebras_api_key_env()
+            api_key = get_cerebras_api_key_env(snapshot)
             if not api_key:
                 raise HTTPException(
                     status_code=400,
                     detail="Cerebras API Key is not set",
                 )
-            base_url = get_cerebras_base_url_env()
+            base_url = get_cerebras_base_url_env(snapshot)
             return CerebrasClientConfig(
                 api_key=api_key,
                 base_url=base_url or None,
             )
         case LLMProvider.LITELLM:
             base_url = normalize_openai_compatible_base_url(
-                get_litellm_base_url_env() or ""
+                get_litellm_base_url_env(snapshot) or ""
             )
             if not base_url:
                 raise HTTPException(
                     status_code=400,
                     detail="LiteLLM base URL is not set (LITELLM_BASE_URL).",
                 )
-            lk = (get_litellm_api_key_env() or "").strip()
+            lk = (get_litellm_api_key_env(snapshot) or "").strip()
             return LiteLLMClientConfig(
                 base_url=base_url,
                 api_key=lk if lk else None,
             )
         case LLMProvider.LMSTUDIO:
-            base_url = (get_lmstudio_base_url_env() or "").strip()
-            lk = (get_lmstudio_api_key_env() or "").strip()
+            base_url = (get_lmstudio_base_url_env(snapshot) or "").strip()
+            lk = (get_lmstudio_api_key_env(snapshot) or "").strip()
             kwargs: dict = {"base_url": base_url or None}
             if lk:
                 kwargs["api_key"] = lk
             return LMStudioClientConfig(**kwargs)
         case LLMProvider.OLLAMA:
             return OpenAIClientConfig(
-                base_url=(get_ollama_url_env() or "http://localhost:11434") + "/v1",
+                base_url=(get_ollama_url_env(snapshot) or "http://localhost:11434")
+                + "/v1",
                 api_key="ollama",
             )
         case LLMProvider.CUSTOM:
-            base_url = get_custom_llm_url_env()
+            base_url = get_custom_llm_url_env(snapshot)
             if not base_url:
                 raise HTTPException(
                     status_code=400,
@@ -328,12 +300,12 @@ def get_llm_config() -> ClientConfig:
                 )
             return OpenAIClientConfig(
                 base_url=base_url,
-                api_key=get_custom_llm_api_key_env() or "null",
+                api_key=get_custom_llm_api_key_env(snapshot) or "null",
             )
         case LLMProvider.CODEX:
             return ChatGPTClientConfig(
-                access_token=_get_codex_access_token(),
-                account_id=get_codex_account_id_env() or None,
+                access_token=_get_codex_access_token(snapshot),
+                account_id=get_codex_account_id_env(snapshot) or None,
             )
         case _:
             raise HTTPException(
@@ -346,12 +318,13 @@ def get_llm_config() -> ClientConfig:
             )
 
 
-def get_extra_body() -> Optional[dict]:
-    provider = get_llm_provider()
-    if provider == LLMProvider.CUSTOM and disable_thinking():
+def get_extra_body(settings: RuntimeSettings | None = None) -> Optional[dict]:
+    snapshot = resolve_runtime_settings(settings)
+    provider = get_llm_provider(snapshot)
+    if provider == LLMProvider.CUSTOM and disable_thinking(snapshot):
         return {"enable_thinking": False}
     if provider == LLMProvider.CODEX:
-        effort = (get_codex_reasoning_effort_env() or "").strip().lower()
+        effort = (get_codex_reasoning_effort_env(snapshot) or "").strip().lower()
         # codex (gpt-5.x) reasoning-effort levels; other providers 400 on this param.
         if effort in ("minimal", "none", "low", "medium", "high", "xhigh"):
             return {"reasoning": {"effort": effort}}

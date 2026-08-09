@@ -27,7 +27,13 @@ from services.account_deletion_service import (
     mark_account_deleting,
 )
 from services.database import get_async_session
-from services.provider_settings import get_provider_settings, save_provider_settings
+from services.provider_settings import (
+    ProviderSettingsValidationError,
+    get_provider_settings,
+    get_provider_settings_update_lock,
+    redact_provider_settings,
+    save_provider_settings,
+)
 from services.workspace_cleanup_journal_service import (
     account_cleanup_tombstone_exists,
     redrive_workspace_cleanup_dead_letter,
@@ -37,7 +43,7 @@ from utils.get_env import (
     get_can_change_keys_env,
     is_disable_auth_enabled,
 )
-from utils.user_config import update_env_with_user_config
+from utils.user_config import refresh_process_runtime_settings
 
 API_V1_ADMIN_ROUTER = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
@@ -70,7 +76,7 @@ async def read_provider_settings(
     session: AsyncSession = Depends(get_async_session),
 ) -> dict[str, Any]:
     _ensure_settings_are_mutable()
-    return await get_provider_settings(session)
+    return redact_provider_settings(await get_provider_settings(session))
 
 
 @API_V1_ADMIN_ROUTER.put("/provider-settings")
@@ -80,9 +86,13 @@ async def update_provider_settings(
     session: AsyncSession = Depends(get_async_session),
 ) -> dict[str, Any]:
     _ensure_settings_are_mutable()
-    saved = await save_provider_settings(session, config)
-    update_env_with_user_config()
-    return saved
+    async with get_provider_settings_update_lock():
+        try:
+            saved = await save_provider_settings(session, config)
+        except ProviderSettingsValidationError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        refresh_process_runtime_settings(persisted_config=saved)
+        return redact_provider_settings(saved)
 
 
 @API_V1_ADMIN_ROUTER.get("/users", response_model=list[PublicUser])

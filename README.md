@@ -312,18 +312,26 @@ Run Presenton directly in your browser — no installation, no setup required. S
 
 ### ⚙️ Deployment Configurations
 
-The lists below match the environment variables forwarded in this repository’s **`docker-compose.yml`** (`production`, `production-gpu`, `development`, and `development-gpu`). Put values in a `.env` file next to the compose file, or export them before `docker compose up`. The Electron app backend can read the same names when run outside Docker.
+The canonical generated provider and image-setting reference is
+[`docs/configuration.md`](docs/configuration.md). It is generated from the same
+registry used by FastAPI, `start.js`, and `docker-compose.yml`; run
+`npm run test:settings-registry` to detect drift.
+
+The notes below highlight common settings and examples. The generated reference
+above is the exhaustive list forwarded by **`docker-compose.yml`**. Put values in
+a `.env` file next to the compose file, or export them before `docker compose up`.
+The Electron app backend can read the same names when run outside Docker.
 
 Other optional variables exist in code (for example advanced Mem0 paths, LiteParse runners, or `FAST_API_INTERNAL_URL` when Next.js and FastAPI are not same-origin); they are **not** wired in `docker-compose.yml`. Supported names are discoverable from `servers/fastapi/utils/get_env.py` and the Next.js server utilities under `servers/nextjs/`.
 
 #### LLM and API keys
 
 - **CAN_CHANGE_KEYS**=[true/false]: Set to **false** if you want to keep API keys hidden and make them unmodifiable.
-- **LLM**=[openai/google/vertex/azure/bedrock/anthropic/lmstudio/ollama/custom/codex]: Select the text **LLM**.
+- **LLM**=[ollama/openai/google/vertex/azure/bedrock/openrouter/fireworks/together/cerebras/anthropic/litellm/lmstudio/custom/codex]: Select the text **LLM**.
 - **OPENAI_API_KEY**: Required if **LLM** is **openai**.
 - **OPENAI_MODEL**: Required if **LLM** is **openai** (default: `gpt-4.1`).
 - **GOOGLE_API_KEY**: Required if **LLM** is **google**.
-- **GOOGLE_MODEL**: Required if **LLM** is **google** (default: `models/gemini-2.0-flash`).
+- **GOOGLE_MODEL**: Required if **LLM** is **google** (default: `models/gemini-2.5-flash`).
 - **VERTEX_MODEL**: Required if **LLM** is **vertex** (default: `gemini-2.5-flash`).
 - **VERTEX_API_KEY**: Optional auth path for **LLM=vertex** (Vertex Express).
 - **VERTEX_PROJECT** / **VERTEX_LOCATION**: Optional auth path for **LLM=vertex** when using GCP project credentials (do not combine with `VERTEX_API_KEY`).
@@ -346,7 +354,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 - **TOGETHER_MODEL**: Required if **LLM** is **together** (example: `openai/gpt-oss-20b`).
 - **TOGETHER_BASE_URL**: Optional if **LLM** is **together** (default: `https://api.together.ai/v1`).
 - **ANTHROPIC_API_KEY**: Required if **LLM** is **anthropic**.
-- **ANTHROPIC_MODEL**: Required if **LLM** is **anthropic** (default: `claude-3-5-sonnet-20241022`).
+- **ANTHROPIC_MODEL**: Required if **LLM** is **anthropic** (default: `claude-sonnet-4-20250514`).
 - **CODEX_MODEL**: Required if **LLM** is **codex** (Codex OAuth flow; compose maps host port **1455** for the callback).
 - **CUSTOM_LLM_URL**: OpenAI-compatible base URL if **LLM** is **custom**.
 - **CUSTOM_LLM_API_KEY**: API key if **LLM** is **custom**.
@@ -356,7 +364,6 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 - **LMSTUDIO_MODEL**: Required if **LLM** is **lmstudio** (example: `openai/gpt-oss-20b`).
 - **DISABLE_THINKING**=[true/false]: If **true**, disables “thinking” on the custom LLM.
 - **WEB_GROUNDING**=[true/false]: If **true**, enables web search for OpenAI, Google, and Anthropic models.
-- **EXTENDED_REASONING**=[true/false]: Enables extended reasoning where supported by the configured stack.
 
 #### Ollama
 
@@ -402,7 +409,7 @@ Docker images install the default spaCy model (`en_core_web_sm`) during build so
 
 #### Image generation
 
-These variables match `docker-compose.yml`. **`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `gpt-image-2`, `comfyui`, `open_webui`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
+**`IMAGE_PROVIDER`** selects the backend (`pexels`, `pixabay`, `gemini_flash`, `nanobanana_pro`, `dall-e-3`, `gpt-image-1.5`, `gpt-image-2`, `comfyui`, `open_webui`, `openai_compatible`). Use **OPENAI_API_KEY** for OpenAI image modes and **GOOGLE_API_KEY** for Gemini image modes (same keys as the LLM section).
 
 - **DISABLE_IMAGE_GENERATION**=[true/false]: Disable slide image generation.
 - **ENABLE_PARALLEL_IMAGE_GENERATION**=[true/false]: Allow concurrent image provider requests (default `true`). Set to `false` to generate images one at a time when the provider has strict rate limits.

@@ -297,7 +297,6 @@ export default function LLMProviderSelection({
             <AnthropicConfig
               anthropicApiKey={llmConfig.ANTHROPIC_API_KEY || ""}
               anthropicModel={llmConfig.ANTHROPIC_MODEL || ""}
-              extendedReasoning={llmConfig.EXTENDED_REASONING || false}
               webGrounding={llmConfig.WEB_GROUNDING || false}
               onInputChange={input_field_changed}
             />

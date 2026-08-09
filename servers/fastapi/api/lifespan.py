@@ -79,6 +79,7 @@ from utils.get_env import get_app_data_directory_env
 from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
 )
+from utils.user_config import refresh_process_runtime_settings
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,9 @@ async def app_lifespan(_: FastAPI):
     availability.
     """
     _configure_application_logging()
+    # Process-start seed: userConfig/env are read once and published as an
+    # immutable snapshot. Requests and jobs never copy values into os.environ.
+    refresh_process_runtime_settings()
     template_v2_policy = get_structured_template_policy()
     require_template_v2_database_safety(
         feature_enabled=template_v2_policy.creation_enabled,

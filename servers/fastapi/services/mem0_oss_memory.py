@@ -18,6 +18,9 @@ import threading
 from importlib import import_module
 from typing import Any, Optional
 
+from utils.get_env import get_ollama_model_env, get_ollama_url_env
+from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+
 LOGGER = logging.getLogger(__name__)
 
 _memory_init_lock = threading.Lock()
@@ -72,8 +75,11 @@ def _normalize_openai_base_url(value: Optional[str]) -> Optional[str]:
     return f"{normalized}/v1"
 
 
-def _oss_config_from_env() -> tuple[str, str, str, str, int, dict[str, Any]]:
+def _oss_config_from_env(
+    settings: RuntimeSettings | None = None,
+) -> tuple[str, str, str, str, int, dict[str, Any]]:
     """Return (mem0_dir, qdrant_path, history_db, collection, dims, from_config_dict)."""
+    runtime_settings = resolve_runtime_settings(settings)
     app_data_dir = (os.getenv("APP_DATA_DIRECTORY") or "/tmp/presenton").strip()
     mem0_dir = (os.getenv("MEM0_DIR") or os.path.join(app_data_dir, "mem0")).strip()
     qdrant_path = (
@@ -92,17 +98,16 @@ def _oss_config_from_env() -> tuple[str, str, str, str, int, dict[str, Any]]:
     dims = _to_int(os.getenv("MEM0_EMBEDDING_DIMS"), default=384)
     llm_model = (
         os.getenv("MEM0_LLM_MODEL")
-        or os.getenv("OLLAMA_MODEL")
+        or get_ollama_model_env(runtime_settings)
         or "llama3.1:latest"
     ).strip() or "llama3.1:latest"
     llm_api_key = (
         os.getenv("MEM0_LLM_API_KEY")
-        or os.getenv("OPENAI_API_KEY")
         or "ollama"
     ).strip() or "ollama"
     llm_base_url = _normalize_openai_base_url(
         os.getenv("MEM0_LLM_BASE_URL")
-        or os.getenv("OLLAMA_URL")
+        or get_ollama_url_env(runtime_settings)
         or "http://host.docker.internal:11434"
     )
     config: dict[str, Any] = {

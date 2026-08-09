@@ -1,3 +1,9 @@
+import {
+  TEMPLATE_V2_CHART_TYPES as GENERATED_TEMPLATE_V2_CHART_TYPES,
+  TEMPLATE_V2_DATA_LABEL_POSITIONS,
+  type TemplateV2ChartType as GeneratedTemplateV2ChartType,
+} from "./template-v2-html/template-v2-contract.generated.ts";
+
 export type JsonRecord = Record<string, unknown>;
 
 export const TEMPLATE_V2_CHART_COPILOT_LIMITS = Object.freeze({
@@ -11,22 +17,9 @@ export const TEMPLATE_V2_CHART_COPILOT_LIMITS = Object.freeze({
   maxOperationsPerCandidate: 32,
 });
 
-export const TEMPLATE_V2_CHART_TYPES = Object.freeze([
-  "area",
-  "bar",
-  "bubble",
-  "donut",
-  "horizontal_bar",
-  "horizontal_stacked_bar",
-  "line",
-  "pie",
-  "polar_area",
-  "radar",
-  "scatter",
-  "stacked_bar",
-] as const);
+export const TEMPLATE_V2_CHART_TYPES = GENERATED_TEMPLATE_V2_CHART_TYPES;
 
-export type TemplateV2ChartType = (typeof TEMPLATE_V2_CHART_TYPES)[number];
+export type TemplateV2ChartType = GeneratedTemplateV2ChartType;
 
 const CHART_TYPES = new Set<string>(TEMPLATE_V2_CHART_TYPES);
 const AXIS_CHART_TYPES = new Set<TemplateV2ChartType>([
@@ -37,7 +30,7 @@ const AXIS_CHART_TYPES = new Set<TemplateV2ChartType>([
   "line",
   "stacked_bar",
 ]);
-const DATA_LABEL_POSITIONS = new Set(["base", "mid", "top", "outside"]);
+const DATA_LABEL_POSITIONS = new Set<string>(TEMPLATE_V2_DATA_LABEL_POSITIONS);
 // Kept byte-for-byte compatible with the strict render-plan color grammar.
 const SAFE_COLOR_PATTERN =
   /^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]+|rgba?\([0-9.,%+\-\s]+\)|hsla?\([0-9a-zA-Z.,%+\-\s]+\))$/;

@@ -1,42 +1,23 @@
+import {
+  TEMPLATE_V2_CHART_TYPES,
+  TEMPLATE_V2_DATA_LABEL_POSITIONS,
+  TEMPLATE_V2_ELEMENT_TYPES,
+  TEMPLATE_V2_INFOGRAPHIC_TYPES,
+} from "./template-v2-html/template-v2-contract.generated.mjs";
+
 const CANVAS = Object.freeze({ width: 1280, height: 720 });
 
-export const TEMPLATE_V2_PLAN_ELEMENT_TYPES = Object.freeze([
-  "text",
-  "math",
-  "container",
-  "image",
-  "text-list",
-  "table",
-  "vector",
-  "chart",
-  "infographic",
-  "flex",
-  "grid",
-  "group",
-]);
+export const TEMPLATE_V2_PLAN_ELEMENT_TYPES = TEMPLATE_V2_ELEMENT_TYPES;
 
-export const TEMPLATE_V2_PLAN_CHART_TYPES = Object.freeze([
-  "area",
-  "bar",
-  "bubble",
-  "donut",
-  "horizontal_bar",
-  "horizontal_stacked_bar",
-  "line",
-  "pie",
-  "polar_area",
-  "radar",
-  "scatter",
-  "stacked_bar",
-]);
+export const TEMPLATE_V2_PLAN_CHART_TYPES = TEMPLATE_V2_CHART_TYPES;
 
 const CHART_TYPES = new Set(TEMPLATE_V2_PLAN_CHART_TYPES);
 const ALIGNMENTS = new Set(["flex-start", "flex-end", "center", "stretch"]);
-const INFOGRAPHIC_TYPES = new Set(["progress_bar", "gauge"]);
+const INFOGRAPHIC_TYPES = new Set(TEMPLATE_V2_INFOGRAPHIC_TYPES);
 const HORIZONTAL_ALIGNMENTS = new Set(["left", "center", "right"]);
 const VERTICAL_ALIGNMENTS = new Set(["top", "middle", "bottom"]);
 const IMAGE_FITS = new Set(["contain", "cover", "fill"]);
-const DATA_LABEL_POSITIONS = new Set(["base", "mid", "top", "outside"]);
+const DATA_LABEL_POSITIONS = new Set(TEMPLATE_V2_DATA_LABEL_POSITIONS);
 const AXIS_CHART_TYPES = new Set([
   "area",
   "bar",

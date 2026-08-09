@@ -835,18 +835,16 @@ def _load_live_configuration(
         if not user_config.is_file():
             raise FileNotFoundError(f"USER_CONFIG_PATH does not exist: {user_config}")
         os.environ["USER_CONFIG_PATH"] = str(user_config.resolve())
-    from utils.user_config import update_env_with_user_config
+    from utils.user_config import refresh_process_runtime_settings
 
-    update_env_with_user_config()
-    if provider_override:
-        # The user config can retain its normal interactive provider while a manual
-        # evaluator deliberately selects another already-configured provider.
-        os.environ["LLM"] = provider_override
+    settings = refresh_process_runtime_settings(
+        overrides={"LLM": provider_override} if provider_override else None
+    )
     from utils.llm_config import get_llm_config
     from utils.llm_provider import get_llm_provider, get_model
 
-    get_llm_config()  # Validate configured credentials without serializing them.
-    return {"provider": str(get_llm_provider().value), "model": str(get_model())}
+    get_llm_config(settings)  # Validate credentials without serializing them.
+    return {"provider": str(get_llm_provider(settings).value), "model": str(get_model(settings))}
 
 
 async def _run_live(

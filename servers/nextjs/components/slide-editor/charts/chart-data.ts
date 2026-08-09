@@ -4,6 +4,10 @@ import type {
   ChartSeries,
   ChartType,
 } from "@/components/slide-editor/types";
+import {
+  TEMPLATE_V2_CHART_TYPES as GENERATED_TEMPLATE_V2_CHART_TYPES,
+  TEMPLATE_V2_DATA_LABEL_POSITIONS as GENERATED_TEMPLATE_V2_DATA_LABEL_POSITIONS,
+} from "../../../lib/template-v2-html/template-v2-contract.generated.ts";
 
 export type ResolvedChartDataset = {
   name: string;
@@ -22,20 +26,8 @@ export type ChartColorTarget = {
 
 export const CHART_TEXT_MAX_LENGTH = 128;
 
-export const TEMPLATE_V2_CHART_TYPES = [
-  "area",
-  "bar",
-  "bubble",
-  "donut",
-  "horizontal_bar",
-  "horizontal_stacked_bar",
-  "line",
-  "pie",
-  "polar_area",
-  "radar",
-  "scatter",
-  "stacked_bar",
-] as const satisfies readonly ChartType[];
+export const TEMPLATE_V2_CHART_TYPES =
+  GENERATED_TEMPLATE_V2_CHART_TYPES satisfies readonly ChartType[];
 
 export const TEMPLATE_V2_CHART_TYPE_LABELS: Record<
   (typeof TEMPLATE_V2_CHART_TYPES)[number],
@@ -66,12 +58,8 @@ export const TEMPLATE_V2_AXIS_CHART_TYPES = [
   "stacked_bar",
 ] as const satisfies readonly ChartType[];
 
-export const TEMPLATE_V2_DATA_LABEL_POSITIONS = [
-  "base",
-  "mid",
-  "top",
-  "outside",
-] as const;
+export const TEMPLATE_V2_DATA_LABEL_POSITIONS =
+  GENERATED_TEMPLATE_V2_DATA_LABEL_POSITIONS;
 
 export const DEFAULT_CHART_COLORS = [
   "7F22FE",
@@ -424,37 +412,22 @@ export function parseChartType(value: unknown): ChartType | null {
 
 export function rawChartType(value: unknown): ChartType {
   const normalized = normalizeChartTypeName(value);
+  const canonical = parseChartType(normalized);
+  if (canonical) return canonical;
   switch (normalized) {
-    case "area":
-      return "area";
-    case "bubble":
-      return "bubble";
-    case "donut":
     case "doughnut":
       return "donut";
-    case "horizontal_bar":
     case "bar_horizontal":
       return "horizontal_bar";
-    case "line":
-      return "line";
-    case "pie":
-      return "pie";
     case "polar":
-    case "polar_area":
       return "polar_area";
-    case "radar":
-      return "radar";
-    case "scatter":
-      return "scatter";
     case "stacked":
     case "stackedbar":
-    case "stacked_bar":
     case "bar_stacked":
       return "stacked_bar";
     case "horizontalstackbar":
     case "horizontalstackedbar":
     case "horizontal_stack_bar":
-    case "horizontal_stacked_bar":
       return "horizontal_stacked_bar";
     default:
       return "bar";

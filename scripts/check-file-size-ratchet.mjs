@@ -102,7 +102,11 @@ async function collectGitSourceFiles(root) {
   for (const relativePath of stdout.split(/\r?\n/u).filter(Boolean)) {
     const normalizedPath = relativePath.replaceAll("\\", "/");
     if (!SOURCE_EXTENSIONS.has(path.extname(normalizedPath)) || isExcluded(normalizedPath)) continue;
-    files.push({ path: normalizedPath, lines: lineCount(await readFile(path.join(root, relativePath), "utf8")) });
+    const filePath = path.join(root, relativePath);
+    // `git ls-files` keeps deleted tracked paths until the deletion is staged.
+    // A working-tree ratchet must evaluate the files that actually exist.
+    if (!existsSync(filePath)) continue;
+    files.push({ path: normalizedPath, lines: lineCount(await readFile(filePath, "utf8")) });
   }
   return files;
 }

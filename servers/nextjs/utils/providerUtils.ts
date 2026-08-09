@@ -83,7 +83,6 @@ export const updateLLMConfig = (
     disable_image_generation: "DISABLE_IMAGE_GENERATION",
     use_custom_url: "USE_CUSTOM_URL",
     disable_thinking: "DISABLE_THINKING",
-    extended_reasoning: "EXTENDED_REASONING",
     web_grounding: "WEB_GROUNDING",
     comfyui_url: "COMFYUI_URL",
     comfyui_workflow: "COMFYUI_WORKFLOW",

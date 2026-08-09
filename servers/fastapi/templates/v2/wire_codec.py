@@ -25,23 +25,10 @@ from .models.layouts import SlideLayouts
 
 UPSTREAM_TEMPLATE_V2_SHA = "57b194b234b42c8b28f8a507a30322de200e3e83"
 
-ELEMENT_DISCRIMINATORS = frozenset(
-    {
-        "text",
-        "container",
-        "image",
-        "text-list",
-        "table",
-        "vector",
-        "chart",
-        "infographic",
-        "flex",
-        "grid",
-        "group",
-    }
-)
-
 _STRICT_ELEMENT_ADAPTER = TypeAdapter(SlideElement)
+ELEMENT_DISCRIMINATORS = frozenset(
+    _STRICT_ELEMENT_ADAPTER.json_schema()["discriminator"]["mapping"]
+)
 
 
 class TemplateV2WireCodecError(ValueError):

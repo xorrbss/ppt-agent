@@ -466,9 +466,9 @@ async def run_benchmark(
     positions: tuple[int, ...] | None = None,
 ) -> dict[str, Any]:
     # Match server startup so the replay uses the configured provider/model.
-    from utils.user_config import update_env_with_user_config
+    from utils.user_config import refresh_process_runtime_settings
 
-    update_env_with_user_config()
+    refresh_process_runtime_settings()
     presentation, original_slides = await _load_presentation(presentation_id)
     if len(original_slides) != expected_slides:
         raise RuntimeError(

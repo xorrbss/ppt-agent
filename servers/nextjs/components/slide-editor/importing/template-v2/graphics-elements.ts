@@ -39,6 +39,7 @@ import {
   adaptChartCategories,
   adaptChartSeries,
 } from "@/components/slide-editor/importing/template-v2/content";
+import { TEMPLATE_V2_CHART_TYPES } from "../../../../lib/template-v2-html/template-v2-contract.generated.ts";
 
 export function adaptVector(raw: UnknownRecord): SlideElement | null {
   const base = baseElement(raw);
@@ -157,24 +158,7 @@ export function adaptChart(raw: UnknownRecord): SlideElement {
     .map(adaptChartSeries)
     .filter((item): item is ChartSeries => item != null);
   const chartType =
-    readEnum(
-      raw,
-      [
-        "area",
-        "bar",
-        "bubble",
-        "donut",
-        "horizontal_bar",
-        "horizontal_stacked_bar",
-        "line",
-        "pie",
-        "polar_area",
-        "radar",
-        "scatter",
-        "stacked_bar",
-      ],
-      "chart_type",
-    ) ??
+    readEnum(raw, TEMPLATE_V2_CHART_TYPES, "chart_type") ??
     "bar";
   const supportedSeries =
     chartType === "pie" || chartType === "donut"

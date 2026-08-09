@@ -1,0 +1,695 @@
+{
+  "schemaVersion": 1,
+  "settings": [
+    {
+      "key": "CAN_CHANGE_KEYS",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.process", "compose.shared", "docs.public"],
+      "group": "runtime",
+      "description": "Allow provider settings to be changed from the application."
+    },
+    {
+      "key": "LLM",
+      "type": "enum",
+      "default": null,
+      "secret": false,
+      "choices": ["ollama", "openai", "google", "vertex", "azure", "bedrock", "openrouter", "fireworks", "together", "cerebras", "anthropic", "litellm", "lmstudio", "custom", "codex"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm",
+      "description": "Text generation provider id."
+    },
+    {
+      "key": "OPENAI_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.openai",
+      "description": "OpenAI API key."
+    },
+    {
+      "key": "OPENAI_MODEL",
+      "type": "string",
+      "default": "gpt-4.1",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.openai",
+      "description": "OpenAI model id."
+    },
+    {
+      "key": "GOOGLE_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.google",
+      "description": "Google Generative AI API key."
+    },
+    {
+      "key": "GOOGLE_MODEL",
+      "type": "string",
+      "default": "models/gemini-2.5-flash",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.google",
+      "description": "Google model id."
+    },
+    {
+      "key": "VERTEX_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.vertex",
+      "description": "Vertex AI API key authentication value."
+    },
+    {
+      "key": "VERTEX_MODEL",
+      "type": "string",
+      "default": "gemini-2.5-flash",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.vertex",
+      "description": "Vertex AI model id."
+    },
+    {
+      "key": "VERTEX_PROJECT",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.vertex",
+      "description": "Google Cloud project for ADC-based Vertex authentication."
+    },
+    {
+      "key": "VERTEX_LOCATION",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.vertex",
+      "description": "Vertex AI region."
+    },
+    {
+      "key": "VERTEX_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.vertex",
+      "description": "Optional Vertex AI base URL override."
+    },
+    {
+      "key": "AZURE_OPENAI_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.azure",
+      "description": "Azure OpenAI API key."
+    },
+    {
+      "key": "AZURE_OPENAI_MODEL",
+      "type": "string",
+      "default": "gpt-4.1",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.azure",
+      "description": "Azure OpenAI model id."
+    },
+    {
+      "key": "AZURE_OPENAI_ENDPOINT",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.azure",
+      "description": "Azure OpenAI resource endpoint."
+    },
+    {
+      "key": "AZURE_OPENAI_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.azure",
+      "description": "Optional Azure OpenAI base URL."
+    },
+    {
+      "key": "AZURE_OPENAI_API_VERSION",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.azure",
+      "description": "Azure OpenAI API version."
+    },
+    {
+      "key": "AZURE_OPENAI_DEPLOYMENT",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.azure",
+      "description": "Azure OpenAI deployment name."
+    },
+    {
+      "key": "BEDROCK_REGION",
+      "type": "string",
+      "default": "us-east-1",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.bedrock",
+      "description": "AWS Bedrock region."
+    },
+    {
+      "key": "BEDROCK_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.bedrock",
+      "description": "AWS Bedrock API key."
+    },
+    {
+      "key": "BEDROCK_AWS_ACCESS_KEY_ID",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.bedrock",
+      "description": "AWS access key id for Bedrock."
+    },
+    {
+      "key": "BEDROCK_AWS_SECRET_ACCESS_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.bedrock",
+      "description": "AWS secret access key for Bedrock."
+    },
+    {
+      "key": "BEDROCK_AWS_SESSION_TOKEN",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.bedrock",
+      "description": "Optional AWS session token for Bedrock."
+    },
+    {
+      "key": "BEDROCK_PROFILE_NAME",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.bedrock",
+      "description": "Optional AWS profile name for Bedrock."
+    },
+    {
+      "key": "BEDROCK_MODEL",
+      "type": "string",
+      "default": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.bedrock",
+      "description": "AWS Bedrock model or inference profile id."
+    },
+    {
+      "key": "OPENROUTER_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.openrouter",
+      "description": "OpenRouter API key."
+    },
+    {
+      "key": "OPENROUTER_MODEL",
+      "type": "string",
+      "default": "openai/gpt-4o",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.openrouter",
+      "description": "OpenRouter model id."
+    },
+    {
+      "key": "OPENROUTER_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.openrouter",
+      "description": "Optional OpenRouter base URL."
+    },
+    {
+      "key": "FIREWORKS_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.fireworks",
+      "description": "Fireworks API key."
+    },
+    {
+      "key": "FIREWORKS_MODEL",
+      "type": "string",
+      "default": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.fireworks",
+      "description": "Fireworks model id."
+    },
+    {
+      "key": "FIREWORKS_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.fireworks",
+      "description": "Optional Fireworks base URL."
+    },
+    {
+      "key": "TOGETHER_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.together",
+      "description": "Together AI API key."
+    },
+    {
+      "key": "TOGETHER_MODEL",
+      "type": "string",
+      "default": "openai/gpt-oss-20b",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.together",
+      "description": "Together AI model id."
+    },
+    {
+      "key": "TOGETHER_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.together",
+      "description": "Optional Together AI base URL."
+    },
+    {
+      "key": "CEREBRAS_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.cerebras",
+      "description": "Cerebras API key."
+    },
+    {
+      "key": "CEREBRAS_MODEL",
+      "type": "string",
+      "default": "llama-3.3-70b",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.cerebras",
+      "description": "Cerebras model id."
+    },
+    {
+      "key": "CEREBRAS_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.cerebras",
+      "description": "Optional Cerebras base URL."
+    },
+    {
+      "key": "ANTHROPIC_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.anthropic",
+      "description": "Anthropic API key."
+    },
+    {
+      "key": "ANTHROPIC_MODEL",
+      "type": "string",
+      "default": "claude-sonnet-4-20250514",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.anthropic",
+      "description": "Anthropic model id."
+    },
+    {
+      "key": "OLLAMA_URL",
+      "type": "string",
+      "default": "http://localhost:11434",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.ollama",
+      "description": "Ollama HTTP API base URL."
+    },
+    {
+      "key": "OLLAMA_MODEL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.ollama",
+      "description": "Ollama model name."
+    },
+    {
+      "key": "CUSTOM_LLM_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.custom",
+      "description": "Custom OpenAI-compatible LLM base URL."
+    },
+    {
+      "key": "CUSTOM_LLM_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.custom",
+      "description": "Custom LLM API key."
+    },
+    {
+      "key": "CUSTOM_MODEL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.custom",
+      "description": "Custom LLM model id."
+    },
+    {
+      "key": "LITELLM_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.litellm",
+      "description": "LiteLLM gateway base URL."
+    },
+    {
+      "key": "LITELLM_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.litellm",
+      "description": "Optional LiteLLM gateway API key."
+    },
+    {
+      "key": "LITELLM_MODEL",
+      "type": "string",
+      "default": "gpt-4.1",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.litellm",
+      "description": "LiteLLM model id."
+    },
+    {
+      "key": "LMSTUDIO_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.lmstudio",
+      "description": "LM Studio OpenAI-compatible base URL."
+    },
+    {
+      "key": "LMSTUDIO_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.lmstudio",
+      "description": "Optional LM Studio API key."
+    },
+    {
+      "key": "LMSTUDIO_MODEL",
+      "type": "string",
+      "default": "openai/gpt-oss-20b",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.lmstudio",
+      "description": "LM Studio model id."
+    },
+    {
+      "key": "CODEX_MODEL",
+      "type": "string",
+      "default": "gpt-5.2",
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.codex",
+      "description": "Codex OAuth model id."
+    },
+    {
+      "key": "CODEX_REASONING_EFFORT",
+      "type": "enum",
+      "default": null,
+      "secret": false,
+      "choices": ["minimal", "none", "low", "medium", "high", "xhigh"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.codex",
+      "description": "Optional Codex reasoning effort."
+    },
+    {
+      "key": "CODEX_ACCESS_TOKEN",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "user_config.managed"],
+      "group": "llm.codex",
+      "description": "Managed Codex OAuth access token."
+    },
+    {
+      "key": "CODEX_REFRESH_TOKEN",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "user_config.managed"],
+      "group": "llm.codex",
+      "description": "Managed Codex OAuth refresh token."
+    },
+    {
+      "key": "CODEX_TOKEN_EXPIRES",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "user_config.managed"],
+      "group": "llm.codex",
+      "description": "Managed Codex OAuth token expiry timestamp."
+    },
+    {
+      "key": "CODEX_ACCOUNT_ID",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "user_config.managed"],
+      "group": "llm.codex",
+      "description": "Managed Codex account id."
+    },
+    {
+      "key": "CODEX_USERNAME",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "user_config.managed"],
+      "group": "llm.codex",
+      "description": "Managed Codex account username."
+    },
+    {
+      "key": "CODEX_EMAIL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "user_config.managed"],
+      "group": "llm.codex",
+      "description": "Managed Codex account email."
+    },
+    {
+      "key": "CODEX_IS_PRO",
+      "type": "boolean",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "user_config.managed"],
+      "group": "llm.codex",
+      "description": "Managed Codex subscription indicator."
+    },
+    {
+      "key": "DISABLE_THINKING",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.reasoning",
+      "description": "Disable custom-provider thinking mode."
+    },
+    {
+      "key": "WEB_GROUNDING",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "llm.reasoning",
+      "description": "Enable provider web grounding where supported."
+    },
+    {
+      "key": "USE_CUSTOM_URL",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["start.user_config", "user_config.ui"],
+      "group": "llm.ollama",
+      "description": "Persist the UI choice to use a custom Ollama URL."
+    },
+    {
+      "key": "DISABLE_IMAGE_GENERATION",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image",
+      "description": "Disable slide image generation."
+    },
+    {
+      "key": "ENABLE_PARALLEL_IMAGE_GENERATION",
+      "type": "boolean",
+      "default": true,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.process", "compose.shared", "docs.public"],
+      "group": "image",
+      "description": "Allow image provider requests to run concurrently."
+    },
+    {
+      "key": "IMAGE_PROVIDER",
+      "type": "enum",
+      "default": null,
+      "secret": false,
+      "choices": ["pexels", "pixabay", "gemini_flash", "nanobanana_pro", "dall-e-3", "gpt-image-1.5", "gpt-image-2", "comfyui", "open_webui", "openai_compatible"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image",
+      "description": "Image generation provider id."
+    },
+    {
+      "key": "PEXELS_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.pexels",
+      "description": "Pexels API key."
+    },
+    {
+      "key": "PIXABAY_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.pixabay",
+      "description": "Pixabay API key."
+    },
+    {
+      "key": "COMFYUI_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.comfyui",
+      "description": "ComfyUI base URL."
+    },
+    {
+      "key": "COMFYUI_WORKFLOW",
+      "type": "json",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.comfyui",
+      "description": "ComfyUI workflow JSON."
+    },
+    {
+      "key": "OPEN_WEBUI_IMAGE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.open_webui",
+      "description": "Open WebUI-compatible image endpoint."
+    },
+    {
+      "key": "OPEN_WEBUI_IMAGE_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.open_webui",
+      "description": "Open WebUI image API key."
+    },
+    {
+      "key": "OPENAI_COMPAT_IMAGE_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai_compatible",
+      "description": "OpenAI-compatible image API base URL."
+    },
+    {
+      "key": "OPENAI_COMPAT_IMAGE_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai_compatible",
+      "description": "OpenAI-compatible image API key."
+    },
+    {
+      "key": "OPENAI_COMPAT_IMAGE_MODEL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai_compatible",
+      "description": "OpenAI-compatible image model id."
+    },
+    {
+      "key": "DALL_E_3_QUALITY",
+      "type": "enum",
+      "default": "standard",
+      "secret": false,
+      "choices": ["standard", "hd"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai",
+      "description": "DALL-E 3 output quality."
+    },
+    {
+      "key": "GPT_IMAGE_1_5_QUALITY",
+      "type": "enum",
+      "default": "medium",
+      "secret": false,
+      "choices": ["low", "medium", "high"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai",
+      "description": "GPT Image 1.5 output quality."
+    },
+    {
+      "key": "GPT_IMAGE_2_QUALITY",
+      "type": "enum",
+      "default": "medium",
+      "secret": false,
+      "choices": ["low", "medium", "high"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
+      "group": "image.openai",
+      "description": "GPT Image 2 output quality."
+    }
+  ]
+}

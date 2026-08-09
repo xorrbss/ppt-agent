@@ -125,6 +125,28 @@ test("Ruff is a required locked Python lint gate on both CI providers", () => {
   );
 });
 
+test("generated Template V2 contracts are checked by both CI providers", () => {
+  const rootPackage = readJson("package.json");
+  const workflow = read(".github/workflows/test-all.yml");
+  const githubFastApiJob = workflowJob(workflow, "test-fastapi");
+  const pipeline = read("bitbucket-pipelines.yml");
+  const generator = "contracts/template_v2/generate.py --check";
+
+  assert.equal(
+    rootPackage.scripts["check:template-v2-contracts"],
+    "uv run --directory servers/fastapi python ../../contracts/template_v2/generate.py --check",
+  );
+  assert.match(
+    githubFastApiJob,
+    /name: Check generated Template V2 contracts\s*\n\s*run: uv run python \.\.\/\.\.\/contracts\/template_v2\/generate\.py --check/u,
+  );
+  assert.ok(pipeline.includes(generator));
+  assert.match(
+    pipeline,
+    /uv sync --frozen --directory servers\/fastapi[\s\S]*uv run --directory servers\/fastapi python \.\.\/\.\.\/contracts\/template_v2\/generate\.py --check/u,
+  );
+});
+
 test("workspace E2E is an always-captured PR gate on Bitbucket", () => {
   const pipeline = read("bitbucket-pipelines.yml");
 

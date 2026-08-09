@@ -1,22 +1,16 @@
 import type { JsonRecord } from "./types";
+import { TEMPLATE_V2_ELEMENT_TYPES } from "./template-v2-contract.generated";
 import { readString } from "./values";
 
-const ELEMENT_TYPES = new Set([
-  "text",
-  "math",
-  "container",
-  "image",
-  "text-list",
-  "table",
-  "vector",
+const LEGACY_RENDERER_ELEMENT_TYPES = [
   "svg",
-  "chart",
-  "infographic",
-  "flex",
-  "grid",
-  "group",
   "list-view",
   "grid-view",
+] as const;
+
+const ELEMENT_TYPES = new Set<string>([
+  ...TEMPLATE_V2_ELEMENT_TYPES,
+  ...LEGACY_RENDERER_ELEMENT_TYPES,
 ]);
 
 export function isComponent(item: JsonRecord): item is JsonRecord & { elements: unknown[] } {

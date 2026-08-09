@@ -12,10 +12,11 @@ import {
   isPieLikeChart,
 } from "./chart-kinds";
 import { chartScales } from "./chart-scales";
+import { TEMPLATE_V2_DATA_LABEL_POSITIONS } from "./template-v2-contract.generated";
 import type { DataLabelPosition, JsonRecord } from "./types";
 import { clamp, readOptionalBoolean, readRecord, readString } from "./values";
 
-const DATA_LABEL_POSITIONS = new Set(["base", "mid", "top", "outside"]);
+const DATA_LABEL_POSITIONS = new Set<string>(TEMPLATE_V2_DATA_LABEL_POSITIONS);
 
 export function chartConfig(item: JsonRecord, height: number): JsonRecord {
   const chartKind = chartKindFromValue(readString(item.chartType ?? item.chart_type));

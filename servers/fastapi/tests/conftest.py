@@ -4,6 +4,11 @@ from typing import Any
 
 import pytest
 
+from utils.runtime_settings import (
+    get_published_process_runtime_settings,
+    replace_process_runtime_settings,
+)
+
 
 class FakeAsyncSession:
     def __init__(
@@ -64,6 +69,16 @@ class FakeAsyncSession:
 
     async def scalars(self, *_args: Any, **_kwargs: Any):
         return []
+
+
+@pytest.fixture(autouse=True)
+def isolate_published_runtime_settings():
+    """Keep process-level config snapshots from leaking between unit tests."""
+    previous = get_published_process_runtime_settings()
+    try:
+        yield
+    finally:
+        replace_process_runtime_settings(previous)
 
 
 @pytest.fixture

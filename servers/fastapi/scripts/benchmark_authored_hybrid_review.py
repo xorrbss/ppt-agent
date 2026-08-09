@@ -111,19 +111,19 @@ def _load_live_configuration(
             raise FileNotFoundError(f"USER_CONFIG_PATH does not exist: {user_config}")
         os.environ["USER_CONFIG_PATH"] = str(user_config.resolve())
 
-    from utils.user_config import update_env_with_user_config
+    from utils.user_config import refresh_process_runtime_settings
 
-    update_env_with_user_config()
-    if provider_override:
-        os.environ["LLM"] = provider_override
+    settings = refresh_process_runtime_settings(
+        overrides={"LLM": provider_override} if provider_override else None
+    )
 
     from utils.llm_config import get_llm_config
     from utils.llm_provider import get_llm_provider, get_model
 
-    get_llm_config()  # Validate availability without returning or logging the object.
+    get_llm_config(settings)  # Validate without returning or logging credentials.
     return {
-        "provider": _safe_configuration_token(get_llm_provider().value),
-        "model": _safe_configuration_token(get_model()),
+        "provider": _safe_configuration_token(get_llm_provider(settings).value),
+        "model": _safe_configuration_token(get_model(settings)),
         "credential_validated": True,
     }
 

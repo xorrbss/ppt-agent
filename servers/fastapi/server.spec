@@ -65,6 +65,7 @@ a = Analysis(
         ("assets", "assets"),
         ("static", "static"),
         ("alembic", "alembic"),
+        ("constants/settings_registry.json", "constants"),
         ("authored_styles", "authored_styles"),
         ("authored_style_assets", "authored_style_assets"),
     ]

@@ -1,20 +1,14 @@
+import type {
+  TemplateV2ChartType,
+  TemplateV2DataLabelPosition,
+  TemplateV2InfographicType,
+} from "./template-v2-contract.generated";
+
 export type JsonRecord = Record<string, unknown>;
 export type RenderMode = "absolute" | "flow";
-export type DataLabelPosition = "base" | "mid" | "top" | "outside";
-export type ChartKind =
-  | "bar"
-  | "bubble"
-  | "horizontal_bar"
-  | "horizontal_stacked_bar"
-  | "stacked_bar"
-  | "line"
-  | "area"
-  | "pie"
-  | "donut"
-  | "polar_area"
-  | "radar"
-  | "scatter";
-export type InfographicKind = "progress_bar" | "gauge";
+export type DataLabelPosition = TemplateV2DataLabelPosition;
+export type ChartKind = TemplateV2ChartType;
+export type InfographicKind = TemplateV2InfographicType;
 
 export type JsonToHtmlItem = JsonRecord;
 

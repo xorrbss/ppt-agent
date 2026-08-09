@@ -6,6 +6,7 @@ import type {
   DataLabelPosition,
   LayoutAlignment,
 } from "@/components/slide-editor/types";
+import { TEMPLATE_V2_DATA_LABEL_POSITIONS } from "../../../../lib/template-v2-html/template-v2-contract.generated.ts";
 
 export const MIN_ELEMENT_SIZE = 1;
 export const MAX_BORDER_RADIUS = 128;
@@ -20,7 +21,7 @@ const LAYOUT_ALIGNMENT_VALUES = new Set([
   "center",
   "stretch",
 ]);
-const DATA_LABEL_POSITIONS = new Set(["base", "mid", "top", "outside"]);
+const DATA_LABEL_POSITIONS = new Set<string>(TEMPLATE_V2_DATA_LABEL_POSITIONS);
 
 export function readValue(record: UnknownRecord, key: string) {
   return record[key];

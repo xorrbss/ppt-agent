@@ -16,15 +16,23 @@ from utils.owner_context import (
 from api.v1.auth.users import get_jwt_strategy
 from models.sql.user import User
 from services.database import async_session_maker
-from utils.get_env import get_can_change_keys_env, is_disable_auth_enabled
-from utils.user_config import update_env_with_user_config
+from utils.get_env import is_disable_auth_enabled
+from utils.runtime_settings import (
+    get_process_runtime_settings,
+    reset_current_runtime_settings,
+    set_current_runtime_settings,
+)
 
 
-class UserConfigEnvUpdateMiddleware(BaseHTTPMiddleware):
+class RuntimeSettingsContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if get_can_change_keys_env() != "false":
-            update_env_with_user_config()
-        return await call_next(request)
+        settings = get_process_runtime_settings()
+        request.state.runtime_settings = settings
+        token = set_current_runtime_settings(settings)
+        try:
+            return await call_next(request)
+        finally:
+            reset_current_runtime_settings(token)
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):

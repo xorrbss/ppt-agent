@@ -57,9 +57,9 @@ def _bootstrap_user_config(user_config: Path | None) -> None:
             )
         os.environ["USER_CONFIG_PATH"] = str(user_config.resolve())
     try:
-        from utils.user_config import update_env_with_user_config
+        from utils.user_config import refresh_process_runtime_settings
 
-        update_env_with_user_config()
+        refresh_process_runtime_settings()
     except ReplayExecutionFailure:
         raise
     except Exception as error:

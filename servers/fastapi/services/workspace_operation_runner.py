@@ -64,6 +64,7 @@ from utils.owner_context import (
     reset_current_owner_id,
     set_current_owner_id,
 )
+from utils.runtime_settings import create_runtime_settings_task
 from models.sql.workspace import get_workspace_owner_scope
 
 
@@ -2103,7 +2104,6 @@ class WorkspaceOperationRunner:
         self, claim: WorkspaceOperationClaim
     ) -> None:
         """Recheck deck/account deletion fences immediately before execution."""
-
         async with self.session_factory() as session:
             await _fence_workspace_claim(
                 session,
@@ -2143,7 +2143,7 @@ class WorkspaceOperationRunner:
                 return
 
             heartbeat = asyncio.create_task(self._heartbeat_loop(claim))
-            handler_task = asyncio.create_task(self._call_handler(handler, context))
+            handler_task = create_runtime_settings_task(self._call_handler(handler, context))
             done, _ = await asyncio.wait(
                 (handler_task, heartbeat), return_when=asyncio.FIRST_COMPLETED
             )

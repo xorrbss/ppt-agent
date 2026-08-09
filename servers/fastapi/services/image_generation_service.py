@@ -22,9 +22,10 @@ from utils.get_env import (
     get_open_webui_image_api_key_env,
     get_openai_compat_image_base_url_env,
     get_openai_compat_image_api_key_env,
-    get_openai_compat_image_model_env,
+    get_openai_compat_image_model_env, get_openai_api_key_env, get_google_api_key_env,
     is_parallel_image_generation_enabled,
 )
+from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
 from utils.get_env import get_comfyui_workflow_env
@@ -80,39 +81,40 @@ def _parse_retry_after_seconds(error: Exception) -> float | None:
 
 
 class ImageGenerationService:
-    def __init__(self, output_directory: str):
+    settings: RuntimeSettings | None = None
+    def __init__(self, output_directory: str, settings: RuntimeSettings | None = None):
         self.output_directory = output_directory
-        self.is_image_generation_disabled = is_image_generation_disabled()
+        self.settings = resolve_runtime_settings(settings)
+        self.is_image_generation_disabled = is_image_generation_disabled(self.settings)
         self.image_gen_func = self.get_image_gen_func()
 
     def get_image_gen_func(self):
         if self.is_image_generation_disabled:
             return None
-
-        if is_pixabay_selected():
+        if is_pixabay_selected(self.settings):
             return self.get_image_from_pixabay
-        elif is_pixels_selected():
+        elif is_pixels_selected(self.settings):
             return self.get_image_from_pexels
-        elif is_gemini_flash_selected():
+        elif is_gemini_flash_selected(self.settings):
             return self.generate_image_gemini_flash
-        elif is_nanobanana_pro_selected():
+        elif is_nanobanana_pro_selected(self.settings):
             return self.generate_image_nanobanana_pro
-        elif is_dalle3_selected():
+        elif is_dalle3_selected(self.settings):
             return self.generate_image_openai_dalle3
-        elif is_gpt_image_1_5_selected():
+        elif is_gpt_image_1_5_selected(self.settings):
             return self.generate_image_openai_gpt_image_1_5
-        elif is_gpt_image_2_selected():
+        elif is_gpt_image_2_selected(self.settings):
             return self.generate_image_openai_gpt_image_2
-        elif is_comfyui_selected():
+        elif is_comfyui_selected(self.settings):
             return self.generate_image_comfyui
-        elif is_open_webui_selected():
+        elif is_open_webui_selected(self.settings):
             return self.generate_image_open_webui
-        elif is_openai_compatible_selected():
+        elif is_openai_compatible_selected(self.settings):
             return self.generate_image_openai_compatible
         return None
 
     def is_stock_provider_selected(self):
-        return is_pixels_selected() or is_pixabay_selected()
+        return is_pixels_selected(self.settings) or is_pixabay_selected(self.settings)
 
     async def generate_image(self, prompt: ImagePrompt) -> str | ImageAsset:
         """
@@ -134,9 +136,8 @@ class ImageGenerationService:
             with_theme=not self.is_stock_provider_selected()
         )
         print(f"Request - Generating Image for {image_prompt}")
-
         try:
-            if is_parallel_image_generation_enabled():
+            if is_parallel_image_generation_enabled(self.settings):
                 image_path = await self._call_image_provider(image_prompt)
             else:
                 async with _get_image_generation_lock():
@@ -158,7 +159,6 @@ class ImageGenerationService:
                 ):
                     return absolute_fastapi_asset_url(image_path)
             raise Exception(f"Image not found at {image_path}")
-
         except Exception as e:
             print(f"Error generating image: {e}")
             return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
@@ -171,7 +171,9 @@ class ImageGenerationService:
     async def generate_image_openai(
         self, prompt: str, output_directory: str, model: str, quality: str
     ) -> str:
-        client = AsyncOpenAI()
+        if not (api_key := get_openai_api_key_env(self.settings)):
+            raise ValueError("OPENAI_API_KEY is not configured")
+        client = AsyncOpenAI(api_key=api_key)
         result = None
         for attempt in range(OPENAI_IMAGE_MAX_ATTEMPTS):
             try:
@@ -200,7 +202,6 @@ class ImageGenerationService:
         with open(image_path, "wb") as f:
             f.write(base64.b64decode(result.data[0].b64_json))
         return image_path
-
     async def generate_image_openai_dalle3(
         self, prompt: str, output_directory: str
     ) -> str:
@@ -208,9 +209,8 @@ class ImageGenerationService:
             prompt,
             output_directory,
             "dall-e-3",
-            get_dall_e_3_quality_env() or "standard",
+            get_dall_e_3_quality_env(self.settings) or "standard",
         )
-
     async def generate_image_openai_gpt_image_1_5(
         self, prompt: str, output_directory: str
     ) -> str:
@@ -218,9 +218,8 @@ class ImageGenerationService:
             prompt,
             output_directory,
             "gpt-image-1.5",
-            get_gpt_image_1_5_quality_env() or "medium",
+            get_gpt_image_1_5_quality_env(self.settings) or "medium",
         )
-
     async def generate_image_openai_gpt_image_2(
         self, prompt: str, output_directory: str
     ) -> str:
@@ -228,18 +227,17 @@ class ImageGenerationService:
             prompt,
             output_directory,
             "gpt-image-2",
-            get_gpt_image_2_quality_env() or "medium",
+            get_gpt_image_2_quality_env(self.settings) or "medium",
         )
-
     async def generate_image_open_webui(
         self, prompt: str, output_directory: str
     ) -> str:
-        base_url = get_open_webui_image_url_env()
+        base_url = get_open_webui_image_url_env(self.settings)
         if not base_url:
             raise ValueError("OPEN_WEBUI_IMAGE_URL environment variable is not set")
 
         base_url = base_url.rstrip("/")
-        api_key = get_open_webui_image_api_key_env() or ""
+        api_key = get_open_webui_image_api_key_env(self.settings) or ""
 
         from urllib.parse import urlparse
 
@@ -317,7 +315,9 @@ class ImageGenerationService:
         self, prompt: str, output_directory: str, model: str
     ) -> str:
         """Base method for Google image generation models."""
-        client = genai.Client()
+        if not (api_key := get_google_api_key_env(self.settings)):
+            raise ValueError("GOOGLE_API_KEY is not configured")
+        client = genai.Client(api_key=api_key)
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
@@ -388,7 +388,7 @@ class ImageGenerationService:
         self, prompt: str, api_key: str | None = None, limit: int = 1
     ) -> str | list[str]:
         per_page = max(1, min(limit, 80))
-        resolved_api_key = (api_key or get_pexels_api_key_env() or "").strip()
+        resolved_api_key = (api_key or get_pexels_api_key_env(self.settings) or "").strip()
 
         async with aiohttp.ClientSession(trust_env=True) as session:
             response = await session.get(
@@ -423,7 +423,7 @@ class ImageGenerationService:
         self, prompt: str, api_key: str | None = None, limit: int = 1
     ) -> str | list[str]:
         per_page = max(3, min(limit, 200))
-        resolved_api_key = (api_key or get_pixabay_api_key_env() or "").strip()
+        resolved_api_key = (api_key or get_pixabay_api_key_env(self.settings) or "").strip()
 
         async with aiohttp.ClientSession(trust_env=True) as session:
             response = await session.get(
@@ -489,8 +489,8 @@ class ImageGenerationService:
         Returns:
             Path to the generated image file
         """
-        comfyui_url = get_comfyui_url_env()
-        workflow_json = get_comfyui_workflow_env()
+        comfyui_url = get_comfyui_url_env(self.settings)
+        workflow_json = get_comfyui_workflow_env(self.settings)
 
         if not comfyui_url:
             raise ValueError("COMFYUI_URL environment variable is not set")
@@ -891,9 +891,9 @@ class ImageGenerationService:
     async def generate_image_openai_compatible(
         self, prompt: str, output_directory: str
     ) -> str:
-        base_url = get_openai_compat_image_base_url_env()
-        api_key = get_openai_compat_image_api_key_env()
-        model = get_openai_compat_image_model_env()
+        base_url = get_openai_compat_image_base_url_env(self.settings)
+        api_key = get_openai_compat_image_api_key_env(self.settings)
+        model = get_openai_compat_image_model_env(self.settings)
 
         if not base_url or not api_key or not model:
             raise ValueError(

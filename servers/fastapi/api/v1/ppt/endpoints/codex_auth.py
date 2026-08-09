@@ -9,6 +9,7 @@ Flow:
   5. POST /codex/auth/exchange  — manual fallback if browser callback didn't fire
   6. POST /codex/auth/refresh   — refresh a stored token
 """
+import asyncio
 import uuid
 from typing import Optional
 
@@ -32,16 +33,6 @@ from utils.get_env import (
     get_codex_refresh_token_env,
     get_codex_token_expires_env,
     get_codex_username_env,
-)
-from utils.set_env import (
-    set_codex_access_token_env,
-    set_codex_account_id_env,
-    set_codex_email_env,
-    set_codex_is_pro_env,
-    set_codex_refresh_token_env,
-    set_codex_token_expires_env,
-    set_codex_model_env,
-    set_codex_username_env,
 )
 from utils.user_config import save_codex_tokens_to_user_config
 
@@ -108,19 +99,21 @@ def _parse_optional_bool(value: Optional[str]) -> Optional[bool]:
     return None
 
 
-def _store_token(result: TokenSuccess) -> CodexAccountProfile:
-    """Persist token fields in env vars and userConfig.json. Returns parsed profile."""
-    set_codex_access_token_env(result.access)
-    set_codex_refresh_token_env(result.refresh)
-    set_codex_token_expires_env(str(result.expires))
-
+async def _store_token(result: TokenSuccess) -> CodexAccountProfile:
+    """Persist OAuth fields without staging credentials in process-global state."""
     profile = get_account_profile(result.access, result.id_token)
-    set_codex_account_id_env(profile.account_id or "")
-    set_codex_username_env(profile.username or "")
-    set_codex_email_env(profile.email or "")
-    set_codex_is_pro_env("" if profile.is_pro is None else str(profile.is_pro))
-
-    save_codex_tokens_to_user_config()
+    await asyncio.to_thread(
+        save_codex_tokens_to_user_config,
+        {
+            "CODEX_ACCESS_TOKEN": result.access,
+            "CODEX_REFRESH_TOKEN": result.refresh,
+            "CODEX_TOKEN_EXPIRES": str(result.expires),
+            "CODEX_ACCOUNT_ID": profile.account_id,
+            "CODEX_USERNAME": profile.username,
+            "CODEX_EMAIL": profile.email,
+            "CODEX_IS_PRO": profile.is_pro,
+        },
+    )
     return profile
 
 
@@ -171,8 +164,8 @@ async def poll_codex_auth_status(session_id: str):
     Poll for the result of an ongoing OAuth flow.
 
     Returns {"status": "pending"} until the callback server captures the code.
-    On success the tokens are stored in environment variables and the session
-    is cleaned up.
+    On success the tokens are stored in the managed settings store and the
+    session is cleaned up.
     """
     session = _sessions.get(session_id)
     if not session:
@@ -188,7 +181,7 @@ async def poll_codex_auth_status(session_id: str):
 
     # We have a code — exchange it
     verifier: str = session["verifier"]
-    result = exchange_authorization_code(code, verifier)
+    result = await asyncio.to_thread(exchange_authorization_code, code, verifier)
 
     # Clean up session
     server.close()
@@ -197,7 +190,7 @@ async def poll_codex_auth_status(session_id: str):
     if not isinstance(result, TokenSuccess):
         return StatusResponse(status="failed", detail=result.reason)
 
-    profile = _store_token(result)
+    profile = await _store_token(result)
     return StatusResponse(
         status="success",
         account_id=profile.account_id,
@@ -217,7 +210,7 @@ async def exchange_codex_code(body: ExchangeRequest):
     - the full redirect URL  (http://localhost:1455/auth/callback?code=…&state=…)
     - the code#state shorthand
 
-    Exchanges the code for tokens and stores them in environment variables.
+    Exchanges the code for tokens and stores them in the managed settings store.
     """
     session = _sessions.get(body.session_id)
     if not session:
@@ -236,7 +229,7 @@ async def exchange_codex_code(body: ExchangeRequest):
     verifier: str = session["verifier"]
     server: OAuthCallbackServer = session["server"]
 
-    result = exchange_authorization_code(code, verifier)
+    result = await asyncio.to_thread(exchange_authorization_code, code, verifier)
 
     server.close()
     _sessions.pop(body.session_id, None)
@@ -244,7 +237,7 @@ async def exchange_codex_code(body: ExchangeRequest):
     if not isinstance(result, TokenSuccess):
         raise HTTPException(status_code=502, detail=f"Token exchange failed: {result.reason}")
 
-    profile = _store_token(result)
+    profile = await _store_token(result)
     if not profile.account_id:
         raise HTTPException(status_code=502, detail="Token exchanged but could not extract account ID")
 
@@ -261,7 +254,7 @@ async def refresh_codex_token():
     """
     Refresh the stored Codex OAuth access token using the refresh token.
 
-    Updates environment variables with the new tokens.
+    Publishes a new immutable settings snapshot containing the refreshed tokens.
     """
     refresh_token = get_codex_refresh_token_env()
     if not refresh_token:
@@ -270,11 +263,11 @@ async def refresh_codex_token():
             detail="No Codex refresh token stored. Please authenticate first via /initiate",
         )
 
-    result = refresh_access_token(refresh_token)
+    result = await asyncio.to_thread(refresh_access_token, refresh_token)
     if not isinstance(result, TokenSuccess):
         raise HTTPException(status_code=502, detail=f"Token refresh failed: {result.reason}")
 
-    profile = _store_token(result)
+    profile = await _store_token(result)
     return RefreshResponse(
         account_id=profile.account_id,
         username=profile.username,
@@ -322,15 +315,18 @@ async def get_codex_auth_status():
 @CODEX_AUTH_ROUTER.post("/logout")
 async def logout_codex():
     """
-    Clear all stored Codex OAuth credentials from environment variables and userConfig.json.
+    Clear all stored Codex OAuth credentials from the managed settings store.
     """
-    set_codex_access_token_env("")
-    set_codex_refresh_token_env("")
-    set_codex_token_expires_env("")
-    set_codex_account_id_env("")
-    set_codex_username_env("")
-    set_codex_email_env("")
-    set_codex_is_pro_env("")
-    set_codex_model_env("")
-    save_codex_tokens_to_user_config()
+    await asyncio.to_thread(
+        save_codex_tokens_to_user_config,
+        {
+            "CODEX_ACCESS_TOKEN": None,
+            "CODEX_REFRESH_TOKEN": None,
+            "CODEX_TOKEN_EXPIRES": None,
+            "CODEX_ACCOUNT_ID": None,
+            "CODEX_USERNAME": None,
+            "CODEX_EMAIL": None,
+            "CODEX_IS_PRO": None,
+        },
+    )
     return {"detail": "Logged out successfully"}

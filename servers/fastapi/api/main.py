@@ -8,7 +8,7 @@ from starlette.responses import FileResponse, PlainTextResponse
 
 from api.error_handling import install_api_error_handling
 from api.lifespan import app_lifespan
-from api.middlewares import SessionAuthMiddleware, UserConfigEnvUpdateMiddleware
+from api.middlewares import RuntimeSettingsContextMiddleware, SessionAuthMiddleware
 from api.v1.auth.router import API_V1_AUTH_ROUTER
 from api.v1.admin.router import API_V1_ADMIN_ROUTER
 from api.v1.async_tasks.router import API_V1_ASYNC_TASKS_ROUTER
@@ -109,7 +109,7 @@ app.add_middleware(
     expose_headers=["X-Chat-First-Workspace-Projected"],
 )
 
-app.add_middleware(UserConfigEnvUpdateMiddleware)
+app.add_middleware(RuntimeSettingsContextMiddleware)
 app.add_middleware(SessionAuthMiddleware)
 
 

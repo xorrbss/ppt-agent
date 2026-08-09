@@ -1,16 +1,19 @@
+from constants.settings_registry import get_setting_default
+
+
 OPENAI_URL = "https://api.openai.com/v1"
 
 # Default models
-DEFAULT_OPENAI_MODEL = "gpt-4.1"
-DEFAULT_GOOGLE_MODEL = "models/gemini-2.5-flash"
-DEFAULT_VERTEX_MODEL = "gemini-2.5-flash"
-DEFAULT_AZURE_MODEL = "gpt-4.1"
-DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
-DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o"
-DEFAULT_FIREWORKS_MODEL = "accounts/fireworks/models/llama-v3p1-8b-instruct"
-DEFAULT_TOGETHER_MODEL = "openai/gpt-oss-20b"
-DEFAULT_CEREBRAS_MODEL = "llama-3.3-70b"
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
-DEFAULT_LITELLM_MODEL = "gpt-4.1"
-DEFAULT_LMSTUDIO_MODEL = "openai/gpt-oss-20b"
-DEFAULT_CODEX_MODEL = "gpt-5.2"
+DEFAULT_OPENAI_MODEL = get_setting_default("OPENAI_MODEL")
+DEFAULT_GOOGLE_MODEL = get_setting_default("GOOGLE_MODEL")
+DEFAULT_VERTEX_MODEL = get_setting_default("VERTEX_MODEL")
+DEFAULT_AZURE_MODEL = get_setting_default("AZURE_OPENAI_MODEL")
+DEFAULT_BEDROCK_MODEL = get_setting_default("BEDROCK_MODEL")
+DEFAULT_OPENROUTER_MODEL = get_setting_default("OPENROUTER_MODEL")
+DEFAULT_FIREWORKS_MODEL = get_setting_default("FIREWORKS_MODEL")
+DEFAULT_TOGETHER_MODEL = get_setting_default("TOGETHER_MODEL")
+DEFAULT_CEREBRAS_MODEL = get_setting_default("CEREBRAS_MODEL")
+DEFAULT_ANTHROPIC_MODEL = get_setting_default("ANTHROPIC_MODEL")
+DEFAULT_LITELLM_MODEL = get_setting_default("LITELLM_MODEL")
+DEFAULT_LMSTUDIO_MODEL = get_setting_default("LMSTUDIO_MODEL")
+DEFAULT_CODEX_MODEL = get_setting_default("CODEX_MODEL")

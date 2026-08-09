@@ -1,0 +1,2729 @@
+{
+  "$defs": {
+    "Alignment": {
+      "additionalProperties": false,
+      "properties": {
+        "horizontal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HorizontalAlignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "vertical": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerticalAlignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "Alignment",
+      "type": "object"
+    },
+    "BorderRadius": {
+      "additionalProperties": false,
+      "properties": {
+        "bl": {
+          "title": "Bl",
+          "type": "number"
+        },
+        "br": {
+          "title": "Br",
+          "type": "number"
+        },
+        "tl": {
+          "title": "Tl",
+          "type": "number"
+        },
+        "tr": {
+          "title": "Tr",
+          "type": "number"
+        }
+      },
+      "required": [
+        "tl",
+        "tr",
+        "bl",
+        "br"
+      ],
+      "title": "BorderRadius",
+      "type": "object"
+    },
+    "Chart": {
+      "additionalProperties": false,
+      "properties": {
+        "axis_color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axis Color"
+        },
+        "categories": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Categories"
+        },
+        "chart_type": {
+          "$ref": "#/$defs/ChartType"
+        },
+        "colors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Colors"
+        },
+        "data_labels": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataLabelPosition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decorative": {
+          "title": "Decorative",
+          "type": "boolean"
+        },
+        "grid_color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grid Color"
+        },
+        "legend": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legend"
+        },
+        "legend_color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legend Color"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "series": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ChartSeries"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Series"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "title_color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title Color"
+        },
+        "type": {
+          "const": "chart",
+          "title": "Type",
+          "type": "string"
+        },
+        "x_axis": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X Axis"
+        },
+        "x_axis_grid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X Axis Grid"
+        },
+        "x_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X Axis Title"
+        },
+        "y_axis": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y Axis"
+        },
+        "y_axis_grid": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y Axis Grid"
+        },
+        "y_axis_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y Axis Title"
+        }
+      },
+      "required": [
+        "type",
+        "chart_type",
+        "decorative",
+        "name"
+      ],
+      "title": "Chart",
+      "type": "object"
+    },
+    "ChartSeries": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "values"
+      ],
+      "title": "ChartSeries",
+      "type": "object"
+    },
+    "ChartType": {
+      "enum": [
+        "area",
+        "bar",
+        "bubble",
+        "donut",
+        "horizontal_bar",
+        "horizontal_stacked_bar",
+        "line",
+        "pie",
+        "polar_area",
+        "radar",
+        "scatter",
+        "stacked_bar"
+      ],
+      "title": "ChartType",
+      "type": "string"
+    },
+    "Component": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 300,
+          "minLength": 10,
+          "title": "Description",
+          "type": "string"
+        },
+        "elements": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chart": "#/$defs/Chart",
+                "container": "#/$defs/Container",
+                "flex": "#/$defs/Flex",
+                "grid": "#/$defs/Grid",
+                "group": "#/$defs/Group",
+                "image": "#/$defs/Image",
+                "infographic": "#/$defs/Infographic",
+                "math": "#/$defs/MathExpression",
+                "table": "#/$defs/Table",
+                "text": "#/$defs/Text",
+                "text-list": "#/$defs/TextList",
+                "vector": "#/$defs/Vector"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Text"
+              },
+              {
+                "$ref": "#/$defs/MathExpression"
+              },
+              {
+                "$ref": "#/$defs/Container"
+              },
+              {
+                "$ref": "#/$defs/Image"
+              },
+              {
+                "$ref": "#/$defs/TextList"
+              },
+              {
+                "$ref": "#/$defs/Table"
+              },
+              {
+                "$ref": "#/$defs/Vector"
+              },
+              {
+                "$ref": "#/$defs/Chart"
+              },
+              {
+                "$ref": "#/$defs/Infographic"
+              },
+              {
+                "$ref": "#/$defs/Flex"
+              },
+              {
+                "$ref": "#/$defs/Grid"
+              },
+              {
+                "$ref": "#/$defs/Group"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Elements",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "position": {
+          "$ref": "#/$defs/Position"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "position",
+        "elements"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "Container": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Alignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "border_radius": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BorderRadius"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "child": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "chart": "#/$defs/Chart",
+                  "container": "#/$defs/Container",
+                  "flex": "#/$defs/Flex",
+                  "grid": "#/$defs/Grid",
+                  "group": "#/$defs/Group",
+                  "image": "#/$defs/Image",
+                  "infographic": "#/$defs/Infographic",
+                  "math": "#/$defs/MathExpression",
+                  "table": "#/$defs/Table",
+                  "text": "#/$defs/Text",
+                  "text-list": "#/$defs/TextList",
+                  "vector": "#/$defs/Vector"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/Text"
+                },
+                {
+                  "$ref": "#/$defs/MathExpression"
+                },
+                {
+                  "$ref": "#/$defs/Container"
+                },
+                {
+                  "$ref": "#/$defs/Image"
+                },
+                {
+                  "$ref": "#/$defs/TextList"
+                },
+                {
+                  "$ref": "#/$defs/Table"
+                },
+                {
+                  "$ref": "#/$defs/Vector"
+                },
+                {
+                  "$ref": "#/$defs/Chart"
+                },
+                {
+                  "$ref": "#/$defs/Infographic"
+                },
+                {
+                  "$ref": "#/$defs/Flex"
+                },
+                {
+                  "$ref": "#/$defs/Grid"
+                },
+                {
+                  "$ref": "#/$defs/Group"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Child"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "padding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Padding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "shadow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Shadow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Stroke"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "container",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Container",
+      "type": "object"
+    },
+    "DataLabelPosition": {
+      "enum": [
+        "base",
+        "mid",
+        "top",
+        "outside"
+      ],
+      "title": "DataLabelPosition",
+      "type": "string"
+    },
+    "Fill": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "title": "Color",
+          "type": "string"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        }
+      },
+      "required": [
+        "color"
+      ],
+      "title": "Fill",
+      "type": "object"
+    },
+    "Flex": {
+      "additionalProperties": false,
+      "properties": {
+        "align_items": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutAlignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "children": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chart": "#/$defs/Chart",
+                "container": "#/$defs/Container",
+                "flex": "#/$defs/Flex",
+                "grid": "#/$defs/Grid",
+                "group": "#/$defs/Group",
+                "image": "#/$defs/Image",
+                "infographic": "#/$defs/Infographic",
+                "math": "#/$defs/MathExpression",
+                "table": "#/$defs/Table",
+                "text": "#/$defs/Text",
+                "text-list": "#/$defs/TextList",
+                "vector": "#/$defs/Vector"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Text"
+              },
+              {
+                "$ref": "#/$defs/MathExpression"
+              },
+              {
+                "$ref": "#/$defs/Container"
+              },
+              {
+                "$ref": "#/$defs/Image"
+              },
+              {
+                "$ref": "#/$defs/TextList"
+              },
+              {
+                "$ref": "#/$defs/Table"
+              },
+              {
+                "$ref": "#/$defs/Vector"
+              },
+              {
+                "$ref": "#/$defs/Chart"
+              },
+              {
+                "$ref": "#/$defs/Infographic"
+              },
+              {
+                "$ref": "#/$defs/Flex"
+              },
+              {
+                "$ref": "#/$defs/Grid"
+              },
+              {
+                "$ref": "#/$defs/Group"
+              }
+            ]
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "column_gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Column Gap"
+        },
+        "direction": {
+          "$ref": "#/$defs/FlexDirection"
+        },
+        "gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap"
+        },
+        "justify_content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutAlignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_children": {
+          "title": "Max Children",
+          "type": "integer"
+        },
+        "min_children": {
+          "title": "Min Children",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "row_gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Gap"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "flex",
+          "title": "Type",
+          "type": "string"
+        },
+        "wrap": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wrap"
+        }
+      },
+      "required": [
+        "type",
+        "direction",
+        "children",
+        "name",
+        "max_children",
+        "min_children"
+      ],
+      "title": "Flex",
+      "type": "object"
+    },
+    "FlexDirection": {
+      "enum": [
+        "row",
+        "column"
+      ],
+      "title": "FlexDirection",
+      "type": "string"
+    },
+    "Font": {
+      "additionalProperties": false,
+      "properties": {
+        "bold": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bold"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "ellipsis": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ellipsis"
+        },
+        "family": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Family"
+        },
+        "italic": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Italic"
+        },
+        "letter_spacing": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Letter Spacing"
+        },
+        "line_height": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line Height"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        },
+        "underline": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Underline"
+        }
+      },
+      "title": "Font",
+      "type": "object"
+    },
+    "GaugeInfographicData": {
+      "additionalProperties": false,
+      "properties": {
+        "max_value": {
+          "title": "Max Value",
+          "type": "number"
+        },
+        "min_value": {
+          "title": "Min Value",
+          "type": "number"
+        },
+        "type": {
+          "const": "gauge",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "max_value",
+        "min_value",
+        "value"
+      ],
+      "title": "GaugeInfographicData",
+      "type": "object"
+    },
+    "Grid": {
+      "additionalProperties": false,
+      "properties": {
+        "align_items": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutAlignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "children": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chart": "#/$defs/Chart",
+                "container": "#/$defs/Container",
+                "flex": "#/$defs/Flex",
+                "grid": "#/$defs/Grid",
+                "group": "#/$defs/Group",
+                "image": "#/$defs/Image",
+                "infographic": "#/$defs/Infographic",
+                "math": "#/$defs/MathExpression",
+                "table": "#/$defs/Table",
+                "text": "#/$defs/Text",
+                "text-list": "#/$defs/TextList",
+                "vector": "#/$defs/Vector"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Text"
+              },
+              {
+                "$ref": "#/$defs/MathExpression"
+              },
+              {
+                "$ref": "#/$defs/Container"
+              },
+              {
+                "$ref": "#/$defs/Image"
+              },
+              {
+                "$ref": "#/$defs/TextList"
+              },
+              {
+                "$ref": "#/$defs/Table"
+              },
+              {
+                "$ref": "#/$defs/Vector"
+              },
+              {
+                "$ref": "#/$defs/Chart"
+              },
+              {
+                "$ref": "#/$defs/Infographic"
+              },
+              {
+                "$ref": "#/$defs/Flex"
+              },
+              {
+                "$ref": "#/$defs/Grid"
+              },
+              {
+                "$ref": "#/$defs/Group"
+              }
+            ]
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "column_gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Column Gap"
+        },
+        "columns": {
+          "title": "Columns",
+          "type": "integer"
+        },
+        "gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gap"
+        },
+        "justify_items": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LayoutAlignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_children": {
+          "title": "Max Children",
+          "type": "integer"
+        },
+        "min_children": {
+          "title": "Min Children",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "row_gap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Gap"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "grid",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "columns",
+        "children",
+        "name",
+        "max_children",
+        "min_children"
+      ],
+      "title": "Grid",
+      "type": "object"
+    },
+    "Group": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chart": "#/$defs/Chart",
+                "container": "#/$defs/Container",
+                "flex": "#/$defs/Flex",
+                "grid": "#/$defs/Grid",
+                "group": "#/$defs/Group",
+                "image": "#/$defs/Image",
+                "infographic": "#/$defs/Infographic",
+                "math": "#/$defs/MathExpression",
+                "table": "#/$defs/Table",
+                "text": "#/$defs/Text",
+                "text-list": "#/$defs/TextList",
+                "vector": "#/$defs/Vector"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Text"
+              },
+              {
+                "$ref": "#/$defs/MathExpression"
+              },
+              {
+                "$ref": "#/$defs/Container"
+              },
+              {
+                "$ref": "#/$defs/Image"
+              },
+              {
+                "$ref": "#/$defs/TextList"
+              },
+              {
+                "$ref": "#/$defs/Table"
+              },
+              {
+                "$ref": "#/$defs/Vector"
+              },
+              {
+                "$ref": "#/$defs/Chart"
+              },
+              {
+                "$ref": "#/$defs/Infographic"
+              },
+              {
+                "$ref": "#/$defs/Flex"
+              },
+              {
+                "$ref": "#/$defs/Grid"
+              },
+              {
+                "$ref": "#/$defs/Group"
+              }
+            ]
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "group",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "children",
+        "name"
+      ],
+      "title": "Group",
+      "type": "object"
+    },
+    "HorizontalAlignment": {
+      "enum": [
+        "left",
+        "center",
+        "right"
+      ],
+      "title": "HorizontalAlignment",
+      "type": "string"
+    },
+    "IconType": {
+      "enum": [
+        "bold",
+        "duotone",
+        "fill",
+        "light",
+        "regular",
+        "thin"
+      ],
+      "title": "IconType",
+      "type": "string"
+    },
+    "Image": {
+      "additionalProperties": false,
+      "properties": {
+        "border_radius": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BorderRadius"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "clip_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clip Path"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "crop_scale": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crop Scale"
+        },
+        "data": {
+          "title": "Data",
+          "type": "string"
+        },
+        "decorative": {
+          "title": "Decorative",
+          "type": "boolean"
+        },
+        "fit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageFit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "flip_h": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flip H"
+        },
+        "flip_v": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flip V"
+        },
+        "focus_x": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Focus X"
+        },
+        "focus_y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Focus Y"
+        },
+        "icon_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IconType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "is_icon": {
+          "title": "Is Icon",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "image",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "data",
+        "decorative",
+        "name",
+        "is_icon"
+      ],
+      "title": "Image",
+      "type": "object"
+    },
+    "ImageFit": {
+      "enum": [
+        "contain",
+        "cover",
+        "fill"
+      ],
+      "title": "ImageFit",
+      "type": "string"
+    },
+    "Infographic": {
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Colors",
+          "type": "array"
+        },
+        "data": {
+          "discriminator": {
+            "mapping": {
+              "gauge": "#/$defs/GaugeInfographicData",
+              "progress_bar": "#/$defs/ProgressBarInfographicData"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ProgressBarInfographicData"
+            },
+            {
+              "$ref": "#/$defs/GaugeInfographicData"
+            }
+          ],
+          "title": "Data"
+        },
+        "decorative": {
+          "title": "Decorative",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "infographic",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "data",
+        "decorative",
+        "name"
+      ],
+      "title": "Infographic",
+      "type": "object"
+    },
+    "LayoutAlignment": {
+      "enum": [
+        "flex-start",
+        "flex-end",
+        "center",
+        "stretch"
+      ],
+      "title": "LayoutAlignment",
+      "type": "string"
+    },
+    "Marker": {
+      "enum": [
+        "bullet",
+        "number",
+        "none"
+      ],
+      "title": "Marker",
+      "type": "string"
+    },
+    "MathExpression": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Alignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decorative": {
+          "title": "Decorative",
+          "type": "boolean"
+        },
+        "display_mode": {
+          "default": true,
+          "title": "Display Mode",
+          "type": "boolean"
+        },
+        "font": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Font"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "latex": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Latex",
+          "type": "string"
+        },
+        "max_length": {
+          "default": 4000,
+          "title": "Max Length",
+          "type": "integer"
+        },
+        "min_length": {
+          "default": 1,
+          "title": "Min Length",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "shadow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Shadow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "math",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "latex",
+        "decorative",
+        "name"
+      ],
+      "title": "MathExpression",
+      "type": "object"
+    },
+    "Padding": {
+      "additionalProperties": false,
+      "properties": {
+        "bottom": {
+          "title": "Bottom",
+          "type": "number"
+        },
+        "left": {
+          "title": "Left",
+          "type": "number"
+        },
+        "right": {
+          "title": "Right",
+          "type": "number"
+        },
+        "top": {
+          "title": "Top",
+          "type": "number"
+        }
+      },
+      "required": [
+        "top",
+        "right",
+        "bottom",
+        "left"
+      ],
+      "title": "Padding",
+      "type": "object"
+    },
+    "Position": {
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Position",
+      "type": "object"
+    },
+    "ProgressBarInfographicData": {
+      "additionalProperties": false,
+      "properties": {
+        "max_value": {
+          "title": "Max Value",
+          "type": "number"
+        },
+        "min_value": {
+          "title": "Min Value",
+          "type": "number"
+        },
+        "type": {
+          "const": "progress_bar",
+          "title": "Type",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "max_value",
+        "min_value",
+        "value"
+      ],
+      "title": "ProgressBarInfographicData",
+      "type": "object"
+    },
+    "Shadow": {
+      "additionalProperties": false,
+      "properties": {
+        "blur": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blur"
+        },
+        "color": {
+          "title": "Color",
+          "type": "string"
+        },
+        "offset_x": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset X"
+        },
+        "offset_y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset Y"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        }
+      },
+      "required": [
+        "color"
+      ],
+      "title": "Shadow",
+      "type": "object"
+    },
+    "Size": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "title": "Size",
+      "type": "object"
+    },
+    "SlideLayout": {
+      "additionalProperties": false,
+      "properties": {
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "description": {
+          "maxLength": 300,
+          "minLength": 10,
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "components"
+      ],
+      "title": "SlideLayout",
+      "type": "object"
+    },
+    "Stroke": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "title": "Color",
+          "type": "string"
+        },
+        "dash": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dash"
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        }
+      },
+      "required": [
+        "color",
+        "width"
+      ],
+      "title": "Stroke",
+      "type": "object"
+    },
+    "Table": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/TableCell"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "decorative": {
+          "title": "Decorative",
+          "type": "boolean"
+        },
+        "max_columns": {
+          "title": "Max Columns",
+          "type": "integer"
+        },
+        "max_rows": {
+          "title": "Max Rows",
+          "type": "integer"
+        },
+        "min_columns": {
+          "title": "Min Columns",
+          "type": "integer"
+        },
+        "min_rows": {
+          "title": "Min Rows",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/TableCell"
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "table",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "columns",
+        "rows",
+        "decorative",
+        "name",
+        "max_columns",
+        "min_columns",
+        "max_rows",
+        "min_rows"
+      ],
+      "title": "Table",
+      "type": "object"
+    },
+    "TableCell": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HorizontalAlignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "colspan": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Colspan",
+          "type": "integer"
+        },
+        "covered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableCellReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "font": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Font"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rowspan": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Rowspan",
+          "type": "integer"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/TextRun"
+          },
+          "title": "Runs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "runs"
+      ],
+      "title": "TableCell",
+      "type": "object"
+    },
+    "TableCellReference": {
+      "additionalProperties": false,
+      "description": "Zero-based absolute table coordinate, including the header row.",
+      "properties": {
+        "column": {
+          "minimum": 0,
+          "title": "Column",
+          "type": "integer"
+        },
+        "row": {
+          "minimum": 0,
+          "title": "Row",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "row",
+        "column"
+      ],
+      "title": "TableCellReference",
+      "type": "object"
+    },
+    "Text": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Alignment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decorative": {
+          "title": "Decorative",
+          "type": "boolean"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "font": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Font"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_length": {
+          "title": "Max Length",
+          "type": "integer"
+        },
+        "min_length": {
+          "title": "Min Length",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "runs": {
+          "items": {
+            "$ref": "#/$defs/TextRun"
+          },
+          "title": "Runs",
+          "type": "array"
+        },
+        "shadow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Shadow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Stroke"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "runs",
+        "decorative",
+        "name",
+        "max_length",
+        "min_length"
+      ],
+      "title": "Text",
+      "type": "object"
+    },
+    "TextList": {
+      "additionalProperties": false,
+      "properties": {
+        "decorative": {
+          "title": "Decorative",
+          "type": "boolean"
+        },
+        "font": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Font"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "items": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/TextRun"
+            },
+            "type": "array"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "marker": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Marker"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_item_length": {
+          "title": "Max Item Length",
+          "type": "integer"
+        },
+        "max_items": {
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "min_item_length": {
+          "title": "Min Item Length",
+          "type": "integer"
+        },
+        "min_items": {
+          "title": "Min Items",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Size"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "text-list",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "items",
+        "decorative",
+        "name",
+        "max_items",
+        "min_items",
+        "max_item_length",
+        "min_item_length"
+      ],
+      "title": "TextList",
+      "type": "object"
+    },
+    "TextRun": {
+      "additionalProperties": false,
+      "properties": {
+        "font": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Font"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextRun",
+      "type": "object"
+    },
+    "Vector": {
+      "additionalProperties": false,
+      "properties": {
+        "closed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed"
+        },
+        "corner_radii": {
+          "anyOf": [
+            {
+              "items": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Corner Radii"
+        },
+        "curve": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VectorCurve"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opacity"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Position"
+          },
+          "minItems": 2,
+          "title": "Points",
+          "type": "array"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "shadow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Shadow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shape": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VectorShape"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Stroke"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "vector",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "points"
+      ],
+      "title": "Vector",
+      "type": "object"
+    },
+    "VectorCurve": {
+      "additionalProperties": false,
+      "properties": {
+        "segments": {
+          "anyOf": [
+            {
+              "maximum": 96,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 16,
+          "title": "Segments"
+        },
+        "tension": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tension"
+        },
+        "type": {
+          "const": "smooth",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "VectorCurve",
+      "type": "object"
+    },
+    "VectorShape": {
+      "enum": [
+        "polygon",
+        "ellipse"
+      ],
+      "title": "VectorShape",
+      "type": "string"
+    },
+    "VerticalAlignment": {
+      "enum": [
+        "top",
+        "middle",
+        "bottom"
+      ],
+      "title": "VerticalAlignment",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "layouts": {
+      "items": {
+        "$ref": "#/$defs/SlideLayout"
+      },
+      "minItems": 1,
+      "title": "Layouts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "layouts"
+  ],
+  "title": "SlideLayouts",
+  "type": "object"
+}

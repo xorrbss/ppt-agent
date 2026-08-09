@@ -2,25 +2,14 @@ import {
   createTemplateV2SlideRenderPlan,
   isTemplateV2SafeColor,
   sampleTemplateV2SmoothPoints,
+  TEMPLATE_V2_PLAN_ELEMENT_TYPES,
 } from "./template-v2-render-plan.mjs";
 import katex from "katex";
 
 const CANVAS = Object.freeze({ width: 1280, height: 720 });
 
-export const TEMPLATE_V2_RENDERED_ELEMENT_TYPES = Object.freeze([
-  "text",
-  "math",
-  "container",
-  "image",
-  "text-list",
-  "table",
-  "vector",
-  "chart",
-  "infographic",
-  "flex",
-  "grid",
-  "group",
-]);
+export const TEMPLATE_V2_RENDERED_ELEMENT_TYPES =
+  TEMPLATE_V2_PLAN_ELEMENT_TYPES;
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);

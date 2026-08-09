@@ -1,4 +1,5 @@
 import type { ChartKind } from "./types";
+import { isTemplateV2ChartType } from "./template-v2-contract.generated";
 
 function normalizeChartKindValue(value: string | null): string {
   if (!value) return "";
@@ -12,7 +13,7 @@ function normalizeChartKindValue(value: string | null): string {
 
 export function chartKindFromValue(value: string | null): ChartKind {
   const normalized = normalizeChartKindValue(value);
-  if (normalized === "bubble") return "bubble";
+  if (isTemplateV2ChartType(normalized)) return normalized;
   if (normalized === "horizontal_bar" || normalized === "bar_horizontal") {
     return "horizontal_bar";
   }
@@ -30,13 +31,8 @@ export function chartKindFromValue(value: string | null): ChartKind {
   ) {
     return "stacked_bar";
   }
-  if (normalized === "line") return "line";
-  if (normalized === "area") return "area";
-  if (normalized === "pie") return "pie";
   if (normalized === "donut" || normalized === "doughnut") return "donut";
   if (normalized === "polar" || normalized === "polar_area") return "polar_area";
-  if (normalized === "radar") return "radar";
-  if (normalized === "scatter") return "scatter";
   return "bar";
 }
 

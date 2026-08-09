@@ -6,13 +6,17 @@
   "description": "Open-source AI presentation generator",
   "scripts": {
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
+    "generate:settings-registry": "node scripts/sync-settings-registry.mjs",
+    "test:settings-registry": "node scripts/sync-settings-registry.mjs --check-only && node --test scripts/settings-registry.test.mjs",
+    "generate:template-v2-contracts": "uv run --directory servers/fastapi python ../../contracts/template_v2/generate.py",
+    "check:template-v2-contracts": "uv run --directory servers/fastapi python ../../contracts/template_v2/generate.py --check",
     "sync:presentation-export": "node scripts/sync-presentation-export.cjs",
     "sync:presentation-export:force": "node scripts/sync-presentation-export.cjs --force",
     "check:presentation-export": "node scripts/sync-presentation-export.cjs --check-only",
     "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs",
     "test:chat-first-deployment-config": "node scripts/check-chat-first-deployment-config.mjs",
     "test:file-size-ratchet": "node scripts/check-file-size-ratchet.mjs",
-    "test:next-ci": "npm run test:file-size-ratchet && npm run test:chat-first-deployment-config && node --test scripts/ppt-agent.test.mjs scripts/check-file-size-ratchet.test.mjs scripts/required-ci-contract.test.mjs scripts/verify-upstream-byte-parity.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:next-ci": "npm run test:file-size-ratchet && npm run test:chat-first-deployment-config && npm run test:settings-registry && node --test scripts/ppt-agent.test.mjs scripts/check-file-size-ratchet.test.mjs scripts/required-ci-contract.test.mjs scripts/verify-upstream-byte-parity.test.mjs && npm --prefix servers/nextjs run test:ci-node",
     "test:upstream-byte-parity": "node --test scripts/verify-upstream-byte-parity.test.mjs",
     "test:workspace-e2e": "npm --prefix servers/nextjs run test:workspace-e2e",
     "test:local": "node scripts/test-local.mjs"
