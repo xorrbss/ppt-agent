@@ -35,14 +35,19 @@ test("Korean and English catalogs have identical leaves and placeholders", () =>
 test("catalog covers the selected audit surfaces and integration-owned overlap copy", () => {
   for (const namespace of [
     "admin",
+    "editableAssets",
     "generation",
     "globalError",
     "initialization",
+    "iconEditor",
+    "imageEditor",
     "languageSwitcher",
     "notFound",
     "overlapMessages",
     "pdfMaker",
     "shortcuts",
+    "share",
+    "slideNavigation",
     "studio",
     "userSettings",
   ]) {
@@ -62,6 +67,7 @@ test("root locale, provider, and persistence contracts stay synchronized", () =>
   assert.match(layout, /<html lang=\{locale\}/u);
   assert.doesNotMatch(layout, /<html lang=["'](?:en|ko)["']/u);
   assert.match(providers, /NextIntlClientProvider/u);
+  assert.match(providers, /timeZone=["']UTC["']/u);
   assert.match(globalError, /document\.documentElement\.lang\s*=\s*nextLocale/u);
   assert.match(globalError, /<html lang=\{locale \?\? DEFAULT_UI_LOCALE\}/u);
   assert.match(switcher, /await setUiLocale\(nextLocale\)/u);

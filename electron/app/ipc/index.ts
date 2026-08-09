@@ -7,10 +7,13 @@ import { setupThemeHandlers } from "./theme_handlers";
 import { setupUploadImage } from "./upload_image";
 import { setupLogHandler } from "./log_handler";
 import { setupApiHandlers } from "./api_handlers";
+import { initializeUserConfigRuntime } from "./user_config_runtime";
 
-export function setupIpcHandlers() {
+export function setupIpcHandlers(
+  refreshRuntimeSettings: () => Promise<void>,
+) {
   setupExportHandlers();
-  setupUserConfigHandlers();
+  setupUserConfigHandlers(refreshRuntimeSettings);
   setupSlideMetadataHandlers();
   setupReadFile();
   setupFooterHandlers();
@@ -18,4 +21,8 @@ export function setupIpcHandlers() {
   setupUploadImage();
   setupLogHandler();
   setupApiHandlers();
+}
+
+export function setupUserConfigRuntime(fastApiPort: number): FastApiEnv {
+  return initializeUserConfigRuntime(fastApiPort, setupIpcHandlers);
 }

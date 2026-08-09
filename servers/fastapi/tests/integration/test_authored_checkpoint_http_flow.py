@@ -3,7 +3,6 @@ import io
 import json
 import socket
 from contextlib import suppress
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
@@ -28,6 +27,7 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
 from models.sql.workspace import (
     WorkspaceAsset,
+    WorkspaceArtifact,
     WorkspaceConversation,
     WorkspaceMessage,
     WorkspaceMessageAttachment,
@@ -117,6 +117,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                     WorkspaceConversation.__table__,
                     WorkspaceMessage.__table__,
                     WorkspaceAsset.__table__,
+                    WorkspaceArtifact.__table__,
                     WorkspaceMessageAttachment.__table__,
                     WorkspaceOperation.__table__,
                     WorkspaceOperationEvent.__table__,
@@ -349,7 +350,15 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                     )
                     assert resumed.status_code == 200, resumed.text
                     assert resumed.json()["id"] == task_id
-                    assert resumed.json()["status"] in {"pending", "running"}
+                    # The workspace runner owns retries. An idempotent replay
+                    # during its durable backoff may still observe the recorded
+                    # error; the next claim transitions the same task through
+                    # running without deleting or replacing its operation row.
+                    assert resumed.json()["status"] in {
+                        "error",
+                        "pending",
+                        "running",
+                    }
 
                     async def completed_status():
                         response = await restarted_client.get(
@@ -395,10 +404,6 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
             assert author_calls == [0, 1, 2]
             assert render_calls == [0, 1, 2]
 
-            output_path = Path(completed["data"]["path"])
-            assert output_path.exists()
-            assert len(PptxPresentation(output_path).slides) == 3
-
             async with maker() as session:
                 job = await session.scalar(
                     select(PresentationGenerationJob).where(
@@ -420,6 +425,20 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                         .order_by(AuthoredSlideCheckpoint.slide_index)
                     )
                 ).scalars().all()
+                failure_event_count = await session.scalar(
+                    select(func.count())
+                    .select_from(WorkspaceOperationEvent)
+                    .where(
+                        WorkspaceOperationEvent.operation_id
+                        == job.workspace_operation_id,
+                        WorkspaceOperationEvent.event_type == "operation.error",
+                    )
+                )
+                artifact = await session.scalar(
+                    select(WorkspaceArtifact).where(
+                        WorkspaceArtifact.presentation_id == job.presentation_id
+                    )
+                )
 
             assert job.state == "published"
             assert job.attempt_number == 2
@@ -428,6 +447,14 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
             assert presentation.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
             assert presentation.n_slides == 3
             assert slide_count == 3
+            assert failure_event_count == 1
+            assert artifact is not None
+            assert completed["data"]["path"].replace("\\", "/").endswith(
+                f"/{artifact.storage_key}"
+            )
+            output_path = app_data / artifact.storage_key
+            assert output_path.exists()
+            assert len(PptxPresentation(output_path).slides) == 3
             assert len(durable_checkpoints) == 3
             assert all(
                 checkpoint.persist_status == "completed"

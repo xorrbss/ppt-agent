@@ -19,9 +19,9 @@
   },
   "counts": {
     "upstreamOwned": 10163,
-    "identical": 9376,
-    "exceptions": 787,
-    "localOnly": 1165
+    "identical": 9358,
+    "exceptions": 805,
+    "localOnly": 1330
   },
   "identical": [
     {
@@ -505,24 +505,9 @@
       "blob": "b97efaa79b2374f2f90c1572eff08dd4a0be06e6"
     },
     {
-      "path": "servers/fastapi/services/icon_finder_service.py",
-      "mode": "100644",
-      "blob": "60450e1bf8123105933b1217d48fe0c4df75bf8d"
-    },
-    {
-      "path": "servers/fastapi/services/mem0_oss_memory.py",
-      "mode": "100644",
-      "blob": "9247c10f9e64cb1be316a886f0233e2b8e8c1210"
-    },
-    {
       "path": "servers/fastapi/services/mem0_presentation_memory_service.py",
       "mode": "100644",
       "blob": "f3df5e866b67a8f3844ac409ebe1286446240185"
-    },
-    {
-      "path": "servers/fastapi/services/provider_settings.py",
-      "mode": "100644",
-      "blob": "2654361a2f57bed96ab4a85df41300d3e87621b5"
     },
     {
       "path": "servers/fastapi/services/score_based_chunker.py",
@@ -46015,11 +46000,6 @@
       "blob": "8afc0f824d557b14656701a2871c1d2849ce8532"
     },
     {
-      "path": "servers/fastapi/tests/unit/test_provider_settings.py",
-      "mode": "100644",
-      "blob": "6007650fab4f178fb14b5db297974be02badd932"
-    },
-    {
       "path": "servers/fastapi/utils/__init__.py",
       "mode": "100644",
       "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
@@ -46150,16 +46130,6 @@
       "blob": "9cc7bf46b7341d57ced39ec171da501983e45e84"
     },
     {
-      "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/admin/AdminPanel.tsx",
-      "mode": "100644",
-      "blob": "2a419a72269c8e801d5a747eed3d14f5afe3035c"
-    },
-    {
-      "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/admin/page.tsx",
-      "mode": "100644",
-      "blob": "de1a297e12d922af362ee5fd75d12b687dd7e8a4"
-    },
-    {
       "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/page.tsx",
       "mode": "100644",
       "blob": "cb946b423553337c1af8549be3a0b1918455c76f"
@@ -46178,11 +46148,6 @@
       "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/loading.tsx",
       "mode": "100644",
       "blob": "409a669946cfcc3f91d85e271f22503987fee2d5"
-    },
-    {
-      "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/UserAccountSettings.tsx",
-      "mode": "100644",
-      "blob": "935c9bdb533e74192181023835c7ce243aa1f3ff"
     },
     {
       "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/ColorPickerComponent.tsx",
@@ -46245,11 +46210,6 @@
       "blob": "e61282fa155798a91fb9b434983e92b73cc8e7ed"
     },
     {
-      "path": "servers/nextjs/app/(presentation-generator)/hooks/useFontLoad.tsx",
-      "mode": "100644",
-      "blob": "7910bbdae9b9ca3e18866b4e6b6053f6ff426c2c"
-    },
-    {
       "path": "servers/nextjs/app/(presentation-generator)/layout.tsx",
       "mode": "100644",
       "blob": "35d8ec3f78533de7571c35e5ebb6bacdc90e0641"
@@ -46270,11 +46230,6 @@
       "blob": "ba1987e6f47363ecd4cb48df8ea0bc90bc2b2ec4"
     },
     {
-      "path": "servers/nextjs/app/(presentation-generator)/presentation/components/KeyboardShortcutsDialog.tsx",
-      "mode": "100644",
-      "blob": "3c69bd56fb3fd57bdd572143aef0d5ac56c27d09"
-    },
-    {
       "path": "servers/nextjs/app/(presentation-generator)/presentation/components/Modal.tsx",
       "mode": "100644",
       "blob": "f076d3eacc9cedde4415d8e0db7a378fa0c443bc"
@@ -46283,16 +46238,6 @@
       "path": "servers/nextjs/app/(presentation-generator)/presentation/loading.tsx",
       "mode": "100644",
       "blob": "e045bf79a47f778c66666f85843af46344df0c03"
-    },
-    {
-      "path": "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/LayoutsPanel.tsx",
-      "mode": "100644",
-      "blob": "c83b18e6e695a119aee390fc9fa219ad9208c18f"
-    },
-    {
-      "path": "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/templatePreviewUtils.ts",
-      "mode": "100644",
-      "blob": "14a1fde0a36095c2207f8ddfd00dc9a87d26883a"
     },
     {
       "path": "servers/nextjs/app/(presentation-generator)/upload/loading.tsx",
@@ -46360,11 +46305,6 @@
       "blob": "6b088a71193dc27290d27f910bc5d73214f3bbc1"
     },
     {
-      "path": "servers/nextjs/app/global-error.tsx",
-      "mode": "100644",
-      "blob": "c4f38788771b1a8cd45f3e7da649e7b7248889c5"
-    },
-    {
       "path": "servers/nextjs/app/icon1.svg",
       "mode": "100644",
       "blob": "a689fb37d09e7b304755deed3792d4f362cc9b86"
@@ -46405,16 +46345,6 @@
       "blob": "1a89d8f5cd21f36ada317949639fa51e51606975"
     },
     {
-      "path": "servers/nextjs/components/slide-editor/shortcuts/editorShortcuts.ts",
-      "mode": "100644",
-      "blob": "02f3b83ca7ff664169ac675b3f45dac68266e35b"
-    },
-    {
-      "path": "servers/nextjs/components/slide-editor/shortcuts/ShortcutKeys.tsx",
-      "mode": "100644",
-      "blob": "684696560d1fdea09d368366d06791f3372165c8"
-    },
-    {
       "path": "servers/nextjs/components/slide-editor/text/markdown-text.ts",
       "mode": "100644",
       "blob": "07d0326120d2a588d04b8e91731dc918e56503fb"
@@ -46423,11 +46353,6 @@
       "path": "servers/nextjs/components/slide-editor/text/template-v2-text-editing.ts",
       "mode": "100644",
       "blob": "f2a1977a22d2f771e17b0f6358fdf8b669408382"
-    },
-    {
-      "path": "servers/nextjs/components/slide-editor/text/template-v2-text.ts",
-      "mode": "100644",
-      "blob": "7f64093f54675edd99ccce459a10492ddae20422"
     },
     {
       "path": "servers/nextjs/components/slide-editor/text/text-line-height.ts",
@@ -46453,11 +46378,6 @@
       "path": "servers/nextjs/components/ui/card.tsx",
       "mode": "100644",
       "blob": "77e9fb789bf225de3ed80bd10e833ba5495a109d"
-    },
-    {
-      "path": "servers/nextjs/components/ui/chart.tsx",
-      "mode": "100644",
-      "blob": "39fba6d6fc8509b968824b5076a8791c46650294"
     },
     {
       "path": "servers/nextjs/components/ui/collapsible.tsx",
@@ -46588,11 +46508,6 @@
       "path": "servers/nextjs/cypress/support/component-index.html",
       "mode": "100644",
       "blob": "3e16e9b07db1a668af79422c1f43856aafd7a682"
-    },
-    {
-      "path": "servers/nextjs/lib/chart-browser.ts",
-      "mode": "100644",
-      "blob": "2e294f64ce9b8b3d809287f32589636aa34dee79"
     },
     {
       "path": "servers/nextjs/lib/fastapi-internal.ts",
@@ -46878,11 +46793,6 @@
       "path": "servers/nextjs/utils/constant.ts",
       "mode": "100644",
       "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
-    },
-    {
-      "path": "servers/nextjs/utils/error_helpers.ts",
-      "mode": "100644",
-      "blob": "98e837a2ba26424a05c9560efdf0087179005cb0"
     },
     {
       "path": "servers/nextjs/utils/image-url-converter.ts",
@@ -47792,7 +47702,7 @@
       "path": "servers/fastapi/api/v1/ppt/endpoints/chat.py",
       "upstreamMode": "100644",
       "upstreamBlob": "59c56876c90e040b312c3f3c21845544f091c5db",
-      "localState": "modified",
+      "localState": "deleted",
       "reasonCode": "auth-ownership-transaction"
     },
     {
@@ -48370,6 +48280,13 @@
       "reasonCode": "auth-ownership-transaction"
     },
     {
+      "path": "servers/fastapi/services/icon_finder_service.py",
+      "upstreamMode": "100644",
+      "upstreamBlob": "60450e1bf8123105933b1217d48fe0c4df75bf8d",
+      "localState": "modified",
+      "reasonCode": "auth-ownership-transaction"
+    },
+    {
       "path": "servers/fastapi/services/image_generation_service.py",
       "upstreamMode": "100644",
       "upstreamBlob": "1ec40ffa2dce3cd2d9e60407463929263c584d7c",
@@ -48384,10 +48301,24 @@
       "reasonCode": "auth-ownership-transaction"
     },
     {
+      "path": "servers/fastapi/services/mem0_oss_memory.py",
+      "upstreamMode": "100644",
+      "upstreamBlob": "9247c10f9e64cb1be316a886f0233e2b8e8c1210",
+      "localState": "modified",
+      "reasonCode": "auth-ownership-transaction"
+    },
+    {
       "path": "servers/fastapi/services/office_document_service.py",
       "upstreamMode": "100644",
       "upstreamBlob": "2eeccc9b80b82acbcd805e5e2c691eb14d070929",
       "localState": "deleted",
+      "reasonCode": "auth-ownership-transaction"
+    },
+    {
+      "path": "servers/fastapi/services/provider_settings.py",
+      "upstreamMode": "100644",
+      "upstreamBlob": "2654361a2f57bed96ab4a85df41300d3e87621b5",
+      "localState": "modified",
       "reasonCode": "auth-ownership-transaction"
     },
     {
@@ -48471,7 +48402,7 @@
       "path": "servers/fastapi/templates/v2/models/elements.py",
       "upstreamMode": "100644",
       "upstreamBlob": "f79dad5ada58f6442e05dd1eaf7e07251c7e9657",
-      "localState": "modified",
+      "localState": "deleted",
       "reasonCode": "auth-ownership-transaction"
     },
     {
@@ -48825,6 +48756,13 @@
       "reasonCode": "auth-ownership-transaction"
     },
     {
+      "path": "servers/fastapi/tests/unit/test_provider_settings.py",
+      "upstreamMode": "100644",
+      "upstreamBlob": "6007650fab4f178fb14b5db297974be02badd932",
+      "localState": "modified",
+      "reasonCode": "auth-ownership-transaction"
+    },
+    {
       "path": "servers/fastapi/tests/unit/test_runtime_limits.py",
       "upstreamMode": "100644",
       "upstreamBlob": "53e88f4bed3f3d2d0736de0b3fd2687bf80b1bf9",
@@ -49080,7 +49018,7 @@
       "path": "servers/fastapi/utils/set_env.py",
       "upstreamMode": "100644",
       "upstreamBlob": "899b6d3e64904bf7ae679bf9aaa497eb1b8287bf",
-      "localState": "modified",
+      "localState": "deleted",
       "reasonCode": "auth-ownership-transaction"
     },
     {
@@ -49280,6 +49218,20 @@
       "reasonCode": "local-fork-replacement"
     },
     {
+      "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/admin/AdminPanel.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "2a419a72269c8e801d5a747eed3d14f5afe3035c",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
+      "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/admin/page.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "de1a297e12d922af362ee5fd75d12b687dd7e8a4",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
       "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/Components/DashboardNav.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "6185cd7fe21f8567df98d4695943539f9e28c59e",
@@ -49402,6 +49354,13 @@
       "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/TextProvider.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "9fa143c6a43dd0a95409b47f5e71273a9518af5c",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
+      "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/UserAccountSettings.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "935c9bdb533e74192181023835c7ce243aa1f3ff",
       "localState": "modified",
       "reasonCode": "local-fork-replacement"
     },
@@ -49812,6 +49771,13 @@
       "reasonCode": "local-fork-replacement"
     },
     {
+      "path": "servers/nextjs/app/(presentation-generator)/hooks/useFontLoad.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "7910bbdae9b9ca3e18866b4e6b6053f6ff426c2c",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
       "path": "servers/nextjs/app/(presentation-generator)/hooks/useFontLoader.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "a106fa30aef8747d275630821de1560d2475807a",
@@ -49934,6 +49900,13 @@
       "path": "servers/nextjs/app/(presentation-generator)/presentation/components/Chat.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "02b4ed3972881bf8fb3cb2d1681305a30d895d98",
+      "localState": "deleted",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
+      "path": "servers/nextjs/app/(presentation-generator)/presentation/components/KeyboardShortcutsDialog.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "3c69bd56fb3fd57bdd572143aef0d5ac56c27d09",
       "localState": "modified",
       "reasonCode": "local-fork-replacement"
     },
@@ -50109,7 +50082,7 @@
       "path": "servers/nextjs/app/(presentation-generator)/services/api/chat.ts",
       "upstreamMode": "100644",
       "upstreamBlob": "ef95422a0f10acba8237d87d42790e361ed19f58",
-      "localState": "modified",
+      "localState": "deleted",
       "reasonCode": "local-fork-replacement"
     },
     {
@@ -50183,6 +50156,13 @@
       "reasonCode": "studio-template-v2"
     },
     {
+      "path": "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/LayoutsPanel.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "c83b18e6e695a119aee390fc9fa219ad9208c18f",
+      "localState": "modified",
+      "reasonCode": "studio-template-v2"
+    },
+    {
       "path": "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/ResponsiveSlideFrame.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "13bef6c6e551e7591048cf48a2aab2886c4d7edd",
@@ -50214,6 +50194,13 @@
       "path": "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/TemplatePreviewStates.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "e1537b0176c8f8c8ad9c700b1cfd27f7a0f0a187",
+      "localState": "deleted",
+      "reasonCode": "studio-template-v2"
+    },
+    {
+      "path": "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/templatePreviewUtils.ts",
+      "upstreamMode": "100644",
+      "upstreamBlob": "14a1fde0a36095c2207f8ddfd00dc9a87d26883a",
       "localState": "deleted",
       "reasonCode": "studio-template-v2"
     },
@@ -50424,6 +50411,13 @@
       "path": "servers/nextjs/app/favicon.ico",
       "upstreamMode": "100644",
       "upstreamBlob": "d5e4adde260d11b36700376a68722b7ccc75c5cd",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
+      "path": "servers/nextjs/app/global-error.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "c4f38788771b1a8cd45f3e7da649e7b7248889c5",
       "localState": "modified",
       "reasonCode": "local-fork-replacement"
     },
@@ -50918,6 +50912,20 @@
       "reasonCode": "tiptap3-editor-adapter"
     },
     {
+      "path": "servers/nextjs/components/slide-editor/shortcuts/editorShortcuts.ts",
+      "upstreamMode": "100644",
+      "upstreamBlob": "02f3b83ca7ff664169ac675b3f45dac68266e35b",
+      "localState": "modified",
+      "reasonCode": "tiptap3-editor-adapter"
+    },
+    {
+      "path": "servers/nextjs/components/slide-editor/shortcuts/ShortcutKeys.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "684696560d1fdea09d368366d06791f3372165c8",
+      "localState": "modified",
+      "reasonCode": "tiptap3-editor-adapter"
+    },
+    {
       "path": "servers/nextjs/components/slide-editor/state/state.ts",
       "upstreamMode": "100644",
       "upstreamBlob": "8923cddcdb951398028dedea051efa208bac6f96",
@@ -51030,6 +51038,13 @@
       "reasonCode": "tiptap3-editor-adapter"
     },
     {
+      "path": "servers/nextjs/components/slide-editor/text/template-v2-text.ts",
+      "upstreamMode": "100644",
+      "upstreamBlob": "7f64093f54675edd99ccce459a10492ddae20422",
+      "localState": "modified",
+      "reasonCode": "tiptap3-editor-adapter"
+    },
+    {
       "path": "servers/nextjs/components/slide-editor/text/TemplateV2InlineEditor.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "227ec549c8aa2365b8a5be6841b2fc065dee64fa",
@@ -51121,6 +51136,13 @@
       "reasonCode": "local-fork-replacement"
     },
     {
+      "path": "servers/nextjs/components/ui/chart.tsx",
+      "upstreamMode": "100644",
+      "upstreamBlob": "39fba6d6fc8509b968824b5076a8791c46650294",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
       "path": "servers/nextjs/components/ui/dialog.tsx",
       "upstreamMode": "100644",
       "upstreamBlob": "2ff6d05ec4af76fe55b0ae4bf75ef2ad2c008a55",
@@ -51187,6 +51209,13 @@
       "path": "servers/nextjs/eslint.config.mjs",
       "upstreamMode": "100644",
       "upstreamBlob": "1bd3f8b635363250c4ad076e2ae35601125822bd",
+      "localState": "modified",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
+      "path": "servers/nextjs/lib/chart-browser.ts",
+      "upstreamMode": "100644",
+      "upstreamBlob": "2e294f64ce9b8b3d809287f32589636aa34dee79",
       "localState": "modified",
       "reasonCode": "local-fork-replacement"
     },
@@ -51615,6 +51644,13 @@
       "upstreamMode": "100644",
       "upstreamBlob": "ea384c0dce27ecc75a7400e35c210d503cc4283c",
       "localState": "deleted",
+      "reasonCode": "local-fork-replacement"
+    },
+    {
+      "path": "servers/nextjs/utils/error_helpers.ts",
+      "upstreamMode": "100644",
+      "upstreamBlob": "98e837a2ba26424a05c9560efdf0087179005cb0",
+      "localState": "modified",
       "reasonCode": "local-fork-replacement"
     },
     {
@@ -52443,6 +52479,8 @@
     "contracts/chat-first-workspace/v1/commands-and-receipts.json",
     "contracts/chat-first-workspace/v1/errors-and-runtime.json",
     "contracts/chat-first-workspace/v1/timeline-projection.json",
+    "contracts/template_v2/generate.py",
+    "contracts/template_v2/v1/schema.json",
     "docker-compose.chat-first-canary.yml",
     "docs/adaptive-backlog.md",
     "docs/adaptive-layout-design-review.md",
@@ -52479,8 +52517,10 @@
     "docs/chat-first-slides-workbench-design-review-v2-20260802.md",
     "docs/chat-first-slides-workbench-runbook-20260803.md",
     "docs/compose-ux-design.md",
+    "docs/configuration.md",
     "docs/content-first-design.md",
     "docs/electron-release-dependency-audit.md",
+    "docs/file-size-policy.md",
     "docs/operational-security-cross-platform-runbook.md",
     "docs/ppt-master-data-journalism-content-proposal-20260802.md",
     "docs/ppt-master-rights-publication-runbook.md",
@@ -52494,6 +52534,7 @@
     "docs/slidespec-production-quality-speed-analysis-20260805.md",
     "docs/slidespec-production-repair-priority-report-20260805.md",
     "docs/slidespec-quality-scorecard-20260804.md",
+    "docs/slidespec-repair-context.md",
     "docs/slidespec-scoped-evidence-operations-20260805.md",
     "docs/slidespec-solver-core-and-performance-20260804.md",
     "docs/template-v2-ai-generation-phase0.md",
@@ -52513,6 +52554,7 @@
     "docs/template-v2-runtime-import-design-20260725.md",
     "docs/template-v2-studio-ai-roadmap-completion-20260727.md",
     "docs/template-v2-table-operations-contract-20260727.md",
+    "docs/ui-localization.md",
     "docs/upload-limits.md",
     "docs/upstream-integration-hardening-report-20260726.md",
     "docs/upstream-realignment-handoff-20260725.md",
@@ -52578,9 +52620,12 @@
     "scripts/bench_authored_render_policy.py",
     "scripts/build-authored-style.py",
     "scripts/check-chat-first-deployment-config.mjs",
+    "scripts/check-file-size-ratchet.mjs",
+    "scripts/check-file-size-ratchet.test.mjs",
     "scripts/check_adaptive_pptx_roundtrip.py",
     "scripts/check_legacy_pptx_roundtrip.py",
     "scripts/convert-authored-style.py",
+    "scripts/file-size-ratchet-baseline.json",
     "scripts/fixtures/upstream-intake/changed-contract-risk.json",
     "scripts/fixtures/upstream-intake/changed-review.json",
     "scripts/fixtures/upstream-intake/missing-ref.json",
@@ -52598,7 +52643,9 @@
     "scripts/ppt-agent.test.mjs",
     "scripts/presenton-local-proxy.mjs",
     "scripts/required-ci-contract.test.mjs",
+    "scripts/settings-registry.test.mjs",
     "scripts/sync-presentation-export.test.cjs",
+    "scripts/sync-settings-registry.mjs",
     "scripts/test-local.mjs",
     "scripts/verify-upstream-byte-parity.mjs",
     "scripts/verify-upstream-byte-parity.test.mjs",
@@ -52611,8 +52658,10 @@
     "servers/fastapi/alembic/versions/4e5f6a7b8c9d_reconcile_presenton_multi_user.py",
     "servers/fastapi/alembic/versions/a3c5e7f9b1d2_add_authored_slide_checkpoints.py",
     "servers/fastapi/alembic/versions/a4b5c6d7e8f9_add_template_v2_phase_one.py",
+    "servers/fastapi/alembic/versions/b3d7f1a9c2e4_backfill_cleanup_journal_redrive_columns.py",
     "servers/fastapi/alembic/versions/b4d6f8a1c3e5_add_authored_resume_count.py",
     "servers/fastapi/alembic/versions/b5c6d7e8f9a0_add_template_v2_pptx_imports.py",
+    "servers/fastapi/alembic/versions/c4e8f0a2b6d9_add_presentation_search_and_share_metrics.py",
     "servers/fastapi/alembic/versions/c5e7f9a1b3d4_add_authored_exact_provenance.py",
     "servers/fastapi/alembic/versions/c6d7e8f9a0b1_add_template_v2_revision.py",
     "servers/fastapi/alembic/versions/c8d1e2f3a4b5_add_deck_plan_column.py",
@@ -52700,6 +52749,8 @@
     "servers/fastapi/authored_styles/structured-mint.yaml",
     "servers/fastapi/authored_styles/tech-blueprint.yaml",
     "servers/fastapi/authored_styles/visual-discovery.yaml",
+    "servers/fastapi/constants/settings_registry.json",
+    "servers/fastapi/constants/settings_registry.py",
     "servers/fastapi/evaluation/exact_reconstruction/README.md",
     "servers/fastapi/evaluation/exact_reconstruction/RESULTS_2026-08-02.md",
     "servers/fastapi/evaluation/exact_reconstruction/manifest.example.json",
@@ -52781,6 +52832,25 @@
     "servers/fastapi/services/slidespec_geometry_candidates.py",
     "servers/fastapi/services/slidespec_pipeline_performance.py",
     "servers/fastapi/services/slidespec_repair.py",
+    "servers/fastapi/services/slidespec_repair_context/__init__.py",
+    "servers/fastapi/services/slidespec_repair_context/artifacts.py",
+    "servers/fastapi/services/slidespec_repair_context/base_projection.py",
+    "servers/fastapi/services/slidespec_repair_context/builder.py",
+    "servers/fastapi/services/slidespec_repair_context/composition_groups.py",
+    "servers/fastapi/services/slidespec_repair_context/constraint_projection.py",
+    "servers/fastapi/services/slidespec_repair_context/exact_bottom_stack.py",
+    "servers/fastapi/services/slidespec_repair_context/exact_compositions.py",
+    "servers/fastapi/services/slidespec_repair_context/exact_operations.py",
+    "servers/fastapi/services/slidespec_repair_context/exact_vertical_pack.py",
+    "servers/fastapi/services/slidespec_repair_context/geometry.py",
+    "servers/fastapi/services/slidespec_repair_context/glyph_compositions.py",
+    "servers/fastapi/services/slidespec_repair_context/issue_groups.py",
+    "servers/fastapi/services/slidespec_repair_context/numeric.py",
+    "servers/fastapi/services/slidespec_repair_context/owner_ancestors.py",
+    "servers/fastapi/services/slidespec_repair_context/owner_pair_capacity.py",
+    "servers/fastapi/services/slidespec_repair_context/owner_pairs.py",
+    "servers/fastapi/services/slidespec_repair_context/policy.py",
+    "servers/fastapi/services/slidespec_repair_context/state.py",
     "servers/fastapi/services/slidespec_repair_pipeline.py",
     "servers/fastapi/services/slidespec_rollout_policy.py",
     "servers/fastapi/services/template_v2_generation_observability.py",
@@ -52822,10 +52892,8 @@
     "servers/fastapi/services/workspace_operation_worker.py",
     "servers/fastapi/services/workspace_page_remake_operation_handler.py",
     "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
-    "servers/fastapi/services/workspace_rollout_policy.py",
     "servers/fastapi/services/workspace_runtime_profile.py",
     "servers/fastapi/services/workspace_service.py",
-    "servers/fastapi/services/workspace_shadow_parity.py",
     "servers/fastapi/template_v2_schema_contract.py",
     "servers/fastapi/templates/handler.py",
     "servers/fastapi/templates/pptx_convert.py",
@@ -52838,10 +52906,20 @@
     "servers/fastapi/templates/v2/constants.py",
     "servers/fastapi/templates/v2/evidence/ppt-master-data-journalism/approval-request.v1.md",
     "servers/fastapi/templates/v2/evidence/ppt-master-data-journalism/review-packet.v1.json",
+    "servers/fastapi/templates/v2/generation_prompting.py",
     "servers/fastapi/templates/v2/local_assets.py",
     "servers/fastapi/templates/v2/manifests/ppt_master_catalog.v1.json",
     "servers/fastapi/templates/v2/manifests/ppt_master_rights.v1.json",
     "servers/fastapi/templates/v2/models/__init__.py",
+    "servers/fastapi/templates/v2/models/elements/__init__.py",
+    "servers/fastapi/templates/v2/models/elements/base.py",
+    "servers/fastapi/templates/v2/models/elements/chart.py",
+    "servers/fastapi/templates/v2/models/elements/containers.py",
+    "servers/fastapi/templates/v2/models/elements/image.py",
+    "servers/fastapi/templates/v2/models/elements/infographic.py",
+    "servers/fastapi/templates/v2/models/elements/table.py",
+    "servers/fastapi/templates/v2/models/elements/text.py",
+    "servers/fastapi/templates/v2/models/elements/vector.py",
     "servers/fastapi/templates/v2/persistence.py",
     "servers/fastapi/templates/v2/policy.py",
     "servers/fastapi/templates/v2/pptx/__init__.py",
@@ -52962,8 +53040,6 @@
     "servers/fastapi/tests/unit/test_chat_first_cors_contract.py",
     "servers/fastapi/tests/unit/test_chat_first_direct_write_gate.py",
     "servers/fastapi/tests/unit/test_chat_first_generation_integration.py",
-    "servers/fastapi/tests/unit/test_chat_first_legacy_gate.py",
-    "servers/fastapi/tests/unit/test_chat_first_rollout_legacy_write.py",
     "servers/fastapi/tests/unit/test_chat_first_runtime_admission.py",
     "servers/fastapi/tests/unit/test_chat_outline_context.py",
     "servers/fastapi/tests/unit/test_chat_page_remake_suggestion.py",
@@ -52986,6 +53062,7 @@
     "servers/fastapi/tests/unit/test_file_decompose_jobs_api.py",
     "servers/fastapi/tests/unit/test_files_document_conversion_errors.py",
     "servers/fastapi/tests/unit/test_files_text_decompose.py",
+    "servers/fastapi/tests/unit/test_font_upload_limits.py",
     "servers/fastapi/tests/unit/test_generation_cancel.py",
     "servers/fastapi/tests/unit/test_generation_pipeline.py",
     "servers/fastapi/tests/unit/test_gpt_image_2.py",
@@ -52997,6 +53074,8 @@
     "servers/fastapi/tests/unit/test_lifespan.py",
     "servers/fastapi/tests/unit/test_lifespan_logging.py",
     "servers/fastapi/tests/unit/test_lightweight_document_service.py",
+    "servers/fastapi/tests/unit/test_llm_config_snapshots.py",
+    "servers/fastapi/tests/unit/test_mcp_server_startup.py",
     "servers/fastapi/tests/unit/test_outline_document_context.py",
     "servers/fastapi/tests/unit/test_preflight_cache_evidence_atoms.py",
     "servers/fastapi/tests/unit/test_presentation_delete_safety.py",
@@ -53004,10 +53083,16 @@
     "servers/fastapi/tests/unit/test_presentation_generation_info.py",
     "servers/fastapi/tests/unit/test_presentation_generation_jobs.py",
     "servers/fastapi/tests/unit/test_presentation_generation_operation_handler.py",
+    "servers/fastapi/tests/unit/test_presentation_list_payload.py",
     "servers/fastapi/tests/unit/test_presentation_publication_durability.py",
+    "servers/fastapi/tests/unit/test_presentation_search_share_migration.py",
     "servers/fastapi/tests/unit/test_presentation_share.py",
     "servers/fastapi/tests/unit/test_presentation_version_service.py",
     "servers/fastapi/tests/unit/test_roundtrip_projection_owned_paint.py",
+    "servers/fastapi/tests/unit/test_runtime_settings.py",
+    "servers/fastapi/tests/unit/test_runtime_settings_middleware.py",
+    "servers/fastapi/tests/unit/test_runtime_settings_surfaces.py",
+    "servers/fastapi/tests/unit/test_runtime_startup_security.py",
     "servers/fastapi/tests/unit/test_server_cli.py",
     "servers/fastapi/tests/unit/test_server_repository_environment.py",
     "servers/fastapi/tests/unit/test_simple_auth_owner_scope.py",
@@ -53023,10 +53108,12 @@
     "servers/fastapi/tests/unit/test_slidespec_perf_harness.py",
     "servers/fastapi/tests/unit/test_slidespec_pipeline_performance.py",
     "servers/fastapi/tests/unit/test_slidespec_repair_acceptance.py",
+    "servers/fastapi/tests/unit/test_slidespec_repair_context_facade.py",
     "servers/fastapi/tests/unit/test_slidespec_repair_pipeline.py",
     "servers/fastapi/tests/unit/test_slidespec_safe_projection_repair.py",
     "servers/fastapi/tests/unit/test_slidespec_solver.py",
     "servers/fastapi/tests/unit/test_slidespec_vertical_slice.py",
+    "servers/fastapi/tests/unit/test_startup_migrations.py",
     "servers/fastapi/tests/unit/test_structured_template_import_api.py",
     "servers/fastapi/tests/unit/test_structured_templates_api.py",
     "servers/fastapi/tests/unit/test_target_issue_delta_physical_owner.py",
@@ -53036,6 +53123,7 @@
     "servers/fastapi/tests/unit/test_template_v2_catalog_candidate_preflight.py",
     "servers/fastapi/tests/unit/test_template_v2_chart_table_edit_contract.py",
     "servers/fastapi/tests/unit/test_template_v2_compat_facade.py",
+    "servers/fastapi/tests/unit/test_template_v2_contract_codegen.py",
     "servers/fastapi/tests/unit/test_template_v2_default_authority.py",
     "servers/fastapi/tests/unit/test_template_v2_generation_entrypoint.py",
     "servers/fastapi/tests/unit/test_template_v2_generation_observability.py",
@@ -53095,6 +53183,7 @@
     "servers/fastapi/tests/unit/test_workspace_error_projection.py",
     "servers/fastapi/tests/unit/test_workspace_event_retention.py",
     "servers/fastapi/tests/unit/test_workspace_gate8_observability.py",
+    "servers/fastapi/tests/unit/test_workspace_legacy_write_gate.py",
     "servers/fastapi/tests/unit/test_workspace_metrics_exporter.py",
     "servers/fastapi/tests/unit/test_workspace_operation_kind_registry.py",
     "servers/fastapi/tests/unit/test_workspace_operation_observability.py",
@@ -53138,6 +53227,7 @@
     "servers/fastapi/utils/llm_calls/vision_qa.py",
     "servers/fastapi/utils/owner_context.py",
     "servers/fastapi/utils/prompt_safety.py",
+    "servers/fastapi/utils/runtime_settings.py",
     "servers/fastapi/utils/simple_auth.py",
     "servers/fastapi/utils/slide_capture.py",
     "servers/fastapi/utils/slidespec_constraints.py",
@@ -53148,6 +53238,24 @@
     "servers/nextjs/app/(export)/layout.tsx",
     "servers/nextjs/app/(export)/pdf-maker/TemplateV2GeneralSlide.tsx",
     "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/components/DashboardPage.cy.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/components/DeferredSlideThumbnail.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/components/SharePopover.cy.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/components/SharePopover.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/SettingPage.cy.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/TextProvider.cy.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/setting-page/DownloadProgressModal.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/setting-page/SaveConfigButton.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/setting-page/SessionSection.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/setting-page/providerSummaries.ts",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/setting-page/types.ts",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/setting-page/useSettingsPageState.ts",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/setting-page/useUnsavedModelGuard.ts",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/text-provider/ModelSelectField.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/text-provider/ProviderCredentialFields.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/text-provider/ProviderSelectField.tsx",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/text-provider/types.ts",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/text-provider/useProviderFields.ts",
+    "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/text-provider/useTextProviderForm.ts",
     "servers/nextjs/app/(presentation-generator)/(dashboard)/theme/components/ThemeComposer.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/(dashboard)/theme/components/ThemeComposer.tsx",
     "servers/nextjs/app/(presentation-generator)/components/AdaptiveBlockControls.cy.tsx",
@@ -53160,12 +53268,14 @@
     "servers/nextjs/app/(presentation-generator)/components/AuthoredSlidePreview.tsx",
     "servers/nextjs/app/(presentation-generator)/components/EditableChart.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/components/EditableChart.tsx",
+    "servers/nextjs/app/(presentation-generator)/components/EditableLayoutWrapper.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/components/EditableLayoutWrapper.tsx",
     "servers/nextjs/app/(presentation-generator)/components/EditableText.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/components/EditableText.tsx",
     "servers/nextjs/app/(presentation-generator)/components/EditableTextContext.tsx",
     "servers/nextjs/app/(presentation-generator)/components/IconsEditor.tsx",
     "servers/nextjs/app/(presentation-generator)/components/MarkdownInlineText.cy.tsx",
+    "servers/nextjs/app/(presentation-generator)/components/PresentationRender.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/components/TiptapTextReplacer.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/components/TiptapTextReplacer.tsx",
     "servers/nextjs/app/(presentation-generator)/custom-template/components/SaveLayoutModal.tsx",
@@ -53187,26 +53297,28 @@
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredQualityReview.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredTemplateChanger.target-workspace.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/AuthoredTemplateChanger.tsx",
-    "servers/nextjs/app/(presentation-generator)/presentation/components/Chat.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/GenerationInfoDialog.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/LoadingState.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/PageRemakeHistory.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/PageRemakeHistory.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/PageRemakePreviewImage.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/PresentationHeader.cy.tsx",
-    "servers/nextjs/app/(presentation-generator)/presentation/components/SharePopover.cy.tsx",
-    "servers/nextjs/app/(presentation-generator)/presentation/components/SharePopover.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/PresentationPage.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/SidePanel.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/SlideContent.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/VersionHistoryPopover.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/VersionHistoryPopover.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/components/authoredPageRemakePreview.ts",
-    "servers/nextjs/app/(presentation-generator)/presentation/components/chatToolMetadata.test.ts",
-    "servers/nextjs/app/(presentation-generator)/presentation/components/chatToolMetadata.ts",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/AuthoredHeaderActions.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/ExportMenu.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/ExportQualityDialog.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/HeaderToolbar.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/PresentationTitleEditor.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/RegenerateConfirmDialog.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/components/header/types.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/hooks/useHybridExportWarmup.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/hooks/useHybridExportWarmup.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/utils/buildSafeExportFileName.ts",
-    "servers/nextjs/app/(presentation-generator)/presentation/utils/chatAttachments.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/utils/composeStyledTheme.test.mjs",
     "servers/nextjs/app/(presentation-generator)/presentation/utils/composeStyledTheme.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/utils/isAuthoredPresentation.ts",
@@ -53218,6 +53330,7 @@
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceComposer.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceMessage.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceOperationCard.tsx",
+    "servers/nextjs/app/(presentation-generator)/presentation/workspace/WorkspaceSuggestions.tsx",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/generationContext.test.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/generationContext.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/index.ts",
@@ -53226,20 +53339,34 @@
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/types.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/useWorkspace.completion.test.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/useWorkspace.ts",
+    "servers/nextjs/app/(presentation-generator)/presentation/workspace/useWorkspaceAgentFocus.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/workspaceCompletion.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/workspaceStream.test.ts",
     "servers/nextjs/app/(presentation-generator)/presentation/workspace/workspaceStream.ts",
     "servers/nextjs/app/(presentation-generator)/services/api/api-error-handler.cy.ts",
     "servers/nextjs/app/(presentation-generator)/services/api/authored.cy.ts",
     "servers/nextjs/app/(presentation-generator)/services/api/authored.ts",
+    "servers/nextjs/app/(presentation-generator)/services/api/dashboard-list-query.test.ts",
+    "servers/nextjs/app/(presentation-generator)/services/api/dashboard-list-query.ts",
     "servers/nextjs/app/(presentation-generator)/services/api/presentation-generation.cy.ts",
     "servers/nextjs/app/(presentation-generator)/services/api/presentation-generation.decompose.test.mjs",
     "servers/nextjs/app/(presentation-generator)/services/api/template.cy.ts",
     "servers/nextjs/app/(presentation-generator)/services/api/workspace.ts",
     "servers/nextjs/app/(presentation-generator)/template-preview/components/StructuredTemplateLayoutEditor.cy.tsx",
     "servers/nextjs/app/(presentation-generator)/template-preview/components/StructuredTemplateLayoutEditor.tsx",
+    "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/EditorChrome.tsx",
+    "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/TemplatePreviewSection.tsx",
+    "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/types.ts",
+    "servers/nextjs/app/(presentation-generator)/template-preview/components/editor/useTemplateEditorReducer.ts",
     "servers/nextjs/app/(presentation-generator)/upload/components/ThemeGallery.tsx",
     "servers/nextjs/app/(presentation-generator)/upload/components/applyDeckTheme.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/abortDocumentProcessing.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/fileCategory.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/llmConfigSummary.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/types.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useSupportingFiles.ts",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts",
+    "servers/nextjs/app/actions/set-ui-locale.ts",
     "servers/nextjs/app/api/decompose-documents/jobs/[jobId]/route.ts",
     "servers/nextjs/app/api/decompose-documents/jobs/route.test.mjs",
     "servers/nextjs/app/api/decompose-documents/jobs/route.ts",
@@ -53251,6 +53378,7 @@
     "servers/nextjs/app/api/rasterize-icon/route.ts",
     "servers/nextjs/app/api/runtime-tailwind-css/route.ts",
     "servers/nextjs/app/api/upload-limits/route.ts",
+    "servers/nextjs/app/error.tsx",
     "servers/nextjs/app/hooks/useCustomTemplates.ts",
     "servers/nextjs/app/hooks/useRemoteSvgIcon.cy.tsx",
     "servers/nextjs/app/hooks/useRemoteSvgIcon.tsx",
@@ -53335,6 +53463,7 @@
     "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2TableEditorPanel.cy.tsx",
     "servers/nextjs/app/template-v2-studio/[templateId]/TemplateV2TableEditorPanel.tsx",
     "servers/nextjs/app/template-v2-studio/[templateId]/page.tsx",
+    "servers/nextjs/app/template-v2-studio/[templateId]/studioI18nTestUtils.cy.tsx",
     "servers/nextjs/app/template-v2-studio/[templateId]/toolbar/ChartTableToolbar.cy.tsx",
     "servers/nextjs/app/template-v2-studio/[templateId]/toolbar/ChartToolbar.tsx",
     "servers/nextjs/app/template-v2-studio/[templateId]/toolbar/IconToolbar.tsx",
@@ -53359,16 +53488,44 @@
     "servers/nextjs/components/MarkDownRender.cy.tsx",
     "servers/nextjs/components/OnBoarding/GenerationWithImage.tsx",
     "servers/nextjs/components/OnBoarding/ModeSelectStep.tsx",
+    "servers/nextjs/components/i18n/LocalizedToaster.tsx",
+    "servers/nextjs/components/i18n/UiLocaleSelect.tsx",
+    "servers/nextjs/components/i18n/UiLocaleSwitcher.tsx",
     "servers/nextjs/components/slide-editor/images/imageCrop.test.mjs",
     "servers/nextjs/components/slide-editor/images/imageCrop.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2-import.deck.test.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2-import.elements.test.ts",
     "servers/nextjs/components/slide-editor/importing/template-v2-table-span.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/content.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/deck.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/element-base.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/element-bounds.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/elements.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/graphics-elements.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/normalize.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/raw-frames.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/raw-layout.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/slide.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/styles.ts",
+    "servers/nextjs/components/slide-editor/importing/template-v2/values.ts",
     "servers/nextjs/components/ui/progress-bar.cy.tsx",
     "servers/nextjs/cypress/component/GenerationInfoDialog.cy.tsx",
     "servers/nextjs/cypress/component/MathRendering.cy.tsx",
     "servers/nextjs/cypress/component/UploadFilePolicy.cy.tsx",
     "servers/nextjs/cypress/component/WorkspaceChatPanelLiveBackend.cy.tsx",
+    "servers/nextjs/cypress/component/i18n/UiLocaleSelect.cy.tsx",
     "servers/nextjs/cypress/e2e/workspaceChatFirstRoute.cy.ts",
     "servers/nextjs/cypress/fixtures/template-v2-matrix/templateV2MatrixFixtures.ts",
+    "servers/nextjs/cypress/support/testHelpers.ts",
+    "servers/nextjs/i18n/global.d.ts",
+    "servers/nextjs/i18n/hardcoded-ui-baseline.json",
+    "servers/nextjs/i18n/i18n-contract.test.mjs",
+    "servers/nextjs/i18n/locale.test.ts",
+    "servers/nextjs/i18n/locale.ts",
+    "servers/nextjs/i18n/messages.ts",
+    "servers/nextjs/i18n/messages/en.json",
+    "servers/nextjs/i18n/messages/ko.json",
+    "servers/nextjs/i18n/server.ts",
     "servers/nextjs/lib/adaptiveBlockEdit.test.mjs",
     "servers/nextjs/lib/adaptiveBlockEdit.ts",
     "servers/nextjs/lib/app-data-directory.test.mjs",
@@ -53435,8 +53592,6 @@
     "servers/nextjs/lib/authored-hybrid/security.test.mjs",
     "servers/nextjs/lib/authored-hybrid/security.ts",
     "servers/nextjs/lib/authored-hybrid/units.ts",
-    "servers/nextjs/lib/chat-first-workbench.test.ts",
-    "servers/nextjs/lib/chat-first-workbench.ts",
     "servers/nextjs/lib/export-fidelity/fixture-contract.test.mjs",
     "servers/nextjs/lib/export-fidelity/fixtures/template-v2-general/00-title-body/source.html",
     "servers/nextjs/lib/export-fidelity/fixtures/template-v2-general/00-title-body/template.v2.json",
@@ -53499,14 +53654,55 @@
     "servers/nextjs/lib/template-v2-general-renderer.d.ts",
     "servers/nextjs/lib/template-v2-general-renderer.mjs",
     "servers/nextjs/lib/template-v2-general-renderer.test.mjs",
+    "servers/nextjs/lib/template-v2-html/chart-colors.ts",
+    "servers/nextjs/lib/template-v2-html/chart-config.ts",
+    "servers/nextjs/lib/template-v2-html/chart-data.ts",
+    "servers/nextjs/lib/template-v2-html/chart-kinds.ts",
+    "servers/nextjs/lib/template-v2-html/chart-scales.ts",
+    "servers/nextjs/lib/template-v2-html/chart-script.ts",
+    "servers/nextjs/lib/template-v2-html/chart.ts",
+    "servers/nextjs/lib/template-v2-html/css.ts",
+    "servers/nextjs/lib/template-v2-html/element-types.ts",
+    "servers/nextjs/lib/template-v2-html/fonts.ts",
+    "servers/nextjs/lib/template-v2-html/geometry.ts",
+    "servers/nextjs/lib/template-v2-html/image.ts",
+    "servers/nextjs/lib/template-v2-html/infographic.ts",
+    "servers/nextjs/lib/template-v2-html/layout.ts",
+    "servers/nextjs/lib/template-v2-html/render-item.ts",
+    "servers/nextjs/lib/template-v2-html/runs.ts",
+    "servers/nextjs/lib/template-v2-html/style.ts",
+    "servers/nextjs/lib/template-v2-html/table.ts",
+    "servers/nextjs/lib/template-v2-html/template-v2-contract.generated.mjs",
+    "servers/nextjs/lib/template-v2-html/template-v2-contract.generated.test.mjs",
+    "servers/nextjs/lib/template-v2-html/template-v2-contract.generated.ts",
+    "servers/nextjs/lib/template-v2-html/template-v2-contract.typecheck.ts",
+    "servers/nextjs/lib/template-v2-html/text.ts",
+    "servers/nextjs/lib/template-v2-html/types.ts",
+    "servers/nextjs/lib/template-v2-html/values.ts",
+    "servers/nextjs/lib/template-v2-html/vector.ts",
     "servers/nextjs/lib/template-v2-image-replacement.test.ts",
     "servers/nextjs/lib/template-v2-image-replacement.ts",
     "servers/nextjs/lib/template-v2-import-review.test.ts",
     "servers/nextjs/lib/template-v2-import-review.ts",
     "servers/nextjs/lib/template-v2-infographic-contract.test.ts",
     "servers/nextjs/lib/template-v2-infographic-contract.ts",
+    "servers/nextjs/lib/template-v2-json-to-html.chart-data.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.chart-kinds.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.container.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.document.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.flex.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.grid.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.image.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.infographic.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.list.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.table.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.test-harness.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.text.golden.test.mjs",
+    "servers/nextjs/lib/template-v2-json-to-html.vector.golden.test.mjs",
     "servers/nextjs/lib/template-v2-konva.test.ts",
     "servers/nextjs/lib/template-v2-konva.ts",
+    "servers/nextjs/lib/template-v2-preview/core.ts",
+    "servers/nextjs/lib/template-v2-preview/index.ts",
     "servers/nextjs/lib/template-v2-quality-inspector.test.ts",
     "servers/nextjs/lib/template-v2-quality-inspector.ts",
     "servers/nextjs/lib/template-v2-render-plan.d.mts",
@@ -53552,10 +53748,11 @@
     "servers/nextjs/lib/template-v2-vector.ts",
     "servers/nextjs/lib/upload-limits.test.ts",
     "servers/nextjs/lib/upload-limits.ts",
-    "servers/nextjs/lib/use-chat-first-workbench-rollout.ts",
     "servers/nextjs/lib/use-upload-limits.ts",
     "servers/nextjs/lib/workspace-contract-fixtures.test.mjs",
     "servers/nextjs/public/dx-browser-icon-v2.png",
+    "servers/nextjs/scripts/check-i18n-hardcoding.mjs",
+    "servers/nextjs/scripts/check-i18n-hardcoding.test.mjs",
     "servers/nextjs/scripts/generate-layout-schemas.mjs",
     "servers/nextjs/scripts/inspect-pptx-embedded-fonts.mjs",
     "servers/nextjs/scripts/lib/authored-hybrid-fidelity-report.mjs",
@@ -53576,7 +53773,11 @@
     "servers/nextjs/scripts/run-ci-node-tests.mjs",
     "servers/nextjs/scripts/run-next-build.mjs",
     "servers/nextjs/scripts/run-workspace-e2e.mjs",
+    "servers/nextjs/scripts/test-support/node-alias-imports.mjs",
     "servers/nextjs/store/slices/presentationGenUpload.cy.ts",
+    "servers/nextjs/tests/dark-mode-withdrawal.test.mjs",
+    "servers/nextjs/tests/i18n-audited-surfaces.test.mjs",
+    "servers/nextjs/tests/rules-of-hooks-regression.test.mjs",
     "servers/nextjs/tests/workspace-contract.test.mjs",
     "servers/nextjs/utils/fetchWithNetworkRetry.test.ts",
     "servers/nextjs/utils/fetchWithNetworkRetry.ts",

@@ -29,11 +29,13 @@ from services.account_deletion_service import (
 from services.database import get_async_session
 from services.provider_settings import (
     ProviderSettingsValidationError,
+    REDACTED_SECRET_PLACEHOLDER,
     get_provider_settings,
     get_provider_settings_update_lock,
     redact_provider_settings,
     save_provider_settings,
 )
+from utils.available_models import list_available_openai_compatible_models
 from services.workspace_cleanup_journal_service import (
     account_cleanup_tombstone_exists,
     redrive_workspace_cleanup_dead_letter,
@@ -93,6 +95,43 @@ async def update_provider_settings(
             raise HTTPException(status_code=422, detail=str(error)) from None
         refresh_process_runtime_settings(persisted_config=saved)
         return redact_provider_settings(saved)
+
+
+@API_V1_ADMIN_ROUTER.post("/provider-settings/custom-model-available")
+async def check_stored_custom_model_available(
+    _: None = Depends(require_settings_admin),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict[str, bool]:
+    """Validate the selected custom model without exposing its stored secret."""
+    config = await get_provider_settings(session)
+    url = config.get("CUSTOM_LLM_URL")
+    api_key = config.get("CUSTOM_LLM_API_KEY", "")
+    model = config.get("CUSTOM_MODEL")
+
+    if (
+        not isinstance(url, str)
+        or not url
+        or not isinstance(api_key, str)
+        or api_key == REDACTED_SECRET_PLACEHOLDER
+        or not isinstance(model, str)
+        or not model
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Stored custom LLM configuration is incomplete",
+        )
+
+    try:
+        models = await list_available_openai_compatible_models(url, api_key)
+    except Exception:
+        # Upstream errors can contain request details. Keep credentials and the
+        # private endpoint out of both the API response and application logs.
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to validate stored custom LLM configuration",
+        ) from None
+
+    return {"available": model in models}
 
 
 @API_V1_ADMIN_ROUTER.get("/users", response_model=list[PublicUser])

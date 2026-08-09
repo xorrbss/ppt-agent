@@ -81,6 +81,92 @@ def test_secret_placeholder_is_never_persisted_without_an_existing_secret():
     ) == {"LLM": "openai"}
 
 
+def test_custom_secret_survives_redacted_and_partial_updates():
+    stored = {
+        "LLM": "custom",
+        "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+        "CUSTOM_LLM_API_KEY": "stored-custom-key",
+        "CUSTOM_MODEL": "private-model",
+    }
+
+    redacted = redact_provider_settings(stored)
+    assert redacted["CUSTOM_LLM_API_KEY"] == REDACTED_SECRET_PLACEHOLDER
+    assert "stored-custom-key" not in repr(redacted)
+
+    assert merge_provider_settings(stored, redacted) == stored
+    assert merge_provider_settings(
+        stored, {"CUSTOM_MODEL": "replacement-model"}
+    ) == {
+        **stored,
+        "CUSTOM_MODEL": "replacement-model",
+    }
+
+
+def test_partial_update_removes_a_previously_persisted_secret_placeholder():
+    assert merge_provider_settings(
+        {
+            "LLM": "custom",
+            "CUSTOM_LLM_API_KEY": REDACTED_SECRET_PLACEHOLDER,
+        },
+        {"CUSTOM_MODEL": "private-model"},
+    ) == {
+        "LLM": "custom",
+        "CUSTOM_MODEL": "private-model",
+    }
+
+
+def test_save_partial_custom_update_preserves_secret_in_db_and_file_mirror(
+    monkeypatch,
+):
+    stored = {
+        "LLM": "custom",
+        "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+        "CUSTOM_LLM_API_KEY": "stored-custom-key",
+        "CUSTOM_MODEL": "private-model",
+    }
+    session = ProviderSettingsSession()
+    session.row = ProviderSettings(id=1, config=stored)
+    mirrored = []
+    monkeypatch.setattr(
+        "services.provider_settings._mirror_to_legacy_file",
+        lambda config: mirrored.append(dict(config)),
+    )
+
+    saved = asyncio.run(
+        save_provider_settings(session, {"CUSTOM_MODEL": "replacement-model"})
+    )
+
+    expected = {**stored, "CUSTOM_MODEL": "replacement-model"}
+    assert saved == expected
+    assert session.row.config == expected
+    assert mirrored == [expected]
+
+
+def test_save_never_writes_a_placeholder_when_no_custom_secret_exists(monkeypatch):
+    session = ProviderSettingsSession()
+    mirrored = []
+    monkeypatch.setattr(
+        "services.provider_settings._mirror_to_legacy_file",
+        lambda config: mirrored.append(dict(config)),
+    )
+
+    saved = asyncio.run(
+        save_provider_settings(
+            session,
+            {
+                "LLM": "custom",
+                "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+                "CUSTOM_LLM_API_KEY": REDACTED_SECRET_PLACEHOLDER,
+                "CUSTOM_MODEL": "private-model",
+            },
+        )
+    )
+
+    assert "CUSTOM_LLM_API_KEY" not in saved
+    assert "CUSTOM_LLM_API_KEY" not in session.row.config
+    assert REDACTED_SECRET_PLACEHOLDER not in repr(mirrored)
+
+
 def test_admin_get_redacts_secret_values(monkeypatch):
     async def get_settings(_session):
         return {"LLM": "openai", "OPENAI_API_KEY": "provider-key"}
@@ -95,6 +181,153 @@ def test_admin_get_redacts_secret_values(monkeypatch):
         "OPENAI_API_KEY": REDACTED_SECRET_PLACEHOLDER,
     }
     assert "provider-key" not in repr(response)
+
+
+def test_admin_custom_model_check_uses_stored_key_without_exposing_it(monkeypatch):
+    stored_key = "stored-custom-key"
+    provider_call = {}
+
+    async def get_settings(_session):
+        return {
+            "LLM": "custom",
+            "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+            "CUSTOM_LLM_API_KEY": stored_key,
+            "CUSTOM_MODEL": "private-model",
+        }
+
+    async def list_models(url, api_key):
+        provider_call.update(url=url, api_key=api_key)
+        return ["other-model", "private-model"]
+
+    monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
+    monkeypatch.setattr(admin_router, "get_provider_settings", get_settings)
+    monkeypatch.setattr(
+        admin_router, "list_available_openai_compatible_models", list_models
+    )
+
+    response = asyncio.run(
+        admin_router.check_stored_custom_model_available(None, object())
+    )
+
+    assert provider_call == {
+        "url": "https://custom.example.test/v1",
+        "api_key": stored_key,
+    }
+    assert response == {"available": True}
+    assert stored_key not in repr(response)
+    assert REDACTED_SECRET_PLACEHOLDER not in provider_call.values()
+
+
+def test_admin_custom_model_check_works_when_provider_mutations_are_disabled(
+    monkeypatch,
+):
+    stored = {
+        "LLM": "custom",
+        "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+        "CUSTOM_LLM_API_KEY": "stored-custom-key",
+        "CUSTOM_MODEL": "private-model",
+    }
+    assert (
+        redact_provider_settings(stored)["CUSTOM_LLM_API_KEY"]
+        == REDACTED_SECRET_PLACEHOLDER
+    )
+
+    async def get_settings(_session):
+        return stored
+
+    async def list_models(_url, _api_key):
+        return ["private-model"]
+
+    monkeypatch.setattr(admin_router, "get_can_change_keys_env", lambda: "false")
+    monkeypatch.setattr(admin_router, "get_provider_settings", get_settings)
+    monkeypatch.setattr(
+        admin_router, "list_available_openai_compatible_models", list_models
+    )
+
+    response = asyncio.run(
+        admin_router.check_stored_custom_model_available(None, object())
+    )
+
+    assert response == {"available": True}
+
+
+def test_admin_custom_model_check_reports_model_absence(monkeypatch):
+    async def get_settings(_session):
+        return {
+            "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+            "CUSTOM_LLM_API_KEY": "stored-custom-key",
+            "CUSTOM_MODEL": "missing-model",
+        }
+
+    async def list_models(_url, _api_key):
+        return ["other-model"]
+
+    monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
+    monkeypatch.setattr(admin_router, "get_provider_settings", get_settings)
+    monkeypatch.setattr(
+        admin_router, "list_available_openai_compatible_models", list_models
+    )
+
+    response = asyncio.run(
+        admin_router.check_stored_custom_model_available(None, object())
+    )
+
+    assert response == {"available": False}
+
+
+def test_admin_custom_model_check_never_sends_a_stored_placeholder(monkeypatch):
+    async def get_settings(_session):
+        return {
+            "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+            "CUSTOM_LLM_API_KEY": REDACTED_SECRET_PLACEHOLDER,
+            "CUSTOM_MODEL": "private-model",
+        }
+
+    async def list_models(_url, _api_key):
+        pytest.fail("the redaction placeholder must never reach a provider")
+
+    monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
+    monkeypatch.setattr(admin_router, "get_provider_settings", get_settings)
+    monkeypatch.setattr(
+        admin_router, "list_available_openai_compatible_models", list_models
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(
+            admin_router.check_stored_custom_model_available(None, object())
+        )
+
+    assert error.value.status_code == 422
+    assert REDACTED_SECRET_PLACEHOLDER not in str(error.value.detail)
+
+
+def test_admin_custom_model_check_redacts_provider_error_details(monkeypatch):
+    stored_key = "stored-custom-key"
+
+    async def get_settings(_session):
+        return {
+            "CUSTOM_LLM_URL": "https://custom.example.test/v1",
+            "CUSTOM_LLM_API_KEY": stored_key,
+            "CUSTOM_MODEL": "private-model",
+        }
+
+    async def list_models(_url, _api_key):
+        raise RuntimeError(f"upstream accidentally included {stored_key}")
+
+    monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
+    monkeypatch.setattr(admin_router, "get_provider_settings", get_settings)
+    monkeypatch.setattr(
+        admin_router, "list_available_openai_compatible_models", list_models
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(
+            admin_router.check_stored_custom_model_available(None, object())
+        )
+
+    assert error.value.status_code == 502
+    assert stored_key not in str(error.value.detail)
+    assert "custom.example.test" not in str(error.value.detail)
 
 
 def test_admin_put_preserves_placeholder_but_publishes_raw_secret(monkeypatch):

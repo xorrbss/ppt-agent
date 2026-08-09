@@ -159,9 +159,9 @@ describe("TemplateV2PptxImportPanel", () => {
     cy.wait("@uploadImport");
 
     cy.wait("@pollImport");
-    cy.contains("PPTX analysis complete; explicit confirmation required");
+    cy.contains("Review required");
     cy.contains("deterministic-ooxml-static");
-    cy.contains("External AI").parent().contains("not used");
+    cy.contains("External AI").parent().contains("Not used");
     cy.contains("Repeat-block suggestions");
     cy.contains("li", "horizontal")
       .find('input[type="checkbox"]')

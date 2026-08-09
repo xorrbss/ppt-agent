@@ -14,8 +14,26 @@ import { AUTH_SESSION_EXPIRED_EVENT } from '@/app/(presentation-generator)/servi
 import { UiLocaleSwitcher } from '@/components/i18n/UiLocaleSwitcher';
 import { useTranslations } from 'next-intl';
 
+const REDACTED_SECRET_PLACEHOLDER = '__configured__';
+
 const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
   try {
+    if (llmConfig.CUSTOM_LLM_API_KEY?.trim() === REDACTED_SECRET_PLACEHOLDER) {
+      const response = await fetch(
+        getApiUrl('/api/v1/admin/provider-settings/custom-model-available'),
+        { method: 'POST' }
+      );
+      if (!response.ok) return false;
+
+      const data: unknown = await response.json();
+      return (
+        typeof data === 'object' &&
+        data !== null &&
+        'available' in data &&
+        data.available === true
+      );
+    }
+
     const response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
       method: 'POST',
       headers: {
@@ -26,8 +44,10 @@ const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
         api_key: llmConfig.CUSTOM_LLM_API_KEY,
       }),
     });
-    const data = await response.json();
-    return data.includes(llmConfig.CUSTOM_MODEL);
+    if (!response.ok) return false;
+
+    const data: unknown = await response.json();
+    return Array.isArray(data) && data.includes(llmConfig.CUSTOM_MODEL);
   } catch (error) {
     console.error('Error fetching custom models:', error);
     return false;

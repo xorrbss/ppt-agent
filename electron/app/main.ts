@@ -22,7 +22,7 @@ import {
   localhost,
   nextjsDir,
 } from "./utils/constants";
-import { setupIpcHandlers } from "./ipc";
+import { setupUserConfigRuntime } from "./ipc";
 import { ipcMain } from "electron";
 import { stopActiveExportProcesses } from "./ipc/export_handlers";
 import { setupLibreOfficeInstallHandlers, stopActiveLibreOfficeInstallProcesses } from "./ipc/libreoffice_install_handlers";
@@ -274,7 +274,7 @@ if (gotSingleInstanceLock) {
   });
 }
 
-async function startServers(fastApiPort: number, nextjsPort: number) {
+async function startServers(fastApiPort: number, nextjsPort: number, userConfigRuntimeEnv: FastApiEnv) {
   try {
     const appDataDir = getAppDataDir();
     const tempDir = getTempDir();
@@ -340,7 +340,7 @@ async function startServers(fastApiPort: number, nextjsPort: number) {
         GPT_IMAGE_2_QUALITY: process.env.GPT_IMAGE_2_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
         TEMP_DIRECTORY: tempDir,
-        USER_CONFIG_PATH: userConfigPath,
+        USER_CONFIG_PATH: userConfigPath, ...userConfigRuntimeEnv,
         MIGRATE_DATABASE_ON_STARTUP: "True",
         DISABLE_AUTH: disableAuthForElectron,
         // Resolved by libreoffice-check.ts at startup when available; lets
@@ -556,9 +556,9 @@ app.whenReady().then(async () => {
 
   //? Setup environment variables to be used in the preloads
   setupEnv(fastApiPort, nextjsPort);
-  setupIpcHandlers();
+  const userConfigRuntimeEnv = setupUserConfigRuntime(fastApiPort);
 
-  await startServers(fastApiPort, nextjsPort);
+  await startServers(fastApiPort, nextjsPort, userConfigRuntimeEnv);
   if (isStopping) {
     return;
   }

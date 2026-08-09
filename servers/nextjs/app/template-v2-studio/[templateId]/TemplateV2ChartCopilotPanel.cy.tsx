@@ -88,7 +88,7 @@ describe("TemplateV2ChartCopilotPanel", () => {
     cy.contains("button", "Validate and stage import").click();
     cy.get('[role="alert"]').should(
       "contain.text",
-      "template_v2_chart_copilot_invalid_import",
+      "The CSV or TSV data is invalid.",
     );
     cy.get('[aria-label="Chart copilot import data"]')
       .clear()
@@ -131,7 +131,7 @@ describe("TemplateV2ChartCopilotPanel", () => {
       />,
     );
 
-    cy.contains("Axis and grid controls are incompatible with radar").should(
+    cy.contains("Axis and grid controls are incompatible with Radar and are fail-closed.").should(
       "be.visible",
     );
     cy.get('[aria-label="Chart copilot Show X axis"]').should("be.disabled");
@@ -140,7 +140,7 @@ describe("TemplateV2ChartCopilotPanel", () => {
     cy.contains("button", "Stage deterministic recommendation").click();
     cy.get('[role="status"]').should(
       "contain.text",
-      "multi_series_comparison",
+      "Recommendation: Bar (multi-series comparison, medium confidence). Review before applying.",
     );
     cy.get('[aria-label="Chart copilot chart type"]').should(
       "have.value",

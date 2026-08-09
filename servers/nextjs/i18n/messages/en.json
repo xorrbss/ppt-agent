@@ -22,6 +22,165 @@
     "save": "Save",
     "close": "Close"
   },
+  "editableAssets": {
+    "types": {
+      "image": "image",
+      "icon": "icon"
+    },
+    "editNamed": "Edit {asset}: {name}",
+    "editOnSlide": "Edit {asset} {index} on slide {slide}"
+  },
+  "share": {
+    "title": "Share presentation",
+    "untitled": "Untitled presentation",
+    "loadError": "Could not load sharing settings.",
+    "retry": "Try again",
+    "expired": "This share link has expired. Creating a new link permanently replaces the previous one.",
+    "linkLabel": "Share link",
+    "copy": "Copy",
+    "copied": "Copied",
+    "expirationLabel": "Link expiration",
+    "expiration": {
+      "never": "Never expires",
+      "oneDay": "In 1 day",
+      "sevenDays": "In 7 days",
+      "thirtyDays": "In 30 days"
+    },
+    "views": "{count, plural, one {# view} other {# views}}",
+    "expiresAt": "Expires {date}.",
+    "disable": "Disable sharing",
+    "disabling": "Disabling…",
+    "regenerate": "Regenerate link",
+    "regenerating": "Generating…",
+    "save": "Save settings",
+    "saving": "Saving…",
+    "create": "Create share link",
+    "createNew": "Create new link",
+    "toasts": {
+      "loadError": "Could not load sharing settings.",
+      "regenerated": "Created a new share link.",
+      "saved": "Saved sharing settings.",
+      "saveError": "Could not save sharing settings.",
+      "disabled": "Sharing disabled.",
+      "disableError": "Could not disable sharing.",
+      "copied": "Share link copied."
+    }
+  },
+  "imageEditor": {
+    "title": "Change image",
+    "description": "Replace the selected image or adjust its crop and focus point.",
+    "providers": {
+      "pexels": "Pexels",
+      "pixabay": "Pixabay"
+    },
+    "tabs": {
+      "stock": "Stock search",
+      "generate": "AI generation",
+      "upload": "Upload",
+      "edit": "Edit"
+    },
+    "currentPrompt": "Current prompt",
+    "searchKeyword": "Search keywords",
+    "imageDescription": "Image description",
+    "stockPlaceholder": "e.g. team collaboration, modern office, mountain sunset…",
+    "generationPlaceholder": "Describe the image to generate…",
+    "searching": "Searching…",
+    "searchStock": "Search stock images",
+    "generating": "Generating…",
+    "generate": "Generate image",
+    "searchResults": "Search results — choose an image to use",
+    "useStockImage": "Use stock image {index}",
+    "runSearchForThumbnails": "Run a search to see {provider} thumbnails.",
+    "useGeneratedImage": "Use generated image",
+    "previewAlt": "Image preview",
+    "previousImages": "Previously generated images",
+    "usePreviousImage": "Use previously generated image: {prompt}",
+    "uploading": "Uploading image…",
+    "clickToUpload": "Click to upload an image",
+    "maxFileSize": "Maximum file size: {limit} MB",
+    "uploadedPreviewTitle": "Uploaded image preview",
+    "processing": "Processing…",
+    "useUploadedImage": "Use uploaded image",
+    "uploadedPreviewAlt": "Uploaded image preview",
+    "useThisImage": "Use this image",
+    "uploadedImages": "Uploaded images",
+    "useUploadedImageById": "Use uploaded image {id}",
+    "use": "Use",
+    "deleteUploadedImage": "Delete uploaded image {id}",
+    "currentImage": "Current image",
+    "focusPoint": "Adjust image focus point",
+    "focusPointPosition": "Adjust image focus point. Horizontal {horizontal} percent, vertical {vertical} percent. Use arrow keys; Escape finishes.",
+    "clickToChangeFocus": "Click to change the focus point",
+    "focusPointInstruction": "Click anywhere to set the focus point",
+    "fitMode": "Fit mode",
+    "fit": {
+      "cover": "Fill",
+      "contain": "Fit",
+      "fill": "Stretch"
+    },
+    "cropScale": "Crop scale",
+    "cropScaleDescription": "Cropping switches the image to Fill mode.",
+    "reset": "Reset",
+    "done": "Done",
+    "errors": {
+      "previousImages": "Could not load previously generated images. Try again.",
+      "searchKeywordRequired": "Enter search keywords.",
+      "stockApiKey": "Add a {provider} API key in Settings to search stock images.",
+      "noStockResults": "No images found. Try different keywords.",
+      "stockSearch": "Stock image search failed. Try again.",
+      "promptRequired": "Enter a prompt.",
+      "generation": "Could not generate an image. Try again.",
+      "fileTooLarge": "Image files must be {limit} MB or smaller.",
+      "fileType": "Upload a PNG, JPEG, GIF, or WebP image.",
+      "upload": "Could not upload the image. Try again.",
+      "uploadedImages": "Could not load uploaded images. Try again.",
+      "delete": "Could not delete the image. Try again."
+    },
+    "toasts": {
+      "loadTitle": "Could not load images",
+      "uploadTitle": "Upload failed",
+      "deletedTitle": "Image deleted",
+      "deletedDescription": "The image was removed from the uploaded images list.",
+      "deleteErrorTitle": "Could not delete image"
+    }
+  },
+  "iconEditor": {
+    "title": "Edit icon",
+    "description": "Choose a replacement for the selected icon.",
+    "weightLabel": "Icon weight",
+    "weightHelp": "Choose the visual weight used for icon search and replacement.",
+    "weightHelpAria": "Icon weight help",
+    "weightChoiceAria": "{weight} icon weight",
+    "weights": {
+      "thin": "Thin",
+      "light": "Light",
+      "regular": "Regular",
+      "bold": "Bold",
+      "fill": "Fill",
+      "duotone": "Duotone"
+    },
+    "applyToPresentation": "Apply style to entire presentation",
+    "applyToPresentationAria": "Apply icon weight to entire presentation",
+    "searchPlaceholder": "Search icons",
+    "selectIconAria": "Select icon {index}",
+    "emptyTitle": "No icons found",
+    "emptyDescription": "Try a different search term.",
+    "replace": "Replace icon",
+    "toasts": {
+      "loadTitle": "Could not load icons",
+      "loadDescription": "Could not fetch icons. Try again.",
+      "selectTitle": "Choose an icon",
+      "selectDescription": "Choose an icon before replacing it."
+    }
+  },
+  "slideNavigation": {
+    "limitTitle": "Slide limit reached",
+    "limitDescription": "A presentation can contain up to {limit} slides.",
+    "thumbnails": "Slide thumbnails",
+    "addSlide": "Add slide",
+    "slide": "Slide {index}",
+    "reorder": "Reorder slide {index}"
+  },
   "notFound": {
     "metadataTitle": "Page not found | Presenton",
     "imageAlt": "Page not found",

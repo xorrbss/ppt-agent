@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
 import { Provider } from "react-redux";
 
+import enMessages from "@/i18n/messages/en.json";
 import { makeStore } from "@/store/store";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { createBlankPresentationSlide } from "../../_shared/blank-slide";
@@ -49,9 +51,11 @@ function mountSidePanel(mutationsEnabled: boolean, slideCount = 1) {
   }
 
   mount(
-    <Provider store={store}>
-      <Harness />
-    </Provider>,
+    <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+      <Provider store={store}>
+        <Harness />
+      </Provider>
+    </NextIntlClientProvider>,
   );
 
   return store;

@@ -1,5 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslations } from 'next-intl';
 import type { Slide } from '../../types/slide';
 import { useRef, type PointerEventHandler } from 'react';
 import { SlideThumbnailCard } from './SlideThumbnailCard';
@@ -12,6 +13,7 @@ interface SortableSlideProps {
 }
 
 export function SortableSlide({ slide, index, selectedSlide, onSlideClick, previewScale }: SortableSlideProps) {
+    const t = useTranslations('slideNavigation');
     const lastClickTime = useRef(0);
     const {
         attributes,
@@ -58,7 +60,7 @@ export function SortableSlide({ slide, index, selectedSlide, onSlideClick, previ
                 ...listeners,
                 onPointerDown: undefined,
                 ref: setActivatorNodeRef,
-                "aria-label": `Reorder slide ${index + 1}`,
+                "aria-label": t('reorder', { index: index + 1 }),
             }}
             onClick={handleClick}
         />

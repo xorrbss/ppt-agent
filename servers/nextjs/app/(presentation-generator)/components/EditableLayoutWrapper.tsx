@@ -1,12 +1,14 @@
 "use client";
 
 import React, { ReactNode, useRef, useEffect, useState, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { useDispatch } from 'react-redux';
 import { updateSlideImage, updateSlideIcon, updateImageProperties } from '@/store/slices/presentationGeneration';
 import ImageEditor from './ImageEditor';
 import IconsEditor from './IconsEditor';
 import AdaptiveBlockControls from './AdaptiveBlockControls';
 import AdaptivePropertyControls from './AdaptivePropertyControls';
+import { getEditableAssetLabels } from './editableAssetLabels';
 import {
     cropScaleFromProperties,
     imageCropDomStyle,
@@ -66,6 +68,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
     
 }) => {
     const dispatch = useDispatch();
+    const t = useTranslations('editableAssets');
     const containerRef = useRef<HTMLDivElement>(null);
     const [, setEditableElements] = useState<EditableElement[]>([]);
     const editableElementsRef = useRef<EditableElement[]>([]);
@@ -247,10 +250,9 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         ariaExpanded: htmlImg.getAttribute('aria-expanded'),
                         editableAsset: htmlImg.getAttribute('data-editable-asset'),
                     };
-                    const assetName = type === 'icon' ? 'icon' : 'image';
-                    const accessibleName = htmlImg.alt.trim()
-                        ? `Edit ${assetName}: ${htmlImg.alt.trim()}`
-                        : `Edit ${assetName} ${index + 1} on slide ${slideIndex + 1}`;
+                    const { accessibleName, assetName } = getEditableAssetLabels(
+                        t, type, htmlImg.alt, index, slideIndex
+                    );
 
                     htmlImg.setAttribute('tabindex', '0');
                     htmlImg.setAttribute('role', 'button');
@@ -371,17 +373,14 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
                         editableAsset: activationElement.getAttribute('data-editable-asset'),
                         editableId: activationElement.getAttribute('data-editable-id'),
                     };
-                    const existingName = originalAttributes.ariaLabel?.trim();
+                    const { accessibleName } = getEditableAssetLabels(
+                        t, 'icon', originalAttributes.ariaLabel, index, slideIndex
+                    );
 
                     activationElement.setAttribute('data-editable-id', `${slideIndex}-icon-${dataPath}-${index}`);
                     activationElement.setAttribute('tabindex', '0');
                     activationElement.setAttribute('role', 'button');
-                    activationElement.setAttribute(
-                        'aria-label',
-                        existingName
-                            ? `Edit icon: ${existingName}`
-                            : `Edit icon ${index + 1} on slide ${slideIndex + 1}`
-                    );
+                    activationElement.setAttribute('aria-label', accessibleName);
                     activationElement.setAttribute('aria-haspopup', 'dialog');
                     activationElement.setAttribute('aria-expanded', 'false');
                     activationElement.setAttribute('data-editable-asset', 'icon');
@@ -451,7 +450,7 @@ const EditableLayoutWrapper: React.FC<EditableLayoutWrapperProps> = ({
             editableElementsRef.current = next;
             return next;
         });
-    }, [findBestDataPath, properties, slideData, slideIndex]);
+    }, [findBestDataPath, properties, slideData, slideIndex, t]);
 
     /**
      * Cleanup function to remove event listeners and reset styles

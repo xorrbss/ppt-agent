@@ -104,15 +104,24 @@ def merge_provider_settings(
     existing: dict[str, Any], incoming: dict[str, Any]
 ) -> dict[str, Any]:
     """Preserve the previous settings API's patch and managed-token behavior."""
+    sanitized_existing = sanitize_provider_settings(existing)
     sanitized = sanitize_provider_settings(incoming)
-    merged = {**sanitize_provider_settings(existing), **sanitized}
+    merged = {**sanitized_existing, **sanitized}
 
     for key in SECRET_SETTING_KEYS:
         if sanitized.get(key) == REDACTED_SECRET_PLACEHOLDER:
-            if existing.get(key):
-                merged[key] = existing[key]
+            existing_secret = sanitized_existing.get(key)
+            if existing_secret and existing_secret != REDACTED_SECRET_PLACEHOLDER:
+                merged[key] = existing_secret
             else:
                 merged.pop(key, None)
+        elif (
+            key not in sanitized
+            and sanitized_existing.get(key) == REDACTED_SECRET_PLACEHOLDER
+        ):
+            # The placeholder is an API representation, never a credential. If
+            # an older writer persisted it, clean it up on the next update.
+            merged.pop(key, None)
 
     for key in CODEX_MANAGED_FIELDS:
         if key in existing:

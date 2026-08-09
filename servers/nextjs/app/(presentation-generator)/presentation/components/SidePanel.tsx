@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
@@ -58,6 +59,7 @@ const SidePanel = ({
   mutationsEnabled = true,
   displayMode = "rail",
 }: SidePanelProps) => {
+  const t = useTranslations("slideNavigation");
   const pathname = usePathname();
   const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
   const thumbnailScrollRef = useRef<HTMLDivElement | null>(null);
@@ -106,8 +108,8 @@ const SidePanel = ({
 
     if (presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
       notify.warning(
-        "Slide limit reached",
-        `You can have up to ${MAX_NUMBER_OF_SLIDES} slides.`,
+        t("limitTitle"),
+        t("limitDescription", { limit: MAX_NUMBER_OF_SLIDES }),
       );
       return;
     }
@@ -270,7 +272,7 @@ const SidePanel = ({
               ref={thumbnailScrollRef}
               data-testid="slide-thumbnail-scroll"
               role="navigation"
-              aria-label="Slide thumbnails"
+              aria-label={t("thumbnails")}
               className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5"
             >
               {isStreaming || !mutationsEnabled ? (
@@ -324,7 +326,7 @@ const SidePanel = ({
             >
               <Plus className="w-3.5 h-3.5" />
               <span className="text-[11px] font-normal text-[#000000]">
-                슬라이드 추가
+                {t("addSlide")}
               </span>
             </button>
           )}

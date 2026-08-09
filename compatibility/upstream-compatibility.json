@@ -34,7 +34,7 @@
     },
     {
       "id": "react",
-      "value": "19.2.6",
+      "value": "19.2.8",
       "source": "servers/nextjs/package.json",
       "jsonPointer": "/dependencies/react"
     },
@@ -46,7 +46,7 @@
     },
     {
       "id": "react-konva",
-      "value": "19.2.4",
+      "value": "19.2.5",
       "source": "servers/nextjs/package.json",
       "jsonPointer": "/dependencies/react-konva"
     }

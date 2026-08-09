@@ -1,5 +1,6 @@
 import React, { forwardRef } from "react";
 import { GripVertical } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { Slide } from "../../types/slide";
 import { V1ContentRender } from "../../components/V1ContentRender";
 
@@ -28,6 +29,7 @@ export const SlideThumbnailCard = forwardRef<
   onKeyDown,
   ...props
 }, ref) => {
+  const t = useTranslations("slideNavigation");
   const handleDragButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     dragHandleProps?.onClick?.(event);
@@ -50,7 +52,7 @@ export const SlideThumbnailCard = forwardRef<
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Slide ${index + 1}`}
+        aria-label={t("slide", { index: index + 1 })}
         aria-current={selected ? "page" : undefined}
         data-testid={`slide-thumbnail-select-${index}`}
         onClick={onClick}
@@ -92,7 +94,7 @@ export const SlideThumbnailCard = forwardRef<
         <button
           {...dragHandleProps}
           type="button"
-          aria-label={dragHandleProps["aria-label"] ?? `Reorder slide ${index + 1}`}
+          aria-label={dragHandleProps["aria-label"] ?? t("reorder", { index: index + 1 })}
           onClick={handleDragButtonClick}
           className={`absolute right-1 top-1 z-[60] flex h-8 w-8 touch-none items-center justify-center rounded-md bg-white/95 text-slate-600 shadow-sm outline-none hover:bg-white focus-visible:ring-2 focus-visible:ring-[#6D28D9] ${dragHandleProps.className ?? ""}`}
         >

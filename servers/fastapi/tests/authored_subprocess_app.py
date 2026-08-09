@@ -27,10 +27,24 @@ from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
-from models.sql.workspace import WorkspaceOperation
+from models.sql.user import User
+from models.sql.workspace import (
+    WorkspaceAsset,
+    WorkspaceArtifact,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceMessageAttachment,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
 from services import authored_presentation_service as authored
 from services import database
 from services import presentation_generation_job_service as jobs
+from services import workspace_operation_runner as workspace_runner
+from services.presentation_generation_operation_handler import (
+    register_presentation_generation_operation_handler,
+)
 from utils import llm_provider
 
 
@@ -151,19 +165,31 @@ async def _lifespan(_app: FastAPI):
                 AuthoredSlideCheckpoint.__table__,
                 PresentationModel.__table__,
                 SlideModel.__table__,
-                # PresentationGenerationJob has an optional FK to this table.
-                # SQLite still requires the referenced table to exist when a
-                # legacy job with a NULL workspace_operation_id is inserted.
+                User.__table__,
+                # A bare generate bootstraps and activates its chat-first
+                # workspace before the runner can claim the linked job.
+                WorkspaceConversation.__table__,
+                WorkspaceMessage.__table__,
+                WorkspaceAsset.__table__,
+                WorkspaceArtifact.__table__,
+                WorkspaceMessageAttachment.__table__,
                 WorkspaceOperation.__table__,
+                WorkspaceOperationEvent.__table__,
+                WorkspaceOutbox.__table__,
             ],
         )
     await jobs.start_presentation_generation_dispatcher()
+    register_presentation_generation_operation_handler(replace=True)
+    await workspace_runner.start_workspace_operation_runner()
     _record("startup")
     try:
         yield
     finally:
-        await jobs.stop_presentation_generation_dispatcher()
-        await database.dispose_engines()
+        try:
+            await workspace_runner.stop_workspace_operation_runner()
+        finally:
+            await jobs.stop_presentation_generation_dispatcher()
+            await database.dispose_engines()
 
 
 app = FastAPI(lifespan=_lifespan)

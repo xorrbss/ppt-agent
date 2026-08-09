@@ -1,9 +1,13 @@
+import ipaddress
+import os
 import posixpath
+import secrets
 
 from fastapi import Request
 from sqlalchemy import func, select
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from api.v1.auth.assets import is_app_data_path_authorized
 from api.v1.auth.principal import resolve_request_principal
@@ -22,10 +26,61 @@ from utils.runtime_settings import (
     reset_current_runtime_settings,
     set_current_runtime_settings,
 )
+from utils.user_config import refresh_process_runtime_settings
+
+
+_RUNTIME_SETTINGS_REFRESH_PATH = "/_presenton/runtime-settings/refresh"
+_RUNTIME_SETTINGS_REFRESH_TOKEN_ENV = (
+    "PRESENTON_RUNTIME_SETTINGS_REFRESH_TOKEN"
+)
+_RUNTIME_SETTINGS_REFRESH_TOKEN_HEADER = (
+    "x-presenton-runtime-settings-token"
+)
+
+
+def _is_loopback_request(request: Request) -> bool:
+    client = request.client
+    if client is None:
+        return False
+    try:
+        return ipaddress.ip_address(client.host).is_loopback
+    except ValueError:
+        return False
+
+
+async def _refresh_runtime_settings(request: Request) -> Response:
+    expected_token = os.getenv(_RUNTIME_SETTINGS_REFRESH_TOKEN_ENV, "")
+    provided_token = request.headers.get(_RUNTIME_SETTINGS_REFRESH_TOKEN_HEADER, "")
+    authorized = (
+        request.method == "POST"
+        and _is_loopback_request(request)
+        and bool(expected_token)
+        and bool(provided_token)
+        and secrets.compare_digest(
+            provided_token.encode("utf-8"),
+            expected_token.encode("utf-8"),
+        )
+    )
+    if not authorized:
+        # Keep this process-control surface undiscoverable unless the Electron
+        # launcher enabled it and supplied its process-memory token.
+        return Response(status_code=404)
+
+    # The file is read only for this explicit post-save notification, never on
+    # ordinary requests. Electron launches one FastAPI worker, so publication
+    # here updates the complete packaged backend process.
+    try:
+        await run_in_threadpool(refresh_process_runtime_settings)
+    except Exception:
+        # Do not reflect exception details, paths, config values, or secrets.
+        return Response(status_code=500)
+    return Response(status_code=204)
 
 
 class RuntimeSettingsContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        if request.url.path == _RUNTIME_SETTINGS_REFRESH_PATH:
+            return await _refresh_runtime_settings(request)
         settings = get_process_runtime_settings()
         request.state.runtime_settings = settings
         token = set_current_runtime_settings(settings)

@@ -88,7 +88,6 @@ describe("TemplateV2ImageReplacementPanel", () => {
     );
 
     cy.contains("The declared MIME type does not match the file magic bytes.");
-    cy.contains("template_v2_local_image_magic_mismatch");
     cy.get('[aria-label="Image crop preview"]').should("not.exist");
   });
 

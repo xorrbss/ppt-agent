@@ -77,7 +77,7 @@ describe("<PresentationPage />", () => {
   const mountPage = () => {
     router = createMockRouter();
     cy.mount(
-      <NextIntlClientProvider locale="en" messages={enMessages}>
+      <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
         <AppRouterContext.Provider value={router as never}>
           <PathnameContext.Provider value="/presentation">
             <SearchParamsContext.Provider

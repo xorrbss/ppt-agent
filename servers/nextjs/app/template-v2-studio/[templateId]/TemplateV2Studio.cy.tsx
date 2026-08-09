@@ -468,7 +468,6 @@ describe("TemplateV2Studio API integration", () => {
     mountWithStudioI18n(<TemplateV2Studio templateId={templateId} />);
     cy.wait("@loadMalformedTemplate");
     cy.contains("Template V2 Studio unavailable").should("be.visible");
-    cy.contains("template_v2_upstream_layouts_invalid").should("be.visible");
     cy.contains("button", "Save").should("not.exist");
     cy.then(() => expect(malformedSaveRequests).to.equal(0));
   });

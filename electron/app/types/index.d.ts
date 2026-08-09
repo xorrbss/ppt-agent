@@ -55,6 +55,8 @@ interface FastApiEnv {
   NEXT_PUBLIC_FAST_API?: string,
   TEMP_DIRECTORY?: string,
   USER_CONFIG_PATH?: string,
+  /** Electron-only process token for the loopback runtime snapshot refresh. */
+  PRESENTON_RUNTIME_SETTINGS_REFRESH_TOKEN?: string,
   MIGRATE_DATABASE_ON_STARTUP?: string,
   DISABLE_AUTH?: string,
   /** Absolute path to the resolved LibreOffice executable discovered at startup. */

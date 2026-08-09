@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any, Mapping
 
 from constants.settings_registry import get_settings_registry
@@ -28,6 +29,7 @@ _CODEX_MANAGED_KEYS = frozenset(
     for entry in get_settings_registry()
     if "user_config.managed" in entry["targets"]
 )
+_RUNTIME_SETTINGS_REFRESH_LOCK = threading.Lock()
 
 
 def _read_persisted_user_config(
@@ -70,14 +72,18 @@ def refresh_process_runtime_settings(
     overrides: Mapping[str, object] | None = None,
 ) -> RuntimeSettings:
     """Publish a newly loaded process snapshot at startup or after an admin write."""
-    snapshot = load_runtime_settings(
-        environ,
-        persisted_config=persisted_config,
-    )
-    if overrides:
-        snapshot = snapshot.with_overrides(overrides)
-    replace_process_runtime_settings(snapshot)
-    return snapshot
+    # Keep load + publish as one process-local critical section. Without this,
+    # an older, slower refresh can overwrite a newer snapshot after concurrent
+    # admin/Electron notifications complete out of order.
+    with _RUNTIME_SETTINGS_REFRESH_LOCK:
+        snapshot = load_runtime_settings(
+            environ,
+            persisted_config=persisted_config,
+        )
+        if overrides:
+            snapshot = snapshot.with_overrides(overrides)
+        replace_process_runtime_settings(snapshot)
+        return snapshot
 
 
 def get_user_config(

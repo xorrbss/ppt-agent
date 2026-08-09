@@ -5,7 +5,7 @@ import enMessages from "@/i18n/messages/en.json";
 
 export function mountWithStudioI18n(component: ReactNode) {
   return cy.mount(
-    <NextIntlClientProvider locale="en" messages={enMessages}>
+    <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
       {component}
     </NextIntlClientProvider>,
   );

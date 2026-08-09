@@ -14,7 +14,14 @@ const auditedFiles = [
   "app/(export)/pdf-maker/page.tsx",
   "app/(presentation-generator)/(dashboard)/admin/AdminPanel.tsx",
   "app/(presentation-generator)/(dashboard)/settings/UserAccountSettings.tsx",
+  "app/(presentation-generator)/(dashboard)/dashboard/components/SharePopover.tsx",
+  "app/(presentation-generator)/components/EditableLayoutWrapper.tsx",
+  "app/(presentation-generator)/components/ImageEditor.tsx",
+  "app/(presentation-generator)/components/IconsEditor.tsx",
   "app/(presentation-generator)/presentation/components/KeyboardShortcutsDialog.tsx",
+  "app/(presentation-generator)/presentation/components/SidePanel.tsx",
+  "app/(presentation-generator)/presentation/components/SlideThumbnailCard.tsx",
+  "app/(presentation-generator)/presentation/components/SortableSlide.tsx",
   "components/slide-editor/shortcuts/ShortcutKeys.tsx",
   "components/slide-editor/shortcuts/editorShortcuts.ts",
 ];
@@ -28,7 +35,7 @@ function collectStudioFiles(directory, result = []) {
   return result;
 }
 
-test("the eight audited surfaces contain no hardcoded user-facing copy", () => {
+test("the audited surfaces contain no hardcoded user-facing copy", () => {
   const files = [
     ...auditedFiles,
     ...collectStudioFiles("app/template-v2-studio/[templateId]"),

@@ -1,6 +1,8 @@
 import React from "react";
+import { NextIntlClientProvider } from "next-intl";
 import { Provider } from "react-redux";
 
+import enMessages from "@/i18n/messages/en.json";
 import { makeStore } from "@/store/store";
 import EditableLayoutWrapper from "./EditableLayoutWrapper";
 
@@ -28,23 +30,25 @@ function mountEditableAssets() {
   cy.intercept("GET", "**/api/v1/ppt/icons/search*", []);
 
   cy.mount(
-    <Provider store={makeStore()}>
-      <EditableLayoutWrapper slideIndex={0} slideData={slideData}>
-        <div className="grid grid-cols-2 gap-4 p-8">
-          {/* eslint-disable-next-line @next/next/no-img-element -- Native asset fixture mirrors template output. */}
-          <img src="/accessibility-image.png" alt="Quarterly revenue chart" />
-          <span
-            data-path="/accessibility-icon.svg"
-            role="img"
-            aria-label="Accessibility symbol"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-            </svg>
-          </span>
-        </div>
-      </EditableLayoutWrapper>
-    </Provider>,
+    <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+      <Provider store={makeStore()}>
+        <EditableLayoutWrapper slideIndex={0} slideData={slideData}>
+          <div className="grid grid-cols-2 gap-4 p-8">
+            {/* eslint-disable-next-line @next/next/no-img-element -- Native asset fixture mirrors template output. */}
+            <img src="/accessibility-image.png" alt="Quarterly revenue chart" />
+            <span
+              data-path="/accessibility-icon.svg"
+              role="img"
+              aria-label="Accessibility symbol"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+            </span>
+          </div>
+        </EditableLayoutWrapper>
+      </Provider>
+    </NextIntlClientProvider>,
   );
 
   cy.get('[data-editable-asset="image"]', { timeout: 3000 }).should("exist");
@@ -96,6 +100,8 @@ describe("EditableLayoutWrapper accessibility", () => {
     cy.focused().should("have.attr", "data-editable-asset", "image");
     cy.press(Cypress.Keyboard.Keys.ENTER);
 
+    cy.contains("Change image").should("be.visible");
+    cy.contains("Replace the selected image or adjust its crop and focus point.").should("exist");
     cy.get('[role="dialog"]').should(($dialog) => {
       expect($dialog[0].contains($dialog[0].ownerDocument.activeElement)).to.eq(true);
     });
@@ -121,7 +127,7 @@ describe("EditableLayoutWrapper accessibility", () => {
   it("supports keyboard focus-point adjustment inside the image editor", () => {
     cy.get('[data-editable-asset="image"]').focus();
     cy.press(Cypress.Keyboard.Keys.ENTER);
-    cy.contains('[role="tab"]', "편집").click();
+    cy.contains('[role="tab"]', "Edit").click();
     cy.get('[role="button"][aria-label^="Adjust image focus point"]')
       .focus()
       .should("have.attr", "aria-pressed", "false");

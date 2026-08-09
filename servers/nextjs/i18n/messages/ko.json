@@ -22,6 +22,165 @@
     "save": "저장",
     "close": "닫기"
   },
+  "editableAssets": {
+    "types": {
+      "image": "이미지",
+      "icon": "아이콘"
+    },
+    "editNamed": "{name} {asset} 편집",
+    "editOnSlide": "{slide}번 슬라이드의 {index}번 {asset} 편집"
+  },
+  "share": {
+    "title": "발표자료 공유",
+    "untitled": "제목 없는 발표자료",
+    "loadError": "공유 설정을 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "expired": "이 공유 링크는 만료되었습니다. 새 링크를 만들면 이전 링크는 다시 사용할 수 없습니다.",
+    "linkLabel": "공유 링크",
+    "copy": "복사",
+    "copied": "복사됨",
+    "expirationLabel": "링크 만료",
+    "expiration": {
+      "never": "만료 없음",
+      "oneDay": "1일 후",
+      "sevenDays": "7일 후",
+      "thirtyDays": "30일 후"
+    },
+    "views": "조회 {count}회",
+    "expiresAt": "{date}에 만료됩니다.",
+    "disable": "공유 해제",
+    "disabling": "해제 중…",
+    "regenerate": "링크 재생성",
+    "regenerating": "생성 중…",
+    "save": "설정 저장",
+    "saving": "저장 중…",
+    "create": "공유 링크 만들기",
+    "createNew": "새 링크 만들기",
+    "toasts": {
+      "loadError": "공유 설정을 불러오지 못했습니다.",
+      "regenerated": "공유 링크를 새로 만들었습니다.",
+      "saved": "공유 설정을 저장했습니다.",
+      "saveError": "공유 설정을 저장하지 못했습니다.",
+      "disabled": "공유를 해제했습니다.",
+      "disableError": "공유를 해제하지 못했습니다.",
+      "copied": "공유 링크를 복사했습니다."
+    }
+  },
+  "imageEditor": {
+    "title": "이미지 변경",
+    "description": "선택한 이미지를 바꾸거나 자르기 및 초점 위치를 조정합니다.",
+    "providers": {
+      "pexels": "Pexels",
+      "pixabay": "Pixabay"
+    },
+    "tabs": {
+      "stock": "스톡 검색",
+      "generate": "AI 생성",
+      "upload": "업로드",
+      "edit": "편집"
+    },
+    "currentPrompt": "현재 프롬프트",
+    "searchKeyword": "검색 키워드",
+    "imageDescription": "이미지 설명",
+    "stockPlaceholder": "예: 팀 협업, 모던한 사무실, 노을 진 산…",
+    "generationPlaceholder": "생성하려는 이미지를 설명하세요…",
+    "searching": "검색 중…",
+    "searchStock": "스톡 이미지 검색",
+    "generating": "생성 중…",
+    "generate": "이미지 생성",
+    "searchResults": "검색 결과 — 사용할 이미지를 선택하세요",
+    "useStockImage": "{index}번 스톡 이미지 사용",
+    "runSearchForThumbnails": "{provider} 썸네일을 보려면 검색을 실행하세요.",
+    "useGeneratedImage": "생성된 이미지 사용",
+    "previewAlt": "이미지 미리보기",
+    "previousImages": "이전에 생성한 이미지",
+    "usePreviousImage": "이전에 생성한 이미지 사용: {prompt}",
+    "uploading": "이미지를 업로드하는 중…",
+    "clickToUpload": "클릭하여 이미지 업로드",
+    "maxFileSize": "최대 파일 크기: {limit}MB",
+    "uploadedPreviewTitle": "업로드한 이미지 미리보기",
+    "processing": "처리 중…",
+    "useUploadedImage": "업로드한 이미지 사용",
+    "uploadedPreviewAlt": "업로드한 이미지 미리보기",
+    "useThisImage": "이 이미지 사용하기",
+    "uploadedImages": "업로드한 이미지",
+    "useUploadedImageById": "업로드한 이미지 {id} 사용",
+    "use": "사용",
+    "deleteUploadedImage": "업로드한 이미지 {id} 삭제",
+    "currentImage": "현재 이미지",
+    "focusPoint": "이미지 초점 위치 조정",
+    "focusPointPosition": "이미지 초점 위치 조정. 가로 {horizontal}퍼센트, 세로 {vertical}퍼센트입니다. 화살표 키로 이동하고 Esc 키로 마칩니다.",
+    "clickToChangeFocus": "클릭하여 초점 변경",
+    "focusPointInstruction": "아무 곳이나 클릭하여 초점을 설정하세요",
+    "fitMode": "맞춤 방식",
+    "fit": {
+      "cover": "채우기",
+      "contain": "맞춤",
+      "fill": "늘이기"
+    },
+    "cropScale": "자르기 배율",
+    "cropScaleDescription": "자르기를 사용하면 이미지가 채우기 모드로 전환됩니다.",
+    "reset": "초기화",
+    "done": "완료",
+    "errors": {
+      "previousImages": "이전에 생성한 이미지를 가져오지 못했습니다. 다시 시도해 주세요.",
+      "searchKeywordRequired": "검색 키워드를 입력하세요.",
+      "stockApiKey": "스톡 이미지를 검색하려면 설정에서 {provider} API 키를 추가하세요.",
+      "noStockResults": "이미지를 찾을 수 없습니다. 다른 키워드로 시도해 보세요.",
+      "stockSearch": "스톡 검색에 실패했습니다. 다시 시도해 주세요.",
+      "promptRequired": "프롬프트를 입력하세요.",
+      "generation": "이미지를 생성하지 못했습니다. 다시 시도해 주세요.",
+      "fileTooLarge": "이미지 파일 크기는 {limit}MB 이하여야 합니다.",
+      "fileType": "PNG, JPEG, GIF 또는 WebP 이미지를 업로드해 주세요.",
+      "upload": "이미지를 업로드하지 못했습니다. 다시 시도해 주세요.",
+      "uploadedImages": "업로드한 이미지를 가져오지 못했습니다. 다시 시도해 주세요.",
+      "delete": "이미지를 삭제하지 못했습니다. 다시 시도해 주세요."
+    },
+    "toasts": {
+      "loadTitle": "이미지를 불러올 수 없습니다",
+      "uploadTitle": "업로드 실패",
+      "deletedTitle": "이미지 삭제됨",
+      "deletedDescription": "업로드 목록에서 이미지가 삭제되었습니다.",
+      "deleteErrorTitle": "이미지를 삭제할 수 없습니다"
+    }
+  },
+  "iconEditor": {
+    "title": "아이콘 편집",
+    "description": "선택한 아이콘을 바꿀 아이콘을 고릅니다.",
+    "weightLabel": "아이콘 두께",
+    "weightHelp": "아이콘 검색 및 교체에 사용할 시각적 두께를 선택하세요.",
+    "weightHelpAria": "아이콘 두께 도움말",
+    "weightChoiceAria": "{weight} 아이콘 두께",
+    "weights": {
+      "thin": "얇게",
+      "light": "가늘게",
+      "regular": "기본",
+      "bold": "굵게",
+      "fill": "채움",
+      "duotone": "투톤"
+    },
+    "applyToPresentation": "발표자료 전체에 스타일 적용",
+    "applyToPresentationAria": "발표자료 전체에 아이콘 두께 적용",
+    "searchPlaceholder": "아이콘 검색",
+    "selectIconAria": "{index}번 아이콘 선택",
+    "emptyTitle": "아이콘이 없습니다",
+    "emptyDescription": "다른 검색어로 시도해 보세요.",
+    "replace": "아이콘 교체",
+    "toasts": {
+      "loadTitle": "아이콘을 불러올 수 없습니다",
+      "loadDescription": "아이콘을 가져오지 못했습니다. 다시 시도해 주세요.",
+      "selectTitle": "아이콘을 선택하세요",
+      "selectDescription": "교체하기 전에 아이콘을 선택해 주세요."
+    }
+  },
+  "slideNavigation": {
+    "limitTitle": "슬라이드 수 제한에 도달했습니다",
+    "limitDescription": "발표자료에는 최대 {limit}개의 슬라이드를 만들 수 있습니다.",
+    "thumbnails": "슬라이드 미리보기",
+    "addSlide": "슬라이드 추가",
+    "slide": "{index}번 슬라이드",
+    "reorder": "{index}번 슬라이드 순서 변경"
+  },
   "notFound": {
     "metadataTitle": "페이지를 찾을 수 없음 | Presenton",
     "imageAlt": "페이지를 찾을 수 없음",

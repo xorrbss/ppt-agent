@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- Native img nodes are required for crop geometry and arbitrary blob/cross-origin editor sources. */
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useRef, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import {
@@ -21,8 +22,13 @@ import { PreviousGeneratedImagesResponse } from "../services/api/params";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "../services/api/images";
 import { ImageAssetResponse } from "../services/api/types";
-import { resolveBackendAssetSource } from "@/utils/api";
 import { useUploadLimits } from "@/lib/use-upload-limits";
+import {
+  getImageUploadValidationError,
+  getStockImageApiKey,
+  resolveEditorImageSource,
+  resolveStockImageProvider,
+} from "./imageEditorHelpers";
 import {
   cropScaleFromProperties,
   imageCropDomStyle,
@@ -31,8 +37,6 @@ import {
   resolveImageEditorProperties,
   type ImageFit,
 } from "@/components/slide-editor/images/imageCrop";
-
-const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 
 interface ImageEditorProps {
   initialImage: string | null;
@@ -46,14 +50,6 @@ interface ImageEditorProps {
   onFocusPointClick?: (propertiesData: any) => void;
 }
 
-const resolveEditorImageSource = (
-  image:
-    | string
-    | { file_url?: string | null; path?: string | null; url?: string | null }
-    | null
-    | undefined
-) => resolveBackendAssetSource(image);
-
 const ImageEditor = ({
   initialImage,
   imageIdx = 0,
@@ -63,13 +59,13 @@ const ImageEditor = ({
   onFocusPointClick,
   onImageChange,
 }: ImageEditorProps) => {
+  const t = useTranslations("imageEditor");
   const uploadLimits = useUploadLimits();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
-  const stockImageProvider = useMemo(() => {
-    if (llmConfig?.DISABLE_IMAGE_GENERATION) return null;
-    const id = (llmConfig?.IMAGE_PROVIDER || "").trim().toLowerCase();
-    return STOCK_IMAGE_PROVIDERS.has(id) ? id : null;
-  }, [llmConfig?.DISABLE_IMAGE_GENERATION, llmConfig?.IMAGE_PROVIDER]);
+  const stockImageProvider = useMemo(
+    () => resolveStockImageProvider(llmConfig),
+    [llmConfig]
+  );
 
   // State management
   const [previewImages, setPreviewImages] = useState(
@@ -108,6 +104,19 @@ const ImageEditor = ({
   // Refs
   const imageRef = useRef<HTMLImageElement>(null);
 
+  const getPreviousGeneratedImage = useCallback(async () => {
+    try {
+      trackEvent(MixpanelEvent.ImageEditor_GetPreviousGeneratedImages_API_Call);
+      const response =
+        await PresentationGenerationApi.getPreviousGeneratedImages();
+      setPreviousGeneratedImages(response);
+    } catch (error: any) {
+      notify.error(t("toasts.loadTitle"), t("errors.previousImages"));
+      console.error("error in getting previous generated images", error);
+      setError(error.message || t("errors.previousImages"));
+    }
+  }, [t]);
+
   useEffect(() => {
     setPreviewImages(resolveEditorImageSource(initialImage));
   }, [initialImage]);
@@ -132,7 +141,12 @@ const ImageEditor = ({
     if (isOpen && !previousGeneratedImages.length && !stockImageProvider) {
       getPreviousGeneratedImage();
     }
-  }, [isOpen, previousGeneratedImages.length, stockImageProvider]);
+  }, [
+    getPreviousGeneratedImage,
+    isOpen,
+    previousGeneratedImages.length,
+    stockImageProvider,
+  ]);
 
   // Handle close with animation
   const handleClose = () => {
@@ -142,22 +156,6 @@ const ImageEditor = ({
     setTimeout(() => {
       onClose?.();
     }, 300); // Match the Sheet animation duration
-  };
-
-  const getPreviousGeneratedImage = async () => {
-    try {
-      trackEvent(MixpanelEvent.ImageEditor_GetPreviousGeneratedImages_API_Call);
-      const response =
-        await PresentationGenerationApi.getPreviousGeneratedImages();
-      setPreviousGeneratedImages(response);
-    } catch (error: any) {
-      notify.error("이미지를 불러올 수 없습니다", "이전에 생성한 이미지를 가져오지 못했습니다. 다시 시도해 주세요.");
-      console.error("error in getting previous generated images", error);
-      setError(
-        error.message ||
-          "이전에 생성한 이미지를 가져오지 못했습니다. 다시 시도해 주세요."
-      );
-    }
   };
 
   /**
@@ -300,19 +298,18 @@ const ImageEditor = ({
    */
   const handleStockImageSearch = async () => {
     if (!prompt.trim()) {
-      setError("검색 키워드를 입력하세요");
+      setError(t("errors.searchKeywordRequired"));
       return;
     }
     if (!stockImageProvider) return;
 
-    const apiKey =
-      stockImageProvider === "pexels"
-        ? (llmConfig?.PEXELS_API_KEY || "").trim()
-        : (llmConfig?.PIXABAY_API_KEY || "").trim();
+    const apiKey = getStockImageApiKey(stockImageProvider, llmConfig);
 
     if (!apiKey) {
       setError(
-        `스톡 이미지를 검색하려면 설정에서 ${stockImageProvider === "pexels" ? "Pexels" : "Pixabay"} API 키를 추가하세요.`
+        t("errors.stockApiKey", {
+          provider: t(`providers.${stockImageProvider}`),
+        })
       );
       return;
     }
@@ -326,12 +323,12 @@ const ImageEditor = ({
       });
       setStockSearchResults(urls);
       if (urls.length === 0) {
-        setError("이미지를 찾을 수 없습니다. 다른 키워드로 시도해 보세요.");
+        setError(t("errors.noStockResults"));
       }
     } catch (err: unknown) {
       console.error("Stock image search error", err);
       const message =
-        err instanceof Error ? err.message : "스톡 검색에 실패했습니다. 다시 시도해 주세요.";
+        err instanceof Error ? err.message : t("errors.stockSearch");
       setError(message);
       setStockSearchResults([]);
     } finally {
@@ -344,7 +341,7 @@ const ImageEditor = ({
    */
   const handleGenerateImage = async () => {
     if (!prompt) {
-      setError("프롬프트를 입력하세요");
+      setError(t("errors.promptRequired"));
       return;
     }
     if (stockImageProvider) {
@@ -362,7 +359,7 @@ const ImageEditor = ({
       setPreviewImages(resolveEditorImageSource(response));
     } catch (err: any) {
       console.error("Error in image generation", err);
-      setError(err.message || "이미지를 생성하지 못했습니다. 다시 시도해 주세요.");
+      setError(err.message || t("errors.generation"));
     } finally {
       setIsGenerating(false);
     }
@@ -377,16 +374,15 @@ const ImageEditor = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.size > uploadLimits.image.bytes) {
+    const validationError = getImageUploadValidationError(file, uploadLimits.image);
+    if (validationError === "tooLarge") {
       setUploadError(
-        `이미지 파일 크기는 ${uploadLimits.image.mb}MB 이하여야 합니다`
+        t("errors.fileTooLarge", { limit: uploadLimits.image.mb })
       );
       return;
     }
-
-    // Validate file type
-    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
-      setUploadError("PNG, JPEG, GIF 또는 WebP 이미지를 업로드해 주세요");
+    if (validationError === "invalidType") {
+      setUploadError(t("errors.fileType"));
       return;
     }
     try {
@@ -396,8 +392,8 @@ const ImageEditor = ({
       const result = await ImagesApi.uploadImage(file);
       setUploadedImageUrl(resolveEditorImageSource(result));
     } catch (err:any) {
-      setUploadError("이미지를 업로드하지 못했습니다. 다시 시도해 주세요.");
-      notify.error("업로드 실패", err.message || "이미지를 업로드하지 못했습니다. 다시 시도해 주세요.");
+      setUploadError(t("errors.upload"));
+      notify.error(t("toasts.uploadTitle"), err.message || t("errors.upload"));
       console.log("Upload error:", err.message);
     } finally {
       setIsUploading(false);
@@ -410,7 +406,7 @@ const ImageEditor = ({
       const result = await ImagesApi.getUploadedImages();
       setUploadedImages(result);
     } catch (err:any) {
-      notify.error("이미지를 불러올 수 없습니다", err.message || "업로드한 이미지를 가져오지 못했습니다. 다시 시도해 주세요.");
+      notify.error(t("toasts.loadTitle"), err.message || t("errors.uploadedImages"));
       console.log("Get uploaded images error:", err.message);
     } finally {
       setUploadedImagesLoading(false);
@@ -426,9 +422,9 @@ const ImageEditor = ({
     try {
       await ImagesApi.deleteImage(image_id);
       setUploadedImages(uploadedImages.filter((image) => image.id !== image_id));
-      notify.success("이미지 삭제됨", "업로드 목록에서 이미지가 삭제되었습니다.");
+      notify.success(t("toasts.deletedTitle"), t("toasts.deletedDescription"));
     } catch (err:any) {
-      notify.error("이미지를 삭제할 수 없습니다", err.message || "이미지를 삭제하지 못했습니다. 다시 시도해 주세요.");
+      notify.error(t("toasts.deleteErrorTitle"), err.message || t("errors.delete"));
     }
   };
   return (
@@ -441,9 +437,9 @@ const ImageEditor = ({
           onClick={(e) => e.stopPropagation()}
         >
           <SheetHeader>
-            <SheetTitle>이미지 변경</SheetTitle>
+            <SheetTitle>{t("title")}</SheetTitle>
             <p id="image-editor-description" className="sr-only">
-              Replace the selected image or adjust its crop and focus point.
+              {t("description")}
             </p>
           </SheetHeader>
 
@@ -451,32 +447,32 @@ const ImageEditor = ({
             <Tabs defaultValue="generate" className="w-full" onValueChange={handleTabChange}>
               <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto">
                 <TabsTrigger className="font-medium" value="generate">
-                  {stockImageProvider ? "스톡 검색" : "AI 생성"}
+                  {stockImageProvider ? t("tabs.stock") : t("tabs.generate")}
                 </TabsTrigger>
                 <TabsTrigger className="font-medium" value="upload">
-                  업로드
+                  {t("tabs.upload")}
                 </TabsTrigger>
                 <TabsTrigger className="font-medium" value="edit">
-                  편집
+                  {t("tabs.edit")}
                 </TabsTrigger>
               </TabsList>
               {/* Generate Tab */}
               <TabsContent value="generate" className="mt-4 space-y-4 overflow-y-auto hide-scrollbar h-[85vh]">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-sm font-medium mb-1">현재 프롬프트</h3>
+                    <h3 className="text-sm font-medium mb-1">{t("currentPrompt")}</h3>
                     <p className="text-sm text-gray-500">{promptContent}</p>
                   </div>
 
                   <div>
                     <h3 className="text-base font-medium mb-2">
-                      {stockImageProvider ? "검색 키워드" : "이미지 설명"}
+                      {stockImageProvider ? t("searchKeyword") : t("imageDescription")}
                     </h3>
                     <Textarea
                       placeholder={
                         stockImageProvider
-                          ? "예: 팀 협업, 모던한 사무실, 노을 진 산…"
-                          : "생성하려는 이미지를 설명하세요..."
+                          ? t("stockPlaceholder")
+                          : t("generationPlaceholder")
                       }
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
@@ -496,18 +492,18 @@ const ImageEditor = ({
                     )}
                     {stockImageProvider
                       ? isSearchingStock
-                        ? "검색 중…"
-                        : "스톡 이미지 검색"
+                        ? t("searching")
+                        : t("searchStock")
                       : isGenerating
-                        ? "생성 중..."
-                        : "이미지 생성"}
+                        ? t("generating")
+                        : t("generate")}
                   </Button>
 
                   {error && <p className="text-red-500 text-sm">{error}</p>}
 
                   {stockImageProvider ? (
                     <div className="space-y-3">
-                      <h3 className="text-sm font-medium">검색 결과 — 사용할 이미지를 클릭하세요</h3>
+                      <h3 className="text-sm font-medium">{t("searchResults")}</h3>
                       <div className="grid grid-cols-2 gap-3">
                         {isSearchingStock
                           ? Array.from({ length: 8 }).map((_, index) => (
@@ -520,7 +516,7 @@ const ImageEditor = ({
                               <button
                                 type="button"
                                 key={url}
-                                aria-label={`Use stock image ${index + 1}`}
+                                aria-label={t("useStockImage", { index: index + 1 })}
                                 onClick={() => handleImageChange(url)}
                                 className="aspect-[4/3] w-full overflow-hidden rounded-lg border border-gray-200 cursor-pointer hover:border-blue-500 transition-colors text-left p-0 bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                               >
@@ -534,8 +530,9 @@ const ImageEditor = ({
                       </div>
                       {!isSearchingStock && stockSearchResults.length === 0 && (
                         <p className="text-sm text-gray-500">
-                          {stockImageProvider === "pexels" ? "Pexels" : "Pixabay"}
-                          {" "}썸네일을 보려면 검색을 실행하세요.
+                          {t("runSearchForThumbnails", {
+                            provider: t(`providers.${stockImageProvider}`),
+                          })}
                         </p>
                       )}
                     </div>
@@ -552,14 +549,14 @@ const ImageEditor = ({
                         ) : (
                           <button
                             type="button"
-                            aria-label="Use generated image"
+                            aria-label={t("useGeneratedImage")}
                             onClick={() => handleImageChange(previewImages)}
                             className="aspect-[4/3] w-full overflow-hidden rounded-lg border cursor-pointer hover:border-blue-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                           >
                             {previewImages && (
                               <img
                                 src={previewImages}
-                                alt={`Preview`}
+                                alt={t("previewAlt")}
                                 className="w-full h-full object-cover"
                               />
                             )}
@@ -569,13 +566,15 @@ const ImageEditor = ({
                       {previousGeneratedImages.length > 0 && (
                         <div className="mt-4">
                           <h3 className="text-sm font-medium mb-2">
-                            이전에 생성한 이미지
+                            {t("previousImages")}
                           </h3>
                           <div className="grid grid-cols-2 gap-4  ">
                             {previousGeneratedImages.map((image) => (
                               <button
                                 type="button"
-                                aria-label={`Use previously generated image: ${image.extras.prompt}`}
+                                aria-label={t("usePreviousImage", {
+                                  prompt: image.extras.prompt,
+                                })}
                                 onClick={() =>
                                   handleImageChange(resolveEditorImageSource(image))
                                 }
@@ -629,12 +628,10 @@ const ImageEditor = ({
                         <Upload className="w-8 h-8 text-gray-500 mb-2" />
                       )}
                       <span className="text-sm text-gray-600">
-                        {isUploading
-                          ? "이미지를 업로드하는 중..."
-                          : "클릭하여 이미지 업로드"}
+                        {isUploading ? t("uploading") : t("clickToUpload")}
                       </span>
                       <span className="text-xs text-gray-500 mt-1">
-                        최대 파일 크기: {uploadLimits.image.mb}MB
+                        {t("maxFileSize", { limit: uploadLimits.image.mb })}
                       </span>
                     </label>
                   </div>
@@ -648,7 +645,7 @@ const ImageEditor = ({
                   {(uploadedImageUrl || isUploading) && (
                     <div className="mt-4">
                       <h3 className="text-sm font-medium mb-2">
-                        업로드한 이미지 미리보기
+                        {t("uploadedPreviewTitle")}
                       </h3>
                       <div className="aspect-[4/3] relative rounded-lg overflow-hidden border border-gray-200">
                         {isUploading ? (
@@ -656,7 +653,7 @@ const ImageEditor = ({
                             <div className="flex flex-col items-center">
                               <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mb-2" />
                               <span className="text-sm text-gray-500">
-                                처리 중...
+                                {t("processing")}
                               </span>
                             </div>
                           </div>
@@ -664,7 +661,7 @@ const ImageEditor = ({
                           uploadedImageUrl && (
                             <button
                               type="button"
-                              aria-label="Use uploaded image"
+                              aria-label={t("useUploadedImage")}
                               onClick={() =>
                                 handleImageChange(uploadedImageUrl)
                               }
@@ -672,13 +669,13 @@ const ImageEditor = ({
                             >
                               <img
                                 src={uploadedImageUrl}
-                                alt="Uploaded preview"
+                                alt={t("uploadedPreviewAlt")}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span className="bg-white/90 px-3 py-1 rounded-full text-sm font-medium">
-                                  이 이미지 사용하기
+                                  {t("useThisImage")}
                                 </span>
                               </div>
                             </button>
@@ -688,7 +685,7 @@ const ImageEditor = ({
                     </div>
                   )}
                   <div>
-                    <h3 className="text-sm font-medium mb-2">업로드한 이미지:</h3>
+                    <h3 className="text-sm font-medium mb-2">{t("uploadedImages")}</h3>
                     <div className="grid grid-cols-2 gap-4">
                       {uploadedImagesLoading ? (
                         <div className="flex items-center justify-center">
@@ -702,7 +699,7 @@ const ImageEditor = ({
                           >
                             <button
                               type="button"
-                              aria-label={`Use uploaded image ${image.id}`}
+                              aria-label={t("useUploadedImageById", { id: image.id })}
                               onClick={() =>
                                 handleImageChange(resolveEditorImageSource(image))
                               }
@@ -710,19 +707,19 @@ const ImageEditor = ({
                             >
                               <img
                                 src={resolveEditorImageSource(image)}
-                                alt="Uploaded preview"
+                                alt={t("uploadedPreviewAlt")}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                               />
                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200" />
                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span className="bg-white/90 px-3 py-1 rounded-full text-xs font-medium">
-                                  사용
+                                  {t("use")}
                                 </span>
                               </div>
                             </button>
                             <button
                               type="button"
-                              aria-label={`Delete uploaded image ${image.id}`}
+                              aria-label={t("deleteUploadedImage", { id: image.id })}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleDeleteImage(image.id);
@@ -740,14 +737,17 @@ const ImageEditor = ({
               </TabsContent>
               <TabsContent value="edit" className="mt-4 space-y-4">
                 <div className="space-y-4">
-                  <h3 className="text-sm font-medium mb-2">현재 이미지</h3>
+                  <h3 className="text-sm font-medium mb-2">{t("currentImage")}</h3>
                   <div
                     role="button"
                     tabIndex={0}
                     aria-label={
                       isFocusPointMode
-                        ? `Adjust image focus point. Horizontal ${Math.round(focusPoint.x)} percent, vertical ${Math.round(focusPoint.y)} percent. Use arrow keys; Escape finishes.`
-                        : "Adjust image focus point"
+                        ? t("focusPointPosition", {
+                            horizontal: Math.round(focusPoint.x),
+                            vertical: Math.round(focusPoint.y),
+                          })
+                        : t("focusPoint")
                     }
                     aria-pressed={isFocusPointMode}
                     aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight Escape"
@@ -760,7 +760,7 @@ const ImageEditor = ({
                     className="aspect-[4/3] group rounded-lg overflow-hidden relative border border-gray-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                   >
                     <p className="group-hover:opacity-100 opacity-0 transition-opacity absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-center font-medium bg-black/50 text-white px-2 py-1 rounded">
-                      클릭하여 초점 변경
+                      {t("clickToChangeFocus")}
                     </p>
                     {previewImages && (
                       <img
@@ -776,7 +776,7 @@ const ImageEditor = ({
                             cropScale
                           ),
                         }}
-                        alt={`Preview`}
+                        alt={t("previewAlt")}
                         className="w-full h-full "
                       />
                     )}
@@ -784,7 +784,7 @@ const ImageEditor = ({
                       <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
                         <div className="text-white text-center p-2 bg-black/50 rounded">
                           <p className="text-sm font-medium pointer-events-none">
-                            아무 곳이나 클릭하여 초점을 설정하세요
+                            {t("focusPointInstruction")}
                           </p>
                         </div>
 
@@ -809,7 +809,7 @@ const ImageEditor = ({
                   {/* Object Fit */}
                   {
                     <div>
-                      <h3 className="text-sm font-medium mb-2">맞춤 방식</h3>
+                      <h3 className="text-sm font-medium mb-2">{t("fitMode")}</h3>
                       <div className="flex gap-4">
                         <Button
                           variant="outline"
@@ -820,7 +820,7 @@ const ImageEditor = ({
                           )}
                           onClick={() => handleFitChange("cover")}
                         >
-                          채우기
+                          {t("fit.cover")}
                         </Button>
                         <Button
                           variant="outline"
@@ -831,7 +831,7 @@ const ImageEditor = ({
                           )}
                           onClick={() => handleFitChange("contain")}
                         >
-                          맞춤
+                          {t("fit.contain")}
                         </Button>
                         <Button
                           variant="outline"
@@ -841,20 +841,20 @@ const ImageEditor = ({
                           )}
                           onClick={() => handleFitChange("fill")}
                         >
-                          늘이기
+                          {t("fit.fill")}
                         </Button>
                       </div>
                     </div>
                   }
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium">Crop scale</h3>
+                      <h3 className="text-sm font-medium">{t("cropScale")}</h3>
                       <span className="text-xs tabular-nums text-gray-500">
                         {cropScale.toFixed(1)}×
                       </span>
                     </div>
                     <input
-                      aria-label="Crop scale"
+                      aria-label={t("cropScale")}
                       className="w-full accent-blue-600"
                       max={6}
                       min={0.1}
@@ -867,7 +867,7 @@ const ImageEditor = ({
                     />
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-gray-500">
-                        Cropping switches the image to Fill mode.
+                        {t("cropScaleDescription")}
                       </p>
                       <Button
                         size="sm"
@@ -875,13 +875,13 @@ const ImageEditor = ({
                         variant="outline"
                         onClick={() => handleCropScaleChange(1)}
                       >
-                        Reset
+                        {t("reset")}
                       </Button>
                     </div>
                   </div>
                   {isFocusPointMode && (
                     <Button type="button" size="sm" onClick={toggleFocusPointMode}>
-                      완료
+                      {t("done")}
                     </Button>
                   )}
                   {/* Focus Point */}

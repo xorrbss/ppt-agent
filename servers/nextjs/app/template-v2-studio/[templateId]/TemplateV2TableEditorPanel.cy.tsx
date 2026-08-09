@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { mount } from "cypress/react";
 
 import TemplateV2TableEditorPanel, {
   type TemplateV2TableEditorMutation,
 } from "./TemplateV2TableEditorPanel";
+import { mountWithStudioI18n } from "./studioI18nTestUtils.cy";
 
 function cell(text: string, id: string) {
   return {
@@ -66,12 +66,12 @@ function Harness({
 describe("TemplateV2TableEditorPanel", () => {
   it("previews before applying row and column structure changes with CAS metadata", () => {
     const onMutation = cy.stub().as("mutation");
-    mount(<Harness onMutation={onMutation} />);
+    mountWithStudioI18n(<Harness onMutation={onMutation} />);
 
     cy.get('button[aria-label="Move row 2 up"]').click();
     cy.get('[aria-label="Table change preview"]').should(
       "contain.text",
-      "move-row",
+      "Preview · Move row",
     );
     cy.get("@mutation").should("not.have.been.called");
     cy.contains("button", "Apply preview").click();
@@ -101,7 +101,7 @@ describe("TemplateV2TableEditorPanel", () => {
     cy.contains("button", "Add column").click();
     cy.get('[aria-label="Table change preview"]').should(
       "contain.text",
-      "insert-column",
+      "Preview · Insert column",
     );
     cy.contains("button", "Cancel").click();
     cy.contains("Preview canceled. No template data changed.").should(
@@ -112,10 +112,10 @@ describe("TemplateV2TableEditorPanel", () => {
 
   it("supports header conversion and transpose through explicit previews", () => {
     const onMutation = cy.stub().as("mutation");
-    mount(<Harness onMutation={onMutation} />);
+    mountWithStudioI18n(<Harness onMutation={onMutation} />);
 
     cy.contains("button", "Promote first row to header").click();
-    cy.contains("Preview · promote-first-row-to-header").should("be.visible");
+    cy.contains("Preview · Promote first row to header").should("be.visible");
     cy.contains("button", "Apply preview").click();
 
     cy.get("@mutation").then((value) => {
@@ -130,20 +130,20 @@ describe("TemplateV2TableEditorPanel", () => {
     });
 
     cy.contains("button", "Transpose").click();
-    cy.contains("Preview · transpose").should("be.visible");
+    cy.contains("Preview · Transpose").should("be.visible");
     cy.contains("button", "Apply preview").click();
     cy.get("@mutation").should("have.been.calledTwice");
   });
 
   it("imports quoted CSV, rejects malformed/ragged data, and bounds paste", () => {
     const onMutation = cy.stub().as("mutation");
-    mount(<Harness onMutation={onMutation} />);
+    mountWithStudioI18n(<Harness onMutation={onMutation} />);
 
     cy.get('[aria-label="Delimited table data"]').type(
       'Region,Revenue{enter}"North, East",12{enter}South,18',
     );
     cy.contains("button", "Preview replace import").click();
-    cy.contains("Preview · import-csv").should("be.visible");
+    cy.contains("Preview · Import CSV").should("be.visible");
     cy.get("@mutation").should("not.have.been.called");
     cy.contains("button", "Apply preview").click();
 
@@ -181,13 +181,13 @@ describe("TemplateV2TableEditorPanel", () => {
 
   it("keeps table-to-chart separate and suggests bounded long-table splits", () => {
     const onMutation = cy.stub().as("mutation");
-    mount(<Harness initial={table(25)} onMutation={onMutation} />);
+    mountWithStudioI18n(<Harness initial={table(25)} onMutation={onMutation} />);
 
     cy.contains("Long table split suggested").should("be.visible");
     cy.contains("25 rows · 3 slide segments").should("be.visible");
     cy.get('[aria-label="Table chart title"]').type("Quarterly revenue");
     cy.contains("button", "Preview chart conversion").click();
-    cy.contains("Preview · table-to-chart").should("be.visible");
+    cy.contains("Preview · Convert table to chart").should("be.visible");
     cy.contains("Categories").parent().should("contain.text", "25");
     cy.get("@mutation").should("not.have.been.called");
     cy.contains("button", "Apply preview").click();

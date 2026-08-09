@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "fc3d5e7f9a1b",
+  "localTipRevision": "c4e8f0a2b6d9",
   "databaseCompatibility": {
     "verified": [
       {
@@ -71,7 +71,9 @@
     { "revision": "f8b0d3e5a7c9", "downRevision": "e7a9c2d4f6b8", "file": "f8b0d3e5a7c9_add_durable_deletion_and_attachment_snapshots.py" },
     { "revision": "fa1b2c3d4e5f", "downRevision": "f8b0d3e5a7c9", "file": "fa1b2c3d4e5f_add_account_deletion_fence.py" },
     { "revision": "fb2c4d6e8a0b", "downRevision": "fa1b2c3d4e5f", "file": "fb2c4d6e8a0b_add_slidespec_artifact_bundles.py" },
-    { "revision": "fc3d5e7f9a1b", "downRevision": "fb2c4d6e8a0b", "file": "fc3d5e7f9a1b_add_slidespec_publication_attempts.py" }
+    { "revision": "fc3d5e7f9a1b", "downRevision": "fb2c4d6e8a0b", "file": "fc3d5e7f9a1b_add_slidespec_publication_attempts.py" },
+    { "revision": "b3d7f1a9c2e4", "downRevision": "fc3d5e7f9a1b", "file": "b3d7f1a9c2e4_backfill_cleanup_journal_redrive_columns.py" },
+    { "revision": "c4e8f0a2b6d9", "downRevision": "b3d7f1a9c2e4", "file": "c4e8f0a2b6d9_add_presentation_search_and_share_metrics.py" }
   ],
   "translations": [
     {

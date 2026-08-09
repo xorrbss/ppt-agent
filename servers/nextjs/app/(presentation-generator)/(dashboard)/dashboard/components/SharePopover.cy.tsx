@@ -1,6 +1,10 @@
 import React from "react";
+import { NextIntlClientProvider } from "next-intl";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
+import enMessages from "@/i18n/messages/en.json";
+import koMessages from "@/i18n/messages/ko.json";
+import type { UiLocale } from "@/i18n/locale";
 import { SharePopover } from "./SharePopover";
 
 const inactive = {
@@ -10,6 +14,15 @@ const inactive = {
   view_count: 0,
   expired: false,
 };
+
+function mountWithLocale(component: React.ReactNode, locale: UiLocale = "ko") {
+  const messages = locale === "en" ? enMessages : koMessages;
+  return cy.mount(
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
+      {component}
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("SharePopover", () => {
   it("creates a link with an explicit UTC expiry", () => {
@@ -24,7 +37,7 @@ describe("SharePopover", () => {
         expired: false,
       });
 
-    cy.mount(
+    mountWithLocale(
       <SharePopover
         presentationId="deck-1"
         title="분기 계획"
@@ -67,7 +80,7 @@ describe("SharePopover", () => {
       view_count: 0,
     });
 
-    cy.mount(
+    mountWithLocale(
       <SharePopover
         presentationId="deck-2"
         title="공유 중인 자료"
@@ -117,7 +130,7 @@ describe("SharePopover", () => {
       );
     }
 
-    cy.mount(<Harness />);
+    mountWithLocale(<Harness />);
     cy.get('input[aria-label="공유 링크"]').should(
       "have.value",
       `${window.location.origin}/p/deck-a-token`,
@@ -130,5 +143,23 @@ describe("SharePopover", () => {
     );
     cy.get('input[aria-label="공유 링크"]').should("not.exist");
     cy.contains("/p/deck-a-token").should("not.exist");
+  });
+
+  it("renders sharing controls from the English catalog", () => {
+    cy.stub(DashboardApi, "getShareStatus").resolves(inactive);
+
+    mountWithLocale(
+      <SharePopover
+        presentationId="deck-en"
+        title="English deck"
+        open
+        onOpenChange={cy.stub()}
+      />,
+      "en",
+    );
+
+    cy.contains("h2", "Share presentation").should("be.visible");
+    cy.contains("button", "Create share link").should("be.visible");
+    cy.get("select").should("be.visible").and("contain", "Never expires");
   });
 });

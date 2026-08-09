@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
 import {
   Sheet,
   SheetContent,
@@ -41,15 +42,6 @@ type IconWeight = (typeof ICON_WEIGHTS)[number];
 const DEFAULT_ICON_WEIGHT: IconWeight = "regular";
 const ICON_WEIGHT_PATTERN = ICON_WEIGHTS.join("|");
 const ICON_SEARCH_DEBOUNCE_MS = 500;
-
-const ICON_WEIGHT_LABELS: Record<IconWeight, string> = {
-  thin: "얇게",
-  light: "가늘게",
-  regular: "기본",
-  bold: "굵게",
-  fill: "채움",
-  duotone: "투톤",
-};
 
 const normalizeIconWeight = (weight?: string | null): IconWeight => {
   const normalized = (weight || "").trim().toLowerCase().replace(/_/g, "-");
@@ -140,6 +132,7 @@ const IconsEditor = ({
   onClose,
   onIconChange,
 }: IconsEditorProps) => {
+  const t = useTranslations("iconEditor");
   const dispatch = useDispatch();
   const presentationData = useSelector(
     (state: RootState) => state.presentationGeneration.presentationData
@@ -234,8 +227,8 @@ const IconsEditor = ({
         if (requestIdRef.current === requestId) {
           console.error("Error fetching icons:", error);
           notify.error(
-            "아이콘을 불러올 수 없습니다",
-            error.message || "아이콘을 가져오지 못했습니다. 다시 시도해 주세요."
+            t("toasts.loadTitle"),
+            error.message || t("toasts.loadDescription")
           );
           setIcons([]);
         }
@@ -245,7 +238,7 @@ const IconsEditor = ({
         }
       }
     },
-    [selectedWeight]
+    [selectedWeight, t]
   );
 
   useEffect(() => {
@@ -267,7 +260,7 @@ const IconsEditor = ({
     );
 
     if (!replacementIcon) {
-      notify.warning("아이콘을 선택하세요", "교체하기 전에 아이콘을 선택해 주세요.");
+      notify.warning(t("toasts.selectTitle"), t("toasts.selectDescription"));
       return;
     }
 
@@ -300,10 +293,10 @@ const IconsEditor = ({
         >
           <SheetHeader className="border-b border-[#EDEEEF] px-4 py-4 text-left">
             <SheetTitle className="text-sm font-semibold text-[#191919]">
-              아이콘 편집
+              {t("title")}
             </SheetTitle>
             <p id="icons-editor-description" className="sr-only">
-              Choose a replacement for the selected icon.
+              {t("description")}
             </p>
           </SheetHeader>
 
@@ -312,12 +305,12 @@ const IconsEditor = ({
               <div className="pb-5">
                 <div className="mb-[15px] flex items-center gap-1.5">
                   <p className="text-sn font-normal text-[#191919]">
-                    아이콘 두께
+                    {t("weightLabel")}
                   </p>
-                  <ToolTip content="아이콘 검색 및 교체에 사용할 시각적 두께를 선택하세요.">
+                  <ToolTip content={t("weightHelp")}>
                     <button
                       type="button"
-                      aria-label="아이콘 두께 도움말"
+                      aria-label={t("weightHelpAria")}
                       className="inline-flex h-8 w-8 items-center justify-center rounded text-[#A1A1AA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                     >
                       <Info className="h-3 w-3" />
@@ -337,7 +330,9 @@ const IconsEditor = ({
                         key={weight}
                         type="button"
                         aria-pressed={isSelected}
-                        aria-label={`${ICON_WEIGHT_LABELS[weight]} 아이콘 두께`}
+                        aria-label={t("weightChoiceAria", {
+                          weight: t(`weights.${weight}`),
+                        })}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleWeightSelect(weight);
@@ -369,7 +364,7 @@ const IconsEditor = ({
                             isSelected ? "text-[#7A5AF8]" : "text-[#666666]"
                           )}
                         >
-                          {ICON_WEIGHT_LABELS[weight]}
+                          {t(`weights.${weight}`)}
                         </span>
                       </button>
                     );
@@ -379,10 +374,10 @@ const IconsEditor = ({
 
               <div className="flex items-center justify-between gap-3 pb-5">
                 <p className="text-sm font-medium text-[#191919] ">
-                  발표자료 전체에 스타일 적용
+                  {t("applyToPresentation")}
                 </p>
                 <Switch
-                  aria-label="발표자료 전체에 아이콘 두께 적용"
+                  aria-label={t("applyToPresentationAria")}
                   checked={applyStylesToPresentation}
                   onCheckedChange={setApplyStylesToPresentation}
                   className="h-5 w-9 data-[state=checked]:bg-[#7C3AED] data-[state=unchecked]:bg-[#DDDEE3]"
@@ -399,7 +394,7 @@ const IconsEditor = ({
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B9CA3]" />
                   <Input
-                    placeholder="아이콘 검색"
+                    placeholder={t("searchPlaceholder")}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
@@ -425,7 +420,7 @@ const IconsEditor = ({
                       <button
                         key={`${iconSrc}-${index}`}
                         type="button"
-                        aria-label={`아이콘 ${index + 1} 선택`}
+                        aria-label={t("selectIconAria", { index: index + 1 })}
                         aria-pressed={isSelected}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -449,9 +444,9 @@ const IconsEditor = ({
               ) : (
                 <div className="flex h-44 flex-col items-center justify-center text-center text-[#73737A]">
                   <Search className="mb-3 h-8 w-8 text-[#B7B8BE]" />
-                  <p className="text-[12px] font-medium">아이콘이 없습니다</p>
+                  <p className="text-[12px] font-medium">{t("emptyTitle")}</p>
                   <p className="mt-1 text-[11px]">
-                    다른 검색어로 시도해 보세요.
+                    {t("emptyDescription")}
                   </p>
                 </div>
               )}
@@ -471,7 +466,7 @@ const IconsEditor = ({
                 disabled={!selectedIconUrl && !currentIconUrl}
                 className="h-10 rounded-full  px-4 text-sm font-semibold text-[#101323] shadow-none hover:bg-[#F2DDAA] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                아이콘 교체
+                {t("replace")}
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

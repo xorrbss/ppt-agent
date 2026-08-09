@@ -16,7 +16,7 @@ export function Providers({
   messages: AbstractIntlMessages;
 }) {
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
       <Provider store={store}>{children}</Provider>
     </NextIntlClientProvider>
   );

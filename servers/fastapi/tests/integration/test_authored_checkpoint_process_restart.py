@@ -287,6 +287,8 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
         first_env = common_env | {
             "AUTHORED_SUBPROCESS_BLOCK_RENDER_SLIDE": "2",
             "AUTHORED_SUBPROCESS_LEASE_SECONDS": _CRASHED_LEASE_SECONDS,
+            "WORKSPACE_OPERATION_LEASE_SECONDS": _CRASHED_LEASE_SECONDS,
+            "WORKSPACE_OPERATION_HEARTBEAT_SECONDS": "1",
         }
         first, first_url = _start_server(
             python=python,
@@ -376,22 +378,26 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
             ("awaiting_resume", 1, 2),
         }
         assert _one(
-            database_path, "SELECT COUNT(*) FROM presentations"
-        )[0] == 0
+            database_path,
+            "SELECT lifecycle_status, n_slides FROM presentations",
+        ) == ("staging", 6)
 
         def lease_is_recoverable():
-            state, lease_expires_at = _one(
+            state, job_lease_expires_at, operation_lease_expires_at = _one(
                 database_path,
-                "SELECT state, lease_expires_at "
-                "FROM presentation_generation_jobs",
+                "SELECT jobs.state, jobs.lease_expires_at, "
+                "operations.lease_expires_at "
+                "FROM presentation_generation_jobs AS jobs "
+                "JOIN workspace_operations AS operations "
+                "ON operations.id = jobs.workspace_operation_id",
             )
-            # This is exactly the precondition recover_generation_jobs() uses
-            # to reclaim an abandoned attempt: either the crashed runtime
-            # already released the lease, or its recorded expiry has passed.
-            if lease_expires_at is None:
-                return state
-            return state if _as_utc(lease_expires_at) <= datetime.now(
-                timezone.utc
+            # The workspace operation is the canonical lease and the linked
+            # generation row mirrors it for checkpoint fencing. Both must be
+            # reclaimable before the new process performs startup recovery.
+            now = datetime.now(timezone.utc)
+            leases = (job_lease_expires_at, operation_lease_expires_at)
+            return state if all(
+                value is None or _as_utc(value) <= now for value in leases
             ) else None
 
         # Waiting for the recorded expiry instant -- instead of sleeping for a
@@ -407,6 +413,8 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
         second_env = common_env | {
             "AUTHORED_SUBPROCESS_BLOCK_RENDER_SLIDE": "-1",
             "AUTHORED_SUBPROCESS_LEASE_SECONDS": _RESUMING_LEASE_SECONDS,
+            "WORKSPACE_OPERATION_LEASE_SECONDS": _RESUMING_LEASE_SECONDS,
+            "WORKSPACE_OPERATION_HEARTBEAT_SECONDS": "1",
         }
         second, second_url = _start_server(
             python=python,
@@ -427,29 +435,6 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
         )
         assert second.pid != first_pid
         assert second_runtime_pid != first_runtime_pid
-
-        # Startup recovery runs inside the lifespan, before uvicorn serves, so
-        # this projection is already settled once the server answers.
-        pending = _request(
-            "GET",
-            f"{second_url}/api/v1/ppt/presentation/status/{task_id}",
-            description="the resuming runtime to report the recovered task",
-        ).json()
-        assert pending["status"] == "pending"
-        assert "Idempotency-Key" in pending["message"]
-        assert _one(
-            database_path, "SELECT state FROM presentation_generation_jobs"
-        )[0] == "awaiting_resume"
-
-        resumed = _request(
-            "POST",
-            f"{second_url}/api/v1/ppt/presentation/generate/async",
-            json=payload,
-            headers=headers,
-            description="the authenticated idempotent resume request",
-        )
-        assert resumed.status_code == 200, resumed.text
-        assert resumed.json()["id"] == task_id
 
         def completed_status():
             status_response = httpx.get(
@@ -478,9 +463,28 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
         assert completed["progress"]["completed_slides"] == 6
         assert completed["progress"]["percent"] == 100
         assert completed["failure"] is None
-        output_path = Path(completed["data"]["path"])
+        storage_key = _one(
+            database_path, "SELECT storage_key FROM workspace_artifacts"
+        )[0]
+        assert completed["data"]["path"].replace("\\", "/").endswith(
+            f"/{storage_key}"
+        )
+        output_path = Path(common_env["APP_DATA_DIRECTORY"]) / storage_key
         assert output_path.exists()
         assert len(PptxPresentation(output_path).slides) == 6
+
+        # Replaying the original idempotency key after recovery must resolve to
+        # the same durable task instead of replacing the historical row.
+        replayed = _request(
+            "POST",
+            f"{second_url}/api/v1/ppt/presentation/generate/async",
+            json=payload,
+            headers=headers,
+            description="the completed idempotent replay",
+        )
+        assert replayed.status_code == 200, replayed.text
+        assert replayed.json()["id"] == task_id
+        assert replayed.json()["status"] == "completed"
 
         second_output = _kill_process_tree(second)
         second = None
