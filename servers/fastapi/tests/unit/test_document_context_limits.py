@@ -192,6 +192,7 @@ def test_outline_stream_emits_safe_error_and_skips_llm_for_oversized_document(
     presentation_id = uuid.uuid4()
     presentation = PresentationModel(
         id=presentation_id,
+        lifecycle_status="staging",
         content="Create a deck.",
         n_slides=1,
         language="English",
@@ -200,7 +201,12 @@ def test_outline_stream_emits_safe_error_and_skips_llm_for_oversized_document(
         verbosity="standard",
         instructions=None,
     )
-    session = FakeAsyncSession(get_results={presentation_id: presentation})
+    session = FakeAsyncSession(
+        get_results={presentation_id: presentation},
+        # The outline writer admits only a staged deck whose generate operation
+        # is still awaiting activation; this is that deck.
+        scalar_result=uuid.uuid4(),
+    )
     request = types.SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
     limit_error = DocumentContextLimitError(
         actual_chars=50_001,
@@ -306,6 +312,10 @@ def test_async_queue_rejects_oversized_context_before_creating_job():
                 request,
                 background_tasks,
                 session,
+                # The nested-generation dispatch used by workspace
+                # orchestration; it reaches the same document preflight
+                # without needing a second bootstrap operation.
+                force_legacy_dispatch=True,
             )
         )
 

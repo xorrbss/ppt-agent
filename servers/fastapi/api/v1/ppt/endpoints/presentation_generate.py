@@ -91,7 +91,6 @@ from services.presentation_generation_job_service import (
     launch_generation_job,
     release_generation_job,
     request_sha256,
-    resolve_generation_job_presentation_id,
 )
 from services.template_v2_generation_observability import (
     log_template_v2_generation_observation,
@@ -120,21 +119,19 @@ from services.workspace_artifact_publication_service import (
     workspace_chat_artifacts_were_published,
 )
 from services.workspace_legacy_write_gate import (
-    legacy_write_requires_presentation_scope,
     require_legacy_presentation_write_path,
-)
-from services.workspace_rollout_policy import (
-    resolve_active_workspace_write_rollout,
 )
 from services.workspace_operation_runner import (
     append_operation_event,
     wake_workspace_operation_runner,
 )
-from services.workspace_runtime_profile import resolve_chat_first_workspace_rollout
+from services.workspace_runtime_profile import (
+    UnsupportedWorkspaceRuntimeError,
+    require_supported_workspace_runtime,
+)
 from services.workspace_service import (
     WorkspaceServiceError,
     activate_workspace_operation,
-    workspace_commands_enabled,
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.strategies import (
@@ -222,23 +219,12 @@ def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
 
 
 def _chat_first_generation_enabled() -> bool:
-    """Resolve rollout intent before fingerprint lookup or durable job writes."""
+    """Fail closed when the SQL runtime cannot host the operation store."""
 
-    rollout = resolve_chat_first_workspace_rollout(
-        workspace_commands_enabled(),
-        sql_engine.url,
-    )
-    if not rollout.requested:
-        return False
-    if not rollout.enabled:
-        raise HTTPException(
-            status_code=(
-                501
-                if rollout.reason == "chat_first_runtime_unsupported"
-                else 503
-            ),
-            detail=rollout.reason,
-        )
+    try:
+        require_supported_workspace_runtime(sql_engine.url)
+    except UnsupportedWorkspaceRuntimeError as error:
+        raise HTTPException(status_code=501, detail=error.code) from error
     return True
 
 
@@ -1936,13 +1922,13 @@ async def generate_presentation_sync(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    # The synchronous endpoint executes the mutation inline and therefore has
-    # no durable workspace operation, lease, revision fence, or timeline card.
-    # Once chat-first owns writes, callers must use /generate/async after the
-    # atomic /presentation/create bootstrap admission.
-    require_legacy_presentation_write_path(
-        getattr(request, "presentation_id", None)
-    )
+    # The synchronous endpoint runs the whole generation inline, so it has no
+    # durable operation, lease, revision fence, or timeline card. It stays open
+    # because it is the documented one-shot API/CLI entry point for creating a
+    # deck (scripts/ppt-agent.mjs) and the workspace has no synchronous
+    # equivalent. Callers editing an existing deck must use a workspace command;
+    # concurrent use on a deck that already has a running operation is not
+    # fenced against that operation.
     request._request_id = getattr(request_http.state, "request_id", None)
     try:
         (presentation_id,) = await check_if_api_request_is_valid(request, sql_session)
@@ -2160,14 +2146,8 @@ async def queue_presentation_generation(
     # That nested generation job must use the existing durable generator rather
     # than trying to bootstrap a second workspace operation for a deck that does
     # not exist yet.
-    chat_first_runtime_enabled = (
+    chat_first_enabled = (
         False if force_legacy_dispatch else _chat_first_generation_enabled()
-    )
-    chat_first_enabled = bool(
-        chat_first_runtime_enabled
-        and resolve_active_workspace_write_rollout(
-            request.presentation_id
-        ).enabled
     )
     # Legacy requests have no pre-existing timeline anchor, so retain their
     # fail-before-session behavior. Chat-first requests are admitted only after
@@ -2607,9 +2587,7 @@ async def cancel_async_presentation_generation(
     # Chat-first cancellation is an operation action so the operation and its
     # linked compatibility generation job transition together.  Mutating the
     # legacy task row directly would leave the timeline and runner divergent.
-    if legacy_write_requires_presentation_scope():
-        presentation_id = await resolve_generation_job_presentation_id(id)
-        require_legacy_presentation_write_path(presentation_id)
+    require_legacy_presentation_write_path()
     task = await cancel_generation_job(id)
     if task is None:
         raise HTTPException(

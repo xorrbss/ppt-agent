@@ -66,18 +66,9 @@ from services.workspace_error_registry import (
     resolve_workspace_error,
 )
 from services.workspace_metrics import WORKSPACE_METRICS
-from services.workspace_rollout_policy import (
-    WorkspaceWriteRolloutDecision,
-    resolve_workspace_write_rollout,
-    workspace_cohort_bucket,
-)
-from services.workspace_shadow_parity import (
-    observe_workspace_timeline_shadow_parity,
-)
 from services.workspace_runtime_profile import (
-    ChatFirstWorkspaceRollout,
-    CHAT_FIRST_FEATURE_DISABLED,
-    resolve_chat_first_workspace_rollout,
+    WORKSPACE_RUNTIME_UNSUPPORTED,
+    WorkspaceRuntimeProfile,
     resolve_workspace_runtime_profile,
 )
 from services.workspace_service import (
@@ -85,7 +76,6 @@ from services.workspace_service import (
     apply_workspace_action,
     bootstrap_workspace,
     create_workspace_command,
-    workspace_commands_enabled,
     workspace_events,
     workspace_timeline,
 )
@@ -137,82 +127,51 @@ WORKSPACE_ROUTER = APIRouter(
 )
 
 
-def _runtime_profile():
+def _runtime_profile() -> WorkspaceRuntimeProfile:
     return resolve_workspace_runtime_profile(sql_engine.url)
 
 
-def _rollout_status() -> ChatFirstWorkspaceRollout:
-    return resolve_chat_first_workspace_rollout(
-        workspace_commands_enabled(),
-        _runtime_profile(),
-    )
+def _require_supported_runtime() -> WorkspaceRuntimeProfile:
+    """The operation store is the only writer, so an unusable dialect is fatal."""
 
-
-def _rollout_decision(
-    presentation_id: uuid.UUID | None = None,
-) -> WorkspaceWriteRolloutDecision:
-    decision = resolve_workspace_write_rollout(
-        _rollout_status(),
-        presentation_id,
-    )
-    try:
-        WORKSPACE_METRICS.record_rollout(
-            enabled=decision.enabled,
-            reason=decision.reason,
-        )
-    except Exception:
-        pass
-    return decision
-
-
-def _require_supported_runtime() -> None:
-    rollout = _rollout_status()
-    if not rollout.workspace_reads_supported:
-        error_code = rollout.runtime_error or "chat_first_runtime_unsupported"
+    profile = _runtime_profile()
+    if not profile.supported:
         raise WorkspaceAPIException(
-            error_code,
-            status_code=(501 if error_code == "chat_first_runtime_unsupported" else 503),
+            WORKSPACE_RUNTIME_UNSUPPORTED,
+            status_code=501,
         )
+    return profile
 
 
 def _require_workspace_writes(
     presentation_id: uuid.UUID | None = None,
-) -> WorkspaceWriteRolloutDecision:
-    decision = _rollout_decision(presentation_id)
-    if decision.enabled:
-        return decision
-    error_code = decision.reason or CHAT_FIRST_FEATURE_DISABLED
-    raise WorkspaceAPIException(
-        error_code,
-        status_code=(501 if error_code == "chat_first_runtime_unsupported" else 503),
-    )
+) -> WorkspaceRuntimeProfile:
+    profile = _require_supported_runtime()
+    try:
+        WORKSPACE_METRICS.record_rollout(enabled=True, reason=None)
+    except Exception:
+        pass
+    return profile
 
 
 def _template_application_target_id(
     *,
     source_presentation_id: uuid.UUID,
     idempotency_key: str,
-    source_decision: WorkspaceWriteRolloutDecision,
 ) -> uuid.UUID:
-    """Choose a target cohort no narrower than the admitted source cohort."""
+    """Derive one stable target deck id so a retry cannot create a second deck."""
 
-    source_bucket = source_decision.cohort_bucket
-    if source_bucket is None:
-        return uuid.uuid4()
     namespace = uuid.uuid5(
         source_presentation_id,
         f"workspace-template-application:{idempotency_key}",
     )
     for ordinal in range(1_000_000):
         candidate = uuid.uuid5(namespace, str(ordinal))
-        if (
-            candidate != source_presentation_id
-            and workspace_cohort_bucket(candidate) <= source_bucket
-        ):
+        if candidate != source_presentation_id:
             return candidate
     raise WorkspaceAPIException(
-        "chat_first_cohort_excluded",
-        status_code=503,
+        WORKSPACE_RUNTIME_UNSUPPORTED,
+        status_code=501,
     )
 
 
@@ -292,25 +251,26 @@ def _raise_artifact_error(error: WorkspaceArtifactPublicationError) -> None:
 async def workspace_capabilities(
     presentation_id: Optional[uuid.UUID] = None,
 ) -> WorkspaceCapabilitiesResponse:
-    rollout = _rollout_status()
-    decision = _rollout_decision(presentation_id)
-    supported = rollout.workspace_reads_supported
-    enabled = decision.enabled
+    profile = _runtime_profile()
+    supported = profile.supported
+    # The workspace is the only writer now, so reads and writes stand or fall
+    # together on the runtime. The cohort/kill-switch fields stay in the v1
+    # response shape and report the absence of any rollout.
     return WorkspaceCapabilitiesResponse(
         supported=supported,
-        enabled=enabled,
+        enabled=supported,
         timeline=supported,
-        commands=enabled,
+        commands=supported,
         events=supported,
         reads_supported=supported,
-        writes_supported=enabled,
-        commands_enabled=enabled,
-        runtime_profile=rollout.profile.kind.value,
-        reason=decision.reason,
-        cohort_eligible=decision.cohort_eligible,
-        cohort_bucket=decision.cohort_bucket,
-        kill_switch_active=decision.kill_switch_active,
-        shadow_mode=decision.shadow_mode,
+        writes_supported=supported,
+        commands_enabled=supported,
+        runtime_profile=profile.kind.value,
+        reason=None if supported else WORKSPACE_RUNTIME_UNSUPPORTED,
+        cohort_eligible=supported,
+        cohort_bucket=None,
+        kill_switch_active=False,
+        shadow_mode=False,
     )
 
 
@@ -548,11 +508,10 @@ async def confirm_presentation_template_application(
 ) -> WorkspaceTemplateApplicationResponse:
     """Confirm one target-owned authored template application."""
 
-    source_decision = _require_workspace_writes(source_presentation_id)
+    _require_workspace_writes(source_presentation_id)
     target_presentation_id = _template_application_target_id(
         source_presentation_id=source_presentation_id,
         idempotency_key=idempotency_key,
-        source_decision=source_decision,
     )
     try:
         confirmed = await confirm_authored_template_application(
@@ -626,11 +585,6 @@ async def get_presentation_workspace_timeline(
         )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
-    await observe_workspace_timeline_shadow_parity(
-        session,
-        presentation_id=presentation_id,
-        timeline=result,
-    )
     return project_workspace_timeline(
         result,
         presentation_id=presentation_id,

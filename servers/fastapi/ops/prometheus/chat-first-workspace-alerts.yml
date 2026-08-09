@@ -149,22 +149,7 @@ groups:
           service: chat-first-workspace
         annotations:
           summary: Workspace observability signal delivery failed
-          description: A closed-schema operation, shadow-parity, or event-lag telemetry sink failed during the last ten minutes.
-
-      - alert: WorkspaceShadowParityDivergence
-        expr: |
-          (
-            sum(rate(workspace_shadow_parity_match_total[10m]))
-            / sum(rate(workspace_shadow_parity_total[10m])) < 0.999
-          )
-          and sum(rate(workspace_shadow_parity_total[10m])) > 0
-        for: 10m
-        labels:
-          severity: critical
-          service: chat-first-workspace
-        annotations:
-          summary: Workspace shadow-read parity diverged
-          description: Fewer than 99.9% of live shadow comparisons matched for ten minutes.
+          description: A closed-schema operation or event-lag telemetry sink failed during the last ten minutes.
 
       - alert: WorkspaceEventProcessingLagSLOBreach
         expr: |

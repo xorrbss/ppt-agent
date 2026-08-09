@@ -1,5 +1,6 @@
 "use client";
 
+import { LocateFixed } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -10,11 +11,19 @@ import {
 } from "react";
 import { WorkspaceComposer } from "./WorkspaceComposer";
 import { WorkspaceMessage } from "./WorkspaceMessage";
+import { WorkspaceSuggestions } from "./WorkspaceSuggestions";
 import { WorkspaceOperationCard } from "./WorkspaceOperationCard";
 import { useWorkspaceTimeline } from "./useWorkspace";
+import {
+  useWorkspaceAgentFocus,
+  type WorkspaceAgentFocusController,
+  type WorkspaceAgentSlideFocus,
+} from "./useWorkspaceAgentFocus";
 import type {
   WorkspaceCommandDispatcher,
+  WorkspaceCommandOptions,
   WorkspacePageRemakeRequester,
+  WorkspacePresentationChange,
   WorkspacePresentationChangedHandler,
   WorkspaceQualityReviewRequester,
 } from "./types";
@@ -43,6 +52,10 @@ interface WorkspaceChatPanelProps {
   commandsEnabled?: boolean;
   onPresentationChanged?: WorkspacePresentationChangedHandler;
   onSlideFocus?: (slideIndex: number) => void;
+  /** True while the runner still owns the deck, for canvas activity affordances. */
+  onAgentActivityChange?: (active: boolean) => void;
+  /** Emitted only while "AI 따라가기" is on, so the canvas may move itself. */
+  onAgentSlideFocus?: (focus: WorkspaceAgentSlideFocus) => void;
   onCommandDispatcherReady?: (
     dispatcher: WorkspaceCommandDispatcher | null,
   ) => void;
@@ -126,12 +139,16 @@ export default function WorkspaceChatPanel({
   commandsEnabled = true,
   onPresentationChanged,
   onSlideFocus,
+  onAgentActivityChange,
+  onAgentSlideFocus,
   onCommandDispatcherReady,
   onQualityReviewRequesterReady,
   onPageRemakeRequesterReady,
 }: WorkspaceChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const [draft, setDraft] = useState("");
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -173,6 +190,17 @@ export default function WorkspaceChatPanel({
     scrollTop: number;
     itemCount: number;
   } | null>(null);
+  // The focus controller is created below from timeline state, so a change that
+  // arrives from the hook reaches it through this ref rather than a cycle.
+  const agentFocusRef = useRef<WorkspaceAgentFocusController | null>(null);
+  const handlePresentationChanged =
+    useCallback<WorkspacePresentationChangedHandler>(
+      async (change: WorkspacePresentationChange) => {
+        agentFocusRef.current?.notePresentationChange(change);
+        await onPresentationChanged?.(change);
+      },
+      [onPresentationChanged],
+    );
   const {
     projection,
     loading,
@@ -192,7 +220,7 @@ export default function WorkspaceChatPanel({
     presentationId,
     enabled: true,
     commandsEnabled,
-    onPresentationChanged,
+    onPresentationChanged: handlePresentationChanged,
   });
 
   useEffect(() => {
@@ -224,12 +252,28 @@ export default function WorkspaceChatPanel({
     [generationInfo, presentationId, projection.items],
   );
 
+  const agentFocus = useWorkspaceAgentFocus({
+    presentationId,
+    submitting,
+    items: projection.items,
+    onActivityChange: onAgentActivityChange,
+    onSlideFocus: onAgentSlideFocus,
+  });
+  useEffect(() => {
+    agentFocusRef.current = agentFocus;
+  }, [agentFocus]);
+
   const sendCommandRef = useRef(sendCommand);
   useEffect(() => {
     sendCommandRef.current = sendCommand;
   }, [sendCommand]);
+  // Single funnel for every command the panel can start, so the pages a request
+  // names are recorded once instead of at each call site.
   const commandDispatcher = useCallback<WorkspaceCommandDispatcher>(
-    (command, options) => sendCommandRef.current(command, options),
+    (command, options?: WorkspaceCommandOptions) => {
+      agentFocusRef.current?.noteDispatch(options);
+      return sendCommandRef.current(command, options);
+    },
     [],
   );
 
@@ -279,6 +323,7 @@ export default function WorkspaceChatPanel({
     previousEventHighWatermarkRef.current = undefined;
     prependRestoreRef.current = null;
     setLoadingOlder(false);
+    setDraft("");
     setPendingAssets([]);
     setUploadError(null);
     setQualityReviewPrompt(null);
@@ -315,7 +360,7 @@ export default function WorkspaceChatPanel({
         ? `현재 ${selectedSlide + 1}번 슬라이드를`
         : "전체 슬라이드를";
 
-    await sendCommandRef.current(
+    await commandDispatcher(
       `${subject} 고품질 검수하고 문제를 자동 수정해 줘`,
       {
         commandType: "quality.review",
@@ -337,7 +382,12 @@ export default function WorkspaceChatPanel({
       },
     );
     setQualityReviewPrompt(null);
-  }, [qualityReviewPrompt, qualityReviewRange, qualityReviewScope]);
+  }, [
+    commandDispatcher,
+    qualityReviewPrompt,
+    qualityReviewRange,
+    qualityReviewScope,
+  ]);
 
   const handleQualityReviewRangeInput = useCallback(
     (value: string) => {
@@ -474,13 +524,14 @@ export default function WorkspaceChatPanel({
       className="flex h-full w-full min-h-0 min-w-0 flex-col bg-slate-50"
       aria-label="프레젠테이션 작업 대화"
     >
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <div>
+      <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-slate-900">
             Slides Workbench
           </h2>
           <p className="text-xs text-slate-500">생성 및 수정 내역</p>
         </div>
+        <div className="flex shrink-0 items-center gap-2">
         <span
           className="text-xs text-slate-500"
           role="status"
@@ -488,6 +539,26 @@ export default function WorkspaceChatPanel({
         >
           {CONNECTION_LABELS[connection]}
         </span>
+        <button
+          type="button"
+          onClick={agentFocus.toggleFollow}
+          aria-pressed={agentFocus.followEnabled}
+          data-testid="workspace-follow-agent-toggle"
+          title={
+            agentFocus.followEnabled
+              ? "AI 따라가기 켜짐: 요청한 페이지로 캔버스가 이동합니다"
+              : "AI 따라가기 꺼짐"
+          }
+          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            agentFocus.followEnabled
+              ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+              : "border-slate-200 bg-white text-slate-500"
+          }`}
+        >
+          <LocateFixed className="h-3 w-3" aria-hidden="true" />
+          {agentFocus.followEnabled ? "따라가는 중" : "AI 따라가기"}
+        </button>
+        </div>
       </header>
 
       <div
@@ -519,9 +590,20 @@ export default function WorkspaceChatPanel({
           !qualityReviewPrompt &&
           !pageRemakePrompt &&
           !historyError && (
-            <p className="py-8 text-center text-sm text-slate-500">
-              아직 기록된 대화가 없습니다.
-            </p>
+            <div className="py-8">
+              <p className="text-center text-sm text-slate-500">
+                아직 기록된 대화가 없습니다.
+              </p>
+              {commandsEnabled && (
+                <WorkspaceSuggestions
+                  disabled={submitting || !writesEnabled}
+                  onSelect={(prompt) => {
+                    setDraft(prompt);
+                    composerRef.current?.focus();
+                  }}
+                />
+              )}
+            </div>
           )}
         {/* Remake previews carry no conversation position, so they sit above
             the transcript. Rendering them after it put them between the newest
@@ -534,7 +616,7 @@ export default function WorkspaceChatPanel({
           onWorkspaceCommand={commandDispatcher}
           onApplied={(slideIndex) => {
             setPageRemakeHistoryToken((token) => token + 1);
-            onPresentationChanged?.({
+            void handlePresentationChanged({
               operationId: `page-remake-history-${slideIndex}`,
               operationType: "slide.regenerate",
               fixedSlideIndexes: [slideIndex],
@@ -572,7 +654,7 @@ export default function WorkspaceChatPanel({
                   onReExport={(operationType) => {
                     const format =
                       operationType === "export.pdf" ? "pdf" : "pptx";
-                    return sendCommandRef.current(
+                    return commandDispatcher(
                       `${format.toUpperCase()}로 다시 내보내기`,
                       {
                         commandType: operationType,
@@ -843,6 +925,9 @@ export default function WorkspaceChatPanel({
           uploadError={uploadError}
           assets={pendingAssets}
           fileInputRef={fileInputRef}
+          value={draft}
+          onValueChange={setDraft}
+          textareaRef={composerRef}
           onFilesSelected={handleFilesSelected}
           onRemoveAsset={(assetId) => {
             setPendingAssets((current) =>
@@ -855,7 +940,7 @@ export default function WorkspaceChatPanel({
             // their message and its progress card land below the fold and the
             // send looks like it did nothing.
             shouldFollowLatestRef.current = true;
-            await sendCommand(command, {
+            await commandDispatcher(command, {
               context: { current_slide: currentSlide },
               assetIds: pendingAssets.map((asset) => asset.assetId),
             });

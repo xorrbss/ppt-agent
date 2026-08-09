@@ -22,9 +22,6 @@ from models.sql.presentation import (
 )
 from models.sql.slide import SlideModel
 from services.database import get_async_session
-from services.workspace_legacy_write_gate import (
-    require_legacy_presentation_write_path,
-)
 from utils.get_env import get_app_data_directory_env
 
 PRESENTATION_SHARE_ROUTER = APIRouter(
@@ -229,7 +226,9 @@ async def enable_share(
 ):
     """Enable read-only sharing (idempotent). `regenerate=true` rotates the token,
     which immediately voids the previous link."""
-    require_legacy_presentation_write_path(id)
+    # Sharing flips a token on the deck row; it never touches slides or the
+    # revision the operation runner fences, and there is no workspace command
+    # for it. Routing it through the runner would only delete the feature.
     presentation = await sql_session.get(PresentationModel, id)
     if (
         not presentation
@@ -248,7 +247,6 @@ async def enable_share(
 async def disable_share(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    require_legacy_presentation_write_path(id)
     presentation = await sql_session.get(PresentationModel, id)
     if (
         not presentation

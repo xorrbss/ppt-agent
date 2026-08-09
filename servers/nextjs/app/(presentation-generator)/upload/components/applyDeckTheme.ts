@@ -1,9 +1,6 @@
 import { DEFAULT_THEMES } from "@/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/constants";
 import ThemeApi from "@/app/(presentation-generator)/services/api/theme";
-import {
-  PresentationGenerationApi,
-  PresentationThemePayload,
-} from "../../services/api/presentation-generation";
+import type { PresentationThemePayload } from "../../services/api/presentation-generation";
 
 const normalizeTheme = (value: unknown): PresentationThemePayload | null => {
   if (!value || typeof value !== "object") return null;
@@ -54,25 +51,5 @@ export async function resolveDeckTheme(
   } catch (error) {
     console.error("Failed to resolve selected theme", error);
     return null;
-  }
-}
-
-// Apply a chosen theme (a built-in preset id, or a saved custom theme id) to a
-// freshly-created deck. Best-effort: theme is presentation-level and applied at
-// render time, so a PATCH after create is enough for the editor/export to render
-// with it. No selection (or unresolvable id) → no-op.
-export async function applyDeckTheme(
-  presentationId: string,
-  selectedThemeId: string | null
-): Promise<void> {
-  try {
-    const theme = await resolveDeckTheme(selectedThemeId);
-    if (!theme) return;
-    await PresentationGenerationApi.updatePresentationContent({
-      id: presentationId,
-      theme,
-    });
-  } catch (error) {
-    console.error("Failed to apply selected theme", error);
   }
 }

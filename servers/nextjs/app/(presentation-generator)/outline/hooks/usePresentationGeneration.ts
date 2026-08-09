@@ -1,19 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { flushSync } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { usePathname, useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import type {
-  GenerationFailure,
-  GenerationStatusResponse,
-} from "../../services/api/presentation-generation";
-import { DashboardApi } from "../../services/api/dashboard";
 import { LoadingState, TABS } from "../types/index";
 import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils";
-import { getCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { AUTHORED_TEMPLATE_ID } from "../components/TemplateSelection";
 import { LanguageType } from "../../upload/type";
@@ -23,7 +16,6 @@ import {
 } from "@/app/hooks/useStructuredTemplates";
 import {
   ApiError,
-  apiErrorFromPayload,
   getApiErrorDisplayMessage,
   getRetryablePresentationGenerationMessage,
   isRetryablePresentationGenerationError,
@@ -34,10 +26,8 @@ import {
   DurableGenerationTask,
   findDurableGenerationTask,
   saveDurableGenerationTask,
-  subscribeToDurableGenerationTasks,
   updateDurableGenerationTask,
 } from "./durableGenerationTask";
-import { useChatFirstWorkbenchRollout } from "@/lib/use-chat-first-workbench-rollout";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -50,13 +40,7 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 // through the async generate endpoint + polling rather than the layout
 // prepare/stream path. Sentinel id shared with the selection card
 // (AUTHORED_TEMPLATE_ID) so the card and this branch can never disagree.
-const AUTHORED_POLL_MS = 4000;
 const AUTHORED_TIMEOUT_MS = 30 * 60 * 1000;
-// Tolerate a few consecutive transient status-poll failures (a 502/network blip during
-// the minutes-long poll) before aborting — the backend task keeps running regardless.
-const AUTHORED_MAX_POLL_ERRORS = 3;
-const PREPARE_RECOVERY_ATTEMPTS = 4;
-const PREPARE_RECOVERY_POLL_MS = 1000;
 
 const isAmbiguousGenerationTransportError = (error: unknown): boolean => {
   if (error instanceof TypeError) return true;
@@ -82,23 +66,14 @@ const isRetryableGenerationStartError = (error: unknown): boolean =>
 const hasRecoverableChatFirstWorkspace = (error: unknown): boolean =>
   error instanceof ApiError && error.workspaceProjected;
 
-const hasPreparedStructure = (presentation: any): boolean =>
-  Array.isArray(presentation?.structure?.slides) &&
-  presentation.structure.slides.length > 0;
-
 export const normalizeCustomTemplateId = (templateId: string): string =>
   templateId.startsWith("custom-") ? templateId : `custom-${templateId}`;
-
-type PresentationGenerationOptions = {
-  chatFirstEnabled?: boolean;
-};
 
 export const usePresentationGeneration = (
   presentationId: string | null,
   outlines: { content: string }[] | null,
   selectedTemplate: TemplateLayoutsWithSettings | string | null,
-  setActiveTab: (tab: string) => void,
-  options: PresentationGenerationOptions = {}
+  setActiveTab: (tab: string) => void
 ) => {
   const dispatch = useDispatch();
   const router = useRouter();
@@ -116,28 +91,9 @@ export const usePresentationGeneration = (
     (s: RootState) => s.pptGenUpload.config
   );
   const language = generationConfig?.language ?? null;
-  const hasRolloutOverride = typeof options.chatFirstEnabled === "boolean";
-  const chatFirstRollout = useChatFirstWorkbenchRollout(
-    hasRolloutOverride ? false : undefined,
-    presentationId ?? undefined,
-  );
-  // The explicit option is retained for isolated hook tests. Product callers
-  // always use the authenticated shared runtime decision.
-  const rolloutMode = hasRolloutOverride
-    ? options.chatFirstEnabled
-      ? "chat"
-      : "legacy"
-    : chatFirstRollout.mode;
-  const chatFirstEnabled = rolloutMode === "chat";
-  const generationEnabled = rolloutMode === "chat" || rolloutMode === "legacy";
   const [loadingState, setLoadingState] = useState<LoadingState>(
     DEFAULT_LOADING_STATE
   );
-  // A stored retryable-error task whose same-key re-POST resumes the server-side
-  // slide checkpoints. Surfaced so the page can offer an explicit resume instead
-  // of silently dropping the interrupted job after a reload.
-  const [resumableTask, setResumableTask] =
-    useState<DurableGenerationTask | null>(null);
   const generationRunRef = useRef(0);
   const retrySubmitRef = useRef<(() => void) | null>(null);
   const activeDurableTaskRef = useRef<string | null>(null);
@@ -198,7 +154,7 @@ export const usePresentationGeneration = (
     element.style.removeProperty("--graph-9");
   }, []);
 
-  const openChatFirstWorkspace = useCallback(
+  const openWorkspace = useCallback(
     (idempotencyKey?: string) => {
       if (idempotencyKey) clearDurableGenerationTask(idempotencyKey);
       startingDurableTaskRef.current = null;
@@ -213,76 +169,23 @@ export const usePresentationGeneration = (
     [clearTheme, dispatch, presentationId, router]
   );
 
-  const openRecoverableChatFirstWorkspace = useCallback(
+  const openRecoverableWorkspace = useCallback(
     (error: unknown, idempotencyKey?: string): boolean => {
-      if (!chatFirstEnabled || !hasRecoverableChatFirstWorkspace(error)) {
+      if (!hasRecoverableChatFirstWorkspace(error)) {
         return false;
       }
       // The bootstrap endpoint has already durably attached the conversation,
       // first user message, settings, assets, and operation to this staging
       // presentation. Admission errors do not currently echo those IDs, so the
       // presentation ID is the stable recovery key for opening the timeline.
-      openChatFirstWorkspace(idempotencyKey);
+      openWorkspace(idempotencyKey);
       return true;
     },
-    [chatFirstEnabled, openChatFirstWorkspace]
-  );
-
-  const getDurableLoadingState = useCallback(
-    (task: DurableGenerationTask): LoadingState => ({
-      message:
-        task.mode === "authored"
-          ? "AI가 슬라이드를 저작하는 중입니다. 완료되면 자동으로 이동합니다."
-          : "구조화 템플릿으로 프레젠테이션을 생성하는 중입니다.",
-      isLoading: task.status !== "background",
-      showProgress: task.status !== "background",
-      duration: task.progressDurationSeconds,
-      progress: task.lastProgress,
-      failure: task.lastFailure,
-    }),
-    []
-  );
-
-  const finishDurableGeneration = useCallback(
-    async (
-      durableTask: DurableGenerationTask,
-      statusTask: GenerationStatusResponse,
-      isActiveRun: () => boolean
-    ) => {
-      const newId = statusTask?.data?.presentation_id;
-      if (!newId) {
-        throw new Error("생성된 프레젠테이션을 찾을 수 없습니다.");
-      }
-
-      clearDurableGenerationTask(durableTask.idempotencyKey);
-      startingDurableTaskRef.current = null;
-      if (!isActiveRun()) return;
-      // Completion is user-visible before best-effort cleanup. Waiting for the
-      // outline-shell DELETE can otherwise strand a completed deck behind the
-      // loading overlay when that request is slow or unavailable.
-      flushSync(() => setLoadingState(DEFAULT_LOADING_STATE));
-      dispatch(clearPresentationData());
-      clearTheme();
-      router.replace(
-        statusTask?.data?.edit_path || `/presentation?id=${newId}`
-      );
-
-      if (
-        durableTask.sourcePresentationId &&
-        durableTask.sourcePresentationId !== newId
-      ) {
-        void DashboardApi.deletePresentation(
-          durableTask.sourcePresentationId
-        ).catch((error) => {
-          console.warn("Failed to clean up outline shell presentation", error);
-        });
-      }
-    },
-    [clearTheme, dispatch, router]
+    [openWorkspace]
   );
 
   const reportDurableGenerationFailure = useCallback(
-    (error: any, task: DurableGenerationTask) => {
+    (error: unknown, task: DurableGenerationTask) => {
       console.warn(
         task.mode === "authored"
           ? "Authored presentation generation did not complete."
@@ -325,190 +228,13 @@ export const usePresentationGeneration = (
     []
   );
 
-  const runDurableGeneration = useCallback(
-    async (
-      initialTask: DurableGenerationTask,
-      minimumLoadingMs = 0
-    ) => {
-      if (
-        activeDurableTaskRef.current === initialTask.idempotencyKey &&
-        initialTask.taskId
-      ) {
-        return;
-      }
-
-      const runId = ++generationRunRef.current;
-      const isActiveRun = () => generationRunRef.current === runId;
-      activeDurableTaskRef.current = initialTask.idempotencyKey;
-      setLoadingState(getDurableLoadingState(initialTask));
-
-      let durableTask = initialTask;
-      let pollErrors = 0;
-      let backgroundNoticeShown = initialTask.status === "background";
-      const showLoadingUntil = Date.now() + minimumLoadingMs;
-
-      try {
-        if (!durableTask.taskId) {
-          throw new Error("생성 작업 식별자가 없습니다.");
-        }
-        const taskId = durableTask.taskId;
-
-        while (isActiveRun()) {
-          let statusTask: GenerationStatusResponse;
-          try {
-            statusTask = await PresentationGenerationApi.getGenerationStatus(
-              taskId
-            );
-            if (!isActiveRun()) return;
-            pollErrors = 0;
-          } catch (pollError) {
-            pollErrors += 1;
-            if (pollErrors >= AUTHORED_MAX_POLL_ERRORS) throw pollError;
-            await new Promise((resolve) =>
-              setTimeout(resolve, AUTHORED_POLL_MS)
-            );
-            continue;
-          }
-
-          if (statusTask?.status === "completed") {
-            const remainingLoadingMs = showLoadingUntil - Date.now();
-            if (remainingLoadingMs > 0) {
-              // Avoid an imperceptible loading flash when a newly-created task
-              // is completed from an idempotency replay/cache immediately.
-              await new Promise((resolve) =>
-                setTimeout(resolve, remainingLoadingMs)
-              );
-              if (!isActiveRun()) return;
-            }
-            await finishDurableGeneration(
-              durableTask,
-              statusTask,
-              isActiveRun
-            );
-            return;
-          }
-          if (statusTask?.status === "error") {
-            const failure = (statusTask.failure || statusTask.error) as
-              | GenerationFailure
-              | Record<string, unknown>
-              | undefined;
-            const generationError = apiErrorFromPayload(
-              failure,
-              statusTask?.message || "Presentation generation failed.",
-              500,
-              statusTask?.request_id
-            );
-            if (
-              durableTask.mode === "authored" &&
-              isRetryablePresentationGenerationError(generationError)
-            ) {
-              durableTask = updateDurableGenerationTask(durableTask, {
-                status: "retryable-error",
-                requestId: statusTask.request_id || durableTask.requestId,
-                lastProgress: statusTask.progress || durableTask.lastProgress,
-                lastFailure: failure as GenerationFailure | undefined,
-              });
-            } else {
-              clearDurableGenerationTask(durableTask.idempotencyKey);
-            }
-            throw generationError;
-          }
-
-          const isPastForegroundDeadline = Date.now() >= durableTask.deadlineAt;
-          durableTask = updateDurableGenerationTask(durableTask, {
-            status: isPastForegroundDeadline
-              ? "background"
-              : statusTask?.status === "running"
-                ? "running"
-                : "pending",
-            requestId: statusTask?.request_id || durableTask.requestId,
-            lastProgress: statusTask?.progress || durableTask.lastProgress,
-            lastFailure: undefined,
-          });
-          if (!isPastForegroundDeadline) {
-            setLoadingState(getDurableLoadingState(durableTask));
-          }
-
-          // The 30-minute deadline limits the blocking overlay, not the server job.
-          // Keep polling in the background so a late completion still opens the deck.
-          if (isPastForegroundDeadline && !backgroundNoticeShown) {
-            backgroundNoticeShown = true;
-            setLoadingState(DEFAULT_LOADING_STATE);
-            notify.info(
-              "생성이 백그라운드에서 계속됩니다",
-              "완료되면 생성된 프레젠테이션으로 자동 이동합니다."
-            );
-          }
-
-          await new Promise((resolve) =>
-            setTimeout(resolve, AUTHORED_POLL_MS)
-          );
-        }
-      } catch (error: any) {
-        if (!isActiveRun()) return;
-        const isRetryable = isRetryablePresentationGenerationError(error);
-        if (durableTask.mode === "authored" && isRetryable) {
-          if (durableTask.status !== "retryable-error") {
-            durableTask = updateDurableGenerationTask(durableTask, {
-              status: "retryable-error",
-            });
-          }
-        } else if (!isRetryable) {
-          clearDurableGenerationTask(durableTask.idempotencyKey);
-          startingDurableTaskRef.current = null;
-        }
-        reportDurableGenerationFailure(error, durableTask);
-      } finally {
-        if (isActiveRun()) {
-          activeDurableTaskRef.current = null;
-          setLoadingState(DEFAULT_LOADING_STATE);
-        }
-      }
-    },
-    [
-      finishDurableGeneration,
-      getDurableLoadingState,
-      reportDurableGenerationFailure,
-    ]
-  );
-
+  // The workspace timeline reports generation progress, so a reload never
+  // resumes a client-side poller; only stale overlay state needs clearing.
   useEffect(() => {
-    if (!generationEnabled) {
-      setResumableTask(null);
-      setLoadingState(DEFAULT_LOADING_STATE);
-      return;
-    }
-    if (chatFirstEnabled) {
-      setResumableTask(null);
-      setLoadingState(DEFAULT_LOADING_STATE);
-      return;
-    }
-    const reconcile = () => {
-      const durableTask = findDurableGenerationTask(presentationId);
-      setResumableTask(
-        durableTask?.taskId && durableTask.status === "retryable-error"
-          ? durableTask
-          : null
-      );
-      if (!durableTask?.taskId || durableTask.status === "retryable-error") {
-        // Fast Refresh may preserve React state after invalidating its poller. If
-        // there is no durable task to resume, never leave that stale overlay up.
-        setLoadingState(DEFAULT_LOADING_STATE);
-        return;
-      }
-      void runDurableGeneration(
-        durableTask,
-        submittingDurableTaskRef.current === durableTask.idempotencyKey
-          ? 100
-          : 0
-      );
-    };
-    reconcile();
-    return subscribeToDurableGenerationTasks(reconcile);
-  }, [chatFirstEnabled, generationEnabled, presentationId, runDurableGeneration]);
+    setLoadingState(DEFAULT_LOADING_STATE);
+  }, [presentationId]);
 
   const handleSubmit = useCallback(async () => {
-    if (!generationEnabled) return;
     if (!selectedTemplate) {
       setActiveTab(TABS.LAYOUTS);
       return;
@@ -537,12 +263,9 @@ export const usePresentationGeneration = (
           }
         : {}),
     };
-    // Keep flag-off requests byte-for-byte compatible with the legacy durable
-    // retry snapshot. Chat-first persists the complete generation settings in
-    // the first workspace message, so its admission request can include them.
-    const asyncGenerationPreferences = chatFirstEnabled
-      ? generationPreferences
-      : { language: generationPreferences.language };
+    // The complete generation settings are persisted in the first workspace
+    // message, so the admission request carries all of them.
+    const asyncGenerationPreferences = generationPreferences;
 
     // Persist the idempotency key before POSTing so a lost response can be retried
     // without creating a second authored deck.
@@ -570,11 +293,7 @@ export const usePresentationGeneration = (
           ? startingDurableTaskRef.current
           : findDurableGenerationTask(presentationId);
       if (durableTask?.taskId && durableTask.status !== "retryable-error") {
-        if (chatFirstEnabled) {
-          openChatFirstWorkspace(durableTask.idempotencyKey);
-          return;
-        }
-        await runDurableGeneration(durableTask);
+        openWorkspace(durableTask.idempotencyKey);
         return;
       }
       // A "starting" record can survive a lost POST response. Reusing it here
@@ -595,9 +314,6 @@ export const usePresentationGeneration = (
       const authoredRequest = durableTask.authoredRequest ?? reduxAuthoredRequest;
       startingDurableTaskRef.current = durableTask;
       submittingDurableTaskRef.current = durableTask.idempotencyKey;
-      if (!chatFirstEnabled) {
-        setLoadingState(getDurableLoadingState(durableTask));
-      }
       try {
         const started = await PresentationGenerationApi.generateAuthoredAsync({
           presentation_id: presentationId,
@@ -620,17 +336,11 @@ export const usePresentationGeneration = (
         submittingDurableTaskRef.current = null;
         startingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        if (chatFirstEnabled) {
-          openChatFirstWorkspace(durableTask.idempotencyKey);
-          return;
-        }
-        await runDurableGeneration(durableTask);
-      } catch (error: any) {
+        openWorkspace(durableTask.idempotencyKey);
+      } catch (error: unknown) {
         submittingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        if (
-          openRecoverableChatFirstWorkspace(error, durableTask.idempotencyKey)
-        ) {
+        if (openRecoverableWorkspace(error, durableTask.idempotencyKey)) {
           return;
         }
         if (!isRetryableGenerationStartError(error)) {
@@ -638,10 +348,6 @@ export const usePresentationGeneration = (
           startingDurableTaskRef.current = null;
         }
         reportDurableGenerationFailure(error, durableTask);
-      } finally {
-        if (isActiveRun() && !chatFirstEnabled) {
-          setLoadingState(DEFAULT_LOADING_STATE);
-        }
       }
       return;
     }
@@ -679,11 +385,7 @@ export const usePresentationGeneration = (
           ? startingDurableTaskRef.current
           : findDurableGenerationTask(presentationId);
       if (durableTask?.taskId) {
-        if (chatFirstEnabled) {
-          openChatFirstWorkspace(durableTask.idempotencyKey);
-          return;
-        }
-        await runDurableGeneration(durableTask);
+        openWorkspace(durableTask.idempotencyKey);
         return;
       }
       // See the authored branch: a retry of a response-lost POST must keep the
@@ -700,9 +402,6 @@ export const usePresentationGeneration = (
       }
       startingDurableTaskRef.current = durableTask;
       submittingDurableTaskRef.current = durableTask.idempotencyKey;
-      if (!chatFirstEnabled) {
-        setLoadingState(getDurableLoadingState(durableTask));
-      }
 
       try {
         const started =
@@ -727,17 +426,11 @@ export const usePresentationGeneration = (
         submittingDurableTaskRef.current = null;
         startingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        if (chatFirstEnabled) {
-          openChatFirstWorkspace(durableTask.idempotencyKey);
-          return;
-        }
-        await runDurableGeneration(durableTask);
-      } catch (error: any) {
+        openWorkspace(durableTask.idempotencyKey);
+      } catch (error: unknown) {
         submittingDurableTaskRef.current = null;
         if (!isActiveRun()) return;
-        if (
-          openRecoverableChatFirstWorkspace(error, durableTask.idempotencyKey)
-        ) {
+        if (openRecoverableWorkspace(error, durableTask.idempotencyKey)) {
           return;
         }
         if (!isRetryableGenerationStartError(error)) {
@@ -745,10 +438,6 @@ export const usePresentationGeneration = (
           startingDurableTaskRef.current = null;
         }
         reportDurableGenerationFailure(error, durableTask);
-      } finally {
-        if (isActiveRun() && !chatFirstEnabled) {
-          setLoadingState(DEFAULT_LOADING_STATE);
-        }
       }
       return;
     }
@@ -778,222 +467,73 @@ export const usePresentationGeneration = (
       template_layout_count: selectedTemplateLayoutCount,
     });
 
-    if (chatFirstEnabled) {
-      const slides_markdown = (outlines || [])
-        .map((outline) => outline.content)
-        .filter((content) => content && content.trim().length > 0);
-      if (slides_markdown.length === 0) {
-        notify.warning(
-          "Outline is empty",
-          "Add outline content before generating the presentation."
-        );
-        return;
-      }
-      const template =
-        typeof selectedTemplate === "string"
-          ? normalizeCustomTemplateId(selectedTemplate)
-          : selectedTemplate.id;
-      if (!standardIdempotencyKeyRef.current) {
-        const randomId =
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `${Date.now().toString(36)}-${Math.random()
-                .toString(36)
-                .slice(2)}`;
-        standardIdempotencyKeyRef.current = `ppt-generation-${randomId}`;
-      }
-      const idempotencyKey = standardIdempotencyKeyRef.current;
-
-      try {
-        const started = await PresentationGenerationApi.generateStandardAsync({
-          presentation_id: presentationId,
-          content: slides_markdown[0].slice(0, 200),
-          slides_markdown,
-          ...generationPreferences,
-          template,
-          idempotency_key: idempotencyKey,
-        });
-        if (!started?.id) {
-          throw new Error("Presentation generation was not accepted.");
-        }
-        if (!isActiveRun()) return;
-        openChatFirstWorkspace();
-      } catch (error: any) {
-        if (!isActiveRun()) return;
-        console.warn("Presentation generation was not accepted.", error);
-        if (openRecoverableChatFirstWorkspace(error)) return;
-        if (isRetryableGenerationStartError(error)) {
-          notify.error(
-            "Presentation generation was interrupted",
-            getRetryablePresentationGenerationMessage(error),
-            {
-              duration: 12_000,
-              action: {
-                label: "Retry",
-                onClick: () => retrySubmitRef.current?.(),
-              },
-            }
-          );
-        } else {
-          notify.error(
-            "Generation error",
-            getApiErrorDisplayMessage(
-              error,
-              "A problem occurred while starting presentation generation."
-            )
-          );
-        }
-      }
+    const slides_markdown = (outlines || [])
+      .map((outline) => outline.content)
+      .filter((content) => content && content.trim().length > 0);
+    if (slides_markdown.length === 0) {
+      notify.warning(
+        "Outline is empty",
+        "Add outline content before generating the presentation."
+      );
       return;
     }
-
-    setLoadingState({
-      message: "발표자료 생성 중…",
-      isLoading: true,
-      showProgress: true,
-      duration: 30,
-    });
+    const template =
+      typeof selectedTemplate === "string"
+        ? normalizeCustomTemplateId(selectedTemplate)
+        : selectedTemplate.id;
+    if (!standardIdempotencyKeyRef.current) {
+      const randomId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random()
+              .toString(36)
+              .slice(2)}`;
+      standardIdempotencyKeyRef.current = `ppt-generation-${randomId}`;
+    }
+    const idempotencyKey = standardIdempotencyKeyRef.current;
 
     try {
-      let layout;
-
-      // Check if it's a custom template (string = presentationId)
-      if (typeof selectedTemplate === "string") {
-        setLoadingState({
-          message: "커스텀 템플릿 불러오는 중…",
-          isLoading: true,
-          showProgress: true,
-          duration: 30,
-        });
-
-        // Fetch custom template details using the shared function
-        const customTemplateDetail = await getCustomTemplateDetails(
-          selectedTemplate
-        );
-
-        if (
-          !customTemplateDetail ||
-          customTemplateDetail.layouts.length === 0
-        ) {
-          notify.error("템플릿 오류", "커스텀 템플릿 레이아웃을 불러오지 못했습니다.");
-          return;
-        }
-
-        setLoadingState({
-          message: "발표자료 생성 중…",
-          isLoading: true,
-          showProgress: true,
-          duration: 30,
-        });
-
-        layout = {
-          name: customTemplateDetail.id,
-          ordered: false,
-          icon_weight: "bold",
-          slides: customTemplateDetail.layouts.map((compiledLayout) => ({
-            id: customTemplateDetail.id.startsWith("custom-")
-              ? `${customTemplateDetail.id}:${compiledLayout.layoutId}`
-              : `custom-${customTemplateDetail.id}:${compiledLayout.layoutId}`,
-            name: compiledLayout.layoutName,
-            description: compiledLayout.layoutDescription,
-            templateID: customTemplateDetail.id,
-            templateName: customTemplateDetail.name,
-            json_schema: compiledLayout.schemaJSON,
-          })),
-        };
-      } else {
-        // Built-in template
-        layout = {
-          name: selectedTemplate.id,
-          ordered: false,
-          icon_weight: selectedTemplate.settings?.icon_weight || "bold",
-          slides: selectedTemplate.layouts.map((layoutItem: any) => ({
-            id: layoutItem.layoutId,
-            name: layoutItem.layoutName,
-            description: layoutItem.layoutDescription,
-            templateID: selectedTemplate.id,
-            templateName: selectedTemplate.name,
-            json_schema: layoutItem.schemaJSON,
-          })),
-        };
-      }
-
-      const response = await PresentationGenerationApi.presentationPrepare({
+      const started = await PresentationGenerationApi.generateStandardAsync({
         presentation_id: presentationId,
-        outlines: outlines,
-        layout: layout,
+        content: slides_markdown[0].slice(0, 200),
+        slides_markdown,
+        ...generationPreferences,
+        template,
+        idempotency_key: idempotencyKey,
       });
-
-      if (response) {
-        dispatch(clearPresentationData());
-        clearTheme();
-        router.replace(
-          `/presentation?id=${presentationId}&stream=true&type=standard`
-        );
+      if (!started?.id) {
+        throw new Error("Presentation generation was not accepted.");
       }
-    } catch (error: any) {
-      // This failure is handled below with an in-app notification. Keep it out of
-      // the Next.js development error overlay so the user can retry normally.
-      console.warn("Presentation preparation did not complete.", error);
-
-      // The browser can lose the long-running prepare response just before the
-      // backend commits the finished structure. Confirm the persisted result for
-      // a few seconds before reporting a failure so a completed deck is not
-      // stranded behind an error toast.
-      if (presentationId && isActiveRun()) {
-        for (let attempt = 0; attempt < PREPARE_RECOVERY_ATTEMPTS; attempt += 1) {
-          if (attempt > 0) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, PREPARE_RECOVERY_POLL_MS)
-            );
-          }
-          if (!isActiveRun()) return;
-
-          try {
-            const savedPresentation =
-              await DashboardApi.getPresentation(presentationId);
-            if (hasPreparedStructure(savedPresentation)) {
-              dispatch(clearPresentationData());
-              clearTheme();
-              router.replace(
-                `/presentation?id=${presentationId}&stream=true&type=standard`
-              );
-              return;
-            }
-          } catch {
-            // The original prepare error remains the useful message. A transient
-            // recovery-read failure should not replace it with a second error.
-          }
-        }
-      }
-
-      if (isRetryablePresentationGenerationError(error)) {
+      if (!isActiveRun()) return;
+      openWorkspace();
+    } catch (error: unknown) {
+      if (!isActiveRun()) return;
+      console.warn("Presentation generation was not accepted.", error);
+      if (openRecoverableWorkspace(error)) return;
+      if (isRetryableGenerationStartError(error)) {
         notify.error(
-          "생성이 일시 중단되었습니다",
+          "Presentation generation was interrupted",
           getRetryablePresentationGenerationMessage(error),
           {
             duration: 12_000,
             action: {
-              label: "다시 시도",
+              label: "Retry",
               onClick: () => retrySubmitRef.current?.(),
             },
           }
         );
       } else {
         notify.error(
-          "생성 오류",
+          "Generation error",
           getApiErrorDisplayMessage(
             error,
-            "발표자료를 생성하는 중 문제가 발생했습니다."
+            "A problem occurred while starting presentation generation."
           )
         );
       }
-    } finally {
-      if (isActiveRun()) setLoadingState(DEFAULT_LOADING_STATE);
     }
   }, [
     selectedTemplate,
-    generationEnabled,
     validateInputs,
     pathname,
     presentationId,
@@ -1003,15 +543,9 @@ export const usePresentationGeneration = (
     language,
     generationConfig,
     authoredStyle,
-    chatFirstEnabled,
-    dispatch,
-    router,
-    clearTheme,
-    openChatFirstWorkspace,
-    openRecoverableChatFirstWorkspace,
-    getDurableLoadingState,
+    openWorkspace,
+    openRecoverableWorkspace,
     reportDurableGenerationFailure,
-    runDurableGeneration,
   ]);
 
   useEffect(() => {
@@ -1051,13 +585,5 @@ export const usePresentationGeneration = (
     );
   }, [presentationId]);
 
-  return {
-    loadingState,
-    handleSubmit,
-    cancelGeneration,
-    resumableTask,
-    rolloutMode,
-    generationEnabled,
-    refreshRollout: chatFirstRollout.refresh,
-  };
+  return { loadingState, handleSubmit, cancelGeneration };
 };

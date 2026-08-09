@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from services import workspace_operation_worker as worker
+from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError
 
 
 def test_workspace_worker_mode_defaults_to_embedded(monkeypatch) -> None:
@@ -36,12 +37,6 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     stop = asyncio.Event()
     stop.set()
     monkeypatch.setenv("WORKSPACE_OPERATION_WORKER_MODE", "external")
-    monkeypatch.setattr(worker, "workspace_commands_enabled", lambda: True)
-    monkeypatch.setattr(
-        worker,
-        "validate_chat_first_workspace_rollout",
-        lambda *_args, **_kwargs: SimpleNamespace(enabled=True),
-    )
     monkeypatch.setattr(
         worker, "require_workspace_asset_malware_scan_safety", Mock()
     )
@@ -73,17 +68,16 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     worker.dispose_engines.assert_awaited_once_with()
 
 
-def test_external_worker_requires_enabled_chat_first_rollout(monkeypatch) -> None:
+def test_external_worker_requires_a_supported_sql_runtime(monkeypatch) -> None:
     monkeypatch.setenv("WORKSPACE_OPERATION_WORKER_MODE", "external")
-    monkeypatch.setattr(worker, "workspace_commands_enabled", lambda: False)
     monkeypatch.setattr(
         worker,
-        "validate_chat_first_workspace_rollout",
-        lambda *_args, **_kwargs: SimpleNamespace(enabled=False),
+        "sql_engine",
+        SimpleNamespace(url="mysql+aiomysql://db/app"),
     )
 
     with pytest.raises(
-        RuntimeError,
-        match="chat_first_workspace_external_worker_disabled",
+        UnsupportedWorkspaceRuntimeError,
+        match="^chat_first_runtime_unsupported$",
     ):
         asyncio.run(worker.run_external_worker(asyncio.Event()))

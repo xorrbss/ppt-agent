@@ -176,14 +176,11 @@ def test_outline_stream_admits_a_staged_deck_at_full_rollout(
         monkeypatch.setattr(
             presentation_crud, "_chat_first_create_enabled", lambda: True
         )
-        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
-        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT", "100")
         presentation_id = uuid.uuid4()
         try:
-            # The preflight the endpoint must not use rejects outright here.
+            # The blanket gate the endpoint must not use rejects outright here.
             with pytest.raises(HTTPException) as preflight:
-                workspace_legacy_write_gate.legacy_write_requires_presentation_scope()
+                workspace_legacy_write_gate.require_legacy_presentation_write_path()
             assert preflight.value.status_code == 409
 
             async with maker() as session:

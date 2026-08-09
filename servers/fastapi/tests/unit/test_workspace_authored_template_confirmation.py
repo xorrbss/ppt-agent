@@ -34,11 +34,6 @@ from api.v1.ppt.endpoints.presentation_crud import get_presentation
 from services.workspace_authored_template_confirmation_service import (
     confirm_authored_template_application,
 )
-from services.workspace_rollout_policy import (
-    WorkspaceWriteRolloutDecision,
-    resolve_active_workspace_write_rollout,
-    workspace_cohort_bucket,
-)
 from services.workspace_service import WorkspaceServiceError
 
 
@@ -209,36 +204,26 @@ def test_confirm_openapi_contract_uses_required_idempotency_header():
     }
 
 
-def test_target_cohort_remains_enabled_whenever_source_cohort_is_enabled(
-    monkeypatch,
-):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ROLLOUT_SALT", "target-inheritance")
+def test_target_id_is_stable_per_idempotency_key_and_never_the_source():
     source_id = uuid.uuid4()
-    source_bucket = workspace_cohort_bucket(source_id)
-    source_decision = WorkspaceWriteRolloutDecision(
-        enabled=True,
-        cohort_eligible=True,
-        cohort_bucket=source_bucket,
-        kill_switch_active=False,
-        shadow_mode=False,
-        reason=None,
-    )
 
-    target_id = workspace_endpoint._template_application_target_id(
+    first = workspace_endpoint._template_application_target_id(
         source_presentation_id=source_id,
         idempotency_key="stable-target-key",
-        source_decision=source_decision,
+    )
+    second = workspace_endpoint._template_application_target_id(
+        source_presentation_id=source_id,
+        idempotency_key="stable-target-key",
+    )
+    other = workspace_endpoint._template_application_target_id(
+        source_presentation_id=source_id,
+        idempotency_key="a-different-key",
     )
 
-    target_bucket = workspace_cohort_bucket(target_id)
-    assert target_id != source_id
-    assert target_bucket <= source_bucket
-    monkeypatch.setenv(
-        "CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT",
-        str((source_bucket + 1) / 100),
-    )
-    assert resolve_active_workspace_write_rollout(source_id).enabled is True
-    assert resolve_active_workspace_write_rollout(target_id).enabled is True
+    # A retry must land on the same target deck, never create a second one.
+    assert first == second
+    assert first != source_id
+    assert other != first
 
 
 def test_confirm_rejects_stale_source_revision_and_key_conflict(tmp_path: Path):

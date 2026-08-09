@@ -11,14 +11,6 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { notify } from "@/components/ui/sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { PageRemakePreviewImage } from "./PageRemakePreviewImage";
@@ -429,83 +421,39 @@ export function WorkspacePageRemakePrompt({
 }
 
 export default function AuthoredPageRemake({
-  presentationId,
   currentSlide,
   disabled = false,
-  chatFirstEnabled = false,
   workspaceCommandsEnabled = false,
   onWorkspacePageRemakeRequest,
-  onReload,
 }: {
-  presentationId: string;
   currentSlide?: number;
   disabled?: boolean;
-  chatFirstEnabled?: boolean;
   workspaceCommandsEnabled?: boolean;
   onWorkspacePageRemakeRequest?: (slideIndex: number) => void;
-  onReload?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const validSlide =
     typeof currentSlide === "number" &&
     Number.isInteger(currentSlide) &&
     currentSlide >= 0;
 
-  if (chatFirstEnabled) {
-    return (
-      <Button
-        type="button"
-        variant="toolbar"
-        size="toolbar"
-        disabled={
-          disabled ||
-          !validSlide ||
-          !workspaceCommandsEnabled ||
-          !onWorkspacePageRemakeRequest
-        }
-        data-testid="page-remake-trigger"
-        onClick={() => {
-          if (validSlide) onWorkspacePageRemakeRequest?.(currentSlide);
-        }}
-      >
-        <RefreshCw className="h-4 w-4" />
-        페이지 다시 만들기
-      </Button>
-    );
-  }
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="toolbar"
-          size="toolbar"
-          disabled={disabled || !validSlide}
-          data-testid="page-remake-trigger"
-        >
-          <RefreshCw className="h-4 w-4" />
-          페이지 다시 만들기
-        </Button>
-      </DialogTrigger>
-      {validSlide && (
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>페이지 다시 만들기</DialogTitle>
-            <DialogDescription>
-              {currentSlide + 1}페이지만 새 레이아웃으로 다시 만듭니다. 전체
-              검수에서는 이 작업이 자동으로 실행되지 않으며, 적용하기 전까지
-              원본은 변경되지 않습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <PageRemakeFlow
-            presentationId={presentationId}
-            currentSlide={currentSlide}
-            onReload={onReload}
-            onDismiss={() => setOpen(false)}
-          />
-        </DialogContent>
-      )}
-    </Dialog>
+    <Button
+      type="button"
+      variant="toolbar"
+      size="toolbar"
+      disabled={
+        disabled ||
+        !validSlide ||
+        !workspaceCommandsEnabled ||
+        !onWorkspacePageRemakeRequest
+      }
+      data-testid="page-remake-trigger"
+      onClick={() => {
+        if (validSlide) onWorkspacePageRemakeRequest?.(currentSlide);
+      }}
+    >
+      <RefreshCw className="h-4 w-4" />
+      페이지 다시 만들기
+    </Button>
   );
 }

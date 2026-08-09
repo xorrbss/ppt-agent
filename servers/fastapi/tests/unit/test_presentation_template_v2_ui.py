@@ -4,8 +4,7 @@ import json
 import uuid
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, StatementError
@@ -13,8 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from api.middlewares import SessionAuthMiddleware
-from api.v1.ppt.endpoints.presentation import PRESENTATION_ROUTER
+from api.v1.ppt.endpoints.presentation import apply_presentation_update
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
@@ -192,30 +190,24 @@ def test_update_api_returns_422_for_invalid_native_ui_and_preserves_live_slide(
             session.add_all([presentation, live])
             await session.commit()
 
-    async def get_test_session():
-        async with session_factory() as session:
-            yield session
-
     request_slide = live.model_dump(mode="json")
     asyncio.run(setup_database())
-    app = FastAPI()
-    app.add_middleware(SessionAuthMiddleware)
-    app.include_router(PRESENTATION_ROUTER, prefix="/api/v1/ppt")
-    app.dependency_overrides[get_async_session] = get_test_session
 
     request_slide["ui"] = ui
     request_slide["html_content"] = html_content
-    with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.patch(
-            "/api/v1/ppt/presentation/update",
-            headers={"x-test-token": "valid"},
-            json={
-                "id": str(presentation.id),
-                "slides": [request_slide],
-            },
-        )
 
-    assert response.status_code == 422
+    async def apply_invalid_update() -> None:
+        async with session_factory() as session:
+            await apply_presentation_update(
+                presentation.id,
+                session,
+                slides=[SlideModel.model_construct(**request_slide)],
+            )
+
+    with pytest.raises(HTTPException) as caught:
+        asyncio.run(apply_invalid_update())
+
+    assert caught.value.status_code == 422
 
     async def assert_unchanged() -> None:
         async with session_factory() as session:
@@ -280,30 +272,22 @@ def test_update_api_preserves_valid_nested_native_ui_in_response_and_sqlite(
             session.add_all([presentation, live])
             await session.commit()
 
-    async def get_test_session():
-        async with session_factory() as session:
-            yield session
-
     request_slide = live.model_dump(mode="json")
     asyncio.run(setup_database())
-    app = FastAPI()
-    app.add_middleware(SessionAuthMiddleware)
-    app.include_router(PRESENTATION_ROUTER, prefix="/api/v1/ppt")
-    app.dependency_overrides[get_async_session] = get_test_session
 
     request_slide["ui"] = deepcopy(updated_ui)
-    with TestClient(app) as client:
-        response = client.patch(
-            "/api/v1/ppt/presentation/update",
-            headers={"x-test-token": "valid"},
-            json={
-                "id": str(presentation.id),
-                "slides": [request_slide],
-            },
-        )
 
-    assert response.status_code == 200
-    assert response.json()["slides"][0]["ui"] == expected_ui
+    async def apply_valid_update():
+        async with session_factory() as session:
+            return await apply_presentation_update(
+                presentation.id,
+                session,
+                slides=[SlideModel.model_construct(**request_slide)],
+            )
+
+    updated = asyncio.run(apply_valid_update())
+
+    assert updated.slides[0].ui == expected_ui
 
     async def assert_persisted() -> None:
         async with session_factory() as session:

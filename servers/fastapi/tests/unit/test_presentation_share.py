@@ -11,16 +11,10 @@ from sqlmodel import SQLModel
 from api.v1.ppt.endpoints import presentation_share as share
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel  # noqa: F401 (metadata)
-from services.workspace_legacy_write_gate import CHAT_FIRST_COMMAND_REQUIRED
 
 
 def _run(coro):
     return asyncio.run(coro)
-
-
-@pytest.fixture(autouse=True)
-def _legacy_share_mutations_enabled(monkeypatch):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "false")
 
 
 async def _make_engine(db_path):
@@ -78,8 +72,6 @@ def test_enable_then_public_get_returns_deck_without_leaking_token(tmp_path):
         await engine.dispose()
 
     _run(runner())
-
-
 def test_public_get_rejects_unknown_and_short_tokens(tmp_path):
     async def runner():
         engine = await _make_engine(tmp_path / "t.db")
@@ -94,8 +86,6 @@ def test_public_get_rejects_unknown_and_short_tokens(tmp_path):
         await engine.dispose()
 
     _run(runner())
-
-
 def test_disable_share_makes_public_view_404(tmp_path):
     async def runner():
         engine = await _make_engine(tmp_path / "t.db")
@@ -289,21 +279,3 @@ def test_disabling_share_revokes_public_asset_route(tmp_path, monkeypatch):
         await engine.dispose()
 
     _run(runner())
-
-
-@pytest.mark.parametrize("mutation", [share.enable_share, share.disable_share])
-def test_chat_first_rejects_legacy_share_mutations_before_database_access(
-    monkeypatch, mutation
-):
-    class DatabaseAccessProbe:
-        async def get(self, *_args, **_kwargs):
-            raise AssertionError("chat-first guard must run before database access")
-
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
-
-    with pytest.raises(HTTPException) as exc:
-        _run(mutation(id=uuid.uuid4(), sql_session=DatabaseAccessProbe()))
-
-    assert exc.value.status_code == 409
-    assert exc.value.detail == CHAT_FIRST_COMMAND_REQUIRED

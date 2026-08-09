@@ -282,20 +282,27 @@ export class ApiResponseHandler {
   }
 
  
-  static async handleResponse(response: Response, defaultErrorMessage: string): Promise<any> {
+  /**
+   * Parses a successful response body, or throws `ApiError`. The body shape is
+   * whatever the endpoint returns, so callers name it via `T` (either
+   * explicitly or through the awaited call's contextual type). The `any`
+   * default preserves the previous signature for the many legacy call sites
+   * that still consume the body untyped; pass `T` at new call sites.
+   */
+  static async handleResponse<T = any>(response: Response, defaultErrorMessage: string): Promise<T> {
     // Handle successful responses
     if (response.ok) {
       // Handle 204 No Content responses
       if (response.status === 204) {
-        return true;
+        return true as T;
       }
-      
+
       // Try to parse JSON response
       try {
-        return await response.json();
+        return (await response.json()) as T;
       } catch {
         // If JSON parsing fails but response is ok, return empty object
-        return {};
+        return {} as T;
       }
     }
 

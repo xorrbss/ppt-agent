@@ -22,53 +22,29 @@ class _NoMutationSession:
         raise AssertionError(f"database access before runtime admission: {name}")
 
 
+# The operation store only runs on sqlite or postgresql; any other dialect is
+# admitted nowhere, and there is no legacy path left to fall back to.
 _INVALID_RUNTIME_CASES = (
-    ("sqlite+aiosqlite:///local.db", None, "chat_first_runtime_profile_required", 503),
-    ("sqlite+aiosqlite:///local.db", "typo", "chat_first_runtime_profile_invalid", 503),
-    (
-        "sqlite+aiosqlite:///local.db",
-        "postgresql-cluster",
-        "chat_first_runtime_profile_mismatch",
-        503,
-    ),
-    (
-        "mysql+aiomysql://db/app",
-        "sqlite-local",
-        "chat_first_runtime_unsupported",
-        501,
-    ),
+    ("mysql+aiomysql://db/app", "chat_first_runtime_unsupported", 501),
+    ("oracle://db/app", "chat_first_runtime_unsupported", 501),
 )
 
 
-def _configure_invalid_runtime(monkeypatch, module, database_url, declared_profile):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    if declared_profile is None:
-        monkeypatch.delenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", raising=False)
-    else:
-        monkeypatch.setenv(
-            "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE",
-            declared_profile,
-        )
+def _configure_invalid_runtime(monkeypatch, module, database_url):
     monkeypatch.setattr(module, "sql_engine", SimpleNamespace(url=database_url))
 
 
 @pytest.mark.parametrize(
-    ("database_url", "declared_profile", "reason", "status_code"),
+    ("database_url", "reason", "status_code"),
     _INVALID_RUNTIME_CASES,
 )
 def test_create_fails_before_database_or_file_admission(
     monkeypatch,
     database_url,
-    declared_profile,
     reason,
     status_code,
 ):
-    _configure_invalid_runtime(
-        monkeypatch,
-        presentation_crud,
-        database_url,
-        declared_profile,
-    )
+    _configure_invalid_runtime(monkeypatch, presentation_crud, database_url)
 
     with pytest.raises(HTTPException) as caught:
         asyncio.run(
@@ -95,22 +71,16 @@ def test_create_fails_before_database_or_file_admission(
 
 
 @pytest.mark.parametrize(
-    ("database_url", "declared_profile", "reason", "status_code"),
+    ("database_url", "reason", "status_code"),
     _INVALID_RUNTIME_CASES,
 )
 def test_generation_queue_fails_before_validation_or_job_mutation(
     monkeypatch,
     database_url,
-    declared_profile,
     reason,
     status_code,
 ):
-    _configure_invalid_runtime(
-        monkeypatch,
-        presentation_generate,
-        database_url,
-        declared_profile,
-    )
+    _configure_invalid_runtime(monkeypatch, presentation_generate, database_url)
     validation_calls: list[object] = []
     monkeypatch.setattr(
         presentation_generate,
@@ -137,22 +107,16 @@ def test_generation_queue_fails_before_validation_or_job_mutation(
 
 
 @pytest.mark.parametrize(
-    ("database_url", "declared_profile", "reason", "status_code"),
+    ("database_url", "reason", "status_code"),
     _INVALID_RUNTIME_CASES,
 )
 def test_workspace_bootstrap_fails_before_service_mutation(
     monkeypatch,
     database_url,
-    declared_profile,
     reason,
     status_code,
 ):
-    _configure_invalid_runtime(
-        monkeypatch,
-        workspace_endpoint,
-        database_url,
-        declared_profile,
-    )
+    _configure_invalid_runtime(monkeypatch, workspace_endpoint, database_url)
     service_calls: list[object] = []
 
     async def _bootstrap(*args, **kwargs):
@@ -178,12 +142,10 @@ def test_workspace_bootstrap_fails_before_service_mutation(
     assert service_calls == []
 
 
-def test_flag_off_preserves_legacy_create_and_generation_paths(monkeypatch):
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "false")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "typo")
-    mysql = SimpleNamespace(url="mysql+aiomysql://db/app")
-    monkeypatch.setattr(presentation_crud, "sql_engine", mysql)
-    monkeypatch.setattr(presentation_generate, "sql_engine", mysql)
+def test_supported_runtime_admits_create_and_generation(monkeypatch):
+    sqlite = SimpleNamespace(url="sqlite+aiosqlite:///local.db")
+    monkeypatch.setattr(presentation_crud, "sql_engine", sqlite)
+    monkeypatch.setattr(presentation_generate, "sql_engine", sqlite)
 
-    assert presentation_crud._chat_first_create_enabled() is False
-    assert presentation_generate._chat_first_generation_enabled() is False
+    assert presentation_crud._chat_first_create_enabled() is True
+    assert presentation_generate._chat_first_generation_enabled() is True

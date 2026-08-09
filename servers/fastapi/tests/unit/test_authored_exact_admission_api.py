@@ -82,7 +82,14 @@ def test_exact_admission_happens_before_async_job_or_background_task(monkeypatch
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
             endpoint.queue_presentation_generation(
-                _authored_request(), tasks, session
+                _authored_request(),
+                tasks,
+                session,
+                # A workspace-bootstrapped request defers this rejection until
+                # after the operation is located, so that it lands on the
+                # timeline card. The nested dispatch keeps the fail-first
+                # ordering this test is about.
+                force_legacy_dispatch=True,
             )
         )
 

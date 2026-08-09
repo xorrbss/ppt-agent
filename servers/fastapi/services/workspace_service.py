@@ -61,7 +61,6 @@ from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
 
-_TRUE_VALUES = {"1", "true", "on", "yes"}
 _ASSET_WAIT_STATES = {"uploaded", "scanning", "processing"}
 _ASSET_BLOCK_STATES = {"failed", "quarantined", "expired", "deleted"}
 _TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
@@ -183,10 +182,6 @@ class WorkspaceServiceError(RuntimeError):
         self.retryable = retryable
         self.safe_message = message or _SAFE_ERROR_MESSAGES.get(code, code)
         super().__init__(code)
-
-
-def workspace_commands_enabled() -> bool:
-    return os.getenv("CHAT_FIRST_WORKSPACE_ENABLED", "false").strip().lower() in _TRUE_VALUES
 
 
 def canonical_payload_hash(payload: Mapping[str, Any]) -> str:

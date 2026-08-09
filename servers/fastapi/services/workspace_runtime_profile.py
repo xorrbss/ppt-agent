@@ -1,8 +1,15 @@
+"""Physical-runtime admission for the workspace operation store.
+
+The workspace owns every presentation mutation, so this module answers one
+question: can the configured SQL runtime host the operation store safely?  It
+is a correctness guard on the dialect, not a rollout control - there is no
+legacy path left to fall back to.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-import os
 from typing import Any
 
 from sqlalchemy.engine import URL, make_url
@@ -21,41 +28,16 @@ class WorkspaceRuntimeProfile:
     supported: bool
 
 
-@dataclass(frozen=True)
-class ChatFirstWorkspaceRollout:
-    """One authoritative interpretation of rollout flag and SQL runtime intent.
-
-    ``reason`` describes why commands are unavailable.  Runtime declaration
-    validation is intentionally skipped while the feature flag is off so an
-    operator can roll back to the legacy paths even if a stale declaration is
-    present.  ``runtime_error`` remains available for guarding read-only
-    workspace tables on an unsupported dialect.
-    """
-
-    requested: bool
-    enabled: bool
-    profile: WorkspaceRuntimeProfile
-    reason: str | None
-    runtime_error: str | None
-
-    @property
-    def workspace_reads_supported(self) -> bool:
-        # Timeline/history/artifact reads depend only on the physical runtime.
-        # A missing or mismatched *write* declaration must not hide durable
-        # workspace state during a rollout rollback or configuration incident.
-        return self.profile.supported
-
-
 class UnsupportedWorkspaceRuntimeError(RuntimeError):
-    def __init__(self, code: str, dialect: str, declared_profile: str | None = None):
+    def __init__(self, code: str, dialect: str):
         self.code = code
         self.dialect = dialect
-        self.declared_profile = declared_profile
         super().__init__(code)
 
 
-CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE = "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE"
-CHAT_FIRST_FEATURE_DISABLED = "chat_first_feature_disabled"
+# Kept as the published error code for an unusable SQL runtime. It is part of
+# the v1 workspace error contract, so it outlives the rollout it was named for.
+WORKSPACE_RUNTIME_UNSUPPORTED = "chat_first_runtime_unsupported"
 
 
 def _dialect_name(database_url_or_dialect: Any) -> str:
@@ -95,110 +77,14 @@ def resolve_workspace_runtime_profile(
     )
 
 
-def require_chat_first_runtime(
-    feature_enabled: bool,
+def require_supported_workspace_runtime(
     database_url_or_dialect: Any,
-    declared_profile: str | None = None,
 ) -> WorkspaceRuntimeProfile:
+    """Raise unless the configured dialect can host the operation store."""
+
     profile = resolve_workspace_runtime_profile(database_url_or_dialect)
-    if not feature_enabled:
-        return profile
     if not profile.supported:
         raise UnsupportedWorkspaceRuntimeError(
-            "chat_first_runtime_unsupported", profile.dialect
-        )
-
-    raw_declared = (
-        declared_profile
-        if declared_profile is not None
-        else os.getenv(CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE)
-    )
-    normalized_declared = str(raw_declared or "").strip().lower()
-    if not normalized_declared:
-        raise UnsupportedWorkspaceRuntimeError(
-            "chat_first_runtime_profile_required", profile.dialect
-        )
-    try:
-        declared_kind = WorkspaceRuntimeKind(normalized_declared)
-    except ValueError as error:
-        raise UnsupportedWorkspaceRuntimeError(
-            "chat_first_runtime_profile_invalid",
-            profile.dialect,
-            normalized_declared,
-        ) from error
-    if declared_kind is WorkspaceRuntimeKind.UNSUPPORTED:
-        raise UnsupportedWorkspaceRuntimeError(
-            "chat_first_runtime_profile_invalid",
-            profile.dialect,
-            normalized_declared,
-        )
-    if declared_kind is not profile.kind:
-        raise UnsupportedWorkspaceRuntimeError(
-            "chat_first_runtime_profile_mismatch",
-            profile.dialect,
-            normalized_declared,
+            WORKSPACE_RUNTIME_UNSUPPORTED, profile.dialect
         )
     return profile
-
-
-def resolve_chat_first_workspace_rollout(
-    feature_enabled: bool,
-    database_url_or_dialect: Any,
-    declared_profile: str | None = None,
-) -> ChatFirstWorkspaceRollout:
-    """Resolve the effective Chat-first state without mutating application state."""
-
-    requested = bool(feature_enabled)
-    profile = resolve_workspace_runtime_profile(database_url_or_dialect)
-    if not requested:
-        return ChatFirstWorkspaceRollout(
-            requested=False,
-            enabled=False,
-            profile=profile,
-            reason=CHAT_FIRST_FEATURE_DISABLED,
-            runtime_error=(
-                None if profile.supported else "chat_first_runtime_unsupported"
-            ),
-        )
-    try:
-        profile = require_chat_first_runtime(
-            True,
-            database_url_or_dialect,
-            declared_profile=declared_profile,
-        )
-    except UnsupportedWorkspaceRuntimeError as error:
-        return ChatFirstWorkspaceRollout(
-            requested=True,
-            enabled=False,
-            profile=profile,
-            reason=error.code,
-            runtime_error=error.code,
-        )
-    return ChatFirstWorkspaceRollout(
-        requested=True,
-        enabled=True,
-        profile=profile,
-        reason=None,
-        runtime_error=None,
-    )
-
-
-def validate_chat_first_workspace_rollout(
-    feature_enabled: bool,
-    database_url_or_dialect: Any,
-    declared_profile: str | None = None,
-) -> ChatFirstWorkspaceRollout:
-    """Validate runtime intent when requested while allowing explicit rollback."""
-
-    rollout = resolve_chat_first_workspace_rollout(
-        feature_enabled,
-        database_url_or_dialect,
-        declared_profile=declared_profile,
-    )
-    if rollout.requested and not rollout.enabled:
-        raise UnsupportedWorkspaceRuntimeError(
-            rollout.reason or "chat_first_runtime_unsupported",
-            rollout.profile.dialect,
-            declared_profile,
-        )
-    return rollout

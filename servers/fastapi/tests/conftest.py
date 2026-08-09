@@ -6,8 +6,15 @@ import pytest
 
 
 class FakeAsyncSession:
-    def __init__(self, get_results: dict[Any, Any] | None = None):
+    def __init__(
+        self,
+        get_results: dict[Any, Any] | None = None,
+        scalar_result: Any = None,
+    ):
         self._get_results = get_results or {}
+        # Single answer for `session.scalar(...)`; enough for admission lookups
+        # that only ask whether one row exists.
+        self._scalar_result = scalar_result
         self.added: list[Any] = []
         self.added_all: list[Any] = []
         self.deleted: list[Any] = []
@@ -51,6 +58,9 @@ class FakeAsyncSession:
                 return iter([])
 
         return _EmptyResult()
+
+    async def scalar(self, *_args: Any, **_kwargs: Any):
+        return self._scalar_result
 
     async def scalars(self, *_args: Any, **_kwargs: Any):
         return []

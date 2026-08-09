@@ -70,24 +70,6 @@ def _deleted_presentation() -> PresentationModel:
     )
 
 
-def _configure_rollout(monkeypatch, mode: str) -> None:
-    monkeypatch.delenv("CHAT_FIRST_WORKSPACE_KILL_SWITCH", raising=False)
-    monkeypatch.delenv("CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT", raising=False)
-    monkeypatch.delenv("CHAT_FIRST_WORKSPACE_ROLLOUT_SALT", raising=False)
-    if mode == "flag-off":
-        monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "false")
-        monkeypatch.delenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", raising=False)
-        return
-
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ENABLED", "true")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE", "sqlite-local")
-    monkeypatch.setenv("CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT", "100")
-    monkeypatch.setenv(
-        "CHAT_FIRST_WORKSPACE_KILL_SWITCH",
-        "true" if mode == "kill-switch" else "false",
-    )
-
-
 async def _call_deleted_mutation(
     name: str,
     presentation: PresentationModel,
@@ -159,22 +141,7 @@ async def _call_deleted_mutation(
 # by `require_live_presentation` (404) instead of the scope preflight (409): one
 # read replaces none, while the properties that matter here are unchanged - no
 # write, no rehydration, and no generation work is reached.
-@pytest.mark.parametrize(
-    ("mode", "expected_status", "expected_detail", "expected_reads"),
-    (
-        ("full-rollout", 404, "Presentation not found", 1),
-        ("flag-off", 404, "Presentation not found", 1),
-        ("kill-switch", 404, "Presentation not found", 1),
-    ),
-)
-def test_outline_writer_never_rehydrates_deleted_tombstone(
-    monkeypatch,
-    mode,
-    expected_status,
-    expected_detail,
-    expected_reads,
-):
-    _configure_rollout(monkeypatch, mode)
+def test_outline_writer_never_rehydrates_deleted_tombstone(monkeypatch):
     presentation = _deleted_presentation()
     session = _TombstoneSession(presentation)
     request = SimpleNamespace()
@@ -211,9 +178,9 @@ def test_outline_writer_never_rehydrates_deleted_tombstone(
             )
         )
 
-    assert caught.value.status_code == expected_status
-    assert caught.value.detail == expected_detail
-    assert session.reads == expected_reads
+    assert caught.value.status_code == 404
+    assert caught.value.detail == "Presentation not found"
+    assert session.reads == 1
     assert session.adds == session.commits == session.rollbacks == session.queries == 0
     temp_dir.assert_not_called()
     content_brief.assert_not_called()
@@ -222,22 +189,7 @@ def test_outline_writer_never_rehydrates_deleted_tombstone(
     store_outlines.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    ("mode", "expected_status", "expected_detail", "expected_reads"),
-    (
-        ("full-rollout", 409, CHAT_FIRST_COMMAND_REQUIRED, 0),
-        ("flag-off", 404, "Presentation not found", 1),
-        ("kill-switch", 404, "Presentation not found", 1),
-    ),
-)
-def test_legacy_delete_preserves_existing_durable_tombstone(
-    monkeypatch,
-    mode,
-    expected_status,
-    expected_detail,
-    expected_reads,
-):
-    _configure_rollout(monkeypatch, mode)
+def test_legacy_delete_preserves_existing_durable_tombstone(monkeypatch):
     presentation = _deleted_presentation()
     session = _TombstoneSession(presentation)
     deletion_service = Mock()
@@ -250,9 +202,9 @@ def test_legacy_delete_preserves_existing_durable_tombstone(
     with pytest.raises(HTTPException) as caught:
         asyncio.run(presentation_crud.delete_presentation(presentation.id, session))
 
-    assert caught.value.status_code == expected_status
-    assert caught.value.detail == expected_detail
-    assert session.reads == expected_reads
+    assert caught.value.status_code == 409
+    assert caught.value.detail == CHAT_FIRST_COMMAND_REQUIRED
+    assert session.reads == 0
     assert session.adds == session.commits == session.rollbacks == session.queries == 0
     deletion_service.assert_not_called()
 
@@ -270,32 +222,18 @@ def test_legacy_delete_preserves_existing_durable_tombstone(
         "restore",
     ),
 )
-@pytest.mark.parametrize(
-    ("mode", "expected_status", "expected_detail", "expected_reads"),
-    (
-        ("full-rollout", 409, CHAT_FIRST_COMMAND_REQUIRED, 0),
-        ("flag-off", 404, "Presentation not found", 1),
-        ("kill-switch", 404, "Presentation not found", 1),
-    ),
-)
-def test_legacy_mutations_cannot_reach_deleted_presentation_side_effects(
-    monkeypatch,
-    mutation,
-    mode,
-    expected_status,
-    expected_detail,
-    expected_reads,
-):
-    _configure_rollout(monkeypatch, mode)
+def test_legacy_mutations_cannot_reach_deleted_presentation_side_effects(mutation):
     presentation = _deleted_presentation()
     session = _TombstoneSession(presentation)
 
     with pytest.raises(HTTPException) as caught:
         asyncio.run(_call_deleted_mutation(mutation, presentation, session))
 
-    assert caught.value.status_code == expected_status
-    assert caught.value.detail == expected_detail
-    assert session.reads == expected_reads
+    # The runner-only gate answers before the tombstone is even read, so a
+    # deleted deck can never be touched by a direct write.
+    assert caught.value.status_code == 409
+    assert caught.value.detail == CHAT_FIRST_COMMAND_REQUIRED
+    assert session.reads == 0
     assert session.adds == session.commits == session.rollbacks == session.queries == 0
 
 

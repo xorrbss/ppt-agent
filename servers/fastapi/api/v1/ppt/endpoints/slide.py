@@ -11,7 +11,6 @@ from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
 from services.workspace_legacy_write_gate import (
-    legacy_write_requires_presentation_scope,
     require_legacy_presentation_write_path,
 )
 from utils.asset_directory_utils import get_images_directory
@@ -37,12 +36,10 @@ async def edit_slide(
     prompt: Annotated[str, Body()],
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    resolve_rollout_scope = legacy_write_requires_presentation_scope()
+    require_legacy_presentation_write_path()
     slide = await sql_session.get(SlideModel, id)
     if not slide:
         raise HTTPException(status_code=404, detail="Slide not found")
-    if resolve_rollout_scope:
-        require_legacy_presentation_write_path(slide.presentation)
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:
         raise HTTPException(status_code=404, detail="Presentation not found")
@@ -113,12 +110,10 @@ async def edit_slide_html(
     html: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    resolve_rollout_scope = legacy_write_requires_presentation_scope()
+    require_legacy_presentation_write_path()
     slide = await sql_session.get(SlideModel, id)
     if not slide:
         raise HTTPException(status_code=404, detail="Slide not found")
-    if resolve_rollout_scope:
-        require_legacy_presentation_write_path(slide.presentation)
 
     presentation = await sql_session.get(PresentationModel, slide.presentation)
     if not presentation:

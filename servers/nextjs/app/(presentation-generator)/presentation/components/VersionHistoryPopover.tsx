@@ -32,17 +32,13 @@ function formatWhen(iso: string): string {
 const VersionHistoryPopover = ({
   presentationId,
   disabled,
-  onRestored,
   allowRestore = true,
-  chatFirstEnabled = false,
   workspaceCommandsEnabled = false,
   onWorkspaceCommand,
 }: {
   presentationId: string;
   disabled?: boolean;
-  onRestored?: () => void;
   allowRestore?: boolean;
-  chatFirstEnabled?: boolean;
   workspaceCommandsEnabled?: boolean;
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
 }) => {
@@ -50,10 +46,9 @@ const VersionHistoryPopover = ({
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
-  const chatFirstRestoreEnabled =
-    chatFirstEnabled && workspaceCommandsEnabled && Boolean(onWorkspaceCommand);
+  // Restores run as durable workspace commands; the legacy REST route is fenced.
   const restoreAllowed =
-    allowRestore && (!chatFirstEnabled || chatFirstRestoreEnabled);
+    allowRestore && workspaceCommandsEnabled && Boolean(onWorkspaceCommand);
 
   const loadVersions = async () => {
     setLoading(true);
@@ -78,29 +73,17 @@ const VersionHistoryPopover = ({
     if (!restoreAllowed) return;
     setRestoringId(version.id);
     try {
-      if (chatFirstRestoreEnabled && onWorkspaceCommand) {
-        await onWorkspaceCommand(
-          `${formatWhen(version.created_at)} 버전으로 복원해 줘`,
-          {
-            commandType: "version.restore",
-            context: { version_id: version.id, source: "version_history" },
-          }
-        );
-        // The workspace card now owns approval, progress, result, and errors.
-        setOpen(false);
-        return;
-      }
-      await PresentationGenerationApi.restorePresentationVersion(
-        presentationId,
-        version.id
+      await onWorkspaceCommand?.(
+        `${formatWhen(version.created_at)} 버전으로 복원해 줘`,
+        {
+          commandType: "version.restore",
+          context: { version_id: version.id, source: "version_history" },
+        }
       );
-      notify.success("복원했습니다", "선택한 버전으로 슬라이드를 되돌렸습니다.");
+      // The workspace card owns approval, progress, result, and errors.
       setOpen(false);
-      onRestored?.();
     } catch {
-      if (!chatFirstRestoreEnabled) {
-        notify.error("복원하지 못했습니다", "다시 시도해 주세요.");
-      }
+      // The durable timeline reports the failure next to its command card.
     } finally {
       setRestoringId(null);
     }
