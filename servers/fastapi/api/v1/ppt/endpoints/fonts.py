@@ -1,11 +1,11 @@
 import os
 import uuid
-import shutil
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from templates.preview import FontCheckResponse, check_fonts_in_pptx_handler
 from utils.asset_directory_utils import absolute_fastapi_asset_url, get_app_data_directory_env
+from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file
 
 try:
     from fontTools.ttLib import TTFont
@@ -166,9 +166,15 @@ async def upload_font(
         fonts_dir = get_fonts_directory()
         font_path = os.path.join(fonts_dir, unique_filename)
         
-        # Save the uploaded file
-        with open(font_path, "wb") as buffer:
-            shutil.copyfileobj(font_file.file, buffer)
+        # Stream to disk so the configured upload limit is enforced even when
+        # the client does not provide a Content-Length header. The shared helper
+        # removes this destination if the stream exceeds the limit.
+        await stream_upload_to_file(
+            font_file,
+            font_path,
+            limit_bytes=get_single_upload_limit_bytes(),
+            label="Font file",
+        )
         
         # Generate accessible URL
         font_url = absolute_fastapi_asset_url(f"/app_data/fonts/{unique_filename}")

@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-const ROOTS = ["app", "components", "lib", "scripts", "utils"];
+const ROOTS = ["app", "components", "lib", "scripts", "tests", "utils"];
 const TEST_RE = /\.test\.(ts|tsx|mjs)$/;
 const EXCLUDED = [
   {

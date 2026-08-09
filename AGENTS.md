@@ -59,11 +59,14 @@ uv sync
 $env:APP_DATA_DIRECTORY="..\..\app_data"
 $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"
 $env:NEXT_INTERNAL_URL="http://localhost:5000"
+$env:MIGRATE_DATABASE_ON_STARTUP="true"
 uv run python server.py --port 8000 --reload false
 ```
 
 `APP_DATA_DIRECTORY` is required. On Windows, keep uvicorn reload disabled unless
-the task specifically needs it.
+the task specifically needs it. Keep startup migrations enabled for normal local
+and packaged runs; Alembic upgrades are idempotent. Electron injects this setting
+for both its development and packaged FastAPI launch paths.
 
 ### Frontend
 
@@ -77,6 +80,20 @@ npm run dev
 
 For the complete web flow, run `node scripts/presenton-local-proxy.mjs` from the
 repository root and use `http://localhost:5000` as the single origin.
+
+### Optional MCP server
+
+The Docker `start.js` entrypoint does not start MCP by default. Set
+`ENABLE_MCP_SERVER=true` to opt in; production still passes `--reload false`.
+Direct local execution is itself an explicit opt-in:
+
+```powershell
+cd servers/fastapi
+uv run python mcp_server.py --port 8001 --reload false
+```
+
+The Docker nginx `/mcp` and `/mcp/` routes require a valid Presenton session or
+admin API-key bearer credential before a request is proxied to MCP.
 
 ## Verification
 

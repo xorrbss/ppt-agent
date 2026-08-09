@@ -122,6 +122,59 @@ test("workspace E2E is an always-captured PR gate on Bitbucket", () => {
   assert.match(pipeline, /capture-on: always/u);
 });
 
+test("chat-first deployment configuration is required by both CI providers", () => {
+  const rootPackage = readJson("package.json");
+  const workflow = read(".github/workflows/test-all.yml");
+  const githubNextJob = workflowJob(workflow, "test-nextjs");
+  const pipeline = read("bitbucket-pipelines.yml");
+  const nextCiRunner = read("servers/nextjs/scripts/run-ci-node-tests.mjs");
+
+  assert.equal(
+    rootPackage.scripts["test:chat-first-deployment-config"],
+    "node scripts/check-chat-first-deployment-config.mjs",
+  );
+  assert.match(
+    rootPackage.scripts["test:next-ci"],
+    /npm run test:chat-first-deployment-config/u,
+  );
+  assert.match(nextCiRunner, /ROOTS = \[.*"tests".*\]/u);
+  assert.ok(nextCiRunner.includes("const TEST_RE = /\\.test\\.(ts|tsx|mjs)$/"));
+  const exclusions = nextCiRunner.slice(
+    nextCiRunner.indexOf("const EXCLUDED"),
+    nextCiRunner.indexOf("function walk"),
+  );
+  assert.doesNotMatch(
+    exclusions,
+    /tests\//u,
+    "the explicit Next.js Node-test directory must not be excluded from CI discovery",
+  );
+  for (const testFile of [
+    "element-insert-shapes.test.mjs",
+    "math-insert-elements.test.mjs",
+    "settings-access.test.mjs",
+    "template-v2-json-to-html.test.mjs",
+    "workspace-contract.test.mjs",
+  ]) {
+    assert.ok(
+      read(`servers/nextjs/tests/${testFile}`).length > 0,
+      `${testFile} must remain discoverable by the CI runner`,
+    );
+  }
+  assert.match(githubNextJob, /npm run test:next-ci/u);
+  assert.match(
+    pipeline,
+    /name: Run shared Next\.js CI Node suite[\s\S]*npm ci --prefix servers\/nextjs[\s\S]*npm run test:next-ci/u,
+  );
+  assert.match(
+    pipeline,
+    /pull-requests:\s*\n\s*"\*\*":\s*\n\s*- step: \*nextjs-ci-node-contracts/u,
+  );
+  assert.match(
+    pipeline,
+    /branches:\s*\n\s*main:\s*\n\s*- step: \*nextjs-ci-node-contracts/u,
+  );
+});
+
 test("the E2E runner bounds Cypress, traps termination, and preserves replayable logs", () => {
   const runner = read("servers/nextjs/scripts/run-workspace-e2e.mjs");
 
@@ -855,7 +908,7 @@ test("the required route gate enforces axe and bounded approval announcements", 
   const runner = read("servers/nextjs/scripts/run-workspace-e2e.mjs");
   const spec = read("servers/nextjs/cypress/e2e/workspaceChatFirstRoute.cy.ts");
 
-  assert.equal(nextPackage.devDependencies["axe-core"], "4.12.1");
+  assert.equal(nextPackage.devDependencies["axe-core"], "4.13.0");
   assert.match(runner, /cypress\/e2e\/workspaceChatFirstRoute\.cy\.ts/u);
   assert.match(spec, /node_modules\/axe-core\/axe\.min\.js/u);
   assert.match(spec, /window\.Function\(source\)\(\)/u);
@@ -917,47 +970,39 @@ test("the route gate proves an authoritative kill switch wins across real browsi
   );
 });
 
-test("partial rollout uses one deck identity from capability discovery through admission", () => {
-  const upload = read(
-    "servers/nextjs/app/(presentation-generator)/upload/components/UploadPage.tsx",
+test("presentation creation and outline generation retain one stable deck identity", () => {
+  const uploadState = read(
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts",
   );
   const outline = read(
     "servers/nextjs/app/(presentation-generator)/outline/hooks/usePresentationGeneration.ts",
   );
 
   assert.match(
-    upload,
+    uploadState,
     /const \[pendingPresentationId\] = useState\(\(\) => crypto\.randomUUID\(\)\)/u,
   );
-  assert.match(
-    upload,
-    /useChatFirstWorkbenchRollout\(\s*undefined,\s*pendingPresentationId,?\s*\)/u,
-  );
   assert.equal(
-    upload.match(/const presentationId = pendingPresentationId;/gu)?.length,
+    uploadState.match(/const presentationId = pendingPresentationId;/gu)?.length,
     2,
-    "document and prompt-only creates must reuse the capability-scoped id",
+    "document and prompt-only creates must reuse the stable deck id",
   );
   assert.equal(
-    upload.match(/presentation_id: presentationId,/gu)?.length,
+    uploadState.match(/presentation_id: presentationId,/gu)?.length,
     2,
     "both create admissions must send that same id",
   );
   assert.equal(
-    upload.match(
+    uploadState.match(
       /idempotency_key: `presentation-create:\$\{presentationId\}`/gu,
     )?.length,
     2,
     "both create admissions must derive idempotency from the stable deck id",
   );
-
-  assert.match(
-    outline,
-    /useChatFirstWorkbenchRollout\(\s*hasRolloutOverride \? false : undefined,\s*presentationId \?\? undefined,?\s*\)/u,
-  );
-  assert.ok(
-    (outline.match(/presentation_id: presentationId,/gu)?.length ?? 0) >= 4,
-    "every outline generation admission must retain the capability-scoped deck id",
+  assert.equal(
+    outline.match(/presentation_id: presentationId,/gu)?.length,
+    4,
+    "every outline generation admission must retain the stable deck id",
   );
 });
 

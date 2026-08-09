@@ -34,6 +34,7 @@ const args = process.argv.slice(2);
 const hasDevArg = args.includes("--dev") || args.includes("-d");
 const isDev = hasDevArg;
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
+const shouldStartMcpServer = process.env.ENABLE_MCP_SERVER === "true";
 
 const fastapiPort = 8000;
 const nextjsPort = 3000;
@@ -473,6 +474,13 @@ const setupUserConfigFromEnv = () => {
 };
 
 const startServers = async (nginxReadyPromise) => {
+  const fastApiEnvironment = {
+    ...process.env,
+    // Compose already sets this value. Keep direct start.js launches equally
+    // safe while preserving an explicit operator override such as "false".
+    MIGRATE_DATABASE_ON_STARTUP:
+      process.env.MIGRATE_DATABASE_ON_STARTUP ?? "true",
+  };
   const fastApiProcess = spawn(
     "python",
     [
@@ -485,7 +493,7 @@ const startServers = async (nginxReadyPromise) => {
     {
       cwd: fastapiDir,
       stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
+      env: fastApiEnvironment,
     }
   );
 
@@ -493,19 +501,31 @@ const startServers = async (nginxReadyPromise) => {
     console.error("FastAPI process failed to start:", err);
   });
 
-  const appmcpProcess = spawn(
-    "python",
-    ["mcp_server.py", "--port", appmcpPort.toString()],
-    {
-      cwd: fastapiDir,
-      stdio: "ignore",
-      env: process.env,
-    }
-  );
+  if (shouldStartMcpServer) {
+    const appmcpProcess = spawn(
+      "python",
+      [
+        "mcp_server.py",
+        "--port",
+        appmcpPort.toString(),
+        "--reload",
+        isDev ? "true" : "false",
+      ],
+      {
+        cwd: fastapiDir,
+        stdio: "ignore",
+        env: process.env,
+      }
+    );
 
-  appmcpProcess.on("error", (err) => {
-    console.error("App MCP process failed to start:", err);
-  });
+    appmcpProcess.on("error", (err) => {
+      console.error("App MCP process failed to start:", err);
+    });
+  } else {
+    console.log(
+      "MCP server disabled; set ENABLE_MCP_SERVER=true to start it."
+    );
+  }
 
   const useStandaloneNextjs = !isDev && existsSync(nextjsStandaloneServer);
 

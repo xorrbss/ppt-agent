@@ -46,16 +46,40 @@ $env:APP_DATA_DIRECTORY="..\..\app_data"; $env:USER_CONFIG_PATH="..\..\app_data\
 # Default is http://localhost (nginx :80 in Docker); without nginx, point it at
 # the single-origin proxy below or template lookup and PPTX/PDF export fail.
 $env:NEXT_INTERNAL_URL="http://localhost:5000"
+$env:MIGRATE_DATABASE_ON_STARTUP="true"
 uv run python server.py --port 8000 --reload false
 
 # frontend (APP_DATA_DIRECTORY + USER_CONFIG_PATH are required here too — see note below)
 cd servers/nextjs; npm install
 $env:APP_DATA_DIRECTORY="..\..\app_data"; $env:FAST_API_INTERNAL_URL="http://127.0.0.1:8000"; $env:NEXT_INTERNAL_URL="http://localhost:5000"; $env:USER_CONFIG_PATH="..\..\app_data\userConfig.json"; npm run build; npm run start -- -p 3000
 
-# single-origin proxy (serves http://localhost:5000 -> next:3000 / fastapi:8000 / mcp:8001)
+# single-origin proxy (mcp:8001 is reachable only if started separately)
 node scripts/presenton-local-proxy.mjs
 ```
 Open http://localhost:5000. First boot shows a one-time admin login (`/api/v1/auth/setup`).
+
+Startup migrations should remain enabled for normal native runs. Re-running the
+backend is safe: Alembic upgrades an older database to the current head and a
+subsequent startup is a no-op. Set `MIGRATE_DATABASE_ON_STARTUP=false` only for a
+controlled workflow that applies migrations separately.
+
+### Optional MCP server
+
+MCP is opt-in. For a direct native run, starting `mcp_server.py` is the explicit
+opt-in (use a separate terminal):
+
+```powershell
+cd servers/fastapi
+uv run python mcp_server.py --port 8001 --reload false
+```
+
+The local proxy binds to loopback and can route `/mcp` to that process. Docker's
+`start.js` does not start MCP unless `ENABLE_MCP_SERVER=true`; its production MCP
+process always uses `--reload false`. Docker nginx authenticates both `/mcp` and
+`/mcp/` with the Presenton session cookie or an admin API-key bearer token before
+forwarding the request and credential to MCP. The native proxy does not reproduce
+that nginx authentication gate, so keep it loopback-only. Never combine an
+externally reachable MCP endpoint with `DISABLE_AUTH=true`.
 
 The bundled PPTX/PDF exporter must render through the single-origin proxy because
 authored slides load `/app_data` images. It uses `NEXT_PUBLIC_URL`, then
@@ -83,7 +107,9 @@ npm run dev            # cleans app_dist, runs tsc, launches Electron (cross-pla
 Electron runs with `DISABLE_AUTH=true` (no login). Provider keys are set in-app
 (Settings) or via env at launch (`LLM`, `OPENAI_API_KEY`, `OPENAI_MODEL`, …).
 On Windows dev, set `PRESENTON_DEV_NODE_BINARY` to your system `node.exe` so LiteParse
-runs on system Node.
+runs on system Node. Electron enables `MIGRATE_DATABASE_ON_STARTUP` for both the
+native development server and the packaged FastAPI binary, and keeps backend reload
+disabled.
 
 ## Automation: `scripts/ppt-agent.mjs`
 A zero-dependency Node 18+ CLI that drives deck generation over the API

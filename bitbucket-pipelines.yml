@@ -4,6 +4,14 @@ definitions:
   caches:
     uv: ~/.cache/uv
   steps:
+    - step: &nextjs-ci-node-contracts
+        name: Run shared Next.js CI Node suite
+        size: 2x
+        max-time: 15
+        script:
+          - npm ci
+          - npm ci --prefix servers/nextjs
+          - npm run test:next-ci
     - step: &upstream-byte-parity-check
         name: Upstream byte-parity verification
         size: 1x
@@ -63,10 +71,12 @@ definitions:
 pipelines:
   pull-requests:
     "**":
+      - step: *nextjs-ci-node-contracts
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   branches:
     main:
+      - step: *nextjs-ci-node-contracts
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   custom:
