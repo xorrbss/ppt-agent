@@ -39,6 +39,7 @@
     "test:release-workflows": "node --test scripts/release-workflow-policy.test.cjs",
     "preflight:package": "node scripts/verify-packaging-inputs.cjs",
     "test:package-preflight": "node --test scripts/verify-packaging-inputs.test.cjs",
+    "test:runtime-settings-refresh": "npm run build:ts && node --test tests/runtime-settings-refresh.test.cjs",
     "smoke:packaged-servers": "node scripts/smoke-packaged-servers.cjs",
     "verify:macos-release": "node scripts/verify-macos-release.cjs",
     "test:macos-release": "node --test scripts/verify-macos-release.test.cjs",

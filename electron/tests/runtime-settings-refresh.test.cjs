@@ -9,6 +9,11 @@ const {
 const {
   saveUserConfigAndRefresh,
 } = require("../app_dist/ipc/user_config_runtime.js");
+const {
+  PROVIDER_SETTINGS_PENDING_REFRESH_KEY,
+  createProviderSettingsPendingRefreshNonce,
+  mergeUserConfig,
+} = require("../app_dist/utils/user-config-merge.js");
 
 async function startServer(handler) {
   const server = http.createServer(handler);
@@ -136,4 +141,34 @@ test("the IPC save contract never refreshes after a failed file write", async ()
   );
 
   assert.equal(refreshCalls, 0);
+});
+
+test("only an IPC persistence merge records a fresh provider settings pending marker", () => {
+  const existingConfig = {
+    LLM: "openai",
+    CODEX_ACCESS_TOKEN: "preserved-access-token",
+    unrelated: "preserved",
+  };
+  const incomingConfig = {
+    LLM: "google",
+    GOOGLE_MODEL: "new-model",
+    CODEX_ACCESS_TOKEN: "must-not-overwrite",
+    [PROVIDER_SETTINGS_PENDING_REFRESH_KEY]: "must-not-control-marker",
+  };
+  const firstNonce = createProviderSettingsPendingRefreshNonce();
+  const secondNonce = createProviderSettingsPendingRefreshNonce();
+
+  const startupConfig = mergeUserConfig(existingConfig, incomingConfig);
+  const firstIpcConfig = mergeUserConfig(existingConfig, incomingConfig, firstNonce);
+  const secondIpcConfig = mergeUserConfig(firstIpcConfig, incomingConfig, secondNonce);
+
+  assert.equal(startupConfig[PROVIDER_SETTINGS_PENDING_REFRESH_KEY], undefined);
+  assert.equal(firstIpcConfig[PROVIDER_SETTINGS_PENDING_REFRESH_KEY], firstNonce);
+  assert.equal(secondIpcConfig[PROVIDER_SETTINGS_PENDING_REFRESH_KEY], secondNonce);
+  assert.notEqual(firstNonce, secondNonce);
+  assert.match(firstNonce, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  assert.equal(firstIpcConfig.CODEX_ACCESS_TOKEN, "preserved-access-token");
+  assert.equal(firstIpcConfig.LLM, "google");
+  assert.equal(firstIpcConfig.GOOGLE_MODEL, "new-model");
+  assert.equal(firstIpcConfig.unrelated, "preserved");
 });

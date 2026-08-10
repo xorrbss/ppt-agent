@@ -5,7 +5,6 @@ import secrets
 
 from fastapi import Request
 from sqlalchemy import func, select
-from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
@@ -20,6 +19,7 @@ from utils.owner_context import (
 from api.v1.auth.users import get_jwt_strategy
 from models.sql.user import User
 from services.database import async_session_maker
+from services.provider_settings import import_legacy_file_to_provider_settings
 from utils.get_env import is_disable_auth_enabled
 from utils.runtime_settings import (
     get_process_runtime_settings,
@@ -67,10 +67,16 @@ async def _refresh_runtime_settings(request: Request) -> Response:
         return Response(status_code=404)
 
     # The file is read only for this explicit post-save notification, never on
-    # ordinary requests. Electron launches one FastAPI worker, so publication
-    # here updates the complete packaged backend process.
+    # ordinary requests. Electron's local worker publishes immediately; the DB
+    # revision lets any external workers converge without carrying settings in
+    # this control request.
     try:
-        await run_in_threadpool(refresh_process_runtime_settings)
+        async with async_session_maker() as session:
+            committed = await import_legacy_file_to_provider_settings(session)
+        refresh_process_runtime_settings(
+            persisted_config=committed.config,
+            revision=committed.revision,
+        )
     except Exception:
         # Do not reflect exception details, paths, config values, or secrets.
         return Response(status_code=500)

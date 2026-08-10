@@ -18,6 +18,10 @@ from services.presentation_generation_job_service import (
 from services.presentation_generation_operation_handler import (
     register_presentation_generation_operation_handler,
 )
+from services.runtime_settings_coordinator import (
+    start_runtime_settings_coordinator,
+    stop_runtime_settings_coordinator,
+)
 from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
 )
@@ -79,7 +83,6 @@ from utils.get_env import get_app_data_directory_env
 from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
 )
-from utils.user_config import refresh_process_runtime_settings
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +109,6 @@ async def app_lifespan(_: FastAPI):
     availability.
     """
     _configure_application_logging()
-    # Process-start seed: userConfig/env are read once and published as an
-    # immutable snapshot. Requests and jobs never copy values into os.environ.
-    refresh_process_runtime_settings()
     template_v2_policy = get_structured_template_policy()
     require_template_v2_database_safety(
         feature_enabled=template_v2_policy.creation_enabled,
@@ -123,6 +123,8 @@ async def app_lifespan(_: FastAPI):
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
+    await start_runtime_settings_coordinator()
+    runtime_settings_coordinator_started = True
     template_v2_dispatcher_started = False
     template_v2_cleanup_started = False
     export_retention_started = False
@@ -172,40 +174,44 @@ async def app_lifespan(_: FastAPI):
         yield
     finally:
         try:
-            if workspace_event_retention_started:
-                await stop_workspace_event_retention()
+            if runtime_settings_coordinator_started:
+                await stop_runtime_settings_coordinator()
         finally:
             try:
-                if workspace_cleanup_maintenance_started:
-                    await stop_workspace_cleanup_maintenance()
+                if workspace_event_retention_started:
+                    await stop_workspace_event_retention()
             finally:
                 try:
-                    if workspace_asset_maintenance_started:
-                        await stop_workspace_asset_maintenance()
+                    if workspace_cleanup_maintenance_started:
+                        await stop_workspace_cleanup_maintenance()
                 finally:
                     try:
-                        if workspace_operation_runner_started:
-                            await stop_workspace_operation_runner()
+                        if workspace_asset_maintenance_started:
+                            await stop_workspace_asset_maintenance()
                     finally:
                         try:
-                            if workspace_outbox_dispatcher_started:
-                                await stop_workspace_operation_outbox_dispatcher()
+                            if workspace_operation_runner_started:
+                                await stop_workspace_operation_runner()
                         finally:
                             try:
-                                if template_v2_dispatcher_started:
-                                    await stop_template_v2_pptx_dispatcher()
+                                if workspace_outbox_dispatcher_started:
+                                    await stop_workspace_operation_outbox_dispatcher()
                             finally:
                                 try:
-                                    if presentation_generation_dispatcher_started:
-                                        await stop_presentation_generation_dispatcher()
+                                    if template_v2_dispatcher_started:
+                                        await stop_template_v2_pptx_dispatcher()
                                 finally:
                                     try:
-                                        if export_retention_started:
-                                            await stop_export_retention_sweeper()
+                                        if presentation_generation_dispatcher_started:
+                                            await stop_presentation_generation_dispatcher()
                                     finally:
                                         try:
-                                            if template_v2_cleanup_started:
-                                                await stop_template_v2_private_source_cleanup()
+                                            if export_retention_started:
+                                                await stop_export_retention_sweeper()
                                         finally:
-                                            # Release all database connections to prevent stale/leaked pools.
-                                            await dispose_engines()
+                                            try:
+                                                if template_v2_cleanup_started:
+                                                    await stop_template_v2_private_source_cleanup()
+                                            finally:
+                                                # Release all database connections to prevent stale/leaked pools.
+                                                await dispose_engines()

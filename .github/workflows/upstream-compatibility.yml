@@ -29,7 +29,14 @@ on:
       - "servers/fastapi/utils/validators.py"
       - "servers/fastapi/utils/db_utils.py"
       - "servers/fastapi/alembic/versions/**"
+      - "servers/fastapi/migration_runtime_settings_schema.py"
       - "servers/fastapi/migrations.py"
+      - "servers/fastapi/models/sql/provider_settings.py"
+      - "servers/fastapi/services/database.py"
+      - "servers/fastapi/services/provider_settings*.py"
+      - "servers/fastapi/services/runtime_settings_coordinator.py"
+      - "servers/fastapi/utils/runtime_settings.py"
+      - "servers/fastapi/utils/user_config.py"
       - "servers/fastapi/services/presentation_deletion_service.py"
       - "servers/fastapi/services/workspace_*.py"
       - "servers/fastapi/models/workspace_*.py"
@@ -50,11 +57,22 @@ on:
       - "servers/fastapi/tests/integration/test_postgresql_template_v2_canary_rollback.py"
       - "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
       - "servers/fastapi/tests/integration/test_postgresql_async_task_read_facade.py"
+      - "servers/fastapi/tests/integration/test_postgresql_provider_settings_sync.py"
+      - "servers/fastapi/tests/integration/test_runtime_settings_multiworker_sync.py"
       - "servers/fastapi/tests/integration/test_postgresql_workspace.py"
+      - "servers/fastapi/tests/support/runtime_settings_sync_worker.py"
+      - "servers/fastapi/tests/unit/test_provider_settings*.py"
+      - "servers/fastapi/tests/unit/test_runtime_settings*.py"
+      - "docs/runtime-settings-multiworker-sync.md"
       - "docs/template-v2-canary-rehearsal-prompt-20260725.md"
       - "docs/template-v2-canary-runbook.md"
       - "electron/app/main.ts"
+      - "electron/app/ipc/user_config_handlers.ts"
+      - "electron/app/utils/index.ts"
+      - "electron/app/utils/user-config-merge.ts"
       - "electron/app/utils/resource-root.ts"
+      - "electron/package.json"
+      - "electron/tests/runtime-settings-refresh.test.cjs"
       - "electron/scripts/verify-packaging-inputs.cjs"
       - ".github/workflows/upstream-compatibility.yml"
   workflow_dispatch:
@@ -138,10 +156,11 @@ jobs:
           enable-cache: true
       - name: Install locked FastAPI dependencies
         run: uv sync --frozen
-      - name: Verify Template V2 and Chat-first workspace on PostgreSQL
+      - name: Verify runtime settings, Template V2, and Chat-first workspace on PostgreSQL
         run: >-
           uv run pytest -q --no-header
           tests/integration/test_postgresql_template_v2_migrations.py
           tests/integration/test_postgresql_template_v2_canary_rollback.py
           tests/integration/test_postgresql_async_task_read_facade.py
+          tests/integration/test_postgresql_provider_settings_sync.py
           tests/integration/test_postgresql_workspace.py

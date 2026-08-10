@@ -3,11 +3,15 @@ import threading
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.sql.dml import Insert, Update
+from sqlalchemy.sql.selectable import Select
 from api.v1.admin import router as admin_router
 from models.sql.provider_settings import ProviderSettings
 from models.sql.user import User
 from services.provider_settings import (
+    ProviderSettingsConcurrencyError,
     ProviderSettingsValidationError,
+    ProviderSettingsRecord,
     REDACTED_SECRET_PLACEHOLDER,
     merge_provider_settings,
     migrate_provider_settings_from_file,
@@ -26,6 +30,48 @@ class ProviderSettingsSession:
     async def get(self, _model, _key):
         return self.row
 
+    async def execute(self, statement):
+        session = self
+
+        class Result:
+            rowcount = 0
+
+            def one_or_none(self):
+                if session.row is None:
+                    return None
+                return type(
+                    "Row",
+                    (),
+                    {
+                        "revision": session.row.revision,
+                        "config": session.row.config,
+                    },
+                )()
+
+            def scalar_one_or_none(self):
+                return session.row.revision if session.row is not None else None
+
+        result = Result()
+        if isinstance(statement, Select):
+            return result
+        values = {
+            getattr(column, "key", column): getattr(value, "value", value)
+            for column, value in statement._values.items()
+        }
+        if isinstance(statement, Insert):
+            self.row = ProviderSettings(**values)
+            result.rowcount = 1
+            return result
+        if isinstance(statement, Update):
+            if self.row is None:
+                return result
+            self.row.config = values["config"]
+            self.row.revision += 1
+            self.row.updated_at = values["updated_at"]
+            result.rowcount = 1
+            return result
+        raise AssertionError("unexpected statement")
+
     def add(self, row):
         self.row = row
 
@@ -34,6 +80,9 @@ class ProviderSettingsSession:
         return None
 
     async def refresh(self, _row):
+        return None
+
+    async def rollback(self):
         return None
 
 
@@ -129,7 +178,7 @@ def test_save_partial_custom_update_preserves_secret_in_db_and_file_mirror(
     mirrored = []
     monkeypatch.setattr(
         "services.provider_settings._mirror_to_legacy_file",
-        lambda config: mirrored.append(dict(config)),
+        lambda config, _revision, **_kwargs: mirrored.append(dict(config)),
     )
 
     saved = asyncio.run(
@@ -147,7 +196,7 @@ def test_save_never_writes_a_placeholder_when_no_custom_secret_exists(monkeypatc
     mirrored = []
     monkeypatch.setattr(
         "services.provider_settings._mirror_to_legacy_file",
-        lambda config: mirrored.append(dict(config)),
+        lambda config, _revision, **_kwargs: mirrored.append(dict(config)),
     )
 
     saved = asyncio.run(
@@ -338,11 +387,14 @@ def test_admin_put_preserves_placeholder_but_publishes_raw_secret(monkeypatch):
         return merge_provider_settings(existing, incoming)
 
     monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
-    monkeypatch.setattr(admin_router, "save_provider_settings", save_settings)
+    async def save_record(session, incoming):
+        return ProviderSettingsRecord(4, await save_settings(session, incoming))
+
+    monkeypatch.setattr(admin_router, "save_provider_settings_record", save_record)
     monkeypatch.setattr(
         admin_router,
         "refresh_process_runtime_settings",
-        lambda *, persisted_config: published.append(persisted_config),
+        lambda *, persisted_config, revision: published.append(persisted_config),
     )
 
     response = asyncio.run(
@@ -369,7 +421,9 @@ def test_invalid_registry_values_never_commit_or_mirror(monkeypatch, invalid):
     session.row = ProviderSettings(id=1, config={"LLM": "openai"})
     monkeypatch.setattr(
         "services.provider_settings._mirror_to_legacy_file",
-        lambda _config: pytest.fail("invalid settings must not reach the file mirror"),
+        lambda _config, _revision, **_kwargs: pytest.fail(
+            "invalid settings must not reach the file mirror"
+        ),
     )
 
     with pytest.raises(ProviderSettingsValidationError):
@@ -384,7 +438,7 @@ def test_admin_put_projects_invalid_registry_values_as_422(monkeypatch):
         raise ProviderSettingsValidationError("LLM")
 
     monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
-    monkeypatch.setattr(admin_router, "save_provider_settings", reject)
+    monkeypatch.setattr(admin_router, "save_provider_settings_record", reject)
 
     with pytest.raises(HTTPException) as error:
         asyncio.run(
@@ -397,13 +451,34 @@ def test_admin_put_projects_invalid_registry_values_as_422(monkeypatch):
     assert "not-a-provider" not in str(error.value.detail)
 
 
+def test_admin_put_projects_concurrency_exhaustion_as_retryable_conflict(
+    monkeypatch,
+):
+    async def reject(_session, _incoming):
+        raise ProviderSettingsConcurrencyError()
+
+    monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
+    monkeypatch.setattr(admin_router, "save_provider_settings_record", reject)
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(
+            admin_router.update_provider_settings(
+                {"OPENAI_API_KEY": "must-not-leak"}, None, object()
+            )
+        )
+
+    assert error.value.status_code == 409
+    assert error.value.detail == "Provider settings changed; retry the request"
+    assert "must-not-leak" not in str(error.value.detail)
+
+
 def test_provider_settings_file_mirror_does_not_block_the_event_loop(monkeypatch):
     mirror_started = threading.Event()
     release_mirror = threading.Event()
     ticker_ran = threading.Event()
     event_loop_was_blocked = threading.Event()
 
-    def blocking_mirror(_config):
+    def blocking_mirror(_config, _revision, **_kwargs):
         mirror_started.set()
         release_mirror.wait(timeout=2)
 
@@ -454,11 +529,15 @@ def test_concurrent_admin_puts_publish_in_serialized_order(monkeypatch):
         return dict(stored)
 
     monkeypatch.setattr(admin_router, "_ensure_settings_are_mutable", lambda: None)
-    monkeypatch.setattr(admin_router, "save_provider_settings", save_settings)
+    async def save_record(session, incoming):
+        saved = await save_settings(session, incoming)
+        return ProviderSettingsRecord(len(calls), saved)
+
+    monkeypatch.setattr(admin_router, "save_provider_settings_record", save_record)
     monkeypatch.setattr(
         admin_router,
         "refresh_process_runtime_settings",
-        lambda *, persisted_config: published.append(dict(persisted_config)),
+        lambda *, persisted_config, revision: published.append(dict(persisted_config)),
     )
 
     async def exercise():
@@ -514,6 +593,7 @@ def test_startup_migrates_user_config_and_rewrites_compatibility_file(
     assert read_user_config_file(str(path)) == {
         "LLM": "openai",
         "OPENAI_API_KEY": "provider-key",
+        "_PRESENTON_PROVIDER_SETTINGS_REVISION": 0,
         "AUTH_USERNAME": "admin",
         "AUTH_PASSWORD_HASH": "legacy-hash",
         "AUTH_SECRET_KEY": "jwt-secret",

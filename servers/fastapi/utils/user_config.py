@@ -8,6 +8,7 @@ from constants.settings_registry import get_settings_registry
 from models.user_config import UserConfig
 from utils.runtime_settings import (
     RuntimeSettings,
+    publish_process_runtime_settings,
     replace_process_runtime_settings,
     resolve_runtime_settings,
 )
@@ -70,6 +71,7 @@ def refresh_process_runtime_settings(
     *,
     persisted_config: Mapping[str, object] | None = None,
     overrides: Mapping[str, object] | None = None,
+    revision: int | None = None,
 ) -> RuntimeSettings:
     """Publish a newly loaded process snapshot at startup or after an admin write."""
     # Keep load + publish as one process-local critical section. Without this,
@@ -82,7 +84,10 @@ def refresh_process_runtime_settings(
         )
         if overrides:
             snapshot = snapshot.with_overrides(overrides)
-        replace_process_runtime_settings(snapshot)
+        if revision is None:
+            replace_process_runtime_settings(snapshot)
+        else:
+            publish_process_runtime_settings(revision, snapshot)
         return snapshot
 
 
@@ -128,5 +133,9 @@ def save_codex_tokens_to_user_config(values: Mapping[str, object]) -> None:
     update_user_config_file(path, merge_codex_tokens)
     from services.provider_settings import sync_legacy_file_to_provider_settings
 
-    sync_legacy_file_to_provider_settings()
-    refresh_process_runtime_settings()
+    committed = sync_legacy_file_to_provider_settings(managed_updates=values)
+    if committed is not None:
+        refresh_process_runtime_settings(
+            persisted_config=committed.config,
+            revision=committed.revision,
+        )

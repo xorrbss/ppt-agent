@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import os
 from dataclasses import FrozenInstanceError
 
@@ -15,7 +16,11 @@ from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
 from utils.runtime_settings import (
     RuntimeSettings,
+    RuntimeSettingsInvariantError,
+    RuntimeSettingsPublishOutcome,
     create_runtime_settings_task,
+    get_process_runtime_settings_envelope,
+    publish_process_runtime_settings,
     replace_process_runtime_settings,
     resolve_runtime_settings,
     runtime_settings_context,
@@ -62,6 +67,66 @@ def test_runtime_settings_are_deeply_immutable():
         settings._values = {}  # type: ignore[misc]
     with pytest.raises(TypeError):
         settings._values["OPENAI_API_KEY"] = "changed"  # type: ignore[index]
+
+
+def test_revisioned_publication_is_monotonic_idempotent_and_secret_safe():
+    previous = replace_process_runtime_settings(None)
+    current = get_process_runtime_settings_envelope()
+    base = (current.revision if current is not None else 0) + 10
+    settings_a = _openai_settings("secret-a", "model-a")
+    settings_b = _openai_settings("secret-b", "model-b")
+    try:
+        assert (
+            publish_process_runtime_settings(base, settings_a)
+            == RuntimeSettingsPublishOutcome.APPLIED
+        )
+        assert (
+            publish_process_runtime_settings(base, settings_a)
+            == RuntimeSettingsPublishOutcome.DUPLICATE
+        )
+        assert (
+            publish_process_runtime_settings(base - 1, settings_b)
+            == RuntimeSettingsPublishOutcome.OUT_OF_ORDER
+        )
+        with pytest.raises(RuntimeSettingsInvariantError) as error:
+            publish_process_runtime_settings(base, settings_b)
+        assert "secret-a" not in str(error.value)
+        assert "secret-b" not in str(error.value)
+        envelope = get_process_runtime_settings_envelope()
+        assert envelope is not None
+        assert envelope.revision == base
+        assert envelope.settings is settings_a
+    finally:
+        replace_process_runtime_settings(previous)
+
+
+def test_revision_envelope_compare_and_publish_is_atomic_across_threads():
+    previous = replace_process_runtime_settings(None)
+    settings = [
+        _openai_settings(f"key-{revision}", f"model-{revision}")
+        for revision in range(101, 121)
+    ]
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            outcomes = list(
+                executor.map(
+                    lambda item: publish_process_runtime_settings(*item),
+                    zip(range(101, 121), settings, strict=True),
+                )
+            )
+        envelope = get_process_runtime_settings_envelope()
+        assert envelope is not None
+        assert envelope.revision == 120
+        assert envelope.settings == settings[-1]
+        assert RuntimeSettingsPublishOutcome.APPLIED in outcomes
+        assert set(outcomes).issubset(
+            {
+                RuntimeSettingsPublishOutcome.APPLIED,
+                RuntimeSettingsPublishOutcome.OUT_OF_ORDER,
+            }
+        )
+    finally:
+        replace_process_runtime_settings(previous)
 
 
 def test_concurrent_runtime_snapshots_do_not_cross_contaminate_llm_resolution():

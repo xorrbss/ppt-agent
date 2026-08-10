@@ -2,25 +2,30 @@ import net from 'net'
 import treeKill from 'tree-kill'
 import { getTempDir, getUserConfigPath, localhost } from './constants'
 import { readUserConfigFile, updateUserConfigFile } from './user-config-store'
+import {
+  createProviderSettingsPendingRefreshNonce,
+  mergeUserConfig,
+  type PersistedUserConfig,
+} from './user-config-merge'
 
 export function setUserConfig(userConfig: UserConfig) {
+  persistUserConfig(userConfig)
+}
+
+export function setUserConfigAndMarkRuntimeRefresh(userConfig: UserConfig) {
+  persistUserConfig(userConfig, createProviderSettingsPendingRefreshNonce())
+}
+
+function persistUserConfig(userConfig: UserConfig, pendingRefreshNonce?: string) {
   const userConfigPath = getUserConfigPath()
-  updateUserConfigFile<UserConfig>(userConfigPath, (existingConfig) => {
-    const definedIncomingEntries = Object.entries(userConfig).filter(([, value]) => value !== undefined)
-    return {
-      ...existingConfig,
-      ...Object.fromEntries(definedIncomingEntries),
-      CODEX_ACCESS_TOKEN: existingConfig.CODEX_ACCESS_TOKEN,
-      CODEX_REFRESH_TOKEN: existingConfig.CODEX_REFRESH_TOKEN,
-      CODEX_TOKEN_EXPIRES: existingConfig.CODEX_TOKEN_EXPIRES,
-      CODEX_ACCOUNT_ID: existingConfig.CODEX_ACCOUNT_ID,
-    }
-  })
+  updateUserConfigFile<PersistedUserConfig>(userConfigPath, (existingConfig) =>
+    mergeUserConfig(existingConfig, userConfig, pendingRefreshNonce),
+  )
 }
 
 export function getUserConfig(): UserConfig {
   const userConfigPath = getUserConfigPath()
-  return readUserConfigFile<UserConfig>(userConfigPath)
+  return readUserConfigFile<PersistedUserConfig>(userConfigPath)
 }
 
 export function setupEnv(fastApiPort: number, nextjsPort: number) {

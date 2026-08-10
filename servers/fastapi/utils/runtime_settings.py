@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -131,29 +132,100 @@ class RuntimeSettings:
         return RuntimeSettings(values)
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeSettingsEnvelope:
+    """One immutable, database-versioned process publication."""
+
+    revision: int
+    settings: RuntimeSettings
+
+
+class RuntimeSettingsInvariantError(RuntimeError):
+    """Raised when one database revision is observed with two payloads."""
+
+
+class RuntimeSettingsPublishOutcome:
+    APPLIED = "applied"
+    DUPLICATE = "duplicate"
+    OUT_OF_ORDER = "out_of_order"
+    NO_CHANGE = "no_change"
+
+
 _current_runtime_settings: ContextVar[RuntimeSettings | None] = ContextVar(
     "current_runtime_settings", default=None
 )
-_process_runtime_settings: RuntimeSettings | None = None
+_process_runtime_settings_envelope: RuntimeSettingsEnvelope | None = None
+_process_runtime_settings_lock = threading.Lock()
+
+
+def get_process_runtime_settings_envelope() -> RuntimeSettingsEnvelope | None:
+    return _process_runtime_settings_envelope
 
 
 def get_published_process_runtime_settings() -> RuntimeSettings | None:
     """Return the published snapshot without synthesizing an env fallback."""
-    return _process_runtime_settings
+    envelope = _process_runtime_settings_envelope
+    return envelope.settings if envelope is not None else None
 
 
 def get_process_runtime_settings() -> RuntimeSettings:
-    return _process_runtime_settings or RuntimeSettings.from_sources(environ=os.environ)
+    envelope = _process_runtime_settings_envelope
+    return (
+        envelope.settings
+        if envelope is not None
+        else RuntimeSettings.from_sources(environ=os.environ)
+    )
+
+
+def publish_process_runtime_settings(
+    revision: int,
+    settings: RuntimeSettings,
+) -> str:
+    """Publish a monotonic database snapshot as one atomic envelope assignment."""
+    if revision < 0:
+        raise ValueError("runtime settings revision must be non-negative")
+
+    global _process_runtime_settings_envelope
+    with _process_runtime_settings_lock:
+        current = _process_runtime_settings_envelope
+        if current is not None:
+            if revision < current.revision:
+                return RuntimeSettingsPublishOutcome.OUT_OF_ORDER
+            if revision == current.revision:
+                if settings == current.settings:
+                    return RuntimeSettingsPublishOutcome.DUPLICATE
+                # Never include either snapshot in the error: both may contain
+                # credentials, private URLs, or local paths.
+                raise RuntimeSettingsInvariantError(
+                    "runtime settings revision payload mismatch"
+                )
+        _process_runtime_settings_envelope = RuntimeSettingsEnvelope(
+            revision=revision,
+            settings=settings,
+        )
+        return RuntimeSettingsPublishOutcome.APPLIED
 
 
 def replace_process_runtime_settings(
     settings: RuntimeSettings | None,
 ) -> RuntimeSettings | None:
-    """Atomically publish a new snapshot without mutating ``os.environ``."""
-    global _process_runtime_settings
-    previous = _process_runtime_settings
-    _process_runtime_settings = settings
-    return previous
+    """Compatibility helper for unversioned standalone/test publications.
+
+    Database-coordinated processes use :func:`publish_process_runtime_settings`.
+    This helper deliberately preserves the current revision while replacing or
+    clearing the envelope so older standalone callers cannot manufacture a DB
+    revision.
+    """
+    global _process_runtime_settings_envelope
+    with _process_runtime_settings_lock:
+        previous_envelope = _process_runtime_settings_envelope
+        revision = previous_envelope.revision if previous_envelope else 0
+        _process_runtime_settings_envelope = (
+            RuntimeSettingsEnvelope(revision=revision, settings=settings)
+            if settings is not None
+            else None
+        )
+    return previous_envelope.settings if previous_envelope else None
 
 
 def resolve_runtime_settings(

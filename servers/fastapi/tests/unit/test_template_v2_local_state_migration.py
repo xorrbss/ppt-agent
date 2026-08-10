@@ -248,7 +248,7 @@ def test_complete_schema_inference_recognizes_local_state_head(tmp_path):
                     set(inspector.get_table_names()),
                     "ignored-future-head",
                 )
-                == migrations.REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS
+                == migrations.HEAD_REVISION
             )
     finally:
         engine.dispose()

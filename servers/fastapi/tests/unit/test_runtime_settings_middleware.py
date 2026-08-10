@@ -4,6 +4,7 @@ import json
 import pytest
 
 from api.middlewares import RuntimeSettingsContextMiddleware
+from services.provider_settings import ProviderSettingsRecord
 from utils.runtime_settings import (
     RuntimeSettings,
     get_process_runtime_settings,
@@ -150,6 +151,25 @@ def test_explicit_loopback_refresh_publishes_saved_user_config_for_next_request(
     )
     assert get_process_runtime_settings().get("OPENAI_MODEL") == "old-model"
 
+    class SessionContext:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    async def import_config(_session):
+        return ProviderSettingsRecord(
+            revision=1,
+            config=json.loads(config_path.read_text(encoding="utf-8")),
+        )
+
+    monkeypatch.setattr("api.middlewares.async_session_maker", SessionContext)
+    monkeypatch.setattr(
+        "api.middlewares.import_legacy_file_to_provider_settings",
+        import_config,
+    )
+
     downstream_calls = 0
     observed = []
 
@@ -276,8 +296,24 @@ def test_runtime_refresh_failure_is_empty_and_keeps_the_previous_snapshot(monkey
     )
     replace_process_runtime_settings(settings)
 
-    def fail_refresh():
+    def fail_refresh(**_kwargs):
         raise RuntimeError(secret)
+
+    class SessionContext:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    async def import_config(_session):
+        return ProviderSettingsRecord(1, {})
+
+    monkeypatch.setattr("api.middlewares.async_session_maker", SessionContext)
+    monkeypatch.setattr(
+        "api.middlewares.import_legacy_file_to_provider_settings",
+        import_config,
+    )
 
     monkeypatch.setattr(
         "api.middlewares.refresh_process_runtime_settings",

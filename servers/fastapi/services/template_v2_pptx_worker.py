@@ -19,6 +19,10 @@ from services.template_v2_pptx_retention_service import (
     start_template_v2_private_source_cleanup,
     stop_template_v2_private_source_cleanup,
 )
+from services.runtime_settings_coordinator import (
+    start_runtime_settings_coordinator,
+    stop_runtime_settings_coordinator,
+)
 from templates.v2.policy import get_structured_template_policy
 from utils.get_env import get_app_data_directory_env
 
@@ -50,6 +54,8 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
+    await start_runtime_settings_coordinator()
+    coordinator_started = True
     stop = stop or asyncio.Event()
     cleanup_started = False
     dispatcher_started = False
@@ -63,14 +69,18 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
         await stop.wait()
     finally:
         try:
-            if dispatcher_started:
-                await stop_template_v2_pptx_dispatcher()
+            if coordinator_started:
+                await stop_runtime_settings_coordinator()
         finally:
             try:
-                if cleanup_started:
-                    await stop_template_v2_private_source_cleanup()
+                if dispatcher_started:
+                    await stop_template_v2_pptx_dispatcher()
             finally:
-                await dispose_engines()
+                try:
+                    if cleanup_started:
+                        await stop_template_v2_private_source_cleanup()
+                finally:
+                    await dispose_engines()
 
 
 def main() -> None:

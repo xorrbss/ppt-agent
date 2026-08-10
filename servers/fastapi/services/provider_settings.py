@@ -1,60 +1,64 @@
 import asyncio
+from dataclasses import dataclass
 import logging
 from typing import Any
 from weakref import WeakKeyDictionary
 
-from pydantic import ValidationError
-from sqlalchemy import create_engine, select
+from sqlalchemy import insert, select, update
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.provider_settings import ProviderSettings
-from models.user_config import UserConfig
-from constants.settings_registry import get_settings_registry
+from services.provider_settings_values import (
+    ProviderSettingsValidationError as ProviderSettingsValidationError,
+    REDACTED_SECRET_PLACEHOLDER as REDACTED_SECRET_PLACEHOLDER,
+    merge_provider_settings as merge_provider_settings,
+    redact_provider_settings as redact_provider_settings,
+    sanitize_provider_settings as sanitize_provider_settings,
+    sanitize_provider_settings_for_storage,
+)
+from services.provider_settings_retry import (
+    PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS,
+    provider_settings_retry_pause as _retry_pause,
+)
+from services.provider_settings_legacy import (
+    LEGACY_PROVIDER_SETTINGS_PENDING_REFRESH_KEY as LEGACY_PROVIDER_SETTINGS_PENDING_REFRESH_KEY,
+    LEGACY_PROVIDER_SETTINGS_REVISION_KEY as LEGACY_PROVIDER_SETTINGS_REVISION_KEY,
+    legacy_pending_refresh_token as _legacy_pending_refresh_token,
+    legacy_provider_settings_revision as _legacy_revision,
+    mirror_provider_settings_to_legacy_file as _mirror_to_legacy_file,
+)
 from utils.datetime_utils import get_current_utc_datetime
-from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
 from utils.get_env import get_user_config_path_env
-from utils.runtime_settings import coerce_runtime_setting
-from utils.user_config_store import read_user_config_file, update_user_config_file
+from utils.user_config_store import read_user_config_file
 
 
 logger = logging.getLogger(__name__)
 
 PROVIDER_SETTINGS_ID = 1
-CODEX_MANAGED_FIELDS = {
-    "CODEX_ACCESS_TOKEN",
-    "CODEX_REFRESH_TOKEN",
-    "CODEX_TOKEN_EXPIRES",
-    "CODEX_ACCOUNT_ID",
-    "CODEX_USERNAME",
-    "CODEX_EMAIL",
-    "CODEX_IS_PRO",
-}
-EMPTY_VALUE_PRESERVED_FIELDS = {
-    "OPEN_WEBUI_IMAGE_URL",
-    "OPEN_WEBUI_IMAGE_API_KEY",
-    "CODEX_MODEL",
-}
-PROVIDER_SETTING_KEYS = frozenset(
-    entry["key"]
-    for entry in get_settings_registry()
-    if {
-        "start.user_config",
-        "user_config.managed",
-        "user_config.ui",
-    }.intersection(entry["targets"])
-)
-SECRET_SETTING_KEYS = frozenset(
-    entry["key"] for entry in get_settings_registry() if entry["secret"]
-)
-REDACTED_SECRET_PLACEHOLDER = "__configured__"
 _UPDATE_LOCKS: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
     WeakKeyDictionary()
 )
 
 
-class ProviderSettingsValidationError(ValueError):
-    def __init__(self, key: str):
-        super().__init__(f"Invalid provider setting: {key}")
+class ProviderSettingsConcurrencyError(RuntimeError):
+    def __init__(self):
+        super().__init__("provider settings write could not be completed")
+
+
+def _raise_concurrency_exhausted(attempt: int, error_class: str) -> None:
+    logger.warning(
+        "provider settings write outcome=exhausted attempt=%d error=%s",
+        attempt + 1,
+        error_class,
+    )
+    raise ProviderSettingsConcurrencyError() from None
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderSettingsRecord:
+    revision: int
+    config: dict[str, Any]
 
 
 def get_provider_settings_update_lock() -> asyncio.Lock:
@@ -66,180 +70,374 @@ def get_provider_settings_update_lock() -> asyncio.Lock:
     return lock
 
 
-def sanitize_provider_settings(config: dict[str, Any]) -> dict[str, Any]:
-    """Allow only registry-declared provider settings and validate their types."""
-    filtered = {
-        key: value
-        for key, value in config.items()
-        if key in PROVIDER_SETTING_KEYS
-    }
-    try:
-        validated = UserConfig(**filtered).model_dump(exclude_none=True)
-    except ValidationError as error:
-        location = error.errors()[0].get("loc", ("unknown",))
-        raise ProviderSettingsValidationError(str(location[0])) from None
-
-    result: dict[str, Any] = {}
-    for key, value in validated.items():
-        try:
-            coerced = coerce_runtime_setting(key, value)
-        except (TypeError, ValueError):
-            raise ProviderSettingsValidationError(key) from None
-        result[key] = value if value == "" else coerced
-    return result
+def _sanitize_for_storage(config: dict[str, Any]) -> dict[str, Any]:
+    return sanitize_provider_settings_for_storage(config)
 
 
-def redact_provider_settings(config: dict[str, Any]) -> dict[str, Any]:
-    """Return API-safe settings with configured secrets represented write-only."""
-    sanitized = sanitize_provider_settings(config)
-    return {
-        key: REDACTED_SECRET_PLACEHOLDER
-        if key in SECRET_SETTING_KEYS and value
-        else value
-        for key, value in sanitized.items()
-    }
-
-
-def merge_provider_settings(
-    existing: dict[str, Any], incoming: dict[str, Any]
-) -> dict[str, Any]:
-    """Preserve the previous settings API's patch and managed-token behavior."""
-    sanitized_existing = sanitize_provider_settings(existing)
-    sanitized = sanitize_provider_settings(incoming)
-    merged = {**sanitized_existing, **sanitized}
-
-    for key in SECRET_SETTING_KEYS:
-        if sanitized.get(key) == REDACTED_SECRET_PLACEHOLDER:
-            existing_secret = sanitized_existing.get(key)
-            if existing_secret and existing_secret != REDACTED_SECRET_PLACEHOLDER:
-                merged[key] = existing_secret
-            else:
-                merged.pop(key, None)
-        elif (
-            key not in sanitized
-            and sanitized_existing.get(key) == REDACTED_SECRET_PLACEHOLDER
-        ):
-            # The placeholder is an API representation, never a credential. If
-            # an older writer persisted it, clean it up on the next update.
-            merged.pop(key, None)
-
-    for key in CODEX_MANAGED_FIELDS:
-        if key in existing:
-            merged[key] = existing[key]
-        else:
-            merged.pop(key, None)
-
-    for key in EMPTY_VALUE_PRESERVED_FIELDS:
-        if not sanitized.get(key) and key in existing:
-            merged[key] = existing[key]
-
-    return merged
-
-
-def _mirror_to_legacy_file(config: dict[str, Any]) -> None:
-    """Mirror DB settings for code paths that still consume userConfig.json."""
-    path = get_user_config_path_env()
-    if not path:
-        return
-
-    def replace_provider_config(existing: dict[str, Any]) -> dict[str, Any]:
-        mirrored = dict(config)
-        # Authentication is database-backed now, but the compatibility file is
-        # also the rollback/recovery copy. Never discard its credential fields.
-        for key, value in existing.items():
-            if key.upper().startswith("AUTH_"):
-                mirrored[key] = value
-        return mirrored
-
-    update_user_config_file(path, replace_provider_config)
-
-
-async def migrate_provider_settings_from_file(session: AsyncSession) -> dict[str, Any]:
-    """One-time startup import, followed by DB-to-file compatibility syncing."""
-    row = await session.get(ProviderSettings, PROVIDER_SETTINGS_ID)
-    path = get_user_config_path_env()
-
-    if row is None:
-        legacy_config = await asyncio.to_thread(read_user_config_file, path) if path else {}
-        row = ProviderSettings(
-            id=PROVIDER_SETTINGS_ID,
-            config=sanitize_provider_settings(legacy_config),
+async def _read_provider_settings_record(
+    session: AsyncSession,
+) -> ProviderSettingsRecord | None:
+    table = ProviderSettings.__table__
+    result = await session.execute(
+        select(table.c.revision, table.c.config).where(
+            table.c.id == PROVIDER_SETTINGS_ID
         )
-        session.add(row)
-        await session.commit()
-        await session.refresh(row)
-        logger.info("Migrated provider settings from userConfig.json into the database.")
-    else:
-        sanitized = sanitize_provider_settings(dict(row.config or {}))
-        if sanitized != row.config:
-            row.config = sanitized
-            row.updated_at = get_current_utc_datetime()
-            await session.commit()
+    )
+    row = result.one_or_none()
+    if row is None:
+        return None
+    return ProviderSettingsRecord(
+        revision=int(row.revision),
+        config=dict(row.config or {}),
+    )
 
-    config = dict(row.config or {})
-    await asyncio.to_thread(_mirror_to_legacy_file, config)
-    return config
+
+async def _mirror_to_legacy_file_best_effort(
+    record: ProviderSettingsRecord,
+    *,
+    force: bool = False,
+    expected_pending_token: str | None = None,
+    fence_pending_token: bool = False,
+) -> None:
+    try:
+        await asyncio.to_thread(
+            _mirror_to_legacy_file,
+            record.config,
+            record.revision,
+            force=force,
+            expected_pending_token=expected_pending_token,
+            fence_pending_token=fence_pending_token,
+        )
+    except Exception as error:
+        logger.warning(
+            "provider settings mirror outcome=failed revision=%d error=%s",
+            record.revision,
+            type(error).__name__,
+        )
+
+
+async def _recover_pending_startup_write(
+    session: AsyncSession,
+    legacy_config: dict[str, Any],
+    record: ProviderSettingsRecord,
+) -> ProviderSettingsRecord:
+    pending_token = _legacy_pending_refresh_token(legacy_config)
+    base_revision = _legacy_revision(legacy_config)
+    if pending_token is None or base_revision is None:
+        return record
+
+    if base_revision == record.revision:
+        try:
+            committed = await save_provider_settings_record(
+                session,
+                legacy_config,
+                expected_revision=base_revision,
+            )
+        except ProviderSettingsConcurrencyError:
+            latest = await _read_provider_settings_record(session)
+            if latest is None or latest.revision == base_revision:
+                logger.warning(
+                    "provider settings pending startup outcome=failed revision=%d",
+                    base_revision,
+                )
+                raise ProviderSettingsConcurrencyError() from None
+            record = latest
+        else:
+            await _mirror_to_legacy_file_best_effort(
+                committed,
+                force=True,
+                expected_pending_token=pending_token,
+            )
+            logger.info(
+                "provider settings pending startup outcome=applied revision=%d",
+                committed.revision,
+            )
+            return committed
+
+    await _mirror_to_legacy_file_best_effort(
+        record,
+        force=True,
+        expected_pending_token=pending_token,
+    )
+    logger.info(
+        "provider settings pending startup outcome=recovered revision=%d",
+        record.revision,
+    )
+    return record
+
+
+async def migrate_provider_settings_from_file_record(
+    session: AsyncSession,
+) -> ProviderSettingsRecord:
+    """One-time startup import, followed by DB-to-file compatibility syncing."""
+    path = get_user_config_path_env()
+    legacy_config = (
+        await asyncio.to_thread(read_user_config_file, path) if path else {}
+    )
+    initial_config = _sanitize_for_storage(legacy_config)
+    initial_pending_token = _legacy_pending_refresh_token(legacy_config)
+    table = ProviderSettings.__table__
+    created = False
+
+    for attempt in range(PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS):
+        try:
+            record = await _read_provider_settings_record(session)
+            if record is None:
+                try:
+                    await session.execute(
+                        insert(table).values(
+                            id=PROVIDER_SETTINGS_ID,
+                            config=initial_config,
+                            revision=0,
+                            updated_at=get_current_utc_datetime(),
+                        )
+                    )
+                    await session.commit()
+                    record = ProviderSettingsRecord(0, initial_config)
+                    created = True
+                    logger.info(
+                        "provider settings initialization outcome=created revision=0"
+                    )
+                except IntegrityError:
+                    await session.rollback()
+                    if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
+                        _raise_concurrency_exhausted(attempt, "IntegrityError")
+                    await _retry_pause(attempt)
+                    continue
+            else:
+                record = await _recover_pending_startup_write(
+                    session,
+                    legacy_config,
+                    record,
+                )
+                cleaned = _sanitize_for_storage(record.config)
+                if cleaned != record.config:
+                    record = await save_provider_settings_record(
+                        session,
+                        cleaned,
+                        replace=True,
+                    )
+            await _mirror_to_legacy_file_best_effort(
+                record,
+                force=created,
+                expected_pending_token=initial_pending_token,
+                fence_pending_token=created,
+            )
+            return record
+        except OperationalError:
+            await session.rollback()
+            if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
+                _raise_concurrency_exhausted(attempt, "OperationalError")
+            await _retry_pause(attempt)
+    _raise_concurrency_exhausted(
+        PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS - 1,
+        ProviderSettingsConcurrencyError.__name__,
+    )
+
+
+async def migrate_provider_settings_from_file(
+    session: AsyncSession,
+) -> dict[str, Any]:
+    return (await migrate_provider_settings_from_file_record(session)).config
 
 
 async def get_provider_settings(session: AsyncSession) -> dict[str, Any]:
-    row = await session.get(ProviderSettings, PROVIDER_SETTINGS_ID)
-    if row is None:
-        return await migrate_provider_settings_from_file(session)
-    return sanitize_provider_settings(dict(row.config or {}))
+    return (await get_provider_settings_record(session)).config
+
+
+async def get_provider_settings_record(
+    session: AsyncSession,
+) -> ProviderSettingsRecord:
+    record = await _read_provider_settings_record(session)
+    if record is None:
+        return await migrate_provider_settings_from_file_record(session)
+    cleaned = _sanitize_for_storage(record.config)
+    if cleaned != record.config:
+        return await save_provider_settings_record(
+            session,
+            cleaned,
+            replace=True,
+        )
+    return ProviderSettingsRecord(record.revision, cleaned)
+
+
+async def get_provider_settings_revision(session: AsyncSession) -> int | None:
+    table = ProviderSettings.__table__
+    result = await session.execute(
+        select(table.c.revision).where(table.c.id == PROVIDER_SETTINGS_ID)
+    )
+    revision = result.scalar_one_or_none()
+    return int(revision) if revision is not None else None
 
 
 async def save_provider_settings(
     session: AsyncSession, incoming: dict[str, Any]
 ) -> dict[str, Any]:
-    row = await session.get(ProviderSettings, PROVIDER_SETTINGS_ID)
-    if row is None:
-        existing: dict[str, Any] = {}
-        row = ProviderSettings(id=PROVIDER_SETTINGS_ID, config={})
-        session.add(row)
-    else:
-        existing = dict(row.config or {})
-
-    row.config = merge_provider_settings(existing, incoming)
-    row.updated_at = get_current_utc_datetime()
-    await session.commit()
-    await session.refresh(row)
-
-    config = dict(row.config or {})
-    await asyncio.to_thread(_mirror_to_legacy_file, config)
-    return config
+    return (await save_provider_settings_record(session, incoming)).config
 
 
-def sync_legacy_file_to_provider_settings() -> None:
-    """Persist changes made by remaining synchronous userConfig writers.
+async def save_provider_settings_record(
+    session: AsyncSession,
+    incoming: dict[str, Any],
+    *,
+    replace: bool = False,
+    expected_revision: int | None = None,
+) -> ProviderSettingsRecord:
+    """Merge and commit provider settings with bounded optimistic CAS retries."""
+    sanitized_incoming = _sanitize_for_storage(incoming)
+    table = ProviderSettings.__table__
 
-    Codex token refresh currently occurs in synchronous provider code, so this
-    narrow compatibility bridge keeps those rare writes in the DB as well.
-    """
+    for attempt in range(PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS):
+        retry_error_class = ProviderSettingsConcurrencyError.__name__
+        try:
+            seen = await _read_provider_settings_record(session)
+            if expected_revision is not None and (
+                seen is None or seen.revision != expected_revision
+            ):
+                await session.rollback()
+                raise ProviderSettingsConcurrencyError() from None
+            if seen is None:
+                try:
+                    await session.execute(
+                        insert(table).values(
+                            id=PROVIDER_SETTINGS_ID,
+                            config={},
+                            revision=0,
+                            updated_at=get_current_utc_datetime(),
+                        )
+                    )
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+                if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
+                    _raise_concurrency_exhausted(
+                        attempt,
+                        ProviderSettingsConcurrencyError.__name__,
+                    )
+                await _retry_pause(attempt)
+                continue
+
+            existing = _sanitize_for_storage(seen.config)
+            merged = (
+                sanitized_incoming
+                if replace
+                else merge_provider_settings(existing, incoming)
+            )
+            merged = _sanitize_for_storage(merged)
+            if merged == existing and seen.config == existing:
+                result = await session.execute(
+                    update(table)
+                    .where(
+                        table.c.id == PROVIDER_SETTINGS_ID,
+                        table.c.revision == seen.revision,
+                    )
+                    .values(revision=table.c.revision)
+                )
+                if result.rowcount == 1:
+                    await session.commit()
+                    committed = ProviderSettingsRecord(seen.revision, existing)
+                    await _mirror_to_legacy_file_best_effort(committed)
+                    return committed
+                await session.rollback()
+                if expected_revision is not None:
+                    raise ProviderSettingsConcurrencyError() from None
+                if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
+                    _raise_concurrency_exhausted(
+                        attempt,
+                        ProviderSettingsConcurrencyError.__name__,
+                    )
+                await _retry_pause(attempt)
+                continue
+
+            result = await session.execute(
+                update(table)
+                .where(
+                    table.c.id == PROVIDER_SETTINGS_ID,
+                    table.c.revision == seen.revision,
+                )
+                .values(
+                    config=merged,
+                    revision=table.c.revision + 1,
+                    updated_at=get_current_utc_datetime(),
+                )
+            )
+            if result.rowcount == 1:
+                await session.commit()
+                committed = ProviderSettingsRecord(seen.revision + 1, merged)
+                await _mirror_to_legacy_file_best_effort(committed)
+                return committed
+            await session.rollback()
+            if expected_revision is not None:
+                raise ProviderSettingsConcurrencyError() from None
+        except OperationalError:
+            await session.rollback()
+            retry_error_class = "OperationalError"
+
+        if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
+            _raise_concurrency_exhausted(
+                attempt,
+                retry_error_class,
+            )
+        await _retry_pause(attempt)
+    _raise_concurrency_exhausted(
+        PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS - 1,
+        ProviderSettingsConcurrencyError.__name__,
+    )
+
+
+async def import_legacy_file_to_provider_settings(
+    session: AsyncSession,
+) -> ProviderSettingsRecord:
+    """Import Electron's already-durable compatibility write through DB CAS."""
     path = get_user_config_path_env()
     if not path:
-        return
-    config = sanitize_provider_settings(read_user_config_file(path))
-    database_url, _ = get_database_url_and_connect_args()
-    engine = create_engine(to_sync_sqlalchemy_url(database_url))
+        raise RuntimeError("provider settings compatibility file unavailable")
+    config = await asyncio.to_thread(read_user_config_file, path)
+    expected_revision = _legacy_revision(config)
+    pending_token = _legacy_pending_refresh_token(config)
+    if expected_revision is None or pending_token is None:
+        raise ProviderSettingsConcurrencyError() from None
     try:
-        with engine.begin() as connection:
-            table = ProviderSettings.__table__
-            exists = connection.execute(
-                select(table.c.id).where(table.c.id == PROVIDER_SETTINGS_ID)
-            ).scalar_one_or_none()
-            values = {
-                "config": config,
-                "updated_at": get_current_utc_datetime(),
-            }
-            if exists is None:
-                connection.execute(
-                    table.insert().values(id=PROVIDER_SETTINGS_ID, **values)
-                )
-            else:
-                connection.execute(
-                    table.update()
-                    .where(table.c.id == PROVIDER_SETTINGS_ID)
-                    .values(**values)
-                )
-    finally:
-        engine.dispose()
+        committed = await save_provider_settings_record(
+            session,
+            config,
+            expected_revision=expected_revision,
+        )
+    except ProviderSettingsConcurrencyError:
+        try:
+            latest = await get_provider_settings_record(session)
+            await _mirror_to_legacy_file_best_effort(
+                latest,
+                force=True,
+                expected_pending_token=pending_token,
+            )
+        except Exception as error:
+            logger.warning(
+                "provider settings pending recovery outcome=failed error=%s",
+                type(error).__name__,
+            )
+        raise ProviderSettingsConcurrencyError() from None
+
+    try:
+        await asyncio.to_thread(
+            _mirror_to_legacy_file,
+            committed.config,
+            committed.revision,
+            force=True,
+            expected_pending_token=pending_token,
+        )
+    except Exception as error:
+        logger.warning(
+            "provider settings pending completion outcome=failed error=%s",
+            type(error).__name__,
+        )
+        raise ProviderSettingsConcurrencyError() from None
+    return committed
+
+
+def sync_legacy_file_to_provider_settings(*, managed_updates=None):
+    from services.provider_settings_sync import (
+        sync_legacy_file_to_provider_settings as sync_bridge,
+    )
+
+    return sync_bridge(managed_updates=managed_updates)

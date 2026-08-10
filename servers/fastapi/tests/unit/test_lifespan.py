@@ -9,6 +9,20 @@ from api import lifespan
 from services.workspace_runtime_profile import UnsupportedWorkspaceRuntimeError
 
 
+@pytest.fixture(autouse=True)
+def _stub_runtime_settings_coordinator(monkeypatch):
+    monkeypatch.setattr(
+        lifespan,
+        "start_runtime_settings_coordinator",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        lifespan,
+        "stop_runtime_settings_coordinator",
+        AsyncMock(),
+    )
+
+
 def test_managed_database_guard_precedes_schema_mutation(monkeypatch):
     migrate = AsyncMock()
     create_tables = AsyncMock()
@@ -148,6 +162,8 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     lifespan.stop_export_retention_sweeper.assert_awaited_once_with()
     lifespan.start_workspace_cleanup_maintenance.assert_awaited_once_with()
     lifespan.stop_workspace_cleanup_maintenance.assert_awaited_once_with()
+    lifespan.start_runtime_settings_coordinator.assert_awaited_once_with()
+    lifespan.stop_runtime_settings_coordinator.assert_awaited_once_with()
 
 
 def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_path):

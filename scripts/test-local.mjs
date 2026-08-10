@@ -534,7 +534,6 @@ runStep({
   }),
   preconditionDescription: "Node 22, Chrome/Chromium, LibreOffice, and Poppler pdftocairo",
 });
-
 const postgresSelected = requested("--with-postgres");
 const postgresUrl = process.env.PPT_AGENT_POSTGRES_TEST_URL;
 runStep({
@@ -549,6 +548,7 @@ runStep({
     join(pytestBaseDirectory, "postgres"),
     "tests/integration/test_postgresql_async_task_read_facade.py",
     "tests/integration/test_postgresql_authored_cluster_quota.py",
+    "tests/integration/test_postgresql_provider_settings_sync.py",
     "tests/integration/test_postgresql_template_v2_migrations.py",
     "tests/integration/test_postgresql_template_v2_canary_rollback.py",
     "tests/integration/test_postgresql_workspace.py",
@@ -580,7 +580,6 @@ runStep({
   preconditionDescription:
     "running disposable PostgreSQL database whose name ends in test/tests; never a shared or managed database",
 });
-
 const electronSelected = requested("--with-electron");
 const electronPrecondition = withNode22(() => isWindows ? null : "the release gate is Windows-only");
 runStep({
@@ -610,6 +609,7 @@ for (const script of [
   "test:package-preflight",
   "test:build-config",
   "test:update-channel",
+  "test:runtime-settings-refresh",
 ]) {
   runStep({
     name: `Electron ${script}`,

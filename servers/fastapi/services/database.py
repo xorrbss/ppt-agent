@@ -1,11 +1,13 @@
 from collections.abc import AsyncGenerator
+import time
+
+from sqlalchemy import BigInteger, event, inspect, or_, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     create_async_engine,
     async_sessionmaker,
     AsyncSession,
 )
-from sqlalchemy import event, or_
 from sqlalchemy.orm import Session, with_loader_criteria
 from sqlmodel import SQLModel
 
@@ -67,17 +69,47 @@ sql_engine: AsyncEngine = create_async_engine(
 if "sqlite" in database_url:
     @event.listens_for(sql_engine.sync_engine, "connect")
     def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        try:
-            # sqlite-local supports a separate worker process. WAL keeps API
-            # reads available while that worker publishes a short write, and
-            # busy_timeout absorbs the remaining writer/writer hand-off.
-            cursor.execute("PRAGMA busy_timeout=30000")
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.fetchone()
-            cursor.execute("PRAGMA foreign_keys=ON")
-        finally:
-            cursor.close()
+        _configure_sqlite_connection(dbapi_connection)
+
+
+def _configure_sqlite_connection(dbapi_connection) -> None:
+    """Apply and verify SQLite process-safety pragmas with bounded WAL retry."""
+    cursor = dbapi_connection.cursor()
+    try:
+        # Bound each journal transition attempt independently; after WAL is
+        # established, normal database work receives the longer busy timeout.
+        cursor.execute("PRAGMA busy_timeout=250")
+        journal_mode_supported = False
+        for attempt in range(6):
+            try:
+                cursor.execute("PRAGMA journal_mode=WAL")
+                result = cursor.fetchone()
+                mode = str(result[0]).strip().lower() if result else ""
+                # SQLite's true in-memory databases report ``memory`` and
+                # cannot enter WAL mode. They are not a multiprocess target.
+                journal_mode_supported = mode in {"wal", "memory"}
+                if journal_mode_supported:
+                    break
+            except Exception:
+                if attempt == 5:
+                    break
+            time.sleep(min(0.01 * (2**attempt), 0.1))
+        if not journal_mode_supported:
+            raise RuntimeError("sqlite_wal_configuration_failed") from None
+
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA busy_timeout")
+        busy_timeout = cursor.fetchone()
+        if not busy_timeout or int(busy_timeout[0]) < 30000:
+            raise RuntimeError("sqlite_busy_timeout_configuration_failed")
+
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA foreign_keys")
+        foreign_keys = cursor.fetchone()
+        if not foreign_keys or int(foreign_keys[0]) != 1:
+            raise RuntimeError("sqlite_foreign_keys_configuration_failed")
+    finally:
+        cursor.close()
 
 
 async_session_maker = async_sessionmaker(sql_engine, expire_on_commit=False)
@@ -206,6 +238,40 @@ async def create_db_and_tables():
                     ],
                 )
             )
+            await conn.run_sync(_ensure_provider_settings_revision_column)
+
+
+def _ensure_provider_settings_revision_column(connection) -> None:
+    """Top up metadata-created legacy databases when Alembic is disabled."""
+    inspector = inspect(connection)
+    if "provider_settings" not in inspector.get_table_names():
+        return
+    columns = {
+        column["name"]: column
+        for column in inspector.get_columns("provider_settings")
+    }
+    if "revision" not in columns:
+        connection.execute(
+            text(
+                "ALTER TABLE provider_settings "
+                "ADD COLUMN revision BIGINT NOT NULL DEFAULT 0"
+            )
+        )
+        return
+
+    revision = columns["revision"]
+    default = (
+        str(revision.get("default"))
+        .lower()
+        .replace("::bigint", "")
+        .strip("'\"() ")
+    )
+    if (
+        not isinstance(revision.get("type"), BigInteger)
+        or revision.get("nullable", True)
+        or default != "0"
+    ):
+        raise RuntimeError("Provider settings revision column is incompatible")
 
 
 async def dispose_engines():

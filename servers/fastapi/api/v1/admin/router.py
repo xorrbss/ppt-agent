@@ -28,12 +28,13 @@ from services.account_deletion_service import (
 )
 from services.database import get_async_session
 from services.provider_settings import (
+    ProviderSettingsConcurrencyError,
     ProviderSettingsValidationError,
     REDACTED_SECRET_PLACEHOLDER,
     get_provider_settings,
     get_provider_settings_update_lock,
     redact_provider_settings,
-    save_provider_settings,
+    save_provider_settings_record,
 )
 from utils.available_models import list_available_openai_compatible_models
 from services.workspace_cleanup_journal_service import (
@@ -90,11 +91,19 @@ async def update_provider_settings(
     _ensure_settings_are_mutable()
     async with get_provider_settings_update_lock():
         try:
-            saved = await save_provider_settings(session, config)
+            committed = await save_provider_settings_record(session, config)
         except ProviderSettingsValidationError as error:
             raise HTTPException(status_code=422, detail=str(error)) from None
-        refresh_process_runtime_settings(persisted_config=saved)
-        return redact_provider_settings(saved)
+        except ProviderSettingsConcurrencyError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Provider settings changed; retry the request",
+            ) from None
+        refresh_process_runtime_settings(
+            persisted_config=committed.config,
+            revision=committed.revision,
+        )
+        return redact_provider_settings(committed.config)
 
 
 @API_V1_ADMIN_ROUTER.post("/provider-settings/custom-model-available")

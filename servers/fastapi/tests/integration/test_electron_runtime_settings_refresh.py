@@ -13,7 +13,12 @@ import pytest
 import uvicorn
 
 from api.middlewares import RuntimeSettingsContextMiddleware
-from utils.runtime_settings import get_process_runtime_settings, resolve_runtime_settings
+from services.provider_settings import ProviderSettingsRecord
+from utils.runtime_settings import (
+    get_process_runtime_settings,
+    get_process_runtime_settings_envelope,
+    resolve_runtime_settings,
+)
 from utils.user_config import refresh_process_runtime_settings
 
 
@@ -66,6 +71,26 @@ def test_compiled_electron_client_refreshes_the_live_fastapi_snapshot(
         encoding="utf-8",
     )
     refresh_process_runtime_settings()
+
+    class SessionContext:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    async def import_config(_session):
+        current = get_process_runtime_settings_envelope()
+        return ProviderSettingsRecord(
+            revision=(current.revision if current is not None else 0) + 1,
+            config=json.loads(config_path.read_text(encoding="utf-8")),
+        )
+
+    monkeypatch.setattr("api.middlewares.async_session_maker", SessionContext)
+    monkeypatch.setattr(
+        "api.middlewares.import_legacy_file_to_provider_settings",
+        import_config,
+    )
 
     app = FastAPI()
     app.add_middleware(RuntimeSettingsContextMiddleware)

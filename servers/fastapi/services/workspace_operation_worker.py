@@ -21,6 +21,10 @@ from services.presentation_deletion_operation_handler import (
 from services.presentation_generation_operation_handler import (
     register_presentation_generation_operation_handler,
 )
+from services.runtime_settings_coordinator import (
+    start_runtime_settings_coordinator,
+    stop_runtime_settings_coordinator,
+)
 from services.workspace_asset_service import (
     require_workspace_asset_malware_scan_safety,
 )
@@ -81,6 +85,8 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
+    await start_runtime_settings_coordinator()
+    coordinator_started = True
     stop = stop or asyncio.Event()
     runner_started = False
     metrics_exporter = None
@@ -93,14 +99,18 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
         await stop.wait()
     finally:
         try:
-            if runner_started:
-                await stop_workspace_operation_runner()
+            if coordinator_started:
+                await stop_runtime_settings_coordinator()
         finally:
             try:
-                if metrics_exporter is not None:
-                    await metrics_exporter.close()
+                if runner_started:
+                    await stop_workspace_operation_runner()
             finally:
-                await dispose_engines()
+                try:
+                    if metrics_exporter is not None:
+                        await metrics_exporter.close()
+                finally:
+                    await dispose_engines()
 
 
 def main() -> None:

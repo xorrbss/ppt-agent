@@ -78,6 +78,10 @@ jobs:
           npm run test:audit-release --prefix electron
           npm run audit:release --prefix electron
 
+      - name: Test Electron runtime settings refresh contract
+        working-directory: electron
+        run: npm run test:runtime-settings-refresh
+
       - name: Test operational preflight policy
         run: node --test scripts/operational-release-preflight.test.mjs
 

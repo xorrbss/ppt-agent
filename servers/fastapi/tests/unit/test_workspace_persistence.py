@@ -387,7 +387,7 @@ def test_workspace_migration_upgrades_sqlite(tmp_path: Path):
                     set(inspector.get_table_names()),
                     migrations.REVISION_ACCOUNT_DELETION_FENCE,
                 )
-                    == migrations.REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS
+                    == migrations.HEAD_REVISION
             )
     finally:
         engine.dispose()

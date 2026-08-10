@@ -45,6 +45,12 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     )
     monkeypatch.setattr(worker, "migrate_database_on_startup", AsyncMock())
     monkeypatch.setattr(worker, "create_db_and_tables", AsyncMock())
+    monkeypatch.setattr(
+        worker, "start_runtime_settings_coordinator", AsyncMock()
+    )
+    monkeypatch.setattr(
+        worker, "stop_runtime_settings_coordinator", AsyncMock()
+    )
     monkeypatch.setattr(worker, "register_workspace_operation_handlers", Mock())
     metrics_exporter = SimpleNamespace(close=AsyncMock())
     monkeypatch.setattr(
@@ -60,10 +66,12 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
 
     worker.migrate_database_on_startup.assert_awaited_once_with()
     worker.create_db_and_tables.assert_awaited_once_with()
+    worker.start_runtime_settings_coordinator.assert_awaited_once_with()
     worker.register_workspace_operation_handlers.assert_called_once_with()
     worker.start_workspace_worker_metrics_exporter.assert_awaited_once_with()
     worker.start_workspace_operation_runner.assert_awaited_once_with()
     worker.stop_workspace_operation_runner.assert_awaited_once_with()
+    worker.stop_runtime_settings_coordinator.assert_awaited_once_with()
     metrics_exporter.close.assert_awaited_once_with()
     worker.dispose_engines.assert_awaited_once_with()
 

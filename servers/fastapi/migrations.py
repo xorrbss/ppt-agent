@@ -11,6 +11,11 @@ from sqlalchemy import DateTime, Integer, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from alembic import command
+from migration_runtime_settings_schema import (
+    SLIDESPEC_ARTIFACT_BUNDLE_COLUMNS,
+    SLIDESPEC_PUBLICATION_ATTEMPT_COLUMNS,
+    provider_settings_sync_schema_revision,
+)
 from template_v2_schema_contract import (
     SLIDE_UI_CHECK_CONSTRAINT,
     TEMPLATE_V2_PRESENTATION_FK_DELETE_ACTIONS,
@@ -62,7 +67,8 @@ REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS = "fc3d5e7f9a1b"
 # stamped at the revision above and this one then tops up whatever is missing.
 REVISION_CLEANUP_JOURNAL_REDRIVE = "b3d7f1a9c2e4"
 REVISION_PRESENTATION_SEARCH_AND_SHARE_METRICS = "c4e8f0a2b6d9"
-HEAD_REVISION = REVISION_PRESENTATION_SEARCH_AND_SHARE_METRICS
+REVISION_PROVIDER_SETTINGS_SYNC = "d5a9c1e3f7b2"
+HEAD_REVISION = REVISION_PROVIDER_SETTINGS_SYNC
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {
@@ -348,40 +354,6 @@ ACCOUNT_DELETION_USER_CHECKS = {
     "ck_user_deletion_marker",
 }
 ACCOUNT_DELETION_USER_INDEXES = {"ix_user_deletion_state_requested_at"}
-SLIDESPEC_ARTIFACT_BUNDLE_COLUMNS = {
-    "id",
-    "presentation_id",
-    "slide_id",
-    "slide_index",
-    "spec_revision",
-    "route",
-    "status",
-    "base_spec_hash",
-    "candidate_spec_hash",
-    "render_input_hash",
-    "html_hash",
-    "render_hash",
-    "image_hash",
-    "spec",
-    "repair_plan",
-    "acceptance",
-    "evidence",
-    "manifest",
-    "publication_receipt",
-    "html",
-    "created_at",
-}
-SLIDESPEC_PUBLICATION_ATTEMPT_COLUMNS = {
-    "id",
-    "attempt_id",
-    "artifact_bundle_id",
-    "presentation_id",
-    "slide_id",
-    "state",
-    "reason_code",
-    "evidence",
-    "created_at",
-}
 DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "id",
     "task_id",
@@ -769,7 +741,13 @@ def _slidespec_schema_revision(
         publication_index.get("column_names") or ()
     ) != ("slide_id", "created_at") or bool(publication_index.get("unique")):
         raise RuntimeError("SlideSpec publication attempt index is incompatible")
-    return REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS
+    return provider_settings_sync_schema_revision(
+        inspector,
+        tables,
+        REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS,
+        prerequisite_revision=REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS,
+        applied_revision=REVISION_PROVIDER_SETTINGS_SYNC,
+    )
 
 
 def _durable_deletion_schema_revision(

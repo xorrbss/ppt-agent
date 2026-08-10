@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "c4e8f0a2b6d9",
+  "localTipRevision": "d5a9c1e3f7b2",
   "databaseCompatibility": {
     "verified": [
       {
@@ -73,7 +73,8 @@
     { "revision": "fb2c4d6e8a0b", "downRevision": "fa1b2c3d4e5f", "file": "fb2c4d6e8a0b_add_slidespec_artifact_bundles.py" },
     { "revision": "fc3d5e7f9a1b", "downRevision": "fb2c4d6e8a0b", "file": "fc3d5e7f9a1b_add_slidespec_publication_attempts.py" },
     { "revision": "b3d7f1a9c2e4", "downRevision": "fc3d5e7f9a1b", "file": "b3d7f1a9c2e4_backfill_cleanup_journal_redrive_columns.py" },
-    { "revision": "c4e8f0a2b6d9", "downRevision": "b3d7f1a9c2e4", "file": "c4e8f0a2b6d9_add_presentation_search_and_share_metrics.py" }
+    { "revision": "c4e8f0a2b6d9", "downRevision": "b3d7f1a9c2e4", "file": "c4e8f0a2b6d9_add_presentation_search_and_share_metrics.py" },
+    { "revision": "d5a9c1e3f7b2", "downRevision": "c4e8f0a2b6d9", "file": "d5a9c1e3f7b2_add_provider_settings_revision.py" }
   ],
   "translations": [
     {
@@ -225,6 +226,10 @@
     {
       "revision": "e1b3c5d7f9a2",
       "purpose": "Single primary-administrator enforcement"
+    },
+    {
+      "revision": "d5a9c1e3f7b2",
+      "purpose": "Monotonic provider-settings revision for multi-worker runtime synchronization"
     }
   ]
 }
