@@ -37,6 +37,14 @@ type StreamedSlide = Record<string, unknown> & { content?: unknown };
 /** SSE frames emitted by `/api/v1/ppt/presentation/stream/{id}`. */
 type PresentationStreamEvent =
   | { type: "chunk"; chunk: string }
+  | { type: "fonts"; fonts: Record<string, string> | null }
+  | {
+      type: "slide_html";
+      index: unknown;
+      html: unknown;
+      slide?: Slide | null;
+      slide_id?: string | null;
+    }
   | { type: "slide_assets"; slide_index: unknown; slide: Slide | null }
   | { type: "complete"; presentation: PresentationData }
   | { type: "closing"; presentation: PresentationData }
@@ -122,6 +130,34 @@ function mergeSlidesPreservingResolvedAssets(
       ),
     };
   });
+}
+
+function mergeSingleSlidePreservingResolvedAssets(
+  prevSlides: StreamedSlide[] | undefined,
+  incomingSlide: StreamedSlide
+): StreamedSlide[] {
+  const nextSlides = prevSlides ? [...prevSlides] : [];
+  const incomingIndex = Number(incomingSlide.index);
+  const fallbackIndex = Number.isFinite(incomingIndex)
+    ? incomingIndex
+    : nextSlides.length;
+  const matchIndex = nextSlides.findIndex(
+    (slide) =>
+      (incomingSlide.id && slide.id === incomingSlide.id) ||
+      Number(slide.index) === fallbackIndex
+  );
+  const targetIndex = matchIndex >= 0 ? matchIndex : fallbackIndex;
+  const previous = nextSlides[targetIndex];
+  nextSlides[targetIndex] = previous
+    ? {
+        ...incomingSlide,
+        content: mergeContentPreservingResolvedAssets(
+          previous.content,
+          incomingSlide.content
+        ),
+      }
+    : incomingSlide;
+  return nextSlides.filter(Boolean);
 }
 
 export const usePresentationStreaming = (
@@ -218,6 +254,55 @@ export const usePresentationStreaming = (
         }
 
         switch (data.type) {
+          case "fonts": {
+            if (data.fonts && typeof data.fonts === "object") {
+              const prev = store.getState().presentationGeneration.presentationData;
+              dispatch(
+                setPresentationData({
+                  ...(prev ?? {}),
+                  fonts: data.fonts,
+                  slides: prev?.slides ?? [],
+                } as PresentationData)
+              );
+            }
+            break;
+          }
+
+          case "slide_html": {
+            const slideIndex = Number(data.index);
+            const html = typeof data.html === "string" ? data.html : "";
+            if (!Number.isFinite(slideIndex) || !html) break;
+
+            const incomingSlide =
+              data.slide && typeof data.slide === "object"
+                ? data.slide
+                : {
+                    id: data.slide_id,
+                    index: slideIndex,
+                    layout: "smart-html",
+                    layout_group: "smart-html",
+                    content: { title: `Slide ${slideIndex + 1}` },
+                    html_content: html,
+                  };
+            const normalizedSlide = normalizeBackendAssetUrls(
+              incomingSlide
+            ) as unknown as StreamedSlide;
+            const prev = store.getState().presentationGeneration.presentationData;
+            const mergedSlides = mergeSingleSlidePreservingResolvedAssets(
+              prev?.slides,
+              normalizedSlide
+            );
+            dispatch(
+              setPresentationData({
+                ...(prev ?? {}),
+                slides: mergedSlides,
+              } as PresentationData)
+            );
+            previousSlidesLength.current = mergedSlides.length;
+            setLoading(false);
+            break;
+          }
+
           case "chunk":
             accumulatedChunks += data.chunk;
             try {

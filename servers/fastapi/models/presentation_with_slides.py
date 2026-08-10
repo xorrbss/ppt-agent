@@ -1,6 +1,6 @@
 from datetime import datetime
 import re
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 import uuid
 
 from pydantic import BaseModel, field_validator
@@ -22,6 +22,8 @@ class PresentationWithSlides(BaseModel):
     slides: List[SlideModel]
     theme: Optional[dict] = None
     fonts: Optional[Any] = None
+    generation_mode: Literal["standard", "smart"] = "standard"
+    community_design_ids: Optional[List[int]] = None
     # "template" | "adaptive" | "authored" — lets the editor read the deck's mode
     # explicitly instead of inferring it from theme/layout sentinels.
     mode: Optional[str] = None

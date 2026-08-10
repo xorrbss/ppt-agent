@@ -43,7 +43,7 @@ export const metadata: Metadata = {
 
 const page = () => {
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-dvh">
       <Header />
       <UploadPage />
     </div>

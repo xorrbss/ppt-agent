@@ -34,14 +34,14 @@ def reconcile_pending_slides(
 
     deleted_ids = {
         instance.id
-        for instance in session.deleted
+        for instance in getattr(session, "deleted", ())
         if isinstance(instance, SlideModel)
     }
     merged = [row for row in rows if row.id not in deleted_ids]
     seen_ids = {row.id for row in merged}
     merged.extend(
         instance
-        for instance in session.new
+        for instance in getattr(session, "new", ())
         if isinstance(instance, SlideModel)
         and instance.presentation == presentation_id
         and instance.id not in seen_ids

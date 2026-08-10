@@ -49,6 +49,4 @@ async def create_blank_presentation(
         raise
     await sql_session.refresh(presentation)
     await sql_session.refresh(slide)
-    return PresentationWithSlides(
-        **presentation.model_dump(), slides=[slide], fonts=None
-    )
+    return PresentationWithSlides(**presentation.model_dump(), slides=[slide])

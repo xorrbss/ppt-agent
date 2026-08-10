@@ -41,6 +41,8 @@ export const PresentationCard = ({
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [showShareDialog, setShowShareDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const presentationType =
+    presentation?.generation_mode === "smart" ? "smart" : "standard";
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -50,8 +52,9 @@ export const PresentationCard = ({
       presentation_id: id,
       title_length: (title || "").length,
       slide_count: presentation?.slides?.length || 0,
+      presentation_type: presentationType,
     });
-    router.push(`/presentation?id=${id}&type=standard`);
+    router.push(`/presentation?id=${id}&type=${presentationType}`);
   };
   useEffect(() => {
     // Unified theme application (base 16 vars + fonts + adaptive tone & manner

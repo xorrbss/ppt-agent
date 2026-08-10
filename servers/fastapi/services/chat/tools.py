@@ -16,9 +16,12 @@ from services.chat.schemas import (
     GenerateIconInput,
     GenerateImageInput,
     GetContentSchemaFromLayoutIdInput,
+    GetSmartPresentationContextInput,
     GetSlideAtIndexInput,
     NoArgsInput,
+    ReadSourceDocumentsInput,
     SaveSlideInput,
+    SaveSmartSlideInput,
     SearchSlidesInput,
     SetPresentationThemeInput,
     SlideUIToolInput,
@@ -69,6 +72,8 @@ class ChatTools:
             )
 
     def get_tool_definitions(self) -> list[Tool]:
+        if self._memory.presentation_type == "smart":
+            return self._get_smart_tool_definitions()
         tools = [
             Tool(
                 name="getPresentationOutline",
@@ -217,6 +222,76 @@ class ChatTools:
             for name in self._ui_tool_names()
         )
         return tools
+
+    def _get_smart_tool_definitions(self) -> list[Tool]:
+        return [
+            Tool(
+                name="getSmartPresentationContext",
+                description=(
+                    "Read Smart deck metadata, fonts, outlines, structure, and live "
+                    "HTML slide previews. Use before new slides, style changes, or "
+                    "multi-slide edits. Prefer includeSlideHtml=false; fetch exact "
+                    "target HTML with getSlideAtIndex."
+                ),
+                schema=GetSmartPresentationContextInput,
+                strict=False,
+            ),
+            Tool(
+                name="readSourceDocuments",
+                description=(
+                    "Read parsed source documents linked to this presentation when "
+                    "the user asks to use, summarize, quote, or visualize their content."
+                ),
+                schema=ReadSourceDocumentsInput,
+                strict=False,
+            ),
+            Tool(
+                name="searchSlide",
+                description=(
+                    "Search rendered Smart slide text and return matching slide indices "
+                    "and snippets."
+                ),
+                schema=SearchSlidesInput,
+                strict=False,
+            ),
+            Tool(
+                name="getSlideAtIndex",
+                description=(
+                    "Read one live Smart HTML slide by zero-based index. Set "
+                    "includeFullContent=true before every edit to receive the complete "
+                    "authoritative html field."
+                ),
+                schema=GetSlideAtIndexInput,
+                strict=False,
+            ),
+            Tool(
+                name="generateAssets",
+                description=(
+                    "Generate image or icon assets before inserting new visual URLs "
+                    "into Smart slide HTML."
+                ),
+                schema=GenerateAssetsInput,
+                strict=False,
+            ),
+            Tool(
+                name="saveSlide",
+                description=(
+                    "Replace or insert one Smart HTML slide. Pass the complete HTML "
+                    "fragment in html. For an edit, first read the slide, keep its "
+                    "design and scripts, and use replaceOldSlideAtIndex=true."
+                ),
+                schema=SaveSmartSlideInput,
+                strict=False,
+            ),
+            Tool(
+                name="deleteSlide",
+                description=(
+                    "Delete a Smart slide by zero-based index and reindex the rest."
+                ),
+                schema=DeleteSlideInput,
+                strict=False,
+            ),
+        ]
 
     async def execute_tool_call(self, tool_call: AssistantToolCall) -> dict[str, Any]:
         handler = self._tool_handlers.get(tool_call.name)
@@ -408,6 +483,15 @@ class ChatTools:
         }
 
     async def _save_slide(self, args: dict[str, Any]) -> dict[str, Any]:
+        if self._memory.presentation_type == "smart":
+            payload = SaveSmartSlideInput(**args)
+            return await self._memory.save_html_slide(
+                html=payload.html,
+                index=payload.index,
+                replace_old_slide_at_index=payload.replace_old_slide_at_index,
+                speaker_note=payload.speaker_note,
+            )
+
         payload_args = json.loads(json.dumps(dict(args), ensure_ascii=False))
         raw_content = payload_args.get("content")
         if isinstance(raw_content, dict):

@@ -9,10 +9,7 @@ interface PromptInputProps {
 }
 
 export function PromptInput({ value, onChange, onSubmit }: PromptInputProps) {
-
-
   const handleChange = (val: string) => {
-
     onChange(val);
   };
 
@@ -48,6 +45,5 @@ export function PromptInput({ value, onChange, onSubmit }: PromptInputProps) {
         className={`px-2 py-0 font-medium shadow-none font-syne indent-4 text-base min-h-[120px] max-h-[250px] focus-visible:ring-offset-0  focus-visible:ring-transparent focus-visible:ring-0 border-none overflow-y-auto  custom_scrollbar  `}
       />
     </div>
-
   );
 }

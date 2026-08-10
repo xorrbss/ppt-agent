@@ -9,6 +9,7 @@ from api.v1.ppt.endpoints.presentation_versions import PRESENTATION_VERSION_ROUT
 from api.v1.ppt.endpoints.presentation_share import PRESENTATION_SHARE_ROUTER
 from api.v1.ppt.endpoints.anthropic import ANTHROPIC_ROUTER
 from api.v1.ppt.endpoints.codex_auth import CODEX_AUTH_ROUTER
+from api.v1.ppt.endpoints.community import COMMUNITY_ROUTER
 from api.v1.ppt.endpoints.google import GOOGLE_ROUTER
 from api.v1.ppt.endpoints.openai import OPENAI_ROUTER
 from api.v1.ppt.endpoints.files import FILES_ROUTER
@@ -70,3 +71,4 @@ API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATE_IMPORTS_ROUTER)
 API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATES_ROUTER)
 API_V1_PPT_ROUTER.include_router(TEMPLATE_V2_COMPAT_ROUTER)
 API_V1_PPT_ROUTER.include_router(TEMPLATE_ROUTER)
+API_V1_PPT_ROUTER.include_router(COMMUNITY_ROUTER)

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import "@/app/(presentation-generator)/utils/prism-languages";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/presentation-export-strategy";
 import TemplateV2GeneralSlide from "./TemplateV2GeneralSlide";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
+import { useSmartChartInjection } from "@/app/(presentation-generator)/components/useSmartChartInjection";
 
 const PDF_PRINT_STYLE = `
   html,
@@ -129,6 +130,43 @@ function rasterizeSvgIconsForExport(root: HTMLElement): void {
 type PresentationPageProps = {
   presentation_id: string;
   initialPresentationData?: PresentationData;
+};
+
+const SmartHtmlPdfSlide = ({
+  slide,
+  index,
+}: {
+  slide: { id?: string | null; index?: number; html_content?: string | null };
+  index: number;
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const html = slide.html_content?.trim() ?? "";
+  const instanceId = useMemo(
+    () => `pdf-smart-${slide.id ?? index}`,
+    [index, slide.id]
+  );
+
+  useSmartChartInjection({
+    html,
+    instanceId,
+    domRevision: `${slide.index ?? "none"}:${index}`,
+    containerRef,
+  });
+
+  return (
+    <div className="smart-slide-export-root h-[720px] w-[1280px] overflow-hidden bg-white">
+      <div className="smart-slide-export-content h-[720px] w-[1280px] overflow-hidden bg-white">
+        <div
+          ref={containerRef}
+          data-smart-slide-instance={instanceId}
+          data-screenshot="true"
+          data-screenshot-include-children="true"
+          className="h-[720px] w-[1280px] overflow-hidden bg-white"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </div>
+    </div>
+  );
 };
 
 const PresentationPage = ({
@@ -341,6 +379,9 @@ const PresentationPage = ({
                     >
                       {exportStrategy === "template-v2-general" ? (
                         <TemplateV2GeneralSlide slide={slide} />
+                      ) : typeof slide?.html_content === "string" &&
+                        slide.html_content.trim() ? (
+                        <SmartHtmlPdfSlide slide={slide} index={index} />
                       ) : (
                         <SlideScale
                           slide={slide}

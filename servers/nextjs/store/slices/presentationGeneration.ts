@@ -42,6 +42,18 @@ export interface PresentationData {
   // elements). Narrowing this needs a discriminated slide model first.
   slides: any;
   theme: Theme | null;
+  generation_mode?: string;
+  fonts?: Record<string, string> | null;
+}
+
+export interface ChatHtmlSelection {
+  slideId?: string | null;
+  slideIndex: number;
+  slideNumber: number;
+  html: string;
+  elementTag?: string | null;
+  selectedText?: string;
+  selectedAt: number;
 }
 
 interface PresentationGenerationState {
@@ -53,6 +65,8 @@ interface PresentationGenerationState {
   presentationData: PresentationData | null;
   isSlidesRendered: boolean;
   isLayoutLoading: boolean;
+  enableHtmlSelector: boolean;
+  chatHtmlSelection: ChatHtmlSelection | null;
 }
 
 const initialState: PresentationGenerationState = {
@@ -64,6 +78,8 @@ const initialState: PresentationGenerationState = {
   isStreaming: null,
   error: null,
   presentationData: null,
+  enableHtmlSelector: false,
+  chatHtmlSelection: null,
 };
 
 const presentationGenerationSlice = createSlice({
@@ -82,6 +98,9 @@ const presentationGenerationSlice = createSlice({
     },
     // Presentation ID
     setPresentationId: (state, action: PayloadAction<string>) => {
+      if (state.presentation_id !== action.payload) {
+        state.chatHtmlSelection = null;
+      }
       state.presentation_id = action.payload;
       state.error = null;
     },
@@ -97,6 +116,7 @@ const presentationGenerationSlice = createSlice({
     // Clear presentation data
     clearPresentationData: (state) => {
       state.presentationData = null;
+      state.chatHtmlSelection = null;
     },
     clearOutlines: (state) => {
       state.outlines = [];
@@ -108,6 +128,20 @@ const presentationGenerationSlice = createSlice({
     // Set presentation data
     setPresentationData: (state, action: PayloadAction<PresentationData>) => {
       state.presentationData = action.payload;
+      state.chatHtmlSelection = null;
+    },
+    setEnableHtmlSelector: (state, action: PayloadAction<boolean>) => {
+      state.enableHtmlSelector = action.payload;
+      if (!action.payload) state.chatHtmlSelection = null;
+    },
+    setChatHtmlSelection: (
+      state,
+      action: PayloadAction<ChatHtmlSelection>
+    ) => {
+      state.chatHtmlSelection = action.payload;
+    },
+    clearChatHtmlSelection: (state) => {
+      state.chatHtmlSelection = null;
     },
     updateTitle: (state, action: PayloadAction<string>) => {
       if (state.presentationData) {
@@ -166,6 +200,25 @@ const presentationGenerationSlice = createSlice({
         state.presentationData.slides[action.payload.index] =
           action.payload.slide;
       }
+    },
+    updateSlideHtmlContent: (
+      state,
+      action: PayloadAction<{
+        slideIndex: number;
+        html: string;
+        slideId?: string | null;
+      }>
+    ) => {
+      const slides = state.presentationData?.slides;
+      if (!Array.isArray(slides)) return;
+
+      const slide =
+        (action.payload.slideId
+          ? slides.find((item: Slide) => item.id === action.payload.slideId)
+          : undefined) ??
+        slides.find((item: Slide) => item.index === action.payload.slideIndex) ??
+        slides[action.payload.slideIndex];
+      if (slide) slide.html_content = action.payload.html;
     },
 
     // Update a slide's speaker note (presenter-only text; persisted by autosave).
@@ -541,11 +594,15 @@ export const {
   clearOutlines,
   deleteSlideOutline,
   setPresentationData,
+  setEnableHtmlSelector,
+  setChatHtmlSelection,
+  clearChatHtmlSelection,
   updateTitle,
   setOutlines,
   // slides operations
   addSlide,
   updateSlide,
+  updateSlideHtmlContent,
   deletePresentationSlide,
   updateSlideContent,
   updateSlideSpeakerNote,

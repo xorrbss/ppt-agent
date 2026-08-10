@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 import uuid
 from sqlalchemy import (
     BigInteger,
@@ -84,6 +84,14 @@ class PresentationModel(SQLModel, table=True):
     include_title_slide: bool = Field(sa_column=Column(Boolean), default=True)
     web_search: bool = Field(sa_column=Column(Boolean), default=False)
     theme: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    fonts: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    generation_mode: Literal["standard", "smart"] = Field(
+        sa_column=Column(String, nullable=False, default="standard"),
+        default="standard",
+    )
+    community_design_ids: Optional[List[int]] = Field(
+        sa_column=Column(JSON), default=None
+    )
     # Adaptive composer output (PresentationComposition: SlideSpec[]). NEW column
     # (additive, nullable) — holds the authoritative adaptive composition; legacy
     # decks leave it NULL. See docs/adaptive-layout-design-revision.md R3.
@@ -187,6 +195,9 @@ class PresentationModel(SQLModel, table=True):
             version=self.version,
             lifecycle_status=self.lifecycle_status,
             theme=self.theme,
+            fonts=self.fonts,
+            generation_mode=self.generation_mode,
+            community_design_ids=self.community_design_ids,
         )
 
     def get_presentation_outline(self):

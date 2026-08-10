@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import threading
+import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -12,6 +13,7 @@ from fastapi import HTTPException
 from llmai.shared import (
     LLMTool,
     Message,
+    ReasoningConfig,
     ResponseFormat,
     ResponseStreamCompletionChunk,
     UserMessage,
@@ -21,7 +23,6 @@ from llmai.shared import (
 from utils.llm_config import get_extra_body
 from utils.schema_utils import get_schema_validation_errors
 
-
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
 TRANSIENT_LLM_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
@@ -29,6 +30,35 @@ TRANSIENT_LLM_MAX_ATTEMPTS = 4
 TRANSIENT_LLM_RETRY_BASE_DELAY_SECONDS = 1.0
 TRANSIENT_LLM_RETRY_MAX_DELAY_SECONDS = 8.0
 DisconnectChecker = Callable[[], Awaitable[bool]]
+TextChunkCallback = Callable[[str], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class TextGenerationMetrics:
+    model: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    tokens_per_second: float
+    duration_seconds: float
+    estimated: bool
+    thinking_tokens: Optional[int] = None
+    thinking_tokens_estimated: bool = False
+    supports_thinking: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": self.total_tokens,
+            "tokens_per_second": round(self.tokens_per_second, 2),
+            "duration_seconds": round(self.duration_seconds, 3),
+            "estimated": self.estimated,
+            "thinking_tokens": self.thinking_tokens,
+            "thinking_tokens_estimated": self.thinking_tokens_estimated,
+            "supports_thinking": self.supports_thinking,
+        }
 
 
 @dataclass(frozen=True)
@@ -49,9 +79,10 @@ async def _generate_structured_content(
     client: Any,
     *,
     disconnect_checker: Optional[DisconnectChecker],
+    text_chunk_callback: Optional[TextChunkCallback] = None,
     **kwargs: Any,
 ) -> Optional[dict]:
-    if disconnect_checker is None:
+    if disconnect_checker is None and text_chunk_callback is None:
         response = await asyncio.to_thread(client.generate, **kwargs)
         return extract_structured_content(response.content)
 
@@ -68,9 +99,15 @@ async def _generate_structured_content(
             chunk = getattr(event, "chunk", None)
             if isinstance(chunk, str):
                 streamed_text.append(chunk)
+                if text_chunk_callback is not None:
+                    await text_chunk_callback(chunk)
 
     content = extract_structured_content(completion_content)
     if content is not None:
+        if text_chunk_callback is not None and not streamed_text:
+            serialized = serialize_structured_content(completion_content)
+            if serialized:
+                await text_chunk_callback(serialized)
         return content
     return extract_structured_content("".join(streamed_text))
 
@@ -148,6 +185,7 @@ def get_generate_kwargs(
     max_tokens: Optional[int] = None,
     tools: Optional[list[LLMTool]] = None,
     response_format: Optional[ResponseFormat] = None,
+    reasoning: Optional[ReasoningConfig] = None,
     stream: bool = False,
 ) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
@@ -161,12 +199,141 @@ def get_generate_kwargs(
         kwargs["tools"] = tools
     if response_format is not None:
         kwargs["response_format"] = response_format
+    if reasoning is not None:
+        kwargs["reasoning"] = reasoning
 
     extra_body = get_extra_body()
     if extra_body:
         kwargs["extra_body"] = extra_body
 
     return kwargs
+
+
+def estimate_text_tokens(value: str) -> int:
+    """Return a stable approximation when a provider omits token usage."""
+    return max(1, round(len(value) / 4)) if value else 0
+
+
+def estimate_thinking_tokens(value: str) -> int:
+    """Match llmai's visible-reasoning estimate for streamed thinking chunks."""
+    return math.ceil(len(value.encode("utf-8")) / 4) if value else 0
+
+
+def estimate_message_tokens(messages: Sequence[Message]) -> int:
+    return sum(
+        estimate_text_tokens(extract_text(getattr(message, "content", None)) or "")
+        for message in messages
+    )
+
+
+def _usage_token_value(usage: Any, *names: str) -> Optional[int]:
+    for name in names:
+        value = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
+        if isinstance(value, (int, float)):
+            return int(value)
+    return None
+
+
+def _usage_thinking_tokens(usage: Any) -> tuple[Optional[int], bool]:
+    """Return llmai's best thinking count and whether that count is estimated."""
+    if usage is None:
+        return None, False
+
+    reasoning = (
+        usage.get("reasoning")
+        if isinstance(usage, dict)
+        else getattr(usage, "reasoning", None)
+    )
+    billed_tokens = _usage_token_value(reasoning, "billed_tokens")
+    if billed_tokens is not None:
+        billed_estimated = (
+            reasoning.get("billed_estimated", False)
+            if isinstance(reasoning, dict)
+            else getattr(reasoning, "billed_estimated", False)
+        )
+        return billed_tokens, bool(billed_estimated)
+
+    visible_tokens = _usage_token_value(reasoning, "visible_tokens")
+    if visible_tokens is not None:
+        return visible_tokens, True
+
+    return _usage_token_value(usage, "thinking_tokens", "reasoning_tokens"), False
+
+
+def build_text_generation_metrics(
+    *,
+    model: str,
+    messages: Sequence[Message],
+    content: str,
+    streamed_thinking: str,
+    completion: Any,
+    started_at: float,
+    model_supports_thinking: bool = False,
+) -> TextGenerationMetrics:
+    usage = getattr(completion, "usage", None) if completion is not None else None
+    exact_input_tokens = _usage_token_value(usage, "input_tokens", "prompt_tokens")
+    exact_output_tokens = _usage_token_value(
+        usage, "output_tokens", "completion_tokens"
+    )
+    input_tokens = (
+        exact_input_tokens
+        if exact_input_tokens is not None
+        else estimate_message_tokens(messages)
+    )
+    output_tokens = (
+        exact_output_tokens
+        if exact_output_tokens is not None
+        else estimate_text_tokens(content)
+    )
+    thinking_tokens, thinking_tokens_estimated = _usage_thinking_tokens(usage)
+    if thinking_tokens is None and streamed_thinking:
+        thinking_tokens = estimate_thinking_tokens(streamed_thinking)
+        thinking_tokens_estimated = True
+
+    supports_thinking = bool(
+        model_supports_thinking
+        or thinking_tokens is not None
+        or streamed_thinking
+    )
+    if (
+        supports_thinking
+        and exact_output_tokens is not None
+        and (thinking_tokens is None or thinking_tokens_estimated)
+    ):
+        inferred_thinking_tokens = max(
+            0,
+            exact_output_tokens - estimate_text_tokens(content),
+        )
+        if thinking_tokens is None or inferred_thinking_tokens > thinking_tokens:
+            thinking_tokens = inferred_thinking_tokens
+            thinking_tokens_estimated = True
+    if supports_thinking and thinking_tokens is None:
+        thinking_tokens = 0
+        thinking_tokens_estimated = True
+
+    duration_seconds = (
+        getattr(completion, "duration_seconds", None)
+        if completion is not None
+        else None
+    )
+    if not isinstance(duration_seconds, (int, float)) or duration_seconds <= 0:
+        duration_seconds = max(time.perf_counter() - started_at, 1e-9)
+    total_tokens = _usage_token_value(usage, "total_tokens")
+    if total_tokens is None:
+        total_tokens = input_tokens + output_tokens
+
+    return TextGenerationMetrics(
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        tokens_per_second=output_tokens / duration_seconds,
+        duration_seconds=duration_seconds,
+        estimated=exact_input_tokens is None or exact_output_tokens is None,
+        thinking_tokens=thinking_tokens,
+        thinking_tokens_estimated=thinking_tokens_estimated,
+        supports_thinking=supports_thinking,
+    )
 
 
 def structured_validation_feedback_user_message(
@@ -555,6 +722,7 @@ async def generate_structured_with_schema_retries(
     validate_schema: bool = False,
     validate_schema_max_loop_count: int = 4,
     disconnect_checker: Optional[DisconnectChecker] = None,
+    text_chunk_callback: Optional[TextChunkCallback] = None,
 ) -> dict:
     """
     Parse retries (inner loop) plus optional JSON Schema validation feedback loops (outer loop),
@@ -570,6 +738,11 @@ async def generate_structured_with_schema_retries(
             content = await _generate_structured_content_with_transient_retries(
                 client,
                 disconnect_checker=disconnect_checker,
+                text_chunk_callback=(
+                    text_chunk_callback
+                    if validation_attempt == 0 and attempt == 0
+                    else None
+                ),
                 **get_generate_kwargs(
                     model=model,
                     messages=working_messages,

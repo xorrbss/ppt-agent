@@ -105,6 +105,7 @@ class PresentationChatService:
         self._sql_session = sql_session
         self._presentation_id = presentation_id
         self._conversation_id = conversation_id
+        self._presentation_type = presentation_type
 
         self._conversation_store = ChatConversationStore(sql_session)
         self._memory = PresentationContextStore(sql_session, presentation_id)
@@ -299,6 +300,13 @@ class PresentationChatService:
         presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
         if not presentation:
             raise HTTPException(status_code=404, detail="Presentation not found")
+        if presentation.generation_mode != self._presentation_type:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Presentation type does not match the stored generation mode."
+                ),
+            )
 
         conversation_id = await self._conversation_store.ensure_conversation_id(
             self._conversation_id
@@ -328,6 +336,7 @@ class PresentationChatService:
                 content=build_system_prompt(
                     presentation_memory_context=presentation_memory,
                     chat_memory_context=chat_memory,
+                    presentation_type=self._presentation_type,
                 )
             ),
             *history_messages,

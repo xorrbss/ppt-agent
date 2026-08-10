@@ -113,6 +113,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   // Current decks use mode/theme; legacy saved decks are detected from their
   // authored slide sentinels.
   const isAuthoredDeck = isAuthoredPresentation(presentationData as any);
+  const isSmartPresentation = presentationData?.generation_mode === "smart";
   const slidesLength = presentationData?.slides?.length ?? 0;
   const showWorkspaceStaging = workspaceStaging && slidesLength === 0;
   const lastStreamingSlideIndex =
@@ -431,7 +432,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       </h1>
       <div
         style={{
-          background: "#EDEEEF",
+          background: isSmartPresentation ? "#F6F6F9" : "#EDEEEF",
         }}
         id="presentation-slides-wrapper"
         className="relative flex h-full w-full min-w-0 max-w-full flex-col overflow-clip"

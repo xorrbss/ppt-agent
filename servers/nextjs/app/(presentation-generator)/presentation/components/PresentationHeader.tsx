@@ -2,6 +2,7 @@
 import {
   Loader2,
   AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -13,7 +14,9 @@ import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
 import {
+  clearChatHtmlSelection,
   clearPresentationData,
+  setEnableHtmlSelector,
   updateTitle,
 } from "@/store/slices/presentationGeneration";
 import { clearHistory } from "@/store/slices/undoRedoSlice";
@@ -71,7 +74,7 @@ const PresentationHeader = ({
   const pathname = usePathname();
   const dispatch = useDispatch();
 
-  const { presentationData, isStreaming } = useSelector(
+  const { presentationData, isStreaming, enableHtmlSelector } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
 

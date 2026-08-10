@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import React, { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import { File, Paperclip, Plus, X } from 'lucide-react'
