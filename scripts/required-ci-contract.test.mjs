@@ -1008,23 +1008,26 @@ test("the Next.js build reads the repository-root .env so public flags are baked
 test("the required route gate enforces axe and bounded approval announcements", () => {
   const nextPackage = readJson("servers/nextjs/package.json");
   const runner = read("servers/nextjs/scripts/run-workspace-e2e.mjs");
-  const spec = read("servers/nextjs/cypress/e2e/workspaceChatFirstRoute.cy.ts");
+  const routeSpec = read("servers/nextjs/cypress/e2e/canonicalConversationRoute.cy.ts");
+  const liveSpec = read("servers/nextjs/cypress/component/CanonicalWorkspaceChatPanelLiveBackend.cy.tsx");
 
   assert.equal(nextPackage.devDependencies["axe-core"], "4.13.0");
-  assert.match(runner, /cypress\/e2e\/workspaceChatFirstRoute\.cy\.ts/u);
-  assert.match(spec, /node_modules\/axe-core\/axe\.min\.js/u);
-  assert.match(spec, /window\.Function\(source\)\(\)/u);
-  assert.match(spec, /axe-core did not attach to the application window/u);
-  assert.match(spec, /pageAxe\.run\(window\.document\)/u);
+  assert.match(runner, /cypress\/e2e\/canonicalConversationRoute\.cy\.ts/u);
+  assert.match(runner, /cypress\/component\/CanonicalWorkspaceChatPanelLiveBackend\.cy\.tsx/u);
+  assert.match(routeSpec, /node_modules\/axe-core\/axe\.min\.js/u);
+  assert.match(routeSpec, /window\.Function\(source\)\(\)/u);
+  assert.match(routeSpec, /axe-core did not attach to the application window/u);
+  assert.match(routeSpec, /pageAxe\.run\(window\.document\)/u);
   assert.match(
-    spec,
+    routeSpec,
     /operation-approval-alert[\s\S]{0,180}role", "alert"[\s\S]{0,180}aria-live", "assertive"/u,
   );
   assert.match(
-    spec,
+    routeSpec,
     /\[role="status"\]\[aria-live="polite"\][\s\S]{0,80}have\.length", 1/u,
   );
-  assert.match(spec, /results\.violations[\s\S]{0,180}have\.length\(0\)/u);
+  assert.match(routeSpec, /results\.violations[\s\S]{0,180}have\.length\(0\)/u);
+  assert.match(liveSpec, /slide\.delete[\s\S]{0,240}operation_context/u);
 });
 
 test("the route gate proves an authoritative kill switch wins across real browsing contexts", () => {

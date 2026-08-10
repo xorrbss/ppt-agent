@@ -52,6 +52,7 @@ REVISION_DURABLE_GENERATION_JOBS = "3d4e5f6a7b8c"
 REVISION_MULTI_USER_AUTH = "c9f1a2b3d4e5"
 REVISION_PROVIDER_SETTINGS = "d0a2b4c6e8f1"
 REVISION_PRIMARY_ADMIN = "e1b3c5d7f9a2"
+REVISION_SMART_PRESENTATION_GENERATION = "f3a7c1d9e5b2"
 REVISION_CHAT_TEMPLATE_SCOPE_REPAIR = "f2c4d6e8a0b1"
 REVISION_AUTHORED_SLIDE_CHECKPOINTS = "a3c5e7f9b1d2"
 REVISION_AUTHORED_RESUME_COUNT = "b4d6f8a1c3e5"
@@ -68,7 +69,9 @@ REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS = "fc3d5e7f9a1b"
 REVISION_CLEANUP_JOURNAL_REDRIVE = "b3d7f1a9c2e4"
 REVISION_PRESENTATION_SEARCH_AND_SHARE_METRICS = "c4e8f0a2b6d9"
 REVISION_PROVIDER_SETTINGS_SYNC = "d5a9c1e3f7b2"
-HEAD_REVISION = REVISION_PROVIDER_SETTINGS_SYNC
+REVISION_PRESENTATION_RUNTIME_MERGE = "e6b8d0f2a4c6"
+REVISION_REFERENCE_SNAPSHOTS = "f7c9e1a3b5d8"
+HEAD_REVISION = REVISION_REFERENCE_SNAPSHOTS
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {
@@ -741,13 +744,49 @@ def _slidespec_schema_revision(
         publication_index.get("column_names") or ()
     ) != ("slide_id", "created_at") or bool(publication_index.get("unique")):
         raise RuntimeError("SlideSpec publication attempt index is incompatible")
-    return provider_settings_sync_schema_revision(
+    provider_revision = provider_settings_sync_schema_revision(
         inspector,
         tables,
         REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS,
         prerequisite_revision=REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS,
         applied_revision=REVISION_PROVIDER_SETTINGS_SYNC,
     )
+    if provider_revision != REVISION_PROVIDER_SETTINGS_SYNC:
+        return provider_revision
+
+    presentation_columns = {
+        column["name"] for column in inspector.get_columns("presentations")
+    }
+    smart_columns = {"generation_mode", "community_design_ids"}
+    # The two former branch heads can be recognized as the joined head only
+    # after the merge repair itself has run. If any marker is absent, stamp the
+    # provider-settings branch and let Alembic idempotently apply/repair the
+    # Smart branch plus merge revision instead of skipping physical DDL.
+    if smart_columns.issubset(presentation_columns) and "fonts" in presentation_columns:
+        if "reference_snapshots" not in tables:
+            return REVISION_PRESENTATION_RUNTIME_MERGE
+        snapshot_columns = {
+            column["name"]
+            for column in inspector.get_columns("reference_snapshots")
+        }
+        required_snapshot_columns = {
+            "id",
+            "owner_id",
+            "conversation_id",
+            "provider_id",
+            "source_revision",
+            "source_fingerprint",
+            "normalized_payload",
+            "asset_bindings",
+            "content_sha256",
+            "schema_version",
+            "expires_at",
+            "created_at",
+        }
+        if not required_snapshot_columns.issubset(snapshot_columns):
+            raise RuntimeError("Reference snapshot schema is incompatible")
+        return HEAD_REVISION
+    return provider_revision
 
 
 def _durable_deletion_schema_revision(

@@ -16,15 +16,25 @@ import { getLayoutByLayoutId } from "@/app/presentation-templates";
 import { useCustomTemplateDetails } from "@/app/hooks/useCustomTemplates";
 import { updateSlideContent, updateAdaptiveBlock } from "@/store/slices/presentationGeneration";
 import { resolveAuthoredImageUrl } from "@/utils/api";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { Loader2 } from "lucide-react";
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
+import SmartHtmlEditor from "./SmartHtmlEditor";
+import type { RootState } from "@/store/store";
+import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 
 
 
 
 export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml = false }: { slide: any, isEditMode: boolean, theme?: any, enableEditMode?: boolean, preferAuthoredHtml?: boolean }) => {
     const dispatch = useDispatch();
+    const presentationData = useSelector(
+        (state: RootState) => state.presentationGeneration.presentationData
+    );
+    const presentationRuntime = useMemo(
+        () => tryResolveServerIssuedPresentationProfile(presentationData),
+        [presentationData]
+    );
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     // Read-only rendering is also used by the browser-backed PPT export. Keep
@@ -106,6 +116,20 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
         const imageRef = slide?.content?.image || slide?.properties?.image;
         const src = resolveAuthoredImageUrl(imageRef);
         if (preferAuthoredHtml) {
+            if (presentationRuntime?.profile.driver_id === "smart") {
+                return (
+                    <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+                        <div ref={containerRef} className="h-full w-full">
+                            <SmartHtmlEditor
+                                slide={slide}
+                                renderIndex={slide.index}
+                                fonts={presentationData?.fonts}
+                                title={`Slide ${slide.index + 1}`}
+                            />
+                        </div>
+                    </SlideErrorBoundary>
+                );
+            }
             return (
                 <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
                     <div ref={containerRef} className="h-full w-full">

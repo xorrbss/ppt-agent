@@ -153,11 +153,13 @@ async def generate_image(
 
 
 def _image_asset_api_dict(asset: ImageAsset) -> dict:
+    # Compatibility removal condition: once every pre-AssetGateway image row
+    # has a canonical asset id, this facade can return that id directly. Never
+    # expose the server filesystem locator during the transition.
     return {
         "id": asset.id,
         "created_at": asset.created_at,
         "is_uploaded": asset.is_uploaded,
-        "path": asset.path,
         "extras": asset.extras,
         "file_url": filesystem_image_path_to_app_data_url(asset.path),
     }

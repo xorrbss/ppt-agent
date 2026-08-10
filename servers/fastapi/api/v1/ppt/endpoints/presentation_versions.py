@@ -69,7 +69,7 @@ async def restore_presentation_version(
     # fonts are omitted here; the editor re-fetches the presentation after a restore
     # (which resolves fonts) — this response is just the immediately-restored slides.
     return PresentationWithSlides(
-        **presentation.model_dump(),
+        **presentation.model_dump(exclude={"fonts"}),
         slides=restored_slides,
         fonts=None,
     )

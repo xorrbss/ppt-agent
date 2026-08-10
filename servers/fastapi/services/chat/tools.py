@@ -72,7 +72,7 @@ class ChatTools:
             )
 
     def get_tool_definitions(self) -> list[Tool]:
-        if self._memory.presentation_type == "smart":
+        if getattr(self._memory, "presentation_type", "standard") == "smart":
             return self._get_smart_tool_definitions()
         tools = [
             Tool(
@@ -483,7 +483,7 @@ class ChatTools:
         }
 
     async def _save_slide(self, args: dict[str, Any]) -> dict[str, Any]:
-        if self._memory.presentation_type == "smart":
+        if getattr(self._memory, "presentation_type", "standard") == "smart":
             payload = SaveSmartSlideInput(**args)
             return await self._memory.save_html_slide(
                 html=payload.html,

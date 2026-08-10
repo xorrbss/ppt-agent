@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,13 +22,15 @@ from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
     WorkspaceArtifact,
+    WorkspaceAsset,
     WorkspaceConversation,
+    WorkspaceMessage,
     WorkspaceOperation,
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
 from services.chat import ChatTurnResult
-from services.chat import memory_layer as chat_memory_layer
+from services.agent_runtime import AgentRunResult
 from services.chat.conversation_store import ChatConversationStore
 from services.workspace_chat_memory_outbox import (
     WORKSPACE_CHAT_MEMORY_TOPIC,
@@ -46,12 +49,6 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationCancelled,
     WorkspaceOperationClaim,
 )
-from services.workspace_operation_outbox_dispatcher import (
-    WorkspaceOperationOutboxDispatcher,
-    WorkspaceOutboxTopicRegistry,
-)
-
-
 TABLES = [
     User.__table__,
     ImageAsset.__table__,
@@ -59,11 +56,13 @@ TABLES = [
     TemplateV2.__table__,
     ChatHistoryMessageModel.__table__,
     WorkspaceConversation.__table__,
+    WorkspaceMessage.__table__,
     WorkspaceOperation.__table__,
     WorkspaceActionReceipt.__table__,
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
     WorkspaceArtifact.__table__,
+    WorkspaceAsset.__table__,
 ]
 
 
@@ -167,10 +166,18 @@ class _CancelAfterApplyContext(_Context):
 
 def _service_factory(*, fail_after_flush: bool = False):
     class FakeChatService:
-        def __init__(self, *, sql_session, presentation_id, conversation_id):
+        def __init__(
+            self,
+            *,
+            sql_session,
+            presentation_id,
+            conversation_id,
+            artifact_directory,
+        ):
             self._session = sql_session
             self._presentation_id = presentation_id
             self._conversation_id = conversation_id
+            self._artifact_directory = artifact_directory
 
         async def generate_reply(self, _command):
             presentation = await self._session.get(
@@ -201,13 +208,21 @@ def _service_factory(*, fail_after_flush: bool = False):
 
 def _image_writing_service_factory(*, fail_after_write: bool = False):
     class FakeImageWritingChatService:
-        def __init__(self, *, sql_session, presentation_id, conversation_id):
+        def __init__(
+            self,
+            *,
+            sql_session,
+            presentation_id,
+            conversation_id,
+            artifact_directory,
+        ):
             self._session = sql_session
             self._presentation_id = presentation_id
             self._conversation_id = conversation_id
+            self._artifact_directory = artifact_directory
 
         async def generate_reply(self, _command):
-            image_path = Path(chat_memory_layer.get_images_directory()) / (
+            image_path = Path(self._artifact_directory) / (
                 f"{uuid.uuid4()}.png"
             )
             image_path.write_bytes(b"stable-provider-image")
@@ -272,15 +287,14 @@ async def _chat_mutations_and_revision_publish_in_one_commit(tmp_path: Path):
             turn_rows = list(
                 (
                     await session.execute(
-                        select(ChatHistoryMessageModel).order_by(
-                            ChatHistoryMessageModel.position
+                        select(WorkspaceMessage).order_by(
+                            WorkspaceMessage.position
                         )
                     )
                 ).scalars()
             )
-            assert [row.role for row in turn_rows] == ["user", "assistant"]
+            assert [row.role for row in turn_rows] == ["assistant"]
             assert [row.content for row in turn_rows] == [
-                "change the deck",
                 "Deck updated.",
             ]
             outbox = (
@@ -312,21 +326,12 @@ async def _chat_mutations_and_revision_publish_in_one_commit(tmp_path: Path):
                 memory_store=external_memory,
             )
 
-        registry = WorkspaceOutboxTopicRegistry()
-        registry.register(WORKSPACE_CHAT_MEMORY_TOPIC, deliver)
-        registry.register("workspace.operation.event", lambda _payload: None)
-        dispatcher = WorkspaceOperationOutboxDispatcher(
-            session_factory=maker,
-            registry=registry,
-            max_concurrency=1,
-            heartbeat_seconds=60,
-        )
-        assert await dispatcher.dispatch_once() == 1
-        await asyncio.gather(*tuple(dispatcher._active.values()))
-        await asyncio.sleep(0)
-        assert await dispatcher.dispatch_once() == 1
-        await asyncio.gather(*tuple(dispatcher._active.values()))
-        await asyncio.sleep(0)
+        async def deliver_workspace_event(_payload):
+            return None
+
+        # Delivery itself is covered here; dispatcher ordering/retry behavior
+        # has a dedicated suite and is unrelated to the runtime boundary.
+        await deliver(outbox.payload)
 
         external_memory.store_chat_turn.assert_awaited_once_with(
             presentation_id=presentation_id,
@@ -336,15 +341,6 @@ async def _chat_mutations_and_revision_publish_in_one_commit(tmp_path: Path):
             delivery_id=f"workspace-chat:{operation_id}:revision:4",
             strict=True,
         )
-        async with maker() as session:
-            delivered = (
-                await session.execute(
-                    select(WorkspaceOutbox).where(
-                        WorkspaceOutbox.topic == WORKSPACE_CHAT_MEMORY_TOPIC
-                    )
-                )
-            ).scalar_one()
-            assert delivered.status == "delivered"
     finally:
         await engine.dispose()
 
@@ -745,6 +741,211 @@ async def _retry_after_provider_write_failure_has_no_duplicate_artifact(
             assert len(journals) == 2
             assert {journal.status for journal in journals} == {"deleted"}
         assert len(list(Path(os.environ["APP_DATA_DIRECTORY"]).rglob("*.png"))) == 1
+    finally:
+        await engine.dispose()
+
+
+def _capturing_runtime_factory(captured: list[object]):
+    class CapturingRuntime:
+        def __init__(self, *, sql_session, presentation_id, conversation_id):
+            self._presentation_id = presentation_id
+            self._conversation_id = conversation_id
+
+        async def execute_run(self, context, sink):
+            captured.append(context)
+            await sink.assistant_delta("Canonical answer.")
+            return AgentRunResult(
+                conversation_id=self._conversation_id,
+                assistant_output="Canonical answer.",
+                tool_calls=("getSlideAtIndex",),
+            )
+
+    return CapturingRuntime
+
+
+def test_handler_passes_only_db_vetted_smart_context_and_publishes_one_message(
+    tmp_path: Path,
+):
+    asyncio.run(_handler_passes_only_db_vetted_smart_context(tmp_path))
+
+
+async def _handler_passes_only_db_vetted_smart_context(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "canonical-context.db")
+    try:
+        presentation_id, operation_id, claim = await _seed(
+            maker, presentation_revision=5, expected_revision=5
+        )
+        user_message_id = uuid.uuid4()
+        ready_asset_id = uuid.uuid4()
+        raw_context = {
+            "viewport": {"width": 1440, "height": 900, "zoom": 1.25},
+            "current_slide": {"index": 2},
+            "smart_selection": {
+                "html": "<section><h1>Selected</h1></section>",
+                "selected_text": "Selected",
+                "slide_index": 2,
+                # Unknown fields must not enter the typed context.
+                "provider_response": "secret",
+            },
+        }
+        request_payload = {
+            **dict(claim.request_payload),
+            "user_message_id": str(user_message_id),
+            "asset_ids": [str(ready_asset_id)],
+            "context": raw_context,
+            # Client metadata is never used as authoritative attachment data.
+            "attachments": [{"name": "spoofed.exe", "content": "secret"}],
+        }
+        async with maker() as session, session.begin():
+            presentation = await session.get(PresentationModel, presentation_id)
+            presentation.generation_mode = "smart"
+            operation = await session.get(WorkspaceOperation, operation_id)
+            operation.request_payload = request_payload
+            session.add_all(
+                (
+                    WorkspaceMessage(
+                        id=user_message_id,
+                        conversation_id=claim.conversation_id,
+                        position=1,
+                        role="user",
+                        content="change the deck",
+                    ),
+                    WorkspaceAsset(
+                        id=ready_asset_id,
+                        conversation_id=claim.conversation_id,
+                        state="ready",
+                        original_name="authoritative.pdf",
+                        media_type="application/pdf",
+                        size_bytes=123,
+                        storage_key="ready/authoritative.pdf",
+                        sha256="a" * 64,
+                    ),
+                )
+            )
+
+        captured: list[object] = []
+        handler = PresentationChatOperationHandler(
+            session_factory=maker,
+            service_factory=_capturing_runtime_factory(captured),
+        )
+        result = await handler.execute(
+            _Context(replace(claim, request_payload=request_payload))
+        )
+
+        assert result.result_revision == 5
+        assert len(captured) == 1
+        context = captured[0]
+        assert context.generation_mode == "smart"
+        assert context.history == ()  # current canonical user is not duplicated
+        assert context.viewport.slide_index == 2
+        assert context.smart_selection.selected_text == "Selected"
+        assert [asset.name for asset in context.assets] == ["authoritative.pdf"]
+        assert all(asset.name != "spoofed.exe" for asset in context.assets)
+
+        async with maker() as session:
+            messages = list(
+                (
+                    await session.scalars(
+                        select(WorkspaceMessage).order_by(
+                            WorkspaceMessage.position
+                        )
+                    )
+                ).all()
+            )
+            legacy = list(
+                (await session.scalars(select(ChatHistoryMessageModel))).all()
+            )
+            operation = await session.get(WorkspaceOperation, operation_id)
+            assert [message.role for message in messages] == ["user", "assistant"]
+            assert messages[-1].content == "Canonical answer."
+            assert operation.result["assistant_message_id"] == str(messages[-1].id)
+            assert legacy == []
+    finally:
+        await engine.dispose()
+
+
+def test_handler_revalidates_assets_before_runtime(tmp_path: Path):
+    asyncio.run(_handler_revalidates_assets_before_runtime(tmp_path))
+
+
+async def _handler_revalidates_assets_before_runtime(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "asset-revalidation.db")
+    try:
+        presentation_id, operation_id, claim = await _seed(
+            maker, presentation_revision=9, expected_revision=9
+        )
+        asset_id = uuid.uuid4()
+        request_payload = {
+            **dict(claim.request_payload),
+            "asset_ids": [str(asset_id)],
+        }
+        async with maker() as session, session.begin():
+            operation = await session.get(WorkspaceOperation, operation_id)
+            operation.request_payload = request_payload
+            session.add(
+                WorkspaceAsset(
+                    id=asset_id,
+                    conversation_id=claim.conversation_id,
+                    state="quarantined",
+                    original_name="unsafe.pdf",
+                    media_type="application/pdf",
+                    size_bytes=12,
+                    storage_key="quarantine/unsafe.pdf",
+                    sha256="b" * 64,
+                )
+            )
+
+        captured: list[object] = []
+        handler = PresentationChatOperationHandler(
+            session_factory=maker,
+            service_factory=_capturing_runtime_factory(captured),
+        )
+        with pytest.raises(NonRetryableWorkspaceOperationError) as caught:
+            await handler.execute(
+                _Context(replace(claim, request_payload=request_payload))
+            )
+        assert caught.value.code == "workspace_asset_not_ready"
+        assert captured == []
+        async with maker() as session:
+            presentation = await session.get(PresentationModel, presentation_id)
+            assert presentation.revision == 9
+            assert list(
+                (await session.scalars(select(WorkspaceMessage))).all()
+            ) == []
+    finally:
+        await engine.dispose()
+
+
+def test_standard_deck_discards_spoofed_smart_selection(tmp_path: Path):
+    asyncio.run(_standard_deck_discards_spoofed_smart_selection(tmp_path))
+
+
+async def _standard_deck_discards_spoofed_smart_selection(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "standard-selection.db")
+    try:
+        _presentation_id, _operation_id, claim = await _seed(
+            maker, presentation_revision=3, expected_revision=3
+        )
+        request_payload = {
+            **dict(claim.request_payload),
+            "context": {
+                "smart_selection": {
+                    "html": "<script>untrusted()</script>",
+                    "selected_text": "untrusted",
+                }
+            },
+        }
+        captured: list[object] = []
+        handler = PresentationChatOperationHandler(
+            session_factory=maker,
+            service_factory=_capturing_runtime_factory(captured),
+        )
+        await handler.execute(
+            _Context(replace(claim, request_payload=request_payload))
+        )
+        assert len(captured) == 1
+        assert captured[0].generation_mode == "standard"
+        assert captured[0].smart_selection is None
     finally:
         await engine.dispose()
 

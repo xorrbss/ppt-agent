@@ -4,10 +4,19 @@ import test from "node:test";
 
 import {
   executePersistedPresentationExport,
+  PRESENTATION_SOURCE_SHA256,
   type PersistedPresentation,
   type PresentationExportExecutionParams,
   resolvePersistedExportStrategy,
 } from "./presentation-export-strategy.ts";
+import {
+  PRESENTATION_DRIVER_REGISTRY,
+  type PresentationDriverId,
+} from "./presentation-profile.ts";
+import {
+  createRenderPresentationSnapshot,
+  RenderService,
+} from "./render-service/index.ts";
 
 interface StrategyParityCase {
   name: string;
@@ -78,6 +87,39 @@ function validLegacyAuthoredSentinel(): PersistedPresentation {
         html_content: "<section>legacy editable</section>",
       },
     ],
+  };
+}
+
+function withCanonicalRuntime(
+  presentation: PersistedPresentation,
+  driverId: PresentationDriverId,
+): PersistedPresentation {
+  const driver = PRESENTATION_DRIVER_REGISTRY[driverId];
+  return {
+    ...presentation,
+    profile: {
+      schema_version: 1,
+      driver_id: driverId,
+      content_model: driver.content_model,
+      generation_strategy: driver.generation_strategy,
+      style_source:
+        driverId === "authored"
+          ? "authored"
+          : driverId === "template-v2"
+            ? "imported"
+            : "builtin",
+      generation_mode: driverId === "smart" ? "smart" : "standard",
+    },
+    capabilities: {
+      schema_version: 1,
+      driver_id: driverId,
+      renderer_adapter_id: driver.renderer_adapter_id,
+      editor_adapter_id: driver.editor_adapter_id,
+      editor: driver.editor,
+      agent_tool_capability: driver.agent_tool_capability,
+      export_adapter_id: driver.export_adapter_id,
+      export_editable_pptx: driver.export_editable_pptx,
+    },
   };
 }
 
@@ -242,4 +284,91 @@ test("invalid identities fail closed before either executor", async () => {
     );
     assert.deepEqual(calls, { general: 0, hybrid: 0 });
   }
+});
+
+test("server-issued profiles select the same export adapter and reject spoofed conflicts", () => {
+  assert.equal(
+    resolvePersistedExportStrategy(
+      withCanonicalRuntime(validTemplateV2(), "template-v2"),
+    ),
+    "template-v2-general",
+  );
+  assert.equal(
+    resolvePersistedExportStrategy(
+      withCanonicalRuntime(validAuthored(), "authored"),
+    ),
+    "authored-hybrid",
+  );
+  assert.throws(
+    () =>
+      resolvePersistedExportStrategy(
+        withCanonicalRuntime(validTemplateV2(), "standard"),
+      ),
+    /presentation_profile_export_identity_conflict/,
+  );
+});
+
+test("export revision freshness fails before a runner is invoked", async () => {
+  const { calls, registry } = spyRegistry();
+  await assert.rejects(
+    executePersistedPresentationExport(
+      { ...validLegacy(), revision: 4 },
+      { ...pptxParams, expectedPresentationRevision: 3 },
+      registry,
+    ),
+    /stale_render_revision/,
+  );
+  assert.deepEqual(calls, { general: 0, hybrid: 0 });
+});
+
+test("canonical export artifacts are checked against the fetched revision and digest", async () => {
+  const source = {
+    ...withCanonicalRuntime(validLegacy(), "standard"),
+    id: "deck-standard",
+    revision: 4,
+    lifecycle_status: "published",
+    source_sha256: "c".repeat(64),
+    slides: [{ id: "slide-1", ui: null, html_content: null }],
+  };
+  Object.defineProperty(source, PRESENTATION_SOURCE_SHA256, {
+    enumerable: false,
+    value: source.source_sha256,
+  });
+  const artifact = new RenderService().render({
+    target: "pptx",
+    snapshot: createRenderPresentationSnapshot(source),
+  });
+  const accepted = await executePersistedPresentationExport(
+    source,
+    { ...pptxParams, expectedPresentationRevision: 4 },
+    {
+      async general() {
+        return { path: "canonical.pptx", renderArtifact: artifact };
+      },
+      async hybrid() {
+        throw new Error("unexpected_hybrid");
+      },
+    },
+  );
+  assert.equal(accepted.renderArtifact?.artifact_version, artifact.artifact_version);
+
+  const stale = {
+    ...structuredClone(artifact),
+    source: { ...artifact.source, revision: 3 },
+  };
+  await assert.rejects(
+    executePersistedPresentationExport(
+      source,
+      { ...pptxParams, expectedPresentationRevision: 4 },
+      {
+        async general() {
+          return { path: "stale.pptx", renderArtifact: stale };
+        },
+        async hybrid() {
+          throw new Error("unexpected_hybrid");
+        },
+      },
+    ),
+    /stale_render_artifact/,
+  );
 });

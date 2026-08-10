@@ -1,3 +1,4 @@
+from constants.provider_registry import ProviderResolutionError, resolve_provider
 from enums.image_provider import ImageProvider
 from utils.get_env import (
     get_disable_image_generation_env,
@@ -62,5 +63,12 @@ def get_selected_image_provider(
     snapshot = resolve_runtime_settings(settings)
     image_provider_env = get_image_provider_env(snapshot)
     if image_provider_env:
-        return ImageProvider(image_provider_env)
+        provider = ImageProvider(image_provider_env)
+        resolved = resolve_provider(
+            provider.value,
+            required_capabilities=("imageGeneration",),
+        )
+        if resolved.kind != "image":
+            raise ProviderResolutionError("provider_kind_mismatch", provider.value)
+        return provider
     return None

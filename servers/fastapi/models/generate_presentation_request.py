@@ -1,7 +1,7 @@
 import uuid
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from enums.tone import Tone
 from enums.verbosity import Verbosity
@@ -14,6 +14,7 @@ class GeneratePresentationRequest(BaseModel):
     _template_v2_generation_target: Any = PrivateAttr(default=None)
     _request_id: Optional[str] = PrivateAttr(default=None)
     _authored_exact_snapshot_id: Optional[str] = PrivateAttr(default=None)
+    _reference_snapshots: tuple[Any, ...] = PrivateAttr(default=())
 
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy
@@ -69,8 +70,28 @@ class GeneratePresentationRequest(BaseModel):
         default=True, description="Whether to include a title slide"
     )
     files: Optional[List[str]] = Field(
-        default=None, description="Files to use for the presentation"
+        default=None,
+        description=(
+            "Deprecated compatibility input. New callers must upload through the "
+            "asset gateway and pass immutable reference_snapshot_ids."
+        ),
     )
+    reference_snapshot_ids: List[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=16,
+        description=(
+            "Server-created immutable reference snapshots admitted for generation."
+        ),
+    )
+
+    @field_validator("reference_snapshot_ids")
+    @classmethod
+    def validate_unique_reference_snapshot_ids(
+        cls, value: List[uuid.UUID]
+    ) -> List[uuid.UUID]:
+        if len(set(value)) != len(value):
+            raise ValueError("duplicate_reference_snapshot")
+        return value
     export_as: Literal["pptx", "pdf"] = Field(
         default="pptx", description="Export format"
     )

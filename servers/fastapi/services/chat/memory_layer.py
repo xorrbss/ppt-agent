@@ -33,8 +33,8 @@ from services.icon_finder_service import ICON_FINDER_SERVICE
 from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
 from services.presentation_version_service import snapshot_slides
+from services.presentation_profiles import resolve_presentation_profile
 from templates.presentation_layout import SlideLayoutModel
-from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.policy import get_structured_template_policy
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_url,
@@ -268,12 +268,19 @@ class PresentationChatMemoryLayer:
         sql_session: AsyncSession,
         presentation_id: uuid.UUID,
         presentation_type: str = "standard",
+        artifact_directory: str | None = None,
     ):
         self._sql_session = sql_session
         self._presentation_id = presentation_id
         self.presentation_type = (
             "smart" if presentation_type == "smart" else "standard"
         )
+        self._artifact_directory = artifact_directory
+
+    def _images_directory(self) -> str:
+        """Resolve this operation's output directory without global mutation."""
+
+        return self._artifact_directory or get_images_directory()
 
     @property
     def sql_session(self) -> AsyncSession:
@@ -454,7 +461,7 @@ class PresentationChatMemoryLayer:
         presentation = await self._owned_presentation()
         if not presentation:
             return []
-        if presentation.version == TEMPLATE_V2_VERSION:
+        if resolve_presentation_profile(presentation).driver_id == "template-v2":
             template = await self._template_v2_for_presentation()
             payload = (template.layouts or {}) if template else {}
             layouts = payload.get("layouts") if isinstance(payload, dict) else None
@@ -493,7 +500,10 @@ class PresentationChatMemoryLayer:
 
     async def get_content_schema_from_layout_id(self, layout_id: str) -> dict[str, Any] | None:
         presentation = await self._owned_presentation()
-        if presentation and presentation.version == TEMPLATE_V2_VERSION:
+        if (
+            presentation
+            and resolve_presentation_profile(presentation).driver_id == "template-v2"
+        ):
             template = await self._template_v2_for_presentation()
             if template is None:
                 return None
@@ -531,7 +541,7 @@ class PresentationChatMemoryLayer:
             return DEFAULT_ICON_WEIGHT
 
     async def generate_image(self, prompt: str) -> str:
-        image_generation_service = ImageGenerationService(get_images_directory())
+        image_generation_service = ImageGenerationService(self._images_directory())
         image = await image_generation_service.generate_image(ImagePrompt(prompt=prompt))
 
         if isinstance(image, ImageAsset):
@@ -582,7 +592,9 @@ class PresentationChatMemoryLayer:
                     "index": max(0, index),
                 }
 
-        is_template_v2 = presentation.version == TEMPLATE_V2_VERSION
+        is_template_v2 = (
+            resolve_presentation_profile(presentation).driver_id == "template-v2"
+        )
         hydrated_state = None
         layout = None
         template = None
@@ -622,7 +634,7 @@ class PresentationChatMemoryLayer:
             }
 
         target_index = max(0, index)
-        image_generation_service = ImageGenerationService(get_images_directory())
+        image_generation_service = ImageGenerationService(self._images_directory())
 
         if replace_old_slide_at_index:
             # Address the slide through the reconciled view: a WHERE on `index`
@@ -886,7 +898,7 @@ class PresentationChatMemoryLayer:
                 "message": "Presentation not found.",
                 "validation_errors": [],
             }
-        if presentation.generation_mode != "smart":
+        if resolve_presentation_profile(presentation).driver_id != "smart":
             return {
                 "saved": False,
                 "message": "Only Smart presentations can save HTML slides.",

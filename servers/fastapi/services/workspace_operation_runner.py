@@ -130,6 +130,27 @@ _SAFE_PAYLOAD_KEYS = frozenset(
     }
 )
 
+_PUBLIC_RUNTIME_EVENT_TYPES = frozenset(
+    {
+        "assistant.checkpoint",
+        "tool.started",
+        "tool.completed",
+        "run.status",
+    }
+)
+_PUBLIC_RUNTIME_PAYLOAD_KEYS = frozenset(
+    {
+        "message_id",
+        "assistant_text",
+        "checkpoint_sequence",
+        "tool_name",
+        "tool_status",
+        "tool_summary",
+    }
+)
+_MAX_ASSISTANT_CHECKPOINT_LENGTH = 100_000
+_MAX_TOOL_SUMMARY_LENGTH = 500
+
 # Result payload additions are scoped to a specific operation kind.  Keeping
 # these out of the general event allowlist prevents an unrelated handler from
 # publishing fields that only make sense for another operation's result card.
@@ -427,6 +448,8 @@ def sanitize_workspace_event_payload(
     allowed_keys = _SAFE_PAYLOAD_KEYS | _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND.get(
         operation_kind or "", frozenset()
     )
+    if operation_kind in {"presentation.edit", "slide.edit", "slide.delete"}:
+        allowed_keys |= _PUBLIC_RUNTIME_PAYLOAD_KEYS
     safe: dict[str, Any] = {}
     for key, value in payload.items():
         normalized = str(key)
@@ -468,13 +491,16 @@ def sanitize_workspace_event_payload(
                 operation_kind=operation_kind,
             )
         elif value is None or isinstance(value, (str, int, float, bool)):
-            safe[normalized] = (
-                value[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
-                if operation_kind == "quality.review"
-                and normalized == "message"
-                and isinstance(value, str)
-                else value
-            )
+            if isinstance(value, str):
+                if normalized == "assistant_text":
+                    value = value[:_MAX_ASSISTANT_CHECKPOINT_LENGTH]
+                elif normalized == "tool_summary":
+                    value = value[:_MAX_TOOL_SUMMARY_LENGTH]
+                elif normalized in {"message_id", "tool_name", "tool_status"}:
+                    value = value[:128]
+                elif operation_kind == "quality.review" and normalized == "message":
+                    value = value[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
+            safe[normalized] = value
     return safe
 
 
@@ -1897,6 +1923,44 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                 "Progress not recorded for operation %s at stage %s",
                 self.claim.operation_id,
                 stage,
+                exc_info=True,
+            )
+            return True
+
+    async def emit_durable_event(
+        self,
+        *,
+        event_type: str,
+        payload: Mapping[str, Any],
+    ) -> bool:
+        """Persist one public runtime checkpoint under the active attempt fence."""
+
+        if event_type not in _PUBLIC_RUNTIME_EVENT_TYPES:
+            raise ValueError("unsupported public runtime event type")
+        try:
+            async with self._session_factory() as session:
+                event = await append_operation_event(
+                    session,
+                    operation_id=self.claim.operation_id,
+                    event_type=event_type,
+                    payload={"state": "running", **dict(payload)},
+                    operation_kind=self.claim.kind,
+                    attempt_token=self.claim.attempt_token,
+                    allowed_states=("running",),
+                )
+                if event is None:
+                    await session.rollback()
+                    return False
+                await session.commit()
+                return True
+        except OperationalError:
+            # Runtime checkpoints are recoverability hints. Publication and
+            # completion still use the operation/presentation CAS fence, so a
+            # transient writer-lock timeout must not invalidate the run.
+            LOGGER.warning(
+                "Runtime event %s not recorded for operation %s",
+                event_type,
+                self.claim.operation_id,
                 exc_info=True,
             )
             return True

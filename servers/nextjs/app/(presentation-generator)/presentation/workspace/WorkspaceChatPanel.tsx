@@ -36,6 +36,7 @@ import {
   type PresentationGenerationInfo,
 } from "../../services/api/dashboard";
 import { withGenerationContext } from "./generationContext";
+import { buildConversationContext } from "../conversation/context";
 import { WorkspacePageRemakePrompt } from "../components/AuthoredPageRemake";
 import {
   PageRemakeHistory,
@@ -941,7 +942,17 @@ export default function WorkspaceChatPanel({
             // send looks like it did nothing.
             shouldFollowLatestRef.current = true;
             await commandDispatcher(command, {
-              context: { current_slide: currentSlide },
+              // Keep the legacy adapter compatible while making context rich
+              // enough for the canonical Conversation API. The server derives
+              // mode/capabilities and admits only ready/scanned assets.
+              context: { ...buildConversationContext({
+                currentSlideIndex: currentSlide,
+                assets: pendingAssets.map((asset) => ({
+                  id: asset.assetId,
+                  name: asset.fileName,
+                  status: asset.status,
+                })),
+              }) },
               assetIds: pendingAssets.map((asset) => asset.assetId),
             });
             setPendingAssets([]);

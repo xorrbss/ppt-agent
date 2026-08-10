@@ -341,7 +341,7 @@ runStep({
   preconditionDescription: "Node 22 and npm",
 });
 runStep({
-  name: "presentation-export v0.4.2 synchronization contract",
+  name: "presentation-export v0.4.3 synchronization contract",
   command: npm,
   args: ["run", "test:presentation-export-sync"],
   precondition: node22Precondition,
@@ -352,7 +352,7 @@ runStep({
   command: npm,
   args: ["run", "sync:presentation-export"],
   precondition: node22Precondition,
-  preconditionDescription: "network access only when the pinned v0.4.2 runtime is absent or stale",
+  preconditionDescription: "network access only when the pinned v0.4.3 runtime is absent or stale",
 });
 runStep({
   name: "Verify pinned presentation-export runtime",

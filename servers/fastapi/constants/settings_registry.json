@@ -690,6 +690,52 @@
       "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
       "group": "image.openai",
       "description": "GPT Image 2 output quality."
+    },
+    {
+      "key": "WEB_SEARCH_PROVIDER",
+      "type": "enum",
+      "default": "auto",
+      "secret": false,
+      "choices": ["auto", "searxng", "tavily", "exa", "brave"],
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public", "user_config.ui"],
+      "group": "web_search",
+      "description": "Web-search provider selected from the canonical provider registry."
+    },
+    {
+      "key": "SEARXNG_BASE_URL",
+      "type": "string",
+      "default": null,
+      "secret": false,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public", "user_config.ui"],
+      "group": "web_search.searxng",
+      "description": "SearXNG base URL."
+    },
+    {
+      "key": "TAVILY_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public", "user_config.ui"],
+      "group": "web_search.tavily",
+      "description": "Tavily API key."
+    },
+    {
+      "key": "EXA_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public", "user_config.ui"],
+      "group": "web_search.exa",
+      "description": "Exa API key."
+    },
+    {
+      "key": "BRAVE_SEARCH_API_KEY",
+      "type": "string",
+      "default": null,
+      "secret": true,
+      "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public", "user_config.ui"],
+      "group": "web_search.brave",
+      "description": "Brave Search API key."
     }
   ]
 }

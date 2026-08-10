@@ -28,9 +28,10 @@ export interface DeplotResponse {
 
 export interface ImageAssetResponse {
     message: string;
-    path: string;
     id: string;
-    file_url?: string;
+    file_url: string;
+    /** Remove after the legacy raw-path API compatibility window closes. */
+    path?: string;
 }
 
 

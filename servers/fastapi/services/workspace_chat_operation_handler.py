@@ -17,13 +17,25 @@ from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 from fastapi import HTTPException
-from sqlalchemy import inspect as sqlalchemy_inspect
+from sqlalchemy import inspect as sqlalchemy_inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.sql.expression import UpdateBase
 
 from models.sql.chat_history_message import ChatHistoryMessageModel
+from models.sql.presentation import PresentationModel
+from models.sql.workspace import WorkspaceAsset, WorkspaceMessage
+from services.agent_runtime import (
+    AgentRunResult,
+    BoundedCheckpointEventSink,
+    OperationArtifactScope,
+    PresentationAgentRuntime,
+    RunAsset,
+    RunContext,
+    RunMessage,
+    RunViewport,
+    SmartSelection,
+)
 from services.chat import PresentationChatService
-from services.chat import memory_layer as chat_memory_layer
 from services.chat.service import ChatTurnResult
 from services.database import async_session_maker
 from services.presentation_publication_service import (
@@ -34,6 +46,8 @@ from services.presentation_version_service import list_versions, restore_version
 from services.workspace_chat_memory_outbox import (
     enqueue_workspace_chat_memory_delivery,
 )
+from services.presentation_profiles import resolve_presentation_profile
+from services.workspace_db_adapter import reserve_conversation_positions
 from services.workspace_artifact_publication_service import (
     PromotedWorkspaceChatArtifacts,
     WorkspaceArtifactPublicationError,
@@ -66,7 +80,6 @@ CHAT_MUTATION_OPERATION_KINDS = (
 )
 
 LOGGER = logging.getLogger(__name__)
-_CHAT_IMAGE_DIRECTORY_LOCK = asyncio.Lock()
 
 
 class BufferedAsyncSession:
@@ -91,6 +104,7 @@ class BufferedAsyncSession:
     def __init__(self, delegate: AsyncSession) -> None:
         self._delegate = delegate
         self.defer_external_chat_memory = True
+        self.defer_canonical_chat_persistence = True
 
     def _retain(self, instance: object) -> None:
         retained = self._delegate.info.setdefault(
@@ -153,7 +167,7 @@ def _turn_changed_the_deck(session: AsyncSession) -> bool:
     """
 
     return any(
-        not isinstance(instance, ChatHistoryMessageModel)
+        not isinstance(instance, (ChatHistoryMessageModel, WorkspaceMessage))
         for instance in (*session.new, *session.dirty, *session.deleted)
     )
 
@@ -180,15 +194,30 @@ def _error_code(detail: Any, fallback: str) -> str:
 
 
 def chat_turn_result_payload(
-    turn: ChatTurnResult, replacements: Mapping[str, str]
+    turn: ChatTurnResult | AgentRunResult, replacements: Mapping[str, str]
 ) -> dict[str, Any]:
     """Describe a finished chat turn for the workspace client."""
 
+    response_text = (
+        turn.assistant_output
+        if isinstance(turn, AgentRunResult)
+        else turn.response_text
+    )
     payload: dict[str, Any] = {
         "conversation_id": str(turn.conversation_id),
-        "summary": _replace_paths(turn.response_text, replacements),
+        "summary": _replace_paths(response_text, replacements),
         "tool_calls": _replace_paths(list(turn.tool_calls), replacements),
     }
+    if isinstance(turn, AgentRunResult):
+        payload["mutations"] = [mutation.kind for mutation in turn.mutations]
+        payload["tool_summaries"] = [
+            {
+                "tool": summary.name,
+                "status": summary.status,
+                "summary": summary.summary,
+            }
+            for summary in turn.tool_summaries
+        ]
     # The turn answered but could not act: the page is model-authored HTML the
     # chat tools cannot rebuild.  Naming the page turns a reply that merely
     # describes the remake flow into one the client can offer.  The key is
@@ -245,6 +274,254 @@ def _rewrite_pending_artifact_paths(
                 setattr(instance, key, updated)
 
 
+def _optional_uuid(value: Any) -> uuid.UUID | None:
+    if value is None:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _bounded_text(value: Any, limit: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized[:limit] if normalized else None
+
+
+def _run_viewport(raw_context: Mapping[str, Any]) -> RunViewport | None:
+    raw_viewport = raw_context.get("viewport")
+    viewport = raw_viewport if isinstance(raw_viewport, Mapping) else {}
+    width = viewport.get("width")
+    height = viewport.get("height")
+    zoom = viewport.get("zoom", 1.0)
+    if (
+        not isinstance(width, int)
+        or isinstance(width, bool)
+        or width < 1
+        or width > 100_000
+        or not isinstance(height, int)
+        or isinstance(height, bool)
+        or height < 1
+        or height > 100_000
+        or not isinstance(zoom, (int, float))
+        or isinstance(zoom, bool)
+        or zoom <= 0
+        or zoom > 20
+    ):
+        return None
+
+    raw_slide = raw_context.get("current_slide", raw_context.get("currentSlide"))
+    slide = raw_slide if isinstance(raw_slide, Mapping) else {}
+    raw_index = (
+        slide.get("index")
+        if slide
+        else raw_slide
+        if isinstance(raw_slide, int) and not isinstance(raw_slide, bool)
+        else None
+    )
+    slide_index = (
+        raw_index
+        if isinstance(raw_index, int)
+        and not isinstance(raw_index, bool)
+        and raw_index >= 0
+        else None
+    )
+    return RunViewport(
+        width=width,
+        height=height,
+        zoom=float(zoom),
+        slide_id=_optional_uuid(
+            slide.get("slide_id", slide.get("slideId")) if slide else None
+        ),
+        slide_index=slide_index,
+    )
+
+
+def _smart_selection(
+    raw_context: Mapping[str, Any], *, generation_mode: str
+) -> SmartSelection | None:
+    if generation_mode != "smart":
+        return None
+    raw = raw_context.get("smart_selection", raw_context.get("smartSelection"))
+    selection = raw if isinstance(raw, Mapping) else {}
+    html = _bounded_text(selection.get("html"), 100_000)
+    if html is None:
+        return None
+    raw_index = selection.get("slide_index", selection.get("slideIndex"))
+    slide_index = (
+        raw_index
+        if isinstance(raw_index, int)
+        and not isinstance(raw_index, bool)
+        and raw_index >= 0
+        else None
+    )
+    return SmartSelection(
+        html=html,
+        selected_text=_bounded_text(
+            selection.get("selected_text", selection.get("selectedText")),
+            50_000,
+        ),
+        slide_id=_optional_uuid(
+            selection.get("slide_id", selection.get("slideId"))
+        ),
+        slide_index=slide_index,
+    )
+
+
+async def _load_canonical_history(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    current_user_message_id: uuid.UUID | None,
+) -> tuple[RunMessage, ...]:
+    rows = list(
+        (
+            await session.scalars(
+                select(WorkspaceMessage)
+                .where(WorkspaceMessage.conversation_id == conversation_id)
+                .order_by(WorkspaceMessage.position.asc())
+            )
+        ).all()
+    )
+    return tuple(
+        RunMessage(role=cast(Any, row.role), content=row.content)
+        for row in rows
+        if row.id != current_user_message_id
+        and row.role in {"user", "assistant", "system", "tool"}
+        and row.content
+    )
+
+
+async def _load_ready_run_assets(
+    session: AsyncSession,
+    *,
+    raw_asset_ids: Any,
+    conversation_id: uuid.UUID,
+    owner_id: uuid.UUID | None,
+) -> tuple[RunAsset, ...]:
+    if not raw_asset_ids:
+        return ()
+    if not isinstance(raw_asset_ids, list) or len(raw_asset_ids) > 100:
+        raise NonRetryableWorkspaceOperationError("workspace_asset_not_ready")
+    asset_ids: list[uuid.UUID] = []
+    for value in raw_asset_ids:
+        asset_id = _optional_uuid(value)
+        if asset_id is None or asset_id in asset_ids:
+            raise NonRetryableWorkspaceOperationError("workspace_asset_not_ready")
+        asset_ids.append(asset_id)
+
+    statement = select(WorkspaceAsset).where(
+        WorkspaceAsset.id.in_(asset_ids),
+        WorkspaceAsset.conversation_id == conversation_id,
+        WorkspaceAsset.state == "ready",
+        WorkspaceAsset.deleted_at.is_(None),
+        WorkspaceAsset.sha256.is_not(None),
+    )
+    statement = statement.where(
+        WorkspaceAsset.owner_id == owner_id
+        if owner_id is not None
+        else WorkspaceAsset.owner_id.is_(None)
+    )
+    rows = list((await session.scalars(statement)).all())
+    by_id = {row.id: row for row in rows}
+    if len(by_id) != len(asset_ids):
+        # The worker revalidates after admission so a concurrent quarantine,
+        # expiry or ownership change can never enter provider context.
+        raise NonRetryableWorkspaceOperationError("workspace_asset_not_ready")
+    return tuple(
+        RunAsset(
+            id=asset_id,
+            name=by_id[asset_id].original_name,
+            media_type=by_id[asset_id].media_type,
+            size_bytes=by_id[asset_id].size_bytes,
+            sha256=cast(str, by_id[asset_id].sha256),
+        )
+        for asset_id in asset_ids
+    )
+
+
+async def _build_run_context(
+    session: AsyncSession,
+    *,
+    claim: Any,
+    command: str,
+    artifact_scope: OperationArtifactScope,
+    cancellation_check: Callable[[], Any],
+) -> RunContext:
+    presentation = await session.get(PresentationModel, claim.presentation_id)
+    if presentation is None:
+        raise NonRetryableWorkspaceOperationError("presentation_not_found")
+    profile = resolve_presentation_profile(presentation)
+    generation_mode = "smart" if profile.driver_id == "smart" else "standard"
+    raw_context = claim.request_payload.get("context")
+    structured = raw_context if isinstance(raw_context, Mapping) else {}
+    current_user_message_id = _optional_uuid(
+        claim.request_payload.get("user_message_id")
+    )
+    return RunContext(
+        run_id=claim.operation_id,
+        presentation_id=claim.presentation_id,
+        conversation_id=claim.conversation_id,
+        user_message=command,
+        expected_revision=claim.expected_revision,
+        generation_mode=cast(Any, generation_mode),
+        history=await _load_canonical_history(
+            session,
+            conversation_id=claim.conversation_id,
+            current_user_message_id=current_user_message_id,
+        ),
+        viewport=_run_viewport(structured),
+        smart_selection=_smart_selection(
+            structured, generation_mode=generation_mode
+        ),
+        assets=await _load_ready_run_assets(
+            session,
+            raw_asset_ids=claim.request_payload.get("asset_ids", []),
+            conversation_id=claim.conversation_id,
+            owner_id=claim.owner_id,
+        ),
+        artifact_scope=artifact_scope,
+        cancellation_check=cancellation_check,
+    )
+
+
+async def _append_canonical_assistant_message(
+    session: AsyncSession,
+    *,
+    context: RunContext,
+    result: AgentRunResult,
+) -> WorkspaceMessage:
+    existing = await session.get(WorkspaceMessage, context.assistant_message_id)
+    if existing is not None:
+        if (
+            existing.conversation_id != context.conversation_id
+            or existing.role != "assistant"
+            or existing.content != result.assistant_output
+        ):
+            raise RuntimeError("assistant_message_publication_conflict")
+        return existing
+
+    reservation = await reserve_conversation_positions(
+        session, context.conversation_id, 1
+    )
+    message = WorkspaceMessage(
+        id=context.assistant_message_id,
+        conversation_id=context.conversation_id,
+        position=reservation.start,
+        role="assistant",
+        content=result.assistant_output,
+        message_metadata={
+            "run_id": str(context.run_id),
+            "tool_calls": list(result.tool_calls),
+            "mutations": [mutation.kind for mutation in result.mutations],
+        },
+    )
+    session.add(message)
+    return message
+
+
 class PresentationChatOperationHandler:
     """Execute an existing chat mutation as one fenced publication."""
 
@@ -291,32 +568,44 @@ class PresentationChatOperationHandler:
                     attempt_token=claim.attempt_token,
                     fencing_token=claim.fencing_token,
                 )
-                service = self._service_factory(
-                    sql_session=deferred,
-                    presentation_id=claim.presentation_id,
+                run_context = await _build_run_context(
+                    deferred,
+                    claim=claim,
+                    command=command.strip(),
+                    artifact_scope=OperationArtifactScope(
+                        staging.staging_directory
+                    ),
+                    cancellation_check=context.raise_if_cancelled,
+                )
+
+                async def durable_writer(
+                    event_type: str, payload: dict[str, object]
+                ) -> bool:
+                    emit = getattr(context, "emit_durable_event", None)
+                    if not callable(emit):
+                        # Compatibility for deterministic unit contexts. The
+                        # real runner always supplies the fenced writer.
+                        return True
+                    return bool(
+                        await emit(event_type=event_type, payload=payload)
+                    )
+
+                event_sink = BoundedCheckpointEventSink(
                     conversation_id=claim.conversation_id,
+                    run_id=claim.operation_id,
+                    message_id=run_context.assistant_message_id,
+                    durable_writer=durable_writer,
+                )
+                runtime = PresentationAgentRuntime(
+                    sql_session=deferred,
+                    service_factory=self._service_factory,
                 )
                 await context.progress(stage="applying_command", percent=20)
                 # Autoflush would defeat the buffer: any read the tools issue
                 # after their first mutation would flush it to the connection
                 # and take the writer lock for the rest of the provider call.
                 with session.sync_session.no_autoflush:
-                    # PresentationContextStore imports this helper directly. Keep
-                    # the narrow module override serialized so another coroutine
-                    # can never inherit this operation's owner/fence directory.
-                    async with _CHAT_IMAGE_DIRECTORY_LOCK:
-                        original_images_directory = (
-                            chat_memory_layer.get_images_directory
-                        )
-                        chat_memory_layer.get_images_directory = (
-                            lambda: str(staging.staging_directory)
-                        )
-                        try:
-                            turn = await service.generate_reply(command.strip())
-                        finally:
-                            chat_memory_layer.get_images_directory = (
-                                original_images_directory
-                            )
+                    turn = await runtime.run(run_context, event_sink)
                 # Sample before promotion adds artifact rows of its own.
                 deck_changed = _turn_changed_the_deck(session)
                 await context.raise_if_cancelled()
@@ -339,6 +628,14 @@ class PresentationChatOperationHandler:
                 # every other client's expected_revision.
                 result_payload = chat_turn_result_payload(
                     turn, promoted.replacements
+                )
+                assistant_message = await _append_canonical_assistant_message(
+                    session,
+                    context=run_context,
+                    result=turn,
+                )
+                result_payload["assistant_message_id"] = str(
+                    assistant_message.id
                 )
                 revision = await publish_presentation_revision(
                     session,

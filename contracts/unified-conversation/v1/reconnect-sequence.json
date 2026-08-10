@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "description": "A client reconnects with Last-Event-ID 44. The replay page has the durable checkpoint and later run state; the earlier transient delta never needs replaying.",
+  "reconnect_after_cursor": "43",
+  "events": [
+    {
+      "schema_version": 1,
+      "id": "evt-delta-live-43",
+      "type": "assistant.delta",
+      "durability": "transient",
+      "conversation_id": "11111111-1111-4111-8111-111111111111",
+      "run_id": "44444444-4444-4444-8444-444444444444",
+      "message_id": "55555555-5555-4555-8555-555555555555",
+      "presentation_id": "33333333-3333-4333-8333-333333333333",
+      "cursor": null,
+      "checkpoint_cursor": "43",
+      "occurred_at": "2026-08-10T01:02:05Z",
+      "data": { "delta": "partial output" }
+    },
+    {
+      "schema_version": 1,
+      "id": "evt-checkpoint-44",
+      "type": "assistant.checkpoint",
+      "durability": "durable",
+      "conversation_id": "11111111-1111-4111-8111-111111111111",
+      "run_id": "44444444-4444-4444-8444-444444444444",
+      "message_id": "55555555-5555-4555-8555-555555555555",
+      "presentation_id": "33333333-3333-4333-8333-333333333333",
+      "cursor": "44",
+      "checkpoint_cursor": "44",
+      "occurred_at": "2026-08-10T01:02:08Z",
+      "data": { "content": "partial output, recovered after reconnect" }
+    },
+    {
+      "schema_version": 1,
+      "id": "evt-status-45",
+      "type": "run.status",
+      "durability": "durable",
+      "conversation_id": "11111111-1111-4111-8111-111111111111",
+      "run_id": "44444444-4444-4444-8444-444444444444",
+      "message_id": null,
+      "presentation_id": "33333333-3333-4333-8333-333333333333",
+      "cursor": "45",
+      "checkpoint_cursor": "44",
+      "occurred_at": "2026-08-10T01:02:09Z",
+      "data": { "status": "running" }
+    }
+  ],
+  "expected_recovery": {
+    "next_cursor": "45",
+    "assistant_message_id": "55555555-5555-4555-8555-555555555555",
+    "assistant_content": "partial output, recovered after reconnect",
+    "run_status": "running"
+  }
+}

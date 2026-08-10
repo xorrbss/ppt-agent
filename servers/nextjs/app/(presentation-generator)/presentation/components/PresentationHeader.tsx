@@ -37,6 +37,12 @@ import type {
   WorkspaceQualityReviewRequester,
 } from "../workspace";
 
+export interface PresentationHeaderFeatureSlots {
+  /** Computed by PresentationShell's server-issued capability projection. */
+  readonly showAuthoredActions: boolean;
+  readonly exportActions: boolean;
+}
+
 const PresentationHeader = ({
   presentation_id,
   isPresentationSaving,
@@ -48,6 +54,7 @@ const PresentationHeader = ({
   onWorkspaceCommand,
   onWorkspaceQualityReviewRequest,
   onWorkspacePageRemakeRequest,
+  headerFeatures,
 }: {
   presentation_id: string;
   isPresentationSaving: boolean;
@@ -59,6 +66,7 @@ const PresentationHeader = ({
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   onWorkspaceQualityReviewRequest?: WorkspaceQualityReviewRequester;
   onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
+  headerFeatures?: PresentationHeaderFeatureSlots;
 }) => {
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const router = useRouter();
@@ -77,6 +85,14 @@ const PresentationHeader = ({
   const { presentationData, isStreaming, enableHtmlSelector } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  // Compatibility facade for isolated header consumers. The presentation page
+  // always supplies the server-derived projection; this fallback is removable
+  // once those stories/tests consume PresentationShell as well.
+  const resolvedHeaderFeatures: PresentationHeaderFeatureSlots =
+    headerFeatures ?? {
+      showAuthoredActions: isAuthoredDeck,
+      exportActions: true,
+    };
 
   const workspaceHistoryEnabled =
     workspaceCommandsEnabled && Boolean(onWorkspaceCommand);
@@ -224,7 +240,10 @@ const PresentationHeader = ({
   };
 
   const exportDisabled =
-    isStreaming === true || !workspaceCommandsEnabled || !onWorkspaceCommand;
+    !resolvedHeaderFeatures.exportActions ||
+    isStreaming === true ||
+    !workspaceCommandsEnabled ||
+    !onWorkspaceCommand;
 
   const titleBlock = (
     <div
@@ -286,7 +305,7 @@ const PresentationHeader = ({
             </div>
           )}
 
-          {presentationData && isAuthoredDeck && (
+          {presentationData && resolvedHeaderFeatures.showAuthoredActions && (
             <AuthoredHeaderActions
               presentation_id={presentation_id}
               theme={presentationData.theme}
@@ -324,13 +343,15 @@ const PresentationHeader = ({
             />
           )}
 
-          <ExportMenu
-            isAuthoredDeck={isAuthoredDeck}
-            exportDisabled={exportDisabled}
-            workspaceCommandsEnabled={workspaceCommandsEnabled}
-            onExportPptx={handleExportPptx}
-            onExportPdf={handleExportPdf}
-          />
+          {resolvedHeaderFeatures.exportActions && (
+            <ExportMenu
+              isAuthoredDeck={isAuthoredDeck}
+              exportDisabled={exportDisabled}
+              workspaceCommandsEnabled={workspaceCommandsEnabled}
+              onExportPptx={handleExportPptx}
+              onExportPdf={handleExportPdf}
+            />
+          )}
         </div>
       </div>
       <ExportQualityDialog

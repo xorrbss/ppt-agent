@@ -1,12 +1,17 @@
 {
   "name": "presenton",
   "version": "1.0.0",
-  "presentationExportVersion": "v0.4.2",
+  "presentationExportVersion": "v0.4.3",
   "type": "module",
   "description": "Open-source AI presentation generator",
   "scripts": {
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
     "generate:settings-registry": "node scripts/sync-settings-registry.mjs",
+    "generate:provider-registry": "node scripts/generate-provider-registry.mjs",
+    "check:provider-registry": "node scripts/generate-provider-registry.mjs --check",
+    "test:provider-registry": "node scripts/generate-provider-registry.mjs --check && node --test scripts/provider-registry.test.mjs",
+    "generate:template-package": "uv run --directory servers/fastapi python ../../contracts/template_package/generate.py && node scripts/generate-template-package-metadata.mjs",
+    "check:template-package": "uv run --directory servers/fastapi python ../../contracts/template_package/generate.py --check && node scripts/generate-template-package-metadata.mjs --check",
     "test:settings-registry": "node scripts/sync-settings-registry.mjs --check-only && node --test scripts/settings-registry.test.mjs",
     "generate:template-v2-contracts": "uv run --directory servers/fastapi python ../../contracts/template_v2/generate.py",
     "check:template-v2-contracts": "uv run --directory servers/fastapi python ../../contracts/template_v2/generate.py --check",
@@ -16,7 +21,7 @@
     "test:presentation-export-sync": "node --test scripts/sync-presentation-export.test.cjs",
     "test:chat-first-deployment-config": "node scripts/check-chat-first-deployment-config.mjs",
     "test:file-size-ratchet": "node scripts/check-file-size-ratchet.mjs",
-    "test:next-ci": "npm run test:file-size-ratchet && npm run test:chat-first-deployment-config && npm run test:settings-registry && node --test scripts/ppt-agent.test.mjs scripts/presenton-local-proxy.test.mjs scripts/check-file-size-ratchet.test.mjs scripts/required-ci-contract.test.mjs scripts/verify-upstream-byte-parity.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "test:next-ci": "npm run test:file-size-ratchet && npm run test:chat-first-deployment-config && npm run test:settings-registry && npm run check:provider-registry && npm run check:template-package && node --test scripts/ppt-agent.test.mjs scripts/presenton-local-proxy.test.mjs scripts/check-file-size-ratchet.test.mjs scripts/required-ci-contract.test.mjs scripts/verify-upstream-byte-parity.test.mjs && npm --prefix servers/nextjs run test:ci-node",
     "test:upstream-byte-parity": "node --test scripts/verify-upstream-byte-parity.test.mjs",
     "test:workspace-e2e": "npm --prefix servers/nextjs run test:workspace-e2e",
     "test:local": "node scripts/test-local.mjs"

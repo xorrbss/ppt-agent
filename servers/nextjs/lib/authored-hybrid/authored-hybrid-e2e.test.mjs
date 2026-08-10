@@ -119,7 +119,7 @@ function slideXml(entries, slideNumber) {
   return entries.get(`ppt/slides/slide${slideNumber}.xml`).toString("utf8");
 }
 
-test("v0.4.2 authored-hybrid representative fixtures preserve editable structure end to end", async (t) => {
+test("v0.4.3 authored-hybrid representative fixtures preserve editable structure end to end", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
     if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
@@ -134,8 +134,8 @@ test("v0.4.2 authored-hybrid representative fixtures preserve editable structure
       fs.readFile(path.join(HERE, "fixtures", fixture), "utf8")
     ),
   ]);
-  assert.equal(rootPackage.presentationExportVersion, "v0.4.2");
-  assert.equal(installedVersion.trim(), "v0.4.2");
+  assert.equal(rootPackage.presentationExportVersion, "v0.4.3");
+  assert.equal(installedVersion.trim(), "v0.4.3");
 
   // No v0.3.3 runtime is retained in the repository. A binary byte comparison
   // would require downloading or replacing the pinned runtime, so the stable

@@ -41,6 +41,20 @@ class WorkspaceOperationExecutionContext(Protocol):
         percent: int | None = None,
     ) -> bool: ...
 
+    async def emit_durable_event(
+        self,
+        *,
+        event_type: str,
+        payload: Mapping[str, Any],
+    ) -> bool:
+        """Append one allow-listed, fenced public runtime event.
+
+        Implementations must reject unknown event types and sanitize payloads;
+        callers may never use this boundary for provider traces or hidden
+        reasoning.  Transient token deltas use the runtime broadcaster instead.
+        """
+        ...
+
     async def cancellation_requested(self) -> bool: ...
 
     async def raise_if_cancelled(self) -> None: ...

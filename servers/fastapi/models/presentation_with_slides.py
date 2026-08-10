@@ -3,9 +3,14 @@ import re
 from typing import Any, List, Literal, Optional
 import uuid
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from models.sql.slide import SlideModel
+from services.presentation_profiles import (
+    PresentationCapabilities,
+    PresentationProfile,
+    resolve_presentation_driver,
+)
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 
 
@@ -28,6 +33,29 @@ class PresentationWithSlides(BaseModel):
     # explicitly instead of inferring it from theme/layout sentinels.
     mode: Optional[str] = None
     version: str = LEGACY_PRESENTATION_VERSION
+    revision: int = 0
+    lifecycle_status: str = "published"
+    profile: PresentationProfile
+    capabilities: PresentationCapabilities
+
+    @model_validator(mode="before")
+    @classmethod
+    def derive_server_runtime(cls, value: Any) -> Any:
+        """Project persisted identity into the canonical runtime contract.
+
+        Callers cannot supply a profile or capability override: both values are
+        always replaced with a projection of the server-loaded presentation
+        fields.  ``generation_mode`` remains in the wire shape only as the
+        documented rolling-compatibility facade.
+        """
+
+        if not isinstance(value, dict):
+            return value
+        projected = dict(value)
+        profile, capabilities, _ = resolve_presentation_driver(projected)
+        projected["profile"] = profile
+        projected["capabilities"] = capabilities
+        return projected
 
 
 _PUBLIC_PRIVATE_KEYS = {

@@ -22,6 +22,60 @@ type AxeRuntime = typeof import("axe-core");
 const presentationId = "deck-1";
 const presentationUrl = `**/api/v1/ppt/presentation/${presentationId}`;
 
+const standardRuntime = {
+  profile: {
+    schema_version: 1,
+    driver_id: "standard",
+    content_model: "legacy-elements",
+    generation_strategy: "standard",
+    style_source: "builtin",
+    generation_mode: "standard",
+  },
+  capabilities: {
+    schema_version: 1,
+    driver_id: "standard",
+    renderer_adapter_id: "legacy-elements",
+    editor_adapter_id: "legacy-elements",
+    editor: {
+      element_text_edit: true,
+      element_geometry_edit: true,
+      chart_edit: true,
+      theme_apply: true,
+      template_apply: true,
+      slide_image_regenerate: false,
+      smart_selection: false,
+    },
+    agent_tool_capability: "standard",
+    export_adapter_id: "legacy-general",
+    export_editable_pptx: true,
+  },
+} as const;
+
+const smartRuntime = {
+  profile: {
+    schema_version: 1,
+    driver_id: "smart",
+    content_model: "smart-html",
+    generation_strategy: "smart",
+    style_source: "community",
+    generation_mode: "smart",
+  },
+  capabilities: {
+    ...standardRuntime.capabilities,
+    driver_id: "smart",
+    renderer_adapter_id: "smart-html",
+    editor_adapter_id: "smart-html",
+    editor: {
+      ...standardRuntime.capabilities.editor,
+      chart_edit: false,
+      theme_apply: false,
+      template_apply: false,
+      smart_selection: true,
+    },
+    agent_tool_capability: "smart",
+  },
+} as const;
+
 const buildDeck = (slideCount: number) => ({
   id: presentationId,
   title: "테스트 발표자료",
@@ -29,6 +83,7 @@ const buildDeck = (slideCount: number) => ({
   layout: { name: "blank", ordered: true, slides: [] },
   n_slides: slideCount,
   theme: null,
+  ...standardRuntime,
   slides: Array.from({ length: slideCount }, (_, index) =>
     createBlankPresentationSlide({
       id: `slide-${index + 1}`,
@@ -38,6 +93,26 @@ const buildDeck = (slideCount: number) => ({
       isTemplateV2: true,
     }),
   ),
+});
+
+const buildSmartDeck = () => ({
+  ...buildDeck(0),
+  ...smartRuntime,
+  mode: "authored",
+  slides: [
+    {
+      id: "smart-slide-1",
+      presentation: presentationId,
+      index: 0,
+      layout_group: "authored",
+      layout: "authored:SMART_SMOKE",
+      content: { __authored__: true },
+      html_content:
+        "<!doctype html><html><body><main><p>Choose this Smart paragraph</p></main></body></html>",
+      properties: {},
+    },
+  ],
+  n_slides: 1,
 });
 
 function assertNoSevereAxeViolations() {
@@ -105,10 +180,27 @@ describe("<PresentationPage />", () => {
       { prompt: "", attachment_file_names: [], settings: {} },
       "generationInfo",
     );
+    apiMocks.setupGetIntercept("**/api/v1/ppt/workspace/capabilities*", {
+      supported: true,
+      enabled: true,
+      timeline: true,
+      commands: true,
+      events: true,
+    }, "workspaceCapability");
+    apiMocks.setupPostIntercept("**/api/v1/ppt/conversations", {
+      id: "11111111-1111-4111-8111-111111111111",
+      presentation_id: presentationId,
+      revision: 1,
+    }, "conversation");
     apiMocks.setupGetIntercept(
-      "**/api/v1/ppt/chat/conversations*",
-      [] as never,
-      "conversations",
+      "**/api/v1/ppt/conversations/11111111-1111-4111-8111-111111111111/timeline*",
+      { items: [], revision: 1, event_high_watermark: "0" },
+      "conversationTimeline",
+    );
+    cy.intercept(
+      "GET",
+      "**/api/v1/ppt/conversations/11111111-1111-4111-8111-111111111111/events*",
+      { statusCode: 503, body: { error: { safe_message: "stream unavailable" } } },
     );
   });
 
@@ -126,6 +218,22 @@ describe("<PresentationPage />", () => {
     cy.get("#slide-0").should("exist");
     cy.get("#slide-1").should("exist");
     cy.get('[data-testid="slides-scroll-container"]').should("be.visible");
+  });
+
+  it("enables Smart HTML selection and forwards the selected element to canonical chat", () => {
+    cy.window().then((window) => {
+      (window as Window & { tailwind?: unknown }).tailwind = {};
+    });
+    apiMocks.setupGetIntercept(presentationUrl, buildSmartDeck(), "loadSmartDeck");
+
+    mountPage();
+
+    cy.wait("@loadSmartDeck");
+    cy.contains("Choose this Smart paragraph").click();
+    cy.get('[data-testid="smart-selection-badge"]')
+      .should("be.visible")
+      .and("contain.text", "Smart selection");
+    cy.contains("Selected for AI").should("exist");
   });
 
   it("offers a recoverable empty state and reloads the deck on demand", () => {

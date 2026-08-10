@@ -1,0 +1,543 @@
+{
+  "capabilities": {
+    "content_schema": true,
+    "editor_projection": true,
+    "html_render": true,
+    "hydration": true,
+    "issues": [],
+    "pptx_compile": true,
+    "review_required": false,
+    "validation": true
+  },
+  "layouts": [
+    {
+      "components": [
+        {
+          "component_id": "regular_cards",
+          "repeats": [
+            {
+              "anchors": [],
+              "arrangement": "flow",
+              "component_id": "regular_cards",
+              "content_field": "cards",
+              "extensions": {
+                "direction": "row",
+                "x-upstream-extension": {
+                  "kept": true
+                }
+              },
+              "item_signature": "35fe4f1a2418900e0f8b6c0a04f323fed614c467f1b58cc66dcb10c21ebe6112",
+              "max_items": 3,
+              "min_items": 1,
+              "prototype": {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "card_title",
+                    "type": "text"
+                  }
+                ],
+                "name": "card",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "size": {
+                  "height": 120,
+                  "width": 200
+                },
+                "type": "group"
+              },
+              "repeat_id": "regular_cards:681813de9184",
+              "selection": "prototype",
+              "source_indices": [
+                0
+              ],
+              "source_path": "layouts.0.components.0.elements.0.children"
+            }
+          ],
+          "source": {
+            "description": "A repeatable row containing one complete card prototype.",
+            "elements": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "decorative": false,
+                        "name": "card_title",
+                        "type": "text"
+                      }
+                    ],
+                    "name": "card",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "size": {
+                      "height": 120,
+                      "width": 200
+                    },
+                    "type": "group"
+                  }
+                ],
+                "direction": "row",
+                "max_children": 3,
+                "min_children": 1,
+                "name": "cards",
+                "type": "flex",
+                "x-upstream-extension": {
+                  "kept": true
+                }
+              }
+            ],
+            "id": "regular_cards",
+            "position": {
+              "x": 0,
+              "y": 0
+            }
+          },
+          "source_path": "layouts.0.components.0"
+        },
+        {
+          "component_id": "positioned_callouts",
+          "repeats": [
+            {
+              "anchors": [
+                {
+                  "anchor_id": "positioned_callouts:1",
+                  "geometry": {
+                    "height": 80.0,
+                    "rotation": null,
+                    "width": 160.0,
+                    "x": 320.0,
+                    "y": 60.0
+                  },
+                  "source": {
+                    "children": [
+                      {
+                        "decorative": false,
+                        "name": "item_title_1",
+                        "type": "text"
+                      }
+                    ],
+                    "name": "callout_1",
+                    "position": {
+                      "x": 320,
+                      "y": 60
+                    },
+                    "size": {
+                      "height": 80,
+                      "width": 160
+                    },
+                    "type": "group"
+                  },
+                  "source_index": 1
+                },
+                {
+                  "anchor_id": "positioned_callouts:2",
+                  "geometry": {
+                    "height": 80.0,
+                    "rotation": null,
+                    "width": 160.0,
+                    "x": 120.0,
+                    "y": 10.0
+                  },
+                  "source": {
+                    "children": [
+                      {
+                        "decorative": false,
+                        "name": "item_title_2",
+                        "type": "text"
+                      }
+                    ],
+                    "name": "callout_2",
+                    "position": {
+                      "x": 120,
+                      "y": 10
+                    },
+                    "size": {
+                      "height": 80,
+                      "width": 160
+                    },
+                    "type": "group"
+                  },
+                  "source_index": 2
+                },
+                {
+                  "anchor_id": "positioned_callouts:3",
+                  "geometry": {
+                    "height": 80.0,
+                    "rotation": null,
+                    "width": 160.0,
+                    "x": 520.0,
+                    "y": 120.0
+                  },
+                  "source": {
+                    "children": [
+                      {
+                        "decorative": false,
+                        "name": "item_title_3",
+                        "type": "text"
+                      }
+                    ],
+                    "name": "callout_3",
+                    "position": {
+                      "x": 520,
+                      "y": 120
+                    },
+                    "size": {
+                      "height": 80,
+                      "width": 160
+                    },
+                    "type": "group"
+                  },
+                  "source_index": 3
+                }
+              ],
+              "arrangement": "positioned",
+              "component_id": "positioned_callouts",
+              "content_field": "items",
+              "extensions": {},
+              "item_signature": "83bb2d6263c084cf4b88f93983aca8e4f572ba3642a3335d28bbafcbd37c863a",
+              "max_items": 3,
+              "min_items": 1,
+              "prototype": null,
+              "repeat_id": "positioned_callouts:931a97742d5a",
+              "selection": "prefix",
+              "source_indices": [
+                1,
+                2,
+                3
+              ],
+              "source_path": "layouts.0.components.1.elements"
+            }
+          ],
+          "source": {
+            "description": "Fixed connector geometry plus positioned repeated callout groups.",
+            "elements": [
+              {
+                "decorative": true,
+                "name": "shared_path",
+                "type": "vector"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_1",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_1",
+                "position": {
+                  "x": 320,
+                  "y": 60
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_2",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_2",
+                "position": {
+                  "x": 120,
+                  "y": 10
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_3",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_3",
+                "position": {
+                  "x": 520,
+                  "y": 120
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              }
+            ],
+            "id": "positioned_callouts",
+            "position": {
+              "x": 0,
+              "y": 160
+            }
+          },
+          "source_path": "layouts.0.components.1"
+        }
+      ],
+      "layout_id": "canonical_repeat_fixture",
+      "source": {
+        "components": [
+          {
+            "description": "A repeatable row containing one complete card prototype.",
+            "elements": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "decorative": false,
+                        "name": "card_title",
+                        "type": "text"
+                      }
+                    ],
+                    "name": "card",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "size": {
+                      "height": 120,
+                      "width": 200
+                    },
+                    "type": "group"
+                  }
+                ],
+                "direction": "row",
+                "max_children": 3,
+                "min_children": 1,
+                "name": "cards",
+                "type": "flex",
+                "x-upstream-extension": {
+                  "kept": true
+                }
+              }
+            ],
+            "id": "regular_cards",
+            "position": {
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "description": "Fixed connector geometry plus positioned repeated callout groups.",
+            "elements": [
+              {
+                "decorative": true,
+                "name": "shared_path",
+                "type": "vector"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_1",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_1",
+                "position": {
+                  "x": 320,
+                  "y": 60
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_2",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_2",
+                "position": {
+                  "x": 120,
+                  "y": 10
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_3",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_3",
+                "position": {
+                  "x": 520,
+                  "y": 120
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              }
+            ],
+            "id": "positioned_callouts",
+            "position": {
+              "x": 0,
+              "y": 160
+            }
+          }
+        ],
+        "description": "A regular card row and an irregular positioned callout path.",
+        "id": "canonical_repeat_fixture"
+      },
+      "source_path": "layouts.0"
+    }
+  ],
+  "schema_version": "presenton.template-ast/v1",
+  "source": {
+    "layouts": [
+      {
+        "components": [
+          {
+            "description": "A repeatable row containing one complete card prototype.",
+            "elements": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "decorative": false,
+                        "name": "card_title",
+                        "type": "text"
+                      }
+                    ],
+                    "name": "card",
+                    "position": {
+                      "x": 0,
+                      "y": 0
+                    },
+                    "size": {
+                      "height": 120,
+                      "width": 200
+                    },
+                    "type": "group"
+                  }
+                ],
+                "direction": "row",
+                "max_children": 3,
+                "min_children": 1,
+                "name": "cards",
+                "type": "flex",
+                "x-upstream-extension": {
+                  "kept": true
+                }
+              }
+            ],
+            "id": "regular_cards",
+            "position": {
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "description": "Fixed connector geometry plus positioned repeated callout groups.",
+            "elements": [
+              {
+                "decorative": true,
+                "name": "shared_path",
+                "type": "vector"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_1",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_1",
+                "position": {
+                  "x": 320,
+                  "y": 60
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_2",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_2",
+                "position": {
+                  "x": 120,
+                  "y": 10
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              },
+              {
+                "children": [
+                  {
+                    "decorative": false,
+                    "name": "item_title_3",
+                    "type": "text"
+                  }
+                ],
+                "name": "callout_3",
+                "position": {
+                  "x": 520,
+                  "y": 120
+                },
+                "size": {
+                  "height": 80,
+                  "width": 160
+                },
+                "type": "group"
+              }
+            ],
+            "id": "positioned_callouts",
+            "position": {
+              "x": 0,
+              "y": 160
+            }
+          }
+        ],
+        "description": "A regular card row and an irregular positioned callout path.",
+        "id": "canonical_repeat_fixture"
+      }
+    ],
+    "x-upstream-envelope": {
+      "roundTrip": "lossless"
+    }
+  },
+  "source_dialect": "a3352f3c",
+  "source_version": "a3352f3c"
+}

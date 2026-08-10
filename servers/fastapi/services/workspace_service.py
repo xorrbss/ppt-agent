@@ -438,6 +438,37 @@ async def _enqueue_event_notification(
     return row
 
 
+async def _append_message_created_event(
+    session: AsyncSession,
+    *,
+    operation: WorkspaceOperation,
+    message: WorkspaceMessage,
+) -> WorkspaceOperationEvent:
+    """Anchor a canonical message event to the run admitted with that message.
+
+    Message content remains in ``workspace_messages`` and is recovered through
+    the timeline.  The event contains only the stable identifier/role so SSE
+    replay never duplicates user text or exposes request metadata.
+    """
+
+    event = await append_workspace_operation_event(
+        session,
+        operation=operation,
+        event_type="message.created",
+        payload={
+            "status": operation.state,
+            "message_id": str(message.id),
+            "role": message.role,
+        },
+    )
+    await _enqueue_event_notification(
+        session,
+        operation=operation,
+        event=event,
+    )
+    return event
+
+
 async def _existing_operation_for_key(
     session: AsyncSession,
     *,
@@ -784,6 +815,11 @@ async def _bootstrap_workspace_once(
         **operation_payload,
         "asset_ids": [str(asset.id) for asset in assets],
     }
+    await _append_message_created_event(
+        session,
+        operation=operation,
+        message=message,
+    )
     initial_event = await append_workspace_operation_event(
         session,
         operation=operation,
@@ -1589,6 +1625,11 @@ async def create_workspace_command(
             "asset_ids": [str(asset.id) for asset in assets],
         }
         await session.flush()
+        await _append_message_created_event(
+            session,
+            operation=operation,
+            message=message,
+        )
         event = await append_workspace_operation_event(
             session,
             operation=operation,

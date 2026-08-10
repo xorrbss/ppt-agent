@@ -22,6 +22,39 @@
     "save": "Save",
     "close": "Close"
   },
+  "conversation": {
+    "ariaLabel": "Conversation",
+    "connection": {
+      "live": "Live",
+      "connecting": "Connecting",
+      "reconnecting": "Reconnecting"
+    },
+    "smartSelection": "Smart selection",
+    "loading": "Loading conversation…",
+    "streaming": "Streaming…",
+    "tool": {
+      "working": "working…",
+      "completed": "completed"
+    },
+    "agentRun": "Agent run",
+    "approvalRequired": "Approval required before this edit is published.",
+    "attachments": "Attachments",
+    "removeAttachment": "Remove {name}",
+    "placeholder": "Ask about this presentation",
+    "uploading": "Uploading…",
+    "attach": "Attach",
+    "send": "Send",
+    "action": {
+      "retry": "Retry",
+      "cancel": "Cancel",
+      "approve": "Approve",
+      "reject": "Reject",
+      "undo": "Undo"
+    },
+    "reviewAll": "Review this presentation and fix quality issues",
+    "reviewSlide": "Review slide {slide} and fix quality issues",
+    "remakeSlide": "Remake slide {slide}"
+  },
   "editableAssets": {
     "types": {
       "image": "image",

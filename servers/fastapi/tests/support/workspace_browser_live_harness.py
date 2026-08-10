@@ -33,6 +33,9 @@ FIRST_PROMPT = "첨부한 기획서를 바탕으로 경영진용 발표를 만�
 SUCCESS_MARKER = "[live-success]"
 BACKFILL_MARKER = "[live-backfill]"
 FAILURE_MARKER = "[live-failure]"
+CANONICAL_SOURCE = "canonical-live"
+CANONICAL_PUBLISH_MARKER = "[canonical-publish]"
+CANONICAL_CHECKPOINT_MARKER = "[canonical-checkpoint]"
 
 
 def _configure_production_environment(database_path: Path, app_data: Path) -> None:
@@ -109,6 +112,10 @@ def create_app(database_path: Path | None = None):
         WorkspaceOperationResult,
         register_workspace_operation_handler,
     )
+    from services.agent_runtime import AgentRunResult, TypedMutation
+    from services.workspace_chat_operation_handler import (
+        PresentationChatOperationHandler,
+    )
     from services.workspace_asset_maintenance import stop_workspace_asset_maintenance
     from services.workspace_asset_service import transition_workspace_asset
     from services.workspace_service import bootstrap_workspace
@@ -146,8 +153,96 @@ def create_app(database_path: Path | None = None):
                 application.state.production_database_was_blank = True
                 application.state.expected_alembic_head = expected_head
 
+                class DeterministicCanonicalChatService:
+                    """Offline provider fixture behind the real chat publisher."""
+
+                    def __init__(
+                        self,
+                        *,
+                        sql_session,
+                        presentation_id,
+                        conversation_id,
+                        artifact_directory=None,
+                    ):
+                        self._session = sql_session
+                        self._presentation_id = presentation_id
+                        self._conversation_id = conversation_id
+                        self._artifact_directory = artifact_directory
+
+                    async def execute_run(self, context, sink):
+                        command = context.user_message
+                        controls.execution_counts[command] = (
+                            controls.execution_counts.get(command, 0) + 1
+                        )
+                        controls.success_operation_id = str(context.run_id)
+                        controls.success_started.set()
+                        await sink.status("canonical_received")
+                        await context.raise_if_cancelled()
+                        if FAILURE_MARKER in command:
+                            raise NonRetryableWorkspaceOperationError(
+                                "browser_fixture_failure",
+                                detail={
+                                    "message": "Deterministic browser failure."
+                                },
+                            )
+
+                        if BACKFILL_MARKER in command:
+                            await controls.allow_backfill.wait()
+                            await context.raise_if_cancelled()
+
+                        assistant_output = (
+                            "Canonical recovered answer"
+                            if CANONICAL_CHECKPOINT_MARKER in command
+                            else "Canonical deterministic answer"
+                        )
+                        await sink.assistant_delta(assistant_output)
+                        await sink.finalize(assistant_output)
+
+                        mutations = ()
+                        if CANONICAL_PUBLISH_MARKER in command:
+                            presentation = await self._session.get(
+                                PresentationModel, self._presentation_id
+                            )
+                            if presentation is None:
+                                raise NonRetryableWorkspaceOperationError(
+                                    "presentation_not_found"
+                                )
+                            presentation.content = (
+                                f"{presentation.content}\ncanonical-live-publication"
+                            )
+                            mutations = (
+                                TypedMutation(
+                                    kind="presentation.updated",
+                                    tool="canonicalLiveFixture",
+                                ),
+                            )
+
+                        if BACKFILL_MARKER in command:
+                            # The checkpoint writer above commits independently,
+                            # so reconnecting after this gate always has a
+                            # durable cursor even though the run is still open.
+                            controls.backfill_recorded.set()
+                            await controls.allow_complete.wait()
+                            await context.raise_if_cancelled()
+
+                        return AgentRunResult(
+                            conversation_id=self._conversation_id,
+                            assistant_output=assistant_output,
+                            mutations=mutations,
+                        )
+
+                canonical_chat_handler = PresentationChatOperationHandler(
+                    service_factory=DeterministicCanonicalChatService
+                )
+
                 async def deterministic_edit(context):
                     command = str(context.claim.request_payload.get("command", ""))
+                    raw_context = context.claim.request_payload.get("context")
+                    operation_context = (
+                        raw_context if isinstance(raw_context, dict) else {}
+                    )
+                    if operation_context.get("source") == CANONICAL_SOURCE:
+                        return await canonical_chat_handler.execute(context)
                     controls.execution_counts[command] = (
                         controls.execution_counts.get(command, 0) + 1
                     )
@@ -181,6 +276,12 @@ def create_app(database_path: Path | None = None):
                 # the production runner implementation.
                 register_workspace_operation_handler(
                     "presentation.edit", deterministic_edit, replace=True
+                )
+                # The canonical approval fixture submits an allow-listed
+                # destructive kind, so admission/approve/cancel use the same
+                # production state machine before deterministic execution.
+                register_workspace_operation_handler(
+                    "slide.delete", canonical_chat_handler, replace=True
                 )
 
                 async with async_session_maker() as session, session.begin():
@@ -339,6 +440,17 @@ def create_app(database_path: Path | None = None):
             presentation.revision += 1
             revision = presentation.revision
         return {"presentation_id": str(PRESENTATION_ID), "revision": revision}
+
+    @app.get("/__test__/presentation/revision")
+    async def get_revision(request: Request):
+        async with request.app.state.session_factory() as session:
+            presentation = await session.get(PresentationModel, PRESENTATION_ID)
+            if presentation is None:
+                raise RuntimeError("live browser presentation is missing")
+            return {
+                "presentation_id": str(PRESENTATION_ID),
+                "revision": presentation.revision,
+            }
 
     @app.post("/__test__/shutdown")
     async def shutdown(request: Request):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from api.feature_module_registry import FeatureModule, compose_static_feature_modules
 
 from api.v1.ppt.endpoints.slide_to_html import LAYOUT_MANAGEMENT_ROUTER
 from api.v1.ppt.endpoints.presentation import PRESENTATION_ROUTER
@@ -13,6 +13,7 @@ from api.v1.ppt.endpoints.community import COMMUNITY_ROUTER
 from api.v1.ppt.endpoints.google import GOOGLE_ROUTER
 from api.v1.ppt.endpoints.openai import OPENAI_ROUTER
 from api.v1.ppt.endpoints.files import FILES_ROUTER
+from api.v1.ppt.endpoints.asset_gateway import ASSET_GATEWAY_ROUTER
 from api.v1.ppt.endpoints.file_decompose_jobs import FILE_DECOMPOSE_JOBS_ROUTER
 from api.v1.ppt.endpoints.pptx_slides import PPTX_SLIDES_ROUTER
 from api.v1.ppt.endpoints.pdf_slides import PDF_SLIDES_ROUTER
@@ -27,6 +28,7 @@ from api.v1.ppt.endpoints.theme import THEMES_ROUTER
 from api.v1.ppt.endpoints.theme_generate import THEME_ROUTER
 from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
 from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER
+from api.v1.ppt.endpoints.conversations import CONVERSATION_ROUTER
 from api.v1.ppt.endpoints.structured_templates import (
     STRUCTURED_TEMPLATES_ROUTER,
 )
@@ -39,36 +41,100 @@ from api.v1.ppt.endpoints.template_v2_compat import (
 from templates.router import TEMPLATE_ROUTER
 
 
-API_V1_PPT_ROUTER = APIRouter(prefix="/api/v1/ppt")
+# This tuple is intentionally static.  Feature discovery through settings or
+# module-path imports would make the deployed API depend on unreviewed input.
+PPT_FEATURE_MODULES = (
+    FeatureModule("files", FILES_ROUTER, frozenset({"ppt-api", "assets"})),
+    FeatureModule("asset-gateway", ASSET_GATEWAY_ROUTER, frozenset({"ppt-api", "assets"})),
+    FeatureModule("file-decompose-jobs", FILE_DECOMPOSE_JOBS_ROUTER, frozenset({"ppt-api", "assets"})),
+    FeatureModule("fonts", FONTS_ROUTER, frozenset({"ppt-api", "assets"})),
+    FeatureModule("outlines", OUTLINES_ROUTER, frozenset({"ppt-api"})),
+    FeatureModule("presentation-crud", PRESENTATION_CRUD_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("presentation", PRESENTATION_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("presentation-generate", PRESENTATION_GENERATE_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("presentation-blank", PRESENTATION_BLANK_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("presentation-versions", PRESENTATION_VERSION_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("presentation-share", PRESENTATION_SHARE_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("pptx-slides", PPTX_SLIDES_ROUTER, frozenset({"ppt-api", "export"})),
+    FeatureModule("slide", SLIDE_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("layout-management", LAYOUT_MANAGEMENT_ROUTER, frozenset({"ppt-api", "renderer"})),
+    FeatureModule("images", IMAGES_ROUTER, frozenset({"ppt-api", "assets"})),
+    FeatureModule("icons", ICONS_ROUTER, frozenset({"ppt-api", "assets"})),
+    FeatureModule(
+        "ollama",
+        OLLAMA_ROUTER,
+        frozenset({"ppt-api", "providers"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+    FeatureModule("pdf-slides", PDF_SLIDES_ROUTER, frozenset({"ppt-api", "export"})),
+    FeatureModule(
+        "openai",
+        OPENAI_ROUTER,
+        frozenset({"ppt-api", "providers"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+    FeatureModule(
+        "anthropic",
+        ANTHROPIC_ROUTER,
+        frozenset({"ppt-api", "providers"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+    FeatureModule(
+        "google",
+        GOOGLE_ROUTER,
+        frozenset({"ppt-api", "providers"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+    FeatureModule(
+        "codex-auth",
+        CODEX_AUTH_ROUTER,
+        frozenset({"ppt-api", "providers"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+    FeatureModule("pptx-fonts", PPTX_FONTS_ROUTER, frozenset({"ppt-api", "assets", "export"})),
+    FeatureModule("themes", THEMES_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("theme-generate", THEME_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("authored", AUTHORED_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("workspace", WORKSPACE_ROUTER, frozenset({"ppt-api", "workspace"})),
+    FeatureModule("conversations", CONVERSATION_ROUTER, frozenset({"ppt-api", "workspace"})),
+    FeatureModule(
+        "structured-template-imports",
+        STRUCTURED_TEMPLATE_IMPORTS_ROUTER,
+        frozenset({"ppt-api", "templates"}),
+    ),
+    FeatureModule("structured-templates", STRUCTURED_TEMPLATES_ROUTER, frozenset({"ppt-api", "templates"})),
+    FeatureModule(
+        "template-v2-compat",
+        TEMPLATE_V2_COMPAT_ROUTER,
+        frozenset({"ppt-api", "templates"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+    FeatureModule(
+        "templates",
+        TEMPLATE_ROUTER,
+        frozenset({"ppt-api", "templates"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+    FeatureModule(
+        "community",
+        COMMUNITY_ROUTER,
+        frozenset({"ppt-api", "community"}),
+        allow_legacy_route_name_collisions=True,
+    ),
+)
 
-API_V1_PPT_ROUTER.include_router(FILES_ROUTER)
-API_V1_PPT_ROUTER.include_router(FILE_DECOMPOSE_JOBS_ROUTER)
-API_V1_PPT_ROUTER.include_router(FONTS_ROUTER)
-API_V1_PPT_ROUTER.include_router(OUTLINES_ROUTER)
-API_V1_PPT_ROUTER.include_router(PRESENTATION_CRUD_ROUTER)
-API_V1_PPT_ROUTER.include_router(PRESENTATION_ROUTER)
-API_V1_PPT_ROUTER.include_router(PRESENTATION_GENERATE_ROUTER)
-API_V1_PPT_ROUTER.include_router(PRESENTATION_BLANK_ROUTER)
-API_V1_PPT_ROUTER.include_router(PRESENTATION_VERSION_ROUTER)
-API_V1_PPT_ROUTER.include_router(PRESENTATION_SHARE_ROUTER)
-API_V1_PPT_ROUTER.include_router(PPTX_SLIDES_ROUTER)
-API_V1_PPT_ROUTER.include_router(SLIDE_ROUTER)
-API_V1_PPT_ROUTER.include_router(LAYOUT_MANAGEMENT_ROUTER)
-API_V1_PPT_ROUTER.include_router(IMAGES_ROUTER)
-API_V1_PPT_ROUTER.include_router(ICONS_ROUTER)
-API_V1_PPT_ROUTER.include_router(OLLAMA_ROUTER)
-API_V1_PPT_ROUTER.include_router(PDF_SLIDES_ROUTER)
-API_V1_PPT_ROUTER.include_router(OPENAI_ROUTER)
-API_V1_PPT_ROUTER.include_router(ANTHROPIC_ROUTER)
-API_V1_PPT_ROUTER.include_router(GOOGLE_ROUTER)
-API_V1_PPT_ROUTER.include_router(CODEX_AUTH_ROUTER)
-API_V1_PPT_ROUTER.include_router(PPTX_FONTS_ROUTER)
-API_V1_PPT_ROUTER.include_router(THEMES_ROUTER)
-API_V1_PPT_ROUTER.include_router(THEME_ROUTER)
-API_V1_PPT_ROUTER.include_router(AUTHORED_ROUTER)
-API_V1_PPT_ROUTER.include_router(WORKSPACE_ROUTER)
-API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATE_IMPORTS_ROUTER)
-API_V1_PPT_ROUTER.include_router(STRUCTURED_TEMPLATES_ROUTER)
-API_V1_PPT_ROUTER.include_router(TEMPLATE_V2_COMPAT_ROUTER)
-API_V1_PPT_ROUTER.include_router(TEMPLATE_ROUTER)
-API_V1_PPT_ROUTER.include_router(COMMUNITY_ROUTER)
+API_V1_PPT_ROUTER = compose_static_feature_modules(
+    PPT_FEATURE_MODULES,
+    available_capabilities={
+        "ppt-api",
+        "assets",
+        "community",
+        "export",
+        "presentation",
+        "providers",
+        "renderer",
+        "templates",
+        "workspace",
+    },
+    prefix="/api/v1/ppt",
+)

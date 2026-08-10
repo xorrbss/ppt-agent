@@ -1,0 +1,934 @@
+{
+  "schemaVersion": "presenton.template-package-assets/v1",
+  "templateId": "editorial",
+  "files": [
+    {
+      "path": "static/DM Sans Bold.ttf",
+      "sha256": "d415b88e3fe0224e9a1fd34acfdb3d7f1f390c834b440bc3117b68c1f86900e3",
+      "sizeBytes": 71764,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/DM Sans Regular.ttf",
+      "sha256": "42939a84416e04f186a5e40988ff4df5fc588629bff89da5e0713cf74c0b3811",
+      "sizeBytes": 71912,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/freeform_10-1f2b381d0abf.svg",
+      "sha256": "e2f2e17eeefec9ccb5103ff2916c7e274c903dd697804d45ee4f4470d5b925b8",
+      "sizeBytes": 273,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_10-4b343a8f6dd6.svg",
+      "sha256": "f510261067d117e49bc5bc0d487f5b7d3d6141edd9bcf26a1561fa9aadc24b5f",
+      "sizeBytes": 592,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_10-6a93d756797e.svg",
+      "sha256": "c291bc088ba749b18ec0cf27e8c60fdc17a8c096944daf68191803a255f7b52b",
+      "sizeBytes": 646,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_10-7423a02c5a0b.svg",
+      "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+      "sizeBytes": 413,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_10-91af3141e6fe.svg",
+      "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+      "sizeBytes": 526,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_10-dd282336b126.svg",
+      "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+      "sizeBytes": 629,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_10-dd285c6df16e.svg",
+      "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+      "sizeBytes": 690,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_11-4e83e6c313c1.svg",
+      "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_11-6401af7d98d8.svg",
+      "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+      "sizeBytes": 322,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_11-70096e1768aa.svg",
+      "sha256": "345789e22083809461706c2d9ac9c7099beb5b9059bdc19c33c5eaad83d9a15c",
+      "sizeBytes": 669,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_12-fb6e3747a40a.svg",
+      "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_13-7423a02c5a0b.svg",
+      "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+      "sizeBytes": 413,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_13-91af3141e6fe.svg",
+      "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+      "sizeBytes": 526,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_13-ae44a4bca002.svg",
+      "sha256": "270e25562cfa28bf28145cab16491af7901482628882f6d8204588c6b2ece544",
+      "sizeBytes": 646,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_13-dd282336b126.svg",
+      "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+      "sizeBytes": 629,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_13-dd285c6df16e.svg",
+      "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+      "sizeBytes": 690,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_14-304eff937d6d.svg",
+      "sha256": "cfcd40999574947c12a8b9dc1b3e0d688301a63e63af8316df870cd62b9c194c",
+      "sizeBytes": 628,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_14-4e83e6c313c1.svg",
+      "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_14-549f7c1b88ef.svg",
+      "sha256": "049111e985d2b4837f9afded0ffe2df46a0765dd7561988c04a4717e65f15ff1",
+      "sizeBytes": 665,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_14-6401af7d98d8.svg",
+      "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+      "sizeBytes": 322,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_15-4e83e6c313c1.svg",
+      "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_15-746ca951ec57.svg",
+      "sha256": "61fffe790e3bd80f4789b59222fd7470a3b485c403fb1ca57998d7e509278445",
+      "sizeBytes": 269,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_16-7423a02c5a0b.svg",
+      "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+      "sizeBytes": 413,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_16-91af3141e6fe.svg",
+      "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+      "sizeBytes": 526,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_16-b705ebb9bd02.svg",
+      "sha256": "11fcedcc59e309f5179cd2f80e48a3cd538c3abd94ab9bc6620e94513a202ead",
+      "sizeBytes": 646,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_16-dd282336b126.svg",
+      "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+      "sizeBytes": 629,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_16-dd285c6df16e.svg",
+      "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+      "sizeBytes": 690,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_16-fb6e3747a40a.svg",
+      "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_17-249f8fb76642.svg",
+      "sha256": "cc36dd5c8b1965352e31e4fe8cfe0787f12ba73432863e9bea783284d0fe25fe",
+      "sizeBytes": 510,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_17-6401af7d98d8.svg",
+      "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+      "sizeBytes": 322,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_17-89b9975edf67.svg",
+      "sha256": "6422d3b467b924e7505efd2034e49123cc2df333d3de607118421ae5d3e9203d",
+      "sizeBytes": 568,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_18-4e83e6c313c1.svg",
+      "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_19-196ae6b92dc2.svg",
+      "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_19-7423a02c5a0b.svg",
+      "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+      "sizeBytes": 413,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_19-94812e314f28.svg",
+      "sha256": "725a1284411e33edf93967749b47559c724b4f2452fadbe3a4ee3904da9c1b90",
+      "sizeBytes": 646,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_20-683d921055a8.svg",
+      "sha256": "896785b55138ccbf85a509581e3997f7b198b2965ec7575ede1d259e74fc0740",
+      "sizeBytes": 465,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_20-89b9975edf67.svg",
+      "sha256": "6422d3b467b924e7505efd2034e49123cc2df333d3de607118421ae5d3e9203d",
+      "sizeBytes": 568,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_20-fb6e3747a40a.svg",
+      "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_21-4e83e6c313c1.svg",
+      "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_22-196ae6b92dc2.svg",
+      "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_22-d5361bea6e52.svg",
+      "sha256": "87c255b376f678e5cca8115576e8d258aaa2bb8117db960039959387f2aaa4ed",
+      "sizeBytes": 273,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_23-702066843570.svg",
+      "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+      "sizeBytes": 375,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_23-89b9975edf67.svg",
+      "sha256": "6422d3b467b924e7505efd2034e49123cc2df333d3de607118421ae5d3e9203d",
+      "sizeBytes": 568,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_24-4e83e6c313c1.svg",
+      "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_24-fb6e3747a40a.svg",
+      "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_25-196ae6b92dc2.svg",
+      "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_26-702066843570.svg",
+      "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+      "sizeBytes": 375,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_27-4e83e6c313c1.svg",
+      "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_27-6bc95e6e02fe.svg",
+      "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_28-196ae6b92dc2.svg",
+      "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_28-1e4f486a0576.svg",
+      "sha256": "aabf864abf42fe9082f77b72801a14545778019593c83cf2288dff09e1e673cf",
+      "sizeBytes": 273,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_28-fb6e3747a40a.svg",
+      "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_29-63c413265c4c.svg",
+      "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+      "sizeBytes": 750,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_29-702066843570.svg",
+      "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+      "sizeBytes": 375,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_3-aea2ce21dee0.svg",
+      "sha256": "bc497665eecfbcc082e1e49db8c9fc0b436e5ac12ea4b99e87882bd8b198b2e8",
+      "sizeBytes": 281,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_3-eac87b3b9ab0.svg",
+      "sha256": "cf60f8a9c58121855e23ed1a0db0eb267736c1855af7b364864897c7be0586c1",
+      "sizeBytes": 281,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_30-6bc95e6e02fe.svg",
+      "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_32-63c413265c4c.svg",
+      "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+      "sizeBytes": 750,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_32-702066843570.svg",
+      "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+      "sizeBytes": 375,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_33-6bc95e6e02fe.svg",
+      "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_34-2e266b37115d.svg",
+      "sha256": "1a431b657205cdaf73afbda87356707cea556a2b82b584b4f583fa516f941ecc",
+      "sizeBytes": 269,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_35-63c413265c4c.svg",
+      "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+      "sizeBytes": 750,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_35-702066843570.svg",
+      "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+      "sizeBytes": 375,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_36-6bc95e6e02fe.svg",
+      "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_38-63c413265c4c.svg",
+      "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+      "sizeBytes": 750,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_39-517e97cf0da5.svg",
+      "sha256": "59bedbf6fbbcdfa6449733e3acf743ddaeb3424f166b19e49b418befb95005d6",
+      "sizeBytes": 426,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_39-6bc95e6e02fe.svg",
+      "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_42-4747971af694.svg",
+      "sha256": "9762f6446a4d856602e7d5a9bc8b86fe49537cd57fe28025d8fdadc5c7ae8a4d",
+      "sizeBytes": 426,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_45-2c4b6974e56f.svg",
+      "sha256": "5090fc6452bc9dad38147925968c5b68c538b9af12966ad923601e1d404ec07c",
+      "sizeBytes": 421,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_45-512b0c0e8c7a.svg",
+      "sha256": "f07ef7621a682eab19e88bfdbddbb27861d23f27ecaae4e2ce137cb546b2fb61",
+      "sizeBytes": 364,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_46-bd7ae8588550.svg",
+      "sha256": "b7eeb57cf33a00592b1b861b2fb5065c124ab521d2d2ab15b5d3a3de586b2e12",
+      "sizeBytes": 364,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_47-512b0c0e8c7a.svg",
+      "sha256": "f07ef7621a682eab19e88bfdbddbb27861d23f27ecaae4e2ce137cb546b2fb61",
+      "sizeBytes": 364,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_48-2b116a92bc11.svg",
+      "sha256": "f53673bea9012bb3ada338b64bc04a3d7b08c23443e87e48b673bf6edbd52231",
+      "sizeBytes": 371,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_48-3b3a9cc13ef2.svg",
+      "sha256": "032cf4064d9da25b7fb5b70f7af9262ac6628d8867034cce7741103cd8736285",
+      "sizeBytes": 422,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_49-3ab584d0fd10.svg",
+      "sha256": "5010b92335a4ad11487424df5e37d0ba4aa74b8f8ad4fc05f0f3c3dbcf6062f3",
+      "sizeBytes": 373,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_50-2b116a92bc11.svg",
+      "sha256": "f53673bea9012bb3ada338b64bc04a3d7b08c23443e87e48b673bf6edbd52231",
+      "sizeBytes": 371,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_51-d305a9288a99.svg",
+      "sha256": "f5dfd191a42eb2ff07c95dd9700f00ae4c10830ce6f2fcc78601baec5c2a4c48",
+      "sizeBytes": 402,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_6-83d527cd6a35.svg",
+      "sha256": "1d21ffa9194ced29373cb0ef645ba6fad4523f64a9b32769b085a94c7d1cf12e",
+      "sizeBytes": 440,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_6-b8ecad75aca7.svg",
+      "sha256": "fc9e280bf439d0602b9df8d9a8f8e2795842b9b34e2292ee9aa9d3d92bb108d5",
+      "sizeBytes": 693,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-0859355ddfa6.svg",
+      "sha256": "f80e0eb0b77d4e9684f026b4ef73f39c2ea18466e595ccad81571a9235ea2881",
+      "sizeBytes": 265,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-7423a02c5a0b.svg",
+      "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+      "sizeBytes": 413,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-91af3141e6fe.svg",
+      "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+      "sizeBytes": 526,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-9f3a942686b7.svg",
+      "sha256": "5570343f337b80a8ea3b80df38a1092d2ad079383c7c6179781496c2d6ac14fd",
+      "sizeBytes": 465,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-a20cd002a6e5.svg",
+      "sha256": "7fb7ab3dcd81fb6cd5312b255290a0a0d347db14d709ff56b0010982590e52c0",
+      "sizeBytes": 680,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-aceb3eb45350.svg",
+      "sha256": "29808474279452d0a936f6ac798f4b4bb38b773596782ebcbebd80ea48b309a6",
+      "sizeBytes": 646,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-dd282336b126.svg",
+      "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+      "sizeBytes": 629,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_7-dd285c6df16e.svg",
+      "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+      "sizeBytes": 690,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_8-6401af7d98d8.svg",
+      "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+      "sizeBytes": 322,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_8-c34af73bed7d.svg",
+      "sha256": "d331d29417f948de709535d21d4712c17a58810735f54f4d18c330faa08d3a42",
+      "sizeBytes": 299,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/freeform_9-fb6e3747a40a.svg",
+      "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+      "sizeBytes": 379,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image-8d3c8ac86a1e8005.png",
+      "sha256": "514f02ac9b81bab558d56fb0e41024b10efcb38ee35dab4357f7c03f4d4ea905",
+      "sizeBytes": 50269,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image1-615fb2b5b0f5.png",
+      "sha256": "f4be961c9a95ac8be9c107c5ad8b3a346ce60c157fe38041e259e08ba8bae89f",
+      "sizeBytes": 1057296,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image105-ea477bc7a99e.png",
+      "sha256": "0942837f0c17fbec8b0b97cb0435c01af9cb510ffa9bf7c190d8ce58a98dbe6a",
+      "sizeBytes": 22148,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image106-56f1a9276797.png",
+      "sha256": "72e07fe06200efcd60dfcd28252a12997d17f9e7c2c613d963c1e51329cf67bd",
+      "sizeBytes": 51316,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image107-727072695219.png",
+      "sha256": "518437286eaa4e435006a93f9253615f6a8bee3dcc699c733436eac9e7ce1a62",
+      "sizeBytes": 28983,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image108-a80fc6a4b9fe.png",
+      "sha256": "44f4690c5f18e448a48346dbc57c2648401cab5ea28505a513061bdbd3fbec92",
+      "sizeBytes": 16182,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image109-7e0acd3e157f.png",
+      "sha256": "a29d7c6283ee3521d29b9ce0e02d9f1d587394cd37ecb181403daea04271e78a",
+      "sizeBytes": 11069,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image27-01b214bfecdc.png",
+      "sha256": "8147b9f3a07bf89995567d139d7606fd4ce424f5918e5aaab1132243de5aa4c1",
+      "sizeBytes": 3167,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image29-b70f71ba92d8.png",
+      "sha256": "a7fbeb3d5196ec05c6d7c8d18e3a950094992805d51e8a82ff628e1e12039244",
+      "sizeBytes": 2082,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image31-b4c49ed0099a.png",
+      "sha256": "99101288c151406f3bd2bd053cf68960ed95b16e486aa00650c993d52ce22735",
+      "sizeBytes": 177,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image33-038ae472424b.png",
+      "sha256": "18c36c2f764a5f37d10e1939f402bb63ae925bf1bb8739e13b32d043e861548f",
+      "sizeBytes": 3006,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image35-8f1271ad4871.png",
+      "sha256": "9f72dd5007cb9191ddb1ae2921a3ea2bee4eed8760073ac47f9d420a0bf8cfad",
+      "sizeBytes": 1932,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image37-7e1aac595afd.png",
+      "sha256": "d9f96431b072907d9a310b061095adf17700d434de057830cf7dd43ae0597936",
+      "sizeBytes": 21973,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image39-8fbe94b86c23.png",
+      "sha256": "066ec0c14410f14e69513e7c9406fbf7fd2e0ec776fb6d15ed02bb763004b66d",
+      "sizeBytes": 22464,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image41-ba1074e5cab4.png",
+      "sha256": "8849f0dbc367366c924976228e88d0ea6b4f7045b36f7c93817144573379fd57",
+      "sizeBytes": 22472,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image43-582f1b0bd22b.png",
+      "sha256": "86beaea45c97eaff1256f649e096939152e07af5edefc7be72b1c00ccf05410e",
+      "sizeBytes": 21207,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image5-c41a89af784e.png",
+      "sha256": "927eb5de828c8ba54c24c41f6b132050c1086bc93b592fb3b7d0cf441c8342ac",
+      "sizeBytes": 6884,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image6-16889f6f3a56.png",
+      "sha256": "9b9823afaed0396243c7b1c420d7d8910afc7a7ebc92b3091ccbf0b0cc7b09ed",
+      "sizeBytes": 2398403,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image64-978b5a6e637c.png",
+      "sha256": "2fc4ed16680a6d3129a5ec8754d6ab074b4825d0b5fca9471c31e13c4df816cb",
+      "sizeBytes": 26014,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image76-5e0300acacc6.png",
+      "sha256": "9d17fd30f9f2a76ec3c9d4bb465a9bc5339df0dd60eeb55f3aa885b416df4028",
+      "sizeBytes": 21092,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image8-89cdbfb14e09.png",
+      "sha256": "7cab294f850f546de388b5c87dfe2456f24c83ddba44ed94308c1d8290a817b9",
+      "sizeBytes": 159211,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/image96-15deb611fdd9.png",
+      "sha256": "1114644019edef4a83f4c585f3bdcd16b8ed5f71b736ae2f1eaa8a7c6c19eb3f",
+      "sizeBytes": 26034,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    },
+    {
+      "path": "static/Playfair Display Bold Italic.ttf",
+      "sha256": "76805b08a7cea7dc244753746acc63165da9dd7578cd66cb95eceae93583dff5",
+      "sizeBytes": 177756,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/thumbnail.png",
+      "sha256": "443a2e796cba89bebed8f47259a2b42e0e20d8048fa8ac8257660280071e07b5",
+      "sizeBytes": 759736,
+      "mediaType": "image/png",
+      "role": "thumbnail",
+      "licenseRef": "LicenseRef-Unverified-Upstream-Asset"
+    }
+  ]
+}

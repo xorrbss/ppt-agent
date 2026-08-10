@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from templates.preview import FontCheckResponse, check_fonts_in_pptx_handler
 from utils.asset_directory_utils import absolute_fastapi_asset_url, get_app_data_directory_env
+from utils.document_path_security import validated_upload_extension
 from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file
 
 try:
@@ -29,7 +30,6 @@ class FontUploadResponse(BaseModel):
     success: bool
     font_name: str
     font_url: str
-    font_path: str
     message: Optional[str] = None
 
 class FontListResponse(BaseModel):
@@ -70,6 +70,58 @@ def is_valid_font_file(file: UploadFile) -> bool:
     ]
     
     return content_type in valid_mime_types
+
+
+def _validated_font_filename(filename: str) -> tuple[str, str]:
+    """Return a single safe display stem and a registered extension."""
+
+    extension = validated_upload_extension(
+        filename,
+        tuple(SUPPORTED_FONT_EXTENSIONS),
+    )
+    stem = os.path.splitext(filename)[0].strip()
+    if not stem:
+        raise HTTPException(status_code=400, detail="Invalid font filename")
+    return stem, extension
+
+
+def _font_destination(fonts_dir: str, filename: str) -> str:
+    root = os.path.realpath(fonts_dir)
+    destination = os.path.realpath(os.path.join(root, filename))
+    try:
+        if os.path.commonpath([root, destination]) != root:
+            raise HTTPException(status_code=400, detail="Invalid font filename")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid font filename") from None
+    return destination
+
+
+def validate_and_extract_font_name(file_path: str) -> str:
+    """Require a successful parser pass before a shared font is published."""
+
+    if not FONTTOOLS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Font validation unavailable")
+    try:
+        with TTFont(file_path, lazy=False) as font:
+            name_table = font.get("name")
+            if name_table is None:
+                raise ValueError("missing name table")
+            for name_id in (1, 4, 6):
+                candidates = [
+                    record
+                    for record in name_table.names
+                    if record.nameID == name_id
+                ]
+                candidates.sort(key=lambda record: record.langID not in {0, 0x409})
+                for record in candidates:
+                    name = record.toUnicode().strip()
+                    if name:
+                        return name
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=422, detail="Invalid font file") from error
+    raise HTTPException(status_code=422, detail="Invalid font file")
 
 
 def extract_font_name_from_file(file_path: str) -> str:
@@ -158,13 +210,12 @@ async def upload_font(
             )
         
         # Generate unique filename to avoid conflicts
-        file_ext = os.path.splitext(font_file.filename)[1].lower()
-        base_name = os.path.splitext(font_file.filename)[0]
+        base_name, file_ext = _validated_font_filename(font_file.filename)
         unique_filename = f"{base_name}_{str(uuid.uuid4())[:8]}{file_ext}"
         
         # Get fonts directory
         fonts_dir = get_fonts_directory()
-        font_path = os.path.join(fonts_dir, unique_filename)
+        font_path = _font_destination(fonts_dir, unique_filename)
         
         # Stream to disk so the configured upload limit is enforced even when
         # the client does not provide a Content-Length header. The shared helper
@@ -175,16 +226,23 @@ async def upload_font(
             limit_bytes=get_single_upload_limit_bytes(),
             label="Font file",
         )
+        try:
+            font_name = validate_and_extract_font_name(font_path)
+        except HTTPException:
+            try:
+                os.remove(font_path)
+            except FileNotFoundError:
+                pass
+            raise
         
         # Generate accessible URL
         font_url = absolute_fastapi_asset_url(f"/app_data/fonts/{unique_filename}")
         
         return FontUploadResponse(
             success=True,
-            font_name=base_name,
+            font_name=font_name,
             font_url=font_url,
-            font_path=font_path,
-            message=f"Font '{base_name}' uploaded successfully"
+            message=f"Font '{font_name}' uploaded successfully"
         )
         
     except HTTPException:
@@ -308,7 +366,8 @@ async def delete_font(filename: str):
     """
     try:
         fonts_dir = get_fonts_directory()
-        font_path = os.path.join(fonts_dir, filename)
+        _validated_font_filename(filename)
+        font_path = _font_destination(fonts_dir, filename)
         
         if not os.path.exists(font_path):
             raise HTTPException(

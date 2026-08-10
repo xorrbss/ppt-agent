@@ -1,0 +1,47 @@
+{
+  "ref": { "object": { "sha": "b940f7b4a51d473af830d96d441276af3540dae6" } },
+  "commit": {
+    "sha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "html_url": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+    "commit": { "committer": { "date": "2026-08-10T22:06:57+05:45" }, "message": "fix: update version to 0.9.4-beta in package.json" }
+  },
+  "compare": {
+    "status": "ahead", "ahead_by": 6, "behind_by": 0, "total_commits": 6,
+    "files": [
+      { "filename": "servers/fastapi/api/v1/ppt/endpoints/presentation.py", "status": "modified", "additions": 16, "deletions": 1, "patch": "+from templates.v2.content import hydrate_repeated_top_level_groups" },
+      { "filename": "servers/fastapi/templates/v2/content.py", "status": "added", "additions": 42, "deletions": 0, "patch": "+def hydrate_repeated_top_level_groups(" },
+      { "filename": "servers/fastapi/templates/v2/generation.py", "status": "modified", "additions": 81, "deletions": 22, "patch": "+repeated top-level groups" },
+      { "filename": "servers/fastapi/templates/v2/schema.py", "status": "modified", "additions": 73, "deletions": 21, "patch": "+get_repeated_top_level_group_schema_name" },
+      { "filename": "servers/nextjs/components/slide-editor/surface/nodes.tsx", "status": "modified", "additions": 21, "deletions": 11, "patch": "+infographic" },
+      { "filename": "servers/nextjs/lib/template-v2-json-to-html.ts", "status": "modified", "additions": 19, "deletions": 7, "patch": "+renderInfographic" },
+      { "filename": "templates/editorial/template.json", "status": "added", "additions": 30186, "deletions": 0, "patch": "+{\"id\":\"editorial\"}" },
+      { "filename": "templates/editorial/static/thumbnail.png", "status": "added", "additions": 0, "deletions": 0 },
+      { "filename": "package.json", "status": "modified", "additions": 2, "deletions": 2, "patch": "-  \"presentationExportVersion\": \"v0.4.2\",\n+  \"presentationExportVersion\": \"v0.4.3\"," },
+      { "filename": "electron/package.json", "status": "modified", "additions": 2, "deletions": 2, "patch": "-  \"exportVersion\": \"v0.4.2\",\n+  \"exportVersion\": \"v0.4.3\"," }
+    ]
+  },
+  "commits": [
+    { "sha": "a3352f3caba3137e934c3bb68319adba4f8f6570", "subject": "feat(template-v2): support repeatable grouped content", "files": [
+      { "filename": "servers/fastapi/api/v1/ppt/endpoints/presentation.py", "status": "modified", "patch": "+hydrate_repeated_top_level_groups" },
+      { "filename": "servers/fastapi/templates/v2/content.py", "status": "added", "patch": "+def hydrate_repeated_top_level_groups(" },
+      { "filename": "servers/fastapi/templates/v2/schema.py", "status": "modified", "patch": "+get_repeated_top_level_group_schema_name" }
+    ] },
+    { "sha": "a6552331839bd8ce18ab91d2c00166774cecbc3f", "subject": "fix(editor): simplify infographic rendering", "files": [
+      { "filename": "servers/nextjs/components/slide-editor/surface/nodes.tsx", "status": "modified", "patch": "+infographic" },
+      { "filename": "servers/nextjs/lib/template-v2-json-to-html.ts", "status": "modified", "patch": "+renderInfographic" }
+    ] },
+    { "sha": "e271359ed91bfa48ba18c5717f8e19a7b69326ef", "subject": "feat(templates): add editorial theme", "files": [
+      { "filename": "templates/editorial/template.json", "status": "added", "patch": "+{\"id\":\"editorial\"}" },
+      { "filename": "templates/editorial/static/thumbnail.png", "status": "added" }
+    ] },
+    { "sha": "aa23b14367de9d2927b3c7542facccf37b64cdf3", "subject": "Merge pull request #813 from presenton/saurav/feat-template-v2-repeatable-editorial", "files": [] },
+    { "sha": "7131c4d1957c9f04c6a8cdd559bd4b8d5bc44bb4", "subject": "fix: update presentation export version to v0.4.3", "files": [
+      { "filename": "package.json", "status": "modified", "patch": "+  \"presentationExportVersion\": \"v0.4.3\"," },
+      { "filename": "electron/package.json", "status": "modified", "patch": "+  \"exportVersion\": \"v0.4.3\"," }
+    ] },
+    { "sha": "b940f7b4a51d473af830d96d441276af3540dae6", "subject": "fix: update version to 0.9.4-beta in package.json", "files": [
+      { "filename": "package.json", "status": "modified", "patch": "+  \"version\": \"0.9.4-beta\"," },
+      { "filename": "electron/package.json", "status": "modified", "patch": "+  \"version\": \"0.9.4-beta\"," }
+    ] }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "version": "2026.7.2401",
-  "message": "PPT Agent release candidate with presentation-export v0.4.2 compatibility and Windows release gates.",
+  "message": "PPT Agent release candidate with presentation-export v0.4.3 compatibility and Windows release gates.",
   "downloads": {
     "linux": "https://github.com/xorrbss/ppt-agent/releases/download/electron-v2026.7.2401/Presenton-2026.7.2401.deb",
     "mac": "https://github.com/xorrbss/ppt-agent/releases/download/electron-v2026.7.2401/Presenton-2026.7.2401.dmg",

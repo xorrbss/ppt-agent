@@ -314,7 +314,7 @@ const ThemePanel: React.FC = () => {
     try {
       setIsLogoUploading(true)
       const uploaded = await ImagesApi.uploadImage(file)
-      setCustomBrandLogo(uploaded.path)
+      setCustomBrandLogo(uploaded.file_url)
       setCustomBrandLogoId(uploaded.id)
       trackEvent(MixpanelEvent.Theme_Logo_Uploaded, {
         pathname,

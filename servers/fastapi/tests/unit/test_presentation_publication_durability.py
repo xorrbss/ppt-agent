@@ -157,10 +157,22 @@ async def _publication_commit_contains_terminal_event_and_outbox(
         # This is the crash boundary: the handler committed publication, but
         # the runner has not received its return value or run its finalizer.
         assert revision == 4
-        assert await _terminal_counts(maker, operation_id) == (1, 1)
+        # The canonical publication transaction also emits
+        # presentation.published and run.completed, each with its own outbox
+        # cursor, while retaining the legacy operation.result projection.
+        assert await _terminal_counts(maker, operation_id) == (1, 3)
         async with maker() as session:
             presentation = await session.get(PresentationModel, presentation_id)
             operation = await session.get(WorkspaceOperation, operation_id)
+            public_events = list(
+                (
+                    await session.scalars(
+                        select(WorkspaceOperationEvent)
+                        .where(WorkspaceOperationEvent.operation_id == operation_id)
+                        .order_by(WorkspaceOperationEvent.sequence)
+                    )
+                ).all()
+            )
             terminal_event = (
                 await session.execute(
                     select(WorkspaceOperationEvent).where(
@@ -181,6 +193,17 @@ async def _publication_commit_contains_terminal_event_and_outbox(
             assert operation is not None and operation.state == "succeeded"
             assert operation.result == result
             assert operation.result_revision == 4
+            assert operation.version == 3
+            assert [event.event_type for event in public_events] == [
+                "operation.result",
+                "presentation.published",
+                "run.completed",
+            ]
+            assert [event.operation_version for event in public_events] == [
+                2,
+                3,
+                3,
+            ]
             assert terminal_event.payload["state"] == "succeeded"
             assert terminal_event.payload["result_revision"] == 4
             assert notification.status == "pending"
@@ -200,7 +223,7 @@ async def _publication_commit_contains_terminal_event_and_outbox(
             )
             == 0
         )
-        assert await _terminal_counts(maker, operation_id) == (1, 1)
+        assert await _terminal_counts(maker, operation_id) == (1, 3)
     finally:
         await engine.dispose()
 

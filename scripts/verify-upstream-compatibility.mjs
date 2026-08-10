@@ -1,6 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseMigrationHeader } from "./lib/migration-header.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const compatibilityDir = path.join(repoRoot, "compatibility");
@@ -64,12 +65,6 @@ function checkLinearChain(chain, commonRevision, tipRevision, label) {
   checkUnique(chain, (entry) => entry.revision, `${label} revisions`);
 }
 
-function parseMigrationHeader(text) {
-  const revision = text.match(/^revision(?:\s*:\s*[^=]+)?\s*=\s*["']([^"']+)["']/m)?.[1];
-  const downRevision = text.match(/^down_revision(?:\s*:\s*[^=]+)?\s*=\s*["']([^"']+)["']/m)?.[1];
-  return { revision, downRevision };
-}
-
 const manifest = await readJson("compatibility/upstream-compatibility.json");
 const ledger = await readJson("compatibility/migration-translation-ledger.json");
 const registry = await readJson("compatibility/protected-local-patches.json");
@@ -90,8 +85,8 @@ check(
   "upstream test contract registry schemaVersion must be 1"
 );
 check(
-  remoteIntakePolicy.schemaVersion === 1,
-  "remote intake policy schemaVersion must be 1"
+  remoteIntakePolicy.schemaVersion === 2,
+  "remote intake policy schemaVersion must be 2"
 );
 check(
   /^[0-9a-f]{40}$/.test(manifest.baseline?.upstreamSha ?? ""),
@@ -106,8 +101,12 @@ check(
   "manifest and upstream test contract baseline SHAs differ"
 );
 check(
-  remoteIntakePolicy.baselineSha === manifest.baseline?.upstreamSha,
-  "manifest and remote intake policy baseline SHAs differ"
+  /^[0-9a-f]{40}$/.test(remoteIntakePolicy.acceptedBaseline?.sha ?? ""),
+  "remote intake policy acceptedBaseline.sha must be a full lowercase SHA"
+);
+check(
+  /^[0-9a-f]{40}$/.test(remoteIntakePolicy.observedUpstream?.sha ?? ""),
+  "remote intake policy observedUpstream.sha must be a full lowercase SHA"
 );
 check(
   remoteIntakePolicy.repository === manifest.baseline?.repository,
@@ -118,17 +117,22 @@ check(
   "manifest baseline committedAt must be an ISO-compatible timestamp"
 );
 check(
-  normalizedTimestamp(remoteIntakePolicy.baselineMetadata?.committedAt) !== null,
-  "remote intake policy baseline committedAt must be an ISO-compatible timestamp"
+  normalizedTimestamp(remoteIntakePolicy.acceptedBaseline?.committedAt) !== null,
+  "remote intake policy accepted baseline committedAt must be an ISO-compatible timestamp"
 );
 check(
-  normalizedTimestamp(remoteIntakePolicy.baselineMetadata?.committedAt) ===
-    normalizedTimestamp(manifest.baseline?.committedAt),
-  "manifest and remote intake policy baseline committedAt values differ"
+  normalizedTimestamp(remoteIntakePolicy.observedUpstream?.committedAt) !== null,
+  "remote intake policy observed upstream committedAt must be an ISO-compatible timestamp"
 );
 check(
-  remoteIntakePolicy.baselineMetadata?.subject === manifest.baseline?.subject,
-  "manifest and remote intake policy baseline subjects differ"
+  typeof remoteIntakePolicy.acceptedBaseline?.subject === "string" &&
+    remoteIntakePolicy.acceptedBaseline.subject.length > 0,
+  "remote intake policy accepted baseline subject is required"
+);
+check(
+  typeof remoteIntakePolicy.observedUpstream?.subject === "string" &&
+    remoteIntakePolicy.observedUpstream.subject.length > 0,
+  "remote intake policy observed upstream subject is required"
 );
 check(
   ledger.remoteIntakeReview?.policy === manifest.registries?.remoteIntakePolicy,
@@ -138,11 +142,26 @@ check(
   registry.remoteIntakeReview?.policy === manifest.registries?.remoteIntakePolicy,
   "protected patch remote intake policy link differs"
 );
-checkUnique(remoteIntakePolicy.categories ?? [], (entry) => entry.id, "remote intake categories");
-for (const category of remoteIntakePolicy.categories ?? []) {
+checkUnique(remoteIntakePolicy.domains ?? [], (entry) => entry.id, "remote intake domains");
+for (const domain of remoteIntakePolicy.domains ?? []) {
   check(
-    ["info", "review", "contract-risk"].includes(category.severity),
-    `remote intake category ${category.id} has invalid severity`
+    ["info", "review", "contract-risk"].includes(domain.severity),
+    `remote intake domain ${domain.id} has invalid severity`
+  );
+}
+for (const dimension of [
+  "openapiRoutes",
+  "alembicGraph",
+  "jsonSchema",
+  "providerRegistry",
+  "templateCapability",
+  "rendererFixtures",
+  "exporterVersion",
+  "forkOwnedOverlap",
+]) {
+  check(
+    remoteIntakePolicy.contractManifest?.[dimension] !== undefined,
+    `remote intake contract manifest is missing ${dimension}`
   );
 }
 
@@ -239,8 +258,12 @@ check(
   `API root router must retain ${manifest.api?.rootPrefix}`
 );
 for (const routerName of manifest.api?.routerIncludes ?? []) {
+  const staticallyComposed = new RegExp(
+    `FeatureModule\\([\\s\\S]{0,240}?\\b${routerName}\\b`,
+  ).test(routerSource);
   check(
-    routerSource.includes(`API_V1_PPT_ROUTER.include_router(${routerName})`),
+    routerSource.includes(`API_V1_PPT_ROUTER.include_router(${routerName})`) ||
+      staticallyComposed,
     `API root router no longer includes ${routerName}`
   );
 }
@@ -411,6 +434,7 @@ for (const file of actualMigrationFiles) {
     actualMigrations.push({
       revision: header.revision,
       downRevision: header.downRevision,
+      downRevisions: header.downRevisions,
       file,
     });
   }
@@ -425,7 +449,7 @@ const actualMigrationByRevision = new Map(
 );
 const referencedDownRevisions = new Set(
   actualMigrations
-    .map((migration) => migration.downRevision)
+    .flatMap((migration) => migration.downRevisions)
     .filter(Boolean)
 );
 const actualHeads = actualMigrations
@@ -471,7 +495,10 @@ check(
 );
 
 for (const extension of ledger.localOnlyExtensions ?? []) {
-  check(localRevisions.has(extension.revision), `unknown local-only extension ${extension.revision}`);
+  check(
+    actualMigrationByRevision.has(extension.revision),
+    `unknown local-only extension ${extension.revision}`
+  );
 }
 
 checkUnique(registry.patches ?? [], (entry) => entry.id, "protected patch ids");

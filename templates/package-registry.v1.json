@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "presenton.template-package-registry/v1",
+  "packages": [
+    {
+      "templateId": "editorial",
+      "manifest": "templates/manifests/editorial.package.v1.json",
+      "enabled": true,
+      "discoverable": false
+    }
+  ],
+  "legacyCompatibility": {
+    "enabled": true,
+    "templateIds": [
+      "momentum",
+      "dynamic",
+      "executive",
+      "general",
+      "modern",
+      "standard",
+      "swift"
+    ],
+    "removalCondition": "Remove only after every supported installation has an immutable package receipt and rollback-tested package migration."
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "presenton.template-renderer-smoke/v1",
+  "templateId": "editorial",
+  "engineId": "presenton.template-v2-json",
+  "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+  "entrypointSha256": "f63282203b21e4a350f6ff87ffe5695ca4c92413c5aad485e6cdedfbb82f7e60",
+  "networkPolicy": "deny",
+  "scriptPolicy": "deny",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "layoutCount": 24,
+  "layoutIds": [
+    "title_slide_with_image_collage_and_footer",
+    "title_with_numbered_list_in_two_columns",
+    "large_title_with_curved_side_image",
+    "title_description_list_of_items_with_heading_description",
+    "title_with_four_callouts_around_center_graphic",
+    "title_with_stacked_rows_and_side_graphic",
+    "title_with_five_items_on_vertical_branching_path",
+    "title_description_with_four_items_on_arch",
+    "title_with_side_image_and_bottom_callout_cards",
+    "title_description_with_six_alternating_timeline_callouts",
+    "title_description_left_chart_right",
+    "title_with_large_chart_metric_cards_and_callouts",
+    "title_with_center_graphic_and_four_side_metric_callouts",
+    "title_with_four_callouts_on_wave_timeline",
+    "title_with_multi_panel_chart_and_metric_grid",
+    "title_with_three_chart_panels_and_three_gauge_cards",
+    "title_with_two_upper_charts_lower_description_and_metrics",
+    "title_with_concentric_circles_and_linked_side_cards",
+    "title_description_with_row_of_gauge_cards",
+    "title_description_above_full_width_line_chart",
+    "large_text_block_with_side_image",
+    "title_description_with_metric_list_and_bottom_timeline",
+    "title_with_row_of_image_heading_subheading_cards",
+    "title_description_with_items_along_winding_path"
+  ],
+  "checks": {
+    "jsonParsed": true,
+    "uniqueLayoutIds": true,
+    "nonEmptyRoots": true,
+    "browserGoldenRequiredForPublication": true
+  },
+  "status": "passed-static-publication-blocked"
+}

@@ -10,6 +10,11 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from templates.v2.persistence import canonicalize_slide_ui
+from templates.v2.ast import (
+    compile_template_render_plan,
+    decode_template_ast,
+    materialize_render_plan,
+)
 
 
 class TemplateV2HydrationError(ValueError):
@@ -48,6 +53,21 @@ def hydrate_template_v2_slide(
         raise TemplateV2HydrationError("Template V2 content must be an object")
     ui = copy.deepcopy(source_layout)
     try:
+        layout_id = str(ui.get("id") or "hydrated_layout")
+        ui["id"] = layout_id
+        ast = decode_template_ast(
+            {"layouts": [ui]},
+            source_version="a3352f3c-compatible",
+        )
+        plan = compile_template_render_plan(
+            ast,
+            layout_id=layout_id,
+            content=content,
+        )
+        ui = materialize_render_plan(
+            plan,
+            item_hydrator=_hydrate_repeat_item,
+        )
         _apply_content(ui, content)
         canonical = canonicalize_slide_ui(ui)
     except Exception as exc:
@@ -60,6 +80,11 @@ def hydrate_template_v2_slide(
         content=copy.deepcopy(content),
         ui=canonical,
     )
+
+
+def _hydrate_repeat_item(source: dict[str, Any], value: Any) -> dict[str, Any]:
+    _apply_elements([source], value, {}, True)
+    return source
 
 
 def apply_hydrated_template_v2_state(

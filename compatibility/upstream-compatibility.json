@@ -21,7 +21,7 @@
     },
     {
       "id": "presentation-export",
-      "value": "v0.4.2",
+      "value": "v0.4.3",
       "source": "package.json",
       "jsonPointer": "/presentationExportVersion",
       "mirror": "presentation-export/.installed-version"
@@ -53,15 +53,15 @@
   ],
   "exportRuntime": {
     "releaseRepository": "presenton/presenton-export",
-    "version": "v0.4.2",
+    "version": "v0.4.3",
     "note": "SHA-256 of each published release archive. sync-presentation-export.cjs verifies the downloaded asset against these before extraction so a re-uploaded release cannot silently replace the pinned runtime.",
     "assets": {
-      "export-Linux-X64.zip": "8abcc9cdd59b071c32e754206dfad6abd3a82d11cfc65f4694d0d730fee9da69",
-      "export-Linux-ARM64.zip": "b9c166115cb182e4627fbbf01db9d03245b361f521ac240b8aa3474256abdc66",
-      "export-macOS-X64.zip": "e260a2b56228921aac3f4a245afad8ec05a3e69890500a4249726bbfd026de05",
-      "export-macOS-ARM64.zip": "c37caa4d74526418b4e071d4794158679758ce815f3c8a1809cb21993741784d",
-      "export-Windows-X64.zip": "62f143101e88c2e4bd5abff19f78c3010b3d0e7e4fca2aed432889f75c1bc84d",
-      "export-Windows-ia32.zip": "3b46708f63e63decd9c2cadffefe1f3b0137a3e97a17108838ec3cc031f6d096"
+      "export-Linux-X64.zip": "5196884421cd4d5d130d92b4125604b4f724478137eac24dbdffa4ac7e7a061a",
+      "export-Linux-ARM64.zip": "1b6630f6e888269100577afa84aadd1be7ddf8102aa412c06f46663309bfb3cf",
+      "export-macOS-X64.zip": "ef756693cf3b41e4990c7a4e11bc3bf8918aa5fb40939298a47261a4214805d8",
+      "export-macOS-ARM64.zip": "4daeab04d1edbc40d96d83e3321fe2d47301695d6b092c14e2a477e80e0011e3",
+      "export-Windows-X64.zip": "cb998da43ef659c19bc5ded9176051be4dfdbd7aa01eacae66d4b91a36e65243",
+      "export-Windows-ia32.zip": "77463c8017d48b9cddff137206aa414131d76b2df26ff8ae51c36f91f9ef69f8"
     }
   },
   "templateV2Renderer": {

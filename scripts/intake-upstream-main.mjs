@@ -25,18 +25,37 @@ function parseArgs(argv) {
     summary: null,
     json: false,
     failOnRisk: false,
+    prepareFinalize: false,
+    integrationVerified: false,
+    verificationRef: null,
+    authorization: null,
+    finalizeOutput: null,
   };
+  const valueArguments = [
+    "--policy",
+    "--fixture",
+    "--output",
+    "--summary",
+    "--verification-ref",
+    "--authorization",
+    "--finalize-output",
+  ];
+
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--json") options.json = true;
     else if (argument === "--fail-on-risk") options.failOnRisk = true;
-    else if (["--policy", "--fixture", "--output", "--summary"].includes(argument)) {
+    else if (argument === "--prepare-finalize") options.prepareFinalize = true;
+    else if (argument === "--integration-verified") options.integrationVerified = true;
+    else if (valueArguments.includes(argument)) {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new IntakeError("INVALID_ARGUMENT", `${argument} requires a value`);
       }
-      options[argument.slice(2).replaceAll(/-([a-z])/g, (_, letter) => letter.toUpperCase())] =
-        value;
+      const key = argument
+        .slice(2)
+        .replaceAll(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+      options[key] = value;
       index += 1;
     } else {
       throw new IntakeError("INVALID_ARGUMENT", `unknown argument: ${argument}`);
@@ -64,80 +83,6 @@ async function readJson(relativeOrAbsolutePath) {
   }
 }
 
-function validatePolicy(policy) {
-  if (
-    policy.schemaVersion !== 1 ||
-    !/^[0-9a-f]{40}$/.test(policy.baselineSha ?? "") ||
-    !/^[^/]+\/[^/]+$/.test(policy.repository ?? "") ||
-    !Array.isArray(policy.categories)
-  ) {
-    throw new IntakeError("INVALID_POLICY", "upstream intake policy is malformed");
-  }
-}
-
-function requestHeaders() {
-  const token = process.env.UPSTREAM_GITHUB_TOKEN || process.env.GITHUB_TOKEN;
-  return {
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "ppt-agent-upstream-intake",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-async function fetchJson(url, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let response;
-  try {
-    response = await fetch(url, {
-      headers: requestHeaders(),
-      signal: controller.signal,
-      redirect: "error",
-    });
-  } catch (error) {
-    const timedOut = error.name === "AbortError";
-    throw new IntakeError(
-      timedOut ? "TIMEOUT" : "NETWORK_ERROR",
-      timedOut ? "GitHub API request timed out" : "GitHub API request failed",
-      { retryable: true, cause: error.message }
-    );
-  } finally {
-    clearTimeout(timer);
-  }
-
-  let body;
-  try {
-    body = await response.json();
-  } catch (error) {
-    throw new IntakeError("INVALID_RESPONSE", "GitHub API returned invalid JSON", {
-      httpStatus: response.status,
-      retryable: response.status >= 500,
-      cause: error.message,
-    });
-  }
-
-  if (!response.ok) {
-    const remaining = response.headers.get("x-ratelimit-remaining");
-    const rateLimited =
-      response.status === 429 || (response.status === 403 && remaining === "0");
-    throw new IntakeError(
-      rateLimited ? "RATE_LIMITED" : `HTTP_${response.status}`,
-      rateLimited
-        ? "GitHub API rate limit exhausted"
-        : `GitHub API returned HTTP ${response.status}`,
-      {
-        httpStatus: response.status,
-        retryable: rateLimited || response.status >= 500,
-        rateLimitRemaining: remaining,
-        rateLimitReset: response.headers.get("x-ratelimit-reset"),
-        upstreamMessage: typeof body?.message === "string" ? body.message : undefined,
-      }
-    );
-  }
-  return body;
-}
-
 function assertSha(value, label) {
   if (!/^[0-9a-f]{40}$/.test(value ?? "")) {
     throw new IntakeError("INVALID_RESPONSE", `${label} is not a full lowercase SHA`);
@@ -145,33 +90,20 @@ function assertSha(value, label) {
   return value;
 }
 
-async function queryLive(policy) {
-  const root = `https://api.github.com/repos/${policy.repository}`;
-  const refUrl = `${root}/git/ref/heads/${encodeURIComponent(policy.branch)}`;
-  const firstRef = await fetchJson(refUrl, policy.requestTimeoutMs);
-  const observedSha = assertSha(firstRef?.object?.sha, "remote main SHA");
-  const commit = await fetchJson(`${root}/commits/${observedSha}`, policy.requestTimeoutMs);
-  const compare =
-    observedSha === policy.baselineSha
-      ? null
-      : await fetchJson(
-          `${root}/compare/${policy.baselineSha}...${observedSha}`,
-          policy.requestTimeoutMs
-        );
-  const finalRef = await fetchJson(refUrl, policy.requestTimeoutMs);
-  const finalSha = assertSha(finalRef?.object?.sha, "final remote main SHA");
-  if (finalSha !== observedSha) {
-    throw new IntakeError(
-      "REMOTE_MOVED_DURING_INTAKE",
-      "upstream main moved while the snapshot was being inspected",
-      { firstSha: observedSha, finalSha, retryable: true }
-    );
-  }
-  return { ref: firstRef, commit, compare };
+function acceptedSha(policy) {
+  return policy.acceptedBaseline?.sha ?? policy.baselineSha;
 }
 
-function compile(rule, key) {
-  return rule[key] ? new RegExp(rule[key], "im") : null;
+function validatePolicy(policy) {
+  if (
+    policy.schemaVersion !== 2 ||
+    !/^[^/]+\/[^/]+$/.test(policy.repository ?? "") ||
+    !Array.isArray(policy.domains)
+  ) {
+    throw new IntakeError("INVALID_POLICY", "Upstream Intake V2 policy is malformed");
+  }
+  assertSha(acceptedSha(policy), "accepted baseline SHA");
+  assertSha(policy.observedUpstream?.sha, "observed upstream SHA");
 }
 
 function maxSeverity(left, right) {
@@ -186,68 +118,129 @@ function protectedPathSet(registry) {
   );
 }
 
+function compile(expression) {
+  return new RegExp(expression, "i");
+}
+
+function isApiV1RouteRemoval(file) {
+  return (
+    /^servers\/fastapi\/api\/v1\//.test(file.filename ?? "") &&
+    /^-.*(?:\/api\/v1|include_router|@[^\n]+\.(?:get|post|put|patch|delete)\()/im.test(
+      file.patch ?? ""
+    )
+  );
+}
+
+function isExporterVersionMutation(file, domain) {
+  return (
+    domain.id === "renderer-export-runtime" &&
+    /(?:presentationExportVersion|exportVersion|presentation-export)/.test(file.patch ?? "")
+  );
+}
+
+function domainSeverity(file, domain, evidenceUnavailable) {
+  if (isApiV1RouteRemoval(file) || isExporterVersionMutation(file, domain)) {
+    return "contract-risk";
+  }
+  if (evidenceUnavailable && domain.severity === "contract-risk") {
+    return "review";
+  }
+  return domain.severity;
+}
+
+function contractEntries(policy, registry) {
+  return Object.entries(policy.contractManifest ?? {}).map(([id, rule]) => ({
+    id,
+    rule,
+    protectedPaths: id === "forkOwnedOverlap" ? protectedPathSet(registry) : null,
+  }));
+}
+
+function matchesContract(file, contract) {
+  const pathname = file.filename ?? "";
+  if (contract.protectedPaths) {
+    return contract.protectedPaths.has(pathname);
+  }
+  const evidence = `${pathname}\n${file.patch ?? ""}`;
+  return (contract.rule.paths ?? []).some((needle) => evidence.includes(needle));
+}
+
 export function classifyFiles(files, policy, registry) {
   const protectedPaths = protectedPathSet(registry);
   const findings = [];
   let risk = "none";
 
   for (const file of files ?? []) {
-    const evidence = [
-      `"status": "${file.status ?? "unknown"}"`,
-      file.filename ?? "",
-      file.patch ?? "",
-    ].join("\n");
-    // GitHub omits `patch` for binary files and diffs over its size limit. When it
-    // is absent, an evidence regex cannot decide whether the change is risky, so a
-    // path match must fail closed to the rule's severity instead of falling through
-    // to `unclassified/info` and hiding a large rewrite of a watched contract file.
+    const pathname = file.filename ?? "";
     const evidenceUnavailable = !file.patch;
-    const matches = [];
-    for (const rule of policy.categories) {
-      const pathRegex = compile(rule, "pathRegex");
-      const evidenceRegex = compile(rule, "evidenceRegex");
-      if (pathRegex && !pathRegex.test(file.filename ?? "")) continue;
-      if (!evidenceRegex || evidenceRegex.test(evidence)) {
-        let severity = rule.severity;
-        const riskRegex = compile(rule, "riskRegex");
-        if (riskRegex?.test(evidence)) severity = "contract-risk";
-        matches.push({ id: rule.id, label: rule.label, severity });
-        risk = maxSeverity(risk, severity);
-      } else if (evidenceUnavailable) {
-        // The path matched a watched category but the diff is unavailable, so the
-        // change can be neither confirmed nor ruled out. Surface it for human
-        // review without inheriting a contract-risk severity that presumes the
-        // unseen evidence matched (many rules match a broad path on purpose).
-        const severity = rule.severity === "info" ? "info" : "review";
-        matches.push({
-          id: rule.id,
-          label: `${rule.label} (unverified: no diff available)`,
-          severity,
-        });
-        risk = maxSeverity(risk, severity);
-      }
+    const categories = [];
+
+    for (const domain of policy.domains) {
+      if (!compile(domain.pathRegex).test(pathname)) continue;
+      const severity = domainSeverity(file, domain, evidenceUnavailable);
+      categories.push({ id: domain.id, label: domain.label, severity });
     }
-    if (protectedPaths.has(file.filename)) {
-      matches.push({
-        id: "protected-local-patch-overlap",
-        label: "protected local patch overlap",
+
+    // `templates/v2` is not a URL route. Only a literal API route directory may
+    // receive the backend-v2 contract classification.
+    if (/^servers\/fastapi\/api\/v2\//.test(pathname)) {
+      categories.push({
+        id: "api-v2-backend-route",
+        label: "/api/v2 backend route",
         severity: "contract-risk",
       });
-      risk = "contract-risk";
+    }
+
+    if (protectedPaths.has(pathname)) {
+      categories.push({
+        id: "protected-local-patch-overlap",
+        label: "fork-owned overlap",
+        severity: "contract-risk",
+      });
+    }
+
+    if (!categories.length) {
+      categories.push({
+        id: "unclassified-upstream-change",
+        label: "unclassified",
+        severity: "info",
+      });
+    }
+
+    for (const category of categories) {
+      risk = maxSeverity(risk, category.severity);
     }
     findings.push({
-      path: file.filename,
+      path: pathname,
       status: file.status ?? "unknown",
       additions: file.additions ?? 0,
       deletions: file.deletions ?? 0,
-      categories:
-        matches.length > 0
-          ? matches
-          : [{ id: "unclassified-upstream-change", label: "unclassified", severity: "info" }],
+      categories,
     });
-    if (matches.length === 0) risk = maxSeverity(risk, "info");
   }
   return { findings, risk };
+}
+
+function buildContractDiff(files, policy, registry) {
+  const contracts = {};
+  for (const { id, rule, protectedPaths } of contractEntries(policy, registry)) {
+    const changes = (files ?? [])
+      .filter((file) => matchesContract(file, { rule, protectedPaths }))
+      .map((file) => ({
+        path: file.filename,
+        status: file.status ?? "unknown",
+        additions: file.additions ?? 0,
+        deletions: file.deletions ?? 0,
+        evidenceAvailable: Boolean(file.patch),
+      }));
+    contracts[id] = {
+      status: changes.length ? "changed" : "unchanged",
+      severity: rule.severity,
+      paths: changes.map((change) => change.path),
+      changes,
+    };
+  }
+  return contracts;
 }
 
 function commitMetadata(commit) {
@@ -260,197 +253,300 @@ function commitMetadata(commit) {
   };
 }
 
-function validateBaselineMetadata(metadata, policy) {
-  const expected = policy.baselineMetadata ?? {};
-  const mismatches = [];
-  if (expected.committedAt && metadata.committedAt !== expected.committedAt) {
-    mismatches.push(`committedAt expected ${expected.committedAt}, got ${metadata.committedAt}`);
-  }
-  if (expected.subject && metadata.subject !== expected.subject) {
-    mismatches.push(`subject expected "${expected.subject}", got "${metadata.subject}"`);
-  }
-  return mismatches;
+function commitClassifications(snapshot, policy, registry) {
+  return (snapshot.commits ?? []).map((commit) => {
+    const classified = classifyFiles(commit.files ?? [], policy, registry);
+    return {
+      sha: assertSha(commit.sha, "commit SHA"),
+      subject: commit.subject ?? null,
+      risk: classified.risk,
+      domains: [
+        ...new Set(
+          classified.findings.flatMap((finding) =>
+            finding.categories.map((category) => category.id)
+          )
+        ),
+      ],
+      files: classified.findings,
+    };
+  });
+}
+
+function verifyAcceptedMetadata(policy, current) {
+  const expected = policy.acceptedBaseline;
+  return ["committedAt", "subject"]
+    .filter((key) => expected[key] && expected[key] !== current[key])
+    .map((key) => `${key} expected ${expected[key]}, got ${current[key]}`);
+}
+
+function intakeErrorResult(snapshot, policy, registry) {
+  return {
+    schemaVersion: 2,
+    status: "intake-error",
+    changeDetected: false,
+    risk: "none",
+    classificationComplete: false,
+    acceptedBaseline: policy.acceptedBaseline,
+    observedUpstream: null,
+    error: snapshot.error,
+    findings: [],
+    contractDiff: buildContractDiff([], policy, registry),
+  };
+}
+
+function unchangedResult(policy, current, mismatches, registry) {
+  return {
+    schemaVersion: 2,
+    status: mismatches.length ? "intake-error" : "unchanged",
+    changeDetected: false,
+    risk: mismatches.length ? "contract-risk" : "none",
+    classificationComplete: !mismatches.length,
+    acceptedBaseline: policy.acceptedBaseline,
+    observedUpstream: current,
+    metadataMismatches: mismatches,
+    findings: [],
+    contractDiff: buildContractDiff([], policy, registry),
+    ...(mismatches.length
+      ? {
+          error: {
+            code: "BASELINE_METADATA_MISMATCH",
+            message: "accepted baseline metadata differs",
+          },
+        }
+      : {}),
+  };
 }
 
 export function assessSnapshot(snapshot, policy, registry) {
   if (snapshot?.error) {
-    return {
-      schemaVersion: 1,
-      status: "intake-error",
-      changeDetected: false,
-      risk: "none",
-      classificationComplete: false,
-      repository: policy.repository,
-      branch: policy.branch,
-      baselineSha: policy.baselineSha,
-      observedSha: null,
-      error: {
-        code: snapshot.error.code ?? "FIXTURE_ERROR",
-        message: snapshot.error.message ?? "fixture intake error",
-        httpStatus: snapshot.error.httpStatus ?? null,
-      },
-      findings: [],
-    };
+    return intakeErrorResult(snapshot, policy, registry);
   }
 
   const observedSha = assertSha(snapshot?.ref?.object?.sha, "remote main SHA");
-  const metadata = commitMetadata(snapshot.commit);
-  if (metadata.sha !== observedSha) {
+  const current = commitMetadata(snapshot.commit);
+  if (observedSha !== current.sha) {
     throw new IntakeError("INVALID_RESPONSE", "ref SHA and commit SHA differ");
   }
-  const changeDetected = observedSha !== policy.baselineSha;
-  const metadataMismatches = changeDetected
-    ? []
-    : validateBaselineMetadata(metadata, policy);
 
-  if (!changeDetected) {
-    return {
-      schemaVersion: 1,
-      status: metadataMismatches.length ? "intake-error" : "unchanged",
-      changeDetected: false,
-      risk: metadataMismatches.length ? "contract-risk" : "none",
-      classificationComplete: metadataMismatches.length === 0,
-      repository: policy.repository,
-      branch: policy.branch,
-      baselineSha: policy.baselineSha,
-      observedSha,
-      metadata,
-      metadataMismatches,
-      compare: { status: "identical", aheadBy: 0, behindBy: 0, totalCommits: 0, files: 0 },
-      findings: [],
-      ...(metadataMismatches.length
-        ? {
-            error: {
-              code: "BASELINE_METADATA_MISMATCH",
-              message: "the pinned SHA returned unexpected commit metadata",
-            },
-          }
-        : {}),
-    };
+  const accepted = acceptedSha(policy);
+  if (observedSha === accepted) {
+    return unchangedResult(policy, current, verifyAcceptedMetadata(policy, current), registry);
   }
 
   if (!snapshot.compare || !Array.isArray(snapshot.compare.files)) {
     throw new IntakeError("INVALID_RESPONSE", "changed upstream requires compare file evidence");
   }
+
   const classification = classifyFiles(snapshot.compare.files, policy, registry);
-  const limit = policy.maximumCompareFiles ?? 300;
-  const compareStatus = snapshot.compare.status ?? "unknown";
-  const classificationComplete =
-    snapshot.compare.files.length < limit &&
-    ["ahead", "identical"].includes(compareStatus);
+  const compareIsComplete =
+    snapshot.compare.files.length < policy.maximumCompareFiles &&
+    snapshot.compare.status === "ahead";
+  const observedMatchesPinned = observedSha === policy.observedUpstream.sha;
+  const classificationComplete = compareIsComplete && observedMatchesPinned;
   const risk = classificationComplete
     ? classification.risk
     : maxSeverity(classification.risk, "contract-risk");
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "change-detected",
     changeDetected: true,
     risk,
     classificationComplete,
-    repository: policy.repository,
-    branch: policy.branch,
-    baselineSha: policy.baselineSha,
-    observedSha,
-    metadata,
-    metadataMismatches: [],
+    range: {
+      acceptedSha: accepted,
+      observedSha,
+      exactPinnedObservation: observedMatchesPinned,
+    },
+    acceptedBaseline: policy.acceptedBaseline,
+    observedUpstream: current,
     compare: {
-      status: compareStatus,
+      status: snapshot.compare.status ?? "unknown",
       aheadBy: snapshot.compare.ahead_by ?? null,
       behindBy: snapshot.compare.behind_by ?? null,
       totalCommits: snapshot.compare.total_commits ?? null,
       files: snapshot.compare.files.length,
     },
     findings: classification.findings,
+    commitClassifications: commitClassifications(snapshot, policy, registry),
+    contractDiff: buildContractDiff(snapshot.compare.files, policy, registry),
     notes: [
-      "Evidence is read-only; no merge, cherry-pick, fetch, checkout, registry update, or code transplant was performed.",
-      "Category matches identify review scope; they do not assert that local authored/adaptive/export behavior changed.",
-      ...(!classificationComplete
+      "Accepted baseline is immutable during intake.",
+      "Observed upstream is evidence only; it does not advance the accepted SHA.",
+      ...(observedMatchesPinned
+        ? []
+        : ["Observed upstream differs from the pinned review target; a new intake is required."]),
+      ...(!compareIsComplete
         ? ["Compare evidence is incomplete or non-forward; manual review is required."]
         : []),
     ],
   };
 }
 
-function escapeCell(value) {
-  return String(value ?? "").replaceAll("|", "\\|").replaceAll("\n", " ");
-}
-
 export function renderMarkdown(result) {
   const lines = [
-    "# Upstream main intake",
+    "# Upstream main intake V2",
     "",
     `- Status: \`${result.status}\``,
     `- Risk: \`${result.risk}\``,
-    `- Repository/branch: \`${result.repository}:${result.branch}\``,
-    `- Pinned SHA: \`${result.baselineSha}\``,
-    `- Observed SHA: ${result.observedSha ? `\`${result.observedSha}\`` : "_unavailable_"}`,
-    `- Change detected: \`${result.changeDetected}\``,
+    `- Accepted baseline: \`${result.acceptedBaseline?.sha ?? "unavailable"}\``,
+    `- Observed upstream: \`${result.observedUpstream?.sha ?? "unavailable"}\``,
     `- Classification complete: \`${result.classificationComplete}\``,
   ];
-  if (result.metadata) {
-    lines.push(
-      `- Commit time: \`${result.metadata.committedAt}\``,
-      `- Subject: ${result.metadata.subject}`
-    );
-  }
-  if (result.compare) {
-    lines.push(
-      `- Compare: \`${result.compare.status}\`; ahead ${result.compare.aheadBy}, behind ${result.compare.behindBy}, commits ${result.compare.totalCommits}, files ${result.compare.files}`
-    );
+  if (result.range) {
+    lines.push(`- Exact pinned observation: \`${result.range.exactPinnedObservation}\``);
   }
   if (result.error) {
     lines.push(
       "",
       "## Intake error",
       "",
-      `\`${result.error.code}\`: ${result.error.message}`,
+      `\`${result.error.code ?? "FIXTURE_ERROR"}\`: ${result.error.message}`,
       "",
       "**This operational/configuration error is not an upstream change.**"
     );
   }
-  if (result.findings?.length) {
-    lines.push(
-      "",
-      "## Compatibility delta",
-      "",
-      "| File | Status | +/- | Classification |",
-      "| --- | --- | ---: | --- |"
-    );
-    for (const finding of result.findings) {
-      const categories = finding.categories
-        .map((category) => `${category.label} (${category.severity})`)
-        .join("<br>");
+  if (result.commitClassifications?.length) {
+    lines.push("", "## Commit classifications", "", "| Commit | Risk | Domains |", "| --- | --- | --- |");
+    for (const commit of result.commitClassifications) {
       lines.push(
-        `| ${escapeCell(finding.path)} | ${escapeCell(finding.status)} | +${finding.additions}/-${finding.deletions} | ${escapeCell(categories)} |`
+        `| ${commit.sha.slice(0, 8)} ${commit.subject ?? ""} | ${commit.risk} | ${commit.domains.join(", ")} |`
       );
     }
   }
+  lines.push("", "## Contract diff", "", "```json", JSON.stringify(result.contractDiff, null, 2), "``");
   if (result.notes?.length) {
     lines.push("", "## Guardrails", "", ...result.notes.map((note) => `- ${note}`));
   }
-  lines.push("");
-  return lines.join("\n");
+  return `${lines.join("\n")}\n`;
+}
+
+function finalizationCandidate(policy, result, options) {
+  if (
+    !options.integrationVerified ||
+    !options.verificationRef ||
+    !options.authorization ||
+    !options.finalizeOutput
+  ) {
+    throw new IntakeError(
+      "FINALIZATION_REQUIREMENTS_MISSING",
+      "finalization requires integration verification, evidence, authorization, and a separate output path"
+    );
+  }
+  if (
+    result.status !== "change-detected" ||
+    !result.classificationComplete ||
+    !result.range?.exactPinnedObservation
+  ) {
+    throw new IntakeError(
+      "FINALIZATION_NOT_READY",
+      "the pinned observation is not fully classified and ready for finalization"
+    );
+  }
+  const target = path.resolve(repoRoot, options.finalizeOutput);
+  if (target === path.resolve(repoRoot, options.policy)) {
+    throw new IntakeError(
+      "IN_PLACE_FINALIZATION_FORBIDDEN",
+      "finalization must write a separate candidate policy"
+    );
+  }
+  return {
+    ...policy,
+    acceptedBaseline: {
+      sha: result.observedUpstream.sha,
+      committedAt: result.observedUpstream.committedAt,
+      subject: result.observedUpstream.subject,
+    },
+    observedUpstream: {
+      ...policy.observedUpstream,
+      finalizedFrom: policy.acceptedBaseline.sha,
+      verificationRef: options.verificationRef,
+      authorizedBy: options.authorization,
+    },
+    finalization: {
+      ...policy.finalization,
+      preparedAt: new Date().toISOString(),
+      candidateOnly: true,
+    },
+  };
+}
+
+function requestHeaders() {
+  const token = process.env.UPSTREAM_GITHUB_TOKEN || process.env.GITHUB_TOKEN;
+  return {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "ppt-agent-upstream-intake",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function fetchJson(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      headers: requestHeaders(),
+      signal: controller.signal,
+      redirect: "error",
+    });
+    if (!response.ok) {
+      throw new IntakeError(`HTTP_${response.status}`, "GitHub API request failed", {
+        httpStatus: response.status,
+      });
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof IntakeError) throw error;
+    throw new IntakeError(
+      error.name === "AbortError" ? "TIMEOUT" : "NETWORK_ERROR",
+      "GitHub API request failed",
+      { cause: error.message }
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function queryLive(policy) {
+  const root = `https://api.github.com/repos/${policy.repository}`;
+  const refUrl = `${root}/git/ref/heads/${encodeURIComponent(policy.branch)}`;
+  const ref = await fetchJson(refUrl, policy.requestTimeoutMs);
+  const observed = assertSha(ref?.object?.sha, "remote main SHA");
+  const commit = await fetchJson(`${root}/commits/${observed}`, policy.requestTimeoutMs);
+  const compare =
+    observed === acceptedSha(policy)
+      ? null
+      : await fetchJson(
+          `${root}/compare/${acceptedSha(policy)}...${observed}`,
+          policy.requestTimeoutMs
+        );
+  const finalRef = await fetchJson(refUrl, policy.requestTimeoutMs);
+  if (assertSha(finalRef?.object?.sha, "final remote main SHA") !== observed) {
+    throw new IntakeError(
+      "REMOTE_MOVED_DURING_INTAKE",
+      "upstream main moved while the snapshot was being inspected"
+    );
+  }
+  return { ref, commit, compare };
 }
 
 function errorResult(error, policy) {
   const known = error instanceof IntakeError;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: "intake-error",
     changeDetected: false,
     risk: "none",
     classificationComplete: false,
-    repository: policy?.repository ?? "unknown",
-    branch: policy?.branch ?? "unknown",
-    baselineSha: policy?.baselineSha ?? null,
-    observedSha: null,
+    acceptedBaseline: policy?.acceptedBaseline ?? null,
+    observedUpstream: null,
     error: {
       code: known ? error.code : "UNEXPECTED_ERROR",
       message: known ? error.message : "unexpected intake failure",
       ...(known ? error.details : {}),
     },
     findings: [],
+    contractDiff: {},
   };
 }
 
@@ -470,10 +566,17 @@ export async function run(argv = process.argv.slice(2)) {
     policy = await readJson(options.policy);
     validatePolicy(policy);
     const registry = await readJson("compatibility/protected-local-patches.json");
-    const snapshot = options.fixture
-      ? await readJson(options.fixture)
-      : await queryLive(policy);
+    const snapshot = options.fixture ? await readJson(options.fixture) : await queryLive(policy);
     result = assessSnapshot(snapshot, policy, registry);
+
+    if (options.prepareFinalize) {
+      const candidate = finalizationCandidate(policy, result, options);
+      await writeExplicitOutput(options.finalizeOutput, `${JSON.stringify(candidate, null, 2)}\n`);
+      result.finalizationCandidate = path.relative(
+        repoRoot,
+        path.resolve(repoRoot, options.finalizeOutput)
+      );
+    }
   } catch (error) {
     result = errorResult(error, policy);
   }

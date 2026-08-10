@@ -49,6 +49,7 @@ from models.sql.workspace import (
 from models.sql.user import User
 from models.sql.access_token import AccessToken
 from models.sql.provider_settings import ProviderSettings
+from models.sql.reference_snapshot import ReferenceSnapshot
 from templates.v2.catalog import get_template_v2_default_template_id
 from utils.owner_context import get_current_owner_id
 from utils.get_env import get_migrate_database_on_startup_env
@@ -135,6 +136,7 @@ _STRICT_OWNER_MODELS = (
     WorkspaceOutbox,
     WorkspaceActionReceipt,
     WorkspaceArtifact,
+    ReferenceSnapshot,
 )
 
 
@@ -235,6 +237,7 @@ async def create_db_and_tables():
                         User.__table__,
                         AccessToken.__table__,
                         ProviderSettings.__table__,
+                        ReferenceSnapshot.__table__,
                     ],
                 )
             )

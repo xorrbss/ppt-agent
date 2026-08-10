@@ -180,9 +180,14 @@ def test_migration_fails_closed_for_incompatible_existing_revision(tmp_path):
         ):
             command.upgrade(config, "head")
         with engine.connect() as connection:
-            assert connection.execute(
-                text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_PRESENTATION_SEARCH_AND_SHARE_METRICS
+            assert set(
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalars()
+            ) == {
+                migrations.REVISION_PRESENTATION_SEARCH_AND_SHARE_METRICS,
+                migrations.REVISION_SMART_PRESENTATION_GENERATION,
+            }
     finally:
         engine.dispose()
 

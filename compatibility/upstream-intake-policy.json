@@ -1,94 +1,49 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "repository": "presenton/presenton",
   "branch": "main",
-  "baselineSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
-  "baselineMetadata": {
-    "committedAt": "2026-08-07T11:42:21Z",
-    "subject": "feat:Add blank presentation graphic and update loading state UI"
+  "acceptedBaseline": {
+    "sha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "committedAt": "2026-08-10T22:06:57+05:45",
+    "subject": "fix: update version to 0.9.4-beta in package.json"
+  },
+  "observedUpstream": {
+    "sha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "committedAt": "2026-08-10T22:06:57+05:45",
+    "subject": "fix: update version to 0.9.4-beta in package.json",
+    "capturedFrom": "upstream/main",
+    "finalizedFrom": "968f7de6c2b3467f838330f319b992349805eeef",
+    "verificationRef": "focused-verification-2026-08-11",
+    "authorizedBy": "user-request"
   },
   "requestTimeoutMs": 20000,
   "maximumCompareFiles": 300,
-  "categories": [
-    {
-      "id": "api-v2-backend-route",
-      "label": "/api/v2 actual backend route",
-      "severity": "contract-risk",
-      "pathRegex": "^servers/fastapi/",
-      "evidenceRegex": "(api/v2|api\\\\.v2|/v2/|prefix\\s*=\\s*[\"']?/api/v2)"
-    },
-    {
-      "id": "api-v1-endpoint",
-      "label": "API v1 endpoint",
-      "severity": "review",
-      "pathRegex": "^servers/fastapi/(api|main\\.py)",
-      "evidenceRegex": "(/api/v1|api\\\\.v1|APIRouter|include_router|@[^\\n]+\\.(get|post|put|patch|delete)\\()",
-      "riskRegex": "^-[^\\n]*(/api/v1|include_router|@[^\\n]+\\.(get|post|put|patch|delete)\\()"
-    },
-    {
-      "id": "alembic-contract",
-      "label": "Alembic revision graph",
-      "severity": "review",
-      "pathRegex": "^servers/fastapi/alembic/(versions/.*\\.py|env\\.py)$",
-      "evidenceRegex": "(revision|down_revision|alembic|op\\.)",
-      "riskRegex": "(^-[^\\n]*(revision|down_revision)\\s*=|\"status\"\\s*:\\s*\"(modified|removed|renamed)\")"
-    },
-    {
-      "id": "template-v2-schema",
-      "label": "Template V2 schema/discriminator",
-      "severity": "review",
-      "pathRegex": "(template_v2|template-v2|templates/v2|structured_template)",
-      "evidenceRegex": "(discriminator|Literal\\[|SlideElement|type[\"']?\\s*:|model_config|Field\\()",
-      "riskRegex": "^-[^\\n]*(Literal\\[|SlideElement|discriminator|type[\"']?\\s*:)"
-    },
-    {
-      "id": "presentation-export-version",
-      "label": "presentation-export version/runtime",
-      "severity": "contract-risk",
-      "pathRegex": "(^package\\.json$|presentation-export|sync-presentation-export|run-bundled-presentation-export)",
-      "evidenceRegex": "(presentationExportVersion|installed-version|presentation-export|EXPORT_RUNTIME_VERSION|sharp)"
-    },
-    {
-      "id": "authored-adaptive-export-boundary",
-      "label": "authored/adaptive/export boundary",
-      "severity": "review",
-      "pathRegex": "(authored|adaptive|export-presentation|presentation-export|generation|template-v2-general|presentation_version)",
-      "evidenceRegex": "(authored|adaptive|ExportStrategy|GenerationStrategy|template-v2|export|presentation_version)"
-    },
-    {
-      "id": "security-invariant",
-      "label": "security invariant",
-      "severity": "review",
-      "pathRegex": "(middleware|auth|share|validator|upload|export|electron|proxy|url)",
-      "evidenceRegex": "(secret|token|travers|contain|realpath|loopback|127\\.0\\.0\\.1|thrott|rate.limit|file.format|content.type|webSecurity|contextIsolation|nodeIntegration)"
-    },
-    {
-      "id": "windows-runtime-invariant",
-      "label": "Windows/SQLite/Sharp/Electron invariant",
-      "severity": "review",
-      "pathRegex": "(windows|win32|sqlite|sharp|electron|sync-presentation-export|run-bundled-presentation-export)",
-      "evidenceRegex": "(win32|Windows|sqlite|sharp|Electron|taskkill|powershell|Expand-Archive)"
-    },
-    {
-      "id": "api-v2-next-route",
-      "label": "/api/v2 Next route",
-      "severity": "review",
-      "pathRegex": "^servers/nextjs/(app|pages)/api/v2/",
-      "evidenceRegex": "(api/v2|/v2/)"
-    },
-    {
-      "id": "api-v2-proxy-trace",
-      "label": "/api/v2 proxy/client trace (not a backend route)",
-      "severity": "info",
-      "pathRegex": "^servers/nextjs/(proxy\\.ts|utils/|lib/|app/)",
-      "evidenceRegex": "(api/v2|/v2/)"
-    },
-    {
-      "id": "api-v2-experimental-doc",
-      "label": "/api/v2 experimental documentation (not a backend route)",
-      "severity": "info",
-      "pathRegex": "^(docs/experimental-editor-docs/|docs/)",
-      "evidenceRegex": "(api/v2|/v2/)"
-    }
-  ]
+  "domains": [
+    { "id": "api", "label": "OpenAPI and route surface", "severity": "review", "pathRegex": "^servers/fastapi/(api/|main\\.py$)" },
+    { "id": "migrations", "label": "Alembic graph", "severity": "contract-risk", "pathRegex": "^servers/fastapi/alembic/" },
+    { "id": "presentation-profile-driver", "label": "presentation profile or driver", "severity": "review", "pathRegex": "^servers/fastapi/(api/v1/ppt/endpoints/presentation\\.py|services/.+presentation|models/.+presentation)" },
+    { "id": "template-schema-compiler", "label": "template schema or compiler", "severity": "contract-risk", "pathRegex": "^(servers/fastapi/templates/v2/|templates/[^/]+/template\\.json$)" },
+    { "id": "renderer-export-runtime", "label": "renderer or export runtime", "severity": "review", "pathRegex": "^(servers/nextjs/lib/template-v2-json-to-html|presentation-export/|scripts/(sync|run)-presentation-export|package\\.json$)" },
+    { "id": "assets-security", "label": "assets or security", "severity": "review", "pathRegex": "^(templates/[^/]+/static/|servers/(fastapi/(api/middlewares|utils/validators)|nextjs/lib/(export|auth)))" },
+    { "id": "providers-settings", "label": "providers or settings", "severity": "review", "pathRegex": "^(servers/fastapi/utils/llm_(provider|config)\\.py|servers/nextjs/(app/.+settings|lib/.+settings)|.*provider.*)" },
+    { "id": "ui-composition", "label": "UI composition", "severity": "review", "pathRegex": "^servers/nextjs/(app/|components/)" },
+    { "id": "desktop-runtime", "label": "desktop or runtime", "severity": "review", "pathRegex": "^(electron/|Dockerfile|docker-compose|start\\.js$|package\\.json$)" }
+  ],
+  "contractManifest": {
+    "openapiRoutes": { "paths": ["servers/fastapi/api/"], "severity": "review" },
+    "alembicGraph": { "paths": ["servers/fastapi/alembic/"], "severity": "contract-risk" },
+    "jsonSchema": { "paths": ["servers/fastapi/templates/v2/", "templates/"], "severity": "contract-risk" },
+    "providerRegistry": { "paths": ["provider", "llm_config", "llm_provider", "settings"], "severity": "review" },
+    "templateCapability": { "paths": ["templates/v2/", "template-v2-", "templates/"], "severity": "review" },
+    "rendererFixtures": { "paths": ["template-v2-json-to-html", "slide-editor", "tests/"], "severity": "review" },
+    "exporterVersion": { "paths": ["presentationExportVersion", "exportVersion", "presentation-export"], "severity": "contract-risk" },
+    "forkOwnedOverlap": { "source": "compatibility/protected-local-patches.json", "severity": "contract-risk" }
+  },
+  "finalization": {
+    "acceptedShaAdvancesOnlyAfter": ["integration-complete", "verification-complete", "explicit-authorization"],
+    "command": "node scripts/intake-upstream-main.mjs --fixture <verified-report.json> --prepare-finalize --integration-verified --verification-ref <evidence> --authorization <approver> --finalize-output compatibility/upstream-intake-policy.finalized.json",
+    "inPlacePolicyWritesForbidden": true,
+    "acceptedAt": "2026-08-11T06:56:11+09:00",
+    "candidateOnly": false
+  }
 }

@@ -231,8 +231,8 @@ test("strict validation rejects a stale CommonJS bundle", () => {
   }
 });
 
-test("root and Electron pin the same v0.4.2 export release and Sharp range", () => {
-  assert.equal(rootPackage.presentationExportVersion, "v0.4.2");
+test("root and Electron pin the same v0.4.3 export release and Sharp range", () => {
+  assert.equal(rootPackage.presentationExportVersion, "v0.4.3");
   assert.equal(
     electronPackage.exportVersion,
     rootPackage.presentationExportVersion

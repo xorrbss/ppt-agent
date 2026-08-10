@@ -240,14 +240,16 @@ async def _bootstrap_durably_projects_first_message_attachment_and_settings(
                     "unavailable_reason": None,
                 }
             ]
-            assert timeline["items"][1]["events"][0]["type"] == "queued"
+            assert [
+                event["type"] for event in timeline["items"][1]["events"][:2]
+            ] == ["message.created", "queued"]
             assert timeline["items"][1]["events"][0]["operation_version"] == 0
             assert timeline["event_high_watermark"] is not None
 
             assert await session.scalar(select(func.count()).select_from(WorkspaceMessage)) == 1
             assert await session.scalar(select(func.count()).select_from(WorkspaceAsset)) == 1
             assert await session.scalar(select(func.count()).select_from(WorkspaceOperation)) == 1
-            assert await session.scalar(select(func.count()).select_from(WorkspaceOutbox)) == 1
+            assert await session.scalar(select(func.count()).select_from(WorkspaceOutbox)) == 2
     finally:
         await engine.dispose()
 
@@ -645,7 +647,11 @@ async def _destructive_command_waits_for_assets_without_bypassing_approval(
                     )
                 ).all()
             )
-            assert event_types == ["waiting_for_assets", "asset_state_changed"]
+            assert event_types == [
+                "message.created",
+                "waiting_for_assets",
+                "asset_state_changed",
+            ]
     finally:
         await engine.dispose()
 
@@ -741,7 +747,9 @@ async def _bootstrap_asset_state_matrix(
             )
             assert timeline["items"][0]["attachments"][0]["status"] == asset_state
             assert timeline["items"][1]["status"] == operation_state
-            assert timeline["items"][1]["events"][0]["type"] == operation_state
+            assert [
+                event["type"] for event in timeline["items"][1]["events"][:2]
+            ] == ["message.created", operation_state]
     finally:
         await engine.dispose()
 
@@ -864,21 +872,21 @@ async def _message_pagination_and_event_high_watermark_are_independent(tmp_path:
                 session,
                 presentation_id=presentation.id,
             )
-            assert len(all_events["events"]) == 2
+            assert len(all_events["events"]) == 4
             assert [
                 event["operation_version"] for event in all_events["events"]
-            ] == [0, 0]
+            ] == [0, 0, 0, 0]
             assert [
                 event["operation_anchor_position"] for event in all_events["events"]
-            ] == [2, 4]
+            ] == [2, 2, 4, 4]
             first_event_cursor = all_events["events"][0]["cursor"]
             backfill = await workspace_events(
                 session,
                 presentation_id=presentation.id,
                 after=first_event_cursor,
             )
-            assert len(backfill["events"]) == 1
-            assert backfill["events"][0]["cursor"] == event_hwm
+            assert len(backfill["events"]) == 3
+            assert backfill["events"][-1]["cursor"] == event_hwm
             assert backfill["event_high_watermark"] == event_hwm
     finally:
         await engine.dispose()
@@ -986,7 +994,12 @@ async def _timeline_watermark_cannot_skip_operation_committed_after_anchor_snaps
                 after=timeline["event_high_watermark"],
             )
         assert [event["operation_id"] for event in backfill["events"]] == [
-            str(committed_operation_id)
+            str(committed_operation_id),
+            str(committed_operation_id),
+        ]
+        assert [event["type"] for event in backfill["events"]] == [
+            "message.created",
+            "queued",
         ]
         assert int(backfill["event_high_watermark"]) > int(
             timeline["event_high_watermark"]
@@ -1262,7 +1275,10 @@ async def _destructive_command_requires_fresh_revision_bound_approval(tmp_path: 
             card = timeline["items"][-1]
             assert card["status"] == "awaiting_approval"
             assert card["approval_expires_at"] is not None
-            assert card["events"][0]["type"] == "approval_required"
+            assert [event["type"] for event in card["events"][:2]] == [
+                "message.created",
+                "approval_required",
+            ]
 
         async with maker() as session:
             _, approved, duplicate = await apply_workspace_action(
@@ -1427,10 +1443,10 @@ async def _version_restore_command_and_approval_are_durably_idempotent(
             ) == 1
             assert await session.scalar(
                 select(func.count()).select_from(WorkspaceOperationEvent)
-            ) == 2
+            ) == 3
             assert await session.scalar(
                 select(func.count()).select_from(WorkspaceOutbox)
-            ) == 2
+            ) == 3
 
         # A later approval is still bound to the revision captured by the card,
         # even if that client omits its own optional expected_revision.
@@ -1551,7 +1567,7 @@ async def _action_receipt_is_idempotent_and_stale_operation_version_conflicts(
                     )
                 ).all()
             )
-            assert [event.operation_version for event in events] == [0, 1]
+            assert [event.operation_version for event in events] == [0, 0, 1]
     finally:
         await engine.dispose()
 

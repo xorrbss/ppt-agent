@@ -74,4 +74,9 @@ Secret values are never read or rendered by the generator.
 | `DALL_E_3_QUALITY` | enum | `standard` | no | DALL-E 3 output quality. |
 | `GPT_IMAGE_1_5_QUALITY` | enum | `medium` | no | GPT Image 1.5 output quality. |
 | `GPT_IMAGE_2_QUALITY` | enum | `medium` | no | GPT Image 2 output quality. |
+| `WEB_SEARCH_PROVIDER` | enum | `auto` | no | Web-search provider selected from the canonical provider registry. |
+| `SEARXNG_BASE_URL` | string | — | no | SearXNG base URL. |
+| `TAVILY_API_KEY` | string | — | yes | Tavily API key. |
+| `EXA_API_KEY` | string | — | yes | Exa API key. |
+| `BRAVE_SEARCH_API_KEY` | string | — | yes | Brave Search API key. |
 

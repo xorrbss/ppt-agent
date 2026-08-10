@@ -1,0 +1,499 @@
+{
+  "$defs": {
+    "CanonicalComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "component_id": {
+          "title": "Component Id",
+          "type": "string"
+        },
+        "repeats": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RepeatNode"
+          },
+          "title": "Repeats",
+          "type": "array"
+        },
+        "source": {
+          "additionalProperties": true,
+          "title": "Source",
+          "type": "object"
+        },
+        "source_path": {
+          "title": "Source Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "component_id",
+        "source_path",
+        "source"
+      ],
+      "title": "CanonicalComponent",
+      "type": "object"
+    },
+    "CanonicalLayout": {
+      "additionalProperties": false,
+      "properties": {
+        "components": {
+          "items": {
+            "$ref": "#/$defs/CanonicalComponent"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "layout_id": {
+          "title": "Layout Id",
+          "type": "string"
+        },
+        "source": {
+          "additionalProperties": true,
+          "title": "Source",
+          "type": "object"
+        },
+        "source_path": {
+          "title": "Source Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layout_id",
+        "source_path",
+        "source",
+        "components"
+      ],
+      "title": "CanonicalLayout",
+      "type": "object"
+    },
+    "CanonicalTemplateAst": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "$ref": "#/$defs/TemplateCapabilityReport"
+        },
+        "layouts": {
+          "items": {
+            "$ref": "#/$defs/CanonicalLayout"
+          },
+          "title": "Layouts",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "presenton.template-ast/v1",
+          "default": "presenton.template-ast/v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source": {
+          "additionalProperties": true,
+          "title": "Source",
+          "type": "object"
+        },
+        "source_dialect": {
+          "enum": [
+            "57b194b",
+            "a3352f3c",
+            "future"
+          ],
+          "title": "Source Dialect",
+          "type": "string"
+        },
+        "source_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Version"
+        }
+      },
+      "required": [
+        "source_dialect",
+        "source",
+        "layouts",
+        "capabilities"
+      ],
+      "title": "CanonicalTemplateAst",
+      "type": "object"
+    },
+    "Geometry": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "rotation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "x": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
+        },
+        "y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y"
+        }
+      },
+      "title": "Geometry",
+      "type": "object"
+    },
+    "RenderPlanRepeat": {
+      "additionalProperties": false,
+      "properties": {
+        "arrangement": {
+          "enum": [
+            "flow",
+            "grid",
+            "positioned"
+          ],
+          "title": "Arrangement",
+          "type": "string"
+        },
+        "component_id": {
+          "title": "Component Id",
+          "type": "string"
+        },
+        "content_field": {
+          "title": "Content Field",
+          "type": "string"
+        },
+        "repeat_id": {
+          "title": "Repeat Id",
+          "type": "string"
+        },
+        "selected_count": {
+          "minimum": 0,
+          "title": "Selected Count",
+          "type": "integer"
+        },
+        "selected_sources": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Selected Sources",
+          "type": "array"
+        },
+        "source_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Source Indices",
+          "type": "array"
+        },
+        "source_path": {
+          "title": "Source Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repeat_id",
+        "component_id",
+        "source_path",
+        "content_field",
+        "arrangement",
+        "selected_count",
+        "source_indices",
+        "selected_sources"
+      ],
+      "title": "RenderPlanRepeat",
+      "type": "object"
+    },
+    "RepeatAnchor": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "title": "Anchor Id",
+          "type": "string"
+        },
+        "geometry": {
+          "$ref": "#/$defs/Geometry"
+        },
+        "source": {
+          "additionalProperties": true,
+          "title": "Source",
+          "type": "object"
+        },
+        "source_index": {
+          "minimum": 0,
+          "title": "Source Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "anchor_id",
+        "source_index",
+        "geometry",
+        "source"
+      ],
+      "title": "RepeatAnchor",
+      "type": "object"
+    },
+    "RepeatNode": {
+      "additionalProperties": false,
+      "properties": {
+        "anchors": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RepeatAnchor"
+          },
+          "title": "Anchors",
+          "type": "array"
+        },
+        "arrangement": {
+          "enum": [
+            "flow",
+            "grid",
+            "positioned"
+          ],
+          "title": "Arrangement",
+          "type": "string"
+        },
+        "component_id": {
+          "title": "Component Id",
+          "type": "string"
+        },
+        "content_field": {
+          "title": "Content Field",
+          "type": "string"
+        },
+        "extensions": {
+          "additionalProperties": true,
+          "title": "Extensions",
+          "type": "object"
+        },
+        "item_signature": {
+          "title": "Item Signature",
+          "type": "string"
+        },
+        "max_items": {
+          "minimum": 1,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "min_items": {
+          "minimum": 0,
+          "title": "Min Items",
+          "type": "integer"
+        },
+        "prototype": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prototype"
+        },
+        "repeat_id": {
+          "title": "Repeat Id",
+          "type": "string"
+        },
+        "selection": {
+          "enum": [
+            "prototype",
+            "prefix"
+          ],
+          "title": "Selection",
+          "type": "string"
+        },
+        "source_indices": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Source Indices",
+          "type": "array"
+        },
+        "source_path": {
+          "title": "Source Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repeat_id",
+        "component_id",
+        "source_path",
+        "content_field",
+        "arrangement",
+        "selection",
+        "min_items",
+        "max_items",
+        "item_signature",
+        "source_indices"
+      ],
+      "title": "RepeatNode",
+      "type": "object"
+    },
+    "TemplateCapabilityReport": {
+      "additionalProperties": false,
+      "properties": {
+        "content_schema": {
+          "default": true,
+          "title": "Content Schema",
+          "type": "boolean"
+        },
+        "editor_projection": {
+          "default": true,
+          "title": "Editor Projection",
+          "type": "boolean"
+        },
+        "html_render": {
+          "default": true,
+          "title": "Html Render",
+          "type": "boolean"
+        },
+        "hydration": {
+          "default": true,
+          "title": "Hydration",
+          "type": "boolean"
+        },
+        "issues": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "pptx_compile": {
+          "default": true,
+          "title": "Pptx Compile",
+          "type": "boolean"
+        },
+        "review_required": {
+          "default": false,
+          "title": "Review Required",
+          "type": "boolean"
+        },
+        "validation": {
+          "default": true,
+          "title": "Validation",
+          "type": "boolean"
+        }
+      },
+      "title": "TemplateCapabilityReport",
+      "type": "object"
+    },
+    "TemplateRenderPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "ast_schema_version": {
+          "const": "presenton.template-ast/v1",
+          "default": "presenton.template-ast/v1",
+          "title": "Ast Schema Version",
+          "type": "string"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/TemplateCapabilityReport"
+        },
+        "content": {
+          "additionalProperties": true,
+          "title": "Content",
+          "type": "object"
+        },
+        "layout_id": {
+          "title": "Layout Id",
+          "type": "string"
+        },
+        "repeats": {
+          "items": {
+            "$ref": "#/$defs/RenderPlanRepeat"
+          },
+          "title": "Repeats",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "presenton.template-render-plan/v1",
+          "default": "presenton.template-render-plan/v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_layout": {
+          "additionalProperties": true,
+          "title": "Source Layout",
+          "type": "object"
+        }
+      },
+      "required": [
+        "layout_id",
+        "source_layout",
+        "content",
+        "repeats",
+        "capabilities"
+      ],
+      "title": "TemplateRenderPlan",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Schema-generation root covering both AST and render-plan artifacts.",
+  "properties": {
+    "ast": {
+      "$ref": "#/$defs/CanonicalTemplateAst"
+    },
+    "render_plan": {
+      "$ref": "#/$defs/TemplateRenderPlan"
+    }
+  },
+  "required": [
+    "ast",
+    "render_plan"
+  ],
+  "title": "TemplateCompilerContract",
+  "type": "object"
+}

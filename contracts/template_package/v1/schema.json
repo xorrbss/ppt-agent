@@ -1,0 +1,393 @@
+{
+  "$defs": {
+    "AssetInventoryReference": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "inventoryPath": {
+          "title": "Inventorypath",
+          "type": "string"
+        },
+        "inventorySha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Inventorysha256",
+          "type": "string"
+        },
+        "totalSizeBytes": {
+          "maximum": 536870912,
+          "minimum": 0,
+          "title": "Totalsizebytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "inventoryPath",
+        "inventorySha256",
+        "count",
+        "totalSizeBytes"
+      ],
+      "title": "AssetInventoryReference",
+      "type": "object"
+    },
+    "EngineContract": {
+      "additionalProperties": false,
+      "properties": {
+        "contractPath": {
+          "title": "Contractpath",
+          "type": "string"
+        },
+        "contractSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Contractsha256",
+          "type": "string"
+        },
+        "contractVersion": {
+          "const": "1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "id": {
+          "const": "presenton.template-v2-json",
+          "title": "Id",
+          "type": "string"
+        },
+        "requiredCapabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requiredcapabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "contractVersion",
+        "contractPath",
+        "contractSha256",
+        "requiredCapabilities"
+      ],
+      "title": "EngineContract",
+      "type": "object"
+    },
+    "Entrypoint": {
+      "additionalProperties": false,
+      "properties": {
+        "mediaType": {
+          "const": "application/json",
+          "title": "Mediatype",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "minimum": 1,
+          "title": "Sizebytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "sizeBytes",
+        "mediaType"
+      ],
+      "title": "Entrypoint",
+      "type": "object"
+    },
+    "FontContract": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "object"
+        },
+        "faces": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Faces",
+          "type": "array"
+        },
+        "unresolvedAliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolvedaliases",
+          "type": "array"
+        }
+      },
+      "required": [
+        "faces",
+        "aliases",
+        "unresolvedAliases"
+      ],
+      "title": "FontContract",
+      "type": "object"
+    },
+    "LicenseContract": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "title": "Expression",
+          "type": "string"
+        },
+        "rightsEvidenceId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rightsevidenceid"
+        },
+        "status": {
+          "enum": [
+            "approved",
+            "review-required",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "expression",
+        "rightsEvidenceId"
+      ],
+      "title": "LicenseContract",
+      "type": "object"
+    },
+    "PresentationSize": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 4320,
+          "title": "Height",
+          "type": "integer"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 7680,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "title": "PresentationSize",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "commitSha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commitsha",
+          "type": "string"
+        },
+        "repository": {
+          "title": "Repository",
+          "type": "string"
+        },
+        "sourceFileCount": {
+          "minimum": 1,
+          "title": "Sourcefilecount",
+          "type": "integer"
+        },
+        "sourceInventorySha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sourceinventorysha256",
+          "type": "string"
+        },
+        "sourcePath": {
+          "title": "Sourcepath",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "commitSha",
+        "sourcePath",
+        "sourceFileCount",
+        "sourceInventorySha256"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "Publication": {
+      "additionalProperties": false,
+      "properties": {
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "default": {
+          "title": "Default",
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "blocked",
+            "retired"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "default",
+        "blockers"
+      ],
+      "title": "Publication",
+      "type": "object"
+    },
+    "RendererSmoke": {
+      "additionalProperties": false,
+      "properties": {
+        "receiptPath": {
+          "title": "Receiptpath",
+          "type": "string"
+        },
+        "receiptSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receiptsha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receiptPath",
+        "receiptSha256"
+      ],
+      "title": "RendererSmoke",
+      "type": "object"
+    },
+    "Thumbnail": {
+      "additionalProperties": false,
+      "properties": {
+        "assetPath": {
+          "title": "Assetpath",
+          "type": "string"
+        },
+        "height": {
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "assetPath",
+        "sha256",
+        "width",
+        "height"
+      ],
+      "title": "Thumbnail",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "assets": {
+      "$ref": "#/$defs/AssetInventoryReference"
+    },
+    "engine": {
+      "$ref": "#/$defs/EngineContract"
+    },
+    "entrypoint": {
+      "$ref": "#/$defs/Entrypoint"
+    },
+    "fonts": {
+      "$ref": "#/$defs/FontContract"
+    },
+    "license": {
+      "$ref": "#/$defs/LicenseContract"
+    },
+    "packageVersion": {
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+      "title": "Packageversion",
+      "type": "string"
+    },
+    "presentation": {
+      "$ref": "#/$defs/PresentationSize"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "publication": {
+      "$ref": "#/$defs/Publication"
+    },
+    "rendererSmoke": {
+      "$ref": "#/$defs/RendererSmoke"
+    },
+    "schemaVersion": {
+      "const": "presenton.template-package/v1",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "sourceRoot": {
+      "title": "Sourceroot",
+      "type": "string"
+    },
+    "templateId": {
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "title": "Templateid",
+      "type": "string"
+    },
+    "thumbnail": {
+      "$ref": "#/$defs/Thumbnail"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "packageVersion",
+    "templateId",
+    "sourceRoot",
+    "entrypoint",
+    "engine",
+    "presentation",
+    "assets",
+    "fonts",
+    "license",
+    "provenance",
+    "thumbnail",
+    "rendererSmoke",
+    "publication"
+  ],
+  "title": "TemplatePackageManifest",
+  "type": "object"
+}

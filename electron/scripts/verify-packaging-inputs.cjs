@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
-const EXPECTED_EXPORT_VERSION = "v0.4.2";
+const EXPECTED_EXPORT_VERSION = "v0.4.3";
 const DEFAULT_MAX_STANDALONE_FILES = 150000;
 const DEFAULT_MAX_STANDALONE_BYTES = 3 * 1024 * 1024 * 1024;
 const ALLOWED_STANDALONE_ROOTS = new Set([

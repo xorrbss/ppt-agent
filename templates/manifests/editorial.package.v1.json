@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "presenton.template-package/v1",
+  "packageVersion": "1.0.0",
+  "templateId": "editorial",
+  "sourceRoot": "templates/editorial",
+  "entrypoint": {
+    "path": "template.json",
+    "sha256": "f63282203b21e4a350f6ff87ffe5695ca4c92413c5aad485e6cdedfbb82f7e60",
+    "sizeBytes": 1014838,
+    "mediaType": "application/json"
+  },
+  "engine": {
+    "id": "presenton.template-v2-json",
+    "contractVersion": "1",
+    "contractPath": "contracts/template_package/engines/template-v2-json.v1.json",
+    "contractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+    "requiredCapabilities": [
+      "asset.local-font",
+      "asset.raster-image",
+      "asset.safe-svg",
+      "chart.area",
+      "chart.bar",
+      "chart.line",
+      "chart.pie",
+      "chart.scatter",
+      "element.container",
+      "element.group",
+      "element.image",
+      "element.infographic",
+      "element.table",
+      "element.text",
+      "element.text-list",
+      "element.vector",
+      "layout.flex",
+      "layout.grid",
+      "normalization.legacy-authoring-extras",
+      "normalization.legacy-infographic-colors",
+      "repeat.flow",
+      "repeat.positioned"
+    ]
+  },
+  "presentation": {
+    "width": 1280,
+    "height": 720
+  },
+  "assets": {
+    "inventoryPath": "templates/manifests/editorial.assets.v1.json",
+    "inventorySha256": "ed13445b78a13b7da1d4ec5340f3b698fa12a53eaf341fe6cd7b8b6ac56128bc",
+    "count": 116,
+    "totalSizeBytes": 5096023
+  },
+  "fonts": {
+    "faces": [
+      "static/DM Sans Bold.ttf",
+      "static/DM Sans Regular.ttf",
+      "static/Playfair Display Bold Italic.ttf"
+    ],
+    "aliases": {
+      "DM Sans": "static/DM Sans Regular.ttf",
+      "DM Sans Bold": "static/DM Sans Bold.ttf",
+      "Playfair Display Bold": "static/Playfair Display Bold Italic.ttf"
+    },
+    "unresolvedAliases": [
+      "Playfair Display",
+      "Playfair Display Semi-Bold Italics",
+      "Playfair Display Bold Italics"
+    ]
+  },
+  "license": {
+    "status": "review-required",
+    "expression": "Apache-2.0 AND OFL-1.1 AND LicenseRef-Unverified-Upstream-Asset",
+    "rightsEvidenceId": null
+  },
+  "provenance": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "e271359ed91bfa48ba18c5717f8e19a7b69326ef",
+    "sourcePath": "templates/editorial",
+    "sourceFileCount": 117,
+    "sourceInventorySha256": "ed13445b78a13b7da1d4ec5340f3b698fa12a53eaf341fe6cd7b8b6ac56128bc"
+  },
+  "thumbnail": {
+    "assetPath": "static/thumbnail.png",
+    "sha256": "443a2e796cba89bebed8f47259a2b42e0e20d8048fa8ac8257660280071e07b5",
+    "width": 1280,
+    "height": 720
+  },
+  "rendererSmoke": {
+    "receiptPath": "templates/manifests/editorial.renderer-smoke.v1.json",
+    "receiptSha256": "bd5c80df25160181481c11e7b5776222fae08c3db248ba183af8675ddf096b58"
+  },
+  "publication": {
+    "status": "blocked",
+    "default": false,
+    "blockers": [
+      "remote_font_reference",
+      "unresolved_font_aliases",
+      "raster_rights_evidence_missing",
+      "browser_golden_receipt_missing"
+    ]
+  }
+}

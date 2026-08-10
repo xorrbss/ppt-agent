@@ -83,6 +83,11 @@ x-presenton-env: &presenton-env
   DALL_E_3_QUALITY: ${DALL_E_3_QUALITY:-standard}
   GPT_IMAGE_1_5_QUALITY: ${GPT_IMAGE_1_5_QUALITY:-medium}
   GPT_IMAGE_2_QUALITY: ${GPT_IMAGE_2_QUALITY:-medium}
+  WEB_SEARCH_PROVIDER: ${WEB_SEARCH_PROVIDER:-auto}
+  SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-}
+  TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+  EXA_API_KEY: ${EXA_API_KEY:-}
+  BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
   # END GENERATED SETTINGS: compose.shared
   # Ollama is not baked into the image; set START_OLLAMA=true for runtime install, or use OLLAMA_URL.
   START_OLLAMA: ${START_OLLAMA:-false}

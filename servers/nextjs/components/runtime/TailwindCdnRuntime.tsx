@@ -13,8 +13,10 @@ export const TAILWIND_RUNTIME_REQUEST_EVENT =
 export default function TailwindCdnRuntime() {
   const pathname = usePathname();
   const [loadRequested, setLoadRequested] = useState(false);
-  const deferUntilRequested =
-    pathname === "/" || pathname.startsWith("/community");
+  // The runtime is only needed by components that call
+  // `useTailwindRuntimeReady`. Keep every ordinary route free of the external
+  // script until one of those components requests it.
+  const deferUntilRequested = pathname !== "/pdf-maker";
 
   useEffect(() => {
     if (pathname === "/pdf-maker" || !deferUntilRequested) return;

@@ -6,6 +6,7 @@ import "katex/dist/katex.min.css";
 import { Providers } from "./providers";
 import MixpanelInitializer from "./MixpanelInitializer";
 import { LocalizedToaster } from "@/components/i18n/LocalizedToaster";
+import TailwindCdnRuntime from "@/components/runtime/TailwindCdnRuntime";
 import { getServerI18n } from "@/i18n/server";
 const inter = localFont({
   src: [
@@ -106,6 +107,7 @@ export default async function RootLayout({
         className={`${inter.variable} ${syne.variable} ${unbounded.variable} antialiased`}
       >
         <Providers locale={locale} messages={messages}>
+          <TailwindCdnRuntime />
           <MixpanelInitializer>{children}</MixpanelInitializer>
           <LocalizedToaster />
         </Providers>

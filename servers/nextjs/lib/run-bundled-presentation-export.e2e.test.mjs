@@ -73,7 +73,7 @@ function runExporter(entrypoint, taskPath, env) {
   });
 }
 
-test("v0.4.2 general exporter converts a representative Template V2 render", async (t) => {
+test("v0.4.3 general exporter converts a representative Template V2 render", async (t) => {
   const chrome = await firstExisting(chromeExecutable());
   if (!chrome) {
     if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");

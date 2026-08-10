@@ -24,6 +24,7 @@ import { DeferredSlideThumbnail } from "./DeferredSlideThumbnail";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SharePopover } from "./SharePopover";
+import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 
 export const PresentationCard = ({
   id,
@@ -41,12 +42,16 @@ export const PresentationCard = ({
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [showShareDialog, setShowShareDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
-  const presentationType =
-    presentation?.generation_mode === "smart" ? "smart" : "standard";
+  const presentationRuntime = tryResolveServerIssuedPresentationProfile(presentation);
+  const presentationType = presentationRuntime?.profile.generation_mode ?? null;
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
     if (showDeleteDialog || showShareDialog) return;
+    if (!presentationType) {
+      notify.error("Unsupported presentation profile");
+      return;
+    }
     trackEvent(MixpanelEvent.Dashboard_Presentation_Opened, {
       pathname,
       presentation_id: id,

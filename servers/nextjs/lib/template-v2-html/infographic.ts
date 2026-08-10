@@ -1,12 +1,15 @@
 import { DEFAULT_CHART_COLORS, normalizeChartColor } from "./chart-colors";
-import { cssNumber, escapeAttribute, escapeCssColor, escapeHtml } from "./css";
+import { cssNumber, escapeAttribute, escapeCssColor } from "./css";
 import { frameStyle, readBox, transformStyle } from "./style";
 import type { InfographicKind, JsonRecord, RenderMode } from "./types";
 import { clamp, readArray, readNumber, readRecord, readString } from "./values";
+import { createInfographicViewModel } from "../render-service/infographic-policy";
 
 interface InfographicMetrics {
   ratio: number;
-  label: string;
+  value: number;
+  min: number;
+  max: number;
 }
 
 export function renderInfographic(item: JsonRecord, mode: RenderMode): string {
@@ -22,53 +25,54 @@ function renderProgressBarInfographic(item: JsonRecord, mode: RenderMode): strin
   const baseColor = infographicBaseColor(item);
   const fallbackSize = { width: 180, height: 40 };
   const box = readBox(item, fallbackSize);
-  const showLabel = (box.height ?? fallbackSize.height) >= 28;
-  const label = showLabel
-    ? `<div style="color:#111827;font-size:${cssNumber(
-      Math.max(
-        10,
-        Math.min(16, Math.round((box.height ?? fallbackSize.height) * 0.3))
-      )
-    )}px;font-weight:700;line-height:1;text-align:right">${escapeHtml(
-      metrics.label
-    )}</div>`
-    : "";
+  const view = createInfographicViewModel({
+    kind: "progress_bar",
+    value: metrics.value,
+    min_value: metrics.min,
+    max_value: metrics.max,
+    highlight_color: highlightColor,
+    base_color: baseColor,
+    frame_height: box.height ?? fallbackSize.height,
+  });
 
   return `<div style="${frameStyle(item, mode, fallbackSize)}${transformStyle(
     item
-  )}display:flex;flex-direction:column;gap:6px;justify-content:center;overflow:hidden"><div style="position:relative;width:100%;height:${cssNumber(
-    Math.max(
-      6,
-      Math.min(18, Math.round((box.height ?? fallbackSize.height) * 0.35))
-    )
+  )}display:flex;align-items:center;justify-content:center;overflow:hidden"><div style="position:relative;width:100%;height:${cssNumber(
+    view.progress_track_height
   )}px;border-radius:999px;background:${escapeCssColor(
-    baseColor
+    view.base_color
   )};overflow:hidden"><div style="height:100%;width:${cssNumber(
-    metrics.ratio * 100
-  )}%;border-radius:inherit;background:${escapeCssColor(highlightColor)}"></div></div>${label}</div>`;
+    view.ratio * 100
+  )}%;border-radius:inherit;background:${escapeCssColor(view.highlight_color)}"></div></div></div>`;
 }
 
 function renderGaugeInfographic(item: JsonRecord, mode: RenderMode): string {
   const metrics = infographicMetrics(item);
   const highlightColor = infographicHighlightColor(item);
   const baseColor = infographicBaseColor(item);
+  const view = createInfographicViewModel({
+    kind: "gauge",
+    value: metrics.value,
+    min_value: metrics.min,
+    max_value: metrics.max,
+    highlight_color: highlightColor,
+    base_color: baseColor,
+  });
   const fallbackSize = { width: 160, height: 96 };
   const progressPath =
-    metrics.ratio > 0
+    view.ratio > 0
       ? `<path d="${escapeAttribute(
-        describeGaugeArc(60, 60, 48, metrics.ratio)
+        describeGaugeArc(60, 60, 48, view.ratio)
       )}" fill="none" stroke="${escapeAttribute(
-        escapeCssColor(highlightColor)
+        escapeCssColor(view.highlight_color)
       )}" stroke-width="12" stroke-linecap="round"/>`
       : "";
 
   return `<div style="${frameStyle(item, mode, fallbackSize)}${transformStyle(
     item
   )}overflow:hidden"><svg width="100%" height="100%" viewBox="0 0 120 72" preserveAspectRatio="xMidYMid meet" style="display:block"><path d="M 12 60 A 48 48 0 0 1 108 60" fill="none" stroke="${escapeAttribute(
-    escapeCssColor(baseColor)
-  )}" stroke-width="12" stroke-linecap="round"/>${progressPath}<text x="60" y="52" text-anchor="middle" fill="#111827" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">${escapeHtml(
-    metrics.label
-  )}</text></svg></div>`;
+    escapeCssColor(view.base_color)
+  )}" stroke-width="12" stroke-linecap="round"/>${progressPath}</svg></div>`;
 }
 
 function infographicKindFromValue(value: string | null): InfographicKind {
@@ -90,7 +94,9 @@ function infographicMetrics(item: JsonRecord): InfographicMetrics {
 
   return {
     ratio,
-    label: formatInfographicNumber(value),
+    value,
+    min,
+    max,
   };
 }
 
@@ -139,9 +145,4 @@ function gaugePoint(
     x: centerX + radius * Math.cos(radians),
     y: centerY + radius * Math.sin(radians),
   };
-}
-
-function formatInfographicNumber(value: number): string {
-  const rounded = Math.round(value * 100) / 100;
-  return Object.is(rounded, -0) ? "0" : String(rounded);
 }

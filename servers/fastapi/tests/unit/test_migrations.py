@@ -93,12 +93,13 @@ def test_durable_deletion_upgrade_rejects_dangling_attachment_asset(tmp_path):
             command.upgrade(config, "head")
 
         with engine.connect() as connection:
-            assert (
+            versions = set(
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
-                ).scalar_one()
-                == migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ
+                ).scalars()
             )
+            assert migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ in versions
+            assert _script_head(database_url) not in versions
             assert "asset_id_snapshot" not in {
                 column["name"]
                 for column in inspect(connection).get_columns(

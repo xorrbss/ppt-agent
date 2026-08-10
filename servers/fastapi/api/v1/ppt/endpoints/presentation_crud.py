@@ -242,7 +242,7 @@ async def get_all_presentations(
         fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
         presentations_with_slides.append(
             PresentationWithSlides(
-                **presentation.model_dump(),
+                **presentation.model_dump(exclude={"fonts"}),
                 slides=slides,
                 fonts=fonts,
             )
@@ -279,7 +279,7 @@ async def get_presentation(
     slides = list(slides_result)
     fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
     return PresentationWithSlides(
-        **presentation.model_dump(),
+        **presentation.model_dump(exclude={"fonts"}),
         slides=slides,
         fonts=fonts,
     )

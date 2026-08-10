@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
-const EXPECTED_EXPORT_VERSION = "v0.4.2";
+const EXPECTED_EXPORT_VERSION = "v0.4.3";
 const EXPECTED_IDENTITY = "PresentonAI.Presenton";
 const EXPECTED_PUBLISHER = "CN=8A2C57B5-F1C6-473A-93EE-2E9B72134341";
 const APP_RESOURCE_PREFIX = "app/resources/app/resources/";

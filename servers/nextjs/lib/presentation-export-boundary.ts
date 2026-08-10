@@ -32,6 +32,10 @@ export async function executeExportAtProductionBoundary<
     presentation,
     {
       ...params,
+      expectedPresentationRevision:
+        Number.isSafeInteger(presentation.revision)
+          ? Number(presentation.revision)
+          : params.expectedPresentationRevision,
       expectedPresentationSha256:
         presentation[PRESENTATION_SOURCE_SHA256] ??
         params.expectedPresentationSha256,

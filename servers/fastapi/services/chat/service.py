@@ -22,11 +22,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from constants.presentation import AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE
 from models.chat import ChatAttachment
 from models.sql.presentation import PresentationModel
+from services.agent_runtime.contracts import (
+    AgentRunResult,
+    RunContext,
+    RunMessage,
+    ToolSummary,
+    TypedMutation,
+)
+from services.agent_runtime.events import (
+    EventSink,
+    NullEventSink,
+    RuntimeEventFenceLost,
+)
 from services.chat.conversation_store import ChatConversationStore
 from services.chat.presentation_context_store import PresentationContextStore
 from services.chat.prompts import build_system_prompt
 from services.chat.llm_tools import build_chat_llm_tools
 from services.chat.tools import ChatTools
+from services.presentation_profiles import resolve_presentation_profile
+from services.workspace_operation_handler_registry import WorkspaceOperationCancelled
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
@@ -101,15 +115,66 @@ class PresentationChatService:
         sql_session: AsyncSession,
         presentation_id: uuid.UUID,
         conversation_id: uuid.UUID | None,
+        artifact_directory: str | None = None,
     ):
         self._sql_session = sql_session
         self._presentation_id = presentation_id
         self._conversation_id = conversation_id
-        self._presentation_type = presentation_type
+        self._artifact_directory = artifact_directory
+        # The database row, never a client field, selects the capability/tool
+        # profile when the run context is prepared.
+        self._presentation_type: Literal["standard", "smart"] | None = None
 
         self._conversation_store = ChatConversationStore(sql_session)
-        self._memory = PresentationContextStore(sql_session, presentation_id)
-        self._tools = ChatTools(self._memory)
+        self._memory: PresentationContextStore | None = None
+        self._tools: ChatTools | None = None
+
+    async def execute_run(
+        self,
+        context: RunContext,
+        event_sink: EventSink | None = None,
+    ) -> AgentRunResult:
+        """Execute provider/tool work without persisting or committing a turn."""
+
+        if context.presentation_id != self._presentation_id:
+            raise ValueError("agent_run_presentation_mismatch")
+        if context.conversation_id != self._conversation_id:
+            raise ValueError("agent_run_conversation_mismatch")
+        sink = event_sink or NullEventSink()
+        await context.raise_if_cancelled()
+        await sink.status("running")
+        conversation_id, messages = await self._prepare_turn_context(
+            context.user_message,
+            canonical_history=context.history,
+            run_context=context,
+        )
+        (
+            response_text,
+            tool_calls,
+            page_remake_slide_index,
+            tool_summaries,
+            mutations,
+        ) = await self._run_agent_with_tools(
+            messages,
+            context=context,
+            event_sink=sink,
+        )
+        await context.raise_if_cancelled()
+        await sink.finalize(response_text)
+        await context.raise_if_cancelled()
+        return AgentRunResult(
+            conversation_id=conversation_id,
+            assistant_output=response_text,
+            tool_calls=tuple(tool_calls),
+            mutations=tuple(mutations),
+            artifacts=(
+                context.artifact_scope.discover()
+                if context.artifact_scope is not None
+                else ()
+            ),
+            tool_summaries=tuple(tool_summaries),
+            page_remake_slide_index=page_remake_slide_index,
+        )
 
     async def generate_reply(
         self,
@@ -122,9 +187,10 @@ class PresentationChatService:
         response_text, tool_calls, page_remake_slide_index = (
             await self._run_llm_with_tools(messages)
         )
-        return await self._persist_turn(
+        # Compatibility facade only. Canonical conversation publication owns
+        # persistence, so provider execution cannot dual-write a transcript.
+        return ChatTurnResult(
             conversation_id=conversation_id,
-            user_message=user_message,
             response_text=response_text,
             tool_calls=tool_calls,
             page_remake_slide_index=page_remake_slide_index,
@@ -151,7 +217,6 @@ class PresentationChatService:
         for round_index in range(MAX_TOOL_ROUNDS):
             completion_chunk: Any | None = None
             round_content_chunks: list[str] = []
-            thinking_chunks: list[str] = []
 
             try:
                 async for event in stream_generate_events(
@@ -170,22 +235,13 @@ class PresentationChatService:
                             round_content_chunks.append(chunk)
                             yield "chunk", chunk
                     elif event_type == "thinking":
-                        thinking_text = self._event_text(event)
-                        if thinking_text:
-                            thinking_chunks.append(thinking_text)
+                        # Hidden reasoning/provider notes are never public
+                        # events and are intentionally discarded.
+                        continue
                     elif event_type == "completion":
                         completion_chunk = event
             except Exception as exc:
                 raise handle_llm_client_exceptions(exc)
-
-            thinking_summary = self._summarize_model_note(thinking_chunks)
-            if thinking_summary:
-                yield "trace", {
-                    "kind": "model_note",
-                    "round": round_index + 1,
-                    "status": "info",
-                    "message": thinking_summary,
-                }
 
             completion_tool_calls = list(
                 getattr(completion_chunk, "tool_calls", []) or []
@@ -280,10 +336,8 @@ class PresentationChatService:
         if response_text is None:
             yield "chunk", final_response_text
 
-        yield "status", "Saving chat"
-        result = await self._persist_turn(
+        result = ChatTurnResult(
             conversation_id=conversation_id,
-            user_message=user_message,
             response_text=final_response_text,
             tool_calls=called_tools,
         )
@@ -293,6 +347,9 @@ class PresentationChatService:
         self,
         user_message: str,
         attachments: list[ChatAttachment] | None = None,
+        *,
+        canonical_history: tuple[RunMessage, ...] | None = None,
+        run_context: RunContext | None = None,
     ) -> tuple[uuid.UUID, list[Message]]:
         if not (user_message or "").strip():
             raise HTTPException(status_code=400, detail="Message is required")
@@ -300,20 +357,38 @@ class PresentationChatService:
         presentation = await self._sql_session.get(PresentationModel, self._presentation_id)
         if not presentation:
             raise HTTPException(status_code=404, detail="Presentation not found")
-        if presentation.generation_mode != self._presentation_type:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Presentation type does not match the stored generation mode."
-                ),
-            )
+        profile = resolve_presentation_profile(presentation)
+        # Rolling facade for the existing two chat tool registries. Driver
+        # selection itself is always based on the persisted canonical profile.
+        self._presentation_type = (
+            "smart" if profile.driver_id == "smart" else "standard"
+        )
+        self._memory = PresentationContextStore(
+            self._sql_session,
+            self._presentation_id,
+            presentation_type=self._presentation_type,
+            artifact_directory=(
+                str(run_context.artifact_scope.directory)
+                if run_context is not None
+                and run_context.artifact_scope is not None
+                else self._artifact_directory
+            ),
+        )
+        self._tools = ChatTools(self._memory)
 
         conversation_id = await self._conversation_store.ensure_conversation_id(
             self._conversation_id
         )
-        history = await self._conversation_store.load_history(
-            presentation_id=self._presentation_id,
-            conversation_id=conversation_id,
+        history = (
+            [
+                {"role": item.role, "content": item.content}
+                for item in canonical_history
+            ]
+            if canonical_history is not None
+            else await self._conversation_store.load_history(
+                presentation_id=self._presentation_id,
+                conversation_id=conversation_id,
+            )
         )
         history_messages = self._convert_history_to_messages(history)
 
@@ -326,9 +401,17 @@ class PresentationChatService:
             query=memory_query,
         )
         attachment_context = self._build_attachment_context(attachments)
+        runtime_context_block = self._build_runtime_context_block(
+            run_context,
+            generation_mode=self._presentation_type,
+        )
+        context_parts = [
+            part for part in (attachment_context, runtime_context_block) if part
+        ]
+        joined_context = "\n\n".join(context_parts)
         user_content = (
-            f"{attachment_context}\n\n{user_message}"
-            if attachment_context
+            f"{joined_context}\n\n{user_message}"
+            if context_parts
             else user_message
         )
         messages: list[Message] = [
@@ -344,34 +427,11 @@ class PresentationChatService:
         ]
         return conversation_id, messages
 
-    async def _persist_turn(
-        self,
-        *,
-        conversation_id: uuid.UUID,
-        user_message: str,
-        response_text: str,
-        tool_calls: list[str],
-        page_remake_slide_index: int | None = None,
-    ) -> ChatTurnResult:
-        await self._conversation_store.append_turn(
-            presentation_id=self._presentation_id,
-            conversation_id=conversation_id,
-            user_message=self._strip_ui_context_prefix(user_message) or user_message,
-            assistant_message=response_text,
-            tool_calls=tool_calls,
-        )
-        await self._sql_session.commit()
-
-        return ChatTurnResult(
-            conversation_id=conversation_id,
-            response_text=response_text,
-            tool_calls=tool_calls,
-            page_remake_slide_index=page_remake_slide_index,
-        )
-
     async def _run_llm_with_tools(
         self, messages: list[Message]
     ) -> tuple[str, list[str], int | None]:
+        if self._tools is None:
+            raise RuntimeError("chat_runtime_not_prepared")
         client = get_client(config=get_llm_config())
         model = get_model()
         tools = build_chat_llm_tools(self._tools.get_tool_definitions())
@@ -436,12 +496,253 @@ class PresentationChatService:
             page_remake_slide_index,
         )
 
+    async def _run_agent_with_tools(
+        self,
+        messages: list[Message],
+        *,
+        context: RunContext,
+        event_sink: EventSink,
+    ) -> tuple[
+        str,
+        list[str],
+        int | None,
+        list[ToolSummary],
+        list[TypedMutation],
+    ]:
+        """Run the model and expose only typed, public-safe execution output."""
+
+        if self._tools is None:
+            raise RuntimeError("chat_runtime_not_prepared")
+        client = get_client(config=get_llm_config())
+        model = get_model()
+        tools = build_chat_llm_tools(self._tools.get_tool_definitions())
+        called_tools: list[str] = []
+        tool_summaries: list[ToolSummary] = []
+        mutations: list[TypedMutation] = []
+        last_tool_results: list[dict[str, Any]] = []
+        page_remake_slide_index: int | None = None
+
+        for round_index in range(MAX_TOOL_ROUNDS):
+            await context.raise_if_cancelled()
+            completion: Any | None = None
+            content_chunks: list[str] = []
+            try:
+                async for event in stream_generate_events(
+                    client,
+                    **get_generate_kwargs(
+                        model=model,
+                        messages=messages,
+                        tools=tools,
+                        stream=True,
+                    ),
+                ):
+                    await context.raise_if_cancelled()
+                    event_type = getattr(event, "type", None)
+                    if event_type == "content":
+                        chunk = getattr(event, "chunk", None)
+                        if isinstance(chunk, str) and chunk:
+                            content_chunks.append(chunk)
+                            await event_sink.assistant_delta(chunk)
+                    elif event_type == "completion":
+                        completion = event
+                    # thinking/provider trace events are discarded.
+            except (RuntimeEventFenceLost, WorkspaceOperationCancelled):
+                raise
+            except Exception as exc:
+                # Provider exceptions can embed raw response bodies, prompts,
+                # request headers, or credentials. The canonical runtime hands
+                # the workspace runner only a stable public code and status;
+                # it never copies or chains the provider exception into the
+                # durable failure/event path.
+                raw_status = getattr(exc, "status_code", None)
+                status_code = (
+                    raw_status
+                    if isinstance(raw_status, int)
+                    and not isinstance(raw_status, bool)
+                    and 400 <= raw_status <= 599
+                    else 500
+                )
+                raise HTTPException(
+                    status_code=status_code,
+                    detail={"code": "presentation_edit_failed"},
+                ) from None
+
+            response_tool_calls = list(
+                getattr(completion, "tool_calls", []) or []
+            )
+            if not response_tool_calls:
+                response_text = "".join(content_chunks)
+                if not response_text and completion is not None:
+                    response_text = extract_text(
+                        getattr(completion, "content", None)
+                    )
+                    if response_text:
+                        await event_sink.assistant_delta(response_text)
+                response_text = response_text or (
+                    "Unable to generate a response for this request."
+                )
+                return (
+                    response_text,
+                    called_tools,
+                    page_remake_slide_index,
+                    tool_summaries,
+                    mutations,
+                )
+
+            called_tools.extend(call.name for call in response_tool_calls)
+            messages = (
+                list(getattr(completion, "messages", []) or [])
+                if getattr(completion, "messages", None)
+                else list(messages)
+            )
+            last_tool_results = []
+            for tool_call in response_tool_calls:
+                await context.raise_if_cancelled()
+                await event_sink.tool_started(
+                    tool=tool_call.name,
+                    summary=self._tool_start_message(tool_call.name),
+                )
+                tool_result = await self._tools.execute_tool_call(tool_call)
+                await context.raise_if_cancelled()
+                last_tool_results.append(tool_result)
+                succeeded = self._runtime_tool_succeeded(tool_result)
+                summary = self._runtime_tool_summary(tool_call.name, succeeded)
+                await event_sink.tool_completed(
+                    tool=tool_call.name,
+                    status="completed" if succeeded else "failed",
+                    summary=summary,
+                )
+                tool_summaries.append(
+                    ToolSummary(
+                        name=tool_call.name,
+                        status="completed" if succeeded else "failed",
+                        summary=summary,
+                        round=round_index + 1,
+                    )
+                )
+                if succeeded:
+                    mutation = self._typed_mutation(tool_call.name, tool_result)
+                    if mutation is not None:
+                        mutations.append(mutation)
+                if page_remake_slide_index is None:
+                    page_remake_slide_index = _refused_authored_page_index(
+                        _tool_call_payload(tool_result)
+                    )
+                messages.append(
+                    ToolResponseMessage(
+                        id=tool_call.id,
+                        content=[
+                            TextContentPart(
+                                text=json.dumps(tool_result, ensure_ascii=False)
+                            )
+                        ],
+                    )
+                )
+
+        LOGGER.warning("Max tool rounds reached in agent runtime")
+        final_response = await self._try_final_response_without_tools(
+            client=client,
+            model=model,
+            messages=messages,
+            public_safe_failure=True,
+        )
+        response_text = final_response or self._build_tool_limit_fallback(
+            last_tool_results
+        )
+        await event_sink.assistant_delta(response_text)
+        return (
+            response_text,
+            called_tools,
+            page_remake_slide_index,
+            tool_summaries,
+            mutations,
+        )
+
+    @staticmethod
+    def _runtime_tool_succeeded(tool_result: Mapping[str, Any]) -> bool:
+        if not tool_result.get("ok"):
+            return False
+        payload = _tool_call_payload(tool_result)
+        if payload is None:
+            return True
+        for key in ("saved", "deleted", "updated", "success", "applied"):
+            value = payload.get(key)
+            if isinstance(value, bool) and not value:
+                return False
+        return True
+
+    @staticmethod
+    def _runtime_tool_summary(tool_name: str, succeeded: bool) -> str:
+        # Never copy raw provider/tool payload or exception text into a public
+        # runtime event. The typed name/status remains useful and stable.
+        return f"{tool_name} {'completed' if succeeded else 'failed'}."
+
+    @staticmethod
+    def _typed_mutation(
+        tool_name: str, tool_result: Mapping[str, Any]
+    ) -> TypedMutation | None:
+        payload = _tool_call_payload(tool_result) or {}
+        mutation_kinds = {
+            "saveSlide": "slide.update",
+            "deleteSlide": "slide.delete",
+            "setPresentationTheme": "presentation.theme.update",
+            "addOutline": "outline.create",
+            "updateOutline": "outline.update",
+            "deleteOutline": "outline.delete",
+            "moveOutline": "outline.move",
+            "addNewSlide": "slide.create",
+            "addNewSlideLayout": "slide.create",
+            "updateSlide": "slide.ui.update",
+            "addElement": "slide.element.create",
+            "deleteElement": "slide.element.delete",
+            "duplicateElement": "slide.element.create",
+            "addComponent": "slide.component.create",
+            "createComponent": "slide.component.create",
+            "deleteComponent": "slide.component.delete",
+        }
+        kind = mutation_kinds.get(tool_name)
+        if kind is None and (
+            tool_name.startswith("update")
+            or tool_name.startswith("move")
+            or tool_name.startswith("resize")
+            or tool_name.startswith("reorder")
+            or tool_name in {"bringToFront", "sendToBack", "groupElements", "ungroupElement"}
+        ):
+            kind = "slide.element.update"
+        if kind is None:
+            return None
+        if tool_name == "saveSlide" and payload.get("action") == "created":
+            kind = "slide.create"
+
+        raw_slide_id = payload.get("slide_id") or payload.get("deleted_slide_id")
+        slide_id: uuid.UUID | None = None
+        try:
+            if raw_slide_id is not None:
+                slide_id = uuid.UUID(str(raw_slide_id))
+        except (TypeError, ValueError, AttributeError):
+            slide_id = None
+        raw_index = payload.get("index", payload.get("resolved_index"))
+        slide_index = (
+            raw_index
+            if isinstance(raw_index, int)
+            and not isinstance(raw_index, bool)
+            and raw_index >= 0
+            else None
+        )
+        return TypedMutation(
+            kind=kind,
+            tool=tool_name,
+            slide_id=slide_id,
+            slide_index=slide_index,
+        )
+
     async def _try_final_response_without_tools(
         self,
         *,
         client: Any,
         model: str,
         messages: list[Message],
+        public_safe_failure: bool = False,
     ) -> str | None:
         try:
             response = await asyncio.to_thread(
@@ -451,8 +752,14 @@ class PresentationChatService:
                     messages=messages,
                 ),
             )
-        except Exception:
-            LOGGER.warning("Final no-tool synthesis call failed", exc_info=True)
+        except Exception as error:
+            if public_safe_failure:
+                LOGGER.warning(
+                    "Final no-tool synthesis call failed (%s)",
+                    type(error).__name__,
+                )
+            else:
+                LOGGER.warning("Final no-tool synthesis call failed", exc_info=True)
             return None
 
         return extract_text(response.content)
@@ -511,6 +818,64 @@ class PresentationChatService:
             "[첨부 파일]\n"
             "사용자가 다음 파일을 첨부했습니다. 슬라이드 작업 시 이 내용을 참고하세요.\n\n"
             + "\n\n".join(parts)
+        )
+
+    @staticmethod
+    def _build_runtime_context_block(
+        context: RunContext | None,
+        *,
+        generation_mode: Literal["standard", "smart"],
+    ) -> str:
+        """Render only server-vetted structured context for the provider."""
+
+        if context is None:
+            return ""
+        payload: dict[str, Any] = {
+            "expected_revision": context.expected_revision,
+        }
+        if context.viewport is not None:
+            payload["viewport"] = {
+                "width": context.viewport.width,
+                "height": context.viewport.height,
+                "zoom": context.viewport.zoom,
+                "slide_id": (
+                    str(context.viewport.slide_id)
+                    if context.viewport.slide_id is not None
+                    else None
+                ),
+                "slide_index": context.viewport.slide_index,
+            }
+        # HTML/selected text is meaningful only for a DB-authoritative Smart
+        # capability. Standard decks must never receive a spoofed selection.
+        if generation_mode == "smart" and context.smart_selection is not None:
+            payload["smart_selection"] = {
+                "html": context.smart_selection.html,
+                "selected_text": context.smart_selection.selected_text,
+                "slide_id": (
+                    str(context.smart_selection.slide_id)
+                    if context.smart_selection.slide_id is not None
+                    else None
+                ),
+                "slide_index": context.smart_selection.slide_index,
+            }
+        if context.assets:
+            payload["assets"] = [
+                {
+                    "id": str(asset.id),
+                    "name": asset.name,
+                    "media_type": asset.media_type,
+                    "size_bytes": asset.size_bytes,
+                    "sha256": asset.sha256,
+                    "status": "ready",
+                }
+                for asset in context.assets
+            ]
+        if len(payload) == 1:
+            return ""
+        return "Runtime context (server verified):\n" + json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
         )
 
     @staticmethod

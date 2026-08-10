@@ -2,7 +2,7 @@
   "name": "presenton",
   "productName": "Presenton Open Source",
   "version": "2026.7.2401",
-  "exportVersion": "v0.4.2",
+  "exportVersion": "v0.4.3",
   "main": "app_dist/main.js",
   "description": "Open-Source AI Presentation Generator",
   "homepage": "https://github.com/xorrbss/ppt-agent/releases",

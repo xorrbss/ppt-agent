@@ -27,6 +27,7 @@ from models.sql.workspace import (
     WorkspaceActionReceipt,
     WorkspaceArtifact,
     WorkspaceConversation,
+    WorkspaceMessage,
     WorkspaceOperation,
     WorkspaceOperationEvent,
     WorkspaceOutbox,
@@ -48,6 +49,7 @@ TABLES = [
     TemplateV2.__table__,
     ChatHistoryMessageModel.__table__,
     WorkspaceConversation.__table__,
+    WorkspaceMessage.__table__,
     WorkspaceOperation.__table__,
     WorkspaceActionReceipt.__table__,
     WorkspaceOperationEvent.__table__,
@@ -217,13 +219,14 @@ async def _a_question_turn_answers_without_moving_the_revision(tmp_path: Path):
             transcript = list(
                 (
                     await session.execute(
-                        select(ChatHistoryMessageModel).order_by(
-                            ChatHistoryMessageModel.position
+                        select(WorkspaceMessage).order_by(
+                            WorkspaceMessage.position
                         )
                     )
                 ).scalars()
             )
-            assert [row.role for row in transcript] == ["user", "assistant"]
+            assert [row.role for row in transcript] == ["assistant"]
+            assert transcript[0].content == operation.result["summary"]
     finally:
         await engine.dispose()
 

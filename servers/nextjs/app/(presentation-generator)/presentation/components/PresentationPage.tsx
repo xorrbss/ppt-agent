@@ -7,8 +7,12 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
+import {
+  clearChatHtmlSelection,
+  setEnableHtmlSelector,
+} from "@/store/slices/presentationGeneration";
 import "../../utils/prism-languages";
 import { Skeleton } from "@/components/ui/skeleton";
 import PresentationMode from "./PresentationMode";
@@ -36,12 +40,20 @@ import {
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
-import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
+import {
+  presentationCapabilitySelectors,
+  tryResolveServerIssuedPresentationProfile,
+} from "@/lib/presentation-profile";
 
 import PresentationHeader from "./PresentationHeader";
+import PresentationShell, {
+  PresentationFeatureSlot,
+  PresentationRuntimeDependencies,
+} from "./PresentationShell";
+import { buildPresentationFeatureViewModel } from "./presentationFeatureSlots";
 import {
+  CanonicalWorkspaceChatPanel,
   useWorkspaceCapability,
-  WorkspaceChatPanel,
   type WorkspaceAgentSlideFocus,
   type WorkspaceCommandDispatcher,
   type WorkspacePageRemakeRequester,
@@ -62,6 +74,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   workspaceStaging = false,
 }) => {
   const pathname = usePathname();
+  const dispatch = useDispatch();
   // State management
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
@@ -107,13 +120,56 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     [workspacePageRemakeRequester],
   );
 
-  const { presentationData, isStreaming } = useSelector(
+  const { presentationData, isStreaming, chatHtmlSelection } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
-  // Current decks use mode/theme; legacy saved decks are detected from their
-  // authored slide sentinels.
-  const isAuthoredDeck = isAuthoredPresentation(presentationData as any);
-  const isSmartPresentation = presentationData?.generation_mode === "smart";
+  const presentationRuntime = useMemo(
+    () => tryResolveServerIssuedPresentationProfile(presentationData),
+    [presentationData],
+  );
+  const presentationFeatureView = useMemo(
+    () =>
+      buildPresentationFeatureViewModel({
+        runtime: presentationRuntime,
+        workspaceReady,
+        loading: loading || presentationData == null,
+      }),
+    [loading, presentationData, presentationRuntime, workspaceReady],
+  );
+  const isAuthoredDeck = presentationFeatureView.authored;
+  const isSmartPresentation = presentationRuntime
+    ? presentationCapabilitySelectors.canUseSmartSelection(
+        presentationRuntime.capabilities,
+      )
+    : false;
+
+  useEffect(() => {
+    dispatch(setEnableHtmlSelector(isSmartPresentation));
+    if (!isSmartPresentation) dispatch(clearChatHtmlSelection());
+    return () => {
+      dispatch(setEnableHtmlSelector(false));
+      dispatch(clearChatHtmlSelection());
+    };
+  }, [dispatch, isSmartPresentation, presentation_id]);
+
+  const currentConversationSlideId = presentationData?.slides?.[selectedSlide]?.id as
+    | string
+    | undefined;
+  const conversationVisibleSlideIds = useMemo(
+    () => currentConversationSlideId ? [currentConversationSlideId] : undefined,
+    [currentConversationSlideId],
+  );
+  const conversationSmartSelection = useMemo(
+    () => chatHtmlSelection
+      ? {
+          html: chatHtmlSelection.html,
+          text: chatHtmlSelection.selectedText,
+          slideId: chatHtmlSelection.slideId ?? undefined,
+          slideIndex: chatHtmlSelection.slideIndex,
+        }
+      : undefined,
+    [chatHtmlSelection],
+  );
   const slidesLength = presentationData?.slides?.length ?? 0;
   const showWorkspaceStaging = workspaceStaging && slidesLength === 0;
   const lastStreamingSlideIndex =
@@ -263,6 +319,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     ) ?? 0;
     window.requestAnimationFrame(() => handleSlideClick(fallbackIndex));
   }, [fetchUserSlides, handleSlideClick, selectedSlide]);
+  const handleConversationPresentationPublished = useCallback(
+    () => handlePresentationChanged(),
+    [handlePresentationChanged],
+  );
 
   const handleAgentActivityChange = useCallback((working: boolean) => {
     setIsAgentWorking(working);
@@ -423,20 +483,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   }
 
   return (
-    <main
-      className="h-screen h-dvh w-full max-w-full overflow-clip font-syne"
-      aria-labelledby="presentation-editor-title"
+    <PresentationShell
+      title={presentationData?.title ?? "프레젠테이션 편집기"}
+      background={isSmartPresentation ? "#F6F6F9" : "#EDEEEF"}
+      viewModel={presentationFeatureView}
     >
-      <h1 id="presentation-editor-title" className="sr-only">
-        {presentationData?.title ?? "프레젠테이션 편집기"}
-      </h1>
-      <div
-        style={{
-          background: isSmartPresentation ? "#F6F6F9" : "#EDEEEF",
-        }}
-        id="presentation-slides-wrapper"
-        className="relative flex h-full w-full min-w-0 max-w-full flex-col overflow-clip"
-      >
+      <PresentationFeatureSlot name="headerActions">
         <PresentationHeader
           presentation_id={presentation_id}
           isPresentationSaving={isSaving}
@@ -458,7 +510,31 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               ? handleWorkspacePageRemakeRequest
               : undefined
           }
+          headerFeatures={{
+            showAuthoredActions: presentationFeatureView.authored,
+            exportActions: presentationFeatureView.slots.exportActions,
+          }}
         />
+      </PresentationFeatureSlot>
+      <PresentationFeatureSlot name="runtimeDependencies">
+        <PresentationRuntimeDependencies
+          dependencies={presentationFeatureView.runtimeDependencies}
+        />
+      </PresentationFeatureSlot>
+      <PresentationFeatureSlot name="selectionOverlay">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-30"
+          data-testid="presentation-selection-overlay-slot"
+        />
+      </PresentationFeatureSlot>
+      <PresentationFeatureSlot name="exportActions">
+        <div
+          aria-hidden="true"
+          className="hidden"
+          data-testid="presentation-export-actions-slot"
+        />
+      </PresentationFeatureSlot>
         {isAuthoredDeck && (
           <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
             이 발표자료는 <span className="font-bold">AI 저작(고품질)</span> 모드입니다 — 인앱은 보기 전용입니다. 내보낸 PPTX를 PowerPoint에서 편집하세요.
@@ -550,6 +626,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           </button>
         </div>
         <div className="relative flex flex-1 min-h-0 gap-6 overflow-hidden">
+          <PresentationFeatureSlot name="editorSurface">
           <div
             id="presentation-slides-pane"
             role="tabpanel"
@@ -664,6 +741,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             </div>
           </div>
           </div>
+          </PresentationFeatureSlot>
+          <PresentationFeatureSlot name="assistantPanel">
           <div
             id="workspace-chat-pane"
             role="tabpanel"
@@ -674,12 +753,13 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             } ${workspaceDrawerOpen ? "lg:flex" : "lg:hidden"} xl:flex flex-1 lg:absolute lg:inset-y-0 lg:right-0 lg:z-40 lg:w-[min(440px,100%)] lg:max-w-[440px] lg:flex-none lg:shadow-2xl xl:sticky xl:top-0 xl:z-auto xl:w-full xl:max-w-[clamp(360px,30vw,560px)] xl:shrink-0 xl:self-start xl:shadow-none`}
           >
             {workspaceReady ? (
-              <WorkspaceChatPanel
+              <CanonicalWorkspaceChatPanel
                 presentationId={presentation_id}
                 currentSlide={selectedSlide}
-                commandsEnabled={workspaceCapability.commands}
-                onPresentationChanged={handlePresentationChanged}
-                onSlideFocus={handleSlideClick}
+                currentSlideId={currentConversationSlideId}
+                visibleSlideIds={conversationVisibleSlideIds}
+                smartSelection={conversationSmartSelection}
+                onPresentationPublished={handleConversationPresentationPublished}
                 onAgentActivityChange={handleAgentActivityChange}
                 onAgentSlideFocus={handleAgentSlideFocus}
                 onCommandDispatcherReady={handleWorkspaceCommandDispatcherReady}
@@ -724,9 +804,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               </div>
             )}
           </div>
+          </PresentationFeatureSlot>
         </div>
-      </div>
-    </main>
+    </PresentationShell>
   );
 };
 

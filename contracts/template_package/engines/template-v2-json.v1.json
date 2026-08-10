@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "presenton.template-engine/v1",
+  "engineId": "presenton.template-v2-json",
+  "contractVersion": "1",
+  "capabilities": [
+    "asset.local-font",
+    "asset.raster-image",
+    "asset.safe-svg",
+    "chart.area",
+    "chart.bar",
+    "chart.line",
+    "chart.pie",
+    "chart.scatter",
+    "element.container",
+    "element.group",
+    "element.image",
+    "element.infographic",
+    "element.table",
+    "element.text",
+    "element.text-list",
+    "element.vector",
+    "layout.flex",
+    "layout.grid",
+    "normalization.legacy-authoring-extras",
+    "normalization.legacy-infographic-colors",
+    "repeat.flow",
+    "repeat.positioned"
+  ],
+  "security": {
+    "networkAccess": false,
+    "scriptPolicy": "deny",
+    "externalAssetPolicy": "deny"
+  }
+}

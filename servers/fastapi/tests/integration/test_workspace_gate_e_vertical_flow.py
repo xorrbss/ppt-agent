@@ -268,7 +268,8 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
             assert before_disconnect.status_code == 200
             before_disconnect_body = before_disconnect.json()
             assert [event["type"] for event in before_disconnect_body["events"]] == [
-                "queued"
+                "message.created",
+                "queued",
             ]
             reconnect_cursor = before_disconnect_body["event_high_watermark"]
 
@@ -317,6 +318,8 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
                 "operation.progress",
                 "operation.progress",
                 "operation.result",
+                "presentation.published",
+                "run.completed",
             ]
             assert all(
                 int(event["cursor"]) > int(reconnect_cursor)
@@ -337,10 +340,13 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
             assert completed_edit["status"] == "succeeded"
             assert completed_edit["result_revision"] == 1
             assert [event["type"] for event in completed_edit["events"]] == [
+                "message.created",
                 "queued",
                 "operation.progress",
                 "operation.progress",
                 "operation.result",
+                "presentation.published",
+                "run.completed",
             ]
 
             item_count = len(completed["items"])

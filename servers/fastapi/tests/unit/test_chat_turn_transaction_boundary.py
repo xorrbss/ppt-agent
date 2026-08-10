@@ -38,6 +38,7 @@ from models.sql.workspace import (
     WorkspaceActionReceipt,
     WorkspaceArtifact,
     WorkspaceConversation,
+    WorkspaceMessage,
     WorkspaceOperation,
     WorkspaceOperationEvent,
     WorkspaceOutbox,
@@ -51,7 +52,9 @@ from services.workspace_chat_operation_handler import (
     PresentationChatOperationHandler,
 )
 from services.workspace_operation_handler_registry import (
+    NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
+    WorkspaceOperationCancelled,
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.models.layouts import SlideLayout
@@ -67,6 +70,7 @@ TABLES = [
     TemplateV2LocalState.__table__,
     ChatHistoryMessageModel.__table__,
     WorkspaceConversation.__table__,
+    WorkspaceMessage.__table__,
     WorkspaceOperation.__table__,
     WorkspaceActionReceipt.__table__,
     WorkspaceOperationEvent.__table__,
@@ -302,6 +306,20 @@ async def _heartbeat_probe(maker, operation_id: uuid.UUID) -> None:
         await session.commit()
 
 
+async def _advance_revision_probe(
+    maker, presentation_id: uuid.UUID, revision: int
+) -> None:
+    """Commit the competing winner while this attempt is still provisional."""
+
+    async with maker() as session:
+        await session.execute(
+            update(PresentationModel)
+            .where(PresentationModel.id == presentation_id)
+            .values(revision=revision)
+        )
+        await session.commit()
+
+
 def _replay_service_factory(
     *,
     steps: Callable[[PresentationChatMemoryLayer], Any],
@@ -425,8 +443,8 @@ async def _durable_state(maker, presentation_id: uuid.UUID) -> dict[str, Any]:
         history = list(
             (
                 await session.execute(
-                    select(ChatHistoryMessageModel).order_by(
-                        ChatHistoryMessageModel.position
+                    select(WorkspaceMessage).order_by(
+                        WorkspaceMessage.position
                     )
                 )
             ).scalars()
@@ -467,10 +485,7 @@ EXPECTED_STATE: dict[str, Any] = {
         {"index": 1, "layout": "title-image", "title": "Replaced"},
         {"index": 2, "layout": "title-image", "title": "Third"},
     ],
-    "history": [
-        ("user", "restructure the deck"),
-        ("assistant", "Deck restructured."),
-    ],
+    "history": [("assistant", "Deck restructured.")],
     # save_slide(create), save_slide(replace) and delete_slide each force one.
     "version_count": 3,
 }
@@ -611,5 +626,128 @@ async def _no_writer_lock_is_held_across_the_provider_call(
             for key, value in EXPECTED_STATE.items()
             if key != "version_count"
         }
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("failure", ("provider", "cancel", "crash"))
+def test_failed_cancelled_or_crashed_turn_never_publishes_partial_state(
+    tmp_path: Path, monkeypatch, failure: str
+):
+    asyncio.run(
+        _failed_cancelled_or_crashed_turn_never_publishes_partial_state(
+            tmp_path, monkeypatch, failure
+        )
+    )
+
+
+async def _failed_cancelled_or_crashed_turn_never_publishes_partial_state(
+    tmp_path: Path, monkeypatch, failure: str
+):
+    _patch_external_side_effects(monkeypatch)
+    engine, maker = await _database(tmp_path / f"{failure}.db")
+    try:
+        presentation_id, _operation_id, claim, _revisions = await _seed(
+            maker,
+            slide_titles=("First",),
+            presentation_revision=3,
+            expected_revision=3,
+        )
+
+        async def mutate_then_fail(tools: PresentationChatMemoryLayer) -> list[str]:
+            created = await tools.save_slide(
+                content=_content("Provisional"),
+                layout_id="title-image",
+                index=1,
+                replace_old_slide_at_index=False,
+            )
+            assert created["saved"] is True
+            if failure == "cancel":
+                raise WorkspaceOperationCancelled("cancelled")
+            if failure == "crash":
+                raise SystemExit("crashed")
+            raise RuntimeError("provider failed")
+
+        handler = PresentationChatOperationHandler(
+            session_factory=maker,
+            service_factory=_replay_service_factory(steps=mutate_then_fail),
+        )
+        expected_error = (
+            WorkspaceOperationCancelled
+            if failure == "cancel"
+            else SystemExit
+            if failure == "crash"
+            else Exception
+        )
+        with pytest.raises(expected_error):
+            await handler.execute(_Context(claim))
+
+        state = await _durable_state(maker, presentation_id)
+        assert state == {
+            "revision": 3,
+            "n_slides": 1,
+            "slides": [
+                {"index": 0, "layout": "title-image", "title": "First"}
+            ],
+            "history": [],
+            "version_count": 0,
+        }
+    finally:
+        await engine.dispose()
+
+
+def test_losing_revision_cas_rolls_back_only_the_provisional_turn(
+    tmp_path: Path, monkeypatch
+):
+    asyncio.run(
+        _losing_revision_cas_rolls_back_only_the_provisional_turn(
+            tmp_path, monkeypatch
+        )
+    )
+
+
+async def _losing_revision_cas_rolls_back_only_the_provisional_turn(
+    tmp_path: Path, monkeypatch
+):
+    _patch_external_side_effects(monkeypatch)
+    engine, maker = await _database(tmp_path / "cas-conflict.db")
+    try:
+        presentation_id, _operation_id, claim, _revisions = await _seed(
+            maker,
+            slide_titles=("First",),
+            presentation_revision=3,
+            expected_revision=3,
+        )
+
+        async def provisional_edit(tools: PresentationChatMemoryLayer) -> list[str]:
+            await tools.save_slide(
+                content=_content("Losing edit"),
+                layout_id="title-image",
+                index=1,
+                replace_old_slide_at_index=False,
+            )
+            return ["saveSlide:create"]
+
+        handler = PresentationChatOperationHandler(
+            session_factory=maker,
+            service_factory=_replay_service_factory(
+                steps=provisional_edit,
+                probe=lambda: _advance_revision_probe(maker, presentation_id, 4),
+            ),
+        )
+        with pytest.raises(
+            NonRetryableWorkspaceOperationError,
+            match="stale_presentation_revision",
+        ):
+            await handler.execute(_Context(claim))
+
+        state = await _durable_state(maker, presentation_id)
+        assert state["revision"] == 4
+        assert state["n_slides"] == 1
+        assert state["slides"] == [
+            {"index": 0, "layout": "title-image", "title": "First"}
+        ]
+        assert state["history"] == []
+        assert state["version_count"] == 0
     finally:
         await engine.dispose()

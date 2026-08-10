@@ -1,0 +1,72 @@
+{
+  "layouts": [
+    {
+      "id": "canonical_repeat_fixture",
+      "description": "A regular card row and an irregular positioned callout path.",
+      "components": [
+        {
+          "id": "regular_cards",
+          "description": "A repeatable row containing one complete card prototype.",
+          "position": {"x": 0, "y": 0},
+          "elements": [
+            {
+              "type": "flex",
+              "name": "cards",
+              "direction": "row",
+              "min_children": 1,
+              "max_children": 3,
+              "children": [
+                {
+                  "type": "group",
+                  "name": "card",
+                  "position": {"x": 0, "y": 0},
+                  "size": {"width": 200, "height": 120},
+                  "children": [
+                    {"type": "text", "name": "card_title", "decorative": false}
+                  ]
+                }
+              ],
+              "x-upstream-extension": {"kept": true}
+            }
+          ]
+        },
+        {
+          "id": "positioned_callouts",
+          "description": "Fixed connector geometry plus positioned repeated callout groups.",
+          "position": {"x": 0, "y": 160},
+          "elements": [
+            {"type": "vector", "name": "shared_path", "decorative": true},
+            {
+              "type": "group",
+              "name": "callout_1",
+              "position": {"x": 320, "y": 60},
+              "size": {"width": 160, "height": 80},
+              "children": [
+                {"type": "text", "name": "item_title_1", "decorative": false}
+              ]
+            },
+            {
+              "type": "group",
+              "name": "callout_2",
+              "position": {"x": 120, "y": 10},
+              "size": {"width": 160, "height": 80},
+              "children": [
+                {"type": "text", "name": "item_title_2", "decorative": false}
+              ]
+            },
+            {
+              "type": "group",
+              "name": "callout_3",
+              "position": {"x": 520, "y": 120},
+              "size": {"width": 160, "height": 80},
+              "children": [
+                {"type": "text", "name": "item_title_3", "decorative": false}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "x-upstream-envelope": {"roundTrip": "lossless"}
+}

@@ -62,7 +62,7 @@
         },
         {
           "path": "presentation-export/.installed-version",
-          "requiredContains": ["v0.4.2"]
+          "requiredContains": ["v0.4.3"]
         }
       ]
     },
@@ -361,7 +361,7 @@
         {
           "path": "electron/scripts/verify-packaging-inputs.cjs",
           "requiredContains": [
-            "EXPECTED_EXPORT_VERSION = \"v0.4.2\"",
+            "EXPECTED_EXPORT_VERSION = \"v0.4.3\"",
             "Export runtime marker must be"
           ]
         },

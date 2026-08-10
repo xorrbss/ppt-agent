@@ -10,6 +10,10 @@ import {
   type AdaptiveChartPatch,
 } from "@/lib/adaptiveBlockEdit";
 import type { ImageEditorProperties } from "@/components/slide-editor/images/imageCrop";
+import type {
+  PresentationCapabilities,
+  PresentationProfile,
+} from "@/lib/presentation-profile";
 
 /** Object/array container addressed by a dotted+indexed content data path. */
 type PathContainer = Record<string | number, unknown>;
@@ -43,6 +47,10 @@ export interface PresentationData {
   slides: any;
   theme: Theme | null;
   generation_mode?: string;
+  profile?: PresentationProfile;
+  capabilities?: PresentationCapabilities;
+  revision?: number;
+  lifecycle_status?: string;
   fonts?: Record<string, string> | null;
 }
 

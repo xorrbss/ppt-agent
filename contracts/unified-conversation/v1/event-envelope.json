@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://presenton.dev/contracts/unified-conversation/v1/event-envelope.json",
+  "title": "Unified Conversation Runtime event envelope",
+  "description": "The canonical replay contract. Durable events have a canonical decimal cursor. assistant.delta is transient and is never replayed; assistant.checkpoint contains the recoverable assistant text.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "type", "durability", "conversation_id", "occurred_at", "data"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "type": {
+      "enum": [
+        "message.created", "run.queued", "run.started", "run.status",
+        "assistant.delta", "assistant.checkpoint", "tool.started", "tool.completed",
+        "approval.required", "presentation.published", "run.completed", "run.failed"
+      ]
+    },
+    "durability": { "enum": ["durable", "transient"] },
+    "conversation_id": { "$ref": "#/$defs/uuid" },
+    "run_id": { "$ref": "#/$defs/uuidOrNull" },
+    "message_id": { "$ref": "#/$defs/uuidOrNull" },
+    "presentation_id": { "$ref": "#/$defs/uuidOrNull" },
+    "cursor": { "$ref": "#/$defs/cursorOrNull" },
+    "checkpoint_cursor": { "$ref": "#/$defs/cursorOrNull" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "data": { "type": "object", "additionalProperties": true }
+  },
+  "$defs": {
+    "uuid": { "type": "string", "format": "uuid" },
+    "uuidOrNull": { "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }] },
+    "cursor": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+    "cursorOrNull": { "oneOf": [{ "$ref": "#/$defs/cursor" }, { "type": "null" }] }
+  },
+  "x-invariants": {
+    "durable_types": ["message.created", "run.queued", "run.started", "run.status", "assistant.checkpoint", "tool.started", "tool.completed", "approval.required", "presentation.published", "run.completed", "run.failed"],
+    "transient_types": ["assistant.delta"],
+    "durable_requires_cursor": true,
+    "transient_forbids_cursor": true,
+    "checkpoint_reconnect": "Resume durable replay from cursor. Restore assistant output from the latest assistant.checkpoint at or before that cursor; do not attempt to replay assistant.delta.",
+    "privacy": "data must not include raw provider responses, chain-of-thought, prompts, stack traces, credentials, or authorization headers. Tool events contain only public summaries."
+  },
+  "x-data-requirements": {
+    "message.created": { "required": ["role", "content"] },
+    "run.queued": { "required": ["status"] },
+    "run.started": { "required": ["status"] },
+    "run.status": { "required": ["status"] },
+    "assistant.delta": { "required": ["delta"], "max_public_text_length": 100000 },
+    "assistant.checkpoint": { "required": ["content"], "max_public_text_length": 100000 },
+    "tool.started": { "required": ["tool", "summary"] },
+    "tool.completed": { "required": ["tool", "summary"] },
+    "approval.required": { "required": ["approval_id"] },
+    "presentation.published": { "required": ["revision"] },
+    "run.completed": { "required": ["status"] },
+    "run.failed": { "required": ["status", "error_code"] }
+  },
+  "x-replay": {
+    "sse_id": "For durable SSE events, the SSE id is exactly envelope.cursor.",
+    "request_cursor": "Use either after or Last-Event-ID. If both are supplied they must be identical canonical decimal strings.",
+    "pagination": "Timeline pagination and event replay are independent; event_high_watermark is the replay cursor.",
+    "retention": "Cursors are conversation-scoped. An expired, ahead, malformed, or retention-floor cursor is not silently accepted. The client refetches the timeline, applies its durable checkpoint state, and resumes from event_high_watermark.",
+    "rebase": "A presentation revision conflict is never resolved by replay alone. Refetch the canonical timeline/revision, then submit a new action with the returned expected revision."
+  },
+  "examples": [
+    {
+      "schema_version": 1,
+      "id": "evt-message-1",
+      "type": "message.created",
+      "durability": "durable",
+      "conversation_id": "11111111-1111-4111-8111-111111111111",
+      "run_id": null,
+      "message_id": "22222222-2222-4222-8222-222222222222",
+      "presentation_id": "33333333-3333-4333-8333-333333333333",
+      "cursor": "41",
+      "checkpoint_cursor": null,
+      "occurred_at": "2026-08-10T01:02:03Z",
+      "data": { "role": "user", "content": "Make the title stronger", "asset_ids": [] }
+    },
+    {
+      "schema_version": 1,
+      "id": "evt-delta-1",
+      "type": "assistant.delta",
+      "durability": "transient",
+      "conversation_id": "11111111-1111-4111-8111-111111111111",
+      "run_id": "44444444-4444-4444-8444-444444444444",
+      "message_id": "55555555-5555-4555-8555-555555555555",
+      "presentation_id": "33333333-3333-4333-8333-333333333333",
+      "cursor": null,
+      "checkpoint_cursor": "43",
+      "occurred_at": "2026-08-10T01:02:05Z",
+      "data": { "delta": "I will update the title." }
+    },
+    {
+      "schema_version": 1,
+      "id": "evt-published-1",
+      "type": "presentation.published",
+      "durability": "durable",
+      "conversation_id": "11111111-1111-4111-8111-111111111111",
+      "run_id": "44444444-4444-4444-8444-444444444444",
+      "message_id": null,
+      "presentation_id": "33333333-3333-4333-8333-333333333333",
+      "cursor": "47",
+      "checkpoint_cursor": "47",
+      "occurred_at": "2026-08-10T01:02:14Z",
+      "data": { "revision": 8, "previous_revision": 7, "changed": true }
+    }
+  ]
+}

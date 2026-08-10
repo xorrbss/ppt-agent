@@ -148,4 +148,41 @@ async def publish_presentation_revision(
             if terminal_event is None:
                 raise PresentationPublicationConflict("stale_operation_event_fence")
 
+            terminal_version = terminal_event.operation_version
+            if advance_revision:
+                published_event = await append_operation_event(
+                    session,
+                    operation_id=operation_id,
+                    event_type="presentation.published",
+                    payload={
+                        "state": "succeeded",
+                        "revision": result_revision,
+                        "result_revision": result_revision,
+                    },
+                    allowed_states=("succeeded",),
+                    expected_version=terminal_version,
+                    increment_version=True,
+                )
+                if published_event is None:
+                    raise PresentationPublicationConflict(
+                        "stale_presentation_event_fence"
+                    )
+                terminal_version = published_event.operation_version
+
+            completed_event = await append_operation_event(
+                session,
+                operation_id=operation_id,
+                event_type="run.completed",
+                payload={
+                    "state": "succeeded",
+                    "result_revision": result_revision,
+                },
+                allowed_states=("succeeded",),
+                expected_version=terminal_version,
+            )
+            if completed_event is None:
+                raise PresentationPublicationConflict(
+                    "stale_run_completion_event_fence"
+                )
+
     return int(result_revision)

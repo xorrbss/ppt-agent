@@ -3078,7 +3078,7 @@ async function main() {
 
     console.log(`[workspace-e2e] Starting an isolated Next app at ${baseUrl}.`);
     console.log(
-      "[workspace-e2e] Route suite uses Cypress HTTP fixtures; live suite starts FastAPI+SQLite separately.",
+      "[workspace-e2e] Canonical route suite uses Cypress HTTP fixtures; live suite starts FastAPI+SQLite separately.",
     );
 
     await writeFile(
@@ -3112,7 +3112,7 @@ async function main() {
     );
     throwIfInterrupted();
     console.log(
-      "[workspace-e2e] Next presentation route is warm; running the route spec.",
+      "[workspace-e2e] Next presentation route is warm; running the canonical route spec.",
     );
 
     cypressProcess = await spawnNode(
@@ -3121,7 +3121,7 @@ async function main() {
         "run",
         "--e2e",
         "--spec",
-        "cypress/e2e/workspaceChatFirstRoute.cy.ts",
+        "cypress/e2e/canonicalConversationRoute.cy.ts",
         ...cypressArtifactArguments("route"),
       ],
       { ...childEnvironment, CYPRESS_BASE_URL: baseUrl },
@@ -3179,7 +3179,7 @@ async function main() {
         "run",
         "--component",
         "--spec",
-        "cypress/component/WorkspaceChatPanelLiveBackend.cy.tsx",
+        "cypress/component/CanonicalWorkspaceChatPanelLiveBackend.cy.tsx",
         "--env",
         `WORKSPACE_LIVE_BACKEND=${liveBackendUrl}`,
         ...cypressArtifactArguments("live-backend"),

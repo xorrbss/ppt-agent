@@ -295,7 +295,7 @@ async def _public_presentation_projection(
     slides = await _presentation_slides(presentation, sql_session)
     fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
     return PublicPresentationWithSlides(
-        **presentation.model_dump(),
+        **presentation.model_dump(exclude={"fonts"}),
         slides=[slide.model_dump() for slide in slides],
         fonts=fonts,
     )

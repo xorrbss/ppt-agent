@@ -85,9 +85,14 @@ def test_sqlite_account_deletion_migration_defaults_constraints_and_cycle(tmp_pa
             assert migrations.ACCOUNT_DELETION_USER_COLUMNS.isdisjoint(
                 {column["name"] for column in inspector.get_columns("user")}
             )
-            assert connection.execute(
-                text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_DURABLE_DELETION
+            assert set(
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalars()
+            ) == {
+                migrations.REVISION_DURABLE_DELETION,
+                migrations.REVISION_SMART_PRESENTATION_GENERATION,
+            }
 
         command.upgrade(config, "head")
         with engine.connect() as connection:
@@ -128,9 +133,14 @@ def test_sqlite_account_deletion_downgrade_refuses_live_marker_before_ddl(tmp_pa
             assert migrations.ACCOUNT_DELETION_USER_COLUMNS.issubset(
                 {column["name"] for column in inspector.get_columns("user")}
             )
-            assert connection.execute(
-                text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_ACCOUNT_DELETION_FENCE
+            assert set(
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalars()
+            ) == {
+                migrations.REVISION_ACCOUNT_DELETION_FENCE,
+                migrations.REVISION_SMART_PRESENTATION_GENERATION,
+            }
             assert connection.execute(
                 text('SELECT deletion_generation FROM "user"')
             ).scalar_one() == 1
@@ -159,8 +169,13 @@ def test_sqlite_account_deletion_upgrade_rejects_partial_physical_schema(tmp_pat
             command.upgrade(config, "head")
 
         with engine.connect() as connection:
-            assert connection.execute(
-                text("SELECT version_num FROM alembic_version")
-            ).scalar_one() == migrations.REVISION_DURABLE_DELETION
+            assert set(
+                connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalars()
+            ) == {
+                migrations.REVISION_DURABLE_DELETION,
+                migrations.REVISION_SMART_PRESENTATION_GENERATION,
+            }
     finally:
         engine.dispose()

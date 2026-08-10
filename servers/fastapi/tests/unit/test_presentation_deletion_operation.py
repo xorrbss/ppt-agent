@@ -490,6 +490,7 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
                     )
                 )
                 assert event_types == [
+                    "message.created",
                     "approval_required",
                     "approve",
                     "operation.progress",

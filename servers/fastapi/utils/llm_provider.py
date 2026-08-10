@@ -39,13 +39,18 @@ from utils.get_env import (
     get_together_model_env,
     get_vertex_model_env,
 )
+from constants.provider_registry import ProviderResolutionError, resolve_provider
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 
 
 def get_llm_provider(settings: RuntimeSettings | None = None):
     snapshot = resolve_runtime_settings(settings)
     try:
-        return LLMProvider(get_llm_provider_env(snapshot))
+        provider = LLMProvider(get_llm_provider_env(snapshot))
+        resolved = resolve_provider(provider.value)
+        if resolved.kind != "llm":
+            raise ProviderResolutionError("provider_kind_mismatch", provider.value)
+        return provider
     except Exception:
         raise HTTPException(
             status_code=500,

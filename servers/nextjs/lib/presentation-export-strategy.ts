@@ -2,6 +2,14 @@ import { isAuthoredPresentation } from "./authored-hybrid/presentation-mode.ts";
 import type { PptxMode } from "./authored-hybrid/mode.ts";
 import type { AuthoredHybridExportMetadata } from "./authored-hybrid/export-metadata.ts";
 import type { PresentationExportQualityReport } from "./presentation-export-quality.ts";
+import {
+  resolveServerIssuedPresentationProfile,
+} from "./presentation-profile.ts";
+import { assertRenderArtifactFresh } from "./render-service/freshness.ts";
+import type {
+  RenderArtifact,
+  RenderSourceIdentity,
+} from "./render-service/contracts.ts";
 
 export type PersistedExportStrategy =
   | "template-v2-general"
@@ -13,10 +21,15 @@ export const PRESENTATION_SOURCE_SHA256 = Symbol(
 );
 
 export interface PersistedPresentation {
+  id?: unknown;
   version?: unknown;
   mode?: unknown;
   theme?: unknown;
   slides?: unknown;
+  revision?: unknown;
+  lifecycle_status?: unknown;
+  profile?: unknown;
+  capabilities?: unknown;
   [PRESENTATION_SOURCE_SHA256]?: string;
 }
 
@@ -29,6 +42,9 @@ export interface PresentationExportExecutionParams {
   /** Explicit opt-in. Omitted and false are both non-embedding requests. */
   fontEmbedding?: boolean;
   expectedPresentationSha256?: string;
+  /** Server-bound optimistic revision; client hints never select an adapter. */
+  expectedPresentationRevision?: number;
+  expectedArtifactVersion?: string;
 }
 
 export interface PresentationExportResult {
@@ -37,7 +53,15 @@ export interface PresentationExportResult {
   quality?: PresentationExportQualityReport;
   /** Stable aggregate summary for authored-hybrid API consumers. */
   exportMetadata?: AuthoredHybridExportMetadata;
+  /** Canonical additive result. Path-only runners remain a tested rolling facade. */
+  renderArtifact?: RenderArtifact;
 }
+
+export const PATH_ONLY_EXPORT_COMPATIBILITY = Object.freeze({
+  source_of_truth: "renderArtifact" as const,
+  removal_condition:
+    "Remove path-only results after every supported exporter returns a revision- and digest-bound presenton.render-artifact/v1 and rollback from the first enforcing release has been tested.",
+});
 
 export interface PresentationExportAdapterRegistry<
   Result extends PresentationExportResult = PresentationExportResult,
@@ -129,7 +153,10 @@ export function resolvePersistedExportStrategy(
     if (payloads.some(({ ui }) => ui === null || ui === undefined)) {
       throw new Error("template_v2_ui_payload_required");
     }
-    return "template-v2-general";
+    return validateCanonicalExportStrategy(
+      presentation,
+      "template-v2-general",
+    );
   }
 
   const authored = isAuthoredPresentation(presentation);
@@ -143,7 +170,7 @@ export function resolvePersistedExportStrategy(
     if (payloads.some(({ html }) => !html)) {
       throw new Error("authored_html_payload_required");
     }
-    return "authored-hybrid";
+    return validateCanonicalExportStrategy(presentation, "authored-hybrid");
   }
 
   if (
@@ -154,7 +181,74 @@ export function resolvePersistedExportStrategy(
   ) {
     throw new Error("legacy_payload_identity_mismatch");
   }
-  return "legacy-general";
+  return validateCanonicalExportStrategy(presentation, "legacy-general");
+}
+
+function validateCanonicalExportStrategy(
+  presentation: PersistedPresentation,
+  legacyStrategy: PersistedExportStrategy,
+): PersistedExportStrategy {
+  const hasProfile = presentation.profile !== undefined;
+  const hasCapabilities = presentation.capabilities !== undefined;
+  if (!hasProfile && !hasCapabilities) return legacyStrategy;
+  const runtime = resolveServerIssuedPresentationProfile(presentation);
+  const expected: PersistedExportStrategy =
+    runtime.driver.driver_id === "template-v2"
+      ? "template-v2-general"
+      : runtime.driver.driver_id === "authored"
+        ? "authored-hybrid"
+        : "legacy-general";
+  if (expected !== legacyStrategy) {
+    throw new Error("presentation_profile_export_identity_conflict");
+  }
+  if (runtime.capabilities.export_adapter_id !== runtime.driver.export_adapter_id) {
+    throw new Error("presentation_profile_export_capability_conflict");
+  }
+  return expected;
+}
+
+function renderSourceIdentity(
+  presentation: PersistedPresentation,
+): RenderSourceIdentity | null {
+  if (
+    typeof presentation.id !== "string" ||
+    !Number.isSafeInteger(presentation.revision) ||
+    (presentation.lifecycle_status !== "published" &&
+      presentation.lifecycle_status !== "staging")
+  ) {
+    return null;
+  }
+  return {
+    presentation_id: presentation.id,
+    revision: Number(presentation.revision),
+    lifecycle_status: presentation.lifecycle_status,
+    published: presentation.lifecycle_status === "published",
+    ...(presentation[PRESENTATION_SOURCE_SHA256]
+      ? { source_sha256: presentation[PRESENTATION_SOURCE_SHA256] }
+      : {}),
+  };
+}
+
+function validateCanonicalExportResult<Result extends PresentationExportResult>(
+  presentation: PersistedPresentation,
+  params: PresentationExportExecutionParams,
+  result: Result,
+): Result {
+  const artifact = result.renderArtifact;
+  if (!artifact) return result;
+  const source = renderSourceIdentity(presentation);
+  if (!source) throw new Error("render_artifact_source_identity_required");
+  assertRenderArtifactFresh(artifact, source);
+  if (artifact.target !== params.format) {
+    throw new Error("render_artifact_target_mismatch");
+  }
+  if (
+    params.expectedArtifactVersion !== undefined &&
+    params.expectedArtifactVersion !== artifact.artifact_version
+  ) {
+    throw new Error("stale_render_artifact_version");
+  }
+  return result;
 }
 
 export async function executePersistedPresentationExport<
@@ -165,6 +259,12 @@ export async function executePersistedPresentationExport<
   registry: PresentationExportAdapterRegistry<Result>
 ): Promise<Result> {
   const strategy = resolvePersistedExportStrategy(presentation);
+  if (
+    params.expectedPresentationRevision !== undefined &&
+    params.expectedPresentationRevision !== presentation.revision
+  ) {
+    throw new Error("stale_render_revision");
+  }
   if (
     params.fontEmbedding === true &&
     !(
@@ -180,7 +280,15 @@ export async function executePersistedPresentationExport<
     params.pptxMode === "hybrid" &&
     strategy === "authored-hybrid"
   ) {
-    return registry.hybrid(params);
+    return validateCanonicalExportResult(
+      presentation,
+      params,
+      await registry.hybrid(params),
+    );
   }
-  return registry.general(params);
+  return validateCanonicalExportResult(
+    presentation,
+    params,
+    await registry.general(params),
+  );
 }
