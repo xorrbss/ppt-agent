@@ -9,10 +9,12 @@ import {
 } from "@/app/hooks/useStructuredTemplates";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { StructuredTemplateCard } from "@/app/(presentation-generator)/outline/components/StructuredTemplateCard";
+import { useTranslations } from "next-intl";
 
 const LayoutPreview = () => {
   const router = useRouter();
-  const { templates, loading, error } = useStructuredTemplateSummaries();
+  const t = useTranslations("templates");
+  const { templates, loading, error, refetch } = useStructuredTemplateSummaries();
 
   useEffect(() => {
     trackEvent(MixpanelEvent.Templates_Page_Viewed);
@@ -37,7 +39,7 @@ const LayoutPreview = () => {
   );
   const catalogConfigurationError =
     templates.length > 0 && defaultTemplates.length !== 1
-      ? "Template V2 카탈로그에는 정확히 하나의 기본 템플릿이 필요합니다."
+      ? t("configurationError")
       : null;
   const templateCards = useMemo(
     () =>
@@ -58,10 +60,10 @@ const LayoutPreview = () => {
         <div className="flex flex-col items-center justify-between gap-3 xl:flex-row">
           <div>
             <h3 className="font-unbounded text-[28px] font-normal tracking-[-0.84px] text-[#101828]">
-              Templates
+              {t("title")}
             </h3>
             <p className="mt-2 text-sm text-slate-600">
-              Template V2 카탈로그의 편집 가능 PPTX 템플릿입니다.
+              {t("description")}
             </p>
           </div>
         </div>
@@ -71,15 +73,30 @@ const LayoutPreview = () => {
         <section className="my-12">
           {loading ? (
             <div data-testid="template-v2-dashboard-loading" role="status">
-              Template V2 카탈로그를 불러오는 중입니다.
+              {t("loading")}
             </div>
           ) : error ? (
-            <div data-testid="template-v2-dashboard-empty" role="alert">
-              Template V2 카탈로그를 불러오지 못했습니다. 이전 템플릿으로 대체하지 않습니다.
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center" data-testid="template-v2-dashboard-empty" role="alert">
+              <p>{t("loadError")}</p>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="mt-4 rounded-full bg-[#5146E5] px-5 py-2.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5] focus-visible:ring-offset-2"
+              >
+                {t("retry")}
+              </button>
             </div>
           ) : templates.length === 0 ? (
-            <div data-testid="template-v2-dashboard-empty" role="status">
-              현재 사용할 수 있는 Template V2 템플릿이 없습니다.
+            <div className="rounded-2xl border border-[#E4E7EC] bg-[#F9FAFB] p-8 text-center" data-testid="template-v2-dashboard-empty" role="status">
+              <h4 className="text-lg font-semibold text-[#101828]">{t("emptyTitle")}</h4>
+              <p className="mt-2 text-sm text-[#667085]">{t("emptyDescription")}</p>
+              <button
+                type="button"
+                onClick={() => router.push("/custom-template")}
+                className="mt-5 rounded-full bg-[#5146E5] px-5 py-2.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5] focus-visible:ring-offset-2"
+              >
+                {t("createTemplate")}
+              </button>
             </div>
           ) : catalogConfigurationError ? (
             <div data-testid="template-v2-dashboard-configuration-error" role="alert">

@@ -1257,6 +1257,52 @@
       }
     }
   },
+  "upload": {
+    "designSettings": {
+      "title": "Design settings",
+      "description": "Choose a template and theme, or generate now with the defaults."
+    },
+    "generateSummary": "Generate as soon as your idea and files are ready.",
+    "advancedSettings": {
+      "title": "Advanced settings",
+      "close": "Close advanced settings",
+      "description": "Adjust how the presentation is generated",
+      "save": "Save",
+      "instructionsLabel": "Instructions",
+      "instructionsPlaceholder": "Guide the AI with the audience, tone, key points, or constraints.",
+      "toneLabel": "Tone",
+      "tonePlaceholder": "Select tone",
+      "verbosityLabel": "Amount of detail",
+      "verbosityPlaceholder": "Select detail level",
+      "includeTableOfContents": "Include table of contents",
+      "includeTitleSlide": "Include title slide",
+      "webSearch": "Use web search",
+      "tone": {
+        "default": "Default",
+        "casual": "Casual",
+        "professional": "Professional",
+        "funny": "Funny",
+        "educational": "Educational",
+        "salesPitch": "Sales pitch"
+      },
+      "verbosity": {
+        "concise": "Concise",
+        "standard": "Standard",
+        "textHeavy": "Text heavy"
+      }
+    }
+  },
+  "templates": {
+    "title": "Templates",
+    "description": "Editable PPTX templates from the Template V2 catalog.",
+    "loading": "Loading the Template V2 catalog…",
+    "loadError": "The Template V2 catalog could not be loaded.",
+    "retry": "Try again",
+    "emptyTitle": "No templates are available yet",
+    "emptyDescription": "Create a template to start building presentations with your own design.",
+    "createTemplate": "Create a template",
+    "configurationError": "The Template V2 catalog must contain exactly one default template."
+  },
   "generation": {
     "outlineNotReadyTitle": "Outline not ready",
     "outlineNotReadyDescription": "Wait for outline generation to finish before continuing.",

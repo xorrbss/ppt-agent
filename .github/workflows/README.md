@@ -103,8 +103,9 @@ After changing workflow or job `name` fields, update branch protection and this
 list together.
 
 The canonical `origin` is Bitbucket, so `bitbucket-pipelines.yml` also defines
-the exact `Workspace chat-first browser E2E` step for every pull request and
-for `main`. In Bitbucket repository settings, enable both merge checks **No
+the shared Next.js Node suite, Dashboard Cypress component gate, upstream
+byte-parity check, and exact `Workspace chat-first browser E2E` step for every
+pull request and for `main`. In Bitbucket repository settings, enable both merge checks **No
 failed pipelines** and **Minimum number of successful builds: 1** on the
 `main` branch restriction. Bitbucket stores merge checks outside the repository;
 the versioned pipeline and `scripts/required-ci-contract.test.mjs` keep the job
@@ -119,7 +120,7 @@ capability-specific integration gates:
 | Workflow | Required environment | Role |
 | --- | --- | --- |
 | `test-all.yml` | Ubuntu, Node 22, locked `uv` environment, Chromium | Canonical full FastAPI SQLite suite, FastAPI PyInstaller build, shared Next.js Node tests, full Next.js TypeScript typecheck, lint/build, selected Cypress component tests, and the required workspace browser E2E job. It also validates the local runner's complete dry-run plan. |
-| `bitbucket-pipelines.yml` | Cypress 15.19 image, Node, Python 3.11, locked `uv` environment | Canonical-origin pull-request and `main` workspace browser E2E gate. Repository merge checks must require a successful pipeline and reject failed pipelines. |
+| `bitbucket-pipelines.yml` | Cypress 15.19 image, Node, Python 3.11, locked `uv` environment | Canonical-origin pull-request and `main` shared Next.js Node, Dashboard component, upstream byte-parity, and workspace browser E2E gates. Repository merge checks must require a successful pipeline and reject failed pipelines. |
 | `upstream-compatibility.yml` | Ubuntu plus Windows path checks; PostgreSQL 16 for one job | Static/export compatibility contracts, three Windows path/synchronization guards, and real PostgreSQL migration, canary rollback, and owner-scoped async-read integration tests. The PostgreSQL job is intentionally separate from the SQLite FastAPI suite. |
 | `upstream-intake.yml` | Offline fixture on pull requests; GitHub API on schedule/manual dispatch | Detects upstream movement without merging it. Live intake is intentionally not a pull-request dependency. |
 | `template-v2-export-fidelity.yml` | Ubuntu, macOS, and Windows with Chromium, LibreOffice, and PDF tools | Template V2 structural export checks and required rendered-image fidelity on all three operating systems. |

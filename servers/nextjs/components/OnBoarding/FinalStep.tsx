@@ -78,16 +78,16 @@ const FinalStep = () => {
         router.push('/upload')
     }
     return (
-        <div className='fixed top-0 left-0 w-full h-full flex flex-col items-center justify-center'>
-            <div className='flex flex-col items-center justify-center'>
+        <div className='fixed left-0 top-0 flex h-full w-full flex-col items-center justify-center overflow-x-hidden px-4'>
+            <div className='flex w-full max-w-xl flex-col items-center justify-center text-center'>
 
                 <Image src="/final_onboarding.png" alt="Presenton" width={118} height={98} className='w-[118px] h-[98px] object-contain' />
                 <h1 className='text-black text-[30px] font-normal font-unbounded py-2.5'>환영합니다!</h1>
-                <p className='text-[#000000CC] text-xl font-normal font-syne'>모든 준비가 끝났습니다. 첫 번째 발표자료를 만들어 보세요.</p>
+                <p className='text-base font-normal text-[#000000CC] font-syne sm:text-xl'>모든 준비가 끝났습니다. 첫 번째 발표자료를 만들어 보세요.</p>
 
                 {trackingEnabled !== null && (
-                    <div className='flex items-center gap-3 mt-8 px-5 py-3.5 rounded-[10px] border border-[#EDEEEF] bg-white'>
-                        <div>
+                    <div className='mt-8 flex w-full max-w-md items-center gap-3 rounded-[10px] border border-[#EDEEEF] bg-white px-4 py-3.5 text-left sm:px-5'>
+                        <div className='min-w-0 flex-1'>
                             <p className='text-sm font-medium text-[#191919] font-syne'>사용 분석</p>
                             <p className='text-[11px] text-[#9CA3AF] font-syne leading-tight mt-0.5'>익명 사용 데이터를 공유해 Presenton 개선에 도움을 주세요.</p>
                         </div>
@@ -104,7 +104,7 @@ const FinalStep = () => {
                     <PartyPopper className='w-4 h-4' /> 다시 축하하기!
                 </button>
             </div>
-            <button onClick={handleGoToDashboard} className='absolute uppercase bottom-20 text-[#7A5AF8] flex items-center gap-2 right-10  text-xs font-normal font-syne'>대시보드로 이동 <ArrowRight className='w-4 h-4 text-[#7A5AF8]' /></button>
+            <button onClick={handleGoToDashboard} className='absolute bottom-6 right-4 flex items-center gap-2 text-xs font-normal uppercase text-[#7A5AF8] font-syne sm:bottom-20 sm:right-10'>대시보드로 이동 <ArrowRight className='w-4 h-4 text-[#7A5AF8]' /></button>
         </div>
     )
 }

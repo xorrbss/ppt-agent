@@ -27,6 +27,7 @@ export default defineConfig({
     specPattern: [
       "cypress/component/**/*.cy.{js,jsx,ts,tsx}",
       "app/**/*.cy.{js,jsx,ts,tsx}",
+      "components/**/*.cy.{js,jsx,ts,tsx}",
     ],
     devServer: {
       framework: "react",

@@ -3,9 +3,9 @@ import Image from 'next/image'
 
 const OnBoardingSlidebar = ({ step }: { step: number }) => {
     return (
-        <div className={`${step === 3 ? "bg-white" : "bg-[#F6F6F9]"} w-[300px] relative`}>
-            <Image src="/Logo.png" alt="Presenton 로고" width={204} height={48} className="sticky top-8 left-0 w-[128px] h-auto m-6" priority />
-            {step !== 3 && <svg xmlns="http://www.w3.org/2000/svg" width="296" height="591" viewBox="0 0 296 591" fill="none">
+        <div data-testid="onboarding-sidebar" className={`${step === 3 ? "bg-white" : "bg-[#F6F6F9]"} relative h-[72px] w-full shrink-0 md:h-auto md:min-h-screen md:w-[300px]`}>
+            <Image src="/Logo.png" alt="Presenton 로고" width={204} height={48} className="m-5 h-auto w-[128px] md:sticky md:left-0 md:top-8 md:m-6" priority />
+            {step !== 3 && <svg className="hidden md:block" xmlns="http://www.w3.org/2000/svg" width="296" height="591" viewBox="0 0 296 591" fill="none">
                 <path d="M291.5 183.5C311.916 183.5 328.5 200.271 328.5 221C328.5 241.729 311.916 258.5 291.5 258.5C271.084 258.5 254.5 241.729 254.5 221C254.5 200.271 271.084 183.5 291.5 183.5Z" stroke="#EDEEEF" strokeWidth="3" />
                 <path d="M291.5 131.238C340.408 131.238 380.089 171.407 380.09 220.998C380.09 270.589 340.408 310.758 291.5 310.758C242.591 310.758 202.91 270.589 202.91 220.998C202.91 171.407 242.591 131.238 291.5 131.238Z" stroke="#EDEEEF" strokeWidth="3" />
                 <path d="M291.5 43.6289C388.173 43.6289 466.576 123.021 466.576 220.998C466.576 318.975 388.174 398.368 291.5 398.368C194.826 398.368 116.424 318.975 116.424 220.998C116.424 123.022 194.826 43.629 291.5 43.6289Z" stroke="#EDEEEF" strokeWidth="3" />

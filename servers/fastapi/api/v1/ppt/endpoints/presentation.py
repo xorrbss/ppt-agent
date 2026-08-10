@@ -100,7 +100,6 @@ PRESENTATION_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 _build_export_cookie_header = build_export_cookie_header
 logger = logging.getLogger(__name__)
 
-
 async def _notify_slide_assets_ready(
     slide_index: int,
     asset_task: asyncio.Task,
@@ -146,9 +145,6 @@ async def apply_presentation_prepare(
     presentation = await require_live_presentation(sql_session, presentation_id)
 
     presentation_outline_model = PresentationOutlineModel(slides=outlines)
-
-    total_slide_layouts = len(layout.slides)
-    total_outlines = len(outlines)
 
     if layout.name == "adaptive":
         # Adaptive path: compose one SlideSpec per outline slide (archetype chosen

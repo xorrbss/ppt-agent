@@ -868,6 +868,7 @@ test("the local default profile runs E2E with isolated pytest and Windows diagno
     "Chat.cy.tsx",
     "WorkspaceChatPanel.cy.tsx",
     "SharePopover.cy.tsx",
+    "DashboardPage.cy.tsx",
   ]) {
     assert.match(
       localRunner,
@@ -884,12 +885,52 @@ test("the required component gate covers workspace stream and rollback UI", () =
     "Chat.cy.tsx",
     "WorkspaceChatPanel.cy.tsx",
     "SharePopover.cy.tsx",
+    "DashboardPage.cy.tsx",
   ]) {
     assert.match(
       job,
       new RegExp(requiredComponentSpec.replace(".", "\\."), "u"),
     );
   }
+});
+
+test("Dashboard component coverage is required on both CI providers", () => {
+  const workflow = read(".github/workflows/test-all.yml");
+  const githubNextJob = workflowJob(workflow, "test-nextjs");
+  const pipeline = read("bitbucket-pipelines.yml");
+
+  assert.match(githubNextJob, /DashboardPage\.cy\.tsx/u);
+  assert.match(
+    pipeline,
+    /name: Dashboard component gate[\s\S]*DashboardPage\.cy\.tsx/u,
+  );
+  assert.match(
+    pipeline,
+    /pull-requests:[\s\S]*\*dashboard-component-gate/u,
+  );
+  assert.match(pipeline, /branches:[\s\S]*\*dashboard-component-gate/u);
+});
+
+test("developer documentation matches the executable lint and test workflow", () => {
+  const claude = read("CLAUDE.md");
+  const workflow = read(".github/workflows/test-all.yml");
+  const nextPackage = readJson("servers/nextjs/package.json");
+  const rootPackage = readJson("package.json");
+  const nodeRunner = read("servers/nextjs/scripts/run-ci-node-tests.mjs");
+  const pyproject = read("servers/fastapi/pyproject.toml");
+  const specList = workflow.match(/\bspec: "([^"]+)"/u)?.[1]?.split(",");
+
+  assert.deepEqual(nextPackage.scripts.lint, "npm run check:i18n && eslint .");
+  assert.equal(nextPackage.scripts["test:ci-node"], "node scripts/run-ci-node-tests.mjs");
+  assert.match(rootPackage.scripts["test:next-ci"], /test:ci-node/u);
+  assert.match(pyproject, /select = \["E", "F", "B", "ASYNC"\]/u);
+  assert.match(nodeRunner, /const ROOTS = \["app", "components", "lib", "scripts", "tests", "utils"\]/u);
+  assert.equal(specList?.length, 26);
+  assert.match(claude, /Ruff is locked/u);
+  assert.match(claude, /tests\/?`, and `utils\//u);
+  assert.match(claude, /26 named Cypress specs/u);
+  assert.doesNotMatch(claude, /There is \*\*no ruff/u);
+  assert.doesNotMatch(claude, /does \*\*not\*\* include `servers\/nextjs\/tests\/`/u);
 });
 
 test("Windows PR packaging preflights symlink policy and validates a link-free resource", () => {

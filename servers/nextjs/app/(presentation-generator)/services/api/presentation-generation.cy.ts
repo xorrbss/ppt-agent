@@ -77,6 +77,29 @@ describe("PresentationGenerationApi.createPresentation", () => {
   });
 });
 
+describe("PresentationGenerationApi.createBlankPresentation", () => {
+  it("uses the additive FastAPI blank-presentation route", () => {
+    cy.intercept("POST", "**/api/v1/ppt/presentation/create/blank", {
+      statusCode: 201,
+      body: {
+        id: "blank-presentation",
+        version: "v2-standard",
+        title: "Untitled Presentation",
+        n_slides: 1,
+        language: "English",
+        slides: [{}],
+      },
+    }).as("createBlankPresentation");
+
+    cy.then(() => PresentationGenerationApi.createBlankPresentation()).then(
+      (presentation) => {
+        expect(presentation.id).to.equal("blank-presentation");
+      },
+    );
+    cy.wait("@createBlankPresentation").its("request.body").should("be.empty");
+  });
+});
+
 describe("PresentationGenerationApi.generateAuthoredAsync", () => {
   it("sends the selected authored style without changing other authored fields", () => {
     cy.intercept("POST", "**/api/v1/ppt/presentation/generate/async", {

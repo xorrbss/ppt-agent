@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## Global policy
+
+Follow the global `~/.codex/AGENTS.md` working policy. During development, run the
+smallest checks relevant to the changed layer. Do not run a complete test suite
+unless the user explicitly requests it in the current request. Commands listed
+below are references, not authorization for an automatic full-suite run.
+
 ## Project overview
 
 Presenton is a self-hostable AI presentation generator. It uses a Python 3.11
@@ -103,7 +110,7 @@ Use the narrowest relevant check first, then broaden it when warranted.
 # Backend
 cd servers/fastapi
 uv run pytest tests/unit/test_dict_utils.py
-uv run pytest
+uv run pytest  # Full backend suite: explicit user request only
 
 # Frontend
 cd servers/nextjs

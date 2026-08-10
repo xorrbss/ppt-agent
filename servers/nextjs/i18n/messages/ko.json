@@ -1257,6 +1257,52 @@
       }
     }
   },
+  "upload": {
+    "designSettings": {
+      "title": "디자인 설정",
+      "description": "템플릿과 테마를 선택하거나 기본값으로 바로 생성할 수 있습니다."
+    },
+    "generateSummary": "아이디어와 파일이 준비되면 바로 생성하세요.",
+    "advancedSettings": {
+      "title": "고급 설정",
+      "close": "고급 설정 닫기",
+      "description": "발표자료 생성 방식을 조정합니다",
+      "save": "저장",
+      "instructionsLabel": "지침 입력",
+      "instructionsPlaceholder": "대상, 어조, 핵심 내용, 제약 조건 등 AI가 따를 방향을 입력하세요.",
+      "toneLabel": "어조",
+      "tonePlaceholder": "어조 선택",
+      "verbosityLabel": "분량",
+      "verbosityPlaceholder": "분량 선택",
+      "includeTableOfContents": "목차 포함",
+      "includeTitleSlide": "제목 슬라이드 포함",
+      "webSearch": "웹 검색 사용",
+      "tone": {
+        "default": "기본",
+        "casual": "편안한 어조",
+        "professional": "전문적인 어조",
+        "funny": "재미있는 어조",
+        "educational": "교육적인 어조",
+        "salesPitch": "영업 제안형"
+      },
+      "verbosity": {
+        "concise": "간결하게",
+        "standard": "표준",
+        "textHeavy": "상세하게"
+      }
+    }
+  },
+  "templates": {
+    "title": "템플릿",
+    "description": "Template V2 카탈로그의 편집 가능한 PPTX 템플릿입니다.",
+    "loading": "Template V2 카탈로그를 불러오는 중입니다…",
+    "loadError": "Template V2 카탈로그를 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "emptyTitle": "아직 사용할 수 있는 템플릿이 없습니다",
+    "emptyDescription": "나만의 디자인으로 발표자료를 만들 수 있도록 첫 템플릿을 만들어 보세요.",
+    "createTemplate": "템플릿 만들기",
+    "configurationError": "Template V2 카탈로그에는 정확히 하나의 기본 템플릿이 필요합니다."
+  },
   "generation": {
     "outlineNotReadyTitle": "개요가 준비되지 않았습니다",
     "outlineNotReadyDescription": "계속하기 전에 개요 생성이 완료될 때까지 기다려 주세요.",

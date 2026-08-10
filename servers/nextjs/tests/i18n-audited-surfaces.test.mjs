@@ -15,6 +15,8 @@ const auditedFiles = [
   "app/(presentation-generator)/(dashboard)/admin/AdminPanel.tsx",
   "app/(presentation-generator)/(dashboard)/settings/UserAccountSettings.tsx",
   "app/(presentation-generator)/(dashboard)/dashboard/components/SharePopover.tsx",
+  "app/(presentation-generator)/(dashboard)/templates/components/TemplatePanel.tsx",
+  "app/(presentation-generator)/upload/components/AdvanceSettings.tsx",
   "app/(presentation-generator)/components/EditableLayoutWrapper.tsx",
   "app/(presentation-generator)/components/ImageEditor.tsx",
   "app/(presentation-generator)/components/IconsEditor.tsx",

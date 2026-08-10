@@ -1,22 +1,26 @@
 import React from "react";
 import { Provider } from "react-redux";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { NextIntlClientProvider } from "next-intl";
 
 import { createMockRouter, ApiMockManager, testViewports } from "@/cypress/support/testHelpers";
 import { makeStore } from "@/store/store";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import DashboardPage from "./DashboardPage";
+import enMessages from "@/i18n/messages/en.json";
 
 // The cards now mount for real, so the page needs its Redux store: the slide
 // stage dispatches through it. The router and viewport come from the shared
 // helpers so this spec stays in step with the rest of the suite.
 function mountDashboard() {
   cy.mount(
-    <AppRouterContext.Provider value={createMockRouter() as never}>
-      <Provider store={makeStore()}>
-        <DashboardPage />
-      </Provider>
-    </AppRouterContext.Provider>
+    <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+      <AppRouterContext.Provider value={createMockRouter() as never}>
+        <Provider store={makeStore()}>
+          <DashboardPage />
+        </Provider>
+      </AppRouterContext.Provider>
+    </NextIntlClientProvider>
   );
 }
 

@@ -19,6 +19,14 @@ definitions:
         script:
           - npm ci
           - node scripts/verify-upstream-byte-parity.mjs
+    - step: &dashboard-component-gate
+        name: Dashboard component gate
+        size: 2x
+        max-time: 10
+        script:
+          - npm ci --prefix servers/nextjs
+          - cd servers/nextjs
+          - xvfb-run -a npx --no-install cypress run --component --spec "**/DashboardPage.cy.tsx"
     - step: &workspace-chat-first-e2e
         name: Workspace chat-first browser E2E
         size: 2x
@@ -74,11 +82,13 @@ pipelines:
   pull-requests:
     "**":
       - step: *nextjs-ci-node-contracts
+      - step: *dashboard-component-gate
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   branches:
     main:
       - step: *nextjs-ci-node-contracts
+      - step: *dashboard-component-gate
       - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   custom:

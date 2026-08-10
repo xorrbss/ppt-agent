@@ -25,12 +25,13 @@ const DashboardSidebar = () => {
 
     return (
         <aside
-            className="sticky top-0 h-screen w-[115px] flex flex-col justify-between bg-[#F6F6F9] backdrop-blur border-r border-[#E1E1E5] px-4  py-8"
+            data-testid="dashboard-sidebar"
+            className="fixed inset-x-0 bottom-0 z-50 flex h-16 w-full shrink-0 items-center justify-between border-t border-[#E1E1E5] bg-[#F6F6F9]/95 px-3 py-2 backdrop-blur sm:sticky sm:top-0 sm:h-screen sm:w-[115px] sm:flex-col sm:border-r sm:border-t-0 sm:px-4 sm:py-8"
             aria-label="대시보드 사이드바"
         >
-            <div>
+            <div className="min-w-0 flex-1 sm:w-full sm:flex-none">
 
-                <Link href={`/dashboard`} className="flex items-center  pb-6 border-b border-[#E1E1E5]   gap-2    ">
+                <Link href={`/dashboard`} className="hidden items-center gap-2 border-b border-[#E1E1E5] pb-6 sm:flex">
                     <Image
                         src="/logo-with-bg.png"
                         alt="Presenton logo"
@@ -39,15 +40,15 @@ const DashboardSidebar = () => {
                         className="mx-auto h-[40px] w-[40px] cursor-pointer object-contain"
                     />
                 </Link>
-                <nav className="pt-6 font-syne" aria-label="대시보드 섹션">
-                    <div className="  space-y-6">
+                <nav className="font-syne sm:pt-6" aria-label="대시보드 섹션">
+                    <div className="flex items-center justify-around sm:block sm:space-y-6">
 
                         {/* Dashboard */}
                         <Link
                             prefetch={false}
                             href={`/dashboard`}
                             className={[
-                                "flex flex-col tex-center items-center gap-2  transition-colors",
+                                "flex min-w-0 flex-1 flex-col items-center gap-1 text-center transition-colors sm:gap-2",
                                 pathname === "/dashboard" ? "" : "ring-transparent",
                             ].join(" ")}
                             aria-label="대시보드"
@@ -60,13 +61,13 @@ const DashboardSidebar = () => {
                             prefetch={false}
                             href={`/templates`}
                             className={[
-                                "flex flex-col tex-center items-center gap-2  transition-colors",
+                                "flex min-w-0 flex-1 flex-col items-center gap-1 text-center transition-colors sm:gap-2",
                                 pathname === "/templates" ? "" : "ring-transparent",
                             ].join(" ")}
                             aria-label="템플릿"
                             title="템플릿"
                         >
-                            <div className="flex flex-col cursor-pointer tex-center items-center gap-2  transition-colors">
+                            <div className="flex cursor-pointer flex-col items-center gap-1 text-center transition-colors sm:gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={`${pathname === "/templates" ? "#5146E5" : "#475569"}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M4 14h6" /><path d="M4 2h10" /><rect x="4" y="18" width="16" height="4" rx="1" /><rect x="4" y="6" width="16" height="4" rx="1" /></svg>
                                 <span className="text-[11px] text-slate-800">템플릿</span>
                             </div>
@@ -75,13 +76,13 @@ const DashboardSidebar = () => {
                             prefetch={false}
                             href={`/theme`}
                             className={[
-                                "flex flex-col tex-center items-center gap-2  transition-colors",
+                                "flex min-w-0 flex-1 flex-col items-center gap-1 text-center transition-colors sm:gap-2",
                                 pathname === "/theme" ? "" : "ring-transparent",
                             ].join(" ")}
                             aria-label="테마"
                             title="테마"
                         >
-                            <div className="flex flex-col cursor-pointer tex-center items-center gap-2  transition-colors">
+                            <div className="flex cursor-pointer flex-col items-center gap-1 text-center transition-colors sm:gap-2">
                                 <Palette className={`h-4 w-4 ${pathname === "/theme" ? "text-[#5146E5]" : "text-slate-600"}`} />
                                 <span className="text-[11px] text-slate-800">테마</span>
                             </div>
@@ -90,7 +91,7 @@ const DashboardSidebar = () => {
                 </nav>
             </div>
 
-            <div className=" pt-5 border-t border-[#E1E1E5]  font-syne "
+            <div className="border-[#E1E1E5] pl-2 font-syne sm:w-full sm:border-t sm:pl-0 sm:pt-5"
             >
                 {BelongingNavItems.map(({ key, label: itemLabel }) => {
                     const isActive = pathname === `/${key}`;
@@ -100,7 +101,7 @@ const DashboardSidebar = () => {
                             key={key}
                             href={`/${key}`}
                             className={[
-                                "flex flex-col tex-center items-center gap-2  transition-colors ",
+                                "flex flex-col items-center gap-1 text-center transition-colors sm:gap-2",
                                 isActive ? "" : "ring-transparent",
                             ].join(" ")}
                             aria-label={itemLabel}

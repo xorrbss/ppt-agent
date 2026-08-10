@@ -31,9 +31,9 @@ export default function Home() {
 
   return (
 
-    <div className="flex min-h-screen relative">
+    <div className="relative flex min-h-screen w-full min-w-0 flex-col overflow-x-clip md:flex-row">
       <OnBoardingSlidebar step={step} />
-      <main className="w-full pl-20 pr-8 max-w-[1440px] mx-auto relative z-10">
+      <main className="relative z-10 mx-auto w-full min-w-0 max-w-[1440px] px-4 pb-24 sm:px-8 md:pl-20 md:pr-8">
 
         <OnBoardingHeader currentStep={step} setStep={setStep} />
         {step === 1 && <ModeSelectStep selectedMode={selectedMode} setStep={setStep} setSelectedMode={setSelectedMode} />}

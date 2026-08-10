@@ -4,6 +4,7 @@ from api.v1.ppt.endpoints.slide_to_html import LAYOUT_MANAGEMENT_ROUTER
 from api.v1.ppt.endpoints.presentation import PRESENTATION_ROUTER
 from api.v1.ppt.endpoints.presentation_crud import PRESENTATION_CRUD_ROUTER
 from api.v1.ppt.endpoints.presentation_generate import PRESENTATION_GENERATE_ROUTER
+from api.v1.ppt.endpoints.presentation_blank import PRESENTATION_BLANK_ROUTER
 from api.v1.ppt.endpoints.presentation_versions import PRESENTATION_VERSION_ROUTER
 from api.v1.ppt.endpoints.presentation_share import PRESENTATION_SHARE_ROUTER
 from api.v1.ppt.endpoints.anthropic import ANTHROPIC_ROUTER
@@ -46,6 +47,7 @@ API_V1_PPT_ROUTER.include_router(OUTLINES_ROUTER)
 API_V1_PPT_ROUTER.include_router(PRESENTATION_CRUD_ROUTER)
 API_V1_PPT_ROUTER.include_router(PRESENTATION_ROUTER)
 API_V1_PPT_ROUTER.include_router(PRESENTATION_GENERATE_ROUTER)
+API_V1_PPT_ROUTER.include_router(PRESENTATION_BLANK_ROUTER)
 API_V1_PPT_ROUTER.include_router(PRESENTATION_VERSION_ROUTER)
 API_V1_PPT_ROUTER.include_router(PRESENTATION_SHARE_ROUTER)
 API_V1_PPT_ROUTER.include_router(PPTX_SLIDES_ROUTER)

@@ -535,7 +535,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     }, [fetchAvailableModels, llmConfig.LLM, modelsChecked, modelsLoading]);
 
     return (
-        <div className='w-full max-w-[660px] font-syne pb-10'>
+        <div className='w-full min-w-0 max-w-[660px] pb-10 font-syne'>
             <p className='px-2.5 py-0.5 w-fit text-[#7A5AF8] rounded-[50px]  border border-[#EDEEEF] text-[10px] font-medium mb-5 font-syne'>PRESENTON</p>
             <div className=''>
 
@@ -1276,7 +1276,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </div>}
             </div>
 
-            <div className='fixed bottom-16 mr-8  max-w-[1440px]  right-16 flex justify-end items-center gap-2.5 '>
+            <div className='fixed bottom-4 left-4 right-4 z-30 flex items-center justify-end gap-2.5 md:bottom-16 md:left-auto md:right-16'>
                 <button
                     disabled={currentStep === 1}
                     onClick={() => {

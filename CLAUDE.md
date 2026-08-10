@@ -84,7 +84,7 @@ npm run dev                                     # localhost:3000; set NEXT_PUBLI
 
 업스트림 `presenton/presenton`을 포크하여 한글 UI와, Docker 없이 Windows에서 **web**·**Electron** 앱을 네이티브로 실행하는 데 필요한 수정을 추가한 버전이다. 위의 업스트림 기준 Docker 안내도 여전히 동작하지만, 여기서의 일상 개발은 Docker 없는 경로를 사용한다.
 
-- **한글 UI / 기본값:** 앱 화면(chrome)이 번역되어 있고, 기본 프레젠테이션 언어는 한국어다(`upload/components/UploadPage.tsx`). API 값, 프로바이더/모델 ID, 로직 리터럴은 영어로 유지한다. 번역은 i18n 프레임워크 없이 문자열 하드코딩으로 되어 있으므로, UI 문자열을 추가할 때 기존 방식을 따른다.
+- **한글 UI / 기본값:** 앱 화면(chrome)이 번역되어 있고, 기본 프레젠테이션 언어는 한국어다(`upload/components/UploadPage.tsx`). API 값, 프로바이더/모델 ID, 로직 리터럴은 영어로 유지한다. 사용자 표시 문자열은 `next-intl`과 `i18n/messages/{en,ko}.json`을 사용하고, 새 감사 대상 화면은 `tests/i18n-audited-surfaces.test.mjs` 및 `npm run check:i18n` 게이트에 포함한다.
 - **단일 오리진 프록시 (로컬에서 nginx 대체):** `node scripts/presenton-local-proxy.mjs`가 `nginx.conf`를 그대로 반영하여 `http://localhost:5000` → Next.js:3000 / FastAPI:8000 / MCP:8001로 라우팅한다. 포트는 `PROXY_PORT`/`NEXT_PORT`/`FASTAPI_PORT`/`MCP_PORT` 환경변수로 바꾼다. 브라우저 프론트엔드는 단일 오리진을 전제로 하므로, web 플로우에서는 (raw `npm run start`가 아니라) 이 프록시를 실행한다.
 - **Windows 백엔드는** `APP_DATA_DIRECTORY` **와** `USER_CONFIG_PATH` **둘 다 필요**하며, uvicorn은 `--reload false`로 실행한다(이 포크에서 reloader 비활성화). 리로더가 없으므로 백엔드 코드를 바꾸면 프로세스를 직접 재시작해야 한다.
 - **기존 `app_data`를 재사용해 업그레이드할 때는** `MIGRATE_DATABASE_ON_STARTUP=true` **를 반드시 설정한다.** 이 값이 정확히 `"true"`가 아니면 마이그레이션이 조용히 건너뛰어지고, 새 DB는 `create_db_and_tables()`로 생성되기 때문에 오류 없이 스키마만 어긋난다.
@@ -103,7 +103,7 @@ uv run pytest --cov                             # coverage config exists in pypr
 ```
 Tests are organized as `tests/unit/`, `tests/integration/`, `tests/edge_cases/`, `tests/regression/`, with shared fixtures in `tests/conftest.py` and LLM/image stubs in `tests/mocks/`. CI runs with `DISABLE_IMAGE_GENERATION=true`, `DATABASE_URL=sqlite+aiosqlite:///./test.db`, and `APP_DATA_DIRECTORY=/tmp/app_data`.
 
-There is **no ruff/mypy/black configuration** and no Python lint or type-check step in CI. A stray `.ruff_cache/` at the repo root is from ad-hoc runs only.
+Ruff is locked in `servers/fastapi/uv.lock` and configured in `pyproject.toml` for `E`, `F`, `B`, and `ASYNC`. Both GitHub and Bitbucket run `uv run ruff check .` as a required Python lint gate. The per-file ignores are the audited legacy baseline and should be reduced when a touched file can be fixed safely. There is still no required mypy or Black gate.
 
 **Next.js** (`servers/nextjs`):
 ```bash
@@ -114,7 +114,7 @@ npm run test:template-v2-export-fidelity
 npm run test:workspace-e2e     # spawns a real browser
 npx cypress run --component    # component tests (*.cy.tsx)
 ```
-Both Cypress **and** `node:test` suites exist — the frontend is not Cypress-only. `scripts/run-ci-node-tests.mjs` walks the roots listed above; note it does **not** include `servers/nextjs/tests/`, so the five files there (including `workspace-contract.test.mjs`, the TypeScript half of the two-sided workspace contract) currently never run in CI.
+Both Cypress **and** `node:test` suites exist — the frontend is not Cypress-only. `scripts/run-ci-node-tests.mjs` walks `app/`, `components/`, `lib/`, `scripts/`, `tests/`, and `utils/`; the explicit `servers/nextjs/tests/` contract files therefore run in the shared CI Node suite. Only the runner's printed dedicated-flow exclusions are omitted.
 
 **Root-level:**
 ```bash
@@ -126,7 +126,7 @@ npm run check:presentation-export   # verify the pinned export runtime is presen
 
 **Electron:** `npm run typecheck` (`tsc --noEmit`), `npm run lint:main`. Neither runs in CI.
 
-**CI gates.** `.github/workflows/test-all.yml` runs three jobs on PRs to `main`: `test-fastapi` (full pytest with `uv sync --frozen`, plus a PyInstaller build), `test-nextjs` (`test:next-ci` → `tsc --noEmit` → eslint → `next build` → 25 named Cypress specs), and `workspace-e2e` (xvfb browser run). Five more workflows are path-filtered (`template-v2-export-fidelity`, `upstream-compatibility`, `upstream-intake`, `cross-platform-packaging-security`, `g4-pptx-roundtrip`), and `bitbucket-pipelines.yml` adds upstream byte-parity plus a chat-first E2E. `scripts/required-ci-contract.test.mjs` is a meta-test that asserts the workflow file itself keeps these gates — if you change `test-all.yml`, expect it to fail until you update the contract too.
+**CI gates.** `.github/workflows/test-all.yml` runs three jobs on PRs to `main`: `test-fastapi` (Ruff, full pytest with `uv sync --frozen`, plus a PyInstaller build), `test-nextjs` (`test:next-ci` → `tsc --noEmit` → eslint → `next build` → 26 named Cypress specs), and `workspace-e2e` (xvfb browser run). Five more workflows are path-filtered (`template-v2-export-fidelity`, `upstream-compatibility`, `upstream-intake`, `cross-platform-packaging-security`, `g4-pptx-roundtrip`). `bitbucket-pipelines.yml` requires the shared Next Node suite, Dashboard Cypress component gate, upstream byte parity, and chat-first E2E on pull requests and `main`. `scripts/required-ci-contract.test.mjs` is a meta-test that asserts these workflow contracts — if you change them, update the contract test too.
 
 ## FastAPI backend internals
 
@@ -137,7 +137,7 @@ npm run check:presentation-export   # verify the pinned export runtime is presen
 - **LLM provider abstraction:** `utils/llm_provider.py` + `utils/llm_config.py` wrap the `llmai` library and select among 15 providers (`enums/llm_provider.py`). Image providers are in `enums/image_provider.py` (10, including local ComfyUI/Open WebUI and a `DISABLE_IMAGE_GENERATION` placeholder path). Add provider logic here, not in endpoints.
 - **Persistence:** SQLModel models in `models/sql/` (26 modules). Multi-tenant scoping is applied centrally, not per query: `services/database.py:109` installs a `do_orm_execute` hook that applies `with_loader_criteria` to owner-scoped models — do not hand-roll owner filters. Alembic migrations in `alembic/`, run on startup when `MIGRATE_DATABASE_ON_STARTUP=true` (orchestrated by `migrations.py`). `DATABASE_URL` accepts any async SQLAlchemy URL; falls back to SQLite under app data.
 - **Errors:** `api/error_handling.py` provides a centralized error envelope with request IDs for HTTPException, validation errors, and unhandled exceptions. Prefer it over ad-hoc try/except in endpoints.
-- **Configuration:** `utils/get_env.py` holds ~89 getters and is *intended* as the source of truth — but ~130 `os.getenv` call sites across ~52 other modules live outside it (auth bootstrap, `MEM0_*`, `AUTHORED_*` concurrency, `SLIDESPEC_*`, `CORS_ALLOWED_ORIGINS`, `DB_POOL_SIZE`, export runtime paths). When adding a knob, put it in `get_env.py`; when hunting for one, grep the whole tree. Per-instance runtime keys are persisted in `app_data/userConfig.json` (written by `start.js`); they are only writable when `CAN_CHANGE_KEYS != "false"`. Single-admin auth lives in `utils/simple_auth.py`.
+- **Configuration:** `constants/settings_registry.json` is the authoritative registry for managed/public provider settings and generates the shared Compose/docs surfaces via `npm run generate:settings-registry`; CI checks drift with `npm run test:settings-registry`. Runtime reads use `utils/get_env.py`, while some legacy direct `os.getenv` call sites remain outside it. New managed knobs must be registered first and consumed through the existing access layer. Per-instance runtime keys are persisted in `app_data/userConfig.json` (written by `start.js`); they are only writable when `CAN_CHANGE_KEYS != "false"`. Single-admin auth lives in `utils/simple_auth.py`.
 - **Runtime settings synchronization:** external API and standalone worker processes share the database-backed monotonic revision described in `docs/runtime-settings-multiworker-sync.md`. PostgreSQL is the cluster profile; SQLite remains a local/multiprocess profile. Do not add request-time file/DB reads or transmit setting values in refresh notifications.
 
 ## Next.js frontend internals

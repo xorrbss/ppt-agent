@@ -13,6 +13,8 @@ import { store } from '@/store/store'
 import { Provider } from 'react-redux'
 import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime'
 import { Toaster } from '@/components/ui/sonner'
+import { NextIntlClientProvider } from 'next-intl'
+import koMessages from '@/i18n/messages/ko.json'
 
 import '@/app/globals.css'
 
@@ -31,12 +33,14 @@ const createRouter = () => ({
 
 const mountUploadPage = () =>
   mount(
-    <AppRouterContext.Provider value={createRouter() as any}>
-      <Provider store={store}>
-        <UploadPage />
-        <Toaster />
-      </Provider>
-    </AppRouterContext.Provider>
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
+      <AppRouterContext.Provider value={createRouter() as any}>
+        <Provider store={store}>
+          <UploadPage />
+          <Toaster />
+        </Provider>
+      </AppRouterContext.Provider>
+    </NextIntlClientProvider>
   )
 
 // notify() -> sonner renders <li data-sonner-toast> with the title in [data-title].
@@ -57,6 +61,40 @@ describe('<UploadPage />', () => {
     // Language + tone/verbosity live behind the advanced-settings modal.
     cy.get('[data-testid="advanced-settings-button"]').should('exist')
     cy.get('[data-testid="file-upload-input"]').should('exist')
+    cy.get('[data-testid="generate-action-bar"]').should('be.visible')
+    cy.get('[data-testid="appearance-settings"]').should('not.have.attr', 'open')
+  })
+
+  it('keeps the primary CTA inside the desktop viewport', () => {
+    cy.get('[data-testid="generate-presentation-button"]').should(($button) => {
+      const rect = $button[0].getBoundingClientRect()
+      expect(rect.top).to.be.greaterThan(0)
+      expect(rect.bottom).to.be.at.most(900)
+    })
+  })
+
+  it('keeps the primary CTA inside a 390x844 mobile viewport', () => {
+    cy.viewport(390, 844)
+    cy.get('[data-testid="generate-action-bar"]').should(($bar) => {
+      const rect = $bar[0].getBoundingClientRect()
+      expect(rect.left).to.be.at.least(0)
+      expect(rect.right).to.be.at.most(390)
+      expect(rect.bottom).to.be.at.most(844)
+    })
+    cy.get('[data-testid="generate-presentation-button"]').should('be.visible')
+  })
+
+  it('opens optional design settings and runs the CTA from the keyboard', () => {
+    cy.get('[data-testid="appearance-settings"] summary')
+      .focus()
+      .type('{enter}')
+    cy.get('[data-testid="appearance-settings"]').should('have.attr', 'open')
+
+    cy.get('[data-testid="generate-presentation-button"]')
+      .focus()
+      .should('have.focus')
+    cy.get('[data-testid="prompt-input"]').focus().type('{enter}')
+    checkToast('입력이 필요합니다')
   })
 
   describe('Configuration Selection', () => {
@@ -71,13 +109,16 @@ describe('<UploadPage />', () => {
     it('opens the advanced-settings modal', () => {
       cy.get('[data-testid="advanced-settings-button"]').click({ force: true })
       cy.get('[role="dialog"]').should('be.visible').and('contain', '고급 설정')
+      cy.get('[role="switch"][aria-label="목차 포함"]').should('exist')
+      cy.get('[role="switch"][aria-label="제목 슬라이드 포함"]').should('exist')
+      cy.get('[role="switch"][aria-label="웹 검색 사용"]').should('exist')
     })
   })
 
   describe('Prompt Input', () => {
     it('allows entering prompt text', () => {
       const testPrompt = 'Create a presentation about AI'
-      cy.get('[data-testid="prompt-input"]').type(testPrompt)
+      cy.get('[data-testid="prompt-input"]').type(testPrompt, { delay: 0 })
       cy.get('[data-testid="prompt-input"]').should('have.value', testPrompt)
     })
   })
@@ -205,6 +246,7 @@ describe('<UploadPage />', () => {
 
   describe('Theme gallery', () => {
     it('lists presets and selecting one marks it active', () => {
+      cy.get('[data-testid="appearance-settings"] summary').click()
       cy.get('[data-testid="theme-gallery"]').should('exist')
       cy.get('[data-testid="theme-option-carbon"]').should('exist')
       cy.get('[data-testid="theme-option-broadsheet"]').should('exist')

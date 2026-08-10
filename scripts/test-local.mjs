@@ -479,7 +479,7 @@ const cypressSpecs = [
   "**/AdaptivePropertyControls.cy.tsx",
   "**/ChartLeaf.cy.tsx",
   "**/Variants.cy.tsx",
-  "**/UploadPage.cy.tsx",
+  "**/UploadPage.cy.tsx", "**/DashboardPage.cy.tsx",
   "**/ThemeComposer.cy.tsx",
   "**/TemplateSelection.cy.tsx",
   "**/presentationGenUpload.cy.ts",

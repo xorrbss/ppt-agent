@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Pencil, SlidersHorizontal, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import React, { useEffect, useState } from 'react';
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
 
@@ -15,10 +16,26 @@ interface ConfigurationSelectsProps {
 const toggleClassName =
     'h-[22px] w-[36px] border-0 bg-[#D8D8DD] data-[state=checked]:bg-[#7A5AF8] ';
 
+const toneLabelKeys = {
+    [ToneType.Default]: 'tone.default',
+    [ToneType.Casual]: 'tone.casual',
+    [ToneType.Professional]: 'tone.professional',
+    [ToneType.Funny]: 'tone.funny',
+    [ToneType.Educational]: 'tone.educational',
+    [ToneType.Sales_Pitch]: 'tone.salesPitch',
+} as const;
+
+const verbosityLabelKeys = {
+    [VerbosityType.Concise]: 'verbosity.concise',
+    [VerbosityType.Standard]: 'verbosity.standard',
+    [VerbosityType.Text_Heavy]: 'verbosity.textHeavy',
+} as const;
+
 const AdvanceSettings = ({
     config,
     onConfigChange,
 }: ConfigurationSelectsProps) => {
+    const t = useTranslations('upload.advancedSettings');
     const [openAdvanced, setOpenAdvanced] = useState(false);
 
     const [advancedDraft, setAdvancedDraft] = useState({
@@ -85,10 +102,10 @@ const AdvanceSettings = ({
     return (
         <>
             <div className="ml-auto">
-                <ToolTip content="고급 설정">
+                <ToolTip content={t('title')}>
                     <button
-                        aria-label="고급 설정"
-                        title="고급 설정"
+                        aria-label={t('title')}
+                        title={t('title')}
                         type="button"
                         onClick={handleOpenAdvanced}
                         className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E4E5E8] bg-white text-[#1C1C27] shadow-sm transition hover:bg-[#F7F7FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5]/25"
@@ -108,14 +125,14 @@ const AdvanceSettings = ({
                     <div
                         role="dialog"
                         aria-modal="true"
-                        aria-label="고급 설정"
+                        aria-label={t('title')}
                         className="relative mx-auto mt-[108px] w-[calc(100vw-2rem)] max-w-[640px] overflow-visible"
                         onClick={(event) => event.stopPropagation()}
                     >
                         <button
                             type="button"
                             onClick={handleCloseAdvanced}
-                            aria-label="고급 설정 닫기"
+                            aria-label={t('close')}
                             className="absolute -top-[62px] right-2 flex h-[50px] w-[50px] items-center justify-center rounded-full border border-[#E7E7EC] bg-white text-[#2C2B35] shadow-sm transition hover:bg-[#F8F8FB]"
                         >
                             <X className="h-3.5 w-3.5" />
@@ -125,9 +142,9 @@ const AdvanceSettings = ({
                             <div className="flex items-start justify-between gap-4 bg-[#F8F8FA] px-6 py-[22px] ">
                                 <div>
                                     <h2 className="font-syne text-lg font-semibold leading-none text-[#191919]">
-                                        고급 설정
+                                        {t('title')}
                                     </h2>
-                                    <p className="mt-1 text-sm text-[#808080]">발표자료 동작 방식 조정</p>
+                                    <p className="mt-1 text-sm text-[#808080]">{t('description')}</p>
                                 </div>
 
                                 <Button
@@ -139,7 +156,7 @@ const AdvanceSettings = ({
                                     }}
                                     className=" rounded-full px-[28px]  py-[10px] font-syne text-xs font-semibold text-[#1E1D2B] shadow-none hover:opacity-95"
                                 >
-                                    저장
+                                    {t('save')}
                                 </Button>
                             </div>
 
@@ -151,7 +168,7 @@ const AdvanceSettings = ({
                                             htmlFor="advanced-instructions"
                                             className="block font-syne text-sm font-semibold leading-none text-[#1F1D2A]"
                                         >
-                                            지침 입력
+                                            {t('instructionsLabel')}
                                         </label>
                                         <Textarea
                                             id="advanced-instructions"
@@ -161,7 +178,7 @@ const AdvanceSettings = ({
                                             onChange={(event) =>
                                                 setAdvancedDraft((prev) => ({ ...prev, instructions: event.target.value }))
                                             }
-                                            placeholder="AI에게 방향을 안내하세요: 대상, 어조, 핵심 내용, 제약 조건 등을 입력하세요."
+                                            placeholder={t('instructionsPlaceholder')}
                                             className="mt-1 min-h-[64px] resize-none border-0 bg-transparent p-0 text-sm leading-[1.3] text-[#242430] shadow-none placeholder:text-[#7C7B87] focus-visible:ring-0 focus-visible:ring-offset-0"
                                         />
                                     </div>
@@ -170,7 +187,7 @@ const AdvanceSettings = ({
 
                             <div className="space-y-4 px-6 pb-5 pt-3.5 ">
                                 <div className="flex items-center justify-between gap-3">
-                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">어조</label>
+                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">{t('toneLabel')}</label>
                                     <Select
                                         value={advancedDraft.tone}
                                         onValueChange={(value) =>
@@ -178,13 +195,13 @@ const AdvanceSettings = ({
                                         }
 
                                     >
-                                        <SelectTrigger className="p-2.5 w-[120px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium capitalize text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
-                                            <SelectValue placeholder="어조 선택" />
+                                        <SelectTrigger aria-label={t('toneLabel')} className="p-2.5 w-[120px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
+                                            <SelectValue placeholder={t('tonePlaceholder')} />
                                         </SelectTrigger>
                                         <SelectContent className="z-[120] font-syne">
                                             {Object.values(ToneType).map((tone) => (
                                                 <SelectItem key={tone} value={tone} className="text-sm font-medium capitalize">
-                                                    {tone}
+                                                    {t(toneLabelKeys[tone])}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -192,20 +209,20 @@ const AdvanceSettings = ({
                                 </div>
 
                                 <div className="flex items-center justify-between gap-3">
-                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">분량</label>
+                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">{t('verbosityLabel')}</label>
                                     <Select
                                         value={advancedDraft.verbosity}
                                         onValueChange={(value) =>
                                             setAdvancedDraft((prev) => ({ ...prev, verbosity: value as VerbosityType }))
                                         }
                                     >
-                                        <SelectTrigger className="p-2.5 w-[120px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium capitalize text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
-                                            <SelectValue placeholder="분량 선택" />
+                                        <SelectTrigger aria-label={t('verbosityLabel')} className="p-2.5 w-[120px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">
+                                            <SelectValue placeholder={t('verbosityPlaceholder')} />
                                         </SelectTrigger>
                                         <SelectContent className="z-[120] font-syne">
                                             {Object.values(VerbosityType).map((verbosity) => (
                                                 <SelectItem key={verbosity} value={verbosity} className="text-sm font-medium capitalize">
-                                                    {verbosity}
+                                                    {t(verbosityLabelKeys[verbosity])}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -214,9 +231,10 @@ const AdvanceSettings = ({
 
                                 <div className="flex items-center justify-between gap-3">
                                     <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">
-                                        목차 포함
+                                        {t('includeTableOfContents')}
                                     </label>
                                     <Switch
+                                        aria-label={t('includeTableOfContents')}
                                         checked={advancedDraft.includeTableOfContents}
                                         onCheckedChange={(checked) =>
                                             setAdvancedDraft((prev) => ({ ...prev, includeTableOfContents: checked }))
@@ -226,8 +244,9 @@ const AdvanceSettings = ({
                                 </div>
 
                                 <div className="flex items-center justify-between gap-3">
-                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">제목 슬라이드</label>
+                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">{t('includeTitleSlide')}</label>
                                     <Switch
+                                        aria-label={t('includeTitleSlide')}
                                         checked={advancedDraft.includeTitleSlide}
                                         onCheckedChange={(checked) =>
                                             setAdvancedDraft((prev) => ({ ...prev, includeTitleSlide: checked }))
@@ -237,8 +256,9 @@ const AdvanceSettings = ({
                                 </div>
 
                                 <div className="flex items-center justify-between gap-3">
-                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">웹 검색</label>
+                                    <label className="font-syne text-sm font-semibold leading-none text-[#1F1D2A]">{t('webSearch')}</label>
                                     <Switch
+                                        aria-label={t('webSearch')}
                                         checked={advancedDraft.webSearch}
                                         onCheckedChange={(checked) =>
                                             setAdvancedDraft((prev) => ({ ...prev, webSearch: checked }))
