@@ -21,6 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from models.sql.workspace import WorkspaceAsset
 from models.workspace import WorkspaceAssetTransitionRequest
 from services.database import async_session_maker
+from services.asset_gateway_idempotency_service import (
+    cleanup_expired_asset_gateway_idempotency_receipts,
+)
+from services.references import cleanup_expired_reference_snapshots
 from services.workspace_artifact_publication_service import (
     sweep_workspace_artifact_cleanup,
 )
@@ -213,6 +217,18 @@ async def run_workspace_asset_maintenance(
             expired = await expire_orphan_workspace_assets(session, now=current)
         async with session_factory() as session:
             deleted = await cleanup_expired_workspace_assets(session)
+        async with session_factory() as session:
+            reference_snapshots_deleted = await cleanup_expired_reference_snapshots(
+                session,
+                now=current,
+            )
+        async with session_factory() as session:
+            idempotency_receipts_deleted = (
+                await cleanup_expired_asset_gateway_idempotency_receipts(
+                    session,
+                    now=current,
+                )
+            )
         artifact_cleanup = await sweep_workspace_artifact_cleanup(
             session_factory=session_factory,
             now=current,
@@ -224,6 +240,8 @@ async def run_workspace_asset_maintenance(
         "processed": processed,
         "expired": expired,
         "deleted": deleted,
+        "reference_snapshots_deleted": reference_snapshots_deleted,
+        "idempotency_receipts_deleted": idempotency_receipts_deleted,
         "artifact_claimed": artifact_cleanup["claimed"],
         "artifact_deleted": artifact_cleanup["deleted"],
         "artifact_retry_pending": artifact_cleanup["retry_pending"],
@@ -241,6 +259,7 @@ async def _workspace_asset_maintenance_loop() -> None:
                 logger.info(
                     "Workspace asset maintenance completed: "
                     "timed_out=%d processed=%d expired=%d deleted=%d "
+                    "reference_snapshots_deleted=%d idempotency_receipts_deleted=%d "
                     "artifact_claimed=%d artifact_deleted=%d "
                     "artifact_retry_pending=%d artifact_dead_lettered=%d "
                     "artifact_stale=%d",
@@ -248,6 +267,8 @@ async def _workspace_asset_maintenance_loop() -> None:
                     result["processed"],
                     result["expired"],
                     result["deleted"],
+                    result["reference_snapshots_deleted"],
+                    result["idempotency_receipts_deleted"],
                     result["artifact_claimed"],
                     result["artifact_deleted"],
                     result["artifact_retry_pending"],

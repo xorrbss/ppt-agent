@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "presenton.template-renderer-smoke/v1",
+  "templateId": "general",
+  "engineId": "presenton.template-v2-json",
+  "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+  "entrypointSha256": "e3857fd52e8692e4a12bc2dd5b3069a5dad661196f9d62674c841e0bfd6c86f7",
+  "networkPolicy": "deny",
+  "scriptPolicy": "deny",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "layoutCount": 12,
+  "layoutIds": [
+    "title_intro",
+    "title_description_image",
+    "title_image_bullet_points_1",
+    "title_description_bullet_points",
+    "title_description_chart_cards",
+    "title_metrics_description",
+    "title_image_description_metrics",
+    "title_image_bullet_points",
+    "title_quote_image",
+    "title_table_description",
+    "table_of_contents",
+    "title_description_team_cards"
+  ],
+  "checks": {
+    "jsonParsed": true,
+    "uniqueLayoutIds": true,
+    "nonEmptyRoots": true,
+    "browserGoldenRequiredForPublication": true,
+    "browserGoldenReceiptVerified": true
+  },
+  "status": "passed-static-browser-golden"
+}

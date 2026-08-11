@@ -20,8 +20,10 @@ def get_supported_models():
     return SUPPORTED_OLLAMA_MODELS.values()
 
 
-@OLLAMA_ROUTER.get("/models/available", response_model=List[OllamaModelStatus])
-async def get_available_models():
+@OLLAMA_ROUTER.get(
+    "/models/available", response_model=List[OllamaModelStatus], name="get_available_ollama_models"
+)
+async def get_available_ollama_models():
     return await list_pulled_ollama_models()
 
 

@@ -214,30 +214,36 @@ export const useUploadPageState = ({
       extra_info: files.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
     });
 
-    let documents = [];
+    let documentAdmission: Awaited<
+      ReturnType<typeof PresentationGenerationApi.uploadDoc>
+    > | null = null;
 
     if (files.length > 0) {
-      const uploadResponse = await PresentationGenerationApi.uploadDoc(files);
-      documents = uploadResponse;
+      documentAdmission = await PresentationGenerationApi.uploadDoc(files);
     }
 
     const selectedLanguage = config?.language ?? "";
 
     const promises: Promise<any>[] = [];
 
-    if (documents.length > 0) {
+    if (documentAdmission) {
       const decomposeController = new AbortController();
       decomposeAbortControllerRef.current = decomposeController;
       setCanCancelDocumentProcessing(true);
       promises.push(
         PresentationGenerationApi.decomposeDocuments(
-          documents,
+          {
+            referenceSnapshotId: documentAdmission.referenceSnapshotId,
+            documentCount: documentAdmission.assetIds.length,
+          },
           selectedLanguage,
           {
+            idempotencyKey: `document-decompose:${pendingPresentationId}:${documentAdmission.referenceSnapshotId}`,
             signal: decomposeController.signal,
             onProgress: (job) => {
               const completed = job.progress?.completed_files ?? 0;
-              const total = job.progress?.total_files ?? documents.length;
+              const total =
+                job.progress?.total_files ?? documentAdmission.assetIds.length;
               setLoadingState((previous) => ({
                 ...previous,
                 progress: total > 0 ? (completed / total) * 100 : undefined,
@@ -266,13 +272,6 @@ export const useUploadPageState = ({
     }));
     dispatch(clearOutlines())
 
-    // Silently create the presentation from the decomposed documents and go
-    // straight to the auto outline bridge (skip the /documents-preview step).
-    const documentPaths = responses
-      .flat()
-      .filter((item: any) => item && item.name && item.file_path)
-      .map((item: any) => item.file_path);
-
     const presentationId = pendingPresentationId;
     const selectedTheme = await resolveDeckTheme(selectedThemeId);
     const createResponse = await PresentationGenerationApi.createPresentation({
@@ -280,7 +279,9 @@ export const useUploadPageState = ({
       idempotency_key: `presentation-create:${presentationId}`,
       content: config?.prompt ?? "",
       n_slides: config?.slides ? parseInt(config.slides, 10) : null,
-      file_paths: documentPaths,
+      reference_snapshot_ids: documentAdmission
+        ? [documentAdmission.referenceSnapshotId]
+        : [],
       language: selectedLanguage,
       tone: config?.tone,
       verbosity: config?.verbosity,
@@ -294,7 +295,7 @@ export const useUploadPageState = ({
     dispatch(setPresentationId(createResponse.id));
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
-      uploaded_documents_count: documents.length,
+      uploaded_documents_count: documentAdmission?.assetIds.length ?? 0,
       decompose_job_count: responses.length,
       presentation_id: createResponse.id,
       destination: "/outline?auto=1",
@@ -324,7 +325,6 @@ export const useUploadPageState = ({
       idempotency_key: `presentation-create:${presentationId}`,
       content: config?.prompt ?? "",
       n_slides: config?.slides ? parseInt(config.slides, 10) : null,
-      file_paths: [],
       language: selectedLanguage,
       tone: config?.tone,
       verbosity: config?.verbosity,

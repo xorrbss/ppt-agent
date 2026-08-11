@@ -41,7 +41,6 @@ import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 import {
-  presentationCapabilitySelectors,
   tryResolveServerIssuedPresentationProfile,
 } from "@/lib/presentation-profile";
 import PresentationHeader from "./PresentationHeader";
@@ -49,9 +48,9 @@ import PresentationShell, {
   PresentationFeatureSlot,
   PresentationRuntimeDependencies,
 } from "./PresentationShell";
-import { buildPresentationFeatureViewModel } from "./presentationFeatureSlots";
+import { usePresentationPageController } from "../hooks/usePresentationPageController";
 import {
-  CanonicalWorkspaceChatPanel,
+  WorkspaceChatPanel,
   useWorkspaceCapability,
   type WorkspaceAgentSlideFocus,
   type WorkspaceCommandDispatcher,
@@ -61,12 +60,62 @@ import {
 } from "../workspace";
 import { findMostVisibleSlideIndex } from "../utils/slideScrollSync";
 import { PresentationLoadError, PresentationModeView } from "./PresentationTerminalStates";
+import { renderArtifactSlides } from "@/lib/render-service";
+import { usePresentationPreviewArtifact } from "../hooks/usePresentationPreviewArtifact";
 /**
  * Every deck is served by the Slides Workbench, so the editor never takes a
  * direct write: the backend answers those with `chat_first_command_required`.
  * Inline editing stays rendered but read-only.
  */
 const INLINE_MUTATIONS_ENABLED = false;
+
+export function useAgentSlideFocusOnce({
+  presentationId,
+  totalSlides,
+  focusedSlide,
+  focusEventId,
+  selectedSlide,
+  onSlideFocus,
+}: {
+  presentationId: string;
+  totalSlides: number;
+  focusedSlide: number | null;
+  focusEventId: string | null;
+  selectedSlide: number;
+  onSlideFocus: (slideIndex: number) => void;
+}) {
+  const appliedFocusRef = useRef<{
+    eventKey: string;
+    slideIndex: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (totalSlides <= 0 || focusedSlide === null || focusEventId === null) {
+      return;
+    }
+    const clampedIndex = Math.min(Math.max(focusedSlide, 0), totalSlides - 1);
+    const eventKey = `${presentationId}:${focusEventId}`;
+    const appliedFocus = appliedFocusRef.current;
+    if (
+      appliedFocus?.eventKey === eventKey &&
+      appliedFocus.slideIndex === clampedIndex
+    ) {
+      return;
+    }
+    appliedFocusRef.current = { eventKey, slideIndex: clampedIndex };
+    if (clampedIndex !== selectedSlide) {
+      onSlideFocus(clampedIndex);
+    }
+  }, [
+    focusEventId,
+    focusedSlide,
+    onSlideFocus,
+    presentationId,
+    selectedSlide,
+    totalSlides,
+  ]);
+}
+
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
   workspaceStaging = false,
@@ -117,28 +166,20 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [workspacePageRemakeRequester],
   );
-  const { presentationData, isStreaming, chatHtmlSelection } = useSelector(
+  const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
   const presentationRuntime = useMemo(
     () => tryResolveServerIssuedPresentationProfile(presentationData),
     [presentationData],
   );
-  const presentationFeatureView = useMemo(
-    () =>
-      buildPresentationFeatureViewModel({
-        runtime: presentationRuntime,
-        workspaceReady,
-        loading: loading || presentationData == null,
-      }),
-    [loading, presentationData, presentationRuntime, workspaceReady],
-  );
+  const presentationFeatureView = usePresentationPageController({
+    runtime: presentationRuntime,
+    workspaceReady,
+    loading: loading || presentationData == null,
+  });
   const isAuthoredDeck = presentationFeatureView.authored;
-  const isSmartPresentation = presentationRuntime
-    ? presentationCapabilitySelectors.canUseSmartSelection(
-        presentationRuntime.capabilities,
-      )
-    : false;
+  const isSmartPresentation = presentationFeatureView.selectionEnabled;
   useEffect(() => {
     dispatch(setEnableHtmlSelector(isSmartPresentation));
     if (!isSmartPresentation) dispatch(clearChatHtmlSelection());
@@ -147,25 +188,19 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       dispatch(clearChatHtmlSelection());
     };
   }, [dispatch, isSmartPresentation, presentation_id]);
-  const currentConversationSlideId = presentationData?.slides?.[selectedSlide]?.id as
-    | string
-    | undefined;
-  const conversationVisibleSlideIds = useMemo(
-    () => currentConversationSlideId ? [currentConversationSlideId] : undefined,
-    [currentConversationSlideId],
-  );
-  const conversationSmartSelection = useMemo(
-    () => chatHtmlSelection
-      ? {
-          html: chatHtmlSelection.html,
-          text: chatHtmlSelection.selectedText,
-          slideId: chatHtmlSelection.slideId ?? undefined,
-          slideIndex: chatHtmlSelection.slideIndex,
-        }
-      : undefined,
-    [chatHtmlSelection],
-  );
   const slidesLength = presentationData?.slides?.length ?? 0;
+  const previewArtifactRequired =
+    presentationRuntime !== null && slidesLength > 0 && !loading;
+  const previewArtifactState = usePresentationPreviewArtifact(
+    presentationData,
+    previewArtifactRequired,
+  );
+  const previewSlides = previewArtifactState.artifact
+    ? renderArtifactSlides(previewArtifactState.artifact)
+    : null;
+  useEffect(() => {
+    if (previewArtifactState.error) setError(true);
+  }, [previewArtifactState.error]);
   const showWorkspaceStaging = workspaceStaging && slidesLength === 0;
   const lastStreamingSlideIndex =
     slidesLength > 0
@@ -289,10 +324,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     ) ?? 0;
     window.requestAnimationFrame(() => handleSlideClick(fallbackIndex));
   }, [fetchUserSlides, handleSlideClick, selectedSlide]);
-  const handleConversationPresentationPublished = useCallback(
-    () => handlePresentationChanged(),
-    [handlePresentationChanged],
-  );
   const handleAgentActivityChange = useCallback((working: boolean) => {
     setIsAgentWorking(working);
     if (working) {
@@ -351,21 +382,14 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [],
   );
-  useEffect(() => {
-    if (totalSlides <= 0 || agentFocusedSlide === null) {
-      return;
-    }
-    const clampedIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
-    if (clampedIndex !== selectedSlide) {
-      handleSlideClick(clampedIndex);
-    }
-  }, [
+  useAgentSlideFocusOnce({
+    presentationId: presentation_id,
     totalSlides,
-    agentFocusedSlide,
-    agentFocusEventId,
+    focusedSlide: agentFocusedSlide,
+    focusEventId: agentFocusEventId,
     selectedSlide,
-    handleSlideClick,
-  ]);
+    onSlideFocus: handleSlideClick,
+  });
   useEffect(() => {
     if (totalSlides <= 0) {
       setGlowingSlideIndex(null);
@@ -398,17 +422,34 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     chatTargetedSlides.length,
     glowingSlideIndex,
   ]);
-  if (isPresentMode) {
-    return <PresentationModeView presentationData={presentationData} presentSlide={presentSlideFromUrl} isFullscreen={isFullscreen} onFullscreenToggle={toggleFullscreen} onExit={handlePresentExit} onSlideChange={onSlideChange} />;
-  }
-  if (error) {
+  if (error || previewArtifactState.error) {
     return <PresentationLoadError pathname={pathname} router={router} />;
+  }
+  if (isPresentMode) {
+    if (previewArtifactRequired && previewSlides === null) {
+      return <LoadingState />;
+    }
+    return (
+      <PresentationModeView
+        presentationData={
+          presentationData && previewSlides
+            ? { ...presentationData, slides: previewSlides }
+            : presentationData
+        }
+        presentSlide={presentSlideFromUrl}
+        isFullscreen={isFullscreen}
+        onFullscreenToggle={toggleFullscreen}
+        onExit={handlePresentExit}
+        onSlideChange={onSlideChange}
+      />
+    );
   }
   return (
     <PresentationShell
       title={presentationData?.title ?? t("presentationEditor")}
-      background={isSmartPresentation ? "#F6F6F9" : "#EDEEEF"}
+      background={presentationFeatureView.background}
       viewModel={presentationFeatureView}
+      renderArtifact={previewArtifactState.artifact}
     >
       <PresentationFeatureSlot name="headerActions">
         <PresentationHeader
@@ -576,6 +617,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
               <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
                 {!presentationData ||
                   loading ||
+                  (previewArtifactRequired && previewSlides === null) ||
                   !presentationData?.slides ||
                   showWorkspaceStaging ||
                   (presentationData.slides.length === 0 && stream) ? (
@@ -631,10 +673,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                   </div>
                 ) : (
                   <>
-                    {presentationData &&
-                      presentationData.slides &&
-                      presentationData.slides.length > 0 &&
-                      presentationData.slides.map((slide: any, index: number) => (
+                    {previewSlides &&
+                      previewSlides.length > 0 &&
+                      previewSlides.map((slide: any, index: number) => (
                         <SlideContent
                           key={`${slide.type}-${index}-${slide.index}`}
                           slide={slide}
@@ -670,13 +711,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             } ${workspaceDrawerOpen ? "lg:flex" : "lg:hidden"} xl:flex flex-1 lg:absolute lg:inset-y-0 lg:right-0 lg:z-40 lg:w-[min(440px,100%)] lg:max-w-[440px] lg:flex-none lg:shadow-2xl xl:sticky xl:top-0 xl:z-auto xl:w-full xl:max-w-[clamp(360px,30vw,560px)] xl:shrink-0 xl:self-start xl:shadow-none`}
           >
             {workspaceReady ? (
-              <CanonicalWorkspaceChatPanel
+              <WorkspaceChatPanel
                 presentationId={presentation_id}
                 currentSlide={selectedSlide}
-                currentSlideId={currentConversationSlideId}
-                visibleSlideIds={conversationVisibleSlideIds}
-                smartSelection={conversationSmartSelection}
-                onPresentationPublished={handleConversationPresentationPublished}
+                commandsEnabled={workspaceCapability.commands}
+                onPresentationChanged={handlePresentationChanged}
+                onSlideFocus={handleSlideClick}
                 onAgentActivityChange={handleAgentActivityChange}
                 onAgentSlideFocus={handleAgentSlideFocus}
                 onCommandDispatcherReady={handleWorkspaceCommandDispatcherReady}

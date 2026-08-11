@@ -23,15 +23,32 @@ describe("CanonicalWorkspaceChatPanel", () => {
     cy.intercept("GET", `**/api/v1/ppt/conversations/${conversationId}/timeline*`, {
       statusCode: 200,
       body: {
-        items: [{
-          item_type: "run",
-          id: "44444444-4444-4444-8444-444444444444",
-          position: 1,
-          run_type: "presentation.edit",
-          status: "running",
-          version: 2,
-          actions: [{ id: "cancel", enabled: true }],
-        }],
+        items: [
+          {
+            item_type: "message",
+            id: "22222222-2222-4222-8222-222222222222",
+            position: 1,
+            role: "user",
+            content: "Use the original brief",
+            attachments: [{
+              id: "66666666-6666-4666-8666-666666666666",
+              name: "customer brief.pdf",
+              status: "ready",
+              mime_type: "application/pdf",
+              size_bytes: 4_096,
+              download_url: "/api/v1/ppt/workspace/assets/66666666-6666-4666-8666-666666666666/download",
+            }],
+          },
+          {
+            item_type: "run",
+            id: "44444444-4444-4444-8444-444444444444",
+            position: 2,
+            run_type: "presentation.edit",
+            status: "running",
+            version: 2,
+            actions: [{ id: "cancel", enabled: true }],
+          },
+        ],
         event_high_watermark: "7",
         revision: 3,
       },
@@ -61,6 +78,8 @@ describe("CanonicalWorkspaceChatPanel", () => {
     );
 
     cy.wait(["@conversation", "@timeline"]);
+    cy.get('[data-testid="conversation-attachment-download"]')
+      .should("have.attr", "download", "customer brief.pdf");
     cy.get("@focus").should("have.been.calledWithMatch", {
       slideIndex: 2,
       eventId: Cypress.sinon.match("canonical-conversation-focus-"),

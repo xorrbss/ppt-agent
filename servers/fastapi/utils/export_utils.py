@@ -40,9 +40,30 @@ def _extract_session_token(cookie_header: str | None) -> str | None:
 
 
 def _build_presentation_export_url(
-    presentation_id: uuid.UUID, session_token: str | None = None
+    presentation_id: uuid.UUID,
+    export_as: Literal["pptx", "pdf"],
+    session_token: str | None = None,
+    expected_revision: int | None = None,
+    legacy_path_only_rolling_facade: bool = False,
 ) -> tuple[str, str | None]:
     params = {"id": str(presentation_id)}
+    if legacy_path_only_rolling_facade:
+        if expected_revision is not None:
+            raise ValueError("legacy path-only export cannot bind an expected revision")
+    else:
+        if expected_revision is None:
+            raise ValueError("expected_revision is required for canonical export")
+        if isinstance(expected_revision, bool) or not isinstance(expected_revision, int):
+            raise ValueError("expected_revision must be an integer")
+        if expected_revision < 0:
+            raise ValueError("expected_revision must be non-negative")
+        params.update(
+            {
+                "format": export_as,
+                "render_contract": "presenton.render-artifact/v1",
+                "expected_revision": str(expected_revision),
+            }
+        )
     fastapi_url = _get_next_public_fastapi_url()
     if fastapi_url:
         params["fastapiUrl"] = fastapi_url
@@ -63,6 +84,8 @@ async def export_presentation(
     title: str,
     export_as: Literal["pptx", "pdf"],
     cookie_header: str | None = None,
+    expected_revision: int | None = None,
+    legacy_path_only_rolling_facade: bool = False,
 ) -> PresentationAndPath:
     log_memory(
         LOGGER,
@@ -72,7 +95,11 @@ async def export_presentation(
     )
     session_token = _extract_session_token(cookie_header)
     export_url, fastapi_url = _build_presentation_export_url(
-        presentation_id, session_token
+        presentation_id,
+        export_as,
+        session_token,
+        expected_revision,
+        legacy_path_only_rolling_facade,
     )
     name = (title or "").strip() or str(uuid.uuid4())
     export_result = await EXPORT_TASK_SERVICE.export_from_url(

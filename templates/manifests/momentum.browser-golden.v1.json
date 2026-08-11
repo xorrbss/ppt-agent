@@ -1,0 +1,298 @@
+{
+  "schemaVersion": "presenton.template-browser-golden/v1",
+  "templateId": "momentum",
+  "engineId": "presenton.template-v2-json",
+  "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+  "entrypointSha256": "07d15e7283ab4f9ae5b0ff70cef306bdc5cfaea801e1b92e04ea41747b6c5e53",
+  "renderer": {
+    "modulePath": "servers/nextjs/lib/template-v2-json-to-html.ts",
+    "moduleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+    "captureAdapter": "chromium-headless-cli/readiness-contract",
+    "productionCaptureContract": "scripts/sync-presentation-export.cjs readiness overlay"
+  },
+  "browser": {
+    "family": "chromium",
+    "product": "Chrome/151.0.7922.76",
+    "revision": "@031bfd60f544af71d8dd7246970d1af3e1acf3ad",
+    "protocolVersion": "1.3"
+  },
+  "capturedAt": "2026-08-11T04:04:39.114Z",
+  "captureEvidence": {
+    "path": "templates/manifests/momentum.browser-golden.capture.v1.json",
+    "sha256": "882e9e81ebb86ed491f881751a05b843113b09653df69da82b4eda9934590c09",
+    "adapter": "chromium-cdp/Page.captureScreenshot"
+  },
+  "networkPolicy": "deny",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "layoutIds": [
+    "title_with_accent_footer_6891",
+    "center_title_agenda_grid_wave_7815",
+    "title_text_image_columns_5015",
+    "title_with_side_callouts_2594",
+    "title_intro_cards_decorative_frame_6592",
+    "photo_collage_title_steps_1029",
+    "title_process_cards_9539",
+    "title_image_metrics_4860",
+    "title_over_cards_layout_8558",
+    "title_table_with_accents_1720",
+    "title_intro_staggered_cards_4014",
+    "title_metrics_cards_8330",
+    "title_chart_callout_footer_4748",
+    "title_text_chart_panel_cards_5852",
+    "title_chart_cards_grid_2766",
+    "title_chart_analysis_sections_9322",
+    "title_charts_card_grid_4598",
+    "title_infographic_sections_6705",
+    "title_quote_with_portrait_3397",
+    "image_sidebar_title_cards_7863",
+    "title_team_cards_grid_3062",
+    "title_timeline_cards_9036",
+    "title_text_with_staggered_cards_4998",
+    "title_with_pricing_cards_6716",
+    "title_metrics_cards_25_2120",
+    "title_timeline_cards_26_8744",
+    "title_text_image_metric_layout_3492",
+    "branded_title_wave_footer_8702"
+  ],
+  "screenshots": [
+    {
+      "layoutId": "title_with_accent_footer_6891",
+      "path": "templates/manifests/momentum.browser-golden/01-title_with_accent_footer_6891.png",
+      "sha256": "a0965dd4531b68de8329d84f8fc3f57f7a25eea56e403a0e51ee380a9385faa9",
+      "sizeBytes": 100773,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_agenda_grid_wave_7815",
+      "path": "templates/manifests/momentum.browser-golden/02-center_title_agenda_grid_wave_7815.png",
+      "sha256": "cf98d953aa8352600d5e8e3d724358b1ea323ab188050a7598272d979e9ba45b",
+      "sizeBytes": 91390,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_text_image_columns_5015",
+      "path": "templates/manifests/momentum.browser-golden/03-title_text_image_columns_5015.png",
+      "sha256": "1547d334e4c34515dfbedffbaea5304491ed1a5a743b57d51ad12f988c14b204",
+      "sizeBytes": 52454,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_side_callouts_2594",
+      "path": "templates/manifests/momentum.browser-golden/04-title_with_side_callouts_2594.png",
+      "sha256": "63621dbe22ced885c3e332c2c720e1e23ef8b62cabf784592966ddde8a89902b",
+      "sizeBytes": 62581,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_intro_cards_decorative_frame_6592",
+      "path": "templates/manifests/momentum.browser-golden/05-title_intro_cards_decorative_frame_6592.png",
+      "sha256": "7a811ccc3e3f1b67fb975d57a9ff8f2fdfc03987f25a42089c0faf3bc22a7635",
+      "sizeBytes": 96953,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "photo_collage_title_steps_1029",
+      "path": "templates/manifests/momentum.browser-golden/06-photo_collage_title_steps_1029.png",
+      "sha256": "03f46edd9520818234853be5ab07639a022383a86b2a883f8acefabc9b3b15ed",
+      "sizeBytes": 32680,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_process_cards_9539",
+      "path": "templates/manifests/momentum.browser-golden/07-title_process_cards_9539.png",
+      "sha256": "19455f492507c6807e4502f7b022ec308f7ae29a4d4fdf1be1b80171c0ab25fa",
+      "sizeBytes": 60068,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_image_metrics_4860",
+      "path": "templates/manifests/momentum.browser-golden/08-title_image_metrics_4860.png",
+      "sha256": "b10b9f32fdcc0849e47c6ec21e5c93f07db8b939f5c88c65333d98dd801279ad",
+      "sizeBytes": 37618,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_over_cards_layout_8558",
+      "path": "templates/manifests/momentum.browser-golden/09-title_over_cards_layout_8558.png",
+      "sha256": "7bdd91895eb66cd5794f514de8d3f369cdbac67c778301d8b9592e565ce06c97",
+      "sizeBytes": 99659,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_table_with_accents_1720",
+      "path": "templates/manifests/momentum.browser-golden/10-title_table_with_accents_1720.png",
+      "sha256": "c7f1d137f356f71c6c0f4ab0a32e19f9633132839fad43ff2ab8276ad5e2dc3c",
+      "sizeBytes": 41895,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_intro_staggered_cards_4014",
+      "path": "templates/manifests/momentum.browser-golden/11-title_intro_staggered_cards_4014.png",
+      "sha256": "a093b0d900dcb83b038ae5e1312dcb7772509f78864b96199b9fa8c8f1dde58f",
+      "sizeBytes": 85735,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_metrics_cards_8330",
+      "path": "templates/manifests/momentum.browser-golden/12-title_metrics_cards_8330.png",
+      "sha256": "2b779d6eb50ccc2ed32c791b99e723e19db3f8be682aad45476b2e69a08161d0",
+      "sizeBytes": 63510,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_chart_callout_footer_4748",
+      "path": "templates/manifests/momentum.browser-golden/13-title_chart_callout_footer_4748.png",
+      "sha256": "3be9adf53473033734974c45a983f91c1714f02e1de357eca37852468fe157ae",
+      "sizeBytes": 54228,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_text_chart_panel_cards_5852",
+      "path": "templates/manifests/momentum.browser-golden/14-title_text_chart_panel_cards_5852.png",
+      "sha256": "603d22d72d68e66025de3c4f65c3efe9fe824f8dbb812a15ace61b84de066cee",
+      "sizeBytes": 74690,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_chart_cards_grid_2766",
+      "path": "templates/manifests/momentum.browser-golden/15-title_chart_cards_grid_2766.png",
+      "sha256": "e3999114ce8b457352cd87dc9af70249d3e476475dd47c081fa769465783830e",
+      "sizeBytes": 37008,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_chart_analysis_sections_9322",
+      "path": "templates/manifests/momentum.browser-golden/16-title_chart_analysis_sections_9322.png",
+      "sha256": "b119cc604bfc107df2fd46341b5d7b5d6d94d4ebc6b6b0bdca5275b47c39ea2d",
+      "sizeBytes": 56503,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_charts_card_grid_4598",
+      "path": "templates/manifests/momentum.browser-golden/17-title_charts_card_grid_4598.png",
+      "sha256": "92c12a431c1258e02acf88100fdf84f153d605fde9e955a6b2c24f5ca635d264",
+      "sizeBytes": 50385,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_infographic_sections_6705",
+      "path": "templates/manifests/momentum.browser-golden/18-title_infographic_sections_6705.png",
+      "sha256": "9fd5877bb1f64c0dac0fc08f31373135e414243c388223f5ad734f8df92d87ca",
+      "sizeBytes": 105342,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_quote_with_portrait_3397",
+      "path": "templates/manifests/momentum.browser-golden/19-title_quote_with_portrait_3397.png",
+      "sha256": "fd0c58fda9274b1762f89147ec949f462177378190a40493853a41d6eb5e1625",
+      "sizeBytes": 68039,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "image_sidebar_title_cards_7863",
+      "path": "templates/manifests/momentum.browser-golden/20-image_sidebar_title_cards_7863.png",
+      "sha256": "ad828dda30815cf76984c5964f5d07bf78d4cd7ec662f8df222f24da6535f980",
+      "sizeBytes": 47274,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_team_cards_grid_3062",
+      "path": "templates/manifests/momentum.browser-golden/21-title_team_cards_grid_3062.png",
+      "sha256": "f77335d23b125200656a44792afab4e610170baf5f8734718fd504c843a81a7d",
+      "sizeBytes": 31614,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_timeline_cards_9036",
+      "path": "templates/manifests/momentum.browser-golden/22-title_timeline_cards_9036.png",
+      "sha256": "c3069ab1bd3695212c3e4198288ae052fead8a73360106f1abea65d38beeb481",
+      "sizeBytes": 46425,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_text_with_staggered_cards_4998",
+      "path": "templates/manifests/momentum.browser-golden/23-title_text_with_staggered_cards_4998.png",
+      "sha256": "4053806ac4493690d7076405fbb0060efb1371a488f9e7d54a1bfe52bd34afc0",
+      "sizeBytes": 102133,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_pricing_cards_6716",
+      "path": "templates/manifests/momentum.browser-golden/24-title_with_pricing_cards_6716.png",
+      "sha256": "d9b143c8fffc887e0c3d7bd0900bb2a2006bddc437a8a3b6f24b81561c7c06c2",
+      "sizeBytes": 68597,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_metrics_cards_25_2120",
+      "path": "templates/manifests/momentum.browser-golden/25-title_metrics_cards_25_2120.png",
+      "sha256": "f29ea0ed1903ea61c4e15dcaddbeb343d1aa6bfb71b3031b73ba264e20d00b16",
+      "sizeBytes": 83057,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_timeline_cards_26_8744",
+      "path": "templates/manifests/momentum.browser-golden/26-title_timeline_cards_26_8744.png",
+      "sha256": "e208731a45b1cc2ed503befd7a7d2f4c0ac84cd3ef9bc644910e2b6aae9e8a8c",
+      "sizeBytes": 80116,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_text_image_metric_layout_3492",
+      "path": "templates/manifests/momentum.browser-golden/27-title_text_image_metric_layout_3492.png",
+      "sha256": "591e8408c27adecd9b6851f9c30110b2c0037b7e78dccd9a479bf6b26ff685bc",
+      "sizeBytes": 43677,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "branded_title_wave_footer_8702",
+      "path": "templates/manifests/momentum.browser-golden/28-branded_title_wave_footer_8702.png",
+      "sha256": "243c9a4e966977f6be1ac39d742799134c80c5d936ceded25c1bf763e0dc6818",
+      "sizeBytes": 104970,
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "checks": {
+    "renderedLayoutCount": 28,
+    "nonBlankLayoutCount": 28,
+    "missingImages": 0,
+    "imageCount": 73,
+    "chartCanvasCount": 5,
+    "externalRequests": [],
+    "localFontsLoaded": true,
+    "consoleErrors": [],
+    "paintReadinessContract": "passed"
+  },
+  "status": "passed-browser-golden"
+}

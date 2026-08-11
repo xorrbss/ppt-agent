@@ -969,8 +969,10 @@ describe("WorkspaceChatPanel", () => {
 
     cy.get('[data-testid="workspace-timeline-scroll"]').then(($scroll) => {
       const scroll = $scroll[0];
+      scroll.dispatchEvent(
+        new WheelEvent("wheel", { bubbles: true, deltaY: -600 }),
+      );
       scroll.scrollTop = 0;
-      scroll.dispatchEvent(new Event("scroll"));
     });
     cy.get(
       '[data-operation-id="operation-generate"] [role="progressbar"]',

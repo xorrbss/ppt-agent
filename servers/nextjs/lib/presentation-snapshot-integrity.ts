@@ -25,12 +25,11 @@ export function normalizeExpectedPresentationSha256(
 export function assertPresentationSnapshotIntegrity(
   body: string,
   expectedSha256: string | undefined
-): void {
+): string {
   const expected = normalizeExpectedPresentationSha256(expectedSha256);
-  if (!expected) return;
-
   const actual = createHash("sha256").update(body).digest("hex");
-  if (actual !== expected) {
+  if (expected && actual !== expected) {
     throw new PresentationSnapshotMismatchError();
   }
+  return actual;
 }

@@ -7,6 +7,12 @@ import {
 import { apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
 import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
 import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
+import {
+  canonicalUploadBatchKey,
+  cleanupCanonicalDocumentAdmission,
+  forgetCanonicalAdmission,
+  rememberCanonicalAdmission,
+} from "./canonical-document-admission";
 
 export type BlankPresentationResponse = {
   id: string;
@@ -79,9 +85,33 @@ export type DocumentDecomposeFailure = {
 
 export type DecomposedDocument = {
   name: string;
-  file_path: string;
+  asset_id?: string;
+  content_sha256?: string;
+  /** Legacy synchronous decomposition facade only. */
+  file_path?: string;
   [key: string]: unknown;
 };
+
+export type CanonicalDocumentAsset = {
+  asset_id: string;
+  kind: "document";
+  state: string;
+  media_type?: string | null;
+  size_bytes: number;
+  sha256: string;
+  version: number;
+  expires_at?: string | null;
+};
+
+export type DocumentUploadAdmission = {
+  assets: CanonicalDocumentAsset[];
+  assetIds: string[];
+  referenceSnapshotId: string;
+};
+
+type DecomposeDocumentSource =
+  | { referenceSnapshotId: string; documentCount: number }
+  | string[];
 
 export type DocumentDecomposeJob = {
   job_id: string;
@@ -180,36 +210,90 @@ const generationPreferencesPayload = (body: GenerationPreferences) => ({
 });
 
 export class PresentationGenerationApi {
-  static async uploadDoc(documents: File[]) {
-    const formData = new FormData();
-
-    documents.forEach((document) => {
-      formData.append("files", document);
-    });
-
+  static async uploadDoc(documents: File[]): Promise<DocumentUploadAdmission> {
+    const batchKey = await canonicalUploadBatchKey(documents);
+    const admittedAssets: CanonicalDocumentAsset[] = [];
     try {
-      const response = await fetchWithNetworkRetry(
-        getApiUrl(`/api/v1/ppt/files/upload`),
+      const settled = await Promise.allSettled(
+        documents.map(async (document, index) => {
+          const formData = new FormData();
+          formData.append("file", document);
+          const response = await fetchWithNetworkRetry(
+            getApiUrl(`/api/v1/ppt/assets/documents`),
+            {
+              method: "POST",
+              headers: {
+                ...getHeaderForFormData(),
+                "Idempotency-Key": `document-upload:v1:${batchKey}:${index}`,
+              },
+              body: formData,
+              cache: "no-cache",
+            },
+          );
+          const asset = (await ApiResponseHandler.handleResponse(
+            response,
+            "Failed to upload document",
+          )) as CanonicalDocumentAsset;
+          admittedAssets.push(asset);
+          return asset;
+        }),
+      );
+      const rejected = settled.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (rejected) throw rejected.reason;
+      const assets = settled.map(
+        (result) => (result as PromiseFulfilledResult<CanonicalDocumentAsset>).value,
+      );
+      const assetIds = assets.map((asset) => asset.asset_id);
+      const snapshotResponse = await fetchWithNetworkRetry(
+        getApiUrl(`/api/v1/ppt/references/snapshots`),
         {
           method: "POST",
-          headers: getHeaderForFormData(),
-          body: formData,
+          headers: {
+            ...getHeader(),
+            "Idempotency-Key": `document-snapshot:v1:${batchKey}`,
+          },
+          body: JSON.stringify({
+            provider_id: "uploaded_document",
+            source: { asset_ids: assetIds },
+          }),
           cache: "no-cache",
         },
       );
-
-      return await ApiResponseHandler.handleResponse(
-        response,
-        "Failed to upload documents",
-      );
+      const snapshot = (await ApiResponseHandler.handleResponse(
+        snapshotResponse,
+        "Failed to admit uploaded documents",
+      )) as { snapshot_id: string };
+      rememberCanonicalAdmission(snapshot.snapshot_id, assetIds);
+      return {
+        assets,
+        assetIds,
+        referenceSnapshotId: snapshot.snapshot_id,
+      };
     } catch (error) {
+      if (admittedAssets.length > 0) {
+        await PresentationGenerationApi.cleanupDocumentAdmission({
+          assetIds: admittedAssets.map((asset) => asset.asset_id),
+        });
+      }
       console.error("Upload error:", error);
       throw error;
     }
   }
 
+  static async cleanupDocumentAdmission({
+    referenceSnapshotId,
+    assetIds,
+  }: {
+    referenceSnapshotId?: string;
+    assetIds?: string[];
+  }): Promise<void> {
+    await cleanupCanonicalDocumentAdmission({ referenceSnapshotId, assetIds });
+  }
+
   static async decomposeDocuments(
-    documentKeys: string[],
+    source: DecomposeDocumentSource,
     language?: string | null,
     options: DecomposeDocumentsOptions = {},
   ) {
@@ -225,7 +309,7 @@ export class PresentationGenerationApi {
 
     try {
       const started = await PresentationGenerationApi.startDecomposeDocuments(
-        documentKeys,
+        source,
         language,
         options,
       );
@@ -258,6 +342,11 @@ export class PresentationGenerationApi {
         job.job_id,
       );
     } catch (error) {
+      if (!Array.isArray(source)) {
+        await PresentationGenerationApi.cleanupDocumentAdmission({
+          referenceSnapshotId: source.referenceSnapshotId,
+        });
+      }
       // Navigation, an explicit cancel, and development refreshes all abort the
       // polling request intentionally. Logging that expected control flow with
       // console.error makes Next.js render a misleading runtime-error overlay.
@@ -271,7 +360,7 @@ export class PresentationGenerationApi {
   }
 
   static async startDecomposeDocuments(
-    documentKeys: string[],
+    source: DecomposeDocumentSource,
     language?: string | null,
     options: Pick<DecomposeDocumentsOptions, "signal" | "idempotencyKey"> = {},
   ): Promise<DocumentDecomposeJob> {
@@ -284,7 +373,9 @@ export class PresentationGenerationApi {
           : {}),
       },
       body: JSON.stringify({
-        file_paths: documentKeys,
+        ...(Array.isArray(source)
+          ? { file_paths: source }
+          : { reference_snapshot_id: source.referenceSnapshotId }),
         language: language ?? null,
       }),
       cache: "no-store",
@@ -296,12 +387,12 @@ export class PresentationGenerationApi {
     // job endpoint, but they can still decompose the same uploaded documents
     // through the legacy synchronous route. Keep uploads working during that
     // version-skew window instead of surfacing a raw 404 in the UI.
-    if (response.status === 404) {
+    if (response.status === 404 && Array.isArray(source)) {
       const fallbackResponse = await fetch("/api/decompose-documents", {
         method: "POST",
         headers: getHeader(),
         body: JSON.stringify({
-          file_paths: documentKeys,
+          file_paths: source,
           language: language ?? null,
         }),
         cache: "no-store",
@@ -315,8 +406,8 @@ export class PresentationGenerationApi {
         job_id: "legacy-sync",
         status: "succeeded",
         progress: {
-          completed_files: documentKeys.length,
-          total_files: documentKeys.length,
+          completed_files: source.length,
+          total_files: source.length,
         },
         result,
         error: null,
@@ -371,6 +462,7 @@ export class PresentationGenerationApi {
     content,
     n_slides,
     file_paths,
+    reference_snapshot_ids,
     language,
     tone,
     verbosity,
@@ -385,6 +477,7 @@ export class PresentationGenerationApi {
     content: string;
     n_slides: number | null;
     file_paths?: string[];
+    reference_snapshot_ids?: string[];
     language: string | null;
     tone?: string | null;
     verbosity?: string | null;
@@ -408,6 +501,7 @@ export class PresentationGenerationApi {
             content,
             n_slides,
             file_paths,
+            reference_snapshot_ids,
             language,
             tone,
             verbosity,
@@ -421,11 +515,20 @@ export class PresentationGenerationApi {
         },
       );
 
-      return await ApiResponseHandler.handleResponse(
+      const created = await ApiResponseHandler.handleResponse(
         response,
         "Failed to create presentation",
       );
+      for (const snapshotId of reference_snapshot_ids ?? []) {
+        forgetCanonicalAdmission(snapshotId);
+      }
+      return created;
     } catch (error) {
+      for (const snapshotId of reference_snapshot_ids ?? []) {
+        await PresentationGenerationApi.cleanupDocumentAdmission({
+          referenceSnapshotId: snapshotId,
+        });
+      }
       console.error("error in presentation creation", error);
       throw error;
     }

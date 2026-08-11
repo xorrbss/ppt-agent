@@ -51,6 +51,7 @@ export interface PresentationData {
   capabilities?: PresentationCapabilities;
   revision?: number;
   lifecycle_status?: string;
+  source_sha256?: string;
   fonts?: Record<string, string> | null;
 }
 

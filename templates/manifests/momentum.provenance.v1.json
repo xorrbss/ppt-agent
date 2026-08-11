@@ -1,0 +1,266 @@
+{
+  "schemaVersion": "presenton.template-package-provenance/v1",
+  "templateId": "momentum",
+  "upstream": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/momentum",
+    "commitUrl": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+    "license": {
+      "expression": "Apache-2.0",
+      "path": "LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE"
+    }
+  },
+  "extensions": [],
+  "evidenceSources": [
+    {
+      "id": "upstream-commit",
+      "type": "git-commit",
+      "url": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+      "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6"
+    },
+    {
+      "id": "upstream-license",
+      "type": "repository-license",
+      "licenseExpression": "Apache-2.0",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20"
+    },
+    {
+      "id": "google-fonts-anton-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/anton/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "ee67e6ee22790b7929f1a3769ca2801d565c64b5a9096942c1adf5596de9c9e4"
+    },
+    {
+      "id": "google-fonts-lato-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/lato/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "74ba064d03f1f1c4a952da936c3eb71866c34404916734de3cae73b34357e59e"
+    }
+  ],
+  "claims": [
+    {
+      "id": "presenton-momentum-assets-apache-2.0",
+      "status": "verified",
+      "licenseExpression": "Apache-2.0",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "upstream-license"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/freeform_10-5ff52db83610.svg",
+          "sha256": "a8f2b73db7d8e27b35b723b62171297ab0051e6e37082b3d52315808a9469199",
+          "upstreamGitBlobSha1": "31ef0e40ad10ce8cc3c8ce5e00b5853aaaeaeafd"
+        },
+        {
+          "path": "static/freeform_12-6610b7abfb3e.svg",
+          "sha256": "a235f61d5ea456a1f547cb4ad08a8b7cf9551381dfe8299e1a15a3d19ef30432",
+          "upstreamGitBlobSha1": "db526a362f942f71141482a4e8410fc1c6d92958"
+        },
+        {
+          "path": "static/freeform_14-191477057cf9.svg",
+          "sha256": "5a29c698e49f971a4c2b69ed85d1f5428b4f70216eee72fb6d29255fe7ae7716",
+          "upstreamGitBlobSha1": "280d512cccabf43095807dd0b32fc463cac57ab2"
+        },
+        {
+          "path": "static/freeform_14-f6e084c6aeb4.svg",
+          "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+          "upstreamGitBlobSha1": "0686a33a277578b04a05a148d80df76e68c16c7d"
+        },
+        {
+          "path": "static/freeform_16-fda648992de3.svg",
+          "sha256": "ba67a4110194fef20520ad9e5146d65f15d664344f4e90444cc68e7359a099f3",
+          "upstreamGitBlobSha1": "ab22ac12b1546852698fc80ceabad3a5011a3299"
+        },
+        {
+          "path": "static/freeform_18-e9c3516f8fed.svg",
+          "sha256": "12e2cac71638efb68e87622822cce259a91e9676037d13fda4cb835f555e6770",
+          "upstreamGitBlobSha1": "30d6d0c160a9ff0d1761bb33baceb8ad13c567a8"
+        },
+        {
+          "path": "static/freeform_20-f6e084c6aeb4.svg",
+          "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+          "upstreamGitBlobSha1": "0686a33a277578b04a05a148d80df76e68c16c7d"
+        },
+        {
+          "path": "static/freeform_25-f6e084c6aeb4.svg",
+          "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+          "upstreamGitBlobSha1": "0686a33a277578b04a05a148d80df76e68c16c7d"
+        },
+        {
+          "path": "static/freeform_27-5b02b270af51.svg",
+          "sha256": "b074dc106df85c2428a96fb72349f9f8bdac01e9796a8505f884b5ca525385d0",
+          "upstreamGitBlobSha1": "499d7bb5e8bbb95789631879942c3d463db07886"
+        },
+        {
+          "path": "static/freeform_3-78cd16e1bfe2.svg",
+          "sha256": "181bcb41b08343cadb2dae7e3dac647f9cd15054bec44f7e316ab199a6db4fa2",
+          "upstreamGitBlobSha1": "8106704ed160624236e38367b21a83e0a247a018"
+        },
+        {
+          "path": "static/freeform_30-db6dd6ad924e.svg",
+          "sha256": "221e7824577a4660027bb2b3d4b3e9426bcdb19b9cfd104c246159f69d11550a",
+          "upstreamGitBlobSha1": "94c68be29bcb2c678923855de7e7476761504bf4"
+        },
+        {
+          "path": "static/freeform_32-f6e084c6aeb4.svg",
+          "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+          "upstreamGitBlobSha1": "0686a33a277578b04a05a148d80df76e68c16c7d"
+        },
+        {
+          "path": "static/freeform_38-ae4c2c33ce63.svg",
+          "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+          "upstreamGitBlobSha1": "5e12baeee792790c64174e18cf8e27905bda823c"
+        },
+        {
+          "path": "static/freeform_43-ae4c2c33ce63.svg",
+          "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+          "upstreamGitBlobSha1": "5e12baeee792790c64174e18cf8e27905bda823c"
+        },
+        {
+          "path": "static/freeform_48-ae4c2c33ce63.svg",
+          "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+          "upstreamGitBlobSha1": "5e12baeee792790c64174e18cf8e27905bda823c"
+        },
+        {
+          "path": "static/freeform_53-ae4c2c33ce63.svg",
+          "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+          "upstreamGitBlobSha1": "5e12baeee792790c64174e18cf8e27905bda823c"
+        },
+        {
+          "path": "static/freeform_58-ae4c2c33ce63.svg",
+          "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+          "upstreamGitBlobSha1": "5e12baeee792790c64174e18cf8e27905bda823c"
+        },
+        {
+          "path": "static/freeform_6-3a1e52f1b7cb.svg",
+          "sha256": "a537152ae09a2f174717b48ecc02d9620c90489a427728c9e4fb7cca4feaf353",
+          "upstreamGitBlobSha1": "57624b3851a1e9b8046127033fd221e2595a5a41"
+        },
+        {
+          "path": "static/freeform_6-db6dd6ad924e.svg",
+          "sha256": "221e7824577a4660027bb2b3d4b3e9426bcdb19b9cfd104c246159f69d11550a",
+          "upstreamGitBlobSha1": "94c68be29bcb2c678923855de7e7476761504bf4"
+        },
+        {
+          "path": "static/freeform_7-4a2ec1827342.svg",
+          "sha256": "c9889d969e159b8702103c1becfbe9981a70aaa8b7740df99fe98c13b88ba222",
+          "upstreamGitBlobSha1": "4bd6ba0481e469d004b0c3b3d5cf96b679e554e8"
+        },
+        {
+          "path": "static/freeform_7-65dda011cbba.svg",
+          "sha256": "caea3bc5aeb1ddb11e25f70ada404d536cf14ccc47fa2138853322029bb74b67",
+          "upstreamGitBlobSha1": "a62b600490914a45dde6f0ae920d767f210f7b0a"
+        },
+        {
+          "path": "static/freeform_7-c0f41c5aff9a.svg",
+          "sha256": "cf505b9356b0992fd96096160aef90a6a827d965544c623b7635da2d3aa7413a",
+          "upstreamGitBlobSha1": "17db06761f1cb0f74b0cd02befec029f22ee46ec"
+        },
+        {
+          "path": "static/freeform_8-bf068a5a8090.svg",
+          "sha256": "249a306dbbb5d448a0ac898584f2c19941a9c349d258e576e43fb2b84b3f76f3",
+          "upstreamGitBlobSha1": "07a64da9c58bc1d9f698a97bf6d23d793bc86bf4"
+        },
+        {
+          "path": "static/freeform_8-f6e084c6aeb4.svg",
+          "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+          "upstreamGitBlobSha1": "0686a33a277578b04a05a148d80df76e68c16c7d"
+        },
+        {
+          "path": "static/image-d1aaebc27c487340.png",
+          "sha256": "a403e064b99255bbcf9d671dfdaa3aa284ec6b0a3aaef3c98e8b5d5fc5e165dd",
+          "upstreamGitBlobSha1": "e05c3e16e937910e02ce3a55864a5c224c75c50b"
+        },
+        {
+          "path": "static/image1-ec7808dc4b3c.png",
+          "sha256": "849d8256860b40007908eb9d0047bce4c2bbc333bb0fefb6aaee176eec66f8e7",
+          "upstreamGitBlobSha1": "29a0cbd0f286a1f99b7420a1be4ee4392f26540c"
+        },
+        {
+          "path": "static/image13-3a85e5ddc709.png",
+          "sha256": "e96b75162a657bbee6aaa9776751f9e406591f3b0793f9d965530851171364d4",
+          "upstreamGitBlobSha1": "8b511677f32e6ec869d5fe8a8a62ed7ef2c27836"
+        },
+        {
+          "path": "static/image3-28baa466293d.png",
+          "sha256": "7d9f0e39ff068b9cf7fa333728364fa13d925c5522cb14566e13b231dd5b14c0",
+          "upstreamGitBlobSha1": "efc527106133d30ed55e67c04d3dbc558a9810b8"
+        },
+        {
+          "path": "static/thumbnail.png",
+          "sha256": "c60d51fca3cee917eca0ae3a0afeefde8740a09db2e898ff717f51b490a1969b",
+          "upstreamGitBlobSha1": "55b2129346e13d47c593a272bb1732e29e449641"
+        }
+      ]
+    },
+    {
+      "id": "presenton-momentum-anton-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "google-fonts-anton-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/Anton Regular.ttf",
+          "sha256": "9c306606325bb3396711d7d1699fe45c1061ede2315fa217ae034bb0236edda7",
+          "upstreamGitBlobSha1": "f96b9334b9c5eb61de18ed6f25aa9d00a5191017",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-anton-ofl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presenton-momentum-lato-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "google-fonts-lato-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/Lato Black.ttf",
+          "sha256": "5e9f15ac21085eec7be86132e914da742a48c5617926d2a44c190d633d9c8361",
+          "upstreamGitBlobSha1": "88e7353b53f82b8a2762435c844cbc50aa10526f",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-lato-ofl"
+          ]
+        },
+        {
+          "path": "static/Lato Bold.ttf",
+          "sha256": "c559a802651543b8645c7f583e99243e600cecb944daf405fac964c0182e0f31",
+          "upstreamGitBlobSha1": "2c46399ac9108e94579dd6fa90a869c2f31d55f3",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-lato-ofl"
+          ]
+        },
+        {
+          "path": "static/Lato Regular.ttf",
+          "sha256": "87ff9cad548d1fb09328a128633e6f92c08cd7b5cad4fdd469978d5d791e6d58",
+          "upstreamGitBlobSha1": "bb470731a29d66a9c2ca18b315317e25b1f025e6",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-lato-ofl"
+          ]
+        }
+      ]
+    }
+  ]
+}

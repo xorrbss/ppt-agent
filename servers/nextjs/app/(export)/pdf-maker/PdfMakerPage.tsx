@@ -24,6 +24,11 @@ import {
 import TemplateV2GeneralSlide from "./TemplateV2GeneralSlide";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
 import { useSmartChartInjection } from "@/app/(presentation-generator)/components/useSmartChartInjection";
+import {
+  createProductionRenderArtifact,
+  renderArtifactSlides,
+  type RenderArtifact,
+} from "@/lib/render-service";
 
 const PDF_PRINT_STYLE = `
   html,
@@ -130,6 +135,9 @@ function rasterizeSvgIconsForExport(root: HTMLElement): void {
 type PresentationPageProps = {
   presentation_id: string;
   initialPresentationData?: PresentationData;
+  renderTarget?: "pdf" | "pptx";
+  renderArtifactRequired?: boolean;
+  expectedRevision?: number;
 };
 
 const SmartHtmlPdfSlide = ({
@@ -172,6 +180,9 @@ const SmartHtmlPdfSlide = ({
 const PresentationPage = ({
   presentation_id,
   initialPresentationData,
+  renderTarget,
+  renderArtifactRequired = false,
+  expectedRevision,
 }: PresentationPageProps) => {
   const pathname = usePathname();
   const normalizedInitialPresentationData = useMemo(
@@ -202,6 +213,20 @@ const PresentationPage = ({
   const presentationData =
     normalizedInitialPresentationData ?? storedPresentationData;
   const [error, setError] = useState(false);
+  const renderArtifact = useMemo<RenderArtifact | null>(() => {
+    if (!presentationData || !renderTarget) return null;
+    if (!presentationData.source_sha256) {
+      if (renderArtifactRequired) {
+        throw new Error("render_artifact_source_digest_required");
+      }
+      return null;
+    }
+    return createProductionRenderArtifact(presentationData, {
+      target: renderTarget,
+      source_sha256: presentationData.source_sha256,
+      expected_revision: expectedRevision ?? presentationData.revision,
+    });
+  }, [expectedRevision, presentationData, renderArtifactRequired, renderTarget]);
 
   useEffect(() => {
     if (normalizedInitialPresentationData) {
@@ -286,7 +311,9 @@ const PresentationPage = ({
     applyPresentationThemeTokens(element, theme);
   };
 
-  const slides = presentationData?.slides ?? [];
+  const slides = renderArtifact
+    ? renderArtifactSlides(renderArtifact)
+    : presentationData?.slides ?? [];
   const isLoading = contentLoading || slides.length === 0;
   const exportStrategy = useMemo(
     () =>
@@ -351,6 +378,10 @@ const PresentationPage = ({
           <div
             id="presentation-slides-wrapper"
             className="relative m-0 flex w-full flex-col items-center overflow-visible p-0"
+            data-render-artifact-contract={renderArtifact?.schema_version}
+            data-render-artifact-version={renderArtifact?.artifact_version}
+            data-render-artifact-target={renderArtifact?.target}
+            data-render-artifact-driver={renderArtifact?.driver_id}
           >
             {isLoading ? (
               <div className="relative m-0 flex w-full justify-center p-0">

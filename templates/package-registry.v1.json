@@ -2,23 +2,57 @@
   "schemaVersion": "presenton.template-package-registry/v1",
   "packages": [
     {
+      "templateId": "dynamic",
+      "manifest": "templates/manifests/dynamic.package.v1.json",
+      "enabled": true,
+      "discoverable": true
+    },
+    {
       "templateId": "editorial",
       "manifest": "templates/manifests/editorial.package.v1.json",
+      "enabled": true,
+      "discoverable": true
+    },
+    {
+      "templateId": "executive",
+      "manifest": "templates/manifests/executive.package.v1.json",
+      "enabled": true,
+      "discoverable": true
+    },
+    {
+      "templateId": "general",
+      "manifest": "templates/manifests/general.package.v1.json",
+      "enabled": true,
+      "discoverable": true
+    },
+    {
+      "templateId": "modern",
+      "manifest": "templates/manifests/modern.package.v1.json",
+      "enabled": true,
+      "discoverable": true
+    },
+    {
+      "templateId": "momentum",
+      "manifest": "templates/manifests/momentum.package.v1.json",
+      "enabled": true,
+      "discoverable": true
+    },
+    {
+      "templateId": "standard",
+      "manifest": "templates/manifests/standard.package.v1.json",
+      "enabled": true,
+      "discoverable": true
+    },
+    {
+      "templateId": "swift",
+      "manifest": "templates/manifests/swift.package.v1.json",
       "enabled": true,
       "discoverable": true
     }
   ],
   "legacyCompatibility": {
-    "enabled": true,
-    "templateIds": [
-      "momentum",
-      "dynamic",
-      "executive",
-      "general",
-      "modern",
-      "standard",
-      "swift"
-    ],
-    "removalCondition": "Remove only after every supported installation has an immutable package receipt and rollback-tested package migration."
+    "enabled": false,
+    "templateIds": [],
+    "removalCondition": "All bundled templates are admitted through immutable verified package receipts."
   }
 }

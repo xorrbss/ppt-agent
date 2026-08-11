@@ -83,7 +83,7 @@ def test_content_schema_is_projected_from_the_same_positioned_repeat_node() -> N
     items = positioned["properties"]["items"]
     assert items["type"] == "array"
     assert (items["minItems"], items["maxItems"]) == (1, 3)
-    assert "item_title_1" in items["items"]["properties"]
+    assert "item_title" in items["items"]["properties"]
 
 
 def test_positioned_repeat_never_duplicates_last_anchor() -> None:

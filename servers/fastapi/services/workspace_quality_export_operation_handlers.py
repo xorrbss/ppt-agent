@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
@@ -26,6 +27,13 @@ from services.presentation_publication_service import (
     PresentationPublicationConflict,
     publish_presentation_revision,
 )
+from services.presentation_export_attempt_service import (
+    terminalize_export_attempt_failed,
+)
+from services.presentation_export_capabilities import (
+    PresentationExportContractError,
+)
+from services.presentation_export_router import execute_presentation_export
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
     compensate_workspace_artifact,
@@ -43,7 +51,6 @@ from services.workspace_operation_handler_registry import (
     workspace_operation_handler_registry,
 )
 from services.workspace_operation_runner import sanitize_workspace_event_payload
-from utils.export_utils import export_presentation
 
 QUALITY_REVIEW_OPERATION_KIND = "quality.review"
 EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
@@ -380,6 +387,15 @@ class WorkspaceExportOperationHandler:
                     "stale_presentation_revision"
                 )
             title = presentation.title or "presentation"
+            operation = await session.get(WorkspaceOperation, claim.operation_id)
+            if (
+                operation is None
+                or operation.presentation_id != claim.presentation_id
+                or operation.owner_scope != claim.owner_scope
+            ):
+                raise NonRetryableWorkspaceOperationError(
+                    "workspace_export_operation_invalid"
+                )
 
         await context.progress(stage="export_rendering", percent=10)
         # Mint at execution time only. This credential is never copied into a
@@ -387,14 +403,32 @@ class WorkspaceExportOperationHandler:
         headers = await self._internal_header_provider()
         cookie_header = headers.get("Cookie") or None
         exported_source: Path | None = None
+        execution = None
         try:
-            exported = await export_presentation(
-                claim.presentation_id,
-                title=title,
-                export_as=cast(Literal["pptx", "pdf"], export_format),
-                cookie_header=cookie_header,
-            )
+            async with self._session_factory() as session:
+                execution = await execute_presentation_export(
+                    session,
+                    render_presentation_id=claim.presentation_id,
+                    attempt_presentation_id=claim.presentation_id,
+                    export_format=cast(Literal["pptx", "pdf"], export_format),
+                    expected_render_revision=claim.expected_revision,
+                    source_revision=claim.expected_revision,
+                    title=title,
+                    cookie_header=cookie_header,
+                    owner_id=claim.owner_id,
+                    owner_scope=claim.owner_scope,
+                    workspace_operation_id=claim.operation_id,
+                    request_hash=operation.request_hash,
+                    idempotency_key_hash=operation.idempotency_key_hash,
+                )
+            exported = execution.presentation
             exported_source = Path(exported.path)
+            if execution.route.result.artifact_sha256 != (
+                hashlib.sha256(exported_source.read_bytes()).hexdigest()
+            ):
+                raise PresentationExportContractError(
+                    "presentation_export_artifact_digest_mismatch"
+                )
             await context.raise_if_cancelled()
             await context.progress(stage="export_publishing", percent=80)
             async with self._session_factory() as session:
@@ -405,6 +439,13 @@ class WorkspaceExportOperationHandler:
                     presentation_id=claim.presentation_id,
                     source_revision=claim.expected_revision,
                     kind=claim.kind,
+                    export_attempt_id=execution.attempt_id,
+                    expected_source_sha256=(
+                        execution.route.result.artifact_sha256
+                    ),
+                    expected_source_size_bytes=(
+                        execution.route.result.artifact_size_bytes
+                    ),
                 )
                 try:
                     await context.raise_if_cancelled()
@@ -417,8 +458,28 @@ class WorkspaceExportOperationHandler:
                     attempt_token=claim.attempt_token,
                     fencing_token=claim.fencing_token,
                     export_format=export_format,
+                    export_source_snapshot_sha256=(
+                        execution.source_snapshot_sha256
+                    ),
+                    export_selected_adapter=(
+                        execution.route.result.selected_adapter
+                    ),
+                    export_provenance=execution.provenance,
                 )
         except WorkspaceOperationCancelled:
+            if execution is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=execution.attempt_id,
+                        expected_owner_id=execution.owner_id,
+                        expected_owner_scope=execution.owner_scope,
+                        expected_workspace_operation_id=(
+                            execution.workspace_operation_id
+                        ),
+                        failure_code="presentation_export_cancelled",
+                        failure_path=None,
+                    )
             raise
         except WorkspaceArtifactPublicationError as error:
             error_type = (
@@ -431,12 +492,70 @@ class WorkspaceExportOperationHandler:
                 }
                 else RetryableWorkspaceOperationError
             )
+            if execution is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=execution.attempt_id,
+                        expected_owner_id=execution.owner_id,
+                        expected_owner_scope=execution.owner_scope,
+                        expected_workspace_operation_id=(
+                            execution.workspace_operation_id
+                        ),
+                        failure_code=error.code,
+                        failure_path=None,
+                    )
             if error.code == "operation_lease_lost":
                 raise WorkspaceOperationLeaseLost(error.code) from error
             raise error_type(error.code) from error
         except WorkspaceOperationLeaseLost:
+            if execution is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=execution.attempt_id,
+                        expected_owner_id=execution.owner_id,
+                        expected_owner_scope=execution.owner_scope,
+                        expected_workspace_operation_id=(
+                            execution.workspace_operation_id
+                        ),
+                        failure_code="operation_lease_lost",
+                        failure_path=None,
+                    )
             raise
+        except PresentationExportContractError as error:
+            if execution is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=execution.attempt_id,
+                        expected_owner_id=execution.owner_id,
+                        expected_owner_scope=execution.owner_scope,
+                        expected_workspace_operation_id=(
+                            execution.workspace_operation_id
+                        ),
+                        failure_code=error.code,
+                        failure_path=error.path,
+                    )
+            raise NonRetryableWorkspaceOperationError(error.code) from error
         except Exception as error:
+            if execution is not None:
+                async with self._session_factory() as session:
+                    await terminalize_export_attempt_failed(
+                        session,
+                        attempt_id=execution.attempt_id,
+                        expected_owner_id=execution.owner_id,
+                        expected_owner_scope=execution.owner_scope,
+                        expected_workspace_operation_id=(
+                            execution.workspace_operation_id
+                        ),
+                        failure_code=getattr(
+                            error,
+                            "code",
+                            "presentation_export_unexpected_failure",
+                        ),
+                        failure_path=getattr(error, "path", None),
+                    )
             raise RetryableWorkspaceOperationError("presentation_export_failed") from error
         finally:
             # The renderer output is only a staging source. The immutable,

@@ -91,7 +91,7 @@ def test_generate_template_rejects_incomplete_inputs(layouts, images, message):
         )
 
 
-def test_build_generated_slide_validates_content_and_preserves_full_native_ui():
+def test_build_generated_slide_validates_content_and_hydrates_full_native_ui():
     layout = _slide_layout()
     original = deepcopy(layout.model_dump(mode="json"))
 
@@ -99,12 +99,93 @@ def test_build_generated_slide_validates_content_and_preserves_full_native_ui():
 
     assert generated.layout_id == "title-slide"
     assert generated.content == {"hero": {"title": "Phase 1"}}
-    assert generated.ui == original
+    assert generated.ui != original
+    assert generated.ui["components"][0]["elements"][0]["runs"][0]["text"] == "Phase 1"
+    assert layout.model_dump(mode="json") == original
 
     layout.components[0].elements[0].runs[0].text = "changed later"
-    assert generated.ui == original
+    assert generated.ui["components"][0]["elements"][0]["runs"][0]["text"] == "Phase 1"
 
 
 def test_build_generated_slide_rejects_content_outside_layout_contract():
     with pytest.raises(ValidationError):
         build_generated_slide(_slide_layout(), {"unknown": "not editable"})
+
+
+def test_build_generated_slide_hydrates_regular_and_positioned_group_repeats():
+    layout = SlideLayout.model_validate(
+        {
+            "id": "repeated-content",
+            "description": "Regular cards and irregular staggered callouts.",
+            "components": [
+                {
+                    "id": "regular",
+                    "description": "A regular row of repeatable cards.",
+                    "position": {"x": 0, "y": 0},
+                    "elements": [
+                        {
+                            "type": "flex",
+                            "name": "cards",
+                            "direction": "row",
+                            "min_children": 1,
+                            "max_children": 3,
+                            "children": [
+                                {
+                                    "type": "group",
+                                    "name": "card",
+                                    "children": [_text_element("card_title")],
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "id": "irregular",
+                    "description": "A center-out staggered callout sequence.",
+                    "position": {"x": 0, "y": 120},
+                    "elements": [
+                        {
+                            "type": "group",
+                            "name": f"callout_{index}",
+                            "position": {"x": x, "y": y},
+                            "children": [_text_element(f"item_title_{index}")],
+                        }
+                        for index, (x, y) in enumerate(
+                            ((320, 60), (120, 10), (520, 120)),
+                            start=1,
+                        )
+                    ],
+                },
+            ],
+        }
+    )
+
+    generated = build_generated_slide(
+        layout,
+        {
+            "regular": {
+                "cards": [
+                    {"card_title": "Alpha"},
+                    {"card_title": "Beta"},
+                ]
+            },
+            "irregular": {
+                "items": [
+                    {"item_title": "Center"},
+                    {"item_title": "Upper"},
+                ]
+            },
+        },
+    )
+
+    regular = generated.ui["components"][0]["elements"][0]["children"]
+    irregular = generated.ui["components"][1]["elements"]
+    assert [item["children"][0]["runs"][0]["text"] for item in regular] == [
+        "Alpha",
+        "Beta",
+    ]
+    assert [item["position"]["x"] for item in irregular] == [320.0, 120.0]
+    assert [item["children"][0]["runs"][0]["text"] for item in irregular] == [
+        "Center",
+        "Upper",
+    ]

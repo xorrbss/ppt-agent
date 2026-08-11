@@ -61,6 +61,12 @@ class PresentationModel(SQLModel, table=True):
     language: str
     title: Optional[str] = None
     file_paths: Optional[List[str]] = Field(sa_column=Column(JSON), default=None)
+    # Canonical document inputs. New upload/outline/generation flows persist
+    # only immutable snapshot identities; ``file_paths`` remains a rolling
+    # compatibility facade for presentations created by older clients.
+    reference_snapshot_ids: Optional[List[str]] = Field(
+        sa_column=Column(JSON), default=None
+    )
     outlines: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     created_at: datetime = Field(
         sa_column=Column(
@@ -191,6 +197,7 @@ class PresentationModel(SQLModel, table=True):
             language=self.language,
             title=self.title,
             file_paths=self.file_paths,
+            reference_snapshot_ids=self.reference_snapshot_ids,
             outlines=self.outlines,
             layout=self.layout,
             structure=self.structure,

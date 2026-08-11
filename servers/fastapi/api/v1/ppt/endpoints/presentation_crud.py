@@ -24,7 +24,10 @@ from sqlalchemy.orm import defer
 from sqlmodel import select
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
-from constants.presentation import MAX_NUMBER_OF_SLIDES
+from constants.presentation import (
+    DEFAULT_ATTACHMENT_GENERATION_PROMPT,
+    MAX_NUMBER_OF_SLIDES,
+)
 from enums.tone import Tone
 from enums.verbosity import Verbosity
 from models.presentation_generation_info import (
@@ -52,6 +55,11 @@ from services.presentation_deletion_service import (
     is_retryable_sqlite_lock,
 )
 from services.presentation_access_service import require_live_presentation
+from services.references import (
+    ReferenceProviderError,
+    admit_reference_snapshots,
+    claim_reference_snapshots,
+)
 from services.workspace_asset_service import (
     import_workspace_document_asset,
     inspect_workspace_document_asset,
@@ -294,13 +302,59 @@ async def get_presentation_generation_info(
 ):
     presentation = await require_live_presentation(sql_session, id)
 
-    attachment_file_names = [
-        file_name
-        for file_path in presentation.file_paths or []
-        if (file_name := _attachment_file_name(file_path))
-    ]
+    prompt = presentation.content
+    generation_operation = await sql_session.scalar(
+        select(WorkspaceOperation)
+        .where(
+            WorkspaceOperation.presentation_id == id,
+            WorkspaceOperation.kind == "presentation.generate",
+        )
+        .order_by(
+            WorkspaceOperation.anchor_position.asc(),
+            WorkspaceOperation.created_at.asc(),
+        )
+        .limit(1)
+    )
+    if generation_operation is not None:
+        # Once a workspace generation exists, ``presentation.content`` may
+        # contain the generated outline rather than the user's original input.
+        # Do not present that outline (or the automatic attachment fallback)
+        # as though it were the original prompt.
+        prompt = ""
+        original_prompt = generation_operation.request_payload.get("prompt")
+        if (
+            isinstance(original_prompt, str)
+            and original_prompt.strip()
+            and original_prompt.strip() != DEFAULT_ATTACHMENT_GENERATION_PROMPT
+        ):
+            prompt = original_prompt
+
+    attachment_file_names: list[str] = []
+    if presentation.reference_snapshot_ids:
+        try:
+            snapshots = await admit_reference_snapshots(
+                sql_session,
+                snapshot_ids=[
+                    uuid.UUID(str(snapshot_id))
+                    for snapshot_id in presentation.reference_snapshot_ids
+                ],
+            )
+            attachment_file_names = [
+                str(document.get("name") or "Uploaded document")
+                for snapshot in snapshots
+                for document in snapshot.payload().get("documents", [])
+                if isinstance(document, dict)
+            ]
+        except (ReferenceProviderError, ValueError):
+            attachment_file_names = []
+    else:
+        attachment_file_names = [
+            file_name
+            for file_path in presentation.file_paths or []
+            if (file_name := _attachment_file_name(file_path))
+        ]
     return PresentationGenerationInfo(
-        prompt=presentation.content,
+        prompt=prompt,
         attachment_file_names=attachment_file_names,
         settings=PresentationGenerationSettings(
             n_slides=presentation.n_slides,
@@ -380,6 +434,7 @@ async def create_presentation(
     n_slides: Annotated[Optional[int], Body()] = None,
     language: Annotated[Optional[str], Body()] = None,
     file_paths: Annotated[Optional[List[str]], Body()] = None,
+    reference_snapshot_ids: Annotated[Optional[List[uuid.UUID]], Body()] = None,
     tone: Annotated[Tone, Body()] = Tone.DEFAULT,
     verbosity: Annotated[Verbosity, Body()] = Verbosity.STANDARD,
     instructions: Annotated[Optional[str], Body()] = None,
@@ -397,8 +452,44 @@ async def create_presentation(
     resolved_theme = (
         _normalize_presentation_create_theme(theme) if chat_first_enabled else None
     )
+    if file_paths and reference_snapshot_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="presentation_document_source_conflict",
+        )
     if file_paths:
         file_paths = validate_document_paths(file_paths)
+    admitted_snapshots = ()
+    canonical_asset_ids: list[uuid.UUID] = []
+    if reference_snapshot_ids:
+        try:
+            admitted_snapshots = await admit_reference_snapshots(
+                sql_session,
+                snapshot_ids=reference_snapshot_ids,
+            )
+        except ReferenceProviderError as error:
+            raise HTTPException(
+                status_code=error.status_code,
+                detail=error.code,
+            ) from error
+        if any(
+            snapshot.provider_id != "uploaded_document"
+            for snapshot in admitted_snapshots
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="uploaded_reference_snapshot_required",
+            )
+        canonical_asset_ids = [
+            binding.asset_id
+            for snapshot in admitted_snapshots
+            for binding in snapshot.asset_bindings
+        ]
+        if len(canonical_asset_ids) != len(set(canonical_asset_ids)):
+            raise HTTPException(
+                status_code=400,
+                detail="duplicate_reference_asset",
+            )
 
     if n_slides is not None and n_slides < 1:
         raise HTTPException(
@@ -440,6 +531,11 @@ async def create_presentation(
         n_slides=n_slides_to_store,
         language=language_to_store,
         file_paths=file_paths,
+        reference_snapshot_ids=(
+            [str(snapshot_id) for snapshot_id in reference_snapshot_ids]
+            if reference_snapshot_ids
+            else None
+        ),
         tone=tone.value,
         verbosity=verbosity.value,
         instructions=instructions,
@@ -477,6 +573,10 @@ async def create_presentation(
                     ),
                 }
             )
+        if reference_snapshot_ids:
+            settings["reference_snapshot_ids"] = [
+                str(snapshot_id) for snapshot_id in reference_snapshot_ids
+            ]
         asset_ids: list[uuid.UUID] = []
         imported_paths = []
         try:
@@ -527,7 +627,23 @@ async def create_presentation(
                         "asset_ids", []
                     )
                 ]
-                if len(existing_asset_ids) != len(file_paths or []):
+                expected_reference_ids = [
+                    str(snapshot_id) for snapshot_id in reference_snapshot_ids or []
+                ]
+                if (
+                    list(existing_presentation.reference_snapshot_ids or [])
+                    != expected_reference_ids
+                ):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="idempotency_key_payload_conflict",
+                    )
+                expected_asset_count = (
+                    len(canonical_asset_ids)
+                    if reference_snapshot_ids
+                    else len(file_paths or [])
+                )
+                if len(existing_asset_ids) != expected_asset_count:
                     raise HTTPException(
                         status_code=409,
                         detail="idempotency_key_payload_conflict",
@@ -565,10 +681,16 @@ async def create_presentation(
                             status_code=409,
                             detail="idempotency_key_payload_conflict",
                         )
+                if reference_snapshot_ids and existing_asset_ids != canonical_asset_ids:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="idempotency_key_payload_conflict",
+                    )
                 asset_ids = existing_asset_ids
                 presentation = existing_presentation
             else:
                 durable_file_paths: list[str] = []
+                asset_ids.extend(canonical_asset_ids)
                 for path in file_paths or []:
                     asset, durable_path = await import_workspace_document_asset(
                         sql_session,
@@ -581,7 +703,7 @@ async def create_presentation(
                 presentation.file_paths = durable_file_paths or None
                 sql_session.add(presentation)
                 await sql_session.flush()
-            await bootstrap_workspace(
+            conversation, _message, _operation, _replayed = await bootstrap_workspace(
                 sql_session,
                 presentation_id=resolved_presentation_id,
                 request=WorkspaceBootstrapRequest(
@@ -589,7 +711,7 @@ async def create_presentation(
                     prompt=(
                         content
                         if content.strip()
-                        else "Generate a presentation from the attached files."
+                        else DEFAULT_ATTACHMENT_GENERATION_PROMPT
                     ),
                     generation_settings=settings,
                     asset_ids=asset_ids,
@@ -599,8 +721,26 @@ async def create_presentation(
                 initial_state="awaiting_approval",
                 commit=False,
             )
+            if reference_snapshot_ids:
+                await claim_reference_snapshots(
+                    sql_session,
+                    snapshot_ids=reference_snapshot_ids,
+                    conversation_id=conversation.id,
+                )
             await sql_session.commit()
         except WorkspaceServiceError as error:
+            await sql_session.rollback()
+            for path in imported_paths:
+                path.unlink(missing_ok=True)
+                try:
+                    path.parent.rmdir()
+                except OSError:
+                    pass
+            raise HTTPException(
+                status_code=error.status_code,
+                detail=error.code,
+            ) from error
+        except ReferenceProviderError as error:
             await sql_session.rollback()
             for path in imported_paths:
                 path.unlink(missing_ok=True)

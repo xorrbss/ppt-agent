@@ -47,7 +47,9 @@ The `live-intake` job in `upstream-intake.yml` runs on a daily schedule at
 **02:17 UTC** (`cron: "17 2 * * *"`). The job:
 
 - Queries the official `presenton/presenton:main` GitHub API branch head
-- Compares against the local baseline SHA in `compatibility/upstream-intake-policy.json`
+- Compares against the intake accepted baseline SHA in
+  `compatibility/upstream-intake-policy.json` (separate from the checked-out
+  compatibility baseline)
 - Generates a JSON report and Markdown step summary in the `reports/` directory
 - Retains artifacts for 14 days
 - Opens or updates a single rolling issue (label: `upstream-intake`) when drift is detected

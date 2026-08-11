@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "presenton.template-package-provenance/v1",
+  "templateId": "modern",
+  "upstream": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/modern",
+    "commitUrl": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+    "license": {
+      "expression": "Apache-2.0",
+      "path": "LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE"
+    }
+  },
+  "extensions": [
+    {
+      "path": "static/Montserrat Regular.ttf",
+      "kind": "added",
+      "reason": "Pinned local font replacement for the upstream Google Fonts stylesheet alias.",
+      "sourceRepository": "https://github.com/google/fonts",
+      "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sourcePath": "ofl/montserrat/Montserrat[wght].ttf",
+      "sourceSha256": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+      "sourceGitBlobSha1": "c97aca18592834d8706549c279cb8d5ac5d85f69"
+    }
+  ],
+  "evidenceSources": [
+    {
+      "id": "upstream-commit",
+      "type": "git-commit",
+      "url": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+      "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6"
+    },
+    {
+      "id": "upstream-license",
+      "type": "repository-license",
+      "licenseExpression": "Apache-2.0",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20"
+    },
+    {
+      "id": "google-fonts-commit",
+      "type": "git-commit",
+      "url": "https://github.com/google/fonts/commit/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5"
+    },
+    {
+      "id": "google-fonts-montserrat-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/montserrat/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e"
+    }
+  ],
+  "claims": [
+    {
+      "id": "presenton-modern-assets-apache-2.0",
+      "status": "verified",
+      "licenseExpression": "Apache-2.0",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "upstream-license"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/thumbnail.png",
+          "sha256": "d371cc7a268cd7b7cedb8913527cbf7200ab440f6d9000abb49445c8e3944e5c",
+          "upstreamGitBlobSha1": "5131c450d23f03c9df476fb87140387046fe6f43"
+        }
+      ]
+    },
+    {
+      "id": "presenton-modern-montserrat-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "google-fonts-commit",
+        "google-fonts-montserrat-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/Montserrat Regular.ttf",
+          "sha256": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+          "upstreamGitBlobSha1": "c97aca18592834d8706549c279cb8d5ac5d85f69",
+          "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+          "sourcePath": "ofl/montserrat/Montserrat[wght].ttf",
+          "evidenceSourceIds": [
+            "google-fonts-commit",
+            "google-fonts-montserrat-ofl"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -18,7 +18,7 @@ from .models.layouts import RawSlideLayout
 JSON_SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
 CONTENT_TYPES = {"text", "math", "image", "text-list", "table", "chart", "infographic"}
 CHART_TYPE_VALUES = [chart_type.value for chart_type in ChartType]
-_REPEATED_SUFFIX = re.compile(r"_\d+$")
+_REPEATED_SUFFIX = re.compile(r"_\d+(?=_|$)")
 
 
 def extract_slide_schema_from_layout(layout: RawSlideLayout) -> dict[str, Any]:
@@ -42,6 +42,20 @@ def get_component_schema(component: Any | Mapping[str, Any]) -> dict[str, Any] |
         "properties": properties,
         "required": list(properties),
     }
+
+
+def get_repeated_top_level_group_schema_name(elements: list[Any]) -> str | None:
+    """Return the content-array name for one repeated positioned group region.
+
+    This is intentionally derived by the same schema projection used during
+    generation.  Callers must not infer a repeat from visual similarity alone.
+    """
+
+    repeated = _component_repeated_top_level_group_node(
+        elements,
+        path="elements",
+    )
+    return repeated[0] if repeated is not None else None
 
 
 def get_template_schema(
@@ -307,7 +321,7 @@ def _normalize_repeated_schema(
 
 
 def _strip_repeated_suffix(value: str, suffix: str | None) -> str:
-    return value[: -len(suffix)] if suffix and value.endswith(suffix) else value
+    return value.replace(suffix, "", 1) if suffix and suffix in value else value
 
 
 def _add_property(
@@ -406,6 +420,10 @@ def _component_nodes_for_elements(
     *,
     path: str = "elements",
 ) -> list[tuple[str, dict[str, Any]]]:
+    repeated = _component_repeated_top_level_group_node(elements, path=path)
+    if repeated is not None:
+        return [repeated]
+
     nodes: list[tuple[str, dict[str, Any]]] = []
     for index, value in enumerate(elements):
         if isinstance(value, Mapping):
@@ -460,12 +478,49 @@ def _component_nodes_for_element(
         child_nodes = [node for node_set in child_node_sets for node in node_set]
         if name is None or not child_nodes:
             return child_nodes
-        if element_type in {"flex", "grid"}:
+        supports_repeated_children = element_type in {"flex", "grid"} or (
+            element_type == "group"
+            and all(
+                isinstance(child, Mapping) and child.get("type") == "group"
+                for child in children
+            )
+        )
+        if supports_repeated_children:
             repeated = _component_repeated_schema(element, child_node_sets)
             if repeated is not None:
                 return [(name, repeated)]
         return [(name, _component_object_schema(child_nodes))]
     return []
+
+
+def _component_repeated_top_level_group_node(
+    elements: list[Any],
+    *,
+    path: str,
+) -> tuple[str, dict[str, Any]] | None:
+    groups = [dict(element) for element in elements if isinstance(element, Mapping)]
+    if (
+        len(groups) != len(elements)
+        or not groups
+        or any(group.get("type") != "group" for group in groups)
+    ):
+        return None
+
+    node_sets = [
+        _component_nodes_for_element(group, path=f"{path}.{index}")
+        for index, group in enumerate(groups)
+    ]
+    repeated = _component_repeated_schema(
+        {"type": "group", "children": groups},
+        node_sets,
+    )
+    if repeated is None or not node_sets[0]:
+        return None
+    first_name = node_sets[0][0][0]
+    return _strip_repeated_suffix(
+        first_name,
+        _repeated_suffix(first_name),
+    ), repeated
 
 
 def _component_object_schema(
@@ -512,8 +567,16 @@ def _component_repeated_schema(
     return _compact(
         {
             "type": "array",
-            "minItems": element.get("min_children"),
-            "maxItems": element.get("max_children"),
+            "minItems": (
+                max(1, len(child_node_sets) // 2)
+                if element.get("type") == "group"
+                else element.get("min_children")
+            ),
+            "maxItems": (
+                len(child_node_sets)
+                if element.get("type") == "group"
+                else element.get("max_children")
+            ),
             "items": normalized_items[0],
         }
     )

@@ -6,8 +6,10 @@ from utils.available_models import list_available_openai_compatible_models
 OPENAI_ROUTER = APIRouter(prefix="/openai", tags=["OpenAI"])
 
 
-@OPENAI_ROUTER.post("/models/available", response_model=List[str])
-async def get_available_models(
+@OPENAI_ROUTER.post(
+    "/models/available", response_model=List[str], name="get_available_openai_models"
+)
+async def get_available_openai_models(
     url: Annotated[str, Body()],
     api_key: Annotated[str, Body()],
 ):

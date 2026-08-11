@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "presenton.template-package/v1",
+  "packageVersion": "1.2.0",
+  "templateId": "modern",
+  "sourceRoot": "templates/modern",
+  "entrypoint": {
+    "path": "template.json",
+    "sha256": "be6722f9cc2ca452e4850ffa8fecc31129655899460689b73a3d3b004378f217",
+    "sizeBytes": 448561,
+    "mediaType": "application/json"
+  },
+  "engine": {
+    "id": "presenton.template-v2-json",
+    "contractVersion": "1",
+    "contractPath": "contracts/template_package/engines/template-v2-json.v1.json",
+    "contractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+    "requiredCapabilities": [
+      "asset.local-font",
+      "asset.raster-image",
+      "asset.safe-svg",
+      "chart.area",
+      "chart.bar",
+      "chart.line",
+      "chart.pie",
+      "chart.scatter",
+      "element.container",
+      "element.group",
+      "element.image",
+      "element.infographic",
+      "element.table",
+      "element.text",
+      "element.text-list",
+      "element.vector",
+      "layout.flex",
+      "layout.grid",
+      "normalization.legacy-authoring-extras",
+      "normalization.legacy-infographic-colors",
+      "repeat.flow",
+      "repeat.positioned"
+    ]
+  },
+  "presentation": {
+    "width": 1280,
+    "height": 720
+  },
+  "assets": {
+    "inventoryPath": "templates/manifests/modern.assets.v1.json",
+    "inventorySha256": "3629d30deac9b54523d72746aeee7368d5de79a78b8c1b798c43145769f3edbc",
+    "count": 2,
+    "totalSizeBytes": 1268652
+  },
+  "fonts": {
+    "faces": [
+      "static/Montserrat Regular.ttf"
+    ],
+    "aliases": {
+      "Montserrat": "static/Montserrat Regular.ttf"
+    },
+    "unresolvedAliases": []
+  },
+  "license": {
+    "status": "approved",
+    "expression": "Apache-2.0 AND OFL-1.1",
+    "rightsEvidenceId": "presenton-modern-assets-apache-2.0"
+  },
+  "provenance": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/modern",
+    "sourceFileCount": 3,
+    "sourceInventorySha256": "3629d30deac9b54523d72746aeee7368d5de79a78b8c1b798c43145769f3edbc",
+    "evidencePath": "templates/manifests/modern.provenance.v1.json",
+    "evidenceSha256": "eff531c9a84b5df6a9dca636c51410a6571bff7cdfaacbf191a76e1d80ff3522",
+    "extensions": [
+      {
+        "path": "static/Montserrat Regular.ttf",
+        "kind": "added",
+        "reason": "Pinned local font replacement for the upstream Google Fonts stylesheet alias.",
+        "sourceRepository": "https://github.com/google/fonts",
+        "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+        "sourcePath": "ofl/montserrat/Montserrat[wght].ttf",
+        "sourceSha256": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+        "sourceGitBlobSha1": "c97aca18592834d8706549c279cb8d5ac5d85f69"
+      }
+    ]
+  },
+  "thumbnail": {
+    "assetPath": "static/thumbnail.png",
+    "sha256": "d371cc7a268cd7b7cedb8913527cbf7200ab440f6d9000abb49445c8e3944e5c",
+    "width": 1280,
+    "height": 720
+  },
+  "rendererSmoke": {
+    "receiptPath": "templates/manifests/modern.renderer-smoke.v1.json",
+    "receiptSha256": "03d8bf9c07af8e092d5616b5efa2c76e3acf2e08ddd8c26e9b5245ca286b59bc"
+  },
+  "browserGolden": {
+    "receiptPath": "templates/manifests/modern.browser-golden.v1.json",
+    "receiptSha256": "0b76ee66f9e7138df2036f5353db38befff22a70b734f05569a26b8552b3c4ce"
+  },
+  "publication": {
+    "status": "ready",
+    "default": false,
+    "blockers": []
+  }
+}

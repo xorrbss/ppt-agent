@@ -53,7 +53,7 @@ describe("PresentationGenerationApi.createPresentation", () => {
       PresentationGenerationApi.createPresentation({
         presentation_id: "presentation-1",
         idempotency_key: "presentation-create:presentation-1",
-        content: "Build a brand deck",
+        content: "첨부 자료를 바탕으로 한글 제안서를 만들어 줘.",
         n_slides: 8,
         file_paths: [],
         language: "Korean",
@@ -67,7 +67,7 @@ describe("PresentationGenerationApi.createPresentation", () => {
       });
       expect(request.body).to.deep.equal({
         presentation_id: "presentation-1",
-        content: "Build a brand deck",
+        content: "첨부 자료를 바탕으로 한글 제안서를 만들어 줘.",
         n_slides: 8,
         file_paths: [],
         language: "Korean",

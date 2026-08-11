@@ -22,6 +22,8 @@
     "test:chat-first-deployment-config": "node scripts/check-chat-first-deployment-config.mjs",
     "test:file-size-ratchet": "node scripts/check-file-size-ratchet.mjs",
     "test:next-ci": "npm run test:file-size-ratchet && npm run test:chat-first-deployment-config && npm run test:settings-registry && npm run check:provider-registry && npm run check:template-package && node --test scripts/ppt-agent.test.mjs scripts/presenton-local-proxy.test.mjs scripts/check-file-size-ratchet.test.mjs scripts/required-ci-contract.test.mjs scripts/verify-upstream-byte-parity.test.mjs && npm --prefix servers/nextjs run test:ci-node",
+    "check:upstream-byte-parity": "node scripts/verify-upstream-byte-parity.mjs --tree HEAD",
+    "check:upstream-byte-parity:working-tree": "node scripts/verify-upstream-byte-parity.mjs --working-tree",
     "test:upstream-byte-parity": "node --test scripts/verify-upstream-byte-parity.test.mjs",
     "test:workspace-e2e": "npm --prefix servers/nextjs run test:workspace-e2e",
     "test:local": "node scripts/test-local.mjs"

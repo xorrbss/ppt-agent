@@ -39,6 +39,19 @@ def validate_rights_evidence(
     ):
         raise TemplatePackageValidationError("template_package_provenance_invalid")
 
+    declared_extensions = {
+        extension.path: extension
+        for extension in manifest.provenance.extensions
+    }
+    if len(declared_extensions) != len(manifest.provenance.extensions):
+        raise TemplatePackageValidationError("template_package_provenance_extension_invalid")
+    evidence_extensions = evidence.get("extensions", [])
+    if evidence_extensions != [
+        extension.model_dump(mode="json", by_alias=True)
+        for extension in manifest.provenance.extensions
+    ]:
+        raise TemplatePackageValidationError("template_package_provenance_extension_invalid")
+
     source_by_id: dict[str, dict[str, Any]] = {}
     for source in sources:
         if not isinstance(source, dict):
@@ -159,6 +172,15 @@ def validate_rights_evidence(
             digest = item.get("sha256")
             blob = item.get("upstreamGitBlobSha1")
             item_refs = item.get("evidenceSourceIds", claim_refs)
+            extension = declared_extensions.get(str(path))
+            source_commit_sha = item.get(
+                "sourceCommitSha",
+                extension.source_commit_sha if extension is not None else manifest.provenance.commit_sha,
+            )
+            source_path = item.get(
+                "sourcePath",
+                extension.source_path if extension is not None else path,
+            )
             if (
                 not isinstance(path, str)
                 or not isinstance(digest, str)
@@ -169,10 +191,22 @@ def validate_rights_evidence(
                 or len(item_refs) != len(set(item_refs))
                 or any(not isinstance(ref, str) or ref not in source_by_id for ref in item_refs)
                 or not set(item_refs).issubset(set(claim_refs))
+                or not isinstance(source_path, str)
+                or not source_path
+                or (extension is not None and source_path != extension.source_path)
+                or (extension is not None and source_commit_sha != extension.source_commit_sha)
+                or (
+                    extension is not None
+                    and extension.kind == "added"
+                    and (
+                        digest != extension.source_sha256
+                        or blob != extension.source_git_blob_sha1
+                    )
+                )
                 or not any(
                     source_by_id[ref].get("type") == "git-commit"
                     and source_by_id[ref].get("commitSha")
-                    == manifest.provenance.commit_sha
+                    == source_commit_sha
                     for ref in item_refs
                 )
                 or not any(

@@ -1,0 +1,4609 @@
+{
+  "schemaVersion": "presenton.template-v2-pdf-golden/v1",
+  "status": "passed",
+  "generatedAt": "2026-08-11T11:08:23.145Z",
+  "scope": "full",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "dpi": 96
+  },
+  "thresholds": {
+    "meanAbsoluteError": 0.03,
+    "perceptualBadPixelRatio": 0.07,
+    "perceptualPixelDelta": 0.08,
+    "ssim": 0.9,
+    "largestBadComponent": 25000,
+    "textBboxMeanAbsoluteError": 0.25,
+    "textBboxOutOfBounds": 0
+  },
+  "thresholdPolicy": {
+    "calibration": {
+      "basis": "Existing 158 browser PNG baselines rendered through presentation-export v0.4.3 and Poppler at 96 DPI; thresholds bound observed Chrome print/Poppler antialiasing without accepting page compositing drift.",
+      "initialCandidate": {
+        "meanAbsoluteError": 0.03,
+        "perceptualBadPixelRatio": 0.05,
+        "ssim": 0.92,
+        "largestBadComponent": 25000,
+        "textBboxMeanAbsoluteError": 0.2,
+        "textBboxOutOfBounds": 0
+      },
+      "effective": {
+        "meanAbsoluteError": 0.03,
+        "perceptualBadPixelRatio": 0.07,
+        "perceptualPixelDelta": 0.08,
+        "ssim": 0.9,
+        "largestBadComponent": 25000,
+        "textBboxMeanAbsoluteError": 0.25,
+        "textBboxOutOfBounds": 0
+      },
+      "changes": [
+        "perceptualBadPixelRatio 0.05 -> 0.07 for Poppler/browser edge antialiasing",
+        "ssim 0.92 -> 0.90 for text rasterization variance",
+        "textBboxMeanAbsoluteError 0.20 -> 0.25 for localized glyph rasterization variance"
+      ],
+      "observedMaxima": {
+        "meanAbsoluteErrorAverage": 0.01114852,
+        "meanAbsoluteErrorMaximum": 0.02916859,
+        "perceptualBadPixelRatioAverage": 0.02690852,
+        "perceptualBadPixelRatioMaximum": 0.0671951,
+        "ssimMinimum": 0.9057397,
+        "largestBadComponentMaximum": 11663,
+        "textBboxMeanAbsoluteErrorMaximum": 0.24169644,
+        "textBboxCount": 2810,
+        "textBboxOutOfBounds": 4
+      }
+    },
+    "textLayout": {
+      "default": "Fail closed at 0 out-of-bounds text ranges, 0 clipped direct-text elements, and 0 overflowing direct-text elements.",
+      "knownObservationDefinitions": [
+        {
+          "layout": "momentum/title_with_side_callouts_2594",
+          "code": "known-momentum-side-callout-glyph-bounds-v1",
+          "reason": "Four transformed side-callout glyph ranges extend beyond the slide by browser Range geometry while the committed browser PNG remains clipped to the 1280x720 canvas.",
+          "evidence": "templates/manifests/momentum.browser-golden/04-title_with_side_callouts_2594.png",
+          "maxOutOfBounds": 4,
+          "maxClippedText": 4,
+          "maxOverflowElements": 4
+        }
+      ],
+      "acceptedKnownObservations": [
+        {
+          "templateId": "momentum",
+          "layoutId": "title_with_side_callouts_2594",
+          "code": "known-momentum-side-callout-glyph-bounds-v1",
+          "reason": "Four transformed side-callout glyph ranges extend beyond the slide by browser Range geometry while the committed browser PNG remains clipped to the 1280x720 canvas.",
+          "evidence": "templates/manifests/momentum.browser-golden/04-title_with_side_callouts_2594.png",
+          "maxOutOfBounds": 4,
+          "maxClippedText": 4,
+          "maxOverflowElements": 4,
+          "observed": {
+            "outOfBounds": 4,
+            "clippedText": 4,
+            "overflowElements": 4
+          }
+        }
+      ]
+    }
+  },
+  "baseline": {
+    "kind": "existing-browser-png-only",
+    "duplicatePdfOrPngBaselines": false,
+    "totalLayouts": 158,
+    "rendererSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+    "templates": [
+      {
+        "templateId": "dynamic",
+        "templateSha256": "bf772065cbfb5a92fe0f33625bc9d88a47a2c7f0a92321dc007998a970749ad8",
+        "browserGoldenManifestSha256": "c734b7a11be7effeab652138144503f9aede84e4fbeeeee402da07aa9d3af1ca",
+        "layoutCount": 32
+      },
+      {
+        "templateId": "editorial",
+        "templateSha256": "83dfc203630ae8986472ca3ec545be4dea917bf29c7ebfccba73ba1189f56a16",
+        "browserGoldenManifestSha256": "7892ad0b6b495ee923a9a0eca117f969c53dc679ea8ff4d96c86e048e040bd6b",
+        "layoutCount": 24
+      },
+      {
+        "templateId": "executive",
+        "templateSha256": "e661c168dea545f5b5df56b231de48a50236a09941b26fdeb581e7f8a91ee622",
+        "browserGoldenManifestSha256": "283fe844f6d29cc27c5c2bcd472b6aeaf3bbdde0495f645b8d0758ff2188699e",
+        "layoutCount": 32
+      },
+      {
+        "templateId": "general",
+        "templateSha256": "e3857fd52e8692e4a12bc2dd5b3069a5dad661196f9d62674c841e0bfd6c86f7",
+        "browserGoldenManifestSha256": "13fba1d4ebbf4018219b1e003a88367688918ecdadb6f679c6b18a6149d5dee3",
+        "layoutCount": 12
+      },
+      {
+        "templateId": "modern",
+        "templateSha256": "be6722f9cc2ca452e4850ffa8fecc31129655899460689b73a3d3b004378f217",
+        "browserGoldenManifestSha256": "0b76ee66f9e7138df2036f5353db38befff22a70b734f05569a26b8552b3c4ce",
+        "layoutCount": 10
+      },
+      {
+        "templateId": "momentum",
+        "templateSha256": "07d15e7283ab4f9ae5b0ff70cef306bdc5cfaea801e1b92e04ea41747b6c5e53",
+        "browserGoldenManifestSha256": "b3728d502f1da47d4d0363cab59702860ea134783bc1eda92087b24504eff022",
+        "layoutCount": 28
+      },
+      {
+        "templateId": "standard",
+        "templateSha256": "faa31b44f9c5997715fea1f0bbaf84d0ededa30e5aaa31bd3629b9a6112a9e69",
+        "browserGoldenManifestSha256": "67c5f0c1a755e1f61a2ec14757e1f0ab6d88068c7c5e86ab5176b3071c8736e0",
+        "layoutCount": 11
+      },
+      {
+        "templateId": "swift",
+        "templateSha256": "1992d63d104ddae4a51cdd70c0afb6f2b03f12e5c6fc9512866673e578bb0619",
+        "browserGoldenManifestSha256": "cae407e7e0c870103e7987bdd48651b8203d993057f0a9eb0ca7dfca6e180b38",
+        "layoutCount": 9
+      }
+    ]
+  },
+  "provenance": {
+    "presentationExport": {
+      "version": "v0.4.3",
+      "entrypointSha256": "f64b6fb2f8aeed76f03036b657eeb4716b3f8511a61eec4114ea3dd29b6afd9f",
+      "converter": {
+        "path": "presentation-export/py/convert-win32-x64.exe",
+        "version": "PyInstaller converter bundled with presentation-export v0.4.3",
+        "sha256": "3fd41539d968797713ba7ce45b234798a8566b126e8b9dd5b79bb6b4530ad41e",
+        "sizeBytes": 41417495
+      }
+    },
+    "chrome": {
+      "path": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+      "product": "Chrome/151.0.7922.76",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+      "executableSha256": "a4d3a6dd0ffb35ccb77e04c033024fabd85a2bc7191066410cf1905f901f7965",
+      "sizeBytes": 4057240,
+      "cliVersionDiagnostic": "���� ������ ���ǿ��� ���� ���Դϴ�."
+    },
+    "poppler": {
+      "pdftoppm": {
+        "path": "$USERPROFILE/AppData/Local/Temp/pdf-golden-poppler-9be6c5aee7bb4180866dae27e2a0324d/expanded/poppler-26.02.0/Library/bin/pdftoppm.exe",
+        "version": "pdftoppm version 26.02.0",
+        "sha256": "575a2f66073b256f69084c4f12f34427e6076b7854b2505cb09ecbdc9957fd7f",
+        "sizeBytes": 49664
+      },
+      "pdfinfo": {
+        "path": "$USERPROFILE/AppData/Local/Temp/pdf-golden-poppler-9be6c5aee7bb4180866dae27e2a0324d/expanded/poppler-26.02.0/Library/bin/pdfinfo.exe",
+        "version": "pdfinfo version 26.02.0",
+        "sha256": "34040ff62bef73d6847a7b443457ac7fe216eb331bfbeadec62ae555618b2aae",
+        "sizeBytes": 65536
+      }
+    },
+    "fonts": [
+      {
+        "templateId": "dynamic",
+        "files": [
+          {
+            "path": "templates/dynamic/static/Montserrat Medium.ttf",
+            "sha256": "9b2a9eb2cc1d610ecdf19f5e549d557408fc2334bf381351ff14e1c8622f3b34",
+            "sizeBytes": 260220
+          },
+          {
+            "path": "templates/dynamic/static/Montserrat SemiBold.ttf",
+            "sha256": "a2b550eb5f130823554fd9cbf17f4b377dd46cbb9d79c5cced783ec9dffd996a",
+            "sizeBytes": 260916
+          }
+        ],
+        "aggregateSha256": "848d8371a9d023b9f581a2dbb493103d593317e31869d2ad87c15b33153c8d45"
+      },
+      {
+        "templateId": "editorial",
+        "files": [
+          {
+            "path": "templates/editorial/static/DM Sans Bold.ttf",
+            "sha256": "d415b88e3fe0224e9a1fd34acfdb3d7f1f390c834b440bc3117b68c1f86900e3",
+            "sizeBytes": 71764
+          },
+          {
+            "path": "templates/editorial/static/DM Sans Regular.ttf",
+            "sha256": "42939a84416e04f186a5e40988ff4df5fc588629bff89da5e0713cf74c0b3811",
+            "sizeBytes": 71912
+          },
+          {
+            "path": "templates/editorial/static/Playfair Display Bold Italic.ttf",
+            "sha256": "76805b08a7cea7dc244753746acc63165da9dd7578cd66cb95eceae93583dff5",
+            "sizeBytes": 177756
+          }
+        ],
+        "aggregateSha256": "7155c409f8e4c06da435d68e2a5c402ae23d5971f2967c9bcc2ff86e003cb3ff"
+      },
+      {
+        "templateId": "executive",
+        "files": [
+          {
+            "path": "templates/executive/static/Anton Regular.ttf",
+            "sha256": "9c306606325bb3396711d7d1699fe45c1061ede2315fa217ae034bb0236edda7",
+            "sizeBytes": 79396
+          },
+          {
+            "path": "templates/executive/static/DM Sans Bold.ttf",
+            "sha256": "d415b88e3fe0224e9a1fd34acfdb3d7f1f390c834b440bc3117b68c1f86900e3",
+            "sizeBytes": 71764
+          },
+          {
+            "path": "templates/executive/static/Montserrat Bold.ttf",
+            "sha256": "63483d1d2ea1f202563d04625eaf3036c7d6da0831c6211a9eecb973995d72ca",
+            "sizeBytes": 261588
+          },
+          {
+            "path": "templates/executive/static/Montserrat Medium.ttf",
+            "sha256": "9b2a9eb2cc1d610ecdf19f5e549d557408fc2334bf381351ff14e1c8622f3b34",
+            "sizeBytes": 260220
+          },
+          {
+            "path": "templates/executive/static/Montserrat Regular.ttf",
+            "sha256": "df738f354367e5ab07f2ede5a07860e791127ff9ea9964b25cf539ec9dc187ac",
+            "sizeBytes": 263192
+          },
+          {
+            "path": "templates/executive/static/Montserrat SemiBold.ttf",
+            "sha256": "a2b550eb5f130823554fd9cbf17f4b377dd46cbb9d79c5cced783ec9dffd996a",
+            "sizeBytes": 260916
+          }
+        ],
+        "aggregateSha256": "c75a0ed2b7450d07dbf406b9a165b7a7d316a3cf7a561916088e5bed4ce33a4d"
+      },
+      {
+        "templateId": "general",
+        "files": [
+          {
+            "path": "templates/general/static/Poppins Regular.ttf",
+            "sha256": "7e65201e9b79159e2300267cc885e16c8dcef2424cdfa09a29bfb0980a94a7ba",
+            "sizeBytes": 160316
+          }
+        ],
+        "aggregateSha256": "719e64399026304bd662ceb59c03289d0cfcf88c78f041877a390bf669aec7dd"
+      },
+      {
+        "templateId": "modern",
+        "files": [
+          {
+            "path": "templates/modern/static/Montserrat Regular.ttf",
+            "sha256": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+            "sizeBytes": 744936
+          }
+        ],
+        "aggregateSha256": "bba8f73f91425f7e1776db888c16f82c294f6c68d796ef4e6f25d091210ad2af"
+      },
+      {
+        "templateId": "momentum",
+        "files": [
+          {
+            "path": "templates/momentum/static/Anton Regular.ttf",
+            "sha256": "9c306606325bb3396711d7d1699fe45c1061ede2315fa217ae034bb0236edda7",
+            "sizeBytes": 79396
+          },
+          {
+            "path": "templates/momentum/static/Lato Black.ttf",
+            "sha256": "5e9f15ac21085eec7be86132e914da742a48c5617926d2a44c190d633d9c8361",
+            "sizeBytes": 614532
+          },
+          {
+            "path": "templates/momentum/static/Lato Bold.ttf",
+            "sha256": "c559a802651543b8645c7f583e99243e600cecb944daf405fac964c0182e0f31",
+            "sizeBytes": 657188
+          },
+          {
+            "path": "templates/momentum/static/Lato Regular.ttf",
+            "sha256": "87ff9cad548d1fb09328a128633e6f92c08cd7b5cad4fdd469978d5d791e6d58",
+            "sizeBytes": 657212
+          }
+        ],
+        "aggregateSha256": "49f4bde9f8ff94cb0cb008cb5a8d3a13f61b21fc205370efe8d87d3480228d60"
+      },
+      {
+        "templateId": "standard",
+        "files": [
+          {
+            "path": "templates/standard/static/Playfair Display Regular.ttf",
+            "sha256": "c40f2293766a503bc70cce9e512ef844a4ccb7cbcde792fe2ea31d191917d8d6",
+            "sizeBytes": 300724
+          }
+        ],
+        "aggregateSha256": "03d55e3956dac15e558319b03a36b4022e52daef1ddaa626ffdf731e5e7179aa"
+      },
+      {
+        "templateId": "swift",
+        "files": [
+          {
+            "path": "templates/swift/static/Albert Sans Regular.ttf",
+            "sha256": "8fe5d4cf5822d7096d4d17ad781c90f97c745ac13a22be619db74966fba45fda",
+            "sizeBytes": 129000
+          }
+        ],
+        "aggregateSha256": "374276b898f847c35756e07fdd0f7eafb9eb37764d24dd00b71cf7f181c81271"
+      }
+    ]
+  },
+  "summary": {
+    "templateCount": 8,
+    "pageCount": 158,
+    "passedPages": 158,
+    "failedPages": 0,
+    "metrics": {
+      "meanAbsoluteErrorAverage": 0.01114852,
+      "meanAbsoluteErrorMaximum": 0.02916859,
+      "perceptualBadPixelRatioAverage": 0.02690852,
+      "perceptualBadPixelRatioMaximum": 0.0671951,
+      "ssimMinimum": 0.9057397,
+      "largestBadComponentMaximum": 11663,
+      "textBboxMeanAbsoluteErrorMaximum": 0.24169644,
+      "textBboxCount": 2810,
+      "textBboxOutOfBounds": 4
+    },
+    "failureReasons": {}
+  },
+  "templates": [
+    {
+      "templateId": "dynamic",
+      "selectedPageCount": 32,
+      "pdfSha256": "ed2140dfb3d63de8df372a9806dd4d206d320194430b047d9d770a54c5092f3b",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.01199624,
+        "meanAbsoluteErrorMaximum": 0.02107562,
+        "perceptualBadPixelRatioAverage": 0.02156091,
+        "perceptualBadPixelRatioMaximum": 0.03996853,
+        "ssimMinimum": 0.92376801,
+        "largestBadComponentMaximum": 11663,
+        "textBboxMeanAbsoluteErrorMaximum": 0.16003143,
+        "textBboxCount": 477,
+        "textBboxOutOfBounds": 0
+      },
+      "layouts": [
+        {
+          "layoutId": "cover_title_left_image_right_8271",
+          "baselineSha256": "748ddf93a1d17e5261c1cba207c02799879e1abf0bfc4c33b13f1c92d8349f4b",
+          "metrics": {
+            "meanAbsoluteError": 0.01217403,
+            "perceptualBadPixelRatio": 0.01599175,
+            "ssim": 0.93597397,
+            "largestBadComponent": 617
+          },
+          "textBbox": {
+            "count": 10,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15732901,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "content_column_overview_3481",
+          "baselineSha256": "2c818f0b116126f12d3ad28baafcf12f8f370332bfd2af3b6ecf54c181d9dfd2",
+          "metrics": {
+            "meanAbsoluteError": 0.0073593,
+            "perceptualBadPixelRatio": 0.00686957,
+            "ssim": 0.96431294,
+            "largestBadComponent": 764
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15126688,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_description_indicator_9624",
+          "baselineSha256": "4e96662460c45eb2b5cc6def5060234f5b45ba387949791d9304481b71ee920c",
+          "metrics": {
+            "meanAbsoluteError": 0.01136058,
+            "perceptualBadPixelRatio": 0.01648112,
+            "ssim": 0.95582754,
+            "largestBadComponent": 438
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.06774785,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "top_image_bottom_text_columns_7836",
+          "baselineSha256": "acb9757df68a72f0b2ac4d98e33954b4bc6854b900beccba8e753d25d0d5c874",
+          "metrics": {
+            "meanAbsoluteError": 0.00842148,
+            "perceptualBadPixelRatio": 0.01254774,
+            "ssim": 0.96120658,
+            "largestBadComponent": 294
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.06973462,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_cards_bottom_5364",
+          "baselineSha256": "359571fa9134543a7857ad7da344b9b867a2c23c9872c1d3af7b1827c31cab5e",
+          "metrics": {
+            "meanAbsoluteError": 0.01506609,
+            "perceptualBadPixelRatio": 0.02487522,
+            "ssim": 0.94161195,
+            "largestBadComponent": 614
+          },
+          "textBbox": {
+            "count": 10,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1130937,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_text_center_image_right_text_2105",
+          "baselineSha256": "3c92c087a491985f4fc5488bd3f24e3a854734028b0c014531b51d04eda014ce",
+          "metrics": {
+            "meanAbsoluteError": 0.00966999,
+            "perceptualBadPixelRatio": 0.01649631,
+            "ssim": 0.94361891,
+            "largestBadComponent": 1006
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15393706,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_right_card_grid_2044",
+          "baselineSha256": "c8258ef5f95cc841714191218424a2cbaef77385d5ced51e598c3e3e9a2a95e6",
+          "metrics": {
+            "meanAbsoluteError": 0.01527152,
+            "perceptualBadPixelRatio": 0.03853516,
+            "ssim": 0.94626014,
+            "largestBadComponent": 478
+          },
+          "textBbox": {
+            "count": 50,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09488423,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 5,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_visual_callouts_5621",
+          "baselineSha256": "3f48d9b9cae48d2c4ef80c6c8325cd398768e06f3e701c3533a51a4add83ee7d",
+          "metrics": {
+            "meanAbsoluteError": 0.01875493,
+            "perceptualBadPixelRatio": 0.03996853,
+            "ssim": 0.93716459,
+            "largestBadComponent": 900
+          },
+          "textBbox": {
+            "count": 36,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15459256,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_cards_2592",
+          "baselineSha256": "6abb94ac52155d5416a5b56494af1dc31f7a7b9e53450523619ea44e6325c851",
+          "metrics": {
+            "meanAbsoluteError": 0.02107562,
+            "perceptualBadPixelRatio": 0.03357747,
+            "ssim": 0.95146026,
+            "largestBadComponent": 11663
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09315337,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_image_right_callouts_4153",
+          "baselineSha256": "0ec86c945f9d021bdbb81a620d4e7e4184ee52a06b35557f996013a63b6938aa",
+          "metrics": {
+            "meanAbsoluteError": 0.00814612,
+            "perceptualBadPixelRatio": 0.01340169,
+            "ssim": 0.96544112,
+            "largestBadComponent": 726
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09739213,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "image_comparison_panels_4102",
+          "baselineSha256": "285422301cf1a6f5adb694b0b058ffceebfe331dda1987f20dd1a135faf34505",
+          "metrics": {
+            "meanAbsoluteError": 0.00977922,
+            "perceptualBadPixelRatio": 0.01583876,
+            "ssim": 0.95489213,
+            "largestBadComponent": 556
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08657268,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_right_info_panel_2580",
+          "baselineSha256": "c745bbc32904b48883b148b6f9520970bd547a9737f0fe882a227556c6cc942f",
+          "metrics": {
+            "meanAbsoluteError": 0.0148746,
+            "perceptualBadPixelRatio": 0.03408637,
+            "ssim": 0.94388453,
+            "largestBadComponent": 2488
+          },
+          "textBbox": {
+            "count": 20,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.07587902,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_stepped_cards_1046",
+          "baselineSha256": "22e4e208fc348388abed474c8f11c86a3ab34d729f081d5077e4fe73d8c0d48c",
+          "metrics": {
+            "meanAbsoluteError": 0.01464924,
+            "perceptualBadPixelRatio": 0.03305339,
+            "ssim": 0.94606545,
+            "largestBadComponent": 432
+          },
+          "textBbox": {
+            "count": 34,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08136641,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_right_chart_panel_1475",
+          "baselineSha256": "318f7b93fbc37a6209fc1f3e2e3ab95057153bec2b3686ea765848f456d0839e",
+          "metrics": {
+            "meanAbsoluteError": 0.01537636,
+            "perceptualBadPixelRatio": 0.03404839,
+            "ssim": 0.92376801,
+            "largestBadComponent": 1722
+          },
+          "textBbox": {
+            "count": 11,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.0695061,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_layout_4067",
+          "baselineSha256": "fb01b63278654c7fd549a00fcef483992d725294ee52895b49e51a38a813e0d4",
+          "metrics": {
+            "meanAbsoluteError": 0.01489333,
+            "perceptualBadPixelRatio": 0.02754232,
+            "ssim": 0.92786932,
+            "largestBadComponent": 1004
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.07173825,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_review_cards_1880",
+          "baselineSha256": "d337d5ac41eed5b061548718f6065b70902b4631e9ec57c899325de7ba492270",
+          "metrics": {
+            "meanAbsoluteError": 0.01042442,
+            "perceptualBadPixelRatio": 0.01545464,
+            "ssim": 0.95094316,
+            "largestBadComponent": 788
+          },
+          "textBbox": {
+            "count": 7,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.12430731,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "large_title_bottom_image_3101",
+          "baselineSha256": "fd5e5d76faf0e4700528609ca2ff15ccd320975b7cc43eaa68058554c4b81ca6",
+          "metrics": {
+            "meanAbsoluteError": 0.009065,
+            "perceptualBadPixelRatio": 0.01500651,
+            "ssim": 0.96647788,
+            "largestBadComponent": 1120
+          },
+          "textBbox": {
+            "count": 2,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.05337056,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_right_media_rows_6461",
+          "baselineSha256": "2d29c7ccef9bd3eaf2e93a3536e50113a9efc15e8bd77098222521b9f9d17a05",
+          "metrics": {
+            "meanAbsoluteError": 0.01171066,
+            "perceptualBadPixelRatio": 0.01995334,
+            "ssim": 0.95386316,
+            "largestBadComponent": 730
+          },
+          "textBbox": {
+            "count": 16,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08616854,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_image_columns_2104",
+          "baselineSha256": "f30b93f7950a93606afc7873fe41ca1d5924a2da94c1e59b3cb2d79ecfc58e2a",
+          "metrics": {
+            "meanAbsoluteError": 0.00839546,
+            "perceptualBadPixelRatio": 0.01103516,
+            "ssim": 0.96055532,
+            "largestBadComponent": 424
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08957688,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_pyramid_callouts_6308",
+          "baselineSha256": "1878b1281ad537ac80ecdda2a5e89bd0933a5351f4a7dd657814b8df9e166734",
+          "metrics": {
+            "meanAbsoluteError": 0.00978865,
+            "perceptualBadPixelRatio": 0.02309462,
+            "ssim": 0.96955955,
+            "largestBadComponent": 793
+          },
+          "textBbox": {
+            "count": 28,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08686928,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 3,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_cards_4771",
+          "baselineSha256": "86176003c3fa335f0bccd73015058fd67e4b78c58c7e11bdbeaa0c129ef9b65c",
+          "metrics": {
+            "meanAbsoluteError": 0.01074692,
+            "perceptualBadPixelRatio": 0.02380534,
+            "ssim": 0.96469245,
+            "largestBadComponent": 416
+          },
+          "textBbox": {
+            "count": 18,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10905867,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_right_text_sections_3504",
+          "baselineSha256": "72f938fc04f2f7239f921562166837b0d1fe70ff1172b0210765b92b922377a1",
+          "metrics": {
+            "meanAbsoluteError": 0.01541102,
+            "perceptualBadPixelRatio": 0.02999566,
+            "ssim": 0.94047755,
+            "largestBadComponent": 729
+          },
+          "textBbox": {
+            "count": 23,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08917719,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "closing_title_description_1992",
+          "baselineSha256": "41c5ff9db8cdbbaa44f9e209270e9e463bb01893521af0073a8532ee443c7959",
+          "metrics": {
+            "meanAbsoluteError": 0.00930968,
+            "perceptualBadPixelRatio": 0.01265191,
+            "ssim": 0.95912687,
+            "largestBadComponent": 586
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08506028,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_staggered_cards_right_image_8296",
+          "baselineSha256": "a658f66d775c88d0fd339a0ccd72a547223f252d2b8860a73aa3d31443f61b8c",
+          "metrics": {
+            "meanAbsoluteError": 0.01406895,
+            "perceptualBadPixelRatio": 0.02866102,
+            "ssim": 0.94964652,
+            "largestBadComponent": 689
+          },
+          "textBbox": {
+            "count": 26,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16003143,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_description_overlay_4828",
+          "baselineSha256": "825726cbaacedee873c5ce538a4c1fad0d66c8837070dd78079dac95821a64a0",
+          "metrics": {
+            "meanAbsoluteError": 0.01514154,
+            "perceptualBadPixelRatio": 0.02884549,
+            "ssim": 0.93040006,
+            "largestBadComponent": 731
+          },
+          "textBbox": {
+            "count": 11,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.06798162,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_metric_callouts_2098",
+          "baselineSha256": "6978f4498145ecfeac2c6407f7f45ff6793a815417d69bd688b980590d4814db",
+          "metrics": {
+            "meanAbsoluteError": 0.00696818,
+            "perceptualBadPixelRatio": 0.01118707,
+            "ssim": 0.97452479,
+            "largestBadComponent": 675
+          },
+          "textBbox": {
+            "count": 7,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08864954,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_staggered_cards_4818",
+          "baselineSha256": "04eeb8196698726ca347fa2fea005adcdf179b43171fd76914bb95f785e4e5ff",
+          "metrics": {
+            "meanAbsoluteError": 0.01399347,
+            "perceptualBadPixelRatio": 0.02647027,
+            "ssim": 0.93497056,
+            "largestBadComponent": 459
+          },
+          "textBbox": {
+            "count": 34,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08253648,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_right_metric_rows_4802",
+          "baselineSha256": "ae0c6df1080c652ab72bdb8d7188b2ae0fc2a5b84587bb67abe89f94f089bc91",
+          "metrics": {
+            "meanAbsoluteError": 0.01127218,
+            "perceptualBadPixelRatio": 0.01497938,
+            "ssim": 0.94522524,
+            "largestBadComponent": 730
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08393024,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_metric_cards_3569",
+          "baselineSha256": "42e62560ea05f7ac600f7fc835c26556981884ecaa1a430597f167c41b283542",
+          "metrics": {
+            "meanAbsoluteError": 0.00996744,
+            "perceptualBadPixelRatio": 0.01363173,
+            "ssim": 0.95237549,
+            "largestBadComponent": 438
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.07847749,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_donut_chart_right_table_1700",
+          "baselineSha256": "e7cd4143e04dba12462b58b15023124935a1460ef01c4fd6ea681335597be1ae",
+          "metrics": {
+            "meanAbsoluteError": 0.011639,
+            "perceptualBadPixelRatio": 0.01970595,
+            "ssim": 0.94586814,
+            "largestBadComponent": 2394
+          },
+          "textBbox": {
+            "count": 20,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1322011,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 5,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_chart_panels_3982",
+          "baselineSha256": "3e714ad15553035c78fc55dc9c710ca9ba2872d9fd1df2b94a83f67896f4ec16",
+          "metrics": {
+            "meanAbsoluteError": 0.00915983,
+            "perceptualBadPixelRatio": 0.01724284,
+            "ssim": 0.96120738,
+            "largestBadComponent": 934
+          },
+          "textBbox": {
+            "count": 2,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.05313806,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_left_chart_right_list_6203",
+          "baselineSha256": "0b686ff69a9a9227f5b16fbcb44c8cc21645a01b9a6bf2149b90cd4949144f3d",
+          "metrics": {
+            "meanAbsoluteError": 0.00994488,
+            "perceptualBadPixelRatio": 0.01491428,
+            "ssim": 0.95201775,
+            "largestBadComponent": 2119
+          },
+          "textBbox": {
+            "count": 4,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08941507,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 3,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "templateId": "editorial",
+      "selectedPageCount": 24,
+      "pdfSha256": "1fade64d023862eddf3e2494ca853130377a3d1bb021f5a1b8f51bdd9c315cff",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.01116259,
+        "meanAbsoluteErrorMaximum": 0.02325767,
+        "perceptualBadPixelRatioAverage": 0.02763066,
+        "perceptualBadPixelRatioMaximum": 0.06056966,
+        "ssimMinimum": 0.92035992,
+        "largestBadComponentMaximum": 8318,
+        "textBboxMeanAbsoluteErrorMaximum": 0.15195039,
+        "textBboxCount": 421,
+        "textBboxOutOfBounds": 0
+      },
+      "layouts": [
+        {
+          "layoutId": "title_slide_with_image_collage_and_footer",
+          "baselineSha256": "fa40ddf73151c141098b19f927944e1f8bca63c14b258fd857bb0bdd8ba6f815",
+          "metrics": {
+            "meanAbsoluteError": 0.00836923,
+            "perceptualBadPixelRatio": 0.01849392,
+            "ssim": 0.97765489,
+            "largestBadComponent": 655
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.13600923,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_numbered_list_in_two_columns",
+          "baselineSha256": "a78ca5526aa09bbb0c95795da25a7d59b4641a6201ff016f183b1037f28184f7",
+          "metrics": {
+            "meanAbsoluteError": 0.00304405,
+            "perceptualBadPixelRatio": 0.00418294,
+            "ssim": 0.99012265,
+            "largestBadComponent": 356
+          },
+          "textBbox": {
+            "count": 3,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.0855053,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "large_title_with_curved_side_image",
+          "baselineSha256": "e44d6a27da712ca2c89a95da977d7aeafc937d0beb6dcf0ce5dbda5557cfd28b",
+          "metrics": {
+            "meanAbsoluteError": 0.00706979,
+            "perceptualBadPixelRatio": 0.01376302,
+            "ssim": 0.98035036,
+            "largestBadComponent": 594
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10122672,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_list_of_items_with_heading_description",
+          "baselineSha256": "d233ae393e9481f00a160b412a82149f8dc27779884a75ce5307f9632c7b0805",
+          "metrics": {
+            "meanAbsoluteError": 0.00833664,
+            "perceptualBadPixelRatio": 0.01793186,
+            "ssim": 0.97798521,
+            "largestBadComponent": 386
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10377535,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_four_callouts_around_center_graphic",
+          "baselineSha256": "e7a6149c4e7990b366ac7a91908949ee0376510b0e0b3e823df56930fe70c793",
+          "metrics": {
+            "meanAbsoluteError": 0.02325767,
+            "perceptualBadPixelRatio": 0.06056966,
+            "ssim": 0.92035992,
+            "largestBadComponent": 5625
+          },
+          "textBbox": {
+            "count": 26,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.13860485,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 5,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_stacked_rows_and_side_graphic",
+          "baselineSha256": "bc65750f8a8404440351c7de6e4bf7466be8b8b83475100414845dea9ba3752b",
+          "metrics": {
+            "meanAbsoluteError": 0.00674633,
+            "perceptualBadPixelRatio": 0.01353082,
+            "ssim": 0.97992786,
+            "largestBadComponent": 1550
+          },
+          "textBbox": {
+            "count": 3,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11900073,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_five_items_on_vertical_branching_path",
+          "baselineSha256": "90925ef5bea00ca94a1021829fa5c50e324e8e7bc463abae7a6eb16184818af7",
+          "metrics": {
+            "meanAbsoluteError": 0.02115123,
+            "perceptualBadPixelRatio": 0.03662977,
+            "ssim": 0.96188853,
+            "largestBadComponent": 4453
+          },
+          "textBbox": {
+            "count": 27,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.12442893,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_with_four_items_on_arch",
+          "baselineSha256": "ca6311ca4c15dbfb53f9ca5ac7e4ce4ad0d4bdf30059404d796f3df6c5afdaa8",
+          "metrics": {
+            "meanAbsoluteError": 0.01276371,
+            "perceptualBadPixelRatio": 0.02645942,
+            "ssim": 0.96299625,
+            "largestBadComponent": 1716
+          },
+          "textBbox": {
+            "count": 24,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11710487,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 9,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_side_image_and_bottom_callout_cards",
+          "baselineSha256": "8ecd7b7ebc4cd65a5a59ccdc3e1d335cf5942ab0414c6a3b70100eb2f9eb6316",
+          "metrics": {
+            "meanAbsoluteError": 0.00708896,
+            "perceptualBadPixelRatio": 0.01957899,
+            "ssim": 0.98044174,
+            "largestBadComponent": 2303
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10078647,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 3,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_with_six_alternating_timeline_callouts",
+          "baselineSha256": "aa1b2200b046c75a2a386a993e6cc7327ae2301e53a1f6a6886a0caca55ce4c1",
+          "metrics": {
+            "meanAbsoluteError": 0.01643365,
+            "perceptualBadPixelRatio": 0.04041992,
+            "ssim": 0.94926182,
+            "largestBadComponent": 492
+          },
+          "textBbox": {
+            "count": 34,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11163043,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 7,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_left_chart_right",
+          "baselineSha256": "553396219bd93e317cc6f77fe58e37fa1614837482628e07302623017e5804e4",
+          "metrics": {
+            "meanAbsoluteError": 0.01415497,
+            "perceptualBadPixelRatio": 0.0392003,
+            "ssim": 0.95795497,
+            "largestBadComponent": 1547
+          },
+          "textBbox": {
+            "count": 19,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10736037,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_large_chart_metric_cards_and_callouts",
+          "baselineSha256": "dc88155b830834430d565ce7e2674399a8ea7ca678b06f556ab40c6f873db5ab",
+          "metrics": {
+            "meanAbsoluteError": 0.00855914,
+            "perceptualBadPixelRatio": 0.02082357,
+            "ssim": 0.96820974,
+            "largestBadComponent": 2153
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10392639,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_center_graphic_and_four_side_metric_callouts",
+          "baselineSha256": "e049b306b859dfacd2b34a71ef2a05ae2644333f17170710d86a1a1843e184f6",
+          "metrics": {
+            "meanAbsoluteError": 0.0119911,
+            "perceptualBadPixelRatio": 0.03105252,
+            "ssim": 0.9664403,
+            "largestBadComponent": 4757
+          },
+          "textBbox": {
+            "count": 16,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09769452,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_four_callouts_on_wave_timeline",
+          "baselineSha256": "984b3749f995272ef27149b83ad34f33af5f0a00dc701314e1eaf814b61d0d67",
+          "metrics": {
+            "meanAbsoluteError": 0.01150546,
+            "perceptualBadPixelRatio": 0.02961263,
+            "ssim": 0.9597056,
+            "largestBadComponent": 1560
+          },
+          "textBbox": {
+            "count": 28,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15195039,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_multi_panel_chart_and_metric_grid",
+          "baselineSha256": "988a0a3608592817d36921a06f749c6b267f05d39538aee4a713dbe042121a42",
+          "metrics": {
+            "meanAbsoluteError": 0.01222563,
+            "perceptualBadPixelRatio": 0.03990343,
+            "ssim": 0.95177157,
+            "largestBadComponent": 8318
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.14506907,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 2,
+            "chartCanvasCount": 2
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_three_chart_panels_and_three_gauge_cards",
+          "baselineSha256": "5b1db937e7c3c321ecf396367da39cb1228972de46894963613d506683ea0135",
+          "metrics": {
+            "meanAbsoluteError": 0.00975602,
+            "perceptualBadPixelRatio": 0.02569119,
+            "ssim": 0.95298422,
+            "largestBadComponent": 5233
+          },
+          "textBbox": {
+            "count": 4,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10041461,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 1,
+            "chartCanvasCount": 2
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_two_upper_charts_lower_description_and_metrics",
+          "baselineSha256": "b3dbff00ddaae369e85b9566724cb675f3d8abd474d45c130901157ea9640690",
+          "metrics": {
+            "meanAbsoluteError": 0.01217144,
+            "perceptualBadPixelRatio": 0.03727756,
+            "ssim": 0.93446542,
+            "largestBadComponent": 8264
+          },
+          "textBbox": {
+            "count": 10,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1139918,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 1,
+            "chartCanvasCount": 2
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_concentric_circles_and_linked_side_cards",
+          "baselineSha256": "b5b4feeef86e7f23d40ac3a635a757eb1910056abfa0abde9a2d5afdb889a614",
+          "metrics": {
+            "meanAbsoluteError": 0.01095929,
+            "perceptualBadPixelRatio": 0.02846029,
+            "ssim": 0.964571,
+            "largestBadComponent": 612
+          },
+          "textBbox": {
+            "count": 30,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.12668153,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 9,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_with_row_of_gauge_cards",
+          "baselineSha256": "0a5aae67b124b67ce6f99bce6d35c4a6a09dc9a498d5c69f1f23d94d368768df",
+          "metrics": {
+            "meanAbsoluteError": 0.00552039,
+            "perceptualBadPixelRatio": 0.01150825,
+            "ssim": 0.98120175,
+            "largestBadComponent": 1568
+          },
+          "textBbox": {
+            "count": 10,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11841459,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_above_full_width_line_chart",
+          "baselineSha256": "80e394676ef99c11821c69267d129bad7e35c2964362d6d15aa5af7ab881f79b",
+          "metrics": {
+            "meanAbsoluteError": 0.00819049,
+            "perceptualBadPixelRatio": 0.02184028,
+            "ssim": 0.97303114,
+            "largestBadComponent": 5907
+          },
+          "textBbox": {
+            "count": 4,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10381002,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "large_text_block_with_side_image",
+          "baselineSha256": "964aaa3c70249fb49e76609843d138e323a8e5f65a1ffb64579d65970e4542af",
+          "metrics": {
+            "meanAbsoluteError": 0.00533207,
+            "perceptualBadPixelRatio": 0.01188694,
+            "ssim": 0.98784012,
+            "largestBadComponent": 389
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.05407402,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_with_metric_list_and_bottom_timeline",
+          "baselineSha256": "a3a4e7875d2b7cecf939bda737593df0e1f5784b4f33a67064381c468071fd25",
+          "metrics": {
+            "meanAbsoluteError": 0.01839157,
+            "perceptualBadPixelRatio": 0.05240126,
+            "ssim": 0.92834602,
+            "largestBadComponent": 1440
+          },
+          "textBbox": {
+            "count": 41,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.137337,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 8,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_row_of_image_heading_subheading_cards",
+          "baselineSha256": "ba7dc7d3d537c2bf8b2917ac3e435d923b7d6f3b6f5827589c631036a09a9226",
+          "metrics": {
+            "meanAbsoluteError": 0.00657324,
+            "perceptualBadPixelRatio": 0.01472114,
+            "ssim": 0.97733441,
+            "largestBadComponent": 400
+          },
+          "textBbox": {
+            "count": 7,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11864899,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_with_items_along_winding_path",
+          "baselineSha256": "37d9c2d7a5c22120487e2ac323a5c2907d2f233ab072825900b77e63afae17b9",
+          "metrics": {
+            "meanAbsoluteError": 0.01831014,
+            "perceptualBadPixelRatio": 0.04719618,
+            "ssim": 0.94835603,
+            "largestBadComponent": 570
+          },
+          "textBbox": {
+            "count": 60,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11276095,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 7,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "templateId": "executive",
+      "selectedPageCount": 32,
+      "pdfSha256": "5233a8fe436222f5013d1ed77b34874783605fe16cb596e5b4789139837b9894",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.01217942,
+        "meanAbsoluteErrorMaximum": 0.02916859,
+        "perceptualBadPixelRatioAverage": 0.03027791,
+        "perceptualBadPixelRatioMaximum": 0.0671951,
+        "ssimMinimum": 0.90840322,
+        "largestBadComponentMaximum": 6889,
+        "textBboxMeanAbsoluteErrorMaximum": 0.18982069,
+        "textBboxCount": 533,
+        "textBboxOutOfBounds": 0
+      },
+      "layouts": [
+        {
+          "layoutId": "centered_title_metadata_6418",
+          "baselineSha256": "2872abd8db70a62b8c6a271cecc9214c74b03bf37eb127ae749c54092a25d0ea",
+          "metrics": {
+            "meanAbsoluteError": 0.01060312,
+            "perceptualBadPixelRatio": 0.02343641,
+            "ssim": 0.95637591,
+            "largestBadComponent": 1489
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1521836,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "large_title_list_footer_2424",
+          "baselineSha256": "3b42e308fa0e7622d69efb610c014516ecdab7bde9dd580c61eeeb62dddc3c14",
+          "metrics": {
+            "meanAbsoluteError": 0.00283699,
+            "perceptualBadPixelRatio": 0.00508464,
+            "ssim": 0.98761439,
+            "largestBadComponent": 528
+          },
+          "textBbox": {
+            "count": 5,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.13549364,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_copy_right_image_footer_6858",
+          "baselineSha256": "207629dcb722ced69f4a4d16925da401c4cdd0c232929ee662ff17d1efe893a0",
+          "metrics": {
+            "meanAbsoluteError": 0.00732621,
+            "perceptualBadPixelRatio": 0.01692274,
+            "ssim": 0.97168718,
+            "largestBadComponent": 1153
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15253182,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_text_right_image_footer_8576",
+          "baselineSha256": "32efa4064b86568434995fd2491e1c39cc16f23077e4b68ea26c2e64a43bbfdf",
+          "metrics": {
+            "meanAbsoluteError": 0.01230116,
+            "perceptualBadPixelRatio": 0.03672526,
+            "ssim": 0.95787114,
+            "largestBadComponent": 709
+          },
+          "textBbox": {
+            "count": 23,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1574957,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_card_grid_footer_1945",
+          "baselineSha256": "292742e4c9247d18dfdcb387e6e7dbec6a426381a4c53c55c9f35df764c871df",
+          "metrics": {
+            "meanAbsoluteError": 0.01059024,
+            "perceptualBadPixelRatio": 0.02603841,
+            "ssim": 0.9603107,
+            "largestBadComponent": 724
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1669255,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_stacked_cards_2967",
+          "baselineSha256": "beca8cdb933508e715581823775db0813c982fa0466574d602621fe36e66fd31",
+          "metrics": {
+            "meanAbsoluteError": 0.0134837,
+            "perceptualBadPixelRatio": 0.03109375,
+            "ssim": 0.950535,
+            "largestBadComponent": 939
+          },
+          "textBbox": {
+            "count": 16,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16131883,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "header_curve_callouts_footer_7432",
+          "baselineSha256": "51bba77e40166f78a0d2e108c02718b46bd91988de42a87ac8d694d4880a81ba",
+          "metrics": {
+            "meanAbsoluteError": 0.01673673,
+            "perceptualBadPixelRatio": 0.03860243,
+            "ssim": 0.94984851,
+            "largestBadComponent": 747
+          },
+          "textBbox": {
+            "count": 23,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.18136169,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 4,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_comparison_cards_footer_2257",
+          "baselineSha256": "3bc76b4e8edc9500c342cf5ae622ba2f10ed8d1d407f182b9eb457298ecf890c",
+          "metrics": {
+            "meanAbsoluteError": 0.01256315,
+            "perceptualBadPixelRatio": 0.03276367,
+            "ssim": 0.96046512,
+            "largestBadComponent": 521
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16456995,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_cards_chart_footer_2861",
+          "baselineSha256": "b553a2c293e2f20ff8a0606556aba480a370132c23956af3adb5d976a7b367ea",
+          "metrics": {
+            "meanAbsoluteError": 0.01164451,
+            "perceptualBadPixelRatio": 0.02856879,
+            "ssim": 0.95656983,
+            "largestBadComponent": 1322
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1545012,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_metrics_image_layout_9576",
+          "baselineSha256": "37a40c67ad90177d550f099ee2b95f8de18dc66dd5ef09b7dcfa74ba63d02a67",
+          "metrics": {
+            "meanAbsoluteError": 0.01072714,
+            "perceptualBadPixelRatio": 0.02607856,
+            "ssim": 0.96530173,
+            "largestBadComponent": 1322
+          },
+          "textBbox": {
+            "count": 16,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16190627,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_metric_bubbles_9090",
+          "baselineSha256": "60fda01404439b4b2ef2253c5dc082551dd6741d44872414373a5fa1bf74bf7e",
+          "metrics": {
+            "meanAbsoluteError": 0.01152281,
+            "perceptualBadPixelRatio": 0.0297819,
+            "ssim": 0.95948665,
+            "largestBadComponent": 1511
+          },
+          "textBbox": {
+            "count": 18,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16490699,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 3,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_staggered_metric_cards_3768",
+          "baselineSha256": "da4f5b3e5a8fa5d2f76d604bec8e236831319864da8c58cb04f94729f2c490c9",
+          "metrics": {
+            "meanAbsoluteError": 0.01425802,
+            "perceptualBadPixelRatio": 0.03200195,
+            "ssim": 0.95001276,
+            "largestBadComponent": 1356
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16441726,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_cards_chart_panel_9233",
+          "baselineSha256": "3553306d9ebd06dfac473f9f0c5439f4381bee0b878c38cf3f356f564a7995f3",
+          "metrics": {
+            "meanAbsoluteError": 0.01221839,
+            "perceptualBadPixelRatio": 0.0309668,
+            "ssim": 0.95873425,
+            "largestBadComponent": 1554
+          },
+          "textBbox": {
+            "count": 16,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16250659,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_cards_footer_layout_3220",
+          "baselineSha256": "2f8335627749db878c8fd9fdceca3a4d3c5a93cf5189e6386ae73c3da5ff18b1",
+          "metrics": {
+            "meanAbsoluteError": 0.01440277,
+            "perceptualBadPixelRatio": 0.03950955,
+            "ssim": 0.95516533,
+            "largestBadComponent": 710
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15008838,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_chart_cards_footer_7145",
+          "baselineSha256": "4050185a2a7891e3a788a0e04e257efb92ce0b3c2430035aa49c2f5209d75161",
+          "metrics": {
+            "meanAbsoluteError": 0.0122247,
+            "perceptualBadPixelRatio": 0.03160156,
+            "ssim": 0.95667261,
+            "largestBadComponent": 862
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16900732,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_cards_footer_3693",
+          "baselineSha256": "517d3384ca8758772e143b54f702c7698738dbc0a5b9ff97522b57db5f8a1d52",
+          "metrics": {
+            "meanAbsoluteError": 0.01289536,
+            "perceptualBadPixelRatio": 0.03341471,
+            "ssim": 0.95324092,
+            "largestBadComponent": 1235
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16900732,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_side_cards_8164",
+          "baselineSha256": "c1e712afcd910a4a9c4700ced2b6042861a004ec89b93c4b0c45b470c7af82f3",
+          "metrics": {
+            "meanAbsoluteError": 0.01714255,
+            "perceptualBadPixelRatio": 0.04415256,
+            "ssim": 0.94032749,
+            "largestBadComponent": 1328
+          },
+          "textBbox": {
+            "count": 22,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.14443875,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_metrics_cards_8029",
+          "baselineSha256": "07fa245f88bc3d86e1d28bb49c2a1552e1780a6ebdc65f2542ecafed507b874d",
+          "metrics": {
+            "meanAbsoluteError": 0.00922244,
+            "perceptualBadPixelRatio": 0.02602865,
+            "ssim": 0.96836385,
+            "largestBadComponent": 996
+          },
+          "textBbox": {
+            "count": 19,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1669255,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_metrics_cards_footer_1626",
+          "baselineSha256": "f8239707816bef777279772bf34d03ee623bcf088b2fc109dc7857f73450c634",
+          "metrics": {
+            "meanAbsoluteError": 0.01293113,
+            "perceptualBadPixelRatio": 0.03223524,
+            "ssim": 0.95679724,
+            "largestBadComponent": 1018
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.14737577,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_card_chart_footer_9567",
+          "baselineSha256": "5fb74e74649fc3d29ed0cec9694218ff68d24f2381fb1faf0d01ec0483e3cbdb",
+          "metrics": {
+            "meanAbsoluteError": 0.01908718,
+            "perceptualBadPixelRatio": 0.05234158,
+            "ssim": 0.9291136,
+            "largestBadComponent": 3439
+          },
+          "textBbox": {
+            "count": 24,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16710798,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 2,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "testimonial_card_image_footer_9315",
+          "baselineSha256": "8522d1889283d1258df2e747f27950c863344a989e4248304e8eb9c5bdfeec12",
+          "metrics": {
+            "meanAbsoluteError": 0.00763557,
+            "perceptualBadPixelRatio": 0.0191862,
+            "ssim": 0.97799997,
+            "largestBadComponent": 855
+          },
+          "textBbox": {
+            "count": 10,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15407293,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_text_with_right_image_8911",
+          "baselineSha256": "cb1d30f3664816f967b99424996e30dfcf4cfacebdb135ca3e2daeb9ca6f51de",
+          "metrics": {
+            "meanAbsoluteError": 0.00966146,
+            "perceptualBadPixelRatio": 0.0224707,
+            "ssim": 0.97137363,
+            "largestBadComponent": 853
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15556244,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_team_cards_2650",
+          "baselineSha256": "96521d7187b72552861628d06fd9910455bea33db7f4adbd7c2d485748fe4611",
+          "metrics": {
+            "meanAbsoluteError": 0.00194686,
+            "perceptualBadPixelRatio": 0.00477648,
+            "ssim": 0.99176742,
+            "largestBadComponent": 559
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15650499,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_timeline_sections_footer_6488",
+          "baselineSha256": "e1117f2303fd8380c764416ce4550db7f809dbbc693ad34d443803beb755cdd7",
+          "metrics": {
+            "meanAbsoluteError": 0.0253346,
+            "perceptualBadPixelRatio": 0.0609451,
+            "ssim": 0.91466767,
+            "largestBadComponent": 1028
+          },
+          "textBbox": {
+            "count": 58,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.18982069,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 4,
+            "svgCount": 11,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "intro_pricing_cards_grid_5022",
+          "baselineSha256": "2b65686c2bd4226f3dd0bbadf12c12770d865994e1546485cbe650c00bbab83f",
+          "metrics": {
+            "meanAbsoluteError": 0.00898609,
+            "perceptualBadPixelRatio": 0.02358724,
+            "ssim": 0.96851236,
+            "largestBadComponent": 1045
+          },
+          "textBbox": {
+            "count": 20,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16848593,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_phase_cards_1554",
+          "baselineSha256": "397cf9dc5d13da4ab7cfc4e7dd9f5bfbfadc9b204d1bf692979793f6766182d8",
+          "metrics": {
+            "meanAbsoluteError": 0.01223076,
+            "perceptualBadPixelRatio": 0.02985786,
+            "ssim": 0.96335869,
+            "largestBadComponent": 885
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15542656,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "image_text_footer_layout_5494",
+          "baselineSha256": "86941b148b9c359c37771299fad1a4d472025254eb43e298dab4c2f4bb7fcd55",
+          "metrics": {
+            "meanAbsoluteError": 0.00594759,
+            "perceptualBadPixelRatio": 0.01435764,
+            "ssim": 0.98771307,
+            "largestBadComponent": 569
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15506192,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_summary_with_cards_4840",
+          "baselineSha256": "77848fb3ddc7b420d9ff7f669f21ba8e2a4a0be8dce1cdf39a82cae267982879",
+          "metrics": {
+            "meanAbsoluteError": 0.00876149,
+            "perceptualBadPixelRatio": 0.02316189,
+            "ssim": 0.9787978,
+            "largestBadComponent": 656
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15650499,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_workflow_cards_footer_1837",
+          "baselineSha256": "e821422a5de3d89c60a4ec6e765f26396f21901944ac6f364d90dab513012a99",
+          "metrics": {
+            "meanAbsoluteError": 0.01275882,
+            "perceptualBadPixelRatio": 0.02894748,
+            "ssim": 0.95888511,
+            "largestBadComponent": 6889
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.17220409,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_risk_sections_map_7549",
+          "baselineSha256": "5a3c105c74b639bf609969b2bae4bce00d34046c908d3426556936df6ebff7f0",
+          "metrics": {
+            "meanAbsoluteError": 0.02916859,
+            "perceptualBadPixelRatio": 0.0671951,
+            "ssim": 0.90840322,
+            "largestBadComponent": 856
+          },
+          "textBbox": {
+            "count": 35,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16883244,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 4,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_diagram_callouts_footer_9350",
+          "baselineSha256": "791492d49ed41d8242a57a704118d71e404c9d62f42d30861413c1699f9b36bb",
+          "metrics": {
+            "meanAbsoluteError": 0.01565612,
+            "perceptualBadPixelRatio": 0.04180773,
+            "ssim": 0.94759754,
+            "largestBadComponent": 678
+          },
+          "textBbox": {
+            "count": 23,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16149171,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_text_right_illustration_9898",
+          "baselineSha256": "f572338eda384ff53d6e7e65561438e945ffd8d04cf80539c0c94275985dc22a",
+          "metrics": {
+            "meanAbsoluteError": 0.00693515,
+            "perceptualBadPixelRatio": 0.01525065,
+            "ssim": 0.98110829,
+            "largestBadComponent": 1118
+          },
+          "textBbox": {
+            "count": 4,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.14360127,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "templateId": "general",
+      "selectedPageCount": 12,
+      "pdfSha256": "85930412292493aec3a6eb5d09f67fd2fa08734cdf7fbe9785ee83dbf00ce9bc",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.00876933,
+        "meanAbsoluteErrorMaximum": 0.01389255,
+        "perceptualBadPixelRatioAverage": 0.02745759,
+        "perceptualBadPixelRatioMaximum": 0.0411556,
+        "ssimMinimum": 0.93306479,
+        "largestBadComponentMaximum": 10057,
+        "textBboxMeanAbsoluteErrorMaximum": 0.10474313,
+        "textBboxCount": 239,
+        "textBboxOutOfBounds": 0
+      },
+      "layouts": [
+        {
+          "layoutId": "title_intro",
+          "baselineSha256": "e9369e1dcdd83c3bdc1d9726fc7e375a6a917ac1ada19825e6d5aff135ef8c15",
+          "metrics": {
+            "meanAbsoluteError": 0.00732384,
+            "perceptualBadPixelRatio": 0.02103516,
+            "ssim": 0.9621852,
+            "largestBadComponent": 519
+          },
+          "textBbox": {
+            "count": 11,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10429555,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 2,
+            "svgCount": 5,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_image",
+          "baselineSha256": "ed5807a134203474634aeffc4f9758e9d69421d05f9dcdd75a068fdb472be8c7",
+          "metrics": {
+            "meanAbsoluteError": 0.00632367,
+            "perceptualBadPixelRatio": 0.01851345,
+            "ssim": 0.96699567,
+            "largestBadComponent": 487
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.06950127,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 3,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_image_bullet_points_1",
+          "baselineSha256": "1a3f4b5eb8b24df8a7a435b61d19818d4a9b50fdd119280d0238f094fbf464eb",
+          "metrics": {
+            "meanAbsoluteError": 0.00892148,
+            "perceptualBadPixelRatio": 0.02659831,
+            "ssim": 0.95265556,
+            "largestBadComponent": 624
+          },
+          "textBbox": {
+            "count": 25,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09520402,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 6,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_bullet_points",
+          "baselineSha256": "b3b464fbe1561bb46cdc32994a3a0a55187fe19245ffe9003b34c9eadd4ff63f",
+          "metrics": {
+            "meanAbsoluteError": 0.00850419,
+            "perceptualBadPixelRatio": 0.02857205,
+            "ssim": 0.93961122,
+            "largestBadComponent": 2258
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09273168,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 3,
+            "svgCount": 6,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_chart_cards",
+          "baselineSha256": "9ea5da16e84374d0db2049d2d787d193e22a48432a1e97f9e0386c1cbb6c8f32",
+          "metrics": {
+            "meanAbsoluteError": 0.0100036,
+            "perceptualBadPixelRatio": 0.04070855,
+            "ssim": 0.93306479,
+            "largestBadComponent": 10057
+          },
+          "textBbox": {
+            "count": 20,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.07972575,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 5,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_metrics_description",
+          "baselineSha256": "b36da883e3cc5ea3e635e08c37053628e5f5684d3ab620aeb617202e0b52ffad",
+          "metrics": {
+            "meanAbsoluteError": 0.00499246,
+            "perceptualBadPixelRatio": 0.01998155,
+            "ssim": 0.97064608,
+            "largestBadComponent": 336
+          },
+          "textBbox": {
+            "count": 13,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.05735346,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_image_description_metrics",
+          "baselineSha256": "45cfc7de6d57d43511e0c4c899eb30d8ce61d0e8f3683a424ba1c4f63da5ed8d",
+          "metrics": {
+            "meanAbsoluteError": 0.00772778,
+            "perceptualBadPixelRatio": 0.02301107,
+            "ssim": 0.96129152,
+            "largestBadComponent": 487
+          },
+          "textBbox": {
+            "count": 13,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08809246,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_image_bullet_points",
+          "baselineSha256": "ba221425615ba6ad8a74f481a7402263365c68fa4989ebb2f6555ade4236cd61",
+          "metrics": {
+            "meanAbsoluteError": 0.01389255,
+            "perceptualBadPixelRatio": 0.0411556,
+            "ssim": 0.94758411,
+            "largestBadComponent": 556
+          },
+          "textBbox": {
+            "count": 23,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10277714,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_quote_image",
+          "baselineSha256": "5744f19f54380f0f4308eff3e72d7fc6cbb2981739bb8c49f25475852b5d7144",
+          "metrics": {
+            "meanAbsoluteError": 0.01094033,
+            "perceptualBadPixelRatio": 0.02725369,
+            "ssim": 0.97116143,
+            "largestBadComponent": 2304
+          },
+          "textBbox": {
+            "count": 7,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09822901,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 9,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_table_description",
+          "baselineSha256": "29c37d8be3037660ba98190facca5f6ba2264f860cc3ac75bd351ba6e4f41d68",
+          "metrics": {
+            "meanAbsoluteError": 0.00767959,
+            "perceptualBadPixelRatio": 0.02487305,
+            "ssim": 0.96537677,
+            "largestBadComponent": 888
+          },
+          "textBbox": {
+            "count": 24,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08941313,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 3,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "table_of_contents",
+          "baselineSha256": "4a219b411494b7c9cebe32f4a1a35cedff3534f16016c43138404bd2fe7ebc76",
+          "metrics": {
+            "meanAbsoluteError": 0.00723389,
+            "perceptualBadPixelRatio": 0.02060981,
+            "ssim": 0.972654,
+            "largestBadComponent": 205
+          },
+          "textBbox": {
+            "count": 41,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09851251,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 11,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_team_cards",
+          "baselineSha256": "954e2bebdd974d6682f88962425cbc01bf6d7e90983b8ab33daa119edf1df883",
+          "metrics": {
+            "meanAbsoluteError": 0.01168858,
+            "perceptualBadPixelRatio": 0.03717882,
+            "ssim": 0.94742451,
+            "largestBadComponent": 556
+          },
+          "textBbox": {
+            "count": 40,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10474313,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 4,
+            "svgCount": 6,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "templateId": "modern",
+      "selectedPageCount": 10,
+      "pdfSha256": "759a633ecc31923a96d963859b584e97652dfb1d2e3b337ec7f043a98b583041",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.00908093,
+        "meanAbsoluteErrorMaximum": 0.01649518,
+        "perceptualBadPixelRatioAverage": 0.02931934,
+        "perceptualBadPixelRatioMaximum": 0.05063368,
+        "ssimMinimum": 0.9138617,
+        "largestBadComponentMaximum": 2400,
+        "textBboxMeanAbsoluteErrorMaximum": 0.14873094,
+        "textBboxCount": 220,
+        "textBboxOutOfBounds": 0
+      },
+      "layouts": [
+        {
+          "layoutId": "title_slide",
+          "baselineSha256": "cc5238810cc0914fbf1304ac9bd15b26f28236a0320116debe452321f088d4d7",
+          "metrics": {
+            "meanAbsoluteError": 0.0044472,
+            "perceptualBadPixelRatio": 0.01475803,
+            "ssim": 0.97577227,
+            "largestBadComponent": 584
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11631235,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_bullet_points_grid_with_icon",
+          "baselineSha256": "138fa1c532e1e3dc093e257f4e83e574d1fb360b2cc6566869e06b6334aea585",
+          "metrics": {
+            "meanAbsoluteError": 0.01100312,
+            "perceptualBadPixelRatio": 0.03062609,
+            "ssim": 0.95606228,
+            "largestBadComponent": 2400
+          },
+          "textBbox": {
+            "count": 16,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11369426,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 6,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_bullet_points_list_with_icon",
+          "baselineSha256": "6537c42fd67439ba4206339c53753db214a7b6488e04da9bd7d6ad3bef2a4698",
+          "metrics": {
+            "meanAbsoluteError": 0.01649518,
+            "perceptualBadPixelRatio": 0.05063368,
+            "ssim": 0.9138617,
+            "largestBadComponent": 2400
+          },
+          "textBbox": {
+            "count": 28,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08669688,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 6,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_chart",
+          "baselineSha256": "4933b8f31fd8fb83d853574f5bbc7d1e8f352580926cd36116435b71ba55c2f4",
+          "metrics": {
+            "meanAbsoluteError": 0.00491146,
+            "perceptualBadPixelRatio": 0.01446615,
+            "ssim": 0.97083683,
+            "largestBadComponent": 1278
+          },
+          "textBbox": {
+            "count": 4,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08436314,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 3,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_chart_table",
+          "baselineSha256": "1f7b949e285ffcb7ffc0081143c3c04b137c103f21f36d8c9368afcd35b86314",
+          "metrics": {
+            "meanAbsoluteError": 0.01040354,
+            "perceptualBadPixelRatio": 0.03522786,
+            "ssim": 0.93623702,
+            "largestBadComponent": 2287
+          },
+          "textBbox": {
+            "count": 24,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.14207561,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 3,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_image",
+          "baselineSha256": "05b51d980925f262d03a805b8028f50993c3d21ea53975fd101d83dbe720d020",
+          "metrics": {
+            "meanAbsoluteError": 0.01211892,
+            "perceptualBadPixelRatio": 0.03505859,
+            "ssim": 0.93896595,
+            "largestBadComponent": 897
+          },
+          "textBbox": {
+            "count": 22,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11397881,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_list_of_cards_with_alternating_image",
+          "baselineSha256": "09e75a0824d75f9c8b4b57f47e88e573d48b867e53dee3282013a84d92b3d174",
+          "metrics": {
+            "meanAbsoluteError": 0.00845387,
+            "perceptualBadPixelRatio": 0.03132704,
+            "ssim": 0.94246497,
+            "largestBadComponent": 1278
+          },
+          "textBbox": {
+            "count": 45,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09778665,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 6,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_list_of_cards_with_image",
+          "baselineSha256": "197a45f881c0b5f6b70483a3602694693f5bda830f4a05e3e8b270ccf61fcd0f",
+          "metrics": {
+            "meanAbsoluteError": 0.0041595,
+            "perceptualBadPixelRatio": 0.01560872,
+            "ssim": 0.97512814,
+            "largestBadComponent": 1278
+          },
+          "textBbox": {
+            "count": 19,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08774931,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 6,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_image_description_list_with_highlighted_text_heading_description",
+          "baselineSha256": "927bf34a3b64ee18fe4f080a6d45df3440cd94f6ad9c6f319b518cdeccd170cd",
+          "metrics": {
+            "meanAbsoluteError": 0.01196896,
+            "perceptualBadPixelRatio": 0.03889757,
+            "ssim": 0.92775217,
+            "largestBadComponent": 742
+          },
+          "textBbox": {
+            "count": 22,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10561643,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "table_of_contents",
+          "baselineSha256": "b6a74bbbb41e0b766d399d593b5efb8ed30c090c47dfee54df5a34e92c31e3b1",
+          "metrics": {
+            "meanAbsoluteError": 0.0068476,
+            "perceptualBadPixelRatio": 0.02658963,
+            "ssim": 0.9528402,
+            "largestBadComponent": 1278
+          },
+          "textBbox": {
+            "count": 31,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.14873094,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "templateId": "momentum",
+      "selectedPageCount": 28,
+      "pdfSha256": "9401f9984a409cc8b4bd8819680587d004a2bd9c29a67811a3d79f5716f3c25b",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.01201116,
+        "meanAbsoluteErrorMaximum": 0.02542083,
+        "perceptualBadPixelRatioAverage": 0.02937457,
+        "perceptualBadPixelRatioMaximum": 0.05458008,
+        "ssimMinimum": 0.91952995,
+        "largestBadComponentMaximum": 3801,
+        "textBboxMeanAbsoluteErrorMaximum": 0.24169644,
+        "textBboxCount": 571,
+        "textBboxOutOfBounds": 4
+      },
+      "layouts": [
+        {
+          "layoutId": "title_with_accent_footer_6891",
+          "baselineSha256": "a0965dd4531b68de8329d84f8fc3f57f7a25eea56e403a0e51ee380a9385faa9",
+          "metrics": {
+            "meanAbsoluteError": 0.00557587,
+            "perceptualBadPixelRatio": 0.01312717,
+            "ssim": 0.9793059,
+            "largestBadComponent": 481
+          },
+          "textBbox": {
+            "count": 7,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15243638,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_agenda_grid_wave_7815",
+          "baselineSha256": "cf98d953aa8352600d5e8e3d724358b1ea323ab188050a7598272d979e9ba45b",
+          "metrics": {
+            "meanAbsoluteError": 0.00213234,
+            "perceptualBadPixelRatio": 0.0040549,
+            "ssim": 0.99246636,
+            "largestBadComponent": 478
+          },
+          "textBbox": {
+            "count": 3,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.13555378,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_text_image_columns_5015",
+          "baselineSha256": "1547d334e4c34515dfbedffbaea5304491ed1a5a743b57d51ad12f988c14b204",
+          "metrics": {
+            "meanAbsoluteError": 0.00717093,
+            "perceptualBadPixelRatio": 0.01581163,
+            "ssim": 0.97074814,
+            "largestBadComponent": 467
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.19478656,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_side_callouts_2594",
+          "baselineSha256": "63621dbe22ced885c3e332c2c720e1e23ef8b62cabf784592966ddde8a89902b",
+          "metrics": {
+            "meanAbsoluteError": 0.01048846,
+            "perceptualBadPixelRatio": 0.02860135,
+            "ssim": 0.96216618,
+            "largestBadComponent": 864
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 4,
+            "maximumMeanAbsoluteError": 0.17536765,
+            "passed": false
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 4,
+            "clippedText": 4,
+            "transparencyCount": 0,
+            "svgCount": 8,
+            "chartCanvasCount": 0
+          },
+          "passed": true,
+          "acceptedKnownObservation": {
+            "code": "known-momentum-side-callout-glyph-bounds-v1",
+            "reason": "Four transformed side-callout glyph ranges extend beyond the slide by browser Range geometry while the committed browser PNG remains clipped to the 1280x720 canvas.",
+            "evidence": "templates/manifests/momentum.browser-golden/04-title_with_side_callouts_2594.png",
+            "maxOutOfBounds": 4,
+            "maxClippedText": 4,
+            "maxOverflowElements": 4,
+            "observed": {
+              "outOfBounds": 4,
+              "clippedText": 4,
+              "overflowElements": 4
+            }
+          }
+        },
+        {
+          "layoutId": "title_intro_cards_decorative_frame_6592",
+          "baselineSha256": "7a811ccc3e3f1b67fb975d57a9ff8f2fdfc03987f25a42089c0faf3bc22a7635",
+          "metrics": {
+            "meanAbsoluteError": 0.01891741,
+            "perceptualBadPixelRatio": 0.04691515,
+            "ssim": 0.91952995,
+            "largestBadComponent": 707
+          },
+          "textBbox": {
+            "count": 37,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.18284824,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "photo_collage_title_steps_1029",
+          "baselineSha256": "03f46edd9520818234853be5ab07639a022383a86b2a883f8acefabc9b3b15ed",
+          "metrics": {
+            "meanAbsoluteError": 0.00723173,
+            "perceptualBadPixelRatio": 0.01556098,
+            "ssim": 0.97205805,
+            "largestBadComponent": 641
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.21527378,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_process_cards_9539",
+          "baselineSha256": "19455f492507c6807e4502f7b022ec308f7ae29a4d4fdf1be1b80171c0ab25fa",
+          "metrics": {
+            "meanAbsoluteError": 0.01123593,
+            "perceptualBadPixelRatio": 0.02676649,
+            "ssim": 0.95919889,
+            "largestBadComponent": 1559
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.17961601,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_image_metrics_4860",
+          "baselineSha256": "b10b9f32fdcc0849e47c6ec21e5c93f07db8b939f5c88c65333d98dd801279ad",
+          "metrics": {
+            "meanAbsoluteError": 0.00960198,
+            "perceptualBadPixelRatio": 0.02123372,
+            "ssim": 0.96830205,
+            "largestBadComponent": 1319
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.201394,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_over_cards_layout_8558",
+          "baselineSha256": "7bdd91895eb66cd5794f514de8d3f369cdbac67c778301d8b9592e565ce06c97",
+          "metrics": {
+            "meanAbsoluteError": 0.01603787,
+            "perceptualBadPixelRatio": 0.04323568,
+            "ssim": 0.93978658,
+            "largestBadComponent": 499
+          },
+          "textBbox": {
+            "count": 44,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.21587219,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_table_with_accents_1720",
+          "baselineSha256": "c7f1d137f356f71c6c0f4ab0a32e19f9633132839fad43ff2ab8276ad5e2dc3c",
+          "metrics": {
+            "meanAbsoluteError": 0.01034587,
+            "perceptualBadPixelRatio": 0.0236339,
+            "ssim": 0.95322064,
+            "largestBadComponent": 519
+          },
+          "textBbox": {
+            "count": 25,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16509395,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_intro_staggered_cards_4014",
+          "baselineSha256": "a093b0d900dcb83b038ae5e1312dcb7772509f78864b96199b9fa8c8f1dde58f",
+          "metrics": {
+            "meanAbsoluteError": 0.02542083,
+            "perceptualBadPixelRatio": 0.05458008,
+            "ssim": 0.92946059,
+            "largestBadComponent": 2651
+          },
+          "textBbox": {
+            "count": 47,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15044654,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_metrics_cards_8330",
+          "baselineSha256": "2b779d6eb50ccc2ed32c791b99e723e19db3f8be682aad45476b2e69a08161d0",
+          "metrics": {
+            "meanAbsoluteError": 0.01087244,
+            "perceptualBadPixelRatio": 0.02717773,
+            "ssim": 0.96043492,
+            "largestBadComponent": 437
+          },
+          "textBbox": {
+            "count": 12,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.18143893,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_callout_footer_4748",
+          "baselineSha256": "3be9adf53473033734974c45a983f91c1714f02e1de357eca37852468fe157ae",
+          "metrics": {
+            "meanAbsoluteError": 0.01320047,
+            "perceptualBadPixelRatio": 0.03273763,
+            "ssim": 0.94999569,
+            "largestBadComponent": 2239
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1679279,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_text_chart_panel_cards_5852",
+          "baselineSha256": "603d22d72d68e66025de3c4f65c3efe9fe824f8dbb812a15ace61b84de066cee",
+          "metrics": {
+            "meanAbsoluteError": 0.01452283,
+            "perceptualBadPixelRatio": 0.03566081,
+            "ssim": 0.93788406,
+            "largestBadComponent": 1095
+          },
+          "textBbox": {
+            "count": 18,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.16228612,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_cards_grid_2766",
+          "baselineSha256": "e3999114ce8b457352cd87dc9af70249d3e476475dd47c081fa769465783830e",
+          "metrics": {
+            "meanAbsoluteError": 0.00655819,
+            "perceptualBadPixelRatio": 0.01447374,
+            "ssim": 0.97360369,
+            "largestBadComponent": 927
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.18615735,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 4,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_chart_analysis_sections_9322",
+          "baselineSha256": "b119cc604bfc107df2fd46341b5d7b5d6d94d4ebc6b6b0bdca5275b47c39ea2d",
+          "metrics": {
+            "meanAbsoluteError": 0.01307163,
+            "perceptualBadPixelRatio": 0.02929905,
+            "ssim": 0.94801442,
+            "largestBadComponent": 3801
+          },
+          "textBbox": {
+            "count": 10,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15811625,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_charts_card_grid_4598",
+          "baselineSha256": "92c12a431c1258e02acf88100fdf84f153d605fde9e955a6b2c24f5ca635d264",
+          "metrics": {
+            "meanAbsoluteError": 0.00960055,
+            "perceptualBadPixelRatio": 0.02249566,
+            "ssim": 0.96066502,
+            "largestBadComponent": 2924
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.15164488,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_infographic_sections_6705",
+          "baselineSha256": "9fd5877bb1f64c0dac0fc08f31373135e414243c388223f5ad734f8df92d87ca",
+          "metrics": {
+            "meanAbsoluteError": 0.01635164,
+            "perceptualBadPixelRatio": 0.04632921,
+            "ssim": 0.94134574,
+            "largestBadComponent": 769
+          },
+          "textBbox": {
+            "count": 23,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.17533701,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 3,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_quote_with_portrait_3397",
+          "baselineSha256": "fd0c58fda9274b1762f89147ec949f462177378190a40493853a41d6eb5e1625",
+          "metrics": {
+            "meanAbsoluteError": 0.00698363,
+            "perceptualBadPixelRatio": 0.01556749,
+            "ssim": 0.9761609,
+            "largestBadComponent": 530
+          },
+          "textBbox": {
+            "count": 9,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1640625,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "image_sidebar_title_cards_7863",
+          "baselineSha256": "ad828dda30815cf76984c5964f5d07bf78d4cd7ec662f8df222f24da6535f980",
+          "metrics": {
+            "meanAbsoluteError": 0.01204772,
+            "perceptualBadPixelRatio": 0.02923828,
+            "ssim": 0.95106232,
+            "largestBadComponent": 587
+          },
+          "textBbox": {
+            "count": 18,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.21144301,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_team_cards_grid_3062",
+          "baselineSha256": "f77335d23b125200656a44792afab4e610170baf5f8734718fd504c843a81a7d",
+          "metrics": {
+            "meanAbsoluteError": 0.00796953,
+            "perceptualBadPixelRatio": 0.01802626,
+            "ssim": 0.97026089,
+            "largestBadComponent": 349
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.18287377,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_timeline_cards_9036",
+          "baselineSha256": "c3069ab1bd3695212c3e4198288ae052fead8a73360106f1abea65d38beeb481",
+          "metrics": {
+            "meanAbsoluteError": 0.01890341,
+            "perceptualBadPixelRatio": 0.0452322,
+            "ssim": 0.93858773,
+            "largestBadComponent": 1443
+          },
+          "textBbox": {
+            "count": 33,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.22778799,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 8,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_text_with_staggered_cards_4998",
+          "baselineSha256": "4053806ac4493690d7076405fbb0060efb1371a488f9e7d54a1bfe52bd34afc0",
+          "metrics": {
+            "meanAbsoluteError": 0.01507774,
+            "perceptualBadPixelRatio": 0.04224067,
+            "ssim": 0.93263344,
+            "largestBadComponent": 705
+          },
+          "textBbox": {
+            "count": 55,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.24169644,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_with_pricing_cards_6716",
+          "baselineSha256": "d9b143c8fffc887e0c3d7bd0900bb2a2006bddc437a8a3b6f24b81561c7c06c2",
+          "metrics": {
+            "meanAbsoluteError": 0.00881669,
+            "perceptualBadPixelRatio": 0.02500434,
+            "ssim": 0.96789343,
+            "largestBadComponent": 760
+          },
+          "textBbox": {
+            "count": 26,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.19560355,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_metrics_cards_25_2120",
+          "baselineSha256": "f29ea0ed1903ea61c4e15dcaddbeb343d1aa6bfb71b3031b73ba264e20d00b16",
+          "metrics": {
+            "meanAbsoluteError": 0.01862474,
+            "perceptualBadPixelRatio": 0.04739692,
+            "ssim": 0.92115742,
+            "largestBadComponent": 817
+          },
+          "textBbox": {
+            "count": 43,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1333293,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_timeline_cards_26_8744",
+          "baselineSha256": "e208731a45b1cc2ed503befd7a7d2f4c0ac84cd3ef9bc644910e2b6aae9e8a8c",
+          "metrics": {
+            "meanAbsoluteError": 0.01828978,
+            "perceptualBadPixelRatio": 0.04964193,
+            "ssim": 0.94167894,
+            "largestBadComponent": 419
+          },
+          "textBbox": {
+            "count": 37,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.23464731,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 10,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_text_image_metric_layout_3492",
+          "baselineSha256": "591e8408c27adecd9b6851f9c30110b2c0037b7e78dccd9a479bf6b26ff685bc",
+          "metrics": {
+            "meanAbsoluteError": 0.0125653,
+            "perceptualBadPixelRatio": 0.02981988,
+            "ssim": 0.94887382,
+            "largestBadComponent": 682
+          },
+          "textBbox": {
+            "count": 14,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.13707024,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "branded_title_wave_footer_8702",
+          "baselineSha256": "243c9a4e966977f6be1ac39d742799134c80c5d936ceded25c1bf763e0dc6818",
+          "metrics": {
+            "meanAbsoluteError": 0.00869697,
+            "perceptualBadPixelRatio": 0.01862522,
+            "ssim": 0.96829321,
+            "largestBadComponent": 807
+          },
+          "textBbox": {
+            "count": 6,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.13730021,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 0,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "templateId": "standard",
+      "selectedPageCount": 11,
+      "pdfSha256": "af58dda92291bc94f24f1db95cb68d64f99f0316f9ce62f17012f92e7397a9ad",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.00958879,
+        "meanAbsoluteErrorMaximum": 0.02268752,
+        "perceptualBadPixelRatioAverage": 0.02554806,
+        "perceptualBadPixelRatioMaximum": 0.06536241,
+        "ssimMinimum": 0.9057397,
+        "largestBadComponentMaximum": 1602,
+        "textBboxMeanAbsoluteErrorMaximum": 0.13921331,
+        "textBboxCount": 181,
+        "textBboxOutOfBounds": 0
+      },
+      "layouts": [
+        {
+          "layoutId": "left_image_right_cover_text_7212",
+          "baselineSha256": "3c182f3f2637518a39e79a90efa73b2a8215c55eab40cb1ab4c8378e527d247b",
+          "metrics": {
+            "meanAbsoluteError": 0.00766725,
+            "perceptualBadPixelRatio": 0.01976671,
+            "ssim": 0.9633821,
+            "largestBadComponent": 640
+          },
+          "textBbox": {
+            "count": 11,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10760847,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_chart_right_title_description_5880",
+          "baselineSha256": "5da0252c9540e2ff4217616065dd85015f63644fe4f27ea63d1d03912730f861",
+          "metrics": {
+            "meanAbsoluteError": 0.00457446,
+            "perceptualBadPixelRatio": 0.01364692,
+            "ssim": 0.97256188,
+            "largestBadComponent": 741
+          },
+          "textBbox": {
+            "count": 5,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.07087468,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 1,
+            "chartCanvasCount": 1
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_image_right_details_2189",
+          "baselineSha256": "e0e25c207ac0119d52a4a08392b7fb4f5f8e62ec4674bfa402fef8f4f7f0e3c9",
+          "metrics": {
+            "meanAbsoluteError": 0.00618461,
+            "perceptualBadPixelRatio": 0.01389757,
+            "ssim": 0.96708718,
+            "largestBadComponent": 1241
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10743537,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 3,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_image_right_title_strategy_cards_6875",
+          "baselineSha256": "cb474996a17b644f180057f14368c51d4635ad0555129f71356cc1bedf435adc",
+          "metrics": {
+            "meanAbsoluteError": 0.00971279,
+            "perceptualBadPixelRatio": 0.02643338,
+            "ssim": 0.94991484,
+            "largestBadComponent": 1602
+          },
+          "textBbox": {
+            "count": 26,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.08706695,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 3,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_text_list_right_title_note_4909",
+          "baselineSha256": "cad4b73cde144216832eabe9c355043643f5a7ca1420caf718df0ef5824a2088",
+          "metrics": {
+            "meanAbsoluteError": 0.00775251,
+            "perceptualBadPixelRatio": 0.02145942,
+            "ssim": 0.96926427,
+            "largestBadComponent": 435
+          },
+          "textBbox": {
+            "count": 11,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09368263,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_image_background_center_card_1475",
+          "baselineSha256": "53b74b62e83023babacba4b7cb3f563f1805e833fc0435851e12ef2bbb2548fb",
+          "metrics": {
+            "meanAbsoluteError": 0.01254426,
+            "perceptualBadPixelRatio": 0.02855143,
+            "ssim": 0.93980693,
+            "largestBadComponent": 1278
+          },
+          "textBbox": {
+            "count": 8,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10180972,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 1,
+            "svgCount": 5,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_cards_2395",
+          "baselineSha256": "9a80d7297472c615e5fa93e43e52d0e4dbaeac0f2cf3f3b15dd53fa1d8d78635",
+          "metrics": {
+            "meanAbsoluteError": 0.00802359,
+            "perceptualBadPixelRatio": 0.02116428,
+            "ssim": 0.96743726,
+            "largestBadComponent": 637
+          },
+          "textBbox": {
+            "count": 13,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.0975541,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 3,
+            "svgCount": 8,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_metric_card_grid_7973",
+          "baselineSha256": "f70866a44c54a8e230638ed6284b344075dfb856aa2fa4ab1ecbf68b3efdc17c",
+          "metrics": {
+            "meanAbsoluteError": 0.02268752,
+            "perceptualBadPixelRatio": 0.06536241,
+            "ssim": 0.9057397,
+            "largestBadComponent": 1406
+          },
+          "textBbox": {
+            "count": 38,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11315216,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 6,
+            "svgCount": 8,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_timeline_center_image_right_title_6170",
+          "baselineSha256": "e58d274047def5d52ea8ea107da5d3757e76a181f63a098b6f4a8c18285b8ec6",
+          "metrics": {
+            "meanAbsoluteError": 0.00720663,
+            "perceptualBadPixelRatio": 0.01845269,
+            "ssim": 0.96894013,
+            "largestBadComponent": 1080
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10895894,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 2,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_index_grid_3810",
+          "baselineSha256": "d55371150f380a83211b61255ad699c6a42c4698da3df6e1e588eeb53df659d9",
+          "metrics": {
+            "meanAbsoluteError": 0.00700537,
+            "perceptualBadPixelRatio": 0.01674154,
+            "ssim": 0.94242285,
+            "largestBadComponent": 452
+          },
+          "textBbox": {
+            "count": 22,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.13921331,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 22,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_description_metric_cards_2015",
+          "baselineSha256": "94d2e584d9838a2153410d2956c755633b5791264b1351ea27b6cbeaa6260aa2",
+          "metrics": {
+            "meanAbsoluteError": 0.01211773,
+            "perceptualBadPixelRatio": 0.0355523,
+            "ssim": 0.93635208,
+            "largestBadComponent": 550
+          },
+          "textBbox": {
+            "count": 24,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.12705211,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 18,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "templateId": "swift",
+      "selectedPageCount": 9,
+      "pdfSha256": "2320aff579131228e3e882a896f9d897fda9691689074ec9f35669602fd01384",
+      "metrics": {
+        "meanAbsoluteErrorAverage": 0.00912365,
+        "meanAbsoluteErrorMaximum": 0.01893081,
+        "perceptualBadPixelRatioAverage": 0.02259633,
+        "perceptualBadPixelRatioMaximum": 0.03698568,
+        "ssimMinimum": 0.9268854,
+        "largestBadComponentMaximum": 3248,
+        "textBboxMeanAbsoluteErrorMaximum": 0.19170425,
+        "textBboxCount": 168,
+        "textBboxOutOfBounds": 0
+      },
+      "layouts": [
+        {
+          "layoutId": "left_cover_text_right_image_2459",
+          "baselineSha256": "23b490d11c6dd583b61d6d543f49f15ba22eb21e15cf8bdbccaa3c0c2ed8277f",
+          "metrics": {
+            "meanAbsoluteError": 0.00412698,
+            "perceptualBadPixelRatio": 0.01078234,
+            "ssim": 0.97964226,
+            "largestBadComponent": 520
+          },
+          "textBbox": {
+            "count": 7,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.11984258,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 9,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_note_icon_cards_2844",
+          "baselineSha256": "b101f3c025986cbf43c4a1d02cc032d86e191bc6ec0c139a2a25d54dc2ad7ce9",
+          "metrics": {
+            "meanAbsoluteError": 0.01893081,
+            "perceptualBadPixelRatio": 0.03698568,
+            "ssim": 0.9268854,
+            "largestBadComponent": 3248
+          },
+          "textBbox": {
+            "count": 22,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.1342061,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 4,
+            "svgCount": 8,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_cards_color_band_3936",
+          "baselineSha256": "11d4bf9bd57861b5f518df89951578ad3b1af5542ba28417434f684aeea2cf66",
+          "metrics": {
+            "meanAbsoluteError": 0.01045418,
+            "perceptualBadPixelRatio": 0.02354926,
+            "ssim": 0.94313931,
+            "largestBadComponent": 624
+          },
+          "textBbox": {
+            "count": 13,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.12777592,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 4,
+            "svgCount": 13,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_intro_image_cards_2981",
+          "baselineSha256": "56a957ae91e859bb8597b5bb4402076144466af9fe6e402ff4b2c4ba2d7bc638",
+          "metrics": {
+            "meanAbsoluteError": 0.00436804,
+            "perceptualBadPixelRatio": 0.01336263,
+            "ssim": 0.97567707,
+            "largestBadComponent": 406
+          },
+          "textBbox": {
+            "count": 13,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.10584279,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 7,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_right_stacked_cards_2710",
+          "baselineSha256": "0fbf9024c9c78ba8afb17dc45420914130d8aaa452360670d969bbde2828fe9b",
+          "metrics": {
+            "meanAbsoluteError": 0.008711,
+            "perceptualBadPixelRatio": 0.02196615,
+            "ssim": 0.94159908,
+            "largestBadComponent": 672
+          },
+          "textBbox": {
+            "count": 21,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.14173244,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 3,
+            "svgCount": 9,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "left_title_right_text_sections_1377",
+          "baselineSha256": "a62df297d06133f443d2594950682b7c861045310b9fc78dc4e71b5073b7f42e",
+          "metrics": {
+            "meanAbsoluteError": 0.01028164,
+            "perceptualBadPixelRatio": 0.03100043,
+            "ssim": 0.94371788,
+            "largestBadComponent": 251
+          },
+          "textBbox": {
+            "count": 19,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.09457637,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 4,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_index_grid_6248",
+          "baselineSha256": "d906aa3407960844ce1af7187cf3c26e3d869ffeb7721e36fc3a7c317215ac7a",
+          "metrics": {
+            "meanAbsoluteError": 0.01052956,
+            "perceptualBadPixelRatio": 0.03092448,
+            "ssim": 0.9430453,
+            "largestBadComponent": 270
+          },
+          "textBbox": {
+            "count": 32,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.12635054,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 14,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "title_table_panel_6574",
+          "baselineSha256": "3588671ba30a22f774f5b03542e02c1a09dabb8cc0115a13a5974c7397837f5e",
+          "metrics": {
+            "meanAbsoluteError": 0.00377256,
+            "perceptualBadPixelRatio": 0.01055664,
+            "ssim": 0.98001666,
+            "largestBadComponent": 207
+          },
+          "textBbox": {
+            "count": 26,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.12272712,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 0,
+            "svgCount": 8,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        },
+        {
+          "layoutId": "center_title_timeline_cards_9667",
+          "baselineSha256": "1f87b30e892e746d6084d81a0c3cc9c7ef4d28dd33e17c55ad8dd3453a2c1d8c",
+          "metrics": {
+            "meanAbsoluteError": 0.01093804,
+            "perceptualBadPixelRatio": 0.02423937,
+            "ssim": 0.94799195,
+            "largestBadComponent": 624
+          },
+          "textBbox": {
+            "count": 15,
+            "outOfBounds": 0,
+            "maximumMeanAbsoluteError": 0.19170425,
+            "passed": true
+          },
+          "telemetry": {
+            "fontSetStatus": "loaded",
+            "failedFonts": 0,
+            "overflowElements": 0,
+            "clippedText": 0,
+            "transparencyCount": 4,
+            "svgCount": 20,
+            "chartCanvasCount": 0
+          },
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

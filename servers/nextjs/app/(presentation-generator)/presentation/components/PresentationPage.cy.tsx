@@ -82,6 +82,8 @@ const buildDeck = (slideCount: number) => ({
   language: "ko",
   layout: { name: "blank", ordered: true, slides: [] },
   n_slides: slideCount,
+  revision: 1,
+  lifecycle_status: "published",
   theme: null,
   ...standardRuntime,
   slides: Array.from({ length: slideCount }, (_, index) =>
@@ -218,6 +220,10 @@ describe("<PresentationPage />", () => {
     cy.get("#slide-0").should("exist");
     cy.get("#slide-1").should("exist");
     cy.get('[data-testid="slides-scroll-container"]').should("be.visible");
+    cy.get('main[data-render-artifact-contract="presenton.render-artifact/v1"]')
+      .should("have.attr", "data-render-artifact-target", "preview")
+      .and("have.attr", "data-editor-adapter", "legacy-elements")
+      .and("have.attr", "data-assistant-adapter", "canonical-workspace");
   });
 
   it("enables Smart HTML selection and forwards the selected element to canonical chat", () => {
@@ -281,13 +287,11 @@ describe("<PresentationPage />", () => {
     mountPage();
 
     cy.wait("@loadDeckError");
-    cy.contains("문제가 발생했습니다").should("be.visible");
-    cy.contains("발표자료를 불러오지 못했습니다. 다시 시도해 주세요.").should(
-      "be.visible",
-    );
-    cy.contains("button", "페이지 새로고침").should("be.visible");
-
-    cy.contains("button", "업로드로 이동").click();
+    cy.get('[role="alert"]')
+      .should("be.visible")
+      .within(() => {
+        cy.get("button").should("have.length", 2).eq(1).click();
+      });
 
     cy.wrap(null).should(() => {
       expect(router.push).to.have.been.calledWith("/upload");

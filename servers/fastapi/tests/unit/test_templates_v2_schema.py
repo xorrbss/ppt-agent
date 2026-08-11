@@ -476,3 +476,72 @@ def test_repeated_flex_children_collapse_to_one_array_property():
         },
         extract_slide_schema_from_layout(layout),
     )
+
+
+def test_component_schema_collapses_positioned_top_level_groups_to_array():
+    component = {
+        "id": "timeline",
+        "description": "Irregular center-out timeline anchors.",
+        "elements": [
+            {
+                "type": "group",
+                "name": f"timeline_item_{index}",
+                "position": {"x": x, "y": y},
+                "children": [
+                    {
+                        "type": "text",
+                        "decorative": False,
+                        "name": f"milestone_{index}_title",
+                        "min_length": 3,
+                        "max_length": 24,
+                    }
+                ],
+            }
+            for index, (x, y) in enumerate(
+                ((500, 250), (300, 140), (700, 360), (100, 40)),
+                start=1,
+            )
+        ],
+    }
+
+    schema = get_component_schema(component)
+
+    assert schema is not None
+    timeline = schema["properties"]["timeline_item"]
+    assert (timeline["minItems"], timeline["maxItems"]) == (2, 4)
+    assert timeline["items"]["properties"]["milestone_title"]["type"] == "string"
+
+
+def test_component_schema_collapses_nested_staggered_group_items_to_array():
+    component = {
+        "id": "callouts",
+        "description": "Staggered callout groups with fixed anchors.",
+        "elements": [
+            {
+                "type": "group",
+                "name": "staggered_callouts",
+                "children": [
+                    {
+                        "type": "group",
+                        "name": f"callout_{index}",
+                        "position": {"x": index * 150, "y": (index % 2) * 80},
+                        "children": [
+                            {
+                                "type": "text",
+                                "decorative": False,
+                                "name": f"callout_title_{index}",
+                            }
+                        ],
+                    }
+                    for index in range(1, 4)
+                ],
+            }
+        ],
+    }
+
+    schema = get_component_schema(component)
+
+    assert schema is not None
+    repeated = schema["properties"]["staggered_callouts"]
+    assert (repeated["minItems"], repeated["maxItems"]) == (1, 3)
+    assert "callout_title" in repeated["items"]["properties"]

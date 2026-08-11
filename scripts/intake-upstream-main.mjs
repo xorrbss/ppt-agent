@@ -274,9 +274,25 @@ function commitClassifications(snapshot, policy, registry) {
 
 function verifyAcceptedMetadata(policy, current) {
   const expected = policy.acceptedBaseline;
-  return ["committedAt", "subject"]
-    .filter((key) => expected[key] && expected[key] !== current[key])
-    .map((key) => `${key} expected ${expected[key]}, got ${current[key]}`);
+  const mismatches = [];
+
+  if (expected.committedAt) {
+    const expectedInstant = Date.parse(expected.committedAt);
+    const currentInstant = Date.parse(current.committedAt ?? "");
+    if (
+      !Number.isFinite(expectedInstant) ||
+      !Number.isFinite(currentInstant) ||
+      expectedInstant !== currentInstant
+    ) {
+      mismatches.push(
+        `committedAt expected ${expected.committedAt}, got ${current.committedAt}`
+      );
+    }
+  }
+  if (expected.subject && expected.subject !== current.subject) {
+    mismatches.push(`subject expected ${expected.subject}, got ${current.subject}`);
+  }
+  return mismatches;
 }
 
 function intakeErrorResult(snapshot, policy, registry) {
@@ -389,8 +405,10 @@ export function renderMarkdown(result) {
     "",
     `- Status: \`${result.status}\``,
     `- Risk: \`${result.risk}\``,
-    `- Accepted baseline: \`${result.acceptedBaseline?.sha ?? "unavailable"}\``,
-    `- Observed upstream: \`${result.observedUpstream?.sha ?? "unavailable"}\``,
+    // This is deliberately distinct from compatibility/upstream-compatibility.json's
+    // compatibility baseline. Intake only verifies the accepted remote observation.
+    `- Intake accepted baseline: \`${result.acceptedBaseline?.sha ?? "unavailable"}\``,
+    `- Intake observed upstream: \`${result.observedUpstream?.sha ?? "unavailable"}\``,
     `- Classification complete: \`${result.classificationComplete}\``,
   ];
   if (result.range) {

@@ -1,0 +1,232 @@
+{
+  "schemaVersion": "presenton.template-browser-capture-evidence/v1",
+  "templateId": "momentum",
+  "rendererModuleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+  "entrypointSha256": "07d15e7283ab4f9ae5b0ff70cef306bdc5cfaea801e1b92e04ea41747b6c5e53",
+  "captureAdapter": "chromium-cdp/Page.captureScreenshot",
+  "browser": {
+    "product": "Chrome/151.0.7922.76",
+    "revision": "@031bfd60f544af71d8dd7246970d1af3e1acf3ad",
+    "protocolVersion": "1.3"
+  },
+  "capturedAt": "2026-08-11T04:04:39.114Z",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "thresholds": {
+    "badPixelRatio": 0.005,
+    "meanAbsoluteError": 0.001
+  },
+  "screenshots": [
+    {
+      "layoutId": "title_with_accent_footer_6891",
+      "goldenSha256": "a0965dd4531b68de8329d84f8fc3f57f7a25eea56e403a0e51ee380a9385faa9",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_agenda_grid_wave_7815",
+      "goldenSha256": "cf98d953aa8352600d5e8e3d724358b1ea323ab188050a7598272d979e9ba45b",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_text_image_columns_5015",
+      "goldenSha256": "1547d334e4c34515dfbedffbaea5304491ed1a5a743b57d51ad12f988c14b204",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_with_side_callouts_2594",
+      "goldenSha256": "63621dbe22ced885c3e332c2c720e1e23ef8b62cabf784592966ddde8a89902b",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_intro_cards_decorative_frame_6592",
+      "goldenSha256": "7a811ccc3e3f1b67fb975d57a9ff8f2fdfc03987f25a42089c0faf3bc22a7635",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "photo_collage_title_steps_1029",
+      "goldenSha256": "03f46edd9520818234853be5ab07639a022383a86b2a883f8acefabc9b3b15ed",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_process_cards_9539",
+      "goldenSha256": "19455f492507c6807e4502f7b022ec308f7ae29a4d4fdf1be1b80171c0ab25fa",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_image_metrics_4860",
+      "goldenSha256": "b10b9f32fdcc0849e47c6ec21e5c93f07db8b939f5c88c65333d98dd801279ad",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_over_cards_layout_8558",
+      "goldenSha256": "7bdd91895eb66cd5794f514de8d3f369cdbac67c778301d8b9592e565ce06c97",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_table_with_accents_1720",
+      "goldenSha256": "c7f1d137f356f71c6c0f4ab0a32e19f9633132839fad43ff2ab8276ad5e2dc3c",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_intro_staggered_cards_4014",
+      "goldenSha256": "a093b0d900dcb83b038ae5e1312dcb7772509f78864b96199b9fa8c8f1dde58f",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_metrics_cards_8330",
+      "goldenSha256": "2b779d6eb50ccc2ed32c791b99e723e19db3f8be682aad45476b2e69a08161d0",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_chart_callout_footer_4748",
+      "goldenSha256": "3be9adf53473033734974c45a983f91c1714f02e1de357eca37852468fe157ae",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_text_chart_panel_cards_5852",
+      "goldenSha256": "603d22d72d68e66025de3c4f65c3efe9fe824f8dbb812a15ace61b84de066cee",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_chart_cards_grid_2766",
+      "goldenSha256": "e3999114ce8b457352cd87dc9af70249d3e476475dd47c081fa769465783830e",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_chart_analysis_sections_9322",
+      "goldenSha256": "b119cc604bfc107df2fd46341b5d7b5d6d94d4ebc6b6b0bdca5275b47c39ea2d",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_charts_card_grid_4598",
+      "goldenSha256": "92c12a431c1258e02acf88100fdf84f153d605fde9e955a6b2c24f5ca635d264",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_infographic_sections_6705",
+      "goldenSha256": "9fd5877bb1f64c0dac0fc08f31373135e414243c388223f5ad734f8df92d87ca",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_quote_with_portrait_3397",
+      "goldenSha256": "fd0c58fda9274b1762f89147ec949f462177378190a40493853a41d6eb5e1625",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "image_sidebar_title_cards_7863",
+      "goldenSha256": "ad828dda30815cf76984c5964f5d07bf78d4cd7ec662f8df222f24da6535f980",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_team_cards_grid_3062",
+      "goldenSha256": "f77335d23b125200656a44792afab4e610170baf5f8734718fd504c843a81a7d",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_timeline_cards_9036",
+      "goldenSha256": "c3069ab1bd3695212c3e4198288ae052fead8a73360106f1abea65d38beeb481",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_text_with_staggered_cards_4998",
+      "goldenSha256": "4053806ac4493690d7076405fbb0060efb1371a488f9e7d54a1bfe52bd34afc0",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_with_pricing_cards_6716",
+      "goldenSha256": "d9b143c8fffc887e0c3d7bd0900bb2a2006bddc437a8a3b6f24b81561c7c06c2",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_metrics_cards_25_2120",
+      "goldenSha256": "f29ea0ed1903ea61c4e15dcaddbeb343d1aa6bfb71b3031b73ba264e20d00b16",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_timeline_cards_26_8744",
+      "goldenSha256": "e208731a45b1cc2ed503befd7a7d2f4c0ac84cd3ef9bc644910e2b6aae9e8a8c",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_text_image_metric_layout_3492",
+      "goldenSha256": "591e8408c27adecd9b6851f9c30110b2c0037b7e78dccd9a479bf6b26ff685bc",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "branded_title_wave_footer_8702",
+      "goldenSha256": "243c9a4e966977f6be1ac39d742799134c80c5d936ceded25c1bf763e0dc6818",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    }
+  ],
+  "checks": {
+    "renderedLayoutCount": 28,
+    "nonBlankLayoutCount": 28,
+    "missingImages": 0,
+    "imageCount": 73,
+    "chartCanvasCount": 5,
+    "externalRequests": [],
+    "localFontsLoaded": true,
+    "consoleErrors": [],
+    "paintReadinessContract": "passed"
+  },
+  "status": "passed-browser-capture"
+}

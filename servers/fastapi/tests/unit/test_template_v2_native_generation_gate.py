@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
@@ -7,6 +8,7 @@ import uuid
 import pytest
 
 from models.sql.slide import SlideModel
+from api.v1.ppt.endpoints import presentation_generate as endpoint
 from services import template_v2_generation_service as generation
 from templates.v2.models.layouts import SlideLayout
 from templates.v2.pptx.native_compiler import TemplateV2NativePptxCompileError
@@ -178,3 +180,134 @@ def test_native_preflight_selected_for_export_is_explicit(
     assert preflight.selected_for_export is expected_selected
     assert preflight.pptx == payload
     assert preflight.to_provenance()["selected_for_export"] is expected_selected
+
+
+def test_sync_generation_reuses_stable_export_identity_and_separates_render_target(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    render_id = uuid.uuid4()
+    target_id = uuid.uuid4()
+    calls: list[dict] = []
+    sentinel = object()
+
+    async def capture(_session, **kwargs):
+        calls.append(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(endpoint, "execute_presentation_export", capture)
+
+    class Session:
+        async def get(self, *_args, **_kwargs):
+            raise AssertionError("sync export must not load a workspace operation")
+
+    request = SimpleNamespace(
+        export_as="pptx",
+        model_dump=lambda **_kwargs: {
+            "content": "same request",
+            "export_as": "pptx",
+        },
+    )
+    publication_target = SimpleNamespace(
+        id=target_id,
+        revision=4,
+        owner_id=None,
+    )
+    render = SimpleNamespace(
+        id=render_id,
+        revision=0,
+        title="Isolated render",
+    )
+
+    async def scenario():
+        first = await endpoint._execute_generation_export(
+            Session(),
+            publication_target=publication_target,
+            render_presentation=render,
+            request=request,
+            export_cookie_header=None,
+            generation_job=None,
+        )
+        second = await endpoint._execute_generation_export(
+            Session(),
+            publication_target=publication_target,
+            render_presentation=render,
+            request=request,
+            export_cookie_header=None,
+            generation_job=None,
+        )
+        assert first is second is sentinel
+
+    asyncio.run(scenario())
+
+    assert len(calls) == 2
+    assert calls[0]["render_presentation_id"] == render_id
+    assert calls[0]["attempt_presentation_id"] == target_id
+    assert calls[0]["expected_render_revision"] == 0
+    assert calls[0]["source_revision"] == 5
+    assert calls[0]["idempotency_key_hash"] == calls[1]["idempotency_key_hash"]
+    assert calls[0]["request_hash"] == calls[1]["request_hash"]
+
+
+def test_generation_publication_passes_exact_router_digest_and_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict = {}
+    target_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    attempt_id = uuid.uuid4()
+    artifact_id = uuid.uuid4()
+    expected_digest = "a" * 64
+
+    async def prepare(_session, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            artifact_id=artifact_id,
+            public_path="/app_data/exact.pptx",
+            source_revision=5,
+        )
+
+    async def publish(_session, **_kwargs):
+        return 5
+
+    monkeypatch.setattr(endpoint, "prepare_workspace_generation_artifact", prepare)
+    monkeypatch.setattr(endpoint, "publish_workspace_generation_artifact", publish)
+
+    class Session:
+        async def rollback(self):
+            return None
+
+    execution = SimpleNamespace(
+        attempt_id=attempt_id,
+        source_snapshot_sha256="b" * 64,
+        provenance={"schema_version": 1},
+        route=SimpleNamespace(
+            result=SimpleNamespace(
+                artifact_sha256=expected_digest,
+                artifact_size_bytes=1234,
+                selected_adapter="general",
+            )
+        ),
+    )
+    presentation = SimpleNamespace(
+        id=target_id,
+        revision=4,
+        lifecycle_status="staging",
+    )
+    generation_job = SimpleNamespace(
+        workspace_operation_id=operation_id,
+        attempt_token="attempt",
+    )
+
+    published = asyncio.run(
+        endpoint._publish_staged_presentation(
+            Session(),
+            presentation,
+            "C:/temp/rendered.pptx",
+            generation_job,
+            export_execution=execution,
+        )
+    )
+
+    assert published == "/app_data/exact.pptx"
+    assert captured["expected_source_sha256"] == expected_digest
+    assert captured["expected_source_size_bytes"] == 1234

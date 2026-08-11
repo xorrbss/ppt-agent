@@ -718,8 +718,11 @@ def is_template_v2_catalog_source_bound(
 def is_template_v2_release_ready(template_id: str, assets: Any) -> bool:
     """Apply the shared discovery/generation release gate fail-closed."""
 
+    from templates.packages.registry import is_template_package_release_ready
     from templates.v2.publication import evaluate_template_v2_publication
 
+    if is_template_package_release_ready(template_id, assets):
+        return True
     if not evaluate_template_v2_publication(assets).publishable:
         return False
     entry = get_template_v2_catalog_entry(template_id)

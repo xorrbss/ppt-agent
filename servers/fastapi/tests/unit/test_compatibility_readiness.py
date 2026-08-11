@@ -14,6 +14,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel, select
 
+import migrations
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -86,7 +87,7 @@ def test_compatibility_revision_is_single_head_and_round_trips(tmp_path: Path):
     )
     database_url = f"sqlite:///{(tmp_path / 'migration.db').as_posix()}"
     config.set_main_option("sqlalchemy.url", database_url)
-    assert ScriptDirectory.from_config(config).get_heads() == ["a8c1e4f7b2d9"]
+    assert ScriptDirectory.from_config(config).get_heads() == [migrations.HEAD_REVISION]
 
     engine = sa.create_engine(database_url)
     try:
@@ -96,8 +97,7 @@ def test_compatibility_revision_is_single_head_and_round_trips(tmp_path: Path):
             )
             connection.exec_driver_sql(
                 "CREATE TABLE imageasset ("
-                "id CHAR(32) PRIMARY KEY, path VARCHAR NOT NULL, "
-                "canonical_asset_id CHAR(32))"
+                "id CHAR(32) PRIMARY KEY, path VARCHAR NOT NULL)"
             )
             connection.exec_driver_sql(
                 "CREATE TABLE presentations (id CHAR(32) PRIMARY KEY)"
@@ -109,7 +109,7 @@ def test_compatibility_revision_is_single_head_and_round_trips(tmp_path: Path):
                 sa.text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
                 {"revision": "f7c9e1a3b5d8"},
             )
-        command.upgrade(config, "head")
+        command.upgrade(config, migrations.REVISION_ASSET_PROFILE_COMPATIBILITY)
         assert "canonical_asset_id" in {
             column["name"] for column in sa.inspect(engine).get_columns("imageasset")
         }
@@ -132,7 +132,7 @@ def test_compatibility_revision_is_single_head_and_round_trips(tmp_path: Path):
         assert "canonical_asset_id" not in {
             column["name"] for column in sa.inspect(engine).get_columns("imageasset")
         }
-        command.upgrade(config, "head")
+        command.upgrade(config, migrations.REVISION_ASSET_PROFILE_COMPATIBILITY)
         assert "canonical_asset_id" in {
             column["name"] for column in sa.inspect(engine).get_columns("imageasset")
         }

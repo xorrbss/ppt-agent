@@ -158,14 +158,19 @@ export const templates: TemplateLayoutsWithSettings[] = [
     },
 ];
 
-// Legacy fixed-template groups were removed (#5), so nothing is "retired but kept"
-// anymore. Kept as an (empty) export for API compatibility with importers.
-export const RETIRED_GROUP_IDS = new Set<string>([]);
+// Template V1 groups are retained only to render and edit already-saved decks.
+// New presentations must be created from the Template V2 catalog.
+export const RETIRED_GROUP_IDS = new Set<string>([
+    "adaptive",
+    "korean-biz",
+    "financial-chart",
+    "comparison-table",
+    "roadmap",
+    "org-chart",
+]);
 
-// Built-in groups offered for NEW decks (all remaining groups are selectable).
-export const selectableTemplates: TemplateLayoutsWithSettings[] = templates.filter(
-    (t) => !RETIRED_GROUP_IDS.has(t.id)
-);
+// No Template V1 group is offered for NEW decks.
+export const selectableTemplates: TemplateLayoutsWithSettings[] = [];
 
 // Helper to get templates by group ID
 export function getTemplatesByTemplateName(templateId: string): TemplateWithData[] {

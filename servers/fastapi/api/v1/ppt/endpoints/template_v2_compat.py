@@ -431,8 +431,9 @@ async def update_template_metadata(
 @TEMPLATE_V2_COMPAT_ROUTER.delete(
     "/{template_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    name="delete_template_v2",
 )
-async def delete_template(
+async def delete_template_v2(
     template_id: str = Path(...),
     sql_session: AsyncSession = Depends(get_async_session),
 ):

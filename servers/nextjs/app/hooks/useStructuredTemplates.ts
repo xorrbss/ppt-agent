@@ -38,6 +38,16 @@ export interface StructuredTemplateSummary {
   /** Optional catalog capabilities. Both API representations are supported. */
   capabilities?: string[] | Record<string, boolean | string | null> | null;
   capability_badges?: string[] | null;
+  /** Card preview and layout count are projected from the structured API. */
+  assets?: {
+    thumbnail?: string | null;
+  } | null;
+  layouts?:
+    | unknown[]
+    | {
+        layouts?: unknown[];
+      }
+    | null;
 }
 
 export const TEMPLATE_V2_SELECTION_PREFIX = "template-v2:";

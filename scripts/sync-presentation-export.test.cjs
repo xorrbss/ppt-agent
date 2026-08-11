@@ -89,7 +89,8 @@ function createRuntimeFixture(version) {
   fs.mkdirSync(path.join(runtimeRoot, "py"), { recursive: true });
   fs.writeFileSync(
     path.join(runtimeRoot, "index.js"),
-    "async function capture(s,p){await BXr(s),p&&await QXr(s),await s.screenshot({type:'png'})}\n"
+    "async function capture(s,p){await BXr(s),p&&await QXr(s),await s.screenshot({type:'png'})}\n" +
+      "async function iGt(s,r){let a=await open(s,r);try{await a.waitForFunction(()=>document.readyState===\"complete\")}catch{}try{await Att(a)}catch{}return a}\n"
   );
 
   const converterName =
@@ -128,7 +129,8 @@ function createElectronRuntimeFixture(version) {
   fs.mkdirSync(pyDir, { recursive: true });
   fs.writeFileSync(
     path.join(runtimeRoot, "index.js"),
-    "async function capture(s,p){await BXr(s),p&&await QXr(s),await s.screenshot({type:'png'})}\n"
+    "async function capture(s,p){await BXr(s),p&&await QXr(s),await s.screenshot({type:'png'})}\n" +
+      "async function iGt(s,r){let a=await open(s,r);try{await a.waitForFunction(()=>document.readyState===\"complete\")}catch{}try{await Att(a)}catch{}return a}\n"
   );
 
   const converterName =
@@ -185,6 +187,10 @@ test("matching installed version validates", () => {
     assert.match(
       fs.readFileSync(path.join(runtimeRoot, "index.js"), "utf8"),
       /Template V2 required resource failed/
+    );
+    assert.match(
+      fs.readFileSync(path.join(runtimeRoot, "index.js"), "utf8"),
+      /data-render-artifact-contract/
     );
   } finally {
     removeFixture(runtimeRoot);

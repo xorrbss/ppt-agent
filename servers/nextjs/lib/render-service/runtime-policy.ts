@@ -5,6 +5,7 @@ import type {
   RenderFontDependency,
   RenderOverflowValidation,
   RenderPresentationSnapshot,
+  RenderRuntimeDependency,
   RenderScriptPolicy,
   RenderSelectionMapEntry,
   RenderSlideDiscovery,
@@ -193,15 +194,70 @@ export function scriptPolicy(
 export function validateDependencies(
   fonts: readonly RenderFontDependency[] = [],
   assets: readonly RenderAssetDependency[] = [],
+  snapshot?: RenderPresentationSnapshot,
 ): void {
+  const fontFamilies = new Set<string>();
   for (const font of fonts) {
-    if (!font.family.trim() || font.status !== "ready") {
+    if (
+      !font.family.trim() ||
+      font.status !== "ready" ||
+      fontFamilies.has(font.family) ||
+      (font.sha256 !== undefined && !/^[0-9a-f]{64}$/i.test(font.sha256))
+    ) {
       throw new RenderPolicyError("render_font_not_ready");
     }
+    fontFamilies.add(font.family);
+    if (font.asset_id && !font.sha256) {
+      throw new RenderPolicyError("render_dependency_digest_required");
+    }
   }
+  const assetIds = new Set<string>();
   for (const asset of assets) {
-    if (!asset.asset_id.trim() || asset.status !== "ready") {
+    if (
+      !asset.asset_id.trim() ||
+      asset.status !== "ready" ||
+      assetIds.has(asset.asset_id) ||
+      (asset.sha256 !== undefined && !/^[0-9a-f]{64}$/i.test(asset.sha256))
+    ) {
       throw new RenderPolicyError("render_asset_not_ready");
     }
+    assetIds.add(asset.asset_id);
+    if (!asset.sha256) {
+      throw new RenderPolicyError("render_dependency_digest_required");
+    }
+  }
+  if (!snapshot) return;
+  const requiredAssetIds = new Set<string>();
+  visit(snapshot.slides, (record) => {
+    const assetId = record.asset_id ?? record.assetId;
+    if (typeof assetId === "string" && assetId.trim()) {
+      requiredAssetIds.add(assetId);
+    }
+  });
+  for (const assetId of requiredAssetIds) {
+    if (!assetIds.has(assetId)) {
+      throw new RenderPolicyError(`render_asset_dependency_required:${assetId}`);
+    }
+  }
+}
+
+export function validateRuntimeDependencies(
+  dependencies: readonly RenderRuntimeDependency[],
+): void {
+  if (!dependencies.length) {
+    throw new RenderPolicyError("render_runtime_dependency_required");
+  }
+  const ids = new Set<string>();
+  for (const dependency of dependencies) {
+    if (
+      !dependency.id.trim() ||
+      !dependency.version.trim() ||
+      ids.has(dependency.id) ||
+      (dependency.integrity !== undefined &&
+        !/^(?:sha256-)?[0-9a-f]{64}$/i.test(dependency.integrity))
+    ) {
+      throw new RenderPolicyError("render_runtime_dependency_invalid");
+    }
+    ids.add(dependency.id);
   }
 }

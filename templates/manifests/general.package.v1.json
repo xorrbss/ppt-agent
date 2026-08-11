@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "presenton.template-package/v1",
+  "packageVersion": "1.2.0",
+  "templateId": "general",
+  "sourceRoot": "templates/general",
+  "entrypoint": {
+    "path": "template.json",
+    "sha256": "e3857fd52e8692e4a12bc2dd5b3069a5dad661196f9d62674c841e0bfd6c86f7",
+    "sizeBytes": 560596,
+    "mediaType": "application/json"
+  },
+  "engine": {
+    "id": "presenton.template-v2-json",
+    "contractVersion": "1",
+    "contractPath": "contracts/template_package/engines/template-v2-json.v1.json",
+    "contractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+    "requiredCapabilities": [
+      "asset.local-font",
+      "asset.raster-image",
+      "asset.safe-svg",
+      "chart.area",
+      "chart.bar",
+      "chart.line",
+      "chart.pie",
+      "chart.scatter",
+      "element.container",
+      "element.group",
+      "element.image",
+      "element.infographic",
+      "element.table",
+      "element.text",
+      "element.text-list",
+      "element.vector",
+      "layout.flex",
+      "layout.grid",
+      "normalization.legacy-authoring-extras",
+      "normalization.legacy-infographic-colors",
+      "repeat.flow",
+      "repeat.positioned"
+    ]
+  },
+  "presentation": {
+    "width": 1280,
+    "height": 720
+  },
+  "assets": {
+    "inventoryPath": "templates/manifests/general.assets.v1.json",
+    "inventorySha256": "8e8ef37678088b4fdf160a789daa3c1209d313dd9f7c48e3c41a3c28b1fb7848",
+    "count": 18,
+    "totalSizeBytes": 432927
+  },
+  "fonts": {
+    "faces": [
+      "static/Poppins Regular.ttf"
+    ],
+    "aliases": {
+      "Poppins": "static/Poppins Regular.ttf"
+    },
+    "unresolvedAliases": []
+  },
+  "license": {
+    "status": "approved",
+    "expression": "Apache-2.0 AND OFL-1.1",
+    "rightsEvidenceId": "presenton-general-assets-apache-2.0"
+  },
+  "provenance": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/general",
+    "sourceFileCount": 19,
+    "sourceInventorySha256": "8e8ef37678088b4fdf160a789daa3c1209d313dd9f7c48e3c41a3c28b1fb7848",
+    "evidencePath": "templates/manifests/general.provenance.v1.json",
+    "evidenceSha256": "a66d568851f2aa116fe56143ebeb738b99bf203188a2723729696611e3c1540e",
+    "extensions": [
+      {
+        "path": "static/Poppins Regular.ttf",
+        "kind": "added",
+        "reason": "Pinned local font replacement for the upstream Google Fonts stylesheet alias.",
+        "sourceRepository": "https://github.com/google/fonts",
+        "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+        "sourcePath": "ofl/poppins/Poppins-Regular.ttf",
+        "sourceSha256": "7e65201e9b79159e2300267cc885e16c8dcef2424cdfa09a29bfb0980a94a7ba",
+        "sourceGitBlobSha1": "0bda228ade88b0bb5aac7da2c881d0c3f64d0817"
+      }
+    ]
+  },
+  "thumbnail": {
+    "assetPath": "static/thumbnail.png",
+    "sha256": "fca8dcd2c0a33254f9d78453f8c0882cea220696c8d2e183645aff8595db9227",
+    "width": 1280,
+    "height": 720
+  },
+  "rendererSmoke": {
+    "receiptPath": "templates/manifests/general.renderer-smoke.v1.json",
+    "receiptSha256": "a403c438611366ca17fe9542f00ef5b29f464fcb5714ad1c1677b00e7111e720"
+  },
+  "browserGolden": {
+    "receiptPath": "templates/manifests/general.browser-golden.v1.json",
+    "receiptSha256": "13fba1d4ebbf4018219b1e003a88367688918ecdadb6f679c6b18a6149d5dee3"
+  },
+  "publication": {
+    "status": "ready",
+    "default": false,
+    "blockers": []
+  }
+}

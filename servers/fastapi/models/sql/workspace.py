@@ -444,6 +444,10 @@ class WorkspaceArtifact(SQLModel, table=True):
     __tablename__ = "workspace_artifacts"
     __table_args__ = (
         UniqueConstraint("storage_key", name="uq_workspace_artifacts_storage_key"),
+        UniqueConstraint(
+            "export_attempt_id",
+            name="uq_workspace_artifacts_export_attempt_id",
+        ),
         CheckConstraint("status IN ('staging', 'ready', 'cleanup_pending', 'failed', 'deleted')", name="ck_workspace_artifacts_status"),
         CheckConstraint("size_bytes >= 0", name="ck_workspace_artifacts_size"),
         CheckConstraint("cleanup_attempts >= 0", name="ck_workspace_artifacts_cleanup_attempts"),
@@ -458,6 +462,18 @@ class WorkspaceArtifact(SQLModel, table=True):
     )
     operation_id: uuid.UUID = Field(sa_column=Column(Uuid, ForeignKey("workspace_operations.id", name="fk_workspace_artifacts_operation_id", ondelete="CASCADE"), nullable=False))
     presentation_id: Optional[uuid.UUID] = Field(default=None, sa_column=Column(Uuid, ForeignKey("presentations.id", name="fk_workspace_artifacts_presentation_id", ondelete="CASCADE"), nullable=True))
+    export_attempt_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            Uuid,
+            ForeignKey(
+                "presentation_export_attempts.id",
+                name="fk_workspace_artifacts_export_attempt_id",
+                ondelete="SET NULL",
+            ),
+            nullable=True,
+        ),
+    )
     kind: str = Field(sa_column=Column(String(128), nullable=False))
     status: str = Field(default="staging", sa_column=Column(String(24), nullable=False, default="staging", server_default="staging"))
     storage_key: str = Field(sa_column=Column(String(1024), nullable=False))

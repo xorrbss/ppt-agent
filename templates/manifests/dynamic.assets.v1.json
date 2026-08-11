@@ -1,0 +1,182 @@
+{
+  "schemaVersion": "presenton.template-package-assets/v1",
+  "templateId": "dynamic",
+  "files": [
+    {
+      "path": "static/freeform_10-76dbf710432f.svg",
+      "sha256": "63f41c9901582c5ac1a80d63728ceec74b049e284b916cb55065fcd87db201fd",
+      "sizeBytes": 686,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_10-d1137f81ec29.svg",
+      "sha256": "79bca94fd9049c42dd9b1126f4c7b0839aff5456b83d7e1334f19af830d72e91",
+      "sizeBytes": 692,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_12-66450bd84d03.svg",
+      "sha256": "2e67c9d00fd338436d5264680fb7597950b693ebcb7b7c0ce3d8be94c53a93cd",
+      "sizeBytes": 486,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_13-4df4bbd502a8.svg",
+      "sha256": "7bc3692a6cc3e4818857aac0442b8cc1a4923fe3fd664fa3a27a34d1f8159c40",
+      "sizeBytes": 765,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_14-2a833ff3a969.svg",
+      "sha256": "5361d22be524a7eb857ea797e9005c552aa163e862433ca62c9bb0adf4403815",
+      "sizeBytes": 682,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_14-66450bd84d03.svg",
+      "sha256": "2e67c9d00fd338436d5264680fb7597950b693ebcb7b7c0ce3d8be94c53a93cd",
+      "sizeBytes": 486,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_16-d1137f81ec29.svg",
+      "sha256": "79bca94fd9049c42dd9b1126f4c7b0839aff5456b83d7e1334f19af830d72e91",
+      "sizeBytes": 692,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_25-2a833ff3a969.svg",
+      "sha256": "5361d22be524a7eb857ea797e9005c552aa163e862433ca62c9bb0adf4403815",
+      "sizeBytes": 682,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_4-115613a8dee4.svg",
+      "sha256": "b98b3b73a5cd2e75a745e67ba8c74fcbfd0de5a7f520601a4ba0f3eee41d8ee0",
+      "sizeBytes": 603,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_4-2a833ff3a969.svg",
+      "sha256": "5361d22be524a7eb857ea797e9005c552aa163e862433ca62c9bb0adf4403815",
+      "sizeBytes": 682,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_4-76dbf710432f.svg",
+      "sha256": "63f41c9901582c5ac1a80d63728ceec74b049e284b916cb55065fcd87db201fd",
+      "sizeBytes": 686,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_4-d1137f81ec29.svg",
+      "sha256": "79bca94fd9049c42dd9b1126f4c7b0839aff5456b83d7e1334f19af830d72e91",
+      "sizeBytes": 692,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_4-d1bef5bf68d5.svg",
+      "sha256": "dd92e1d07fd6383d4ae8b230cabcd4b6c736ff558e1e9545af95e2a8dbf375e8",
+      "sizeBytes": 486,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_9-20a8fba16e18.svg",
+      "sha256": "fd54d58b5bbb74e31d98276156f78af6964ea003174f45c36181e48daa74a785",
+      "sizeBytes": 490,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image1-8f0be57474f1.jpeg",
+      "sha256": "bcaaa186277ce86041d0762ff0159804de94457275750d8d7c50edf0a5355b96",
+      "sizeBytes": 2611085,
+      "mediaType": "image/jpeg",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image24-02344c48b17e.png",
+      "sha256": "169ef04cdc1867762da820c4da33ef40cfebcba4d4a91414487259cbbfee03d3",
+      "sizeBytes": 20284,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image4-677532a3decf.jpeg",
+      "sha256": "ec22c378fdbde6acee5abbf86cdd4e2e7cb74b924507641db3b2705b4166e44c",
+      "sizeBytes": 161298,
+      "mediaType": "image/jpeg",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image47-a6b69e7594b6.png",
+      "sha256": "fc0028e95775fbf5a16875127c2b5f2ddb3c18bd251dc496fad7433b35fc30ef",
+      "sizeBytes": 32044,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image6-67ec4cfdc5cc.jpeg",
+      "sha256": "a5c6376d8de22547e43e713da1de5926cc3174dd2685c82df760db7990b204c0",
+      "sizeBytes": 6060275,
+      "mediaType": "image/jpeg",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/Montserrat Medium.ttf",
+      "sha256": "9b2a9eb2cc1d610ecdf19f5e549d557408fc2334bf381351ff14e1c8622f3b34",
+      "sizeBytes": 260220,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/Montserrat SemiBold.ttf",
+      "sha256": "a2b550eb5f130823554fd9cbf17f4b377dd46cbb9d79c5cced783ec9dffd996a",
+      "sizeBytes": 260916,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/thumbnail.png",
+      "sha256": "66040ca8cfde6291091668c062158f0c4b15931a65dd58d5b4f39b541b8aa226",
+      "sizeBytes": 1160383,
+      "mediaType": "image/png",
+      "role": "thumbnail",
+      "licenseRef": "Apache-2.0"
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:http";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -17,29 +17,59 @@ const REPOSITORY_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
-const TEMPLATE_ROOT = path.join(REPOSITORY_ROOT, "templates", "editorial");
+const TEMPLATE_ID = process.env.TEMPLATE_PACKAGE_ID ?? "editorial";
+assert.match(TEMPLATE_ID, /^[a-z0-9][a-z0-9-]*$/);
+const TEMPLATE_ROOT = path.join(REPOSITORY_ROOT, "templates", TEMPLATE_ID);
 const NEXT_PUBLIC_ROOT = path.join(REPOSITORY_ROOT, "servers", "nextjs", "public");
 const TEMPLATE = JSON.parse(
   await readFile(path.join(TEMPLATE_ROOT, "template.json"), "utf8"),
 );
+assert.equal(TEMPLATE.id, TEMPLATE_ID);
+const LOCAL_FONT_FILES = (await readdir(path.join(TEMPLATE_ROOT, "static")))
+  .filter((name) => /\.(?:ttf|otf)$/i.test(name))
+  .map((name) => `static/${name}`);
+
+function effectiveLocalFonts(fonts) {
+  const entries = { ...(fonts ?? {}) };
+  const declaredLocalFiles = Object.values(entries).filter(
+    (value) => typeof value === "string" && !/^(?:https?:)?\/\//i.test(value),
+  );
+  const localFiles = [...new Set([...declaredLocalFiles, ...LOCAL_FONT_FILES])];
+  for (const [family, value] of Object.entries(entries)) {
+    if (typeof value !== "string" || !/^(?:https?:)?\/\//i.test(value)) continue;
+    const normalizedFamily = family.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const replacement = localFiles.find((candidate) => {
+      const filename = path.posix.basename(candidate).toLowerCase().replace(/[^a-z0-9]/g, "");
+      return filename.startsWith(normalizedFamily);
+    });
+    assert.ok(replacement, `${TEMPLATE_ID} has no local package font for ${family}`);
+    entries[family] = replacement;
+  }
+  return entries;
+}
+
+TEMPLATE.fonts = effectiveLocalFonts(TEMPLATE.fonts);
 process.env.NEXT_PUBLIC_FAST_API = "http://127.0.0.1:43127";
 const RENDERER = await loadTemplateV2HtmlRenderer();
-const GOLDEN_RECEIPT = JSON.parse(
-  await readFile(
-    path.join(
-      REPOSITORY_ROOT,
-      "templates",
-      "manifests",
-      "editorial.browser-golden.v1.json",
+const WRITING_GOLDENS = process.argv.includes("--write-golden");
+const GOLDEN_RECEIPT = WRITING_GOLDENS
+  ? null
+  : JSON.parse(
+    await readFile(
+      path.join(
+        REPOSITORY_ROOT,
+        "templates",
+        "manifests",
+        `${TEMPLATE_ID}.browser-golden.v1.json`,
+      ),
+      "utf8",
     ),
-    "utf8",
-  ),
-);
+  );
 const CAPTURE_EVIDENCE_PATH = path.join(
   REPOSITORY_ROOT,
   "templates",
   "manifests",
-  "editorial.browser-golden.capture.v1.json",
+  `${TEMPLATE_ID}.browser-golden.capture.v1.json`,
 );
 
 const TRANSPARENT_PNG = Buffer.from(
@@ -52,7 +82,7 @@ const TRANSPARENT_SVG = Buffer.from(
 
 function layoutHtml(index) {
   const layout = TEMPLATE.layouts[index];
-  assert.ok(layout, `unknown editorial layout index: ${index}`);
+  assert.ok(layout, `unknown ${TEMPLATE_ID} layout index: ${index}`);
   const html = RENDERER.templateV2UiToHtml(
     { components: layout.components },
     { fonts: TEMPLATE.fonts, width: 1280, height: 720 },
@@ -97,6 +127,7 @@ function goldenIndexHtml() {
 
 function contentType(file) {
   if (file.endsWith(".png")) return "image/png";
+  if (/\.jpe?g$/i.test(file)) return "image/jpeg";
   if (file.endsWith(".svg")) return "image/svg+xml";
   if (file.endsWith(".ttf")) return "font/ttf";
   return "application/octet-stream";
@@ -343,7 +374,7 @@ class CdpSession {
 async function launchChrome() {
   const executable = chromeExecutable();
   assert.ok(executable, "a Chromium executable is required for the release golden gate");
-  const profile = await mkdtemp(path.join(tmpdir(), "editorial-golden-chrome-"));
+  const profile = await mkdtemp(path.join(tmpdir(), `${TEMPLATE_ID}-golden-chrome-`));
   const child = spawn(executable, [
     "--headless=new",
     "--disable-gpu",
@@ -395,18 +426,44 @@ async function launchChrome() {
     cdp,
     executable,
     async close() {
-      cdp.close();
+      try {
+        await Promise.race([
+          cdp.send("Browser.close"),
+          new Promise((resolve) => setTimeout(resolve, 3_000)),
+        ]);
+      } finally {
+        cdp.close();
+      }
       child.kill();
-      await new Promise((resolve) => {
-        if (child.exitCode !== null) resolve();
+      const stopped = await new Promise((resolve) => {
+        if (child.exitCode !== null) resolve(true);
         else {
-          child.once("exit", resolve);
-          setTimeout(resolve, 3_000).unref();
+          child.once("exit", () => resolve(true));
+          setTimeout(() => resolve(false), 3_000).unref();
         }
       });
-      await rm(profile, { recursive: true, force: true });
+      if (!stopped && child.pid && process.platform === "win32") {
+        const killer = spawn(
+          "taskkill",
+          ["/pid", String(child.pid), "/T", "/F"],
+          { windowsHide: true, stdio: "ignore" },
+        );
+        await new Promise((resolve) => killer.once("close", resolve));
+      }
+      await rm(profile, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      });
     },
   };
+}
+
+async function closeGoldenServer(server) {
+  const closed = new Promise((resolve) => server.close(resolve));
+  server.closeAllConnections?.();
+  await closed;
 }
 
 async function evaluate(cdp, expression) {
@@ -428,12 +485,18 @@ async function capturePage(browser, url) {
   browser.cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
     exceptions.push(exceptionDetails.text ?? "browser exception");
   });
-  const loaded = browser.cdp.once("Page.loadEventFired");
-  await browser.cdp.send("Page.navigate", { url });
-  await loaded;
+  const navigation = await browser.cdp.send("Page.navigate", { url });
+  if (navigation.errorText) {
+    throw new Error(`browser navigation failed for ${url}: ${navigation.errorText}`);
+  }
   const deadline = Date.now() + 15_000;
   let state;
   while (Date.now() < deadline) {
+    const readyState = await evaluate(browser.cdp, "document.readyState");
+    if (readyState !== "complete") {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      continue;
+    }
     state = await evaluate(
       browser.cdp,
       `({ready:document.documentElement.dataset.templateV2RenderReady==='true',error:document.documentElement.dataset.templateV2ResourceError==='true',renderState:document.documentElement.dataset.templateV2RenderState||null,chartState:document.documentElement.dataset.templateV2ChartState||null,code:document.documentElement.dataset.templateV2ResourceErrorCode||null,failures:window.__presentonTemplateV2ResourceErrors||[]})`,
@@ -501,12 +564,23 @@ async function writeProductionGoldens() {
   });
   const destinationRoot = path.join(
     manifestRoot,
-    "editorial.browser-golden",
+    `${TEMPLATE_ID}.browser-golden`,
   );
   const browser = await launchChrome();
+  const actual = {
+    renderedLayoutCount: 0,
+    nonBlankLayoutCount: 0,
+    missingImages: 0,
+    imageCount: 0,
+    chartCanvasCount: 0,
+    externalRequests: new Set(),
+    localFontsLoaded: true,
+    consoleErrors: [],
+  };
+  const screenshots = [];
   try {
     await mkdir(destinationRoot, { recursive: true });
-    for (const [index] of TEMPLATE.layouts.entries()) {
+    for (const [index, layout] of TEMPLATE.layouts.entries()) {
       const name = `${String(index + 1).padStart(2, "0")}-${TEMPLATE.layouts[index].id}.png`;
       const outputPath = path.join(destinationRoot, name);
       const capture = await capturePage(
@@ -515,31 +589,92 @@ async function writeProductionGoldens() {
       );
       assert.equal(capture.state.error, false, JSON.stringify(capture.state));
       await writeFile(outputPath, capture.bytes);
+      actual.renderedLayoutCount += 1;
+      actual.nonBlankLayoutCount += Number(await isNonBlank(capture.bytes));
+      actual.missingImages += capture.stats.missingImages;
+      actual.imageCount += capture.stats.imageCount;
+      actual.chartCanvasCount += capture.stats.chartCanvasCount;
+      actual.localFontsLoaded &&=
+        capture.stats.fontSetStatus === "loaded" &&
+        capture.stats.fonts.every((font) => font.status === "loaded");
+      actual.consoleErrors.push(...capture.exceptions);
+      for (const request of capture.requests) {
+        if (!request.startsWith("http://127.0.0.1:43127/") && !request.startsWith("data:")) {
+          actual.externalRequests.add(request);
+        }
+      }
+      screenshots.push({
+        layoutId: layout.id,
+        goldenSha256: sha256(capture.bytes),
+        exact: true,
+        badPixelRatio: 0,
+        meanAbsoluteError: 0,
+      });
     }
+    const rendererBytes = await readFile(
+      path.join(REPOSITORY_ROOT, "servers", "nextjs", "lib", "template-v2-json-to-html.ts"),
+    );
+    const entrypointBytes = await readFile(path.join(TEMPLATE_ROOT, "template.json"));
+    const browserVersion = await browser.cdp.send("Browser.getVersion");
+    const evidence = {
+      schemaVersion: "presenton.template-browser-capture-evidence/v1",
+      templateId: TEMPLATE_ID,
+      rendererModuleSha256: sha256(rendererBytes),
+      entrypointSha256: sha256(entrypointBytes),
+      captureAdapter: "chromium-cdp/Page.captureScreenshot",
+      browser: {
+        product: browserVersion.product,
+        revision: browserVersion.revision,
+        protocolVersion: browserVersion.protocolVersion,
+      },
+      capturedAt: new Date().toISOString(),
+      viewport: { width: 1280, height: 720, deviceScaleFactor: 1 },
+      thresholds: { badPixelRatio: 0.005, meanAbsoluteError: 0.001 },
+      screenshots,
+      checks: {
+        renderedLayoutCount: actual.renderedLayoutCount,
+        nonBlankLayoutCount: actual.nonBlankLayoutCount,
+        missingImages: actual.missingImages,
+        imageCount: actual.imageCount,
+        chartCanvasCount: actual.chartCanvasCount,
+        externalRequests: [...actual.externalRequests].sort(),
+        localFontsLoaded: actual.localFontsLoaded,
+        consoleErrors: actual.consoleErrors,
+        paintReadinessContract: "passed",
+      },
+      status: "passed-browser-capture",
+    };
+    assert.equal(evidence.checks.renderedLayoutCount, TEMPLATE.layouts.length);
+    assert.equal(evidence.checks.nonBlankLayoutCount, TEMPLATE.layouts.length);
+    assert.equal(evidence.checks.missingImages, 0);
+    assert.deepEqual(evidence.checks.externalRequests, []);
+    assert.equal(evidence.checks.localFontsLoaded, true);
+    assert.deepEqual(evidence.checks.consoleErrors, []);
+    await writeFile(CAPTURE_EVIDENCE_PATH, `${JSON.stringify(evidence, null, 2)}\n`);
     process.stdout.write(`${JSON.stringify({
       renderer: "production-chromium/readiness-contract",
+      templateId: TEMPLATE_ID,
       layouts: TEMPLATE.layouts.length,
     })}\n`);
   } finally {
     await browser.close();
-    await new Promise((resolve) => server.close(resolve));
+    await closeGoldenServer(server);
   }
 }
 
 const manifestRoot = path.join(REPOSITORY_ROOT, "templates", "manifests");
 
-if (process.argv.includes("--write-golden")) {
+if (WRITING_GOLDENS) {
   await writeProductionGoldens();
 } else if (process.argv.includes("--serve-golden")) {
-  const port = Number(process.env.EDITORIAL_GOLDEN_PORT ?? "43127");
+  const port = Number(process.env.TEMPLATE_PACKAGE_GOLDEN_PORT ?? "43127");
   const server = createGoldenServer();
   server.listen(port, "127.0.0.1", () => {
-    process.stdout.write(`EDITORIAL_GOLDEN_URL=http://127.0.0.1:${port}/\n`);
+    process.stdout.write(`TEMPLATE_PACKAGE_GOLDEN_URL=http://127.0.0.1:${port}/\n`);
   });
 } else {
-  test("editorial renderer captures and perceptually verifies all 24 committed browser goldens", async () => {
-    assert.equal(TEMPLATE.layouts.length, 24);
-    assert.equal(new Set(TEMPLATE.layouts.map((layout) => layout.id)).size, 24);
+  test(`${TEMPLATE_ID} renderer captures and verifies every committed browser golden`, async () => {
+    assert.equal(new Set(TEMPLATE.layouts.map((layout) => layout.id)).size, TEMPLATE.layouts.length);
     assert.deepEqual(
       Object.values(TEMPLATE.fonts).filter((value) => /^(?:https?:)?\/\//i.test(value)),
       [],
@@ -627,7 +762,7 @@ if (process.argv.includes("--write-golden")) {
       const browserVersion = await browser.cdp.send("Browser.getVersion");
       const evidence = {
         schemaVersion: "presenton.template-browser-capture-evidence/v1",
-        templateId: "editorial",
+        templateId: TEMPLATE_ID,
         rendererModuleSha256: sha256(rendererBytes),
         entrypointSha256: sha256(entrypointBytes),
         captureAdapter: "chromium-cdp/Page.captureScreenshot",
@@ -643,7 +778,7 @@ if (process.argv.includes("--write-golden")) {
         checks,
         status: "passed-browser-capture",
       };
-      if (process.env.EDITORIAL_WRITE_CAPTURE_EVIDENCE === "1") {
+      if (process.env.TEMPLATE_PACKAGE_WRITE_CAPTURE_EVIDENCE === "1") {
         await writeFile(CAPTURE_EVIDENCE_PATH, `${JSON.stringify(evidence, null, 2)}\n`);
       } else {
         const committed = JSON.parse(await readFile(CAPTURE_EVIDENCE_PATH, "utf8"));
@@ -660,9 +795,14 @@ if (process.argv.includes("--write-golden")) {
           evidence.screenshots.map(({ layoutId, goldenSha256 }) => ({ layoutId, goldenSha256 })),
         );
       }
+    } catch (error) {
+      process.stderr.write(
+        `${TEMPLATE_ID} browser golden failure: ${error instanceof Error ? error.stack : String(error)}\n`,
+      );
+      throw error;
     } finally {
       await browser.close();
-      await new Promise((resolve) => server.close(resolve));
+      await closeGoldenServer(server);
     }
   });
 
@@ -691,7 +831,7 @@ if (process.argv.includes("--write-golden")) {
       }
     } finally {
       await browser.close();
-      await new Promise((resolve) => server.close(resolve));
+      await closeGoldenServer(server);
     }
   });
 
@@ -723,7 +863,7 @@ if (process.argv.includes("--write-golden")) {
       }
     } finally {
       await browser.close();
-      await new Promise((resolve) => server.close(resolve));
+      await closeGoldenServer(server);
     }
   });
 }

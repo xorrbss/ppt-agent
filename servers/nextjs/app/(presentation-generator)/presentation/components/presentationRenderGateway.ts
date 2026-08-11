@@ -1,6 +1,7 @@
 import {
   createRenderPresentationSnapshot,
   RenderService,
+  createProductionRenderArtifact,
   type RenderArtifact,
   type RenderRequest,
   type RenderTarget,
@@ -29,6 +30,29 @@ export function createPresentationRenderActionFactory(
         target,
         snapshot,
         expected_revision: snapshot.source.revision,
+      });
+    },
+    async renderProduction(
+      action: PresentationRenderAction,
+      presentation: unknown,
+      options: Pick<
+        RenderRequest,
+        "expected_artifact_version" | "template_render_plans"
+      > = {},
+    ): Promise<RenderArtifact> {
+      const encoded = new TextEncoder().encode(JSON.stringify(presentation));
+      const digest = await globalThis.crypto.subtle.digest("SHA-256", encoded);
+      const sourceSha256 = Array.from(new Uint8Array(digest), (value) =>
+        value.toString(16).padStart(2, "0"),
+      ).join("");
+      return createProductionRenderArtifact(presentation, {
+        target: action,
+        source_sha256: sourceSha256,
+        service,
+        expected_artifact_version: options.expected_artifact_version,
+        request: {
+          template_render_plans: options.template_render_plans,
+        },
       });
     },
   });

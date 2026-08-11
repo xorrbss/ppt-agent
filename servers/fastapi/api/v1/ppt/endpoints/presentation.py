@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional, cast
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -67,12 +67,16 @@ from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
 from services.presentation_access_service import require_live_presentation
+from services.presentation_export_attempt_service import sha256_canonical_json
+from services.presentation_export_router import (
+    execute_presentation_export,
+    terminalize_standalone_presentation_export,
+)
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
 )
 from utils.asset_directory_utils import get_images_directory
 from utils.dict_utils import deep_update
-from utils.export_utils import export_presentation
 from utils.llm_calls.compose_slides import compose_and_project
 from utils.llm_calls.generate_slide_content import (
     get_slide_content_from_type_and_outline,
@@ -90,6 +94,7 @@ from utils.llm_calls.author_deck import plan_deck_roles
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
 
 from utils.owner_context import get_current_owner_id
+from models.sql.workspace import get_workspace_owner_scope
 from api.v1.ppt.endpoints.presentation_helpers import (
     build_export_cookie_header,
     resolve_presentation_fonts,
@@ -823,12 +828,34 @@ async def edit_presentation_with_new_content(
     sql_session.add_all(new_slides)
     await sql_session.commit()
 
-    presentation_and_path = await export_presentation(
-        presentation.id,
-        presentation.title or str(uuid.uuid4()),
-        data.export_as,
-        cookie_header=build_export_cookie_header(request_http),
+    request_hash = sha256_canonical_json(
+        {"operation": "edit", "request": data.model_dump(mode="json")}
     )
+    execution = await execute_presentation_export(
+        sql_session,
+        render_presentation_id=presentation.id,
+        attempt_presentation_id=presentation.id,
+        export_format=cast(Literal["pptx", "pdf"], data.export_as),
+        expected_render_revision=presentation.revision,
+        source_revision=presentation.revision,
+        title=presentation.title or str(uuid.uuid4()),
+        cookie_header=build_export_cookie_header(request_http),
+        owner_id=presentation.owner_id,
+        owner_scope=get_workspace_owner_scope(),
+        workspace_operation_id=None,
+        request_hash=request_hash,
+        idempotency_key_hash=sha256_canonical_json(
+            {
+                "operation": "edit-export",
+                "presentation_id": str(presentation.id),
+                "revision": presentation.revision,
+                "format": data.export_as,
+                "request_hash": request_hash,
+            }
+        ),
+    )
+    await terminalize_standalone_presentation_export(sql_session, execution)
+    presentation_and_path = execution.presentation
 
     return PresentationPathAndEditPath(
         **presentation_and_path.model_dump(),
@@ -868,12 +895,34 @@ async def derive_presentation_from_existing_one(
     sql_session.add_all(new_slides)
     await sql_session.commit()
 
-    presentation_and_path = await export_presentation(
-        new_presentation.id,
-        new_presentation.title or str(uuid.uuid4()),
-        data.export_as,
-        cookie_header=build_export_cookie_header(request_http),
+    request_hash = sha256_canonical_json(
+        {"operation": "derive", "request": data.model_dump(mode="json")}
     )
+    execution = await execute_presentation_export(
+        sql_session,
+        render_presentation_id=new_presentation.id,
+        attempt_presentation_id=new_presentation.id,
+        export_format=cast(Literal["pptx", "pdf"], data.export_as),
+        expected_render_revision=new_presentation.revision,
+        source_revision=new_presentation.revision,
+        title=new_presentation.title or str(uuid.uuid4()),
+        cookie_header=build_export_cookie_header(request_http),
+        owner_id=new_presentation.owner_id,
+        owner_scope=get_workspace_owner_scope(),
+        workspace_operation_id=None,
+        request_hash=request_hash,
+        idempotency_key_hash=sha256_canonical_json(
+            {
+                "operation": "derive-export",
+                "presentation_id": str(new_presentation.id),
+                "revision": new_presentation.revision,
+                "format": data.export_as,
+                "request_hash": request_hash,
+            }
+        ),
+    )
+    await terminalize_standalone_presentation_export(sql_session, execution)
+    presentation_and_path = execution.presentation
 
     return PresentationPathAndEditPath(
         **presentation_and_path.model_dump(),

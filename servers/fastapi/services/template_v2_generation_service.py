@@ -419,10 +419,12 @@ async def load_template_v2_generation_target(
         field: deepcopy(getattr(revision_entry, field))
         for field in SNAPSHOT_FIELDS
     }
+    from templates.packages.registry import get_ready_template_package
+
     if (
         get_template_v2_catalog_entry(template_id) is not None
-        and not is_template_v2_release_ready(template_id, snapshot.get("assets"))
-    ):
+        or get_ready_template_package(template_id) is not None
+    ) and not is_template_v2_release_ready(template_id, snapshot.get("assets")):
         raise TemplateV2GenerationError("template_v2_template_not_published")
     name = snapshot["name"]
     layouts_value = snapshot["layouts"]

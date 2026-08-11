@@ -4,6 +4,11 @@ import type {
   WorkspaceTimelineAnchor,
 } from "./types";
 
+const DEFAULT_ATTACHMENT_GENERATION_PROMPT =
+  "Generate a presentation from the attached files.";
+const MISSING_ORIGINAL_PROMPT_NOTICE =
+  "원본 프롬프트가 저장되지 않아 첨부 파일 기록만 표시합니다.";
+
 function normalizedNames(names: string[]): string[] {
   return names.map((name) => name.trim()).filter(Boolean);
 }
@@ -16,6 +21,23 @@ function isDurableGenerationMessage(
   if (item.anchorType !== "message" || item.role !== "user") return false;
   if (prompt && item.content.trim() !== prompt) return false;
   if (!prompt && !attachmentNames.length) return false;
+
+  // Older attachment-only generations wrote this server fallback into the
+  // first user message. It is not user-authored content, but the durable
+  // message still owns the downloadable attachment snapshots.
+  if (
+    !prompt &&
+    item.content.trim() === DEFAULT_ATTACHMENT_GENERATION_PROMPT &&
+    item.generationSettings &&
+    item.attachments.length > 0
+  ) {
+    return true;
+  }
+
+  // The durable workspace message is the source of truth for original upload
+  // names. Legacy generation metadata can contain storage/hash names instead,
+  // so an exact prompt match is sufficient to avoid rendering a duplicate.
+  if (prompt) return true;
 
   const durableAttachmentNames = new Set(
     item.attachments.map((attachment) => attachment.name.trim()),
@@ -65,5 +87,16 @@ export function withGenerationContext(
   items: WorkspaceTimelineAnchor[],
 ): WorkspaceTimelineAnchor[] {
   const context = generationContextMessage(presentationId, info, items);
-  return context ? [context, ...items] : items;
+  const timeline = context ? [context, ...items] : items;
+  return timeline.map((item) => {
+    if (
+      item.anchorType !== "message" ||
+      item.role !== "user" ||
+      item.content.trim() !== DEFAULT_ATTACHMENT_GENERATION_PROMPT ||
+      !item.generationSettings
+    ) {
+      return item;
+    }
+    return { ...item, content: MISSING_ORIGINAL_PROMPT_NOTICE };
+  });
 }

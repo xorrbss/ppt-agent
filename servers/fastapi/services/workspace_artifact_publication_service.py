@@ -30,6 +30,7 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.workspace import (
     WorkspaceArtifact,
     WorkspaceOperation,
@@ -40,6 +41,9 @@ from models.sql.workspace import (
 from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     require_active_account_generation,
+)
+from services.presentation_export_attempt_service import (
+    terminalize_export_attempt_succeeded,
 )
 from utils.get_env import get_app_data_directory_env
 from utils.owner_context import get_current_owner_id
@@ -77,6 +81,7 @@ class PreparedWorkspaceArtifact:
     sha256: str
     size_bytes: int
     source_revision: int
+    export_attempt_id: uuid.UUID | None = None
 
     @property
     def temporary_path(self) -> Path:
@@ -85,13 +90,16 @@ class PreparedWorkspaceArtifact:
         return self.absolute_path.parent / f".{self.artifact_id}.tmp"
 
     def result_payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "artifact_id": str(self.artifact_id),
             "artifact_kind": self.kind,
             "artifact_sha256": self.sha256,
             "artifact_size_bytes": self.size_bytes,
             "path": self.public_path,
         }
+        if self.export_attempt_id is not None:
+            payload["export_attempt_id"] = str(self.export_attempt_id)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -367,6 +375,7 @@ async def _staging_intent_was_committed(
                 WorkspaceArtifact.status == "staging",
                 WorkspaceArtifact.storage_key == artifact.storage_key,
                 WorkspaceArtifact.source_revision == artifact.source_revision,
+                WorkspaceArtifact.export_attempt_id == artifact.export_attempt_id,
             ).execution_options(skip_owner_scope=True)
         )
     ).scalar_one_or_none()
@@ -526,6 +535,9 @@ async def prepare_workspace_generation_artifact(
     presentation_id: uuid.UUID,
     source_revision: int,
     kind: str = "presentation.export",
+    export_attempt_id: uuid.UUID | None = None,
+    expected_source_sha256: str | None = None,
+    expected_source_size_bytes: int | None = None,
 ) -> PreparedWorkspaceArtifact:
     """Reserve a durable intent, then promote one immutable external file.
 
@@ -534,6 +546,22 @@ async def prepare_workspace_generation_artifact(
     maintenance can derive both the final and deterministic temporary paths.
     """
 
+    if export_attempt_id is not None and (
+        expected_source_sha256 is None or expected_source_size_bytes is None
+    ):
+        raise WorkspaceArtifactPublicationError(
+            "workspace_export_attempt_source_identity_required"
+        )
+    if expected_source_sha256 is not None and not _SHA256_PATTERN.fullmatch(
+        expected_source_sha256
+    ):
+        raise WorkspaceArtifactPublicationError(
+            "workspace_artifact_expected_digest_invalid"
+        )
+    if expected_source_size_bytes is not None and expected_source_size_bytes < 0:
+        raise WorkspaceArtifactPublicationError(
+            "workspace_artifact_expected_size_invalid"
+        )
     root = _app_data_root()
     source = _safe_source(source_path, root)
     owner_scope = get_workspace_owner_scope()
@@ -577,6 +605,38 @@ async def prepare_workspace_generation_artifact(
             raise WorkspaceArtifactPublicationError(
                 "workspace_artifact_owner_scope_invalid"
             )
+        if export_attempt_id is not None:
+            export_attempt = (
+                await intent_session.execute(
+                    select(PresentationExportAttempt).where(
+                        PresentationExportAttempt.id == export_attempt_id,
+                        PresentationExportAttempt.presentation_id == presentation_id,
+                        PresentationExportAttempt.workspace_operation_id == operation_id,
+                        PresentationExportAttempt.owner_scope == owner_scope,
+                        PresentationExportAttempt.state == "running",
+                        PresentationExportAttempt.source_revision == source_revision,
+                    )
+                )
+            ).scalar_one_or_none()
+            if export_attempt is None:
+                raise WorkspaceArtifactPublicationError(
+                    "workspace_export_attempt_invalid"
+                )
+            previous_artifact = (
+                await intent_session.execute(
+                    select(WorkspaceArtifact).where(
+                        WorkspaceArtifact.export_attempt_id == export_attempt_id
+                    )
+                )
+            ).scalar_one_or_none()
+            if previous_artifact is not None:
+                if previous_artifact.status not in {"deleted", "failed"}:
+                    raise WorkspaceArtifactPublicationError(
+                        "workspace_export_attempt_artifact_active"
+                    )
+                previous_artifact.export_attempt_id = None
+                previous_artifact.updated_at = now
+                intent_session.add(previous_artifact)
         relative = _artifact_relative_path(
             owner_id=operation_owner_id,
             operation_id=operation_id,
@@ -597,6 +657,7 @@ async def prepare_workspace_generation_artifact(
             sha256=_STAGING_SHA256,
             size_bytes=0,
             source_revision=source_revision,
+            export_attempt_id=export_attempt_id,
         )
         intent_session.add(
             WorkspaceArtifact(
@@ -610,6 +671,7 @@ async def prepare_workspace_generation_artifact(
                 sha256=_STAGING_SHA256,
                 size_bytes=0,
                 source_revision=source_revision,
+                export_attempt_id=export_attempt_id,
                 expires_at=now + timedelta(seconds=staging_timeout),
             )
         )
@@ -647,6 +709,16 @@ async def prepare_workspace_generation_artifact(
             # injected without replacing Path.open process-wide.
             sha256, size_bytes = _copy_and_hash(source, output)
             _fsync_output(output)
+        if (
+            expected_source_sha256 is not None
+            and sha256 != expected_source_sha256
+        ) or (
+            expected_source_size_bytes is not None
+            and size_bytes != expected_source_size_bytes
+        ):
+            raise WorkspaceArtifactPublicationError(
+                "workspace_artifact_source_digest_mismatch"
+            )
         # A hard-link gives the operation-owned path atomic no-overwrite
         # semantics.  The deterministic temp name remains derivable on crash.
         _atomic_promote(temporary, destination)
@@ -665,6 +737,7 @@ async def prepare_workspace_generation_artifact(
             sha256=sha256,
             size_bytes=size_bytes,
             source_revision=source_revision,
+            export_attempt_id=export_attempt_id,
         )
         destination_removed = _remove_failed_promotion(temporary, destination)
         try:
@@ -704,6 +777,7 @@ async def prepare_workspace_generation_artifact(
         sha256=sha256,
         size_bytes=size_bytes,
         source_revision=source_revision,
+        export_attempt_id=export_attempt_id,
     )
 
 
@@ -835,6 +909,23 @@ def _hash_file(path: Path) -> tuple[str, int]:
             digest.update(chunk)
             size_bytes += len(chunk)
     return digest.hexdigest(), size_bytes
+
+
+def _require_prepared_artifact_integrity(
+    artifact: PreparedWorkspaceArtifact,
+) -> None:
+    """Fail closed if immutable bytes changed after preparation."""
+
+    try:
+        actual_sha256, actual_size = _hash_file(artifact.absolute_path)
+    except OSError as error:
+        raise WorkspaceArtifactPublicationError(
+            "workspace_artifact_source_digest_mismatch"
+        ) from error
+    if actual_sha256 != artifact.sha256 or actual_size != artifact.size_bytes:
+        raise WorkspaceArtifactPublicationError(
+            "workspace_artifact_source_digest_mismatch"
+        )
 
 
 async def promote_workspace_chat_image_artifacts(
@@ -1576,6 +1667,30 @@ async def sweep_workspace_artifact_cleanup(
     return result
 
 
+async def _linked_export_attempt_was_committed(
+    session: AsyncSession,
+    *,
+    artifact: PreparedWorkspaceArtifact,
+) -> bool:
+    if artifact.export_attempt_id is None:
+        return True
+    attempt = await session.get(
+        PresentationExportAttempt,
+        artifact.export_attempt_id,
+    )
+    return bool(
+        attempt is not None
+        and attempt.presentation_id == artifact.presentation_id
+        and attempt.workspace_operation_id == artifact.operation_id
+        and attempt.state == "succeeded"
+        and attempt.source_revision == artifact.source_revision
+        and attempt.selected_adapter is not None
+        and attempt.artifact_sha256 == artifact.sha256
+        and attempt.artifact_size_bytes == artifact.size_bytes
+        and attempt.completed_at is not None
+    )
+
+
 async def _publication_was_committed(
     session: AsyncSession,
     *,
@@ -1649,6 +1764,10 @@ async def _publication_was_committed(
             .limit(1)
         )
     ).scalar_one_or_none()
+    attempt_committed = await _linked_export_attempt_was_committed(
+        session,
+        artifact=artifact,
+    )
     return bool(
         artifact.absolute_path.is_file()
         and artifact_row.status == "ready"
@@ -1656,6 +1775,7 @@ async def _publication_was_committed(
         and artifact_row.sha256 == artifact.sha256
         and artifact_row.size_bytes == artifact.size_bytes
         and artifact_row.source_revision == artifact.source_revision
+        and artifact_row.export_attempt_id == artifact.export_attempt_id
         and operation_row.state == "succeeded"
         and operation_row.result_revision == artifact.source_revision
         and operation_row.result == artifact.result_payload()
@@ -1664,6 +1784,7 @@ async def _publication_was_committed(
         and linked_job_row.state == "published"
         and linked_job_row.attempt_token is None
         and outbox_exists is not None
+        and attempt_committed
     )
 
 
@@ -1760,12 +1881,67 @@ async def _raise_publication_revision_error(
     raise WorkspaceArtifactPublicationError(fallback_code)
 
 
+async def _terminalize_linked_export_attempt(
+    session: AsyncSession,
+    *,
+    artifact: PreparedWorkspaceArtifact,
+    source_snapshot_sha256: str | None,
+    selected_adapter: str | None,
+    provenance: dict | None,
+) -> None:
+    """Make export success part of the artifact publication commit token."""
+
+    if artifact.export_attempt_id is None:
+        if any(
+            value is not None
+            for value in (source_snapshot_sha256, selected_adapter, provenance)
+        ):
+            raise WorkspaceArtifactPublicationError(
+                "workspace_export_attempt_metadata_unlinked"
+            )
+        return
+    if (
+        source_snapshot_sha256 is None
+        or selected_adapter is None
+        or provenance is None
+    ):
+        raise WorkspaceArtifactPublicationError(
+            "workspace_export_attempt_metadata_required"
+        )
+    try:
+        await terminalize_export_attempt_succeeded(
+            session,
+            attempt_id=artifact.export_attempt_id,
+            presentation_id=artifact.presentation_id,
+            expected_owner_id=artifact.owner_id,
+            expected_owner_scope=(
+                str(artifact.owner_id)
+                if artifact.owner_id is not None
+                else "anonymous"
+            ),
+            expected_workspace_operation_id=artifact.operation_id,
+            source_revision=artifact.source_revision,
+            source_snapshot_sha256=source_snapshot_sha256,
+            selected_adapter=selected_adapter,
+            artifact_sha256=artifact.sha256,
+            artifact_size_bytes=artifact.size_bytes,
+            provenance=provenance,
+        )
+    except Exception as error:
+        raise WorkspaceArtifactPublicationError(
+            "workspace_export_attempt_terminal_conflict"
+        ) from error
+
+
 async def publish_workspace_generation_artifact(
     session: AsyncSession,
     *,
     artifact: PreparedWorkspaceArtifact,
     expected_revision: int,
     attempt_token: str,
+    export_source_snapshot_sha256: str | None = None,
+    export_selected_adapter: str | None = None,
+    export_provenance: dict | None = None,
 ) -> int:
     """Fence and commit artifact, presentation revision, and operation result."""
 
@@ -1839,6 +2015,7 @@ async def publish_workspace_generation_artifact(
             "authored_style": authored_style.strip(),
         }
     try:
+        _require_prepared_artifact_integrity(artifact)
         # Lock the active account generation before any operation, job or
         # presentation projection is mutated. Account deletion takes the same
         # serialization point before its durable cleanup snapshot and cascade.
@@ -1965,6 +2142,14 @@ async def publish_workspace_generation_artifact(
                 "workspace_artifact_intent_conflict"
             )
 
+        await _terminalize_linked_export_attempt(
+            session,
+            artifact=artifact,
+            source_snapshot_sha256=export_source_snapshot_sha256,
+            selected_adapter=export_selected_adapter,
+            provenance=export_provenance,
+        )
+
         # Publication consumes the operation lease. Its terminal event and
         # notification must therefore be in this transaction too; otherwise a
         # crash before the runner finalizer leaves a succeeded operation with no
@@ -2059,6 +2244,10 @@ async def _export_publication_was_committed(
         )
         .limit(1)
     )
+    attempt_committed = await _linked_export_attempt_was_committed(
+        session,
+        artifact=artifact,
+    )
     return bool(
         artifact.absolute_path.is_file()
         and artifact_row.status == "ready"
@@ -2066,11 +2255,13 @@ async def _export_publication_was_committed(
         and artifact_row.sha256 == artifact.sha256
         and artifact_row.size_bytes == artifact.size_bytes
         and artifact_row.source_revision == artifact.source_revision
+        and artifact_row.export_attempt_id == artifact.export_attempt_id
         and operation_row.state == "succeeded"
         and operation_row.result_revision == artifact.source_revision
         and operation_row.result == result_payload
         and presentation_revision == artifact.source_revision
         and outbox_id is not None
+        and attempt_committed
     )
 
 
@@ -2081,6 +2272,9 @@ async def publish_workspace_export_artifact(
     attempt_token: str,
     fencing_token: int,
     export_format: str,
+    export_source_snapshot_sha256: str | None = None,
+    export_selected_adapter: str | None = None,
+    export_provenance: dict | None = None,
 ) -> int:
     """Publish a read-only export without advancing the deck revision.
 
@@ -2117,6 +2311,7 @@ async def publish_workspace_export_artifact(
         "expires_at": export_expires_at.isoformat(),
     }
     try:
+        _require_prepared_artifact_integrity(artifact)
         await _fence_artifact_publication_account(session, artifact=artifact)
         presentation_cas = await session.execute(
             update(PresentationModel)
@@ -2191,6 +2386,14 @@ async def publish_workspace_export_artifact(
             raise WorkspaceArtifactPublicationError(
                 "workspace_artifact_intent_conflict"
             )
+
+        await _terminalize_linked_export_attempt(
+            session,
+            artifact=artifact,
+            source_snapshot_sha256=export_source_snapshot_sha256,
+            selected_adapter=export_selected_adapter,
+            provenance=export_provenance,
+        )
 
         from services.workspace_operation_runner import append_operation_event
 

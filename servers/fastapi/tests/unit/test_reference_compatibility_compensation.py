@@ -197,6 +197,53 @@ def test_snapshot_post_flush_admission_failure_is_not_committed(
     asyncio.run(scenario())
 
 
+def test_snapshot_append_can_compose_into_outer_transaction(tmp_path: Path) -> None:
+    class Provider:
+        provider_id = "uploaded_document"
+
+        async def normalize(self, *_args, **_kwargs):
+            return NormalizedReference(
+                provider_id=self.provider_id,
+                source_revision="test:outer-transaction",
+                normalized_payload={"documents": []},
+                asset_bindings=(),
+            )
+
+    class Registry:
+        def require(self, provider_id: str):
+            assert provider_id == "uploaded_document"
+            return Provider()
+
+    async def scenario() -> None:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'outer.db'}")
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                lambda sync: SQLModel.metadata.create_all(
+                    sync,
+                    tables=[ReferenceSnapshot.__table__],
+                )
+            )
+        try:
+            async with maker() as session:
+                await service.create_reference_snapshot(
+                    session,
+                    provider_id="uploaded_document",
+                    request={},
+                    registry=Registry(),  # type: ignore[arg-type]
+                    commit=False,
+                )
+                assert len(list(await session.scalars(select(ReferenceSnapshot)))) == 1
+                await session.rollback()
+
+            async with maker() as session:
+                assert list(await session.scalars(select(ReferenceSnapshot))) == []
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_snapshot_recovers_ambiguous_successful_commit(tmp_path: Path) -> None:
     class Provider:
         provider_id = "uploaded_document"

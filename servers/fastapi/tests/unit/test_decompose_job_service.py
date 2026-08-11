@@ -1,7 +1,9 @@
 import asyncio
+from hashlib import sha256
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import uuid
 
 import pytest
 
@@ -11,6 +13,7 @@ from services.decompose_job_service import (
     DecomposeJobService,
 )
 from services.document_conversion_service import DocumentConversionError
+from services.references.contracts import ReferenceSnapshotView
 from services.temp_file_service import TempFileService
 
 
@@ -128,6 +131,96 @@ def test_idempotency_reuses_identical_job_and_rejects_payload_conflict(
         await service.cancel_job(owner_key="owner-a", job_id=first.job_id)
         await service.cancel_job(owner_key="owner-b", job_id=other.job_id)
         release.set()
+
+    asyncio.run(scenario())
+
+
+def test_canonical_worker_receives_snapshot_id_and_returns_no_server_path(
+    monkeypatch,
+):
+    async def scenario():
+        owner_id = uuid.uuid4()
+        snapshot_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        text = "immutable canonical document"
+        digest = sha256(text.encode("utf-8")).hexdigest()
+        view = ReferenceSnapshotView(
+            snapshot_id=snapshot_id,
+            provider_id="uploaded_document",
+            source_revision="revision-1",
+            source_fingerprint="f" * 64,
+            normalized_payload_json=json.dumps(
+                {
+                    "purpose": "generation-reference",
+                    "assetCount": 1,
+                    "documents": [
+                        {
+                            "assetId": str(asset_id),
+                            "name": "source.pdf",
+                            "contentSha256": digest,
+                            "text": text,
+                        }
+                    ],
+                }
+            ),
+            asset_bindings=(),
+            content_sha256="c" * 64,
+            conversation_id=None,
+            created_at=datetime.now(timezone.utc),
+            expires_at=None,
+        )
+        admitted_ids: list[uuid.UUID] = []
+
+        class FakeSessionContext:
+            async def __aenter__(self):
+                return object()
+
+            async def __aexit__(self, *_args):
+                return False
+
+        async def fake_admit(_session, *, snapshot_id):
+            admitted_ids.append(snapshot_id)
+            return view
+
+        monkeypatch.setattr(job_module, "async_session_maker", FakeSessionContext)
+        monkeypatch.setattr(job_module, "admit_reference_snapshot", fake_admit)
+        service = DecomposeJobService(result_ttl_seconds=60)
+        created, was_created = await service.create_job(
+            owner_key=str(owner_id),
+            reference_snapshot_id=snapshot_id,
+            reference_document_count=1,
+            language="ko",
+            idempotency_key="canonical-1",
+        )
+        assert was_created is True
+        finished = await _wait_for_terminal(service, str(owner_id), created.job_id)
+        assert finished.status == "succeeded"
+        assert admitted_ids == [snapshot_id]
+        assert finished.result and finished.result[0].asset_id == asset_id
+        assert finished.result[0].content_sha256 == digest
+        assert finished.result[0].file_path is None
+        async with service._lock:
+            assert service._jobs[created.job_id].file_paths == ()
+            assert service._jobs[created.job_id].temp_dir is None
+
+        replay, replay_created = await service.create_job(
+            owner_key=str(owner_id),
+            reference_snapshot_id=snapshot_id,
+            reference_document_count=1,
+            language="ko",
+            idempotency_key="canonical-1",
+        )
+        assert replay_created is False
+        assert replay.job_id == created.job_id
+
+        with pytest.raises(DecomposeJobConflictError):
+            await service.create_job(
+                owner_key=str(owner_id),
+                reference_snapshot_id=uuid.uuid4(),
+                reference_document_count=1,
+                language="ko",
+                idempotency_key="canonical-1",
+            )
 
     asyncio.run(scenario())
 

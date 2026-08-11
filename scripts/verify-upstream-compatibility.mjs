@@ -597,7 +597,7 @@ if (errors.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Upstream compatibility verified: ${checks} checks; baseline ${manifest.baseline.upstreamSha}; ` +
+    `Upstream compatibility verified: ${checks} checks; compatibility baseline ${manifest.baseline.upstreamSha}; ` +
       `${expectedDiscriminators.length} discriminators; ${manifest.api.keyEndpoints.length} key endpoints.`
   );
 }

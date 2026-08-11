@@ -3,6 +3,7 @@ name: Template V2 Export Fidelity
 on:
   pull_request:
     paths:
+      - "templates/**"
       - "presentation-export/**"
       - "scripts/sync-presentation-export.cjs"
       - "compatibility/upstream-compatibility.json"
@@ -13,6 +14,8 @@ on:
       - "servers/nextjs/lib/template-v2-render-plan.*"
       - "servers/nextjs/lib/presentation-export-**"
       - "servers/nextjs/lib/run-bundled-presentation-export*"
+      - "servers/nextjs/scripts/template-v2-pdf-golden.mjs"
+      - "servers/nextjs/scripts/lib/template-v2-pdf-golden*.mjs"
       - "servers/nextjs/package.json"
       - "servers/nextjs/package-lock.json"
       - "servers/fastapi/template_v2_schema_contract.py"
@@ -36,7 +39,11 @@ on:
       - "servers/fastapi/tests/unit/test_template_v2_local_state_migration.py"
       - "servers/fastapi/tests/unit/test_presentation_delete_safety.py"
       - ".github/workflows/template-v2-export-fidelity.yml"
+  schedule:
+    - cron: "41 3 * * 2"
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -57,6 +64,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -139,5 +148,84 @@ jobs:
         with:
           name: template-v2-fidelity-${{ runner.os }}
           path: test-artifacts/template-v2-${{ runner.os }}
+          if-no-files-found: ignore
+          retention-days: 14
+
+  pdf-golden:
+    name: Windows presentation-export v0.4.3 PDF golden
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: servers/nextjs/package-lock.json
+
+      - name: Install Next.js dependencies
+        working-directory: servers/nextjs
+        run: npm ci
+
+      - name: Install pinned Poppler
+        shell: pwsh
+        run: |
+          $popplerArchive = Join-Path $env:RUNNER_TEMP "poppler-26.02.0-0.zip"
+          Invoke-WebRequest `
+            -Uri "https://github.com/oschwartz10612/poppler-windows/releases/download/v26.02.0-0/Release-26.02.0-0.zip" `
+            -OutFile $popplerArchive
+          $expectedSha256 = "993E4A94376ED712FAFC7058D724EA0B943D118BBD2305CD9ED55174EB85CDA5"
+          $actualSha256 = (Get-FileHash -LiteralPath $popplerArchive -Algorithm SHA256).Hash
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "Poppler archive SHA-256 mismatch: expected $expectedSha256, received $actualSha256"
+          }
+          $popplerRoot = Join-Path $env:RUNNER_TEMP "pdf-golden-poppler"
+          Expand-Archive -LiteralPath $popplerArchive -DestinationPath $popplerRoot
+          $pdftoppm = Get-ChildItem -LiteralPath $popplerRoot -Recurse -Filter pdftoppm.exe |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $pdftoppm) {
+            throw "pdftoppm.exe not found in the pinned Poppler archive"
+          }
+          "PDF_GOLDEN_PDFTOPPM_PATH=$pdftoppm" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Synchronize pinned presentation-export runtime
+        run: node scripts/sync-presentation-export.cjs --force
+
+      - name: Verify pinned presentation-export runtime
+        run: node scripts/sync-presentation-export.cjs --check-only
+
+      - name: Test PDF golden tooling
+        working-directory: servers/nextjs
+        run: npm run test:template-v2-pdf-golden-tooling
+
+      - name: Run selected PDF golden gate
+        working-directory: servers/nextjs
+        shell: pwsh
+        env:
+          CI: "true"
+          TEST_ARTIFACT_DIR: ${{ github.workspace }}/test-artifacts/template-v2-pdf-golden-windows
+        run: |
+          $gateArgs = @()
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            $gateArgs += "--base"
+            $gateArgs += "${{ github.event.pull_request.base.sha }}"
+          } else {
+            $gateArgs += "--full"
+          }
+          & node scripts/template-v2-pdf-golden.mjs @gateArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload PDF golden failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: template-v2-pdf-golden-windows
+          path: test-artifacts/template-v2-pdf-golden-windows
           if-no-files-found: ignore
           retention-days: 14

@@ -32,6 +32,8 @@ from .generation_prompting import (
     _generate_with_validation_retries,
     _prompted_layout_context,
 )
+from .ast import decode_template_ast, project_content_schema
+from .content import hydrate_layout_content
 from .models.elements import Image as SlideImageElement
 from .models.elements import ImageFit
 from .models.layouts import (
@@ -41,7 +43,6 @@ from .models.layouts import (
     SlideLayout,
     SlideLayouts,
 )
-from .schema import get_template_schema
 
 
 DEFAULT_PROMPTED_LAYOUT_VALIDATION_RETRIES = 5
@@ -105,23 +106,14 @@ def build_generated_slide(
     # Persist the complete validated native payload. Optional fields that are
     # explicitly null are part of the editor contract and must not disappear
     # during projection into ``slide.ui``.
-    ui = layout.model_dump(mode="json")
-    template_schema = get_template_schema({"layouts": [ui]})
-    content_schema = template_schema["layouts"][0]["schema"]
-    if content_schema is None:
-        if content:
-            raise ValueError("layout contains no editable Template V2 content")
-        content_schema = {
-            "type": "object",
-            "properties": {},
-            "required": [],
-            "additionalProperties": False,
-        }
+    source_ui = layout.model_dump(mode="json")
+    ast = decode_template_ast({"layouts": [source_ui]})
+    content_schema = project_content_schema(ast, layout_id=layout.id)
     Draft202012Validator(content_schema).validate(content)
     return GeneratedTemplateSlide(
         layout_id=layout.id,
         content=deepcopy(content),
-        ui=deepcopy(ui),
+        ui=hydrate_layout_content(source_ui, content),
     )
 
 

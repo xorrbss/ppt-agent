@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from models.sql.async_presentation_generation_status import (  # noqa: F401, E402
     AsyncPresentationGenerationTaskModel,
 )
+from models.sql.async_task import AsyncTaskModel  # noqa: F401, E402
 from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
     AuthoredSlideCheckpoint,
 )
@@ -50,6 +51,7 @@ from models.sql.template_v2_local_state import (  # noqa: F401, E402
 from models.sql.template_v2_pptx_import import (  # noqa: F401, E402
     TemplateV2PptxImport,
 )
+from models.sql.template_v2_revision import TemplateV2Revision  # noqa: F401, E402
 from models.sql.template_create_info import TemplateCreateInfoModel  # noqa: F401, E402
 from models.sql.webhook_subscription import WebhookSubscription  # noqa: F401, E402
 from models.sql.workspace import (  # noqa: F401, E402
@@ -67,6 +69,12 @@ from models.sql.user import User  # noqa: F401, E402
 from models.sql.access_token import AccessToken  # noqa: F401, E402
 from models.sql.provider_settings import ProviderSettings  # noqa: F401, E402
 from models.sql.reference_snapshot import ReferenceSnapshot  # noqa: F401, E402
+from models.sql.asset_gateway_idempotency_receipt import (  # noqa: F401, E402
+    AssetGatewayIdempotencyReceipt,
+)
+from models.sql.presentation_export_attempt import (  # noqa: F401, E402
+    PresentationExportAttempt,
+)
 
 alembic_config = context.config
 
@@ -80,6 +88,139 @@ if alembic_config.config_file_name is not None:
     )
 
 target_metadata = SQLModel.metadata
+
+_ALEMBIC_OWNED_FOREIGN_KEYS = {
+    (
+        "presentations",
+        "fk_presentations_owner_id_user",
+        ("owner_id",),
+        "user",
+        ("id",),
+        "CASCADE",
+    ),
+    (
+        "slides",
+        "fk_slides_owner_id_user",
+        ("owner_id",),
+        "user",
+        ("id",),
+        "CASCADE",
+    ),
+    (
+        "async_tasks",
+        "fk_async_tasks_owner_id_user",
+        ("owner_id",),
+        "user",
+        ("id",),
+        "CASCADE",
+    ),
+    (
+        "async_presentation_generation_tasks",
+        "fk_async_presentation_generation_tasks_owner_id_user",
+        ("owner_id",),
+        "user",
+        ("id",),
+        "CASCADE",
+    ),
+    (
+        "chat_history_messages",
+        "fk_chat_history_messages_owner_id_user",
+        ("owner_id",),
+        "user",
+        ("id",),
+        "CASCADE",
+    ),
+    (
+        "template_v2",
+        "fk_template_v2_owner_id_user",
+        ("owner_id",),
+        "user",
+        ("id",),
+        "CASCADE",
+    ),
+    (
+        "imageasset",
+        "fk_imageasset_canonical_asset_id",
+        ("canonical_asset_id",),
+        "workspace_assets",
+        ("id",),
+        "SET NULL",
+    ),
+    (
+        "presentation_generation_jobs",
+        "fk_presentation_generation_jobs_workspace_operation_id",
+        ("workspace_operation_id",),
+        "workspace_operations",
+        ("id",),
+        "SET NULL",
+    ),
+    # SQLite's Inspector omits ON DELETE for this inline ADD COLUMN FK even
+    # though sqlite_master and PRAGMA retain and enforce SET NULL.
+    (
+        "presentation_generation_jobs",
+        "fk_presentation_generation_jobs_workspace_operation_id",
+        ("workspace_operation_id",),
+        "workspace_operations",
+        ("id",),
+        "",
+    ),
+    (
+        "presentation_generation_jobs",
+        None,
+        ("workspace_operation_id",),
+        "workspace_operations",
+        ("id",),
+        "",
+    ),
+}
+
+_ALEMBIC_OWNED_UNIQUE_CONSTRAINTS = {
+    (
+        "template_v2_pptx_imports",
+        "uq_template_v2_pptx_imports_task_id",
+        ("task_id",),
+    ),
+    # The canonical database contract is the named unique index created by
+    # e1; the declarative model can only express this field as an unnamed UC.
+    ("user", None, ("admin_slot",)),
+}
+
+_ALEMBIC_OWNED_INDEXES = {
+    ("user", "uq_user_admin_slot", ("admin_slot",), True),
+}
+
+
+def _foreign_key_signature(constraint) -> tuple[object, ...]:
+    elements = tuple(constraint.elements)
+    return (
+        constraint.table.name,
+        constraint.name,
+        tuple(column.name for column in constraint.columns),
+        elements[0].column.table.name if elements else "",
+        tuple(element.column.name for element in elements),
+        str(constraint.ondelete or "").upper(),
+    )
+
+
+def _include_object(obj, _name, type_, reflected, compare_to) -> bool:
+    if type_ == "foreign_key_constraint" and (
+        _foreign_key_signature(obj) in _ALEMBIC_OWNED_FOREIGN_KEYS
+    ):
+        return False
+    if type_ == "unique_constraint" and (
+        obj.table.name,
+        obj.name,
+        tuple(column.name for column in obj.columns),
+    ) in _ALEMBIC_OWNED_UNIQUE_CONSTRAINTS:
+        return False
+    if type_ == "index" and (
+        obj.table.name,
+        obj.name,
+        tuple(column.name for column in obj.columns),
+        bool(obj.unique),
+    ) in _ALEMBIC_OWNED_INDEXES:
+        return False
+    return True
 
 # alembic.ini sets this so Config validates; treat it as "unset" for URL resolution.
 _CLI_PLACEHOLDER_DB_URL = "sqlite:///placeholder"
@@ -109,6 +250,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=_include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -129,6 +271,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            include_object=_include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

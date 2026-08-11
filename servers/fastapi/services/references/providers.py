@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import timedelta, timezone
 from hashlib import sha256
 from html import escape
 from html.parser import HTMLParser
@@ -27,6 +27,7 @@ from services.references.contracts import (
     ReferenceProviderError,
     ReferenceSourceProvider,
 )
+from services.workspace_asset_service import get_workspace_asset
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
 
@@ -378,6 +379,7 @@ class UploadedDocumentProvider:
             raise ReferenceProviderError("uploaded_reference_asset_id_invalid") from error
         bindings = []
         extracted_documents: list[dict[str, str]] = []
+        expiry_candidates = []
         remaining_characters = MAX_UPLOADED_REFERENCE_CHARACTERS
         for asset_id in asset_ids:
             binding, private_path = await asset_gateway.resolve_for_processing(
@@ -386,6 +388,13 @@ class UploadedDocumentProvider:
                 kind=AssetKind.CONVERSATION_ATTACHMENT,
                 conversation_id=conversation_id,
             )
+            asset = await get_workspace_asset(
+                session,
+                asset_id=asset_id,
+                conversation_id=conversation_id,
+            )
+            if asset.expires_at is not None:
+                expiry_candidates.append(asset.expires_at)
             if private_path.suffix.lower() in {".txt", ".md", ".markdown", ".csv", ".tsv"}:
                 raw = await asyncio.to_thread(private_path.read_bytes)
                 try:
@@ -433,6 +442,7 @@ class UploadedDocumentProvider:
             extracted_documents.append(
                 {
                     "assetId": str(asset_id),
+                    "name": asset.original_name,
                     "contentSha256": sha256(document.encode("utf-8")).hexdigest(),
                     "text": document,
                 }
@@ -447,6 +457,18 @@ class UploadedDocumentProvider:
                 "documents": extracted_documents,
             },
             asset_bindings=tuple(bindings),
+            expires_at=(
+                min(
+                    expiry_candidates,
+                    key=lambda value: (
+                        value
+                        if value.tzinfo is not None
+                        else value.replace(tzinfo=timezone.utc)
+                    ),
+                )
+                if expiry_candidates
+                else None
+            ),
         )
 
 

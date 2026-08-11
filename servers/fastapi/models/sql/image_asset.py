@@ -2,7 +2,17 @@ from datetime import datetime
 from typing import Optional
 import uuid
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, Uuid, text
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
@@ -10,6 +20,18 @@ from utils.owner_context import get_current_owner_id
 
 
 class ImageAsset(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "canonical_asset_id",
+            name="uq_imageasset_canonical_asset_id",
+        ),
+        Index(
+            "ix_imageasset_canonical_asset_id",
+            "canonical_asset_id",
+            unique=False,
+        ),
+    )
+
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     owner_id: Optional[uuid.UUID] = Field(
         default_factory=get_current_owner_id,
@@ -36,8 +58,6 @@ class ImageAsset(SQLModel, table=True):
             # The production FK is Alembic-managed. Omitting it from ORM
             # metadata keeps partial-schema publication fixtures independent.
             nullable=True,
-            unique=True,
-            index=True,
         ),
     )
     canonicalization_attempts: int = Field(

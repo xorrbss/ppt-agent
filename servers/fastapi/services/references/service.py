@@ -11,6 +11,7 @@ import asyncio
 from typing import Any
 import uuid
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -131,6 +132,31 @@ def _utc_comparable(now: datetime, other: datetime) -> datetime:
     return now.replace(tzinfo=None) if other.tzinfo is None else now
 
 
+def _binding_matches_snapshot(
+    snapshot: AssetBinding,
+    current: AssetBinding,
+) -> bool:
+    if current == snapshot:
+        return True
+    # Workspace bootstrap claims a previously unattached upload by assigning a
+    # conversation and incrementing its lifecycle version exactly once. That
+    # transition does not mutate bytes, media type, scan state, or readiness;
+    # accept it as a rolling ownership facade while still rejecting every
+    # content/lifecycle change and every later version drift.
+    return bool(
+        snapshot.conversation_id is None
+        and current.conversation_id is not None
+        and current.version == snapshot.version + 1
+        and current.asset_id == snapshot.asset_id
+        and current.kind == snapshot.kind
+        and current.media_type == snapshot.media_type
+        and current.size_bytes == snapshot.size_bytes
+        and hmac.compare_digest(current.sha256, snapshot.sha256)
+        and current.scan_state == snapshot.scan_state
+        and current.lifecycle_state == snapshot.lifecycle_state
+    )
+
+
 async def canonicalize_legacy_document_paths(
     session: AsyncSession,
     *,
@@ -168,6 +194,7 @@ async def canonicalize_legacy_document_paths(
             request={"asset_ids": asset_ids},
             conversation_id=conversation_id,
             asset_gateway=AssetGateway(storage_root=storage_root),
+            commit=False,
         )
     except BaseException as error:
         # The import helper flushes rows and returns a promoted private copy, but
@@ -202,12 +229,15 @@ async def create_reference_snapshot(
     conversation_id: uuid.UUID | None = None,
     registry: ReferenceSourceProviderRegistry | None = None,
     asset_gateway: AssetGateway | None = None,
+    commit: bool = True,
 ) -> ReferenceSnapshotView:
     """Normalize, admit, and atomically append one immutable record.
 
-    Admission deliberately happens after ``flush`` but before ``commit``. A
-    failed live-asset revalidation therefore cannot leave a durable snapshot
-    pointing at bytes that the importing compatibility boundary compensates.
+    Admission deliberately happens after ``flush`` but before an optional
+    commit. A failed live-asset revalidation therefore cannot leave a durable
+    snapshot pointing at bytes that the importing compatibility boundary
+    compensates. ``commit=False`` composes the append into a caller-owned
+    transaction such as one-call generation bootstrap.
     """
 
     provider = (registry or default_reference_source_registry()).require(provider_id)
@@ -244,8 +274,9 @@ async def create_reference_snapshot(
             conversation_id=conversation_id,
             asset_gateway=gateway,
         )
-        committing = True
-        await session.commit()
+        if commit:
+            committing = True
+            await session.commit()
         return admitted
     except BaseException as error:
         await session.rollback()
@@ -330,7 +361,7 @@ async def admit_reference_snapshot(
                 status_code=error.status_code,
                 retryable=error.retryable,
             ) from error
-        if current != binding:
+        if not _binding_matches_snapshot(binding, current):
             raise ReferenceProviderError("reference_asset_binding_stale", status_code=409)
         revalidated.append(current)
 
@@ -375,3 +406,87 @@ async def admit_reference_snapshots(
             for snapshot_id in snapshot_ids
         ]
     )
+
+
+async def claim_reference_snapshots(
+    session: AsyncSession,
+    *,
+    snapshot_ids: list[uuid.UUID],
+    conversation_id: uuid.UUID,
+) -> None:
+    """Attach admitted upload snapshots to one durable conversation once.
+
+    Upload happens before workspace bootstrap, so both assets and snapshots are
+    initially owner-scoped orphans with a TTL. Bootstrap claims the assets; this
+    matching one-way claim gives snapshot rows the same deletion boundary while
+    preserving their immutable normalized payload and binding digest.
+    """
+
+    if not snapshot_ids:
+        return
+    rows = list(
+        (
+            await session.scalars(
+                select(ReferenceSnapshot).where(
+                    ReferenceSnapshot.id.in_(snapshot_ids),
+                    _owner_predicate(),
+                )
+            )
+        ).all()
+    )
+    if len(rows) != len(set(snapshot_ids)):
+        raise ReferenceProviderError("reference_snapshot_not_found", status_code=404)
+    for row in rows:
+        if row.conversation_id not in (None, conversation_id):
+            raise ReferenceProviderError(
+                "reference_snapshot_conversation_mismatch", status_code=409
+            )
+        if row.conversation_id is None:
+            row.conversation_id = conversation_id
+        # A durable conversation owns the snapshot from this point onward.
+        # Match the workspace asset claim semantics and remove the orphan TTL;
+        # the conversation FK cascade is now the cleanup boundary.
+        row.expires_at = None
+        session.add(row)
+    await session.flush()
+
+
+async def cleanup_expired_reference_snapshots(
+    session: AsyncSession,
+    *,
+    now: datetime | None = None,
+    limit: int = 100,
+    commit: bool = True,
+) -> int:
+    """Purge unattached reference payloads after their admission TTL.
+
+    Uploaded-document snapshots contain normalized source text.  Assets have a
+    separate physical-file sweeper, so deleting only the asset would retain
+    that extracted text indefinitely.  This bounded pass removes orphaned
+    snapshot rows; claimed rows have ``expires_at = NULL`` and are deleted by
+    their conversation cascade instead.
+    """
+
+    current = now or get_current_utc_datetime()
+    snapshot_ids = list(
+        (
+            await session.scalars(
+                select(ReferenceSnapshot.id)
+                .where(
+                    ReferenceSnapshot.conversation_id.is_(None),
+                    ReferenceSnapshot.expires_at.is_not(None),
+                    ReferenceSnapshot.expires_at <= current,
+                )
+                .order_by(ReferenceSnapshot.expires_at, ReferenceSnapshot.id)
+                .limit(max(1, min(limit, 1000)))
+            )
+        ).all()
+    )
+    if snapshot_ids:
+        await session.execute(
+            delete(ReferenceSnapshot).where(ReferenceSnapshot.id.in_(snapshot_ids))
+        )
+    await session.flush()
+    if commit:
+        await session.commit()
+    return len(snapshot_ids)

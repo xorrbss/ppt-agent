@@ -50,6 +50,10 @@ from models.sql.user import User
 from models.sql.access_token import AccessToken
 from models.sql.provider_settings import ProviderSettings
 from models.sql.reference_snapshot import ReferenceSnapshot
+from models.sql.asset_gateway_idempotency_receipt import (
+    AssetGatewayIdempotencyReceipt,
+)
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from templates.v2.catalog import get_template_v2_default_template_id
 from services.presentation_profile_persistence import stamp_presentation_profile
 from utils.owner_context import get_current_owner_id
@@ -138,6 +142,8 @@ _STRICT_OWNER_MODELS = (
     WorkspaceActionReceipt,
     WorkspaceArtifact,
     ReferenceSnapshot,
+    AssetGatewayIdempotencyReceipt,
+    PresentationExportAttempt,
 )
 
 
@@ -236,6 +242,7 @@ async def create_db_and_tables():
                         WorkspaceOperationEvent.__table__,
                         WorkspaceOutbox.__table__,
                         WorkspaceActionReceipt.__table__,
+                        PresentationExportAttempt.__table__,
                         WorkspaceArtifact.__table__,
                         WorkspaceCleanupJournal.__table__,
                         AuthoredExactProvenance.__table__,
@@ -262,6 +269,7 @@ async def create_db_and_tables():
                         AccessToken.__table__,
                         ProviderSettings.__table__,
                         ReferenceSnapshot.__table__,
+                        AssetGatewayIdempotencyReceipt.__table__,
                     ],
                 )
             )

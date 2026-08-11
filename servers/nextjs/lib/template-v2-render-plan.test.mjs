@@ -404,6 +404,29 @@ test("ambiguous appearance contracts fail closed", () => {
   }
 });
 
+test("PPTX-derived SVG path clips retain a bounded CSS-safe representation", () => {
+  const clipPath =
+    "path('M 0 0 L 1826.55 0 L 1826.55 988.62 L 0 988.62 L 0 0 Z')";
+  const plan = createTemplateV2SlideRenderPlan(
+    slide([{ type: "image", data: "x", clip_path: clipPath }])
+  );
+
+  assert.equal(plan.components[0].elements[0].image.clipPath, clipPath);
+  assert.throws(
+    () =>
+      createTemplateV2SlideRenderPlan(
+        slide([
+          {
+            type: "image",
+            data: "x",
+            clip_path: "path('M 0 0 Z');background:url(javascript:alert(1))",
+          },
+        ])
+      ),
+    /^Error: template_v2_render_plan_unsupported_image_clip_path:/
+  );
+});
+
 test("image plans preserve zoomed-out crop scale for preview and export", () => {
   const image = createTemplateV2SlideRenderPlan(
     slide([

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "presenton.template-package-provenance/v1",
+  "templateId": "standard",
+  "upstream": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/standard",
+    "commitUrl": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+    "license": {
+      "expression": "Apache-2.0",
+      "path": "LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE"
+    }
+  },
+  "extensions": [
+    {
+      "path": "static/Playfair Display Regular.ttf",
+      "kind": "added",
+      "reason": "Pinned local font replacement for the upstream Google Fonts stylesheet alias.",
+      "sourceRepository": "https://github.com/google/fonts",
+      "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sourcePath": "ofl/playfairdisplay/PlayfairDisplay[wght].ttf",
+      "sourceSha256": "c40f2293766a503bc70cce9e512ef844a4ccb7cbcde792fe2ea31d191917d8d6",
+      "sourceGitBlobSha1": "7a09eb71f10622fd083134ac9ed46f59b21bee18"
+    }
+  ],
+  "evidenceSources": [
+    {
+      "id": "upstream-commit",
+      "type": "git-commit",
+      "url": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+      "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6"
+    },
+    {
+      "id": "upstream-license",
+      "type": "repository-license",
+      "licenseExpression": "Apache-2.0",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20"
+    },
+    {
+      "id": "google-fonts-commit",
+      "type": "git-commit",
+      "url": "https://github.com/google/fonts/commit/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5"
+    },
+    {
+      "id": "google-fonts-playfair-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/playfairdisplay/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e"
+    }
+  ],
+  "claims": [
+    {
+      "id": "presenton-standard-assets-apache-2.0",
+      "status": "verified",
+      "licenseExpression": "Apache-2.0",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "upstream-license"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/image6-d77d5bd67ea3.png",
+          "sha256": "9f1f5849811ae272268f5e0d7f52204840188a220a7a61a56cf2161a956c7c7a",
+          "upstreamGitBlobSha1": "cb6d196584e2dd045f6772396251756383d594b1"
+        },
+        {
+          "path": "static/image8-1bc3f07c9b32.png",
+          "sha256": "53db4416a31b8af3fc8ff769fcd81101fd0db1bce060e7909c6ec8da8fb2f4ae",
+          "upstreamGitBlobSha1": "6500158426012ce80c4dba32d2df86097b9ed753"
+        },
+        {
+          "path": "static/thumbnail.png",
+          "sha256": "4aec71a70e287498899abb62fe65c82d4b72eb0ba87d440fcdf80a0c725e6e62",
+          "upstreamGitBlobSha1": "8390fef7f2e6fdfe1073def9d8208ecd9ec8eb73"
+        }
+      ]
+    },
+    {
+      "id": "presenton-standard-playfairdisplay-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "google-fonts-commit",
+        "google-fonts-playfair-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/Playfair Display Regular.ttf",
+          "sha256": "c40f2293766a503bc70cce9e512ef844a4ccb7cbcde792fe2ea31d191917d8d6",
+          "upstreamGitBlobSha1": "7a09eb71f10622fd083134ac9ed46f59b21bee18",
+          "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+          "sourcePath": "ofl/playfairdisplay/PlayfairDisplay[wght].ttf",
+          "evidenceSourceIds": [
+            "google-fonts-commit",
+            "google-fonts-playfair-ofl"
+          ]
+        }
+      ]
+    }
+  ]
+}

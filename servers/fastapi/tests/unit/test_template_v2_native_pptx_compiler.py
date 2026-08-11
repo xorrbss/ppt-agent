@@ -310,6 +310,74 @@ def test_native_pptx_compiles_merged_table_as_editable_ooxml(tmp_path: Path):
         }
 
 
+def test_native_compiler_materializes_regular_repeat_items_as_editable_shapes():
+    layout = SlideLayout.model_validate(
+        {
+            "id": "repeat-row",
+            "description": "A regular row of repeatable native cards.",
+            "components": [
+                {
+                    "id": "content",
+                    "description": "A repeatable row of editable cards.",
+                    "position": {"x": 80, "y": 100},
+                    "elements": [
+                        {
+                            "type": "flex",
+                            "name": "cards",
+                            "position": {"x": 0, "y": 0},
+                            "size": {"width": 600, "height": 100},
+                            "direction": "row",
+                            "gap": 20,
+                            "min_children": 1,
+                            "max_children": 3,
+                            "children": [
+                                {
+                                    "type": "group",
+                                    "name": "card",
+                                    "position": {"x": 0, "y": 0},
+                                    "size": {"width": 180, "height": 80},
+                                    "children": [
+                                        {
+                                            "type": "text",
+                                            "position": {"x": 0, "y": 0},
+                                            "size": {"width": 180, "height": 80},
+                                            "runs": [{"text": "Original"}],
+                                            "decorative": False,
+                                            "name": "card_title",
+                                            "min_length": 1,
+                                            "max_length": 40,
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    compilation = compile_template_v2_pptx(
+        [
+            (
+                layout,
+                {
+                    "content": {
+                        "cards": [
+                            {"card_title": "Alpha"},
+                            {"card_title": "Beta"},
+                        ]
+                    }
+                },
+            )
+        ]
+    )
+    slide = Presentation(BytesIO(compilation.pptx)).slides[0]
+
+    assert [shape.text for shape in slide.shapes] == ["Alpha", "Beta"]
+    assert [shape.left for shape in slide.shapes] == [762000, 2667000]
+
+
 def test_native_compiler_fails_closed_for_unsupported_element():
     layout = SlideLayout.model_validate(
         {

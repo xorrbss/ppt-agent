@@ -91,6 +91,14 @@ def validate_template_package(
     }
     if actual != declared:
         raise TemplatePackageValidationError("template_package_inventory_not_exact")
+    extensions = {item.path: item for item in manifest.provenance.extensions}
+    if len(extensions) != len(manifest.provenance.extensions):
+        raise TemplatePackageValidationError("template_package_provenance_extension_invalid")
+    for extension in extensions.values():
+        if extension.kind == "added" and extension.path not in actual:
+            raise TemplatePackageValidationError("template_package_provenance_extension_invalid")
+        if extension.kind == "modified" and extension.path != manifest.entrypoint.path:
+            raise TemplatePackageValidationError("template_package_provenance_extension_invalid")
     for item in inventory.files:
         _validate_asset(source_root, item)
 
@@ -139,7 +147,10 @@ def validate_template_package(
     golden = _json_object(golden_bytes, "browser_golden")
     validate_browser_golden(root, manifest, template, golden)
 
-    remote_references = _remote_references(template)
+    remote_references = _unresolved_remote_references(
+        template,
+        manifest.fonts.aliases,
+    )
     expected_blockers = set(manifest.publication.blockers)
     if remote_references and "remote_font_reference" not in expected_blockers:
         raise TemplatePackageValidationError("template_package_remote_reference_unblocked")
@@ -178,8 +189,14 @@ def _validate_asset(source_root: Path, item: PackageFile) -> None:
     _verify_bytes(asset, item.sha256, item.size_bytes)
     data = asset.read_bytes()
     suffix = asset.suffix.lower()
-    if item.media_type == "image/png":
-        if suffix != ".png" or not data.startswith(b"\x89PNG\r\n\x1a\n"):
+    if item.media_type in {"image/png", "image/jpeg"}:
+        expected_suffixes = {".png"} if item.media_type == "image/png" else {".jpg", ".jpeg"}
+        has_magic = (
+            data.startswith(b"\x89PNG\r\n\x1a\n")
+            if item.media_type == "image/png"
+            else data.startswith(b"\xff\xd8\xff")
+        )
+        if suffix not in expected_suffixes or not has_magic:
             raise TemplatePackageValidationError("template_package_asset_mime_mismatch")
         with Image.open(io.BytesIO(data)) as image:
             image.verify()
@@ -222,6 +239,27 @@ def _remote_references(value: Any) -> tuple[str, ...]:
     elif isinstance(value, str) and value.lower().startswith(("http://", "https://", "//")):
         found.append(value)
     return tuple(found)
+
+
+def _unresolved_remote_references(
+    template: dict[str, Any],
+    font_aliases: dict[str, str],
+) -> tuple[str, ...]:
+    remote_references = list(_remote_references(template))
+    fonts = template.get("fonts")
+    if isinstance(fonts, dict):
+        for family, value in fonts.items():
+            if (
+                isinstance(family, str)
+                and isinstance(value, str)
+                and value.lower().startswith(("http://", "https://", "//"))
+                and family in font_aliases
+            ):
+                try:
+                    remote_references.remove(value)
+                except ValueError:
+                    pass
+    return tuple(remote_references)
 
 
 def _confined_file(root: Path, path_value: Path) -> Path:

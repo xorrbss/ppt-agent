@@ -39,11 +39,28 @@ export function resolveExportRenderBaseUrl(
 export function buildExportRenderUrl(
   baseUrl: string,
   presentationId: string,
-  expectedPresentationSha256?: string
+  expectedPresentationSha256?: string,
+  format?: "pdf" | "pptx",
+  expectedPresentationRevision?: number,
 ): string {
   const query = new URLSearchParams({ id: presentationId });
   if (expectedPresentationSha256) {
     query.set("source_sha256", expectedPresentationSha256);
+  }
+  if (format) {
+    query.set("format", format);
+    query.set("render_contract", "presenton.render-artifact/v1");
+  }
+  if (expectedPresentationRevision !== undefined) {
+    if (
+      !Number.isSafeInteger(expectedPresentationRevision) ||
+      expectedPresentationRevision < 0
+    ) {
+      throw new Error(
+        "Expected presentation revision must be a non-negative safe integer.",
+      );
+    }
+    query.set("expected_revision", String(expectedPresentationRevision));
   }
   return `${baseUrl.replace(/\/+$/, "")}/pdf-maker?${query.toString()}`;
 }

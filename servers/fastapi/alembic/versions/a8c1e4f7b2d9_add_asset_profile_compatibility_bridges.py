@@ -34,7 +34,73 @@ def _unique_columns(constraint: dict[str, object]) -> tuple[str, ...]:
     return tuple(str(value) for value in values or ())
 
 
-def _ensure_image_asset_constraints() -> None:
+def _index_columns(index: dict[str, object]) -> tuple[str, ...]:
+    return tuple(str(value) for value in index.get("column_names") or ())
+
+
+def _validate_canonical_asset_rows() -> None:
+    connection = op.get_bind()
+    duplicate = connection.execute(
+        sa.text(
+            "SELECT canonical_asset_id FROM imageasset "
+            "WHERE canonical_asset_id IS NOT NULL "
+            "GROUP BY canonical_asset_id HAVING COUNT(*) > 1 LIMIT 1"
+        )
+    ).first()
+    if duplicate is not None:
+        raise RuntimeError("imageasset canonical asset identities are duplicated")
+    orphan = connection.execute(
+        sa.text(
+            "SELECT imageasset.canonical_asset_id FROM imageasset "
+            "LEFT JOIN workspace_assets "
+            "ON workspace_assets.id = imageasset.canonical_asset_id "
+            "WHERE imageasset.canonical_asset_id IS NOT NULL "
+            "AND workspace_assets.id IS NULL LIMIT 1"
+        )
+    ).first()
+    if orphan is not None:
+        raise RuntimeError("imageasset canonical asset identity is orphaned")
+
+
+def _validate_postgresql_backing_name_available(
+    inspector,
+    name: str,
+    *,
+    owner_table: str,
+) -> None:
+    """Reserve a PostgreSQL relation name before creating a UC backing index."""
+
+    if inspector.bind.dialect.name != "postgresql":
+        return
+    table_names = set(inspector.get_table_names())
+    try:
+        view_names = set(inspector.get_view_names())
+    except NotImplementedError:
+        view_names = set()
+    if name in (table_names | view_names) - {owner_table}:
+        raise RuntimeError(
+            f"imageasset canonical asset backing-index name collides: {name}"
+        )
+    for table in table_names - {owner_table}:
+        relation_names = {
+            str(index.get("name") or "")
+            for index in inspector.get_indexes(table)
+        }
+        relation_names.add(
+            str(inspector.get_pk_constraint(table).get("name") or "")
+        )
+        relation_names.update(
+            str(constraint.get("name") or "")
+            for constraint in inspector.get_unique_constraints(table)
+        )
+        if name in relation_names:
+            raise RuntimeError(
+                "imageasset canonical asset backing-index name collides: "
+                f"{table}.{name}"
+            )
+
+
+def _ensure_image_asset_constraints(*, allow_fresh_shape: bool) -> None:
     inspector = sa.inspect(op.get_bind())
     unique_constraints = inspector.get_unique_constraints("imageasset")
     named_unique = next(
@@ -49,10 +115,18 @@ def _ensure_image_asset_constraints() -> None:
         "canonical_asset_id",
     ):
         raise RuntimeError("imageasset canonical asset unique constraint is invalid")
-    has_canonical_unique = any(
-        _unique_columns(constraint) == ("canonical_asset_id",)
+    canonical_unique_constraints = [
+        constraint
         for constraint in unique_constraints
-    )
+        if "canonical_asset_id" in _unique_columns(constraint)
+    ]
+    has_canonical_unique = bool(canonical_unique_constraints)
+    if any(
+        "canonical_asset_id" in _unique_columns(constraint)
+        and _unique_columns(constraint) != ("canonical_asset_id",)
+        for constraint in unique_constraints
+    ):
+        raise RuntimeError("imageasset canonical asset unique constraint is invalid")
 
     foreign_keys = inspector.get_foreign_keys("imageasset")
     named_foreign_key = next(
@@ -84,7 +158,79 @@ def _ensure_image_asset_constraints() -> None:
         raise RuntimeError("imageasset canonical asset foreign key is invalid")
     has_canonical_foreign_key = bool(canonical_foreign_keys)
 
-    if not has_canonical_unique or not has_canonical_foreign_key:
+    indexes = [
+        index
+        for index in inspector.get_indexes("imageasset")
+        if not index.get("duplicates_constraint")
+    ]
+    named_index = next(
+        (
+            index
+            for index in indexes
+            if index.get("name") == "ix_imageasset_canonical_asset_id"
+        ),
+        None,
+    )
+    if named_index is not None and _index_columns(named_index) != (
+        "canonical_asset_id",
+    ):
+        raise RuntimeError("imageasset canonical asset index is invalid")
+    canonical_indexes = [
+        index
+        for index in indexes
+        if "canonical_asset_id" in _index_columns(index)
+    ]
+    if any(
+        _index_columns(index) != ("canonical_asset_id",)
+        for index in canonical_indexes
+    ):
+        raise RuntimeError("imageasset canonical asset index is invalid")
+
+    legacy_unique_index = bool(
+        named_index is not None
+        and bool(named_index.get("unique"))
+        and len(canonical_indexes) == 1
+        and not has_canonical_unique
+        and not has_canonical_foreign_key
+    )
+    if named_index is not None and bool(named_index.get("unique")) and not legacy_unique_index:
+        raise RuntimeError("imageasset canonical asset index is invalid")
+
+    is_exact_canonical = bool(
+        len(canonical_unique_constraints) == 1
+        and canonical_unique_constraints[0].get("name")
+        == "uq_imageasset_canonical_asset_id"
+        and len(canonical_foreign_keys) == 1
+        and canonical_foreign_keys[0].get("name")
+        == "fk_imageasset_canonical_asset_id"
+        and len(canonical_indexes) == 1
+        and named_index is not None
+        and not bool(named_index.get("unique"))
+    )
+    is_fresh_shape = bool(
+        allow_fresh_shape
+        and not has_canonical_unique
+        and not has_canonical_foreign_key
+        and not canonical_indexes
+    )
+    if not (is_exact_canonical or legacy_unique_index or is_fresh_shape):
+        raise RuntimeError(
+            "imageasset canonical asset constraints are partially or ambiguously applied"
+        )
+
+    if legacy_unique_index:
+        _validate_postgresql_backing_name_available(
+            inspector,
+            "uq_imageasset_canonical_asset_id",
+            owner_table="imageasset",
+        )
+    _validate_canonical_asset_rows()
+
+    if (
+        not has_canonical_unique
+        or not has_canonical_foreign_key
+        or legacy_unique_index
+    ):
         with op.batch_alter_table("imageasset") as batch:
             if not has_canonical_foreign_key:
                 batch.create_foreign_key(
@@ -98,10 +244,21 @@ def _ensure_image_asset_constraints() -> None:
                 batch.create_unique_constraint(
                     "uq_imageasset_canonical_asset_id", ["canonical_asset_id"]
                 )
+            if legacy_unique_index:
+                batch.drop_index("ix_imageasset_canonical_asset_id")
+                batch.create_index(
+                    "ix_imageasset_canonical_asset_id",
+                    ["canonical_asset_id"],
+                    unique=False,
+                )
 
 
 def _ensure_index(table: str, name: str, columns: tuple[str, ...]) -> None:
-    indexes = sa.inspect(op.get_bind()).get_indexes(table)
+    indexes = [
+        index
+        for index in sa.inspect(op.get_bind()).get_indexes(table)
+        if not index.get("duplicates_constraint")
+    ]
     named = next((index for index in indexes if index.get("name") == name), None)
     if named is not None:
         if tuple(named.get("column_names") or ()) != columns or bool(
@@ -184,6 +341,7 @@ def upgrade() -> None:
 
     if "imageasset" in tables:
         image_columns = _columns("imageasset")
+        canonical_asset_id_added = "canonical_asset_id" not in image_columns
         with op.batch_alter_table("imageasset") as batch:
             if "canonical_asset_id" not in image_columns:
                 batch.add_column(sa.Column("canonical_asset_id", sa.Uuid(), nullable=True))
@@ -204,7 +362,9 @@ def upgrade() -> None:
                 batch.add_column(
                     sa.Column("canonicalized_at", sa.DateTime(timezone=True), nullable=True)
                 )
-        _ensure_image_asset_constraints()
+        _ensure_image_asset_constraints(
+            allow_fresh_shape=canonical_asset_id_added,
+        )
         _ensure_index(
             "imageasset",
             "ix_imageasset_canonical_asset_id",

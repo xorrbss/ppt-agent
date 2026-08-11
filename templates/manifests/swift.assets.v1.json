@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "presenton.template-package-assets/v1",
+  "templateId": "swift",
+  "files": [
+    {
+      "path": "static/Albert Sans Regular.ttf",
+      "sha256": "8fe5d4cf5822d7096d4d17ad781c90f97c745ac13a22be619db74966fba45fda",
+      "sizeBytes": 129000,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/image13-155e60388f78.png",
+      "sha256": "ef1d2748c7091ceb4468a441ecc93847fe14046e5432a6bd9e73087f6815044e",
+      "sizeBytes": 2119,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image14-4a89d3fc557a.png",
+      "sha256": "5b6e5363e3e169a6225ffe190301ab7e5222d98a7da43885dc2c2fff6aa389a0",
+      "sizeBytes": 23264,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/thumbnail.png",
+      "sha256": "985539012f7240cdf02c449d72b554e05836622b9d681a0ca757559f44ae12e0",
+      "sizeBytes": 457233,
+      "mediaType": "image/png",
+      "role": "thumbnail",
+      "licenseRef": "Apache-2.0"
+    }
+  ]
+}

@@ -30,7 +30,9 @@ from pptx.util import Pt
 from templates.v2.generation import build_generated_slide
 from templates.v2.models.elements import (
     Container,
+    Flex,
     Font,
+    Grid,
     Group,
     SlideElement,
     Table,
@@ -38,6 +40,10 @@ from templates.v2.models.elements import (
     TextList,
 )
 from templates.v2.models.layouts import SlideLayout
+from templates.v2.pptx.repeat_adapter import (
+    TemplateV2PptxRepeatAdapterError,
+    prepare_repeatable_pptx_slide,
+)
 
 TEMPLATE_V2_NATIVE_PPTX_SCHEMA_VERSION = "presenton.template-v2-native-pptx/v1"
 TEMPLATE_V2_NATIVE_PPTX_COMPILER_NAME = "presenton-template-v2-native-ooxml"
@@ -92,7 +98,19 @@ def compile_template_v2_pptx(
     layout_ids: list[str] = []
     for slide_index, (layout, raw_content) in enumerate(slides):
         generated = build_generated_slide(layout, dict(raw_content))
-        content = deepcopy(generated.content)
+        try:
+            prepared = prepare_repeatable_pptx_slide(
+                layout,
+                generated.content,
+                preservation_mode="reconstructed",
+            )
+        except TemplateV2PptxRepeatAdapterError as error:
+            raise TemplateV2NativePptxCompileError(
+                error.code,
+                path=error.path,
+            ) from error
+        layout = prepared.layout
+        content = deepcopy(prepared.content)
         slide = presentation.slides.add_slide(presentation.slide_layouts[6])
         layout_ids.append(layout.id)
         for component_index, component in enumerate(layout.components):
@@ -305,10 +323,116 @@ def _compile_element(
                 shape_name=f"{shape_name}/{_element_name(child, index)}",
             )
         return
+    if isinstance(element, (Flex, Grid)):
+        _compile_flow_layout(
+            slide,
+            element,
+            content=content,
+            offset_x=offset_x,
+            offset_y=offset_y,
+            path=path,
+            shape_name=shape_name,
+        )
+        return
     raise TemplateV2NativePptxCompileError(
         "template_v2_native_pptx_element_unsupported",
         path=f"{path}.type={element.type}",
     )
+
+
+def _compile_flow_layout(
+    slide: Slide,
+    element: Flex | Grid,
+    *,
+    content: Mapping[str, Any],
+    offset_x: float,
+    offset_y: float,
+    path: str,
+    shape_name: str,
+) -> None:
+    values = content.get(element.name)
+    if not isinstance(values, list) or len(values) != len(element.children):
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_pptx_repeat_scope_invalid",
+            path=f"{path}.content.{element.name}",
+        )
+    base_x = offset_x + (element.position.x if element.position else 0)
+    base_y = offset_y + (element.position.y if element.position else 0)
+    placements = (
+        _flex_placements(element, path=path)
+        if isinstance(element, Flex)
+        else _grid_placements(element, path=path)
+    )
+    for index, (child, item_scope, (x, y)) in enumerate(
+        zip(element.children, values, placements, strict=True)
+    ):
+        if not isinstance(item_scope, Mapping):
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_pptx_repeat_scope_invalid",
+                path=f"{path}.content.{element.name}.{index}",
+            )
+        child_position = getattr(child, "position", None)
+        child_x = child_position.x if child_position is not None else 0
+        child_y = child_position.y if child_position is not None else 0
+        _compile_element(
+            slide,
+            child,
+            content=item_scope,
+            offset_x=base_x + x - child_x,
+            offset_y=base_y + y - child_y,
+            path=f"{path}.children.{index}",
+            shape_name=f"{shape_name}/{_element_name(child, index)}",
+        )
+
+
+def _flex_placements(element: Flex, *, path: str) -> list[tuple[float, float]]:
+    if element.wrap:
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_pptx_flex_wrap_unsupported",
+            path=f"{path}.wrap",
+        )
+    row = element.direction.value == "row"
+    sizes = [_element_box(child, path=f"{path}.children.{index}") for index, child in enumerate(element.children)]
+    gap = float(element.gap or (element.column_gap if row else element.row_gap) or 0)
+    natural = sum(width if row else height for width, height in sizes) + gap * max(0, len(sizes) - 1)
+    available = (
+        (element.size.width if row else element.size.height)
+        if element.size is not None
+        else natural
+    )
+    free = max(0.0, float(available) - natural)
+    alignment = element.justify_content.value if element.justify_content else "flex-start"
+    cursor = free if alignment == "flex-end" else free / 2 if alignment == "center" else 0.0
+    placements: list[tuple[float, float]] = []
+    for width, height in sizes:
+        placements.append((cursor, 0.0) if row else (0.0, cursor))
+        cursor += (width if row else height) + gap
+    return placements
+
+
+def _grid_placements(element: Grid, *, path: str) -> list[tuple[float, float]]:
+    sizes = [_element_box(child, path=f"{path}.children.{index}") for index, child in enumerate(element.children)]
+    column_gap = float(element.column_gap or element.gap or 0)
+    row_gap = float(element.row_gap or element.gap or 0)
+    natural_width = max((width for width, _height in sizes), default=0.0)
+    natural_height = max((height for _width, height in sizes), default=0.0)
+    return [
+        (
+            (index % element.columns) * (natural_width + column_gap),
+            (index // element.columns) * (natural_height + row_gap),
+        )
+        for index in range(len(sizes))
+    ]
+
+
+def _element_box(element: SlideElement, *, path: str) -> tuple[float, float]:
+    size = getattr(element, "size", None)
+    if size is None:
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_pptx_repeat_child_size_required",
+            path=f"{path}.size",
+        )
+    return float(size.width), float(size.height)
 
 
 def _compile_table(

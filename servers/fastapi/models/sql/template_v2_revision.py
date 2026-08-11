@@ -36,7 +36,11 @@ class TemplateV2Revision(SQLModel, table=True):
     template_id: str = Field(
         sa_column=Column(
             String(128),
-            ForeignKey("template_v2.id", ondelete="CASCADE"),
+            ForeignKey(
+                "template_v2.id",
+                name="fk_template_v2_revisions_template_id_template_v2",
+                ondelete="CASCADE",
+            ),
             primary_key=True,
             nullable=False,
         )

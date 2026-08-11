@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "presenton.template-package/v1",
+  "packageVersion": "1.2.0",
+  "templateId": "swift",
+  "sourceRoot": "templates/swift",
+  "entrypoint": {
+    "path": "template.json",
+    "sha256": "1992d63d104ddae4a51cdd70c0afb6f2b03f12e5c6fc9512866673e578bb0619",
+    "sizeBytes": 582306,
+    "mediaType": "application/json"
+  },
+  "engine": {
+    "id": "presenton.template-v2-json",
+    "contractVersion": "1",
+    "contractPath": "contracts/template_package/engines/template-v2-json.v1.json",
+    "contractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+    "requiredCapabilities": [
+      "asset.local-font",
+      "asset.raster-image",
+      "asset.safe-svg",
+      "chart.area",
+      "chart.bar",
+      "chart.line",
+      "chart.pie",
+      "chart.scatter",
+      "element.container",
+      "element.group",
+      "element.image",
+      "element.infographic",
+      "element.table",
+      "element.text",
+      "element.text-list",
+      "element.vector",
+      "layout.flex",
+      "layout.grid",
+      "normalization.legacy-authoring-extras",
+      "normalization.legacy-infographic-colors",
+      "repeat.flow",
+      "repeat.positioned"
+    ]
+  },
+  "presentation": {
+    "width": 1280,
+    "height": 720
+  },
+  "assets": {
+    "inventoryPath": "templates/manifests/swift.assets.v1.json",
+    "inventorySha256": "ee6091c155b1e01075cfe55dac33c890a291d95826c028814ea989a92eebf94c",
+    "count": 4,
+    "totalSizeBytes": 611616
+  },
+  "fonts": {
+    "faces": [
+      "static/Albert Sans Regular.ttf"
+    ],
+    "aliases": {
+      "Albert Sans": "static/Albert Sans Regular.ttf"
+    },
+    "unresolvedAliases": []
+  },
+  "license": {
+    "status": "approved",
+    "expression": "Apache-2.0 AND OFL-1.1",
+    "rightsEvidenceId": "presenton-swift-assets-apache-2.0"
+  },
+  "provenance": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/swift",
+    "sourceFileCount": 5,
+    "sourceInventorySha256": "ee6091c155b1e01075cfe55dac33c890a291d95826c028814ea989a92eebf94c",
+    "evidencePath": "templates/manifests/swift.provenance.v1.json",
+    "evidenceSha256": "b25fab25408cde71eb2e6da7838d1d9c0a2bce7732e66160da869687bdd8885f",
+    "extensions": [
+      {
+        "path": "static/Albert Sans Regular.ttf",
+        "kind": "added",
+        "reason": "Pinned local font replacement for the upstream Google Fonts stylesheet alias.",
+        "sourceRepository": "https://github.com/google/fonts",
+        "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+        "sourcePath": "ofl/albertsans/AlbertSans[wght].ttf",
+        "sourceSha256": "8fe5d4cf5822d7096d4d17ad781c90f97c745ac13a22be619db74966fba45fda",
+        "sourceGitBlobSha1": "aa28110751a034a03ba84a7de12d069c3f652fe7"
+      }
+    ]
+  },
+  "thumbnail": {
+    "assetPath": "static/thumbnail.png",
+    "sha256": "985539012f7240cdf02c449d72b554e05836622b9d681a0ca757559f44ae12e0",
+    "width": 1280,
+    "height": 720
+  },
+  "rendererSmoke": {
+    "receiptPath": "templates/manifests/swift.renderer-smoke.v1.json",
+    "receiptSha256": "bc3a222cf7f5fcd9798a8f984015719d2be94cdb70b4e3eb85bd892c0f7cacbb"
+  },
+  "browserGolden": {
+    "receiptPath": "templates/manifests/swift.browser-golden.v1.json",
+    "receiptSha256": "cae407e7e0c870103e7987bdd48651b8203d993057f0a9eb0ca7dfca6e180b38"
+  },
+  "publication": {
+    "status": "ready",
+    "default": false,
+    "blockers": []
+  }
+}

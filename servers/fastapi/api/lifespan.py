@@ -78,6 +78,8 @@ from services.workspace_event_retention import (
     stop_workspace_event_retention,
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
+from templates.packages.defaults import import_template_packages_on_startup
+from templates.packages.registry import get_template_package_registry
 from templates.v2.policy import get_structured_template_policy
 from utils.get_env import get_app_data_directory_env
 from utils.model_availability import (
@@ -109,6 +111,9 @@ async def app_lifespan(_: FastAPI):
     availability.
     """
     _configure_application_logging()
+    # Validate the immutable package catalog before migrations or workers make
+    # an API with an untrusted bundled-template source appear healthy.
+    template_package_registry = get_template_package_registry()
     template_v2_policy = get_structured_template_policy()
     require_template_v2_database_safety(
         feature_enabled=template_v2_policy.creation_enabled,
@@ -123,6 +128,7 @@ async def app_lifespan(_: FastAPI):
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
     await create_db_and_tables()
+    await import_template_packages_on_startup(template_package_registry)
     await start_runtime_settings_coordinator()
     runtime_settings_coordinator_started = True
     template_v2_dispatcher_started = False

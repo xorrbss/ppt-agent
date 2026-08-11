@@ -23,6 +23,7 @@ import {
   scriptPolicy,
   validateDependencies,
   validateOverflow,
+  validateRuntimeDependencies,
 } from "./runtime-policy.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -59,6 +60,10 @@ function sourceDigest(presentation: JsonRecord): string | undefined {
 
 export function createRenderPresentationSnapshot(
   presentation: unknown,
+  options: {
+    readonly source_sha256?: string;
+    readonly require_source_sha256?: boolean;
+  } = {},
 ): RenderPresentationSnapshot {
   if (!isRecord(presentation)) {
     throw new RenderPolicyError("render_presentation_required");
@@ -75,14 +80,21 @@ export function createRenderPresentationSnapshot(
   if (lifecycle !== "published" && lifecycle !== "staging") {
     throw new RenderPolicyError("render_presentation_not_renderable");
   }
+  const digest = sourceDigest({
+    ...presentation,
+    ...(options.source_sha256
+      ? { source_sha256: options.source_sha256 }
+      : {}),
+  });
+  if (options.require_source_sha256 && !digest) {
+    throw new RenderPolicyError("render_source_digest_required");
+  }
   const source: RenderSourceIdentity = Object.freeze({
     presentation_id: presentation.id,
     revision: requireRevision(presentation.revision),
     lifecycle_status: lifecycle,
     published: lifecycle === "published",
-    ...(sourceDigest(presentation)
-      ? { source_sha256: sourceDigest(presentation) }
-      : {}),
+    ...(digest ? { source_sha256: digest } : {}),
   });
   return deepFreeze({
     source,
@@ -119,7 +131,13 @@ export class RenderService {
     ) {
       throw new RenderPolicyError("render_adapter_capability_mismatch");
     }
-    validateDependencies(request.fonts, request.assets);
+    if (
+      (request.target === "pdf" || request.target === "pptx") &&
+      !snapshot.source.source_sha256
+    ) {
+      throw new RenderPolicyError("render_source_digest_required");
+    }
+    validateDependencies(request.fonts, request.assets, snapshot);
     const overflow = validateOverflow(snapshot);
     if (
       overflow.status === "failed" &&
@@ -128,6 +146,7 @@ export class RenderService {
       throw new RenderPolicyError("render_overflow_validation_failed");
     }
     const plan = adapter.plan(request);
+    validateRuntimeDependencies(plan.runtime_dependencies);
     const version = buildRenderArtifactVersion(
       snapshot.source,
       plan.renderer_version,

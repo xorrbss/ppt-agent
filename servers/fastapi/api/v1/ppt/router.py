@@ -60,37 +60,12 @@ PPT_FEATURE_MODULES = (
     FeatureModule("layout-management", LAYOUT_MANAGEMENT_ROUTER, frozenset({"ppt-api", "renderer"})),
     FeatureModule("images", IMAGES_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("icons", ICONS_ROUTER, frozenset({"ppt-api", "assets"})),
-    FeatureModule(
-        "ollama",
-        OLLAMA_ROUTER,
-        frozenset({"ppt-api", "providers"}),
-        allow_legacy_route_name_collisions=True,
-    ),
+    FeatureModule("ollama", OLLAMA_ROUTER, frozenset({"ppt-api", "providers"})),
     FeatureModule("pdf-slides", PDF_SLIDES_ROUTER, frozenset({"ppt-api", "export"})),
-    FeatureModule(
-        "openai",
-        OPENAI_ROUTER,
-        frozenset({"ppt-api", "providers"}),
-        allow_legacy_route_name_collisions=True,
-    ),
-    FeatureModule(
-        "anthropic",
-        ANTHROPIC_ROUTER,
-        frozenset({"ppt-api", "providers"}),
-        allow_legacy_route_name_collisions=True,
-    ),
-    FeatureModule(
-        "google",
-        GOOGLE_ROUTER,
-        frozenset({"ppt-api", "providers"}),
-        allow_legacy_route_name_collisions=True,
-    ),
-    FeatureModule(
-        "codex-auth",
-        CODEX_AUTH_ROUTER,
-        frozenset({"ppt-api", "providers"}),
-        allow_legacy_route_name_collisions=True,
-    ),
+    FeatureModule("openai", OPENAI_ROUTER, frozenset({"ppt-api", "providers"})),
+    FeatureModule("anthropic", ANTHROPIC_ROUTER, frozenset({"ppt-api", "providers"})),
+    FeatureModule("google", GOOGLE_ROUTER, frozenset({"ppt-api", "providers"})),
+    FeatureModule("codex-auth", CODEX_AUTH_ROUTER, frozenset({"ppt-api", "providers"})),
     FeatureModule("pptx-fonts", PPTX_FONTS_ROUTER, frozenset({"ppt-api", "assets", "export"})),
     FeatureModule("themes", THEMES_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("theme-generate", THEME_ROUTER, frozenset({"ppt-api", "presentation"})),
@@ -104,23 +79,10 @@ PPT_FEATURE_MODULES = (
     ),
     FeatureModule("structured-templates", STRUCTURED_TEMPLATES_ROUTER, frozenset({"ppt-api", "templates"})),
     FeatureModule(
-        "template-v2-compat",
-        TEMPLATE_V2_COMPAT_ROUTER,
-        frozenset({"ppt-api", "templates"}),
-        allow_legacy_route_name_collisions=True,
+        "template-v2-compat", TEMPLATE_V2_COMPAT_ROUTER, frozenset({"ppt-api", "templates"})
     ),
-    FeatureModule(
-        "templates",
-        TEMPLATE_ROUTER,
-        frozenset({"ppt-api", "templates"}),
-        allow_legacy_route_name_collisions=True,
-    ),
-    FeatureModule(
-        "community",
-        COMMUNITY_ROUTER,
-        frozenset({"ppt-api", "community"}),
-        allow_legacy_route_name_collisions=True,
-    ),
+    FeatureModule("templates", TEMPLATE_ROUTER, frozenset({"ppt-api", "templates"})),
+    FeatureModule("community", COMMUNITY_ROUTER, frozenset({"ppt-api", "community"})),
 )
 
 API_V1_PPT_ROUTER = compose_static_feature_modules(

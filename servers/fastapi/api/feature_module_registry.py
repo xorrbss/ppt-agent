@@ -25,11 +25,6 @@ class FeatureModule:
     name: str
     router: APIRouter
     required_capabilities: FrozenSet[str] = frozenset()
-    # Existing public routers can have historical endpoint function names in
-    # common (for example provider ``get_available_models`` routes).  Their
-    # paths/methods remain validated; this narrow flag documents the legacy
-    # reverse-lookup ambiguity until those endpoint names can be versioned.
-    allow_legacy_route_name_collisions: bool = False
 
 
 def _route_methods(route: object) -> FrozenSet[str]:
@@ -72,8 +67,7 @@ class FeatureModuleRegistry:
             route_name = getattr(route, "name", None)
             if (
                 route_name
-                and route_name in self._route_names
-                and not module.allow_legacy_route_name_collisions
+                and route_name in self._route_names | route_names
             ):
                 raise FeatureModuleRegistrationError(
                     f"duplicate_feature_route_name:{route_name}"

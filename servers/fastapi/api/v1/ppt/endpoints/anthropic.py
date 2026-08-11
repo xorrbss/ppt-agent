@@ -6,8 +6,10 @@ from utils.available_models import list_available_anthropic_models
 ANTHROPIC_ROUTER = APIRouter(prefix="/anthropic", tags=["Anthropic"])
 
 
-@ANTHROPIC_ROUTER.post("/models/available", response_model=List[str])
-async def get_available_models(
+@ANTHROPIC_ROUTER.post(
+    "/models/available", response_model=List[str], name="get_available_anthropic_models"
+)
+async def get_available_anthropic_models(
     api_key: Annotated[str, Body(embed=True)],
 ):
     try:

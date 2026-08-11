@@ -1,0 +1,166 @@
+{
+  "schemaVersion": "presenton.template-package-assets/v1",
+  "templateId": "executive",
+  "files": [
+    {
+      "path": "static/Anton Regular.ttf",
+      "sha256": "9c306606325bb3396711d7d1699fe45c1061ede2315fa217ae034bb0236edda7",
+      "sizeBytes": 79396,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/DM Sans Bold.ttf",
+      "sha256": "d415b88e3fe0224e9a1fd34acfdb3d7f1f390c834b440bc3117b68c1f86900e3",
+      "sizeBytes": 71764,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/freeform_12-356df2a648d5.svg",
+      "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_14-415898a77b60.svg",
+      "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_15-356df2a648d5.svg",
+      "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_17-415898a77b60.svg",
+      "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_18-356df2a648d5.svg",
+      "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_2-cc80a5f71f54.svg",
+      "sha256": "9b8a5384294ce433418c984c0e998e4bdc3f0d0c32176a8d4307570691887c89",
+      "sizeBytes": 360,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_20-415898a77b60.svg",
+      "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_21-356df2a648d5.svg",
+      "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_23-415898a77b60.svg",
+      "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+      "sizeBytes": 457,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image-778d1de63f45a60f.png",
+      "sha256": "23cec99d1780b64babde71b6703f509affb177cdcf15f0820d2acdc2396256df",
+      "sizeBytes": 63937,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image1-7f30c6c93dd1.png",
+      "sha256": "269e736f41176293d92e0472c0025891e5bfffb2605a59133067eec11b582e75",
+      "sizeBytes": 1214453,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image13-8d4aaab60638.png",
+      "sha256": "47c48e12c3964c579e74c81cfaef3c1731f20acba61f9eb7e3b236d9a37356cf",
+      "sizeBytes": 30613,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image2-f9ab39ea57ed.png",
+      "sha256": "771e978a8e212de0059d315b8a33da463d770574dc20d08ad1a3ee3b1fe01107",
+      "sizeBytes": 1279014,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/Montserrat Bold.ttf",
+      "sha256": "63483d1d2ea1f202563d04625eaf3036c7d6da0831c6211a9eecb973995d72ca",
+      "sizeBytes": 261588,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/Montserrat Medium.ttf",
+      "sha256": "9b2a9eb2cc1d610ecdf19f5e549d557408fc2334bf381351ff14e1c8622f3b34",
+      "sizeBytes": 260220,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/Montserrat Regular.ttf",
+      "sha256": "df738f354367e5ab07f2ede5a07860e791127ff9ea9964b25cf539ec9dc187ac",
+      "sizeBytes": 263192,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/Montserrat SemiBold.ttf",
+      "sha256": "a2b550eb5f130823554fd9cbf17f4b377dd46cbb9d79c5cced783ec9dffd996a",
+      "sizeBytes": 260916,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/thumbnail.png",
+      "sha256": "56d523e931cac19c28e32a8a7570a7e004f947524af293b31b0ed509e2325d50",
+      "sizeBytes": 169830,
+      "mediaType": "image/png",
+      "role": "thumbnail",
+      "licenseRef": "Apache-2.0"
+    }
+  ]
+}

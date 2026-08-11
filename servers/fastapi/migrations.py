@@ -72,7 +72,11 @@ REVISION_PROVIDER_SETTINGS_SYNC = "d5a9c1e3f7b2"
 REVISION_PRESENTATION_RUNTIME_MERGE = "e6b8d0f2a4c6"
 REVISION_REFERENCE_SNAPSHOTS = "f7c9e1a3b5d8"
 REVISION_ASSET_PROFILE_COMPATIBILITY = "a8c1e4f7b2d9"
-HEAD_REVISION = REVISION_ASSET_PROFILE_COMPATIBILITY
+REVISION_PRESENTATION_REFERENCE_SNAPSHOTS = "b9d2e4f6a8c1"
+REVISION_ASSET_GATEWAY_IDEMPOTENCY = "c0e3f5a7b9d1"
+REVISION_POST_C0_SCHEMA_RECONCILIATION = "d1a4c7e9b2f6"
+REVISION_PRESENTATION_EXPORT_ATTEMPTS = "d2b5e8f0a3c6"
+HEAD_REVISION = REVISION_PRESENTATION_EXPORT_ATTEMPTS
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {
@@ -786,8 +790,140 @@ def _slidespec_schema_revision(
         }
         if not required_snapshot_columns.issubset(snapshot_columns):
             raise RuntimeError("Reference snapshot schema is incompatible")
-        return HEAD_REVISION
+        return _post_reference_schema_revision(
+            inspector,
+            tables,
+            presentation_columns,
+        )
     return provider_revision
+
+
+def _post_reference_schema_revision(
+    inspector,
+    tables: set[str],
+    presentation_columns: set[str],
+) -> str:
+    """Infer a8 through c0 only from each revision's physical marker.
+
+    These revisions are restartable and may be encountered without an Alembic
+    version row.  Never stamp the dynamic head merely because the older
+    reference-snapshot table exists: doing so would skip presentation snapshot
+    identities, durable gateway receipts, or the package ownership relaxation.
+    """
+
+    image_columns = (
+        {column["name"] for column in inspector.get_columns("imageasset")}
+        if "imageasset" in tables
+        else set()
+    )
+    required_image_columns = {
+        "canonical_asset_id",
+        "canonicalization_attempts",
+        "canonicalization_error_code",
+        "canonicalized_at",
+    }
+    required_profile_columns = {
+        "profile_driver_id",
+        "profile_schema_version",
+        "profile_backfilled_at",
+    }
+    image_markers = required_image_columns & image_columns
+    profile_markers = required_profile_columns & presentation_columns
+    if not image_markers and not profile_markers:
+        return REVISION_REFERENCE_SNAPSHOTS
+    if image_markers != required_image_columns or profile_markers != required_profile_columns:
+        raise RuntimeError("Asset/profile compatibility schema is only partially applied")
+
+    image_indexes = {
+        index.get("name"): index for index in inspector.get_indexes("imageasset")
+    }
+    canonical_index = image_indexes.get("ix_imageasset_canonical_asset_id")
+    if canonical_index is None or tuple(
+        canonical_index.get("column_names") or ()
+    ) != ("canonical_asset_id",):
+        raise RuntimeError("Image asset compatibility index is incompatible")
+    profile_indexes = {
+        index.get("name"): index for index in inspector.get_indexes("presentations")
+    }
+    profile_index = profile_indexes.get("ix_presentations_profile_driver_id")
+    if profile_index is None or tuple(
+        profile_index.get("column_names") or ()
+    ) != ("profile_driver_id",) or bool(profile_index.get("unique")):
+        raise RuntimeError("Presentation profile compatibility index is incompatible")
+    canonical_unique_constraints = [
+        constraint
+        for constraint in inspector.get_unique_constraints("imageasset")
+        if "canonical_asset_id"
+        in tuple(
+            constraint.get("column_names")
+            or constraint.get("constrained_columns")
+            or ()
+        )
+    ]
+    canonical_unique = bool(
+        len(canonical_unique_constraints) == 1
+        and canonical_unique_constraints[0].get("name")
+        == "uq_imageasset_canonical_asset_id"
+        and tuple(
+            canonical_unique_constraints[0].get("column_names")
+            or canonical_unique_constraints[0].get("constrained_columns")
+            or ()
+        )
+        == ("canonical_asset_id",)
+    )
+    canonical_foreign_key = (
+        (
+            ("canonical_asset_id",),
+            "workspace_assets",
+            "SET NULL",
+        )
+        in _foreign_key_signatures(inspector, "imageasset")
+    )
+    legacy_unique_index = bool(
+        canonical_index.get("unique")
+        and not canonical_unique_constraints
+        and not canonical_foreign_key
+    )
+    if legacy_unique_index:
+        return REVISION_REFERENCE_SNAPSHOTS
+    if bool(canonical_index.get("unique")):
+        raise RuntimeError("Image asset compatibility index is incompatible")
+    if not canonical_unique:
+        raise RuntimeError("Image asset canonical identity uniqueness is missing")
+    if not canonical_foreign_key:
+        raise RuntimeError("Image asset canonical identity foreign key is incompatible")
+
+    if "reference_snapshot_ids" not in presentation_columns:
+        return REVISION_ASSET_PROFILE_COMPATIBILITY
+
+    attempt_exists = "presentation_export_attempts" in tables
+    artifact_columns = {
+        column["name"] for column in inspector.get_columns("workspace_artifacts")
+    }
+    link_exists = "export_attempt_id" in artifact_columns
+    if attempt_exists != link_exists:
+        raise RuntimeError("Presentation export attempt schema is only partially applied")
+
+    receipt_table = "asset_gateway_idempotency_receipts"
+    if receipt_table not in tables:
+        if attempt_exists:
+            raise RuntimeError(
+                "Presentation export attempt schema exists without its receipt predecessor"
+            )
+        return REVISION_PRESENTATION_REFERENCE_SNAPSHOTS
+
+    template_columns = {
+        column["name"]: column for column in inspector.get_columns("template_v2")
+    }
+    presentation_column = template_columns.get("presentation_id")
+    if presentation_column is None:
+        raise RuntimeError("Template V2 presentation ownership column is missing")
+    if not presentation_column.get("nullable", False):
+        raise RuntimeError("Template V2 package ownership schema is incompatible")
+    # A receipt marker is deliberately stamped only at c0. D1 validates or
+    # safely repairs the complete receipt contract, and D2 independently
+    # validates an already-present export schema before Alembic can stamp head.
+    return REVISION_ASSET_GATEWAY_IDEMPOTENCY
 
 
 def _durable_deletion_schema_revision(

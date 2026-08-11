@@ -8,6 +8,8 @@ import {
   TemplateV2CompilerError,
 } from "./compiler.ts";
 import type { CanonicalTemplateAst } from "./template-v2-ast.generated.ts";
+import { templateV2UiToHtmlFragment } from "../template-v2-json-to-html.ts";
+import { createTemplateV2SlideRenderPlan } from "../template-v2-render-plan.mjs";
 
 const ast = JSON.parse(
   readFileSync(
@@ -38,6 +40,30 @@ test("TS editor/HTML lowering consumes the canonical Python AST", () => {
     positioned.slice(1).map((item) => (item.position as { x: number }).x),
     [320, 120],
   );
+  assert.deepEqual(
+    (flexChildren as Array<Record<string, unknown>>).map((item) =>
+      (((item.children as Array<Record<string, unknown>>)[0].runs as Array<{ text: string }>)[0].text)
+    ),
+    ["A", "B"],
+  );
+  assert.deepEqual(
+    positioned.slice(1).map((item) =>
+      (((item.children as Array<Record<string, unknown>>)[0].runs as Array<{ text: string }>)[0].text)
+    ),
+    ["One", "Two"],
+  );
+
+  const renderable = structuredClone(rendered);
+  (renderable.components as Array<Record<string, unknown>>)[1].elements = positioned.slice(1);
+  const geometryPlan = createTemplateV2SlideRenderPlan({ ui: renderable });
+  assert.equal(geometryPlan.components[0].elements[0].children.length, 2);
+  assert.deepEqual(
+    geometryPlan.components[1].elements.map((item) => item.frame.x),
+    [320, 120],
+  );
+  const html = templateV2UiToHtmlFragment(renderable);
+  assert.match(html ?? "", /First card|>A</);
+  assert.match(html ?? "", />One</);
 });
 
 test("unsupported or future AST fails closed", () => {

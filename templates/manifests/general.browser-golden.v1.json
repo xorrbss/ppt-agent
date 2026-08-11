@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "presenton.template-browser-golden/v1",
+  "templateId": "general",
+  "engineId": "presenton.template-v2-json",
+  "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+  "entrypointSha256": "e3857fd52e8692e4a12bc2dd5b3069a5dad661196f9d62674c841e0bfd6c86f7",
+  "renderer": {
+    "modulePath": "servers/nextjs/lib/template-v2-json-to-html.ts",
+    "moduleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+    "captureAdapter": "chromium-headless-cli/readiness-contract",
+    "productionCaptureContract": "scripts/sync-presentation-export.cjs readiness overlay"
+  },
+  "browser": {
+    "family": "chromium",
+    "product": "Chrome/151.0.7922.76",
+    "revision": "@031bfd60f544af71d8dd7246970d1af3e1acf3ad",
+    "protocolVersion": "1.3"
+  },
+  "capturedAt": "2026-08-11T04:02:31.310Z",
+  "captureEvidence": {
+    "path": "templates/manifests/general.browser-golden.capture.v1.json",
+    "sha256": "8f3efa90fbf57c02afe35b88e310c17a8181a8dea447bff6a6f9bc065bd10427",
+    "adapter": "chromium-cdp/Page.captureScreenshot"
+  },
+  "networkPolicy": "deny",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "layoutIds": [
+    "title_intro",
+    "title_description_image",
+    "title_image_bullet_points_1",
+    "title_description_bullet_points",
+    "title_description_chart_cards",
+    "title_metrics_description",
+    "title_image_description_metrics",
+    "title_image_bullet_points",
+    "title_quote_image",
+    "title_table_description",
+    "table_of_contents",
+    "title_description_team_cards"
+  ],
+  "screenshots": [
+    {
+      "layoutId": "title_intro",
+      "path": "templates/manifests/general.browser-golden/01-title_intro.png",
+      "sha256": "e9369e1dcdd83c3bdc1d9726fc7e375a6a917ac1ada19825e6d5aff135ef8c15",
+      "sizeBytes": 49887,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_image",
+      "path": "templates/manifests/general.browser-golden/02-title_description_image.png",
+      "sha256": "ed5807a134203474634aeffc4f9758e9d69421d05f9dcdd75a068fdb472be8c7",
+      "sizeBytes": 43328,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_image_bullet_points_1",
+      "path": "templates/manifests/general.browser-golden/03-title_image_bullet_points_1.png",
+      "sha256": "1a3f4b5eb8b24df8a7a435b61d19818d4a9b50fdd119280d0238f094fbf464eb",
+      "sizeBytes": 59360,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_bullet_points",
+      "path": "templates/manifests/general.browser-golden/04-title_description_bullet_points.png",
+      "sha256": "b3b464fbe1561bb46cdc32994a3a0a55187fe19245ffe9003b34c9eadd4ff63f",
+      "sizeBytes": 55626,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_chart_cards",
+      "path": "templates/manifests/general.browser-golden/05-title_description_chart_cards.png",
+      "sha256": "9ea5da16e84374d0db2049d2d787d193e22a48432a1e97f9e0386c1cbb6c8f32",
+      "sizeBytes": 64040,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_metrics_description",
+      "path": "templates/manifests/general.browser-golden/06-title_metrics_description.png",
+      "sha256": "b36da883e3cc5ea3e635e08c37053628e5f5684d3ab620aeb617202e0b52ffad",
+      "sizeBytes": 49425,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_image_description_metrics",
+      "path": "templates/manifests/general.browser-golden/07-title_image_description_metrics.png",
+      "sha256": "45cfc7de6d57d43511e0c4c899eb30d8ce61d0e8f3683a424ba1c4f63da5ed8d",
+      "sizeBytes": 59394,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_image_bullet_points",
+      "path": "templates/manifests/general.browser-golden/08-title_image_bullet_points.png",
+      "sha256": "ba221425615ba6ad8a74f481a7402263365c68fa4989ebb2f6555ade4236cd61",
+      "sizeBytes": 68518,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_quote_image",
+      "path": "templates/manifests/general.browser-golden/09-title_quote_image.png",
+      "sha256": "5744f19f54380f0f4308eff3e72d7fc6cbb2981739bb8c49f25475852b5d7144",
+      "sizeBytes": 52214,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_table_description",
+      "path": "templates/manifests/general.browser-golden/10-title_table_description.png",
+      "sha256": "29c37d8be3037660ba98190facca5f6ba2264f860cc3ac75bd351ba6e4f41d68",
+      "sizeBytes": 63321,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "table_of_contents",
+      "path": "templates/manifests/general.browser-golden/11-table_of_contents.png",
+      "sha256": "4a219b411494b7c9cebe32f4a1a35cedff3534f16016c43138404bd2fe7ebc76",
+      "sizeBytes": 53518,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_team_cards",
+      "path": "templates/manifests/general.browser-golden/12-title_description_team_cards.png",
+      "sha256": "954e2bebdd974d6682f88962425cbc01bf6d7e90983b8ab33daa119edf1df883",
+      "sizeBytes": 81586,
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "checks": {
+    "renderedLayoutCount": 12,
+    "nonBlankLayoutCount": 12,
+    "missingImages": 0,
+    "imageCount": 25,
+    "chartCanvasCount": 1,
+    "externalRequests": [],
+    "localFontsLoaded": true,
+    "consoleErrors": [],
+    "paintReadinessContract": "passed"
+  },
+  "status": "passed-browser-golden"
+}

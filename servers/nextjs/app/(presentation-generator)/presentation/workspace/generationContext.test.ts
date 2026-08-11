@@ -80,3 +80,73 @@ test("does not duplicate a durable bootstrap message", () => {
   assert.equal(items.length, 1);
   assert.equal(items[0], durableMessage);
 });
+
+test("prefers a durable prompt when legacy attachment names do not match", () => {
+  const durableMessage: WorkspaceTimelineAnchor = {
+    anchorType: "message",
+    id: "durable-bootstrap-message",
+    position: 10,
+    role: "user",
+    content: generationInfo.prompt,
+    attachments: [
+      {
+        id: "asset-original",
+        name: "처음 올린 제안요청서.pdf",
+        status: "ready",
+        stateAtTime: "ready",
+        currentState: "ready",
+      },
+    ],
+    generationSettings: { ...generationInfo.settings },
+  };
+  const legacyInfo: PresentationGenerationInfo = {
+    ...generationInfo,
+    attachment_file_names: ["storage-hash.txt"],
+  };
+
+  const items = withGenerationContext("deck-1", legacyInfo, [durableMessage]);
+
+  assert.deepEqual(items, [durableMessage]);
+});
+
+test("labels the automatic attachment fallback as a missing original prompt", () => {
+  const durableMessage: WorkspaceTimelineAnchor = {
+    anchorType: "message",
+    id: "legacy-bootstrap-message",
+    position: 10,
+    role: "user",
+    content: "Generate a presentation from the attached files.",
+    attachments: [
+      {
+        id: "asset-original",
+        name: "처음 올린 제안요청서.pdf",
+        status: "ready",
+        stateAtTime: "ready",
+        currentState: "ready",
+      },
+    ],
+    generationSettings: { ...generationInfo.settings },
+  };
+  const missingPromptInfo: PresentationGenerationInfo = {
+    ...generationInfo,
+    prompt: "",
+    attachment_file_names: ["storage-hash.pdf"],
+  };
+
+  const items = withGenerationContext("deck-1", missingPromptInfo, [
+    durableMessage,
+  ]);
+
+  assert.equal(items.length, 1);
+  const message = items[0];
+  assert.equal(message.anchorType, "message");
+  if (message.anchorType !== "message") return;
+  assert.equal(
+    message.content,
+    "원본 프롬프트가 저장되지 않아 첨부 파일 기록만 표시합니다.",
+  );
+  assert.deepEqual(
+    message.attachments.map((attachment) => attachment.name),
+    ["처음 올린 제안요청서.pdf"],
+  );
+});

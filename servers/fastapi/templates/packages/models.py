@@ -67,6 +67,21 @@ class LicenseContract(PackageModel):
     rights_evidence_id: str | None = Field(alias="rightsEvidenceId")
 
 
+class ProvenanceExtension(PackageModel):
+    path: str
+    kind: Literal["added", "modified"]
+    reason: str
+    source_repository: str = Field(alias="sourceRepository")
+    source_commit_sha: str = Field(
+        alias="sourceCommitSha", pattern=r"^[0-9a-f]{40}$"
+    )
+    source_path: str = Field(alias="sourcePath")
+    source_sha256: str = Field(alias="sourceSha256", pattern=r"^[0-9a-f]{64}$")
+    source_git_blob_sha1: str = Field(
+        alias="sourceGitBlobSha1", pattern=r"^[0-9a-f]{40}$"
+    )
+
+
 class Provenance(PackageModel):
     repository: str
     commit_sha: str = Field(alias="commitSha", pattern=r"^[0-9a-f]{40}$")
@@ -77,6 +92,7 @@ class Provenance(PackageModel):
     )
     evidence_path: str = Field(alias="evidencePath")
     evidence_sha256: str = Field(alias="evidenceSha256", pattern=r"^[0-9a-f]{64}$")
+    extensions: tuple[ProvenanceExtension, ...] = ()
 
 
 class Thumbnail(PackageModel):

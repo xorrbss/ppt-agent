@@ -73,7 +73,7 @@ function runExporter(entrypoint, taskPath, env) {
   });
 }
 
-test("v0.4.3 general exporter converts a representative Template V2 render", async (t) => {
+async function runGeneralExporterSmoke(t, format) {
   const chrome = await firstExisting(chromeExecutable());
   if (!chrome) {
     if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
@@ -133,8 +133,8 @@ test("v0.4.3 general exporter converts a representative Template V2 render", asy
       JSON.stringify({
         type: "export",
         url: `http://127.0.0.1:${address.port}/pdf-maker?id=template-v2-smoke`,
-        format: "pptx",
-        title: "template-v2-general-smoke",
+        format,
+        title: `template-v2-general-${format}-smoke`,
       })
     );
 
@@ -166,21 +166,31 @@ test("v0.4.3 general exporter converts a representative Template V2 render", asy
             ? path.join(appData, response.url.slice("/app_data/".length))
             : undefined;
     assert.equal(typeof outputPath, "string");
-    const pptx = await fs.readFile(outputPath);
-    assert.equal(pptx.subarray(0, 2).toString("ascii"), "PK");
-    const archive = readPptxArchive(pptx);
-    const slideEntry = [...archive.keys()].find((name) =>
-      /^ppt\/slides\/slide\d+\.xml$/.test(name)
-    );
-    assert.ok(
-      slideEntry,
-      `generated archive has no slide XML: ${[...archive.keys()].slice(0, 20)}`
-    );
-    const slideXml = archive.get(slideEntry).toString("utf8");
-    assert.match(slideXml, /Template V2 General Export/);
-    assert.match(slideXml, /Editable native text and rectangle/);
+    const exported = await fs.readFile(outputPath);
+    if (format === "pdf") {
+      assert.equal(exported.subarray(0, 5).toString("ascii"), "%PDF-");
+    } else {
+      assert.equal(exported.subarray(0, 2).toString("ascii"), "PK");
+      const archive = readPptxArchive(exported);
+      const slideEntry = [...archive.keys()].find((name) =>
+        /^ppt\/slides\/slide\d+\.xml$/.test(name)
+      );
+      assert.ok(
+        slideEntry,
+        `generated archive has no slide XML: ${[...archive.keys()].slice(0, 20)}`
+      );
+      const slideXml = archive.get(slideEntry).toString("utf8");
+      assert.match(slideXml, /Template V2 General Export/);
+      assert.match(slideXml, /Editable native text and rectangle/);
+    }
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
-});
+}
+
+for (const format of ["pdf", "pptx"]) {
+  test(`v0.4.3 general exporter converts a representative Template V2 ${format.toUpperCase()} render`, async (t) => {
+    await runGeneralExporterSmoke(t, format);
+  });
+}

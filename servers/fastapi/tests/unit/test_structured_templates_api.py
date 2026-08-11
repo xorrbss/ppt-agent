@@ -1,6 +1,7 @@
 import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 import uuid
 
@@ -31,6 +32,8 @@ from models.sql.template_v2_local_state import TemplateV2LocalState
 from models.sql.template_v2_revision import TemplateV2Revision
 from services.database import get_async_session
 from services.template_v2_rollout import TemplateV2RolloutService
+from templates.packages.defaults import _template_from_package
+from templates.packages.registry import TemplatePackageRegistry
 from templates.v2.constants import (
     LEGACY_PRESENTATION_VERSION,
     TEMPLATE_V2_VERSION,
@@ -118,6 +121,18 @@ def test_create_is_default_off(fake_async_session, monkeypatch):
     assert error.value.status_code == 403
     assert error.value.detail == "template_v2_creation_disabled"
     assert fake_async_session.added == []
+
+
+def test_create_contract_still_requires_a_source_presentation() -> None:
+    with pytest.raises(ValidationError) as error:
+        StructuredTemplateCreate(
+            id="missing-source",
+            name="Missing source",
+            layouts=_layouts(),
+        )
+
+    assert error.value.errors()[0]["loc"] == ("presentation_id",)
+    assert error.value.errors()[0]["type"] == "missing"
 
 
 def test_create_schema_requires_explicit_id():
@@ -212,6 +227,41 @@ def test_direct_read_ignores_stale_database_default(
     )
 
     assert response.is_default is False
+
+
+def test_publishable_admin_bootstrap_can_be_the_default(
+    monkeypatch,
+    fake_async_session,
+):
+    monkeypatch.delenv("ENABLE_TEMPLATE_V2", raising=False)
+    template = _template("universal")
+    template.is_default = True
+    template.assets = {
+        "native_pptx": {
+            "schema_version": "presenton.template-v2-publication/v1",
+            "preservation_mode": "reconstructed",
+            "publication_status": "publishable",
+            "publishable": True,
+            "native_pptx_preflight": {
+                "schema_version": "presenton.template-v2-native-pptx/v1",
+                "compiler_name": "presenton-template-v2-native-ooxml",
+                "compiler_version": "1",
+                "preservation_mode": "reconstructed",
+                "status": "compiled",
+                "selected_for_export": False,
+                "structural_sha256": f"sha256:{'a' * 64}",
+                "package_sha256": f"sha256:{'b' * 64}",
+                "unsupported": None,
+            },
+        }
+    }
+    fake_async_session._get_results["universal"] = template
+
+    response = asyncio.run(
+        get_structured_template("universal", fake_async_session)
+    )
+
+    assert response.is_default is True
 
 
 def test_response_derives_default_from_catalog_release_gate(
@@ -310,6 +360,59 @@ def test_discovery_paginates_after_filtering_blocked_rows(monkeypatch):
     )
 
     assert [template.id for template in discovered] == ["published-two"]
+
+
+def test_registry_packages_are_discoverable_without_a_source_presentation(
+    monkeypatch,
+):
+    repository_root = Path(__file__).resolve().parents[4]
+    registry = TemplatePackageRegistry(
+        repository_root,
+        Path("templates/package-registry.v1.json"),
+    )
+    now = datetime.now(timezone.utc)
+    rows = []
+    for package in registry.discoverable():
+        template = _template_from_package(
+            package,
+            registry.materialize(package.manifest.template_id),
+        )
+        template.created_at = now
+        template.updated_at = now
+        rows.append(template)
+
+    class FakeTemplateV2Service:
+        def __init__(self, _session):
+            pass
+
+        async def list(self, *, template_ids, offset, limit):
+            assert set(template_ids) == {template.id for template in rows}
+            return rows[offset : offset + limit]
+
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv(
+        "TEMPLATE_V2_TEMPLATE_ALLOWLIST",
+        ",".join(template.id for template in rows),
+    )
+    monkeypatch.setattr(
+        "api.v1.ppt.endpoints.structured_templates.TemplateV2Service",
+        FakeTemplateV2Service,
+    )
+
+    discovered = asyncio.run(list_structured_templates(sql_session=object()))
+
+    assert [response.id for response in discovered] == [
+        "dynamic",
+        "editorial",
+        "executive",
+        "general",
+        "modern",
+        "momentum",
+        "standard",
+        "swift",
+    ]
+    assert all(response.presentation_id is None for response in discovered)
+    assert all(response.publication_status == "published" for response in discovered)
 
 
 def test_non_null_malformed_layouts_fail_closed(fake_async_session):

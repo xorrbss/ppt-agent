@@ -37,6 +37,8 @@ from services.references import (
     TemplateReferenceProvider,
     UploadedDocumentProvider,
     admit_reference_snapshot,
+    claim_reference_snapshots,
+    cleanup_expired_reference_snapshots,
     create_reference_snapshot,
 )
 from services.references.contracts import NormalizedReference
@@ -203,11 +205,24 @@ def test_reference_snapshot_migration_upgrade_downgrade_reupgrade(tmp_path: Path
             for column in sa.inspect(engine).get_columns("reference_snapshots")
         }
         assert {"normalized_payload", "asset_bindings", "content_sha256"} <= columns
+        presentation_columns = {
+            column["name"]
+            for column in sa.inspect(engine).get_columns("presentations")
+        }
+        assert "reference_snapshot_ids" in presentation_columns
 
         command.downgrade(config, "e6b8d0f2a4c6")
         assert "reference_snapshots" not in sa.inspect(engine).get_table_names()
+        assert "reference_snapshot_ids" not in {
+            column["name"]
+            for column in sa.inspect(engine).get_columns("presentations")
+        }
         command.upgrade(config, "head")
         assert "reference_snapshots" in sa.inspect(engine).get_table_names()
+        assert "reference_snapshot_ids" in {
+            column["name"]
+            for column in sa.inspect(engine).get_columns("presentations")
+        }
     finally:
         engine.dispose()
 
@@ -411,6 +426,155 @@ def test_uploaded_provider_persists_and_admits_immutable_asset_snapshot(tmp_path
                     serialized = str(row.normalized_payload) + str(row.asset_bindings)
                     assert str(root) not in serialized
                     assert "storage_key" not in serialized
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
+def test_snapshot_accepts_exact_workspace_claim_but_rejects_later_version_drift(
+    tmp_path: Path,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "claim-transition.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "claim-transition-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            asset = await _seed_asset(
+                maker,
+                root=root,
+                owner_id=owner_id,
+                content=b"canonical source text",
+                media_type="text/plain",
+                extension=".txt",
+            )
+            conversation = await _seed_conversation(maker, owner_id)
+            with _owner(owner_id):
+                async with maker() as session:
+                    snapshot = await create_reference_snapshot(
+                        session,
+                        provider_id="uploaded_document",
+                        request={"asset_ids": [str(asset.id)]},
+                        asset_gateway=AssetGateway(storage_root=root),
+                    )
+
+                async with maker() as session:
+                    claimed = await session.get(WorkspaceAsset, asset.id)
+                    claimed.conversation_id = conversation.id
+                    claimed.version += 1
+                    session.add(claimed)
+                    await session.commit()
+                    admitted = await admit_reference_snapshot(
+                        session,
+                        snapshot_id=snapshot.snapshot_id,
+                        asset_gateway=AssetGateway(storage_root=root),
+                    )
+                    assert admitted.asset_bindings[0].conversation_id == conversation.id
+
+                    claimed.version += 1
+                    session.add(claimed)
+                    await session.commit()
+                    with pytest.raises(ReferenceProviderError) as stale:
+                        await admit_reference_snapshot(
+                            session,
+                            snapshot_id=snapshot.snapshot_id,
+                            asset_gateway=AssetGateway(storage_root=root),
+                        )
+                    assert stale.value.code == "reference_asset_binding_stale"
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
+def test_snapshot_claim_links_conversation_cleanup_boundary(tmp_path: Path):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "snapshot-cleanup.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "snapshot-cleanup-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            asset = await _seed_asset(
+                maker,
+                root=root,
+                owner_id=owner_id,
+                content=b"cleanup source",
+                media_type="text/plain",
+                extension=".txt",
+            )
+            conversation = await _seed_conversation(maker, owner_id)
+            with _owner(owner_id):
+                async with maker() as session:
+                    snapshot = await create_reference_snapshot(
+                        session,
+                        provider_id="uploaded_document",
+                        request={"asset_ids": [str(asset.id)]},
+                        asset_gateway=AssetGateway(storage_root=root),
+                    )
+                    await claim_reference_snapshots(
+                        session,
+                        snapshot_ids=[snapshot.snapshot_id],
+                        conversation_id=conversation.id,
+                    )
+                    await session.commit()
+
+                    claimed = await session.get(ReferenceSnapshot, snapshot.snapshot_id)
+                    assert claimed.conversation_id == conversation.id
+                    assert claimed.expires_at is None
+                    await session.delete(
+                        await session.get(WorkspaceConversation, conversation.id)
+                    )
+                    await session.commit()
+
+                async with maker() as session:
+                    assert (
+                        await session.get(ReferenceSnapshot, snapshot.snapshot_id)
+                        is None
+                    )
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
+def test_expired_unclaimed_snapshot_payload_is_purged(tmp_path: Path):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "snapshot-expiry.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "snapshot-expiry-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            asset = await _seed_asset(
+                maker,
+                root=root,
+                owner_id=owner_id,
+                content=b"orphaned normalized source text",
+                media_type="text/plain",
+                extension=".txt",
+                expires_delta=timedelta(minutes=5),
+            )
+            with _owner(owner_id):
+                async with maker() as session:
+                    snapshot = await create_reference_snapshot(
+                        session,
+                        provider_id="uploaded_document",
+                        request={"asset_ids": [str(asset.id)]},
+                        asset_gateway=AssetGateway(storage_root=root),
+                    )
+                    row = await session.get(ReferenceSnapshot, snapshot.snapshot_id)
+                    row.expires_at = get_current_utc_datetime() - timedelta(seconds=1)
+                    session.add(row)
+                    await session.commit()
+
+                # Maintenance runs without a request owner context and must
+                # still purge the owner-scoped orphan payload globally.
+                async with maker() as session:
+                    assert await cleanup_expired_reference_snapshots(session) == 1
+                    assert (
+                        await session.get(ReferenceSnapshot, snapshot.snapshot_id)
+                        is None
+                    )
         finally:
             await engine.dispose()
 

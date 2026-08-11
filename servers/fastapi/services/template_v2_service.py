@@ -73,7 +73,7 @@ class TemplateV2Record:
     """Canonical template together with local provenance/edit state."""
 
     template: TemplateV2
-    presentation_id: uuid.UUID
+    presentation_id: uuid.UUID | None
     revision: int
 
     def __getattr__(self, name: str) -> Any:
@@ -82,7 +82,7 @@ class TemplateV2Record:
 
 @dataclass(frozen=True)
 class TemplateV2LocalStateSnapshot:
-    presentation_id: uuid.UUID
+    presentation_id: uuid.UUID | None
     revision: int
 
 

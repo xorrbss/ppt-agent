@@ -40,7 +40,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
-from constants.presentation import DEFAULT_TEMPLATES, MAX_NUMBER_OF_SLIDES
+from constants.presentation import (
+    DEFAULT_ATTACHMENT_GENERATION_PROMPT,
+    DEFAULT_TEMPLATES,
+    MAX_NUMBER_OF_SLIDES,
+)
 from enums.webhook_event import WebhookEvent
 from models.api_error_model import APIErrorModel
 from models.generate_presentation_request import GeneratePresentationRequest
@@ -55,7 +59,6 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import (
-    PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
     PresentationModel,
 )
@@ -96,19 +99,32 @@ from services.presentation_generation_job_service import (
     release_generation_job,
     request_sha256,
 )
+from services.presentation_generation_export_orchestration import (
+    execute_generation_export,
+    publish_staged_presentation,
+    record_generation_export_failure,
+)
+from services.presentation_export_attempt_service import (
+    terminalize_export_attempt_failed,
+)
+from services.presentation_export_router import (
+    PresentationExportExecution,
+    execute_presentation_export,
+)
 from services.references import (
     ReferenceProviderError,
     ReferenceSnapshotView,
     admit_reference_snapshots,
     canonicalize_legacy_document_paths,
+    claim_reference_snapshots,
 )
 from services.template_v2_generation_observability import (
     log_template_v2_generation_observation,
 )
 from services.template_v2_generation_service import (
     TemplateV2GenerationError,
+    TemplateV2GenerationTarget,
     build_template_v2_slides,
-    export_template_v2_native_pptx,
     load_template_v2_generation_target,
     preflight_template_v2_native_pptx,
     source_content_sha256,
@@ -159,7 +175,6 @@ from utils.authored_styles import (
     resolve_authored_style,
 )
 from utils.document_context import build_document_context
-from utils.export_utils import export_presentation
 from utils.get_env import (
     get_authored_resume_max_attempts_env,
     get_next_internal_base_url,
@@ -192,31 +207,6 @@ _INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
 _INTERNAL_ADMISSION_RETRY_KEY = "_internal_admission_retry_required"
 _STABLE_ADMISSION_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{1,127}$")
 CHAT_FIRST_WORKSPACE_PROJECTED_HEADER = "X-Chat-First-Workspace-Projected"
-
-# Only these authored/template/adaptive fields are promoted from an isolated
-# render snapshot.  Identity, ownership, share state and the publication token
-# belong to the durable target row and must never be copied from staging.
-_PRESENTATION_RENDER_FIELDS = (
-    "content",
-    "n_slides",
-    "language",
-    "title",
-    "file_paths",
-    "outlines",
-    "layout",
-    "structure",
-    "instructions",
-    "tone",
-    "verbosity",
-    "include_table_of_contents",
-    "include_title_slide",
-    "web_search",
-    "theme",
-    "deck_plan",
-    "mode",
-    "version",
-)
-
 
 PRESENTATION_GENERATE_ROUTER = APIRouter(
     prefix="/presentation", tags=["Presentation"]
@@ -342,37 +332,6 @@ async def _discard_render_staging(
     await sql_session.commit()
 
 
-async def _promote_render_staging(
-    sql_session: AsyncSession,
-    *,
-    target: PresentationModel,
-    render: PresentationModel,
-) -> None:
-    """Stage a complete snapshot replacement in the final publication UoW.
-
-    This function deliberately does not commit.  The subsequent revision/artifact
-    publication is the sole commit token, so any fence or external-publication
-    failure rolls the target fields and its slide replacement back together.
-    """
-
-    if target.id == render.id:
-        return
-    for field_name in _PRESENTATION_RENDER_FIELDS:
-        setattr(target, field_name, getattr(render, field_name))
-    target.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
-    sql_session.add(target)
-    await sql_session.execute(
-        delete(SlideModel).where(SlideModel.presentation == target.id)
-    )
-    await sql_session.execute(
-        update(SlideModel)
-        .where(SlideModel.presentation == render.id)
-        .values(presentation=target.id)
-        .execution_options(synchronize_session=False)
-    )
-    await sql_session.delete(render)
-
-
 async def _publish_staged_presentation(
     sql_session: AsyncSession,
     presentation: PresentationModel,
@@ -383,105 +342,59 @@ async def _publish_staged_presentation(
     generated_assets: tuple[ImageAsset, ...] = (),
     image_staging: PreparedWorkspaceChatArtifactStaging | None = None,
     image_artifacts: tuple[PreparedWorkspaceArtifact, ...] = (),
+    export_execution: PresentationExportExecution | None = None,
 ) -> str:
-    """Publish once with revision acting as the final commit token."""
-
-    expected_revision = presentation.revision
-    if generation_job is not None and generation_job.workspace_operation_id is not None:
-        if not generation_job.attempt_token:
-            await sql_session.rollback()
-            raise HTTPException(status_code=409, detail="operation_lease_lost")
-        artifact: PreparedWorkspaceArtifact | None = None
-        publication_started = False
-        try:
-            artifact = await prepare_workspace_generation_artifact(
-                sql_session,
-                source_path=export_path,
-                operation_id=generation_job.workspace_operation_id,
-                presentation_id=presentation.id,
-                source_revision=expected_revision + 1,
-            )
-            if render_presentation is not None:
-                await _promote_render_staging(
-                    sql_session,
-                    target=presentation,
-                    render=render_presentation,
-                )
-            if generated_assets:
-                sql_session.add_all(generated_assets)
-            if image_staging is not None:
-                await stage_workspace_chat_artifacts_for_publication(
-                    sql_session,
-                    staging=image_staging,
-                    artifacts=image_artifacts,
-                )
-            if async_status is not None:
-                async_status.message = "Presentation generation completed"
-                async_status.status = "completed"
-                async_status.data = PresentationPathAndEditPath(
-                    presentation_id=presentation.id,
-                    path=artifact.public_path,
-                    edit_path=f"/presentation?id={presentation.id}",
-                ).model_dump(mode="json")
-                async_status.error = None
-                async_status.updated_at = datetime.now(timezone.utc)
-                sql_session.add(async_status)
-            publication_started = True
-            await publish_workspace_generation_artifact(
-                sql_session,
-                artifact=artifact,
-                expected_revision=expected_revision,
-                attempt_token=generation_job.attempt_token,
-            )
-        except BaseException as error:
-            if artifact is not None and not publication_started:
-                try:
-                    await sql_session.rollback()
-                    await compensate_workspace_artifact(sql_session, artifact)
-                except BaseException:
-                    logger.exception(
-                        "Failed to compensate unpublished presentation artifact %s",
-                        artifact.artifact_id,
-                    )
-            if isinstance(error, WorkspaceArtifactPublicationError):
-                raise HTTPException(status_code=409, detail=error.code) from error
-            raise
-        assert artifact is not None
-        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
-        presentation.revision = expected_revision + 1
-        return artifact.public_path
-
-    if async_status is not None:
-        async_status.message = "Presentation generation completed"
-        async_status.status = "completed"
-        async_status.data = PresentationPathAndEditPath(
-            presentation_id=presentation.id,
-            path=export_path,
-            edit_path=f"/presentation?id={presentation.id}",
-        ).model_dump(mode="json")
-        async_status.error = None
-        async_status.updated_at = datetime.now(timezone.utc)
-        sql_session.add(async_status)
-    result = await sql_session.execute(
-        update(PresentationModel)
-        .where(
-            PresentationModel.id == presentation.id,
-            PresentationModel.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING,
-            PresentationModel.revision == expected_revision,
-        )
-        .values(
-            lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
-            revision=PresentationModel.revision + 1,
-            updated_at=datetime.now(timezone.utc),
-        )
+    return await publish_staged_presentation(
+        sql_session,
+        presentation,
+        export_path,
+        generation_job,
+        async_status,
+        render_presentation,
+        generated_assets,
+        image_staging,
+        image_artifacts,
+        export_execution,
+        prepare_artifact=prepare_workspace_generation_artifact,
+        publish_artifact=publish_workspace_generation_artifact,
+        compensate_artifact=compensate_workspace_artifact,
+        stage_image_artifacts=stage_workspace_chat_artifacts_for_publication,
     )
-    if result.rowcount != 1:
-        await sql_session.rollback()
-        raise HTTPException(status_code=409, detail="revision_conflict")
-    await sql_session.commit()
-    presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
-    presentation.revision = expected_revision + 1
-    return export_path
+
+
+async def _execute_generation_export(
+    sql_session: AsyncSession,
+    *,
+    publication_target: PresentationModel,
+    render_presentation: PresentationModel,
+    request: GeneratePresentationRequest,
+    export_cookie_header: str | None,
+    generation_job: PresentationGenerationJob | None,
+    template_target: TemplateV2GenerationTarget | None = None,
+) -> PresentationExportExecution:
+    return await execute_generation_export(
+        sql_session,
+        publication_target=publication_target,
+        render_presentation=render_presentation,
+        request=request,
+        export_cookie_header=export_cookie_header,
+        generation_job=generation_job,
+        template_target=template_target,
+        execute_export=execute_presentation_export,
+    )
+
+
+async def _record_generation_export_failure(
+    sql_session: AsyncSession,
+    execution: PresentationExportExecution | None,
+    error: BaseException,
+) -> None:
+    await record_generation_export_failure(
+        sql_session,
+        execution,
+        error,
+        terminalize_failure=terminalize_export_attempt_failed,
+    )
 
 
 def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
@@ -1113,6 +1026,9 @@ async def _generate_template_v2_presentation(
             presentation_outlines
         )
         presentation.file_paths = request.files
+        presentation.reference_snapshot_ids = [
+            str(snapshot_id) for snapshot_id in request.reference_snapshot_ids
+        ] or None
         presentation.outlines = presentation_outlines.model_dump(mode="json")
         presentation.layout = None
         presentation.structure = None
@@ -1196,24 +1112,22 @@ async def _generate_template_v2_presentation(
         async_status.updated_at = datetime.now(timezone.utc)
         sql_session.add(async_status)
 
+    publication_target = target_presentation if isolated_render else presentation
+    if publication_target is None:
+        raise HTTPException(status_code=409, detail="revision_conflict")
     export_started_at = perf_counter()
+    export_execution: PresentationExportExecution | None = None
     try:
-        if (
-            target.preservation_mode == "native_clone"
-            and request.export_as == "pptx"
-        ):
-            presentation_and_path = export_template_v2_native_pptx(
-                presentation_id=render_presentation_id,
-                title=presentation.title or str(uuid.uuid4()),
-                preflight=native_pptx_preflight,
-            )
-        else:
-            presentation_and_path = await export_presentation(
-                render_presentation_id,
-                presentation.title or str(uuid.uuid4()),
-                request.export_as,
-                cookie_header=export_cookie_header,
-            )
+        export_execution = await _execute_generation_export(
+            sql_session,
+            publication_target=publication_target,
+            render_presentation=presentation,
+            request=request,
+            export_cookie_header=export_cookie_header,
+            generation_job=generation_job,
+            template_target=target,
+        )
+        presentation_and_path = export_execution.presentation
         log_template_v2_generation_observation(
             operation="export",
             outcome="success",
@@ -1222,7 +1136,12 @@ async def _generate_template_v2_presentation(
             duration_ms=(perf_counter() - export_started_at) * 1000,
             export_type=request.export_as,
         )
-    except BaseException:
+    except BaseException as error:
+        await _record_generation_export_failure(
+            sql_session,
+            export_execution,
+            error,
+        )
         log_template_v2_generation_observation(
             operation="export",
             outcome="failure",
@@ -1264,9 +1183,6 @@ async def _generate_template_v2_presentation(
         path=presentation_and_path.path,
         edit_path=f"/presentation?id={presentation_id}",
     )
-    publication_target = target_presentation if isolated_render else presentation
-    if publication_target is None:
-        raise HTTPException(status_code=409, detail="revision_conflict")
     try:
         published_path = await _publish_staged_presentation(
             sql_session,
@@ -1275,8 +1191,14 @@ async def _generate_template_v2_presentation(
             generation_job,
             async_status,
             render_presentation=presentation if isolated_render else None,
+            export_execution=export_execution,
         )
-    except BaseException:
+    except BaseException as error:
+        await _record_generation_export_failure(
+            sql_session,
+            export_execution,
+            error,
+        )
         if isolated_render:
             try:
                 await _discard_render_staging(
@@ -1672,6 +1594,9 @@ async def generate_presentation_handler(
             vqa_source_outline
         )
         presentation.file_paths = request.files
+        presentation.reference_snapshot_ids = [
+            str(snapshot_id) for snapshot_id in request.reference_snapshot_ids
+        ] or None
         presentation.outlines = presentation_outlines.model_dump()
         presentation.layout = layout_model.model_dump()
         presentation.structure = presentation_structure.model_dump()
@@ -1897,12 +1822,18 @@ async def generate_presentation_handler(
             sql_session.add(async_status)
 
         # 9. Export
-        presentation_and_path = await export_presentation(
-            presentation.id,
-            presentation.title or str(uuid.uuid4()),
-            request.export_as,
-            cookie_header=export_cookie_header,
+        publication_target = target_presentation if isolated_render else presentation
+        if publication_target is None:
+            raise HTTPException(status_code=409, detail="revision_conflict")
+        export_execution = await _execute_generation_export(
+            sql_session,
+            publication_target=publication_target,
+            render_presentation=presentation,
+            request=request,
+            export_cookie_header=export_cookie_header,
+            generation_job=generation_job,
         )
+        presentation_and_path = export_execution.presentation
 
         response = PresentationPathAndEditPath(
             presentation_id=presentation_id,
@@ -1913,17 +1844,26 @@ async def generate_presentation_handler(
         # Publish once, only after the exported artifact exists.  The
         # optimistic revision is the publication commit token; intermediate
         # checkpoints above intentionally leave the staging revision intact.
-        published_path = await _publish_staged_presentation(
-            sql_session,
-            target_presentation if isolated_render else presentation,
-            presentation_and_path.path,
-            generation_job,
-            async_status,
-            render_presentation=presentation if isolated_render else None,
-            generated_assets=tuple(generated_assets) if isolated_render else (),
-            image_staging=image_staging,
-            image_artifacts=promoted_images.artifacts,
-        )
+        try:
+            published_path = await _publish_staged_presentation(
+                sql_session,
+                publication_target,
+                presentation_and_path.path,
+                generation_job,
+                async_status,
+                render_presentation=presentation if isolated_render else None,
+                generated_assets=tuple(generated_assets) if isolated_render else (),
+                image_staging=image_staging,
+                image_artifacts=promoted_images.artifacts,
+                export_execution=export_execution,
+            )
+        except BaseException as error:
+            await _record_generation_export_failure(
+                sql_session,
+                export_execution,
+                error,
+            )
+            raise
         if published_path != response.path:
             response.path = published_path
 
@@ -2275,6 +2215,27 @@ async def _bootstrap_generation_workspace(
 
     presentation_id = uuid.uuid4()
     asset_ids: list[uuid.UUID] = []
+    if request.reference_snapshot_ids:
+        try:
+            snapshots = await admit_reference_snapshots(
+                sql_session,
+                snapshot_ids=request.reference_snapshot_ids,
+            )
+        except ReferenceProviderError as error:
+            raise HTTPException(
+                status_code=error.status_code,
+                detail=error.code,
+            ) from error
+        asset_ids.extend(
+            binding.asset_id
+            for snapshot in snapshots
+            for binding in snapshot.asset_bindings
+        )
+        if len(asset_ids) != len(set(asset_ids)):
+            raise HTTPException(
+                status_code=400,
+                detail="duplicate_reference_asset",
+            )
     durable_file_paths: list[str] = []
     for path in request.files or []:
         asset, durable_path = await import_workspace_document_asset(
@@ -2292,6 +2253,10 @@ async def _bootstrap_generation_workspace(
         n_slides=request.n_slides if request.n_slides is not None else 0,
         language=(request.language or "").strip(),
         file_paths=durable_file_paths or None,
+        reference_snapshot_ids=(
+            [str(snapshot_id) for snapshot_id in request.reference_snapshot_ids]
+            or None
+        ),
         tone=request.tone.value,
         verbosity=request.verbosity.value,
         instructions=request.instructions,
@@ -2304,7 +2269,7 @@ async def _bootstrap_generation_workspace(
     await sql_session.flush()
 
     try:
-        await bootstrap_workspace(
+        conversation, _message, _operation, _replayed = await bootstrap_workspace(
             sql_session,
             presentation_id=presentation_id,
             request=WorkspaceBootstrapRequest(
@@ -2312,7 +2277,7 @@ async def _bootstrap_generation_workspace(
                 prompt=(
                     request.content
                     if request.content.strip()
-                    else "Generate a presentation from the attached files."
+                    else DEFAULT_ATTACHMENT_GENERATION_PROMPT
                 ),
                 generation_settings={
                     "n_slides": request.n_slides,
@@ -2323,6 +2288,10 @@ async def _bootstrap_generation_workspace(
                     "include_table_of_contents": request.include_table_of_contents,
                     "include_title_slide": request.include_title_slide,
                     "web_search": request.web_search,
+                    "reference_snapshot_ids": [
+                        str(snapshot_id)
+                        for snapshot_id in request.reference_snapshot_ids
+                    ],
                 },
                 asset_ids=asset_ids,
                 operation_type="presentation.generate",
@@ -2331,7 +2300,18 @@ async def _bootstrap_generation_workspace(
             commit=False,
             initial_operation_state="awaiting_approval",
         )
+        if request.reference_snapshot_ids:
+            await claim_reference_snapshots(
+                sql_session,
+                snapshot_ids=request.reference_snapshot_ids,
+                conversation_id=conversation.id,
+            )
     except WorkspaceServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail=error.code,
+        ) from error
+    except ReferenceProviderError as error:
         raise HTTPException(
             status_code=error.status_code,
             detail=error.code,
@@ -2512,6 +2492,20 @@ async def queue_presentation_generation(
         # mutating the caller's model would change the fingerprint if the same
         # request object is replayed in-process by a test or recovery path.
         admitted_request = request.model_copy(deep=True)
+        persisted_snapshot_ids = [
+            uuid.UUID(str(snapshot_id))
+            for snapshot_id in admitted_presentation.reference_snapshot_ids or []
+        ]
+        if (
+            admitted_request.reference_snapshot_ids
+            and admitted_request.reference_snapshot_ids != persisted_snapshot_ids
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="generation_reference_snapshot_conflict",
+            )
+        if persisted_snapshot_ids:
+            admitted_request.reference_snapshot_ids = persisted_snapshot_ids
         if admitted_presentation.file_paths is not None:
             admitted_request.files = list(admitted_presentation.file_paths)
         try:

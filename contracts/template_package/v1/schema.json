@@ -235,6 +235,14 @@
           "title": "Evidencesha256",
           "type": "string"
         },
+        "extensions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProvenanceExtension"
+          },
+          "title": "Extensions",
+          "type": "array"
+        },
         "repository": {
           "title": "Repository",
           "type": "string"
@@ -264,6 +272,62 @@
         "evidenceSha256"
       ],
       "title": "Provenance",
+      "type": "object"
+    },
+    "ProvenanceExtension": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "added",
+            "modified"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "sourceCommitSha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Sourcecommitsha",
+          "type": "string"
+        },
+        "sourceGitBlobSha1": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Sourcegitblobsha1",
+          "type": "string"
+        },
+        "sourcePath": {
+          "title": "Sourcepath",
+          "type": "string"
+        },
+        "sourceRepository": {
+          "title": "Sourcerepository",
+          "type": "string"
+        },
+        "sourceSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sourcesha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "reason",
+        "sourceRepository",
+        "sourceCommitSha",
+        "sourcePath",
+        "sourceSha256",
+        "sourceGitBlobSha1"
+      ],
+      "title": "ProvenanceExtension",
       "type": "object"
     },
     "Publication": {

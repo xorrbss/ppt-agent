@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { PRESENTATION_DRIVER_REGISTRY } from "../../../../lib/presentation-profile.ts";
 import { buildPresentationFeatureViewModel } from "./presentationFeatureSlots.ts";
+import { PRESENTATION_PAGE_DRIVER_ADAPTER_REGISTRY } from "./presentationFeatureSlots.ts";
 
 function runtime(driverId: keyof typeof PRESENTATION_DRIVER_REGISTRY) {
   const driver = PRESENTATION_DRIVER_REGISTRY[driverId];
@@ -50,6 +51,31 @@ test("feature slots are driven by the validated presentation capability", () => 
     "authored-hybrid",
   ]);
   assert.deepEqual(authored.renderActions, ["preview", "pdf", "pptx"]);
+  assert.equal(smart.background, "#F6F6F9");
+  assert.equal(smart.componentAdapters.editor, "smart-html");
+  assert.equal(smart.componentAdapters.assistant, "canonical-workspace");
+  assert.equal(smart.componentAdapters.selection, "smart-html-selection");
+  assert.equal(authored.componentAdapters.editor, "authored-readonly");
+  assert.equal(authored.componentAdapters.export, "authored-hybrid");
+});
+
+test("every presentation driver supplies the full page composition", () => {
+  assert.deepEqual(
+    Object.keys(PRESENTATION_PAGE_DRIVER_ADAPTER_REGISTRY).sort(),
+    Object.keys(PRESENTATION_DRIVER_REGISTRY).sort(),
+  );
+  for (const [driverId, adapter] of Object.entries(
+    PRESENTATION_PAGE_DRIVER_ADAPTER_REGISTRY,
+  )) {
+    const driver = PRESENTATION_DRIVER_REGISTRY[
+      driverId as keyof typeof PRESENTATION_DRIVER_REGISTRY
+    ];
+    assert.equal(adapter.driverId, driverId);
+    assert.equal(adapter.editorAdapterId, driver.editor_adapter_id);
+    assert.equal(adapter.exportAdapterId, driver.export_adapter_id);
+    assert.equal(adapter.assistantAdapterId, "canonical-workspace");
+    assert.deepEqual(adapter.renderActions, ["preview", "pdf", "pptx"]);
+  }
 });
 
 test("unknown profiles fail closed while loading retains only the skeleton slot", () => {
@@ -59,6 +85,9 @@ test("unknown profiles fail closed while loading retains only the skeleton slot"
   assert.equal(unknown.slots.headerActions, false);
   assert.equal(unknown.slots.exportActions, false);
   assert.deepEqual(unknown.renderActions, []);
+  assert.equal(unknown.componentAdapters.editor, null);
+  assert.equal(unknown.componentAdapters.assistant, null);
+  assert.equal(unknown.selectionEnabled, false);
 
   const loading = buildPresentationFeatureViewModel({
     runtime: null,

@@ -73,6 +73,7 @@ servers/nextjs/cypress/downloads/
 /.server-logs-main/
 /.tmp/
 servers/fastapi/.codex-backend.*.log
+servers/fastapi/backend-template-card.*.log
 servers/fastapi/.pytest-*/
 servers/nextjs/test-results/
 electron/kor.traineddata

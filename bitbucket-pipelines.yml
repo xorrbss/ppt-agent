@@ -18,7 +18,7 @@ definitions:
         max-time: 10
         script:
           - npm ci
-          - node scripts/verify-upstream-byte-parity.mjs
+          - npm run check:upstream-byte-parity
     - step: &dashboard-component-gate
         name: Dashboard component gate
         size: 2x

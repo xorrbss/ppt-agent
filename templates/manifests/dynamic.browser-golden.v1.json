@@ -1,0 +1,334 @@
+{
+  "schemaVersion": "presenton.template-browser-golden/v1",
+  "templateId": "dynamic",
+  "engineId": "presenton.template-v2-json",
+  "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+  "entrypointSha256": "bf772065cbfb5a92fe0f33625bc9d88a47a2c7f0a92321dc007998a970749ad8",
+  "renderer": {
+    "modulePath": "servers/nextjs/lib/template-v2-json-to-html.ts",
+    "moduleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+    "captureAdapter": "chromium-headless-cli/readiness-contract",
+    "productionCaptureContract": "scripts/sync-presentation-export.cjs readiness overlay"
+  },
+  "browser": {
+    "family": "chromium",
+    "product": "Chrome/151.0.7922.76",
+    "revision": "@031bfd60f544af71d8dd7246970d1af3e1acf3ad",
+    "protocolVersion": "1.3"
+  },
+  "capturedAt": "2026-08-11T04:04:09.085Z",
+  "captureEvidence": {
+    "path": "templates/manifests/dynamic.browser-golden.capture.v1.json",
+    "sha256": "84723b79074e0fc895fdf328c4ad1c7761eedcc2a319cbfd150faeabec7354a5",
+    "adapter": "chromium-cdp/Page.captureScreenshot"
+  },
+  "networkPolicy": "deny",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "layoutIds": [
+    "cover_title_left_image_right_8271",
+    "content_column_overview_3481",
+    "center_title_description_indicator_9624",
+    "top_image_bottom_text_columns_7836",
+    "title_cards_bottom_5364",
+    "left_text_center_image_right_text_2105",
+    "left_title_right_card_grid_2044",
+    "center_visual_callouts_5621",
+    "center_title_cards_2592",
+    "title_image_right_callouts_4153",
+    "image_comparison_panels_4102",
+    "title_chart_right_info_panel_2580",
+    "title_stepped_cards_1046",
+    "left_title_right_chart_panel_1475",
+    "title_chart_layout_4067",
+    "center_title_review_cards_1880",
+    "large_title_bottom_image_3101",
+    "left_title_right_media_rows_6461",
+    "center_title_image_columns_2104",
+    "center_pyramid_callouts_6308",
+    "center_title_cards_4771",
+    "left_title_right_text_sections_3504",
+    "closing_title_description_1992",
+    "title_staggered_cards_right_image_8296",
+    "left_title_description_overlay_4828",
+    "title_metric_callouts_2098",
+    "title_staggered_cards_4818",
+    "left_title_right_metric_rows_4802",
+    "center_title_metric_cards_3569",
+    "title_donut_chart_right_table_1700",
+    "center_title_chart_panels_3982",
+    "title_left_chart_right_list_6203"
+  ],
+  "screenshots": [
+    {
+      "layoutId": "cover_title_left_image_right_8271",
+      "path": "templates/manifests/dynamic.browser-golden/01-cover_title_left_image_right_8271.png",
+      "sha256": "748ddf93a1d17e5261c1cba207c02799879e1abf0bfc4c33b13f1c92d8349f4b",
+      "sizeBytes": 964467,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "content_column_overview_3481",
+      "path": "templates/manifests/dynamic.browser-golden/02-content_column_overview_3481.png",
+      "sha256": "2c818f0b116126f12d3ad28baafcf12f8f370332bfd2af3b6ecf54c181d9dfd2",
+      "sizeBytes": 1262567,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_description_indicator_9624",
+      "path": "templates/manifests/dynamic.browser-golden/03-center_title_description_indicator_9624.png",
+      "sha256": "4e96662460c45eb2b5cc6def5060234f5b45ba387949791d9304481b71ee920c",
+      "sizeBytes": 1253183,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "top_image_bottom_text_columns_7836",
+      "path": "templates/manifests/dynamic.browser-golden/04-top_image_bottom_text_columns_7836.png",
+      "sha256": "acb9757df68a72f0b2ac4d98e33954b4bc6854b900beccba8e753d25d0d5c874",
+      "sizeBytes": 869578,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_cards_bottom_5364",
+      "path": "templates/manifests/dynamic.browser-golden/05-title_cards_bottom_5364.png",
+      "sha256": "359571fa9134543a7857ad7da344b9b867a2c23c9872c1d3af7b1827c31cab5e",
+      "sizeBytes": 1162880,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "left_text_center_image_right_text_2105",
+      "path": "templates/manifests/dynamic.browser-golden/06-left_text_center_image_right_text_2105.png",
+      "sha256": "3c92c087a491985f4fc5488bd3f24e3a854734028b0c014531b51d04eda014ce",
+      "sizeBytes": 415673,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "left_title_right_card_grid_2044",
+      "path": "templates/manifests/dynamic.browser-golden/07-left_title_right_card_grid_2044.png",
+      "sha256": "c8258ef5f95cc841714191218424a2cbaef77385d5ced51e598c3e3e9a2a95e6",
+      "sizeBytes": 609198,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_visual_callouts_5621",
+      "path": "templates/manifests/dynamic.browser-golden/08-center_visual_callouts_5621.png",
+      "sha256": "3f48d9b9cae48d2c4ef80c6c8325cd398768e06f3e701c3533a51a4add83ee7d",
+      "sizeBytes": 1010095,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_cards_2592",
+      "path": "templates/manifests/dynamic.browser-golden/09-center_title_cards_2592.png",
+      "sha256": "6abb94ac52155d5416a5b56494af1dc31f7a7b9e53450523619ea44e6325c851",
+      "sizeBytes": 884505,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_image_right_callouts_4153",
+      "path": "templates/manifests/dynamic.browser-golden/10-title_image_right_callouts_4153.png",
+      "sha256": "0ec86c945f9d021bdbb81a620d4e7e4184ee52a06b35557f996013a63b6938aa",
+      "sizeBytes": 790894,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "image_comparison_panels_4102",
+      "path": "templates/manifests/dynamic.browser-golden/11-image_comparison_panels_4102.png",
+      "sha256": "285422301cf1a6f5adb694b0b058ffceebfe331dda1987f20dd1a135faf34505",
+      "sizeBytes": 990995,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_chart_right_info_panel_2580",
+      "path": "templates/manifests/dynamic.browser-golden/12-title_chart_right_info_panel_2580.png",
+      "sha256": "c745bbc32904b48883b148b6f9520970bd547a9737f0fe882a227556c6cc942f",
+      "sizeBytes": 1034897,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_stepped_cards_1046",
+      "path": "templates/manifests/dynamic.browser-golden/13-title_stepped_cards_1046.png",
+      "sha256": "22e4e208fc348388abed474c8f11c86a3ab34d729f081d5077e4fe73d8c0d48c",
+      "sizeBytes": 1172885,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "left_title_right_chart_panel_1475",
+      "path": "templates/manifests/dynamic.browser-golden/14-left_title_right_chart_panel_1475.png",
+      "sha256": "318f7b93fbc37a6209fc1f3e2e3ab95057153bec2b3686ea765848f456d0839e",
+      "sizeBytes": 815571,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_chart_layout_4067",
+      "path": "templates/manifests/dynamic.browser-golden/15-title_chart_layout_4067.png",
+      "sha256": "fb01b63278654c7fd549a00fcef483992d725294ee52895b49e51a38a813e0d4",
+      "sizeBytes": 1096875,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_review_cards_1880",
+      "path": "templates/manifests/dynamic.browser-golden/16-center_title_review_cards_1880.png",
+      "sha256": "d337d5ac41eed5b061548718f6065b70902b4631e9ec57c899325de7ba492270",
+      "sizeBytes": 1118852,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "large_title_bottom_image_3101",
+      "path": "templates/manifests/dynamic.browser-golden/17-large_title_bottom_image_3101.png",
+      "sha256": "fd5e5d76faf0e4700528609ca2ff15ccd320975b7cc43eaa68058554c4b81ca6",
+      "sizeBytes": 589941,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "left_title_right_media_rows_6461",
+      "path": "templates/manifests/dynamic.browser-golden/18-left_title_right_media_rows_6461.png",
+      "sha256": "2d29c7ccef9bd3eaf2e93a3536e50113a9efc15e8bd77098222521b9f9d17a05",
+      "sizeBytes": 1118222,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_image_columns_2104",
+      "path": "templates/manifests/dynamic.browser-golden/19-center_title_image_columns_2104.png",
+      "sha256": "f30b93f7950a93606afc7873fe41ca1d5924a2da94c1e59b3cb2d79ecfc58e2a",
+      "sizeBytes": 1090796,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_pyramid_callouts_6308",
+      "path": "templates/manifests/dynamic.browser-golden/20-center_pyramid_callouts_6308.png",
+      "sha256": "1878b1281ad537ac80ecdda2a5e89bd0933a5351f4a7dd657814b8df9e166734",
+      "sizeBytes": 721890,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_cards_4771",
+      "path": "templates/manifests/dynamic.browser-golden/21-center_title_cards_4771.png",
+      "sha256": "86176003c3fa335f0bccd73015058fd67e4b78c58c7e11bdbeaa0c129ef9b65c",
+      "sizeBytes": 910824,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "left_title_right_text_sections_3504",
+      "path": "templates/manifests/dynamic.browser-golden/22-left_title_right_text_sections_3504.png",
+      "sha256": "72f938fc04f2f7239f921562166837b0d1fe70ff1172b0210765b92b922377a1",
+      "sizeBytes": 1160084,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "closing_title_description_1992",
+      "path": "templates/manifests/dynamic.browser-golden/23-closing_title_description_1992.png",
+      "sha256": "41c5ff9db8cdbbaa44f9e209270e9e463bb01893521af0073a8532ee443c7959",
+      "sizeBytes": 1115763,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_staggered_cards_right_image_8296",
+      "path": "templates/manifests/dynamic.browser-golden/24-title_staggered_cards_right_image_8296.png",
+      "sha256": "a658f66d775c88d0fd339a0ccd72a547223f252d2b8860a73aa3d31443f61b8c",
+      "sizeBytes": 908289,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "left_title_description_overlay_4828",
+      "path": "templates/manifests/dynamic.browser-golden/25-left_title_description_overlay_4828.png",
+      "sha256": "825726cbaacedee873c5ce538a4c1fad0d66c8837070dd78079dac95821a64a0",
+      "sizeBytes": 1137925,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_metric_callouts_2098",
+      "path": "templates/manifests/dynamic.browser-golden/26-title_metric_callouts_2098.png",
+      "sha256": "6978f4498145ecfeac2c6407f7f45ff6793a815417d69bd688b980590d4814db",
+      "sizeBytes": 1118589,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_staggered_cards_4818",
+      "path": "templates/manifests/dynamic.browser-golden/27-title_staggered_cards_4818.png",
+      "sha256": "04eeb8196698726ca347fa2fea005adcdf179b43171fd76914bb95f785e4e5ff",
+      "sizeBytes": 1417316,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "left_title_right_metric_rows_4802",
+      "path": "templates/manifests/dynamic.browser-golden/28-left_title_right_metric_rows_4802.png",
+      "sha256": "ae0c6df1080c652ab72bdb8d7188b2ae0fc2a5b84587bb67abe89f94f089bc91",
+      "sizeBytes": 1373158,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_metric_cards_3569",
+      "path": "templates/manifests/dynamic.browser-golden/29-center_title_metric_cards_3569.png",
+      "sha256": "42e62560ea05f7ac600f7fc835c26556981884ecaa1a430597f167c41b283542",
+      "sizeBytes": 1285708,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_donut_chart_right_table_1700",
+      "path": "templates/manifests/dynamic.browser-golden/30-title_donut_chart_right_table_1700.png",
+      "sha256": "e7cd4143e04dba12462b58b15023124935a1460ef01c4fd6ea681335597be1ae",
+      "sizeBytes": 1329671,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "center_title_chart_panels_3982",
+      "path": "templates/manifests/dynamic.browser-golden/31-center_title_chart_panels_3982.png",
+      "sha256": "3e714ad15553035c78fc55dc9c710ca9ba2872d9fd1df2b94a83f67896f4ec16",
+      "sizeBytes": 885955,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_left_chart_right_list_6203",
+      "path": "templates/manifests/dynamic.browser-golden/32-title_left_chart_right_list_6203.png",
+      "sha256": "0b686ff69a9a9227f5b16fbcb44c8cc21645a01b9a6bf2149b90cd4949144f3d",
+      "sizeBytes": 1149975,
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "checks": {
+    "renderedLayoutCount": 32,
+    "nonBlankLayoutCount": 32,
+    "missingImages": 0,
+    "imageCount": 56,
+    "chartCanvasCount": 6,
+    "externalRequests": [],
+    "localFontsLoaded": true,
+    "consoleErrors": [],
+    "paintReadinessContract": "passed"
+  },
+  "status": "passed-browser-golden"
+}

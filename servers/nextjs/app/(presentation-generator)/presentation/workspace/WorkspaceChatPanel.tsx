@@ -49,6 +49,8 @@ import {
   type SlideRangeParseResult,
 } from "./workspaceChatPanelUtils";
 
+export { parseQualityReviewSlideRange } from "./workspaceChatPanelUtils";
+
 const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
@@ -441,6 +443,13 @@ export default function WorkspaceChatPanel({
     shouldFollowLatestRef.current = distanceFromBottom <= 48;
   }, []);
 
+  const handleTimelineManualScrollIntent = useCallback(() => {
+    // A wheel/touch gesture is observable before the browser commits the new
+    // scrollTop. Pause follow-latest immediately so an event arriving in that
+    // small window cannot snap the reader back to the live operation card.
+    shouldFollowLatestRef.current = false;
+  }, []);
+
   const handleLoadOlder = useCallback(async () => {
     const scrollElement = scrollRef.current;
     if (!scrollElement || loadingOlder) return;
@@ -506,6 +515,8 @@ export default function WorkspaceChatPanel({
         ref={scrollRef}
         data-testid="workspace-timeline-scroll"
         className="min-h-0 flex-1 overflow-y-auto px-3 py-4"
+        onTouchStartCapture={handleTimelineManualScrollIntent}
+        onWheelCapture={handleTimelineManualScrollIntent}
         onScroll={handleTimelineScroll}
       >
         {projection.hasMore && (

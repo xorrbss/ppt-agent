@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -36,8 +37,11 @@ from models.decompose_job import (
 )
 from models.decomposed_file_info import DecomposedFileInfo
 from services.document_conversion_service import DocumentConversionError
+from services.database import async_session_maker
 from services.documents_loader import DocumentsLoader
+from services.references import ReferenceProviderError, admit_reference_snapshot
 from services.temp_file_service import TEMP_FILE_SERVICE
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
 LOGGER = logging.getLogger(__name__)
@@ -73,6 +77,8 @@ class _DecomposeJobRecord:
     job_id: uuid.UUID
     owner_key: str
     file_paths: tuple[str, ...]
+    reference_snapshot_id: Optional[uuid.UUID]
+    document_count: int
     language: Optional[str]
     request_hash: str
     idempotency_hash: Optional[str]
@@ -113,9 +119,19 @@ class DecomposeJobService:
         self._semaphore = asyncio.Semaphore(self.max_concurrency)
 
     @staticmethod
-    def _request_hash(file_paths: list[str], language: Optional[str]) -> str:
+    def _request_hash(
+        file_paths: list[str],
+        reference_snapshot_id: Optional[uuid.UUID],
+        language: Optional[str],
+    ) -> str:
         payload = json.dumps(
-            {"file_paths": file_paths, "language": language},
+            {
+                "file_paths": file_paths,
+                "reference_snapshot_id": (
+                    str(reference_snapshot_id) if reference_snapshot_id else None
+                ),
+                "language": language,
+            },
             ensure_ascii=False,
             separators=(",", ":"),
         )
@@ -137,7 +153,7 @@ class DecomposeJobService:
             status=record.status,
             progress=DecomposeJobProgress(
                 completed_files=record.completed_files,
-                total_files=len(record.file_paths),
+                total_files=record.document_count,
                 current_file=record.current_file,
             ),
             result=record.result,
@@ -151,13 +167,31 @@ class DecomposeJobService:
         self,
         *,
         owner_key: str,
-        file_paths: list[str],
         language: Optional[str],
         idempotency_key: Optional[str],
+        file_paths: Optional[list[str]] = None,
+        reference_snapshot_id: Optional[uuid.UUID] = None,
+        reference_document_count: Optional[int] = None,
     ) -> tuple[DecomposeJobSnapshot, bool]:
+        normalized_paths = file_paths or []
+        if bool(normalized_paths) == bool(reference_snapshot_id):
+            raise ValueError(
+                "Exactly one of file_paths or reference_snapshot_id is required"
+            )
+        document_count = (
+            len(normalized_paths)
+            if reference_snapshot_id is None
+            else int(reference_document_count or 0)
+        )
+        if document_count < 1:
+            raise ValueError("Document decomposition source is empty")
         await self.cleanup_expired()
         idempotency_hash = self._idempotency_hash(idempotency_key)
-        request_hash = self._request_hash(file_paths, language)
+        request_hash = self._request_hash(
+            normalized_paths,
+            reference_snapshot_id,
+            language,
+        )
         now = datetime.now(timezone.utc)
 
         async with self._lock:
@@ -181,7 +215,9 @@ class DecomposeJobService:
             record = _DecomposeJobRecord(
                 job_id=job_id,
                 owner_key=owner_key,
-                file_paths=tuple(file_paths),
+                file_paths=tuple(normalized_paths),
+                reference_snapshot_id=reference_snapshot_id,
+                document_count=document_count,
                 language=language,
                 request_hash=request_hash,
                 idempotency_hash=idempotency_hash,
@@ -269,6 +305,10 @@ class DecomposeJobService:
                     record.updated_at = datetime.now(timezone.utc)
 
                 try:
+                    if record.reference_snapshot_id is not None:
+                        await self._run_reference_snapshot_job(job_id, record)
+                        return
+
                     temp_dir = TEMP_FILE_SERVICE.create_temp_dir(str(job_id))
                     async with self._lock:
                         record = self._jobs.get(job_id)
@@ -320,6 +360,16 @@ class DecomposeJobService:
                         self._safe_conversion_error(exc),
                         cause=exc,
                     )
+                except ReferenceProviderError as exc:
+                    await self._mark_failed(
+                        job_id,
+                        DecomposeJobError(
+                            code=exc.code,
+                            message="The admitted document reference is no longer available.",
+                            retryable=exc.retryable,
+                        ),
+                        cause=exc,
+                    )
                 except HTTPException as exc:
                     await self._mark_failed(
                         job_id,
@@ -340,6 +390,85 @@ class DecomposeJobService:
             # Application shutdown can cancel a task while it is waiting for
             # capacity. Keep registry state consistent for any final snapshot.
             await self._mark_cancelled(job_id)
+
+    async def _run_reference_snapshot_job(
+        self,
+        job_id: uuid.UUID,
+        record: _DecomposeJobRecord,
+    ) -> None:
+        """Project a re-admitted immutable snapshot without exposing paths.
+
+        The worker receives only the server-issued snapshot identity. Owner,
+        expiry, snapshot digest, live asset digest and lifecycle state are all
+        replayed immediately before the result is published.
+        """
+
+        try:
+            owner_id = (
+                None
+                if record.owner_key == "anonymous"
+                else uuid.UUID(record.owner_key)
+            )
+        except ValueError as error:
+            raise ReferenceProviderError(
+                "reference_owner_scope_invalid", status_code=409
+            ) from error
+
+        token = set_current_owner_id(owner_id)
+        try:
+            async with async_session_maker() as session:
+                snapshot = await admit_reference_snapshot(
+                    session,
+                    snapshot_id=record.reference_snapshot_id,
+                )
+        finally:
+            reset_current_owner_id(token)
+
+        if snapshot.provider_id != "uploaded_document":
+            raise ReferenceProviderError(
+                "uploaded_reference_snapshot_required", status_code=400
+            )
+        documents = snapshot.payload().get("documents")
+        if not isinstance(documents, list) or len(documents) != record.document_count:
+            raise ReferenceProviderError(
+                "reference_snapshot_payload_invalid", status_code=409
+            )
+
+        results: list[DecomposedFileInfo] = []
+        for index, document in enumerate(documents):
+            if await self._stop_if_cancelled(job_id):
+                return
+            if not isinstance(document, dict):
+                raise ReferenceProviderError(
+                    "reference_snapshot_payload_invalid", status_code=409
+                )
+            try:
+                asset_id = uuid.UUID(str(document["assetId"]))
+                text = str(document["text"])
+                expected_digest = str(document["contentSha256"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ReferenceProviderError(
+                    "reference_snapshot_payload_invalid", status_code=409
+                ) from error
+            actual_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            if not hmac.compare_digest(actual_digest, expected_digest):
+                raise ReferenceProviderError(
+                    "reference_snapshot_integrity_failed", status_code=409
+                )
+            name = str(document.get("name") or f"document-{index + 1}")[:512]
+            await self._set_current_file(job_id, name)
+            results.append(
+                DecomposedFileInfo(
+                    name=name,
+                    asset_id=asset_id,
+                    content_sha256=actual_digest,
+                )
+            )
+            await self._mark_file_complete(job_id)
+
+        if await self._stop_if_cancelled(job_id):
+            return
+        await self._mark_succeeded(job_id, results)
 
     async def _set_current_file(self, job_id: uuid.UUID, filename: str) -> None:
         async with self._lock:
@@ -417,7 +546,7 @@ class DecomposeJobService:
             cancelled = record.cancel_requested
             current_file = record.current_file
             completed_files = record.completed_files
-            total_files = len(record.file_paths)
+            total_files = record.document_count
             record.status = "cancelled" if cancelled else "failed"
             if cancelled:
                 record.error = None

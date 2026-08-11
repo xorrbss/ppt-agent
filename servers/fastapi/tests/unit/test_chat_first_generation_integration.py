@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException, Request
@@ -634,6 +635,105 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
                     select(func.count()).select_from(WorkspaceMessage)
                 ) == 1
             assert validated_files == [["C:/workspace-assets/durable-source.txt"]]
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "bare-reference-generation.db")
+        monkeypatch.setattr(
+            presentation_generate,
+            "_chat_first_generation_enabled",
+            lambda: True,
+        )
+        monkeypatch.setattr(
+            presentation_generate,
+            "wake_workspace_operation_runner",
+            lambda: None,
+        )
+        snapshot_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        claimed: list[tuple[list[uuid.UUID], uuid.UUID]] = []
+
+        async def admit(_session, *, snapshot_ids, **_kwargs):
+            assert snapshot_ids == [snapshot_id]
+            return (SimpleNamespace(asset_bindings=(SimpleNamespace(asset_id=asset_id),)),)
+
+        async def claim(_session, *, snapshot_ids, conversation_id):
+            claimed.append((snapshot_ids, conversation_id))
+
+        async def accept_request(_request, _session):
+            return None
+
+        monkeypatch.setattr(
+            presentation_generate,
+            "admit_reference_snapshots",
+            admit,
+        )
+        monkeypatch.setattr(
+            presentation_generate,
+            "claim_reference_snapshots",
+            claim,
+        )
+        monkeypatch.setattr(
+            presentation_generate,
+            "check_if_api_request_is_valid",
+            accept_request,
+        )
+        request = GeneratePresentationRequest(
+            content="Build from the canonical uploaded reference",
+            n_slides=4,
+            language="en",
+            strategy="adaptive",
+            reference_snapshot_ids=[snapshot_id],
+        )
+        try:
+            async with maker() as session:
+                session.add(
+                    WorkspaceAsset(
+                        id=asset_id,
+                        state="ready",
+                        original_name="reference.txt",
+                        media_type="text/plain",
+                        size_bytes=9,
+                        storage_key="owner/asset/reference.txt",
+                        sha256="a" * 64,
+                        version=3,
+                    )
+                )
+                await session.commit()
+
+            async with maker() as session:
+                status = await presentation_generate.queue_presentation_generation(
+                    request,
+                    BackgroundTasks(),
+                    session,
+                    idempotency_key="bare-reference-generation",
+                )
+                assert status.status == "pending"
+
+            async with maker() as session:
+                presentation = (
+                    await session.execute(select(PresentationModel))
+                ).scalar_one()
+                conversation = (
+                    await session.execute(select(WorkspaceConversation))
+                ).scalar_one()
+                operation = (
+                    await session.execute(select(WorkspaceOperation))
+                ).scalar_one()
+                assert presentation.reference_snapshot_ids == [str(snapshot_id)]
+                assert operation.request_payload["asset_ids"] == [str(asset_id)]
+                assert operation.request_payload["generation_settings"][
+                    "reference_snapshot_ids"
+                ] == [str(snapshot_id)]
+                assert claimed == [([snapshot_id], conversation.id)]
         finally:
             await engine.dispose()
 

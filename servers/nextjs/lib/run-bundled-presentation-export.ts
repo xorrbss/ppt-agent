@@ -212,6 +212,7 @@ export async function runBundledPresentationExport(params: {
   format: BundledPresentationExportFormat;
   cookieHeader?: string;
   expectedPresentationSha256?: string;
+  expectedPresentationRevision?: number;
 }): Promise<BundledPresentationExportResult> {
   return runBundledPresentationExportLocked(params);
 }
@@ -222,6 +223,7 @@ async function runBundledPresentationExportLocked(params: {
   format: BundledPresentationExportFormat;
   cookieHeader?: string;
   expectedPresentationSha256?: string;
+  expectedPresentationRevision?: number;
 }): Promise<BundledPresentationExportResult> {
   const {
     presentationId,
@@ -229,6 +231,7 @@ async function runBundledPresentationExportLocked(params: {
     format,
     cookieHeader,
     expectedPresentationSha256,
+    expectedPresentationRevision,
   } = params;
   const exportRoot = getExportPackageRoot();
   const entrypoint = await resolveExportEntrypoint(exportRoot);
@@ -243,7 +246,9 @@ async function runBundledPresentationExportLocked(params: {
   const pptUrl = buildExportRenderUrl(
     nextjsUrl,
     presentationId,
-    expectedPresentationSha256
+    expectedPresentationSha256,
+    format,
+    expectedPresentationRevision,
   );
 
   const tempBase =

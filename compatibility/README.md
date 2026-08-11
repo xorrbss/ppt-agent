@@ -23,8 +23,11 @@ because prose is not covered by that check and would go stale silently.
   renderer/export, import, hydration, and round-trip regression evidence, so an
   exclusion is never relabeled as ported on prose alone.
 - `upstream-intake-policy.json` controls the separate, read-only observation of
-  official `presenton/presenton:main`, including the pinned commit metadata,
-  review categories, and contract-risk escalation rules.
+  official `presenton/presenton:main`, including its **intake accepted
+  baseline** commit metadata, review categories, and contract-risk escalation
+  rules. This is intentionally not the compatibility baseline in
+  `upstream-compatibility.json`; the former gates remote intake evidence while
+  the latter pins the checked-out compatibility contract.
 - `upstream-byte-parity.json` exhaustively classifies every path in the pinned
   upstream Git tree as byte/mode identical or as a documented local exception,
   and separately lists local-only extension paths. The CI verifier recomputes
@@ -42,9 +45,15 @@ The two commands deliberately have different responsibilities:
 - `node scripts/verify-upstream-compatibility.mjs` verifies the checked-out
   pinned local contract, migration ledger, test dispositions, and protected
   source anchors. It does not access the network.
-- `node scripts/verify-upstream-byte-parity.mjs` proves the exhaustive
-  byte-level partition against the pinned upstream commit. After a reviewed
-  classification change, regenerate it with the same command plus `--write`.
+- `npm run check:upstream-byte-parity` proves the exhaustive byte-level
+  partition against the pinned upstream commit from a clean committed `HEAD`.
+  It fails closed if the index, worktree, or nonignored untracked paths differ
+  from `HEAD`. The verifier also supports `--tree <ref>`, `--index`, and
+  `--working-tree` as explicit inspection sources. Its receipt records the
+  source used when the policy was generated, but policy validation may inspect
+  any source; this keeps CI's committed-tree meaning independent from a local
+  mutable receipt. Regenerate with the intended source plus `--write` after a
+  reviewed classification change.
 - `node scripts/intake-upstream-main.mjs --fail-on-risk` resolves the official
   remote `main` ref to an exact SHA, verifies that commit's metadata, and, only
   when the SHA differs, classifies GitHub compare evidence. It does not modify

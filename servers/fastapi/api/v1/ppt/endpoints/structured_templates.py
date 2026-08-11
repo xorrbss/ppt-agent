@@ -50,6 +50,10 @@ from templates.v2.policy import (
     get_structured_template_policy,
 )
 from templates.v2.publication import evaluate_template_v2_publication
+from templates.packages.registry import (
+    get_ready_template_package,
+    is_template_package_release_ready,
+)
 from templates.v2.wire_codec import (
     TemplateV2WireCodecError,
     decode_wire_layouts,
@@ -113,7 +117,9 @@ class StructuredTemplateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    presentation_id: uuid.UUID
+    # Bundled, registry-owned packages do not have a source presentation.
+    # User-authored create requests continue to require one.
+    presentation_id: uuid.UUID | None
     name: str
     description: str | None
     layouts: dict[str, Any] | None
@@ -181,17 +187,70 @@ def _response(template: TemplateV2) -> StructuredTemplateResponse:
     return response.model_copy(
         update={
             "layouts": deepcopy(layouts),
-            "is_default": is_template_v2_default_release(
-                template.id,
-                template.assets,
-            ),
+            "is_default": _is_default_release(template),
             **_catalog_metadata(template),
         }
     )
 
 
+def _is_default_release(template: TemplateV2) -> bool:
+    """Resolve one safe default across packages, catalog, and admin bootstraps.
+
+    Bundled packages and the verified external catalog remain immutable sources
+    of truth. A locally authored template may be selected by an administrator
+    only after its native PPTX publication evidence passes the same release
+    gate used for discovery. This keeps stale database flags fail-closed.
+    """
+
+    package = get_ready_template_package(template.id)
+    if package is not None and is_template_package_release_ready(
+        template.id,
+        template.assets,
+    ):
+        return package.manifest.publication.default
+    if is_template_v2_default_release(template.id, template.assets):
+        return True
+    if get_template_v2_catalog_entry(template.id) is not None:
+        return False
+    return bool(
+        template.is_default
+        and evaluate_template_v2_publication(template.assets).publishable
+    )
+
+
 def _catalog_metadata(template: TemplateV2) -> dict[str, Any]:
     """Project validated catalog/native evidence into optional API fields."""
+
+    package = get_ready_template_package(template.id)
+    if package is not None:
+        manifest = package.manifest
+        return {
+            "source": {
+                "repository": manifest.provenance.repository,
+                "commit_sha": manifest.provenance.commit_sha,
+                "path": manifest.provenance.source_path,
+            },
+            "provenance": {
+                "source": "verified-template-package",
+                "repository": manifest.provenance.repository,
+                "path": manifest.provenance.source_path,
+                "commit": manifest.provenance.commit_sha,
+                "license": manifest.license.expression,
+                "importer_version": manifest.package_version,
+                "runtime_network_fetch": False,
+            },
+            "capabilities": {
+                capability: True
+                for capability in manifest.engine.required_capabilities
+            },
+            "preservation_mode": "reconstructed",
+            "template_kind": "deck",
+            "publication_status": (
+                "published"
+                if is_template_package_release_ready(template.id, template.assets)
+                else "blocked"
+            ),
+        }
 
     catalog_entry = get_template_v2_catalog_entry(template.id)
     decision = evaluate_template_v2_publication(template.assets)

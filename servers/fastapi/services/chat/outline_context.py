@@ -31,6 +31,7 @@ from models.sql.template_v2_local_state import TemplateV2LocalState
 from services.chat.pending_slides import reconcile_pending_slides
 from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
+from services.references import ReferenceProviderError, admit_reference_snapshots
 from services.temp_file_service import TEMP_FILE_SERVICE
 from templates.v2.catalog import (
     get_template_v2_catalog_entry,
@@ -361,6 +362,53 @@ class OutlineTemplateContext:
         documents: list[dict[str, Any]] = []
         errors: list[dict[str, str]] = []
         remaining = budget
+        if presentation.reference_snapshot_ids:
+            try:
+                snapshots = await admit_reference_snapshots(
+                    self._sql_session,
+                    snapshot_ids=[
+                        uuid.UUID(str(snapshot_id))
+                        for snapshot_id in presentation.reference_snapshot_ids
+                    ],
+                )
+                for snapshot in snapshots:
+                    values = snapshot.payload().get("documents")
+                    if not isinstance(values, list):
+                        raise ReferenceProviderError(
+                            "reference_snapshot_payload_invalid",
+                            status_code=409,
+                        )
+                    for index, value in enumerate(values):
+                        if remaining <= 0:
+                            break
+                        if not isinstance(value, dict) or not isinstance(
+                            value.get("text"), str
+                        ):
+                            raise ReferenceProviderError(
+                                "reference_snapshot_payload_invalid",
+                                status_code=409,
+                            )
+                        text = value["text"]
+                        excerpt = text[:remaining]
+                        remaining -= len(excerpt)
+                        documents.append(
+                            {
+                                "name": str(
+                                    value.get("name") or f"document-{index + 1}"
+                                ),
+                                "content": excerpt,
+                                "truncated": len(excerpt) < len(text),
+                            }
+                        )
+            except (ReferenceProviderError, ValueError):
+                LOGGER.warning(
+                    "Chat canonical source-document read rejected/failed "
+                    "(presentation_id=%s)",
+                    self._presentation_id,
+                    exc_info=True,
+                )
+                errors.append({"name": "uploaded-document", "error": "unavailable"})
+
         for source_path in paths:
             if not isinstance(source_path, str) or remaining <= 0:
                 break

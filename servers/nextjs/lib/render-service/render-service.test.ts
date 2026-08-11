@@ -101,7 +101,14 @@ test("preview, thumbnail, selection map, PDF, and PPTX share one artifact shape"
       target: target as "preview" | "thumbnail" | "selection-map" | "pdf" | "pptx",
       snapshot,
       fonts: [{ family: "Inter", status: "ready" }],
-      assets: [{ asset_id: "image", kind: "image", status: "ready" }],
+      assets: [
+        {
+          asset_id: "image",
+          kind: "image",
+          status: "ready",
+          sha256: "c".repeat(64),
+        },
+      ],
     }),
   );
   for (const artifact of artifacts) {
@@ -150,7 +157,7 @@ test("smart charts use controlled preview runtime and require immutable snapshot
   assert.equal(pdf.script_policy.iframe_free, true);
 });
 
-test("Template V2 adapter consumes only the shared canonical render plan", () => {
+test("Template V2 adapter consumes canonical plans and persisted hydrated UI", () => {
   const ast = JSON.parse(
     readFileSync(
       new URL(
@@ -171,18 +178,30 @@ test("Template V2 adapter consumes only the shared canonical render plan", () =>
   );
   const service = new RenderService();
 
-  assert.throws(
-    () => service.render({ target: "preview", snapshot }),
-    /render_template_v2_plan_required/,
-  );
   const artifact = service.render({
     target: "preview",
     snapshot,
     template_render_plans: [plan],
   });
   assert.equal(artifact.renderer_version, "template-v2-canonical@1");
-  const payload = artifact.payload as { slides: Array<Record<string, unknown>> };
+  const payload = artifact.payload as {
+    slides: Array<Record<string, unknown>>;
+    materialization: string;
+  };
   assert.equal(payload.slides.length, 1);
+  assert.equal(payload.materialization, "canonical-render-plan");
+  assert.equal(payload.slides[0].id, "slide-1");
+  assert.ok((payload.slides[0].ui as Record<string, unknown>).components);
+
+  const persistedSnapshot = createRenderPresentationSnapshot(
+    presentation("template-v2", payload.slides),
+  );
+  const persistedArtifact = service.render({
+    target: "preview",
+    snapshot: persistedSnapshot,
+  });
+  const persistedPayload = persistedArtifact.payload as { materialization: string };
+  assert.equal(persistedPayload.materialization, "persisted-hydrated-ui-facade");
 });
 
 test("unknown profiles, stale revisions, stale artifacts, overflow, and unsafe HTML fail closed", () => {

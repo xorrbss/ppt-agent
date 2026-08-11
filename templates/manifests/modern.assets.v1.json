@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "presenton.template-package-assets/v1",
+  "templateId": "modern",
+  "files": [
+    {
+      "path": "static/Montserrat Regular.ttf",
+      "sha256": "0f7b311b2f3279e4eef9b2f968bcdbab6e28f4daeb1f049f4f278a902bcd82f7",
+      "sizeBytes": 744936,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/thumbnail.png",
+      "sha256": "d371cc7a268cd7b7cedb8913527cbf7200ab440f6d9000abb49445c8e3944e5c",
+      "sizeBytes": 523716,
+      "mediaType": "image/png",
+      "role": "thumbnail",
+      "licenseRef": "Apache-2.0"
+    }
+  ]
+}

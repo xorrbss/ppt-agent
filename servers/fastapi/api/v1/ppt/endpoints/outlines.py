@@ -23,6 +23,7 @@ from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
 from services.presentation_access_service import require_live_presentation
+from services.references import ReferenceProviderError, admit_reference_snapshots
 from services.workspace_legacy_write_gate import (
     require_outline_bootstrap_write_path,
 )
@@ -89,7 +90,55 @@ async def stream_outlines(
             return
 
         additional_context = ""
-        if presentation.file_paths:
+        if presentation.reference_snapshot_ids:
+            try:
+                snapshot_ids = [
+                    uuid.UUID(str(snapshot_id))
+                    for snapshot_id in presentation.reference_snapshot_ids
+                ]
+                snapshots = await admit_reference_snapshots(
+                    sql_session,
+                    snapshot_ids=snapshot_ids,
+                )
+                documents: list[str] = []
+                document_names: list[str] = []
+                for snapshot in snapshots:
+                    if snapshot.provider_id != "uploaded_document":
+                        raise ReferenceProviderError(
+                            "uploaded_reference_snapshot_required",
+                            status_code=400,
+                        )
+                    values = snapshot.payload().get("documents")
+                    if not isinstance(values, list):
+                        raise ReferenceProviderError(
+                            "reference_snapshot_payload_invalid",
+                            status_code=409,
+                        )
+                    for index, value in enumerate(values):
+                        if not isinstance(value, dict) or not isinstance(
+                            value.get("text"), str
+                        ):
+                            raise ReferenceProviderError(
+                                "reference_snapshot_payload_invalid",
+                                status_code=409,
+                            )
+                        documents.append(value["text"])
+                        document_names.append(
+                            str(value.get("name") or f"document-{index + 1}")
+                        )
+                additional_context = build_document_context(
+                    documents,
+                    document_names,
+                    overflow_strategy="truncate",
+                )
+            except (ReferenceProviderError, ValueError) as error:
+                detail = getattr(error, "code", "reference_snapshot_invalid")
+                yield SSEErrorResponse(detail=str(detail)).to_string()
+                return
+            except DocumentContextLimitError as error:
+                yield SSEErrorResponse(detail=error.to_sse_detail()).to_string()
+                return
+        elif presentation.file_paths:
             try:
                 documents_loader = DocumentsLoader(
                     file_paths=presentation.file_paths,

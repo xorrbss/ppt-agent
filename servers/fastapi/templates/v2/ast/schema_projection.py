@@ -56,26 +56,36 @@ def project_content_schema(
         if isinstance(component_properties, dict):
             for repeat in component.repeats:
                 if repeat.arrangement == "positioned" and repeat.anchors:
-                    item_schema = get_component_schema(
+                    repeated_schema = get_component_schema(
                         {
                             "id": f"{component.component_id}_repeat_item",
-                            "elements": [copy.deepcopy(repeat.anchors[0].source)],
+                            "elements": [
+                                copy.deepcopy(anchor.source)
+                                for anchor in repeat.anchors
+                            ],
                         }
                     )
-                    if item_schema is None:
+                    if repeated_schema is None:
                         raise ValueError(
                             f"template_ast_repeat_item_schema_missing:{repeat.repeat_id}"
                         )
-                    projected_item = {
-                        key: copy.deepcopy(value)
-                        for key, value in item_schema.items()
-                        if key not in {"$schema", "title", "description"}
-                    }
-                    item_properties = projected_item.get("properties")
-                    if isinstance(item_properties, dict) and len(item_properties) == 1:
-                        only_value = next(iter(item_properties.values()))
-                        if isinstance(only_value, dict) and only_value.get("type") == "object":
-                            projected_item = copy.deepcopy(only_value)
+                    repeated_properties = repeated_schema.get("properties")
+                    repeated_array = (
+                        next(iter(repeated_properties.values()))
+                        if isinstance(repeated_properties, dict)
+                        and len(repeated_properties) == 1
+                        else None
+                    )
+                    projected_item = (
+                        copy.deepcopy(repeated_array.get("items"))
+                        if isinstance(repeated_array, dict)
+                        and isinstance(repeated_array.get("items"), dict)
+                        else None
+                    )
+                    if projected_item is None:
+                        raise ValueError(
+                            f"template_ast_repeat_item_schema_missing:{repeat.repeat_id}"
+                        )
                     component_properties[repeat.content_field] = {
                         "type": "array",
                         "minItems": repeat.min_items,

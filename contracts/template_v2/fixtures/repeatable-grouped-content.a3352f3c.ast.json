@@ -217,8 +217,21 @@
             "description": "Fixed connector geometry plus positioned repeated callout groups.",
             "elements": [
               {
-                "decorative": true,
-                "name": "shared_path",
+                "closed": false,
+                "points": [
+                  {
+                    "x": 80,
+                    "y": 80
+                  },
+                  {
+                    "x": 720,
+                    "y": 80
+                  }
+                ],
+                "stroke": {
+                  "color": "#64748B",
+                  "width": 2
+                },
                 "type": "vector"
               },
               {
@@ -336,8 +349,21 @@
             "description": "Fixed connector geometry plus positioned repeated callout groups.",
             "elements": [
               {
-                "decorative": true,
-                "name": "shared_path",
+                "closed": false,
+                "points": [
+                  {
+                    "x": 80,
+                    "y": 80
+                  },
+                  {
+                    "x": 720,
+                    "y": 80
+                  }
+                ],
+                "stroke": {
+                  "color": "#64748B",
+                  "width": 2
+                },
                 "type": "vector"
               },
               {
@@ -461,8 +487,21 @@
             "description": "Fixed connector geometry plus positioned repeated callout groups.",
             "elements": [
               {
-                "decorative": true,
-                "name": "shared_path",
+                "closed": false,
+                "points": [
+                  {
+                    "x": 80,
+                    "y": 80
+                  },
+                  {
+                    "x": 720,
+                    "y": 80
+                  }
+                ],
+                "stroke": {
+                  "color": "#64748B",
+                  "width": 2
+                },
                 "type": "vector"
               },
               {

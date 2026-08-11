@@ -5,6 +5,7 @@ import {
   assertPresentationSnapshotIntegrity,
   normalizeExpectedPresentationSha256,
 } from "@/lib/presentation-snapshot-integrity";
+import { RENDER_ARTIFACT_CONTRACT } from "@/lib/render-service";
 import {
   getFastApiAuthHeaders,
   getFastApiBaseUrl,
@@ -28,11 +29,13 @@ function normalizePresentationId(id: string): string {
 async function fetchInitialPresentation(
   id: string,
   cookieHeader: string | undefined,
-  expectedSha256: string | undefined
+  expectedSha256: string | undefined,
+  expectedRevision: number | undefined,
+  renderArtifactRequired: boolean,
 ): Promise<PresentationData | undefined> {
   const authHeaders = getFastApiAuthHeaders();
   if (!cookieHeader && Object.keys(authHeaders).length === 0) {
-    if (expectedSha256) {
+    if (expectedSha256 || renderArtifactRequired) {
       throw new Error("Authenticated presentation snapshot is unavailable.");
     }
     return undefined;
@@ -51,7 +54,7 @@ async function fetchInitialPresentation(
       }
     );
     if (!response.ok) {
-      if (expectedSha256) {
+      if (expectedSha256 || renderArtifactRequired) {
         throw new Error(
           `Presentation snapshot fetch failed with status ${response.status}.`
         );
@@ -63,10 +66,23 @@ async function fetchInitialPresentation(
       return undefined;
     }
     const body = await response.text();
-    assertPresentationSnapshotIntegrity(body, expectedSha256);
-    return JSON.parse(body) as PresentationData;
+    const sourceSha256 = assertPresentationSnapshotIntegrity(
+      body,
+      expectedSha256,
+    );
+    const presentation = JSON.parse(body) as PresentationData;
+    if (
+      expectedRevision !== undefined &&
+      Number(presentation.revision) !== expectedRevision
+    ) {
+      throw new Error("stale_render_revision");
+    }
+    return {
+      ...presentation,
+      source_sha256: sourceSha256,
+    };
   } catch (error) {
-    if (expectedSha256) throw error;
+    if (expectedSha256 || renderArtifactRequired) throw error;
     console.error("[pdf-maker] Initial presentation fetch failed", {
       id: normalizedId,
       error,
@@ -82,6 +98,33 @@ export default async function PdfMakerRoute({ searchParams }: PdfMakerRouteProps
   const expectedSha256 = normalizeExpectedPresentationSha256(
     firstQueryValue(params.source_sha256)
   );
+  const renderContract = firstQueryValue(params.render_contract);
+  const renderArtifactRequired = renderContract === RENDER_ARTIFACT_CONTRACT;
+  if (renderContract !== undefined && !renderArtifactRequired) {
+    throw new Error("Unsupported presentation render artifact contract.");
+  }
+  const requestedFormat = firstQueryValue(params.format);
+  const expectedRevisionQuery = firstQueryValue(params.expected_revision);
+  const expectedRevision =
+    expectedRevisionQuery === undefined
+      ? undefined
+      : Number(expectedRevisionQuery);
+  if (
+    expectedRevision !== undefined &&
+    (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)
+  ) {
+    throw new Error("Invalid expected presentation revision.");
+  }
+  if (renderArtifactRequired && expectedRevision === undefined) {
+    throw new Error("An expected revision is required for canonical export.");
+  }
+  const renderTarget =
+    requestedFormat === "pdf" || requestedFormat === "pptx"
+      ? requestedFormat
+      : undefined;
+  if (renderArtifactRequired && !renderTarget) {
+    throw new Error("A render target is required for canonical export.");
+  }
 
   if (!queryId) {
     return (
@@ -101,13 +144,18 @@ export default async function PdfMakerRoute({ searchParams }: PdfMakerRouteProps
   const initialPresentationData = await fetchInitialPresentation(
     queryId,
     cookieHeader,
-    expectedSha256
+    expectedSha256,
+    expectedRevision,
+    renderArtifactRequired,
   );
 
   return (
     <PdfMakerPage
       presentation_id={queryId}
       initialPresentationData={initialPresentationData}
+      renderTarget={renderTarget}
+      renderArtifactRequired={renderArtifactRequired}
+      expectedRevision={expectedRevision}
     />
   );
 }

@@ -1,5 +1,6 @@
 from datetime import datetime
 import re
+from collections.abc import Mapping
 from typing import Any, List, Literal, Optional
 import uuid
 
@@ -52,10 +53,52 @@ class PresentationWithSlides(BaseModel):
         if not isinstance(value, dict):
             return value
         projected = dict(value)
+
+        # A short-lived authored generator wrote nine legacy rows with the
+        # authored theme/slide format but left the earlier adaptive mode and
+        # deck plan behind. The canonical resolver correctly rejects arbitrary
+        # conflicting identity, yet these rows are unambiguously authored from
+        # their server-owned slide payload. Normalize only that exact legacy
+        # shape at the response boundary; persisted data remains untouched.
+        theme = projected.get("theme")
+        slides = projected.get("slides")
+        if (
+            projected.get("profile_driver_id") is None
+            and projected.get("version", LEGACY_PRESENTATION_VERSION)
+            == LEGACY_PRESENTATION_VERSION
+            and projected.get("generation_mode", "standard") == "standard"
+            and projected.get("mode") == "adaptive"
+            and isinstance(theme, Mapping)
+            and theme.get("mode") == "authored"
+            and isinstance(slides, list)
+            and slides
+            and all(_has_authored_slide_identity(slide) for slide in slides)
+        ):
+            projected["mode"] = "authored"
+            projected["deck_plan"] = None
+
         profile, capabilities, _ = resolve_presentation_driver(projected)
         projected["profile"] = profile
         projected["capabilities"] = capabilities
         return projected
+
+
+def _has_authored_slide_identity(slide: Any) -> bool:
+    if isinstance(slide, Mapping):
+        layout_group = slide.get("layout_group")
+        layout = slide.get("layout")
+        content = slide.get("content")
+    else:
+        layout_group = getattr(slide, "layout_group", None)
+        layout = getattr(slide, "layout", None)
+        content = getattr(slide, "content", None)
+    return (
+        layout_group == "authored"
+        and isinstance(layout, str)
+        and layout.startswith("authored:")
+        and isinstance(content, Mapping)
+        and content.get("__authored__") is True
+    )
 
 
 _PUBLIC_PRIVATE_KEYS = {

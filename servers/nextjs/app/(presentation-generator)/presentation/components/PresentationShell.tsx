@@ -7,6 +7,7 @@ import type {
   PresentationFeatureSlotName,
   PresentationFeatureViewModel,
 } from "./presentationFeatureSlots";
+import type { RenderArtifact } from "../../../../lib/render-service/contracts";
 
 const FeatureViewContext = createContext<PresentationFeatureViewModel | null>(null);
 
@@ -31,11 +32,13 @@ export default function PresentationShell({
   background,
   viewModel,
   children,
+  renderArtifact,
 }: {
   readonly title: string;
   readonly background: string;
   readonly viewModel: PresentationFeatureViewModel;
   readonly children: React.ReactNode;
+  readonly renderArtifact?: RenderArtifact | null;
 }) {
   return (
     <FeatureViewContext.Provider value={viewModel}>
@@ -44,6 +47,13 @@ export default function PresentationShell({
         aria-labelledby="presentation-editor-title"
         data-presentation-driver={viewModel.driverId ?? "unresolved"}
         data-review-required={viewModel.reviewRequired || undefined}
+        data-editor-adapter={viewModel.componentAdapters.editor ?? undefined}
+        data-assistant-adapter={viewModel.componentAdapters.assistant ?? undefined}
+        data-export-adapter={viewModel.componentAdapters.export ?? undefined}
+        data-selection-controller={viewModel.componentAdapters.selection ?? undefined}
+        data-render-artifact-contract={renderArtifact?.schema_version}
+        data-render-artifact-version={renderArtifact?.artifact_version}
+        data-render-artifact-target={renderArtifact?.target}
       >
         <h1 id="presentation-editor-title" className="sr-only">
           {title}

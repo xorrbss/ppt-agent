@@ -10,7 +10,93 @@ import {
 import {
   PRESENTATION_SOURCE_SHA256,
   type PresentationExportExecutionParams,
+  type PersistedPresentation,
 } from "../../../lib/presentation-export-strategy.ts";
+import {
+  PRESENTATION_DRIVER_REGISTRY,
+  type PresentationDriverId,
+} from "../../../lib/presentation-profile.ts";
+
+const TEST_SOURCE_SHA256 = "d".repeat(64);
+
+function templateV2Slide() {
+  return {
+    id: "template-slide",
+    ui: {
+      components: [
+        {
+          id: "body",
+          position: { x: 0, y: 0 },
+          elements: [
+            {
+              type: "text",
+              name: "title",
+              position: { x: 40, y: 40 },
+              size: { width: 600, height: 80 },
+              runs: [{ text: "Canonical Template V2" }],
+            },
+          ],
+        },
+      ],
+    },
+    html_content: null,
+  };
+}
+
+function canonicalServerPresentation(
+  input: Record<string, unknown>,
+): PersistedPresentation {
+  const slides = Array.isArray(input.slides) ? input.slides : [];
+  const authored =
+    input.mode === "authored" ||
+    slides.some(
+      (slide) =>
+        typeof slide === "object" &&
+        slide !== null &&
+        (slide as Record<string, unknown>).html_content,
+    );
+  const driverId: PresentationDriverId =
+    input.version === "v2-standard"
+      ? "template-v2"
+      : authored
+        ? "authored"
+        : "standard";
+  const driver = PRESENTATION_DRIVER_REGISTRY[driverId];
+  const presentation = {
+    id: "persisted-id",
+    revision: 4,
+    lifecycle_status: "published",
+    ...input,
+    profile: {
+      schema_version: 1 as const,
+      driver_id: driverId,
+      content_model: driver.content_model,
+      generation_strategy: driver.generation_strategy,
+      style_source:
+        driverId === "template-v2"
+          ? "imported"
+          : driverId === "authored"
+            ? "authored"
+            : "builtin",
+      generation_mode: "standard",
+    },
+    capabilities: {
+      schema_version: 1 as const,
+      driver_id: driverId,
+      renderer_adapter_id: driver.renderer_adapter_id,
+      editor_adapter_id: driver.editor_adapter_id,
+      editor: driver.editor,
+      agent_tool_capability: driver.agent_tool_capability,
+      export_adapter_id: driver.export_adapter_id,
+      export_editable_pptx: driver.export_editable_pptx,
+    },
+  };
+  Object.defineProperty(presentation, PRESENTATION_SOURCE_SHA256, {
+    enumerable: false,
+    value: TEST_SOURCE_SHA256,
+  });
+  return presentation as PersistedPresentation;
+}
 
 async function rejectedRequestError(
   operation: Promise<unknown>
@@ -25,6 +111,7 @@ async function rejectedRequestError(
 }
 
 function boundarySpies(presentation: Record<string, unknown>) {
+  const canonicalPresentation = canonicalServerPresentation(presentation);
   const calls = { fetch: 0, general: 0, hybrid: 0 };
   return {
     calls,
@@ -36,7 +123,7 @@ function boundarySpies(presentation: Record<string, unknown>) {
         calls.fetch += 1;
         assert.equal(presentationId, "persisted-id");
         assert.equal(cookieHeader, "session=test");
-        return presentation;
+        return canonicalPresentation;
       },
       registry: {
         async general(params: PresentationExportExecutionParams) {
@@ -58,7 +145,7 @@ test("route request fetches persisted V2 identity and calls only general", async
   const { calls, dependencies } = boundarySpies({
     version: "v2-standard",
     mode: "template",
-    slides: [{ ui: { id: "native" }, html_content: null }],
+    slides: [templateV2Slide()],
   });
 
   const result = await executeExportPresentationRouteRequest(
@@ -72,6 +159,11 @@ test("route request fetches persisted V2 identity and calls only general", async
   );
 
   assert.equal(result.path, "general.pptx");
+  assert.equal(
+    (result as { renderArtifact?: { driver_id: string; target: string } })
+      .renderArtifact?.driver_id,
+    "template-v2",
+  );
   assert.deepEqual(calls, { fetch: 1, general: 1, hybrid: 0 });
 });
 
@@ -93,6 +185,11 @@ test("route request keeps legacy identity on general even with hybrid hint", asy
   );
 
   assert.equal(result.path, "general.pptx");
+  assert.equal(
+    (result as { renderArtifact?: { driver_id: string } }).renderArtifact
+      ?.driver_id,
+    "standard",
+  );
   assert.deepEqual(calls, { fetch: 1, general: 1, hybrid: 0 });
 });
 
@@ -121,6 +218,11 @@ test("route request sends authored to hybrid only for explicit hybrid", async ()
   );
 
   assert.equal(result.path, "hybrid.pptx");
+  assert.equal(
+    (result as { renderArtifact?: { driver_id: string } }).renderArtifact
+      ?.driver_id,
+    "authored",
+  );
   assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 1 });
 });
 
@@ -225,7 +327,7 @@ test("persisted identity cannot redirect an embedding request to general export"
   const { calls, dependencies } = boundarySpies({
     version: "v2-standard",
     mode: "template",
-    slides: [{ ui: { id: "native" }, html_content: null }],
+    slides: [templateV2Slide()],
   });
   await assert.rejects(
     executeExportPresentationRouteRequest(
@@ -365,7 +467,7 @@ test("route request rejects conflicting identity before either runner", async ()
     version: "v2-standard",
     mode: "template",
     theme: { mode: "adaptive" },
-    slides: [{ ui: { id: "native" }, html_content: null }],
+    slides: [templateV2Slide()],
   });
 
   await assert.rejects(
@@ -574,11 +676,11 @@ test("presentation fetch forwards only configured auth and cookie headers", asyn
 });
 
 test("general export receives the exact persisted snapshot digest", async () => {
-  const body = JSON.stringify({
+  const body = JSON.stringify(canonicalServerPresentation({
     version: "v2-standard",
     mode: "template",
-    slides: [{ ui: { id: "native" }, html_content: null }],
-  });
+    slides: [templateV2Slide()],
+  }));
   const presentation = await fetchPersistedPresentationForExport(
     "persisted-id",
     {

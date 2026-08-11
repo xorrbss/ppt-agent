@@ -1,4 +1,10 @@
-import { FormEvent, RefObject } from "react";
+import {
+  ClipboardEvent,
+  DragEvent,
+  FormEvent,
+  RefObject,
+  useState,
+} from "react";
 
 interface ComposerAsset {
   assetId: string;
@@ -34,6 +40,16 @@ export function WorkspaceComposer({
   onRemoveAsset,
   onSend,
 }: WorkspaceComposerProps) {
+  const [draggingFiles, setDraggingFiles] = useState(false);
+
+  const uploadFiles = (files: File[]) => {
+    if (!files.length || disabled || uploading || !onFilesSelected) return;
+    void onFilesSelected(files);
+  };
+
+  const hasDraggedFiles = (event: DragEvent<HTMLFormElement>) =>
+    Array.from(event.dataTransfer.types || []).includes("Files");
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const command = value.trim();
@@ -48,8 +64,45 @@ export function WorkspaceComposer({
 
   return (
     <form
-      className="border-t border-slate-200 bg-white p-3"
+      className={`relative border-t border-slate-200 bg-white p-3 transition-shadow ${
+        draggingFiles ? "ring-2 ring-inset ring-blue-400" : ""
+      }`}
       onSubmit={submit}
+      onDragEnter={(event) => {
+        if (!hasDraggedFiles(event) || disabled || uploading) return;
+        event.preventDefault();
+        setDraggingFiles(true);
+      }}
+      onDragOver={(event) => {
+        if (!hasDraggedFiles(event) || disabled || uploading) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setDraggingFiles(true);
+      }}
+      onDragLeave={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          event.currentTarget.contains(event.relatedTarget)
+        ) {
+          return;
+        }
+        setDraggingFiles(false);
+      }}
+      onDrop={(event) => {
+        if (!hasDraggedFiles(event) || disabled || uploading) return;
+        event.preventDefault();
+        setDraggingFiles(false);
+        uploadFiles(Array.from(event.dataTransfer.files ?? []));
+      }}
+      onPaste={(event: ClipboardEvent<HTMLFormElement>) => {
+        if (disabled || uploading) return;
+        const images = Array.from(event.clipboardData.files ?? []).filter(
+          (file) => file.type.startsWith("image/"),
+        );
+        if (!images.length) return;
+        event.preventDefault();
+        uploadFiles(images);
+      }}
       data-testid="workspace-command-form"
     >
       <input
@@ -62,7 +115,7 @@ export function WorkspaceComposer({
         onChange={(event) => {
           const files = Array.from(event.currentTarget.files ?? []);
           event.currentTarget.value = "";
-          if (files.length > 0) void onFilesSelected?.(files);
+          uploadFiles(files);
         }}
       />
       {assets.length > 0 && (

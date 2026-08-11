@@ -3,7 +3,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Path, Query
 
 from services.community_presentations import (
-    get_community_presentation,
+    get_community_presentation as get_community_presentation_service,
     list_community_presentations,
 )
 
@@ -42,8 +42,8 @@ async def list_presentations(
     )
 
 
-@COMMUNITY_ROUTER.get("/{community_id}")
-async def get_presentation(
+@COMMUNITY_ROUTER.get("/{community_id}", name="get_community_presentation")
+async def get_community_presentation(
     community_id: int = Path(ge=1),
 ) -> dict[str, Any]:
-    return await get_community_presentation(community_id)
+    return await get_community_presentation_service(community_id)

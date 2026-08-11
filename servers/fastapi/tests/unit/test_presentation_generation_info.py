@@ -10,6 +10,7 @@ from api.v1.ppt.endpoints.presentation_crud import (
     get_presentation_generation_info,
 )
 from models.sql.presentation import PresentationModel
+from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 
 
@@ -104,6 +105,94 @@ def test_generation_info_returns_empty_attachments_and_legacy_default(tmp_path):
             assert info.settings.include_table_of_contents is False
             assert info.settings.include_title_slide is True
             assert info.settings.web_search is False
+
+        await engine.dispose()
+
+    _run(runner())
+
+
+def test_generation_info_prefers_the_original_workspace_generation_prompt(tmp_path):
+    async def runner():
+        engine = await _make_engine(tmp_path / "generation-info-workspace.db")
+        presentation_id = uuid.uuid4()
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            presentation = PresentationModel(
+                id=presentation_id,
+                content="Generated outline summary that is not the user's prompt",
+                n_slides=90,
+                language="ko",
+            )
+            conversation = WorkspaceConversation(presentation_id=presentation_id)
+            session.add_all([presentation, conversation])
+            await session.flush()
+            session.add(
+                WorkspaceOperation(
+                    conversation_id=conversation.id,
+                    presentation_id=presentation_id,
+                    anchor_position=2,
+                    kind="presentation.generate",
+                    state="succeeded",
+                    idempotency_key_hash="a" * 64,
+                    request_hash="b" * 64,
+                    request_payload={
+                        "prompt": "첨부한 제안요청서를 바탕으로 구축 제안서를 만들어 줘."
+                    },
+                )
+            )
+            await session.commit()
+
+            info = await get_presentation_generation_info(
+                id=presentation_id,
+                sql_session=session,
+            )
+
+            assert info.prompt == "첨부한 제안요청서를 바탕으로 구축 제안서를 만들어 줘."
+
+        await engine.dispose()
+
+    _run(runner())
+
+
+def test_generation_info_does_not_report_the_attachment_fallback_as_user_prompt(
+    tmp_path,
+):
+    async def runner():
+        engine = await _make_engine(tmp_path / "generation-info-fallback.db")
+        presentation_id = uuid.uuid4()
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            presentation = PresentationModel(
+                id=presentation_id,
+                content="Generated Korean outline that replaced the original input",
+                n_slides=90,
+                language="ko",
+            )
+            conversation = WorkspaceConversation(presentation_id=presentation_id)
+            session.add_all([presentation, conversation])
+            await session.flush()
+            session.add(
+                WorkspaceOperation(
+                    conversation_id=conversation.id,
+                    presentation_id=presentation_id,
+                    anchor_position=2,
+                    kind="presentation.generate",
+                    state="succeeded",
+                    idempotency_key_hash="c" * 64,
+                    request_hash="d" * 64,
+                    request_payload={
+                        "prompt": "Generate a presentation from the attached files."
+                    },
+                )
+            )
+            await session.commit()
+
+            info = await get_presentation_generation_info(
+                id=presentation_id,
+                sql_session=session,
+            )
+
+            assert info.prompt == ""
 
         await engine.dispose()
 

@@ -62,6 +62,66 @@ def _source_deck() -> bytes:
     return output.getvalue()
 
 
+def _nested_source_deck() -> bytes:
+    presentation = Presentation(BytesIO(_source_deck()))
+    slide = presentation.slides[0]
+    for index, name in enumerate(("Card One", "Card Two")):
+        shape = slide.shapes.add_textbox(
+            Inches(0.6 + index * 4.0),
+            Inches(6.0),
+            Inches(3.5),
+            Inches(0.7),
+        )
+        shape.name = name
+        shape.text = f"Original {name}"
+    output = BytesIO()
+    presentation.save(output)
+    return output.getvalue()
+
+
+def _nested_layout(container_type: str) -> SlideLayout:
+    container = {
+        "type": container_type,
+        "name": "cards",
+        "position": {"x": 0, "y": 0},
+        "size": {"width": 800, "height": 100},
+        "min_children": 2,
+        "max_children": 2,
+        "children": [
+            {
+                "type": "text",
+                "name": f"card_{name}",
+                "position": {"x": index * 400, "y": 0},
+                "size": {"width": 350, "height": 70},
+                "runs": [{"text": f"Original {name}"}],
+                "decorative": False,
+                "min_length": 1,
+                "max_length": 80,
+            }
+            for index, name in enumerate(("one", "two"))
+        ],
+        **(
+            {"direction": "row", "wrap": False}
+            if container_type == "flex"
+            else {"columns": 2, "rows": 1}
+        ),
+    }
+    return SlideLayout.model_validate(
+        {
+            "id": f"nested-{container_type}",
+            "description": f"Nested editable {container_type} content",
+            "components": [
+                {
+                    "id": "content",
+                    "description": "Nested editable cards",
+                    "position": {"x": 0, "y": 0},
+                    "elements": [container],
+                }
+            ],
+        }
+    )
+
+
 def _layout() -> SlideLayout:
     cell = {"runs": [{"text": "Original"}]}
     return SlideLayout.model_validate(
@@ -240,6 +300,9 @@ def test_native_clone_preserves_master_layout_theme_relationships_and_media():
 
     original_parts = _package_parts(source)
     cloned_parts = _package_parts(compilation.pptx)
+    assert cloned_parts["[Content_Types].xml"] == original_parts[
+        "[Content_Types].xml"
+    ]
     preserved_prefixes = (
         "ppt/slideMasters/",
         "ppt/slideLayouts/",
@@ -293,6 +356,9 @@ def test_native_clone_reuses_slide_as_a_relationship_preserving_copy():
     )
     parts = _package_parts(compilation.pptx)
 
+    assert b'<Types xmlns="' in parts["[Content_Types].xml"]
+    assert b"ns0:" not in parts["[Content_Types].xml"]
+    assert b'/ppt/slides/slide2.xml' in parts["[Content_Types].xml"]
     assert parts["ppt/slides/_rels/slide2.xml.rels"] == parts[
         "ppt/slides/_rels/slide1.xml.rels"
     ]
@@ -460,3 +526,28 @@ def test_native_clone_relationship_backed_edits_are_rejected_before_export(
 
     assert rejected.value.code == expected_code
     assert "relationship_replacement_unsupported" in rejected.value.code
+
+
+@pytest.mark.parametrize("container_type", ["flex", "grid"])
+def test_native_clone_patches_every_editable_flex_and_grid_descendant(
+    container_type: str,
+) -> None:
+    compiled = compile_template_v2_native_clone(
+        _nested_source_deck(),
+        [
+            (
+                _nested_layout(container_type),
+                {
+                    "content": {
+                        "cards": {"card_one": "Alpha", "card_two": "Beta"}
+                    }
+                },
+                "ppt/slides/slide1.xml",
+            )
+        ],
+    )
+
+    first = _named_shape(compiled.pptx, "Card One")
+    second = _named_shape(compiled.pptx, "Card Two")
+    assert "Alpha" in "".join(first.itertext())
+    assert "Beta" in "".join(second.itertext())

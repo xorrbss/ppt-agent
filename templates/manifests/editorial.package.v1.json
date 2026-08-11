@@ -1,6 +1,6 @@
 {
   "schemaVersion": "presenton.template-package/v1",
-  "packageVersion": "1.1.0",
+  "packageVersion": "1.2.0",
   "templateId": "editorial",
   "sourceRoot": "templates/editorial",
   "entrypoint": {
@@ -56,12 +56,12 @@
       "static/Playfair Display Bold Italic.ttf"
     ],
     "aliases": {
-      "DM Sans": "static/DM Sans Regular.ttf",
-      "DM Sans Bold": "static/DM Sans Bold.ttf",
-      "Playfair Display": "static/Playfair Display Bold Italic.ttf",
       "Playfair Display Bold": "static/Playfair Display Bold Italic.ttf",
       "Playfair Display Bold Italics": "static/Playfair Display Bold Italic.ttf",
-      "Playfair Display Semi-Bold Italics": "static/Playfair Display Bold Italic.ttf"
+      "Playfair Display Semi-Bold Italics": "static/Playfair Display Bold Italic.ttf",
+      "Playfair Display": "static/Playfair Display Bold Italic.ttf",
+      "DM Sans Bold": "static/DM Sans Bold.ttf",
+      "DM Sans": "static/DM Sans Regular.ttf"
     },
     "unresolvedAliases": []
   },
@@ -77,7 +77,19 @@
     "sourceFileCount": 117,
     "sourceInventorySha256": "337142d0294504d1f52a22bb3716ae6c5c9a437fdac7f75414a5fa1e3effe4f1",
     "evidencePath": "templates/manifests/editorial.provenance.v1.json",
-    "evidenceSha256": "e3ae02f95731b774da36a9b2d8a4259091088b9da0a55d48df5dddbb072e7dd2"
+    "evidenceSha256": "c6d7fdd73b57a8b0062644ab535c495f441e7557289cc30f5d1e02ff1e559d5d",
+    "extensions": [
+      {
+        "path": "template.json",
+        "kind": "modified",
+        "reason": "Preserved the fork's verified offline font aliases while merging the upstream template payload.",
+        "sourceRepository": "https://github.com/presenton/presenton",
+        "sourceCommitSha": "e271359ed91bfa48ba18c5717f8e19a7b69326ef",
+        "sourcePath": "templates/editorial/template.json",
+        "sourceSha256": "f63282203b21e4a350f6ff87ffe5695ca4c92413c5aad485e6cdedfbb82f7e60",
+        "sourceGitBlobSha1": "914512bdab50d4ecb4640b47d1c51be78c33ca6a"
+      }
+    ]
   },
   "thumbnail": {
     "assetPath": "static/thumbnail.png",

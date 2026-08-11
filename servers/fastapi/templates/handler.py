@@ -291,7 +291,7 @@ async def get_all_templates(
     return templates
 
 
-async def get_layouts(
+async def get_template_layouts(
     template_id: str = Path(..., description="The id of the template"),
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -473,7 +473,7 @@ async def _create_slide_layout_impl(
     return CreateSlideLayoutResponse(react_component=normalized_react_component)
 
 
-async def create_slide_layout(
+async def create_template_slide_layout(
     request: CreateSlideLayoutRequest = Body(...),
     sql_session: AsyncSession = Depends(get_async_session),
 ):

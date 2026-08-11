@@ -68,3 +68,25 @@ test("snapshot-bound render URL carries only the expected payload hash", () => {
   );
   assert.doesNotMatch(url, /cookie|session|token|slides|html_content/i);
 });
+
+test("production export URL opts into the revision-bound render artifact contract", () => {
+  const sha256 = "b".repeat(64);
+  const url = new URL(
+    buildExportRenderUrl(
+      "http://127.0.0.1:5000",
+      "deck-1",
+      sha256,
+      "pptx",
+      7
+    )
+  );
+
+  assert.equal(url.searchParams.get("format"), "pptx");
+  assert.equal(
+    url.searchParams.get("render_contract"),
+    "presenton.render-artifact/v1"
+  );
+  assert.equal(url.searchParams.get("source_sha256"), sha256);
+  assert.equal(url.searchParams.get("expected_revision"), "7");
+  assert.doesNotMatch(url.toString(), /cookie|session|token|slides|html_content/i);
+});

@@ -95,7 +95,12 @@ async def seed():
 
 async def main():
     await seed()
-    res = await export_presentation(PID, "legacy smoke", "pptx")
+    res = await export_presentation(
+        PID,
+        "legacy smoke",
+        "pptx",
+        expected_revision=0,
+    )
     prs = Presentation(res.path)
     print(f"exported {res.path} -> {len(prs.slides)} slides")
     failures: list = []

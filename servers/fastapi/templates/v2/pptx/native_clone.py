@@ -11,12 +11,15 @@ import posixpath
 import re
 from typing import Any
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import quoteattr
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile, ZipInfo
 
 from templates.v2.generation import build_generated_slide
 from templates.v2.models.elements import (
     Chart,
     Container,
+    Flex,
+    Grid,
     Group,
     Image,
     Table,
@@ -25,6 +28,10 @@ from templates.v2.models.elements import (
 )
 from templates.v2.models.layouts import SlideLayout
 from templates.v2.pptx.native_compiler import TemplateV2NativePptxCompileError
+from templates.v2.pptx.repeat_adapter import (
+    TemplateV2PptxRepeatAdapterError,
+    prepare_repeatable_pptx_slide,
+)
 
 
 TEMPLATE_V2_NATIVE_CLONE_SCHEMA_VERSION = "presenton.template-v2-native-clone/v1"
@@ -44,6 +51,16 @@ _SLIDE_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
 )
 _XML_NS = "http://www.w3.org/XML/1998/namespace"
+
+# ElementTree's anonymous ``ns0`` prefix is legal XML, but LibreOffice rejects
+# a package when independently serialized OPC roots reuse it for different
+# namespaces. Stable package-specific prefixes keep every rewritten part
+# interoperable without changing any namespace URI or relationship identity.
+ET.register_namespace("p", _P_NS)
+ET.register_namespace("a", _A_NS)
+ET.register_namespace("r", _R_NS)
+ET.register_namespace("pr", _REL_NS)
+ET.register_namespace("ct", _CT_NS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +96,7 @@ def compile_template_v2_native_clone(
     next_slide_number = max(slide_numbers, default=0) + 1
     next_slide_id = max(source_slide_ids.values(), default=255) + 1
     used_parts: set[str] = set()
+    content_types_changed = False
     output_slide_ids: list[tuple[int, str]] = []
     selected_parts: list[str] = []
     patched_slots: list[list[str]] = []
@@ -98,6 +116,17 @@ def compile_template_v2_native_clone(
                 path=f"slides.{slide_index}.source_part",
             )
         generated = build_generated_slide(layout, dict(raw_content))
+        try:
+            prepared = prepare_repeatable_pptx_slide(
+                layout,
+                generated.content,
+                preservation_mode="native_clone",
+            )
+        except TemplateV2PptxRepeatAdapterError as error:
+            raise TemplateV2NativePptxCompileError(
+                error.code,
+                path=error.path,
+            ) from error
         source_xml = parts[source_part]
         target_part = source_part
         if source_part in used_parts:
@@ -109,6 +138,7 @@ def compile_template_v2_native_clone(
             if source_rels_part in parts:
                 parts[target_rels_part] = parts[source_rels_part]
             _ensure_slide_content_type(content_types, target_part)
+            content_types_changed = True
             relationship_id = _append_slide_relationship(
                 presentation_rels, target_part
             )
@@ -125,8 +155,8 @@ def compile_template_v2_native_clone(
 
         patched, names = _patch_slide(
             source_xml,
-            layout=layout,
-            content=generated.content,
+            layout=prepared.layout,
+            content=prepared.content,
             slide_index=slide_index,
         )
         parts[target_part] = patched
@@ -138,7 +168,8 @@ def compile_template_v2_native_clone(
     _replace_slide_order(presentation, output_slide_ids)
     parts["ppt/presentation.xml"] = _serialize_xml(presentation)
     parts["ppt/_rels/presentation.xml.rels"] = _serialize_xml(presentation_rels)
-    parts["[Content_Types].xml"] = _serialize_xml(content_types)
+    if content_types_changed:
+        parts["[Content_Types].xml"] = _serialize_content_types(content_types)
     package = _write_package(parts)
     manifest = {
         "schema_version": TEMPLATE_V2_NATIVE_CLONE_SCHEMA_VERSION,
@@ -434,6 +465,39 @@ def _patch_element(
         _replace_table(shape, [columns, *rows], path)
         patched.append(element.name)
         return
+    if isinstance(element, (Flex, Grid)):
+        values = scope.get(element.name)
+        if isinstance(values, Mapping):
+            for index, child in enumerate(element.children):
+                _patch_element(
+                    child,
+                    scope=values,
+                    shape_map=shape_map,
+                    patched=patched,
+                    path=f"{path}.children.{index}",
+                )
+            return
+        if not isinstance(values, list) or len(values) != len(element.children):
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_clone_repeat_scope_invalid",
+                path=f"{path}.content.{element.name}",
+            )
+        for index, (child, item_scope) in enumerate(
+            zip(element.children, values, strict=True)
+        ):
+            if not isinstance(item_scope, Mapping):
+                raise TemplateV2NativePptxCompileError(
+                    "template_v2_native_clone_repeat_scope_invalid",
+                    path=f"{path}.content.{element.name}.{index}",
+                )
+            _patch_element(
+                child,
+                scope=item_scope,
+                shape_map=shape_map,
+                patched=patched,
+                path=f"{path}.children.{index}",
+            )
+        return
     if isinstance(element, TextList):
         if element.decorative:
             return
@@ -459,7 +523,7 @@ def _patch_element(
             "template_v2_native_clone_chart_relationship_replacement_unsupported",
             path=f"{path}.type=chart",
         )
-    if getattr(element, "decorative", True) is True:
+    if getattr(element, "decorative", False) is True:
         return
     raise TemplateV2NativePptxCompileError(
         "template_v2_native_clone_element_unsupported",
@@ -631,6 +695,33 @@ def _replace_table(shape: ET.Element, values: list[list[str]], path: str) -> Non
 
 def _serialize_xml(root: ET.Element) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _serialize_content_types(root: ET.Element) -> bytes:
+    """Emit OPC content types with the canonical default namespace.
+
+    LibreOffice rejects packages whose rewritten presentation and content-type
+    roots both use ElementTree's anonymous prefix for different namespaces.
+    This flat OPC part needs only attributes, so rebuilding it is lossless.
+    """
+
+    serialized = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        f'<Types xmlns="{_CT_NS}">',
+    ]
+    for child in root:
+        local_name = child.tag.rsplit("}", 1)[-1]
+        if local_name not in {"Default", "Override"}:
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_clone_content_types_invalid",
+                path="[Content_Types].xml",
+            )
+        attributes = " ".join(
+            f"{name}={quoteattr(value)}" for name, value in child.attrib.items()
+        )
+        serialized.append(f"<{local_name} {attributes}/>")
+    serialized.append("</Types>")
+    return "".join(serialized).encode("utf-8")
 
 
 def _write_package(parts: Mapping[str, bytes]) -> bytes:

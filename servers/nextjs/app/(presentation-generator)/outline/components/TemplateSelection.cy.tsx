@@ -86,6 +86,8 @@ describe("<TemplateSelection /> Template V2 catalog", () => {
           },
           provenance: { repository: "hugohe3/ppt-master" },
           capability_badges: ["Editable PPTX", "Master retained"],
+          assets: { thumbnail: "/app_data/templates/quarterly-review/thumbnail.png" },
+          layouts: { layouts: [{ id: "cover" }, { id: "content" }] },
         },
       ],
     }).as("structuredTemplates");
@@ -97,15 +99,16 @@ describe("<TemplateSelection /> Template V2 catalog", () => {
     cy.get('[data-testid="layout-template-grid"]').should("be.visible");
     cy.get('[data-testid="structured-template-quarterly-review"]')
       .should("contain", "Template V2")
-      .and("contain", "Revision 12")
-      .and("contain", "Default");
+      .and("contain", "R12")
+      .and("contain", "기본")
+      .and("contain", "2개 레이아웃");
     cy.get('[data-testid="structured-template-source-quarterly-review"]').should(
       "contain",
       "github.com/hugohe3/ppt-master · examples/ppt169_swiss_grid_systems"
     );
     cy.get('[data-testid="structured-template-capabilities-quarterly-review"]').should(
       "contain",
-      "Master retained"
+      "마스터 유지"
     );
     cy.get("a[href='/custom-template']").should("not.exist");
     cy.get("[data-testid^='custom-template-']").should("not.exist");

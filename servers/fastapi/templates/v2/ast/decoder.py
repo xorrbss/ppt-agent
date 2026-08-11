@@ -22,7 +22,7 @@ from .models import (
 )
 
 
-_REPEATED_SUFFIX = re.compile(r"_\d+$")
+_REPEATED_SUFFIX = re.compile(r"_\d+(?=_|$)")
 _CONTENT_TYPES = {
     "text",
     "math",

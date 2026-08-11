@@ -1,0 +1,260 @@
+{
+  "schemaVersion": "presenton.template-browser-capture-evidence/v1",
+  "templateId": "dynamic",
+  "rendererModuleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+  "entrypointSha256": "bf772065cbfb5a92fe0f33625bc9d88a47a2c7f0a92321dc007998a970749ad8",
+  "captureAdapter": "chromium-cdp/Page.captureScreenshot",
+  "browser": {
+    "product": "Chrome/151.0.7922.76",
+    "revision": "@031bfd60f544af71d8dd7246970d1af3e1acf3ad",
+    "protocolVersion": "1.3"
+  },
+  "capturedAt": "2026-08-11T04:04:09.085Z",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "thresholds": {
+    "badPixelRatio": 0.005,
+    "meanAbsoluteError": 0.001
+  },
+  "screenshots": [
+    {
+      "layoutId": "cover_title_left_image_right_8271",
+      "goldenSha256": "748ddf93a1d17e5261c1cba207c02799879e1abf0bfc4c33b13f1c92d8349f4b",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "content_column_overview_3481",
+      "goldenSha256": "2c818f0b116126f12d3ad28baafcf12f8f370332bfd2af3b6ecf54c181d9dfd2",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_description_indicator_9624",
+      "goldenSha256": "4e96662460c45eb2b5cc6def5060234f5b45ba387949791d9304481b71ee920c",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "top_image_bottom_text_columns_7836",
+      "goldenSha256": "acb9757df68a72f0b2ac4d98e33954b4bc6854b900beccba8e753d25d0d5c874",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_cards_bottom_5364",
+      "goldenSha256": "359571fa9134543a7857ad7da344b9b867a2c23c9872c1d3af7b1827c31cab5e",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "left_text_center_image_right_text_2105",
+      "goldenSha256": "3c92c087a491985f4fc5488bd3f24e3a854734028b0c014531b51d04eda014ce",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "left_title_right_card_grid_2044",
+      "goldenSha256": "c8258ef5f95cc841714191218424a2cbaef77385d5ced51e598c3e3e9a2a95e6",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_visual_callouts_5621",
+      "goldenSha256": "3f48d9b9cae48d2c4ef80c6c8325cd398768e06f3e701c3533a51a4add83ee7d",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_cards_2592",
+      "goldenSha256": "6abb94ac52155d5416a5b56494af1dc31f7a7b9e53450523619ea44e6325c851",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_image_right_callouts_4153",
+      "goldenSha256": "0ec86c945f9d021bdbb81a620d4e7e4184ee52a06b35557f996013a63b6938aa",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "image_comparison_panels_4102",
+      "goldenSha256": "285422301cf1a6f5adb694b0b058ffceebfe331dda1987f20dd1a135faf34505",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_chart_right_info_panel_2580",
+      "goldenSha256": "c745bbc32904b48883b148b6f9520970bd547a9737f0fe882a227556c6cc942f",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_stepped_cards_1046",
+      "goldenSha256": "22e4e208fc348388abed474c8f11c86a3ab34d729f081d5077e4fe73d8c0d48c",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "left_title_right_chart_panel_1475",
+      "goldenSha256": "318f7b93fbc37a6209fc1f3e2e3ab95057153bec2b3686ea765848f456d0839e",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_chart_layout_4067",
+      "goldenSha256": "fb01b63278654c7fd549a00fcef483992d725294ee52895b49e51a38a813e0d4",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_review_cards_1880",
+      "goldenSha256": "d337d5ac41eed5b061548718f6065b70902b4631e9ec57c899325de7ba492270",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "large_title_bottom_image_3101",
+      "goldenSha256": "fd5e5d76faf0e4700528609ca2ff15ccd320975b7cc43eaa68058554c4b81ca6",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "left_title_right_media_rows_6461",
+      "goldenSha256": "2d29c7ccef9bd3eaf2e93a3536e50113a9efc15e8bd77098222521b9f9d17a05",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_image_columns_2104",
+      "goldenSha256": "f30b93f7950a93606afc7873fe41ca1d5924a2da94c1e59b3cb2d79ecfc58e2a",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_pyramid_callouts_6308",
+      "goldenSha256": "1878b1281ad537ac80ecdda2a5e89bd0933a5351f4a7dd657814b8df9e166734",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_cards_4771",
+      "goldenSha256": "86176003c3fa335f0bccd73015058fd67e4b78c58c7e11bdbeaa0c129ef9b65c",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "left_title_right_text_sections_3504",
+      "goldenSha256": "72f938fc04f2f7239f921562166837b0d1fe70ff1172b0210765b92b922377a1",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "closing_title_description_1992",
+      "goldenSha256": "41c5ff9db8cdbbaa44f9e209270e9e463bb01893521af0073a8532ee443c7959",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_staggered_cards_right_image_8296",
+      "goldenSha256": "a658f66d775c88d0fd339a0ccd72a547223f252d2b8860a73aa3d31443f61b8c",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "left_title_description_overlay_4828",
+      "goldenSha256": "825726cbaacedee873c5ce538a4c1fad0d66c8837070dd78079dac95821a64a0",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_metric_callouts_2098",
+      "goldenSha256": "6978f4498145ecfeac2c6407f7f45ff6793a815417d69bd688b980590d4814db",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_staggered_cards_4818",
+      "goldenSha256": "04eeb8196698726ca347fa2fea005adcdf179b43171fd76914bb95f785e4e5ff",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "left_title_right_metric_rows_4802",
+      "goldenSha256": "ae0c6df1080c652ab72bdb8d7188b2ae0fc2a5b84587bb67abe89f94f089bc91",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_metric_cards_3569",
+      "goldenSha256": "42e62560ea05f7ac600f7fc835c26556981884ecaa1a430597f167c41b283542",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_donut_chart_right_table_1700",
+      "goldenSha256": "e7cd4143e04dba12462b58b15023124935a1460ef01c4fd6ea681335597be1ae",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "center_title_chart_panels_3982",
+      "goldenSha256": "3e714ad15553035c78fc55dc9c710ca9ba2872d9fd1df2b94a83f67896f4ec16",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_left_chart_right_list_6203",
+      "goldenSha256": "0b686ff69a9a9227f5b16fbcb44c8cc21645a01b9a6bf2149b90cd4949144f3d",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    }
+  ],
+  "checks": {
+    "renderedLayoutCount": 32,
+    "nonBlankLayoutCount": 32,
+    "missingImages": 0,
+    "imageCount": 56,
+    "chartCanvasCount": 6,
+    "externalRequests": [],
+    "localFontsLoaded": true,
+    "consoleErrors": [],
+    "paintReadinessContract": "passed"
+  },
+  "status": "passed-browser-capture"
+}

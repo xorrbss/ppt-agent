@@ -35,7 +35,12 @@
           "description": "Fixed connector geometry plus positioned repeated callout groups.",
           "position": {"x": 0, "y": 160},
           "elements": [
-            {"type": "vector", "name": "shared_path", "decorative": true},
+            {
+              "type": "vector",
+              "points": [{"x": 80, "y": 80}, {"x": 720, "y": 80}],
+              "closed": false,
+              "stroke": {"color": "#64748B", "width": 2}
+            },
             {
               "type": "group",
               "name": "callout_1",

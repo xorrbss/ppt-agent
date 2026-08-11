@@ -1,0 +1,228 @@
+{
+  "schemaVersion": "presenton.template-package-provenance/v1",
+  "templateId": "executive",
+  "upstream": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/executive",
+    "commitUrl": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+    "license": {
+      "expression": "Apache-2.0",
+      "path": "LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE"
+    }
+  },
+  "extensions": [],
+  "evidenceSources": [
+    {
+      "id": "upstream-commit",
+      "type": "git-commit",
+      "url": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+      "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6"
+    },
+    {
+      "id": "upstream-license",
+      "type": "repository-license",
+      "licenseExpression": "Apache-2.0",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20"
+    },
+    {
+      "id": "google-fonts-anton-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/anton/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "ee67e6ee22790b7929f1a3769ca2801d565c64b5a9096942c1adf5596de9c9e4"
+    },
+    {
+      "id": "google-fonts-dm-sans-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/dmsans/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1"
+    },
+    {
+      "id": "google-fonts-montserrat-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/montserrat/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e"
+    }
+  ],
+  "claims": [
+    {
+      "id": "presenton-executive-assets-apache-2.0",
+      "status": "verified",
+      "licenseExpression": "Apache-2.0",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "upstream-license"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/freeform_12-356df2a648d5.svg",
+          "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+          "upstreamGitBlobSha1": "c166ab9cc56cf627d301f8b6c984040539c72bff"
+        },
+        {
+          "path": "static/freeform_14-415898a77b60.svg",
+          "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+          "upstreamGitBlobSha1": "95b0f2189c257c11c2ce581294444afb1aca8bbc"
+        },
+        {
+          "path": "static/freeform_15-356df2a648d5.svg",
+          "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+          "upstreamGitBlobSha1": "c166ab9cc56cf627d301f8b6c984040539c72bff"
+        },
+        {
+          "path": "static/freeform_17-415898a77b60.svg",
+          "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+          "upstreamGitBlobSha1": "95b0f2189c257c11c2ce581294444afb1aca8bbc"
+        },
+        {
+          "path": "static/freeform_18-356df2a648d5.svg",
+          "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+          "upstreamGitBlobSha1": "c166ab9cc56cf627d301f8b6c984040539c72bff"
+        },
+        {
+          "path": "static/freeform_2-cc80a5f71f54.svg",
+          "sha256": "9b8a5384294ce433418c984c0e998e4bdc3f0d0c32176a8d4307570691887c89",
+          "upstreamGitBlobSha1": "40060a4c9aa593965658b2a36db30b67586575a6"
+        },
+        {
+          "path": "static/freeform_20-415898a77b60.svg",
+          "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+          "upstreamGitBlobSha1": "95b0f2189c257c11c2ce581294444afb1aca8bbc"
+        },
+        {
+          "path": "static/freeform_21-356df2a648d5.svg",
+          "sha256": "0e3e02eed0f869cfca1b65a102b8c6be7f268b1f828994caec601172b2cb6b46",
+          "upstreamGitBlobSha1": "c166ab9cc56cf627d301f8b6c984040539c72bff"
+        },
+        {
+          "path": "static/freeform_23-415898a77b60.svg",
+          "sha256": "b8ca4072f882454d0bec5d56c211f566fc78788f40346acb82e542d938425e32",
+          "upstreamGitBlobSha1": "95b0f2189c257c11c2ce581294444afb1aca8bbc"
+        },
+        {
+          "path": "static/image-778d1de63f45a60f.png",
+          "sha256": "23cec99d1780b64babde71b6703f509affb177cdcf15f0820d2acdc2396256df",
+          "upstreamGitBlobSha1": "3dec3444805dc59e8021e0deeafbb622cbd83422"
+        },
+        {
+          "path": "static/image1-7f30c6c93dd1.png",
+          "sha256": "269e736f41176293d92e0472c0025891e5bfffb2605a59133067eec11b582e75",
+          "upstreamGitBlobSha1": "3e8d8a5034146884840dd3ad8ac3176a8526e006"
+        },
+        {
+          "path": "static/image13-8d4aaab60638.png",
+          "sha256": "47c48e12c3964c579e74c81cfaef3c1731f20acba61f9eb7e3b236d9a37356cf",
+          "upstreamGitBlobSha1": "75155f4735aada2f24b3409ded7b8e0843cdca75"
+        },
+        {
+          "path": "static/image2-f9ab39ea57ed.png",
+          "sha256": "771e978a8e212de0059d315b8a33da463d770574dc20d08ad1a3ee3b1fe01107",
+          "upstreamGitBlobSha1": "147de1a5d79c0daae3dbbc0dd5b1131c5219fd45"
+        },
+        {
+          "path": "static/thumbnail.png",
+          "sha256": "56d523e931cac19c28e32a8a7570a7e004f947524af293b31b0ed509e2325d50",
+          "upstreamGitBlobSha1": "9a7f7bbf6f37efece7c74dcf4bb4ab923cbcb72e"
+        }
+      ]
+    },
+    {
+      "id": "presenton-executive-anton-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "google-fonts-anton-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/Anton Regular.ttf",
+          "sha256": "9c306606325bb3396711d7d1699fe45c1061ede2315fa217ae034bb0236edda7",
+          "upstreamGitBlobSha1": "f96b9334b9c5eb61de18ed6f25aa9d00a5191017",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-anton-ofl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presenton-executive-dmsans-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "google-fonts-dm-sans-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/DM Sans Bold.ttf",
+          "sha256": "d415b88e3fe0224e9a1fd34acfdb3d7f1f390c834b440bc3117b68c1f86900e3",
+          "upstreamGitBlobSha1": "cf462333e0bfd100e984fa57921c07033ab4fb31",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-dm-sans-ofl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "presenton-executive-montserrat-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "google-fonts-montserrat-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/Montserrat Bold.ttf",
+          "sha256": "63483d1d2ea1f202563d04625eaf3036c7d6da0831c6211a9eecb973995d72ca",
+          "upstreamGitBlobSha1": "0ccaf3fa5020e942088dc15005e6682a6b3215a1",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-montserrat-ofl"
+          ]
+        },
+        {
+          "path": "static/Montserrat Medium.ttf",
+          "sha256": "9b2a9eb2cc1d610ecdf19f5e549d557408fc2334bf381351ff14e1c8622f3b34",
+          "upstreamGitBlobSha1": "c1d0e3321366244552cbd2eaee5033573014609d",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-montserrat-ofl"
+          ]
+        },
+        {
+          "path": "static/Montserrat Regular.ttf",
+          "sha256": "df738f354367e5ab07f2ede5a07860e791127ff9ea9964b25cf539ec9dc187ac",
+          "upstreamGitBlobSha1": "c58517469ee7bee024f8badbb3371b03b55436bc",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-montserrat-ofl"
+          ]
+        },
+        {
+          "path": "static/Montserrat SemiBold.ttf",
+          "sha256": "a2b550eb5f130823554fd9cbf17f4b377dd46cbb9d79c5cced783ec9dffd996a",
+          "upstreamGitBlobSha1": "57d07b718b37f87c5cd45501e8d514c60a9e3cca",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-montserrat-ofl"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
@@ -10,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import { readPptxArchive } from "../authored-hybrid/pptx-archive.ts";
 import { resolveAuthoredHybridChromeExecutable } from "../authored-hybrid/chrome-runtime-discovery.ts";
 import { executeExportAtProductionBoundary } from "../presentation-export-boundary.ts";
+import { PRESENTATION_SOURCE_SHA256 } from "../presentation-export-strategy.ts";
+import { PRESENTATION_DRIVER_REGISTRY } from "../presentation-profile.ts";
 import { renderTemplateV2GeneralPresentationHtml } from "../template-v2-general-renderer.mjs";
 import {
   compareSlidePngs,
@@ -26,14 +29,182 @@ const EXPORT_ROOT =
   path.join(REPO_ROOT, "presentation-export");
 const NEXT_ROOT = path.join(REPO_ROOT, "servers", "nextjs");
 const FIXTURE_ROOT = path.join(HERE, "fixtures", "template-v2-general");
+const TEMPLATE_PACKAGE_IDS = Object.freeze([
+  "dynamic",
+  "editorial",
+  "executive",
+  "general",
+  "modern",
+  "momentum",
+  "standard",
+  "swift",
+]);
+
+function attachTemplateV2Runtime(presentation) {
+  const driver = PRESENTATION_DRIVER_REGISTRY["template-v2"];
+  presentation.profile = {
+    schema_version: 1,
+    driver_id: "template-v2",
+    content_model: driver.content_model,
+    generation_strategy: driver.generation_strategy,
+    style_source: "imported",
+    generation_mode: "standard",
+  };
+  presentation.capabilities = {
+    schema_version: 1,
+    driver_id: "template-v2",
+    renderer_adapter_id: driver.renderer_adapter_id,
+    editor_adapter_id: driver.editor_adapter_id,
+    editor: driver.editor,
+    agent_tool_capability: driver.agent_tool_capability,
+    export_adapter_id: driver.export_adapter_id,
+    export_editable_pptx: driver.export_editable_pptx,
+  };
+  const chartIds = new Set();
+  const chartSnapshots = [];
+  const visit = (value, slideId, slideIndex) => {
+    if (Array.isArray(value)) {
+      value.forEach((child) => visit(child, slideId, slideIndex));
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    if (value.type === "chart" || value.kind === "chart") {
+      const chartId =
+        [value.id, value.element_id, value.object_id, value.chart_id].find(
+          (candidate) => typeof candidate === "string" && candidate
+        ) ?? `slide-${slideIndex + 1}-chart-${chartIds.size + 1}`;
+      if (!chartIds.has(chartId)) {
+        chartIds.add(chartId);
+        chartSnapshots.push({
+          chart_id: chartId,
+          slide_id: slideId,
+          mime_type: "image/png",
+          sha256: "c".repeat(64),
+          asset_id: `template-v2-fidelity-${chartIds.size}`,
+        });
+      }
+    }
+    Object.values(value).forEach((child) => visit(child, slideId, slideIndex));
+  };
+  presentation.slides.forEach((slide, slideIndex) =>
+    visit(slide, slide.id ?? `slide-${slideIndex + 1}`, slideIndex)
+  );
+  presentation.render_dependencies = { chart_snapshots: chartSnapshots };
+  return presentation;
+}
+
+function packageAssetMediaType(filePath) {
+  if (/\.png$/i.test(filePath)) return "image/png";
+  if (/\.jpe?g$/i.test(filePath)) return "image/jpeg";
+  if (/\.svg$/i.test(filePath)) return "image/svg+xml";
+  throw new Error(`unsupported TemplatePackage smoke asset: ${filePath}`);
+}
+
+async function inlinePackageAssets(value, templateId) {
+  if (typeof value === "string" && value.startsWith("static/")) {
+    if (/\.(?:ttf|otf)$/i.test(value)) return value;
+    const filePath = path.join(REPO_ROOT, "templates", templateId, ...value.split("/"));
+    const bytes = await fs.readFile(filePath);
+    return `data:${packageAssetMediaType(filePath)};base64,${bytes.toString("base64")}`;
+  }
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((child) => inlinePackageAssets(child, templateId)));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      await Promise.all(
+        Object.entries(value).map(async ([key, child]) => [
+          key,
+          await inlinePackageAssets(child, templateId),
+        ])
+      )
+    );
+  }
+  return value;
+}
+
+async function loadTemplatePackageSmoke() {
+  const slides = [];
+  const expectedText = [];
+  for (const templateId of TEMPLATE_PACKAGE_IDS) {
+    const packageTemplate = JSON.parse(
+      await fs.readFile(
+        path.join(REPO_ROOT, "templates", templateId, "template.json"),
+        "utf8"
+      )
+    );
+    let selected;
+    for (const layout of packageTemplate.layouts) {
+      const candidate = {
+        version: "v2-standard",
+        mode: "template",
+        slides: [{ id: `${templateId}-${layout.id}`, ui: layout }],
+      };
+      try {
+        renderTemplateV2GeneralPresentationHtml(candidate);
+        selected = layout;
+        break;
+      } catch {
+        // The native driver is deliberately capability-gated. Continue until
+        // the package's production-general-compatible layout is found.
+      }
+    }
+    assert.ok(selected, `${templateId} has no production-general-compatible layout`);
+    const sentinel = `Template package smoke ${templateId}`;
+    const ui = await inlinePackageAssets(structuredClone(selected), templateId);
+    ui.components.push({
+      id: `package-smoke-${templateId}`,
+      description: "Structural PPTX smoke identity",
+      position: { x: 0, y: 0 },
+      elements: [
+        {
+          type: "text",
+          position: { x: 4, y: 700 },
+          size: { width: 420, height: 16 },
+          runs: [{ text: sentinel }],
+          font: { size: 8, family: "Arial", color: "#000000" },
+          decorative: false,
+          name: `package_smoke_${templateId}`,
+          min_length: 1,
+          max_length: 80,
+        },
+      ],
+    });
+    slides.push({ id: `${templateId}-${selected.id}`, ui });
+    expectedText.push(sentinel);
+  }
+  return {
+    fixture: {
+      id: "template-packages",
+      expectedText,
+      structuralOnly: true,
+      templateIdentity: { version: "v2-standard", mode: "template" },
+    },
+    presentation: attachTemplateV2Runtime({
+      id: "template-packages",
+      revision: 1,
+      lifecycle_status: "published",
+      version: "v2-standard",
+      mode: "template",
+      template_id: "verified-template-packages",
+      slides,
+    }),
+  };
+}
 
 async function loadCorpus() {
   const manifest = JSON.parse(await fs.readFile(path.join(FIXTURE_ROOT, "manifest.json"), "utf8"));
   const presentations = new Map();
   for (const fixture of manifest.cases) {
     const presentation = JSON.parse(await fs.readFile(path.join(FIXTURE_ROOT, fixture.directory, "template.v2.json"), "utf8"));
-    presentations.set(fixture.id, presentation);
+    presentation.id = fixture.id;
+    presentation.revision = 1;
+    presentation.lifecycle_status = "published";
+    presentations.set(fixture.id, attachTemplateV2Runtime(presentation));
   }
+  const packageSmoke = await loadTemplatePackageSmoke();
+  manifest.cases.push(packageSmoke.fixture);
+  presentations.set(packageSmoke.fixture.id, packageSmoke.presentation);
   return { manifest, presentations };
 }
 
@@ -178,7 +349,15 @@ test("Template V2 persisted JSON always crosses the production strategy boundary
         async fetchPresentation(presentationId, cookieHeader) {
           assert.equal(presentationId, fixture.id);
           assert.equal(cookieHeader, "fidelity-cookie");
-          return presentations.get(presentationId);
+          const presentation = presentations.get(presentationId);
+          if (!presentation[PRESENTATION_SOURCE_SHA256]) {
+            Object.defineProperty(presentation, PRESENTATION_SOURCE_SHA256, {
+              value: createHash("sha256")
+                .update(JSON.stringify(presentation))
+                .digest("hex"),
+            });
+          }
+          return presentation;
         },
         registry: {
           async general(params) {
@@ -346,6 +525,7 @@ test("actual API route renders Template V2 through /pdf-maker and presentation-e
           ? 120_000
           : undefined;
       for (const fixture of manifest.cases) {
+        if (fixture.structuralOnly) continue;
         const sourcePng = await renderTemplateV2SourceHtml(
           renderedHtml.get(fixture.id),
           {

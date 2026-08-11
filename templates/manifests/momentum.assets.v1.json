@@ -1,0 +1,270 @@
+{
+  "schemaVersion": "presenton.template-package-assets/v1",
+  "templateId": "momentum",
+  "files": [
+    {
+      "path": "static/Anton Regular.ttf",
+      "sha256": "9c306606325bb3396711d7d1699fe45c1061ede2315fa217ae034bb0236edda7",
+      "sizeBytes": 79396,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/freeform_10-5ff52db83610.svg",
+      "sha256": "a8f2b73db7d8e27b35b723b62171297ab0051e6e37082b3d52315808a9469199",
+      "sizeBytes": 460,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_12-6610b7abfb3e.svg",
+      "sha256": "a235f61d5ea456a1f547cb4ad08a8b7cf9551381dfe8299e1a15a3d19ef30432",
+      "sizeBytes": 385,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_14-191477057cf9.svg",
+      "sha256": "5a29c698e49f971a4c2b69ed85d1f5428b4f70216eee72fb6d29255fe7ae7716",
+      "sizeBytes": 397,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_14-f6e084c6aeb4.svg",
+      "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+      "sizeBytes": 534,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_16-fda648992de3.svg",
+      "sha256": "ba67a4110194fef20520ad9e5146d65f15d664344f4e90444cc68e7359a099f3",
+      "sizeBytes": 354,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_18-e9c3516f8fed.svg",
+      "sha256": "12e2cac71638efb68e87622822cce259a91e9676037d13fda4cb835f555e6770",
+      "sizeBytes": 438,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_20-f6e084c6aeb4.svg",
+      "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+      "sizeBytes": 534,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_25-f6e084c6aeb4.svg",
+      "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+      "sizeBytes": 534,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_27-5b02b270af51.svg",
+      "sha256": "b074dc106df85c2428a96fb72349f9f8bdac01e9796a8505f884b5ca525385d0",
+      "sizeBytes": 441,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_3-78cd16e1bfe2.svg",
+      "sha256": "181bcb41b08343cadb2dae7e3dac647f9cd15054bec44f7e316ab199a6db4fa2",
+      "sizeBytes": 497,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_30-db6dd6ad924e.svg",
+      "sha256": "221e7824577a4660027bb2b3d4b3e9426bcdb19b9cfd104c246159f69d11550a",
+      "sizeBytes": 391,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_32-f6e084c6aeb4.svg",
+      "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+      "sizeBytes": 534,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_38-ae4c2c33ce63.svg",
+      "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+      "sizeBytes": 380,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_43-ae4c2c33ce63.svg",
+      "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+      "sizeBytes": 380,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_48-ae4c2c33ce63.svg",
+      "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+      "sizeBytes": 380,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_53-ae4c2c33ce63.svg",
+      "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+      "sizeBytes": 380,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_58-ae4c2c33ce63.svg",
+      "sha256": "3b2cd7e092b727905a88f555e84962bd967258c14f470d03faf49145933ea3af",
+      "sizeBytes": 380,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_6-3a1e52f1b7cb.svg",
+      "sha256": "a537152ae09a2f174717b48ecc02d9620c90489a427728c9e4fb7cca4feaf353",
+      "sizeBytes": 445,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_6-db6dd6ad924e.svg",
+      "sha256": "221e7824577a4660027bb2b3d4b3e9426bcdb19b9cfd104c246159f69d11550a",
+      "sizeBytes": 391,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_7-4a2ec1827342.svg",
+      "sha256": "c9889d969e159b8702103c1becfbe9981a70aaa8b7740df99fe98c13b88ba222",
+      "sizeBytes": 459,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_7-65dda011cbba.svg",
+      "sha256": "caea3bc5aeb1ddb11e25f70ada404d536cf14ccc47fa2138853322029bb74b67",
+      "sizeBytes": 680,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_7-c0f41c5aff9a.svg",
+      "sha256": "cf505b9356b0992fd96096160aef90a6a827d965544c623b7635da2d3aa7413a",
+      "sizeBytes": 464,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_8-bf068a5a8090.svg",
+      "sha256": "249a306dbbb5d448a0ac898584f2c19941a9c349d258e576e43fb2b84b3f76f3",
+      "sizeBytes": 471,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/freeform_8-f6e084c6aeb4.svg",
+      "sha256": "1785bc0aa76f60af7938398b8fcd543e6dc1c02ddcaa3429e32979ae28fa7b59",
+      "sizeBytes": 534,
+      "mediaType": "image/svg+xml",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image-d1aaebc27c487340.png",
+      "sha256": "a403e064b99255bbcf9d671dfdaa3aa284ec6b0a3aaef3c98e8b5d5fc5e165dd",
+      "sizeBytes": 125518,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image1-ec7808dc4b3c.png",
+      "sha256": "849d8256860b40007908eb9d0047bce4c2bbc333bb0fefb6aaee176eec66f8e7",
+      "sizeBytes": 34064,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image13-3a85e5ddc709.png",
+      "sha256": "e96b75162a657bbee6aaa9776751f9e406591f3b0793f9d965530851171364d4",
+      "sizeBytes": 856,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/image3-28baa466293d.png",
+      "sha256": "7d9f0e39ff068b9cf7fa333728364fa13d925c5522cb14566e13b231dd5b14c0",
+      "sizeBytes": 229333,
+      "mediaType": "image/png",
+      "role": "template-asset",
+      "licenseRef": "Apache-2.0"
+    },
+    {
+      "path": "static/Lato Black.ttf",
+      "sha256": "5e9f15ac21085eec7be86132e914da742a48c5617926d2a44c190d633d9c8361",
+      "sizeBytes": 614532,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/Lato Bold.ttf",
+      "sha256": "c559a802651543b8645c7f583e99243e600cecb944daf405fac964c0182e0f31",
+      "sizeBytes": 657188,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/Lato Regular.ttf",
+      "sha256": "87ff9cad548d1fb09328a128633e6f92c08cd7b5cad4fdd469978d5d791e6d58",
+      "sizeBytes": 657212,
+      "mediaType": "font/ttf",
+      "role": "font",
+      "licenseRef": "OFL-1.1"
+    },
+    {
+      "path": "static/thumbnail.png",
+      "sha256": "c60d51fca3cee917eca0ae3a0afeefde8740a09db2e898ff717f51b490a1969b",
+      "sizeBytes": 106314,
+      "mediaType": "image/png",
+      "role": "thumbnail",
+      "licenseRef": "Apache-2.0"
+    }
+  ]
+}

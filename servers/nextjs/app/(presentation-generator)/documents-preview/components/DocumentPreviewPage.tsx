@@ -42,7 +42,14 @@ interface TextContents {
   [key: string]: string;
 }
 
-interface FileItem {
+/**
+ * Explicit rolling facade for pre-Asset-Gateway Redux state. Canonical uploads
+ * carry asset/snapshot identities and go directly to the outline route.
+ */
+const LEGACY_DOCUMENT_PREVIEW_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_LEGACY_DOCUMENT_PREVIEW === "true";
+
+interface LegacyFileItem {
   name: string;
   file_path: string;
 }
@@ -74,7 +81,8 @@ const DocumentsPreviewPage: React.FC = () => {
   });
 
   // Memoized computed values
-  const fileItems: FileItem[] = useMemo(() => {
+  const fileItems: LegacyFileItem[] = useMemo(() => {
+    if (!LEGACY_DOCUMENT_PREVIEW_ENABLED) return [];
     if (!files || !Array.isArray(files) || files.length === 0) return [];
     return files
       .flat()
@@ -139,6 +147,14 @@ const DocumentsPreviewPage: React.FC = () => {
   }, [documentKeys, fileItems, readFile, textContents]);
 
   const handleCreatePresentation = async () => {
+    if (!LEGACY_DOCUMENT_PREVIEW_ENABLED) {
+      notify.error(
+        "Legacy document preview is disabled",
+        "Upload documents again through the Asset Gateway.",
+      );
+      router.replace("/");
+      return;
+    }
     try {
       setShowLoading({
         message: "발표자료 개요를 생성하는 중…",
@@ -148,7 +164,7 @@ const DocumentsPreviewPage: React.FC = () => {
       });
 
       const documentPaths = fileItems.map(
-        (fileItem: FileItem) => fileItem.file_path
+        (fileItem: LegacyFileItem) => fileItem.file_path
       );
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
       const presentationId = crypto.randomUUID();
@@ -193,11 +209,15 @@ const DocumentsPreviewPage: React.FC = () => {
 
   // Effects
   useEffect(() => {
+    if (!LEGACY_DOCUMENT_PREVIEW_ENABLED) {
+      router.replace("/");
+      return;
+    }
     if (documentKeys.length > 0) {
       setSelectedDocument(documentKeys[0]);
       void maintainDocumentTexts();
     }
-  }, [documentKeys, maintainDocumentTexts]);
+  }, [documentKeys, maintainDocumentTexts, router]);
 
   // Render helpers
   const renderDocumentContent = () => {

@@ -199,11 +199,16 @@ function normalizeClipPath(value, path) {
     path
   );
   if (resolved === null || resolved === "none") return resolved;
-  if (
-    resolved.length > 1024 ||
-    /[";{}<>\\]/.test(resolved) ||
-    !/^(?:polygon|circle|ellipse|inset)\([0-9a-zA-Z%.,+\-\s/]+\)$/.test(resolved)
-  ) {
+  const standardShape =
+    /^(?:polygon|circle|ellipse|inset)\([0-9a-zA-Z%.,+\-\s/]+\)$/.test(
+      resolved
+    );
+  // PPTX-derived Template V2 packages use CSS `path('...')` clips. Admit the
+  // SVG path-data grammar only; keeping quotes confined to this exact wrapper
+  // prevents the value from escaping the generated CSS declaration.
+  const svgPath =
+    /^path\('[MmLlHhVvCcSsQqTtAaZz0-9eE.,+\-\s]+'\)$/.test(resolved);
+  if (resolved.length > 1024 || (!standardShape && !svgPath)) {
     fail("template_v2_render_plan_unsupported_image_clip_path", path);
   }
   return resolved;

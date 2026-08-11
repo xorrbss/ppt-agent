@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "presenton.template-browser-capture-evidence/v1",
+  "templateId": "modern",
+  "rendererModuleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+  "entrypointSha256": "be6722f9cc2ca452e4850ffa8fecc31129655899460689b73a3d3b004378f217",
+  "captureAdapter": "chromium-cdp/Page.captureScreenshot",
+  "browser": {
+    "product": "Chrome/151.0.7922.76",
+    "revision": "@031bfd60f544af71d8dd7246970d1af3e1acf3ad",
+    "protocolVersion": "1.3"
+  },
+  "capturedAt": "2026-08-11T04:04:26.835Z",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "deviceScaleFactor": 1
+  },
+  "thresholds": {
+    "badPixelRatio": 0.005,
+    "meanAbsoluteError": 0.001
+  },
+  "screenshots": [
+    {
+      "layoutId": "title_slide",
+      "goldenSha256": "cc5238810cc0914fbf1304ac9bd15b26f28236a0320116debe452321f088d4d7",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_description_bullet_points_grid_with_icon",
+      "goldenSha256": "138fa1c532e1e3dc093e257f4e83e574d1fb360b2cc6566869e06b6334aea585",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_description_bullet_points_list_with_icon",
+      "goldenSha256": "6537c42fd67439ba4206339c53753db214a7b6488e04da9bd7d6ad3bef2a4698",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_description_chart",
+      "goldenSha256": "4933b8f31fd8fb83d853574f5bbc7d1e8f352580926cd36116435b71ba55c2f4",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_description_chart_table",
+      "goldenSha256": "1f7b949e285ffcb7ffc0081143c3c04b137c103f21f36d8c9368afcd35b86314",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_description_image",
+      "goldenSha256": "05b51d980925f262d03a805b8028f50993c3d21ea53975fd101d83dbe720d020",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_list_of_cards_with_alternating_image",
+      "goldenSha256": "09e75a0824d75f9c8b4b57f47e88e573d48b867e53dee3282013a84d92b3d174",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_list_of_cards_with_image",
+      "goldenSha256": "197a45f881c0b5f6b70483a3602694693f5bda830f4a05e3e8b270ccf61fcd0f",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "title_image_description_list_with_highlighted_text_heading_description",
+      "goldenSha256": "927bf34a3b64ee18fe4f080a6d45df3440cd94f6ad9c6f319b518cdeccd170cd",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    },
+    {
+      "layoutId": "table_of_contents",
+      "goldenSha256": "b6a74bbbb41e0b766d399d593b5efb8ed30c090c47dfee54df5a34e92c31e3b1",
+      "exact": true,
+      "badPixelRatio": 0,
+      "meanAbsoluteError": 0
+    }
+  ],
+  "checks": {
+    "renderedLayoutCount": 10,
+    "nonBlankLayoutCount": 10,
+    "missingImages": 0,
+    "imageCount": 9,
+    "chartCanvasCount": 2,
+    "externalRequests": [],
+    "localFontsLoaded": true,
+    "consoleErrors": [],
+    "paintReadinessContract": "passed"
+  },
+  "status": "passed-browser-capture"
+}

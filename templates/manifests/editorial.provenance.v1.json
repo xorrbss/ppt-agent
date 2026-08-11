@@ -15,6 +15,18 @@
       "url": "https://github.com/presenton/presenton/blob/e271359ed91bfa48ba18c5717f8e19a7b69326ef/LICENSE"
     }
   },
+  "extensions": [
+    {
+      "path": "template.json",
+      "kind": "modified",
+      "reason": "Preserved the fork's verified offline font aliases while merging the upstream template payload.",
+      "sourceRepository": "https://github.com/presenton/presenton",
+      "sourceCommitSha": "e271359ed91bfa48ba18c5717f8e19a7b69326ef",
+      "sourcePath": "templates/editorial/template.json",
+      "sourceSha256": "f63282203b21e4a350f6ff87ffe5695ca4c92413c5aad485e6cdedfbb82f7e60",
+      "sourceGitBlobSha1": "914512bdab50d4ecb4640b47d1c51be78c33ca6a"
+    }
+  ],
   "evidenceSources": [
     {
       "id": "upstream-commit",
@@ -37,20 +49,20 @@
       "assertion": "The Editorial template was merged with bundled fonts and assets."
     },
     {
-      "id": "google-fonts-playfair-ofl",
-      "type": "font-license",
-      "licenseExpression": "OFL-1.1",
-      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/playfairdisplay/OFL.txt",
-      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
-      "sha256": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e"
-    },
-    {
       "id": "google-fonts-dm-sans-ofl",
       "type": "font-license",
       "licenseExpression": "OFL-1.1",
       "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/dmsans/OFL.txt",
       "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
       "sha256": "9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1"
+    },
+    {
+      "id": "google-fonts-playfair-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/playfairdisplay/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e"
     }
   ],
   "claims": [
@@ -632,12 +644,11 @@
       ]
     },
     {
-      "id": "presenton-editorial-fonts-ofl-1.1",
+      "id": "presenton-editorial-dmsans-fonts-ofl-1.1",
       "status": "verified",
       "licenseExpression": "OFL-1.1",
       "evidenceSourceIds": [
         "upstream-commit",
-        "google-fonts-playfair-ofl",
         "google-fonts-dm-sans-ofl"
       ],
       "coveredAssets": [
@@ -658,7 +669,18 @@
             "upstream-commit",
             "google-fonts-dm-sans-ofl"
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "presenton-editorial-playfairdisplay-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "google-fonts-playfair-ofl"
+      ],
+      "coveredAssets": [
         {
           "path": "static/Playfair Display Bold Italic.ttf",
           "sha256": "76805b08a7cea7dc244753746acc63165da9dd7578cd66cb95eceae93583dff5",

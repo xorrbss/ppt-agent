@@ -187,6 +187,7 @@ async def save_layouts(
 @LAYOUT_MANAGEMENT_ROUTER.get(
     "/get-templates/{presentation}",
     response_model=GetLayoutsResponse,
+    name="get_presentation_layouts",
     responses={
         400: {"model": ErrorResponse, "description": "Invalid presentation ID"},
         404: {
@@ -196,7 +197,7 @@ async def save_layouts(
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def get_layouts(
+async def get_presentation_layouts(
     presentation: UUID, session: AsyncSession = Depends(get_async_session)
 ):
     """
@@ -380,8 +381,10 @@ async def create_template(
         )
 
 
-@LAYOUT_MANAGEMENT_ROUTER.delete("/delete-templates/{template_id}", status_code=204)
-async def delete_template(
+@LAYOUT_MANAGEMENT_ROUTER.delete(
+    "/delete-templates/{template_id}", status_code=204, name="delete_legacy_template"
+)
+async def delete_legacy_template(
     template_id: UUID,
     session: AsyncSession = Depends(get_async_session),
 ):

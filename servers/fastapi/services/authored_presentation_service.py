@@ -928,6 +928,9 @@ async def _generate_authored_presentation(
         presentation.language = language or brand.language
         presentation.title = title
         presentation.file_paths = request.files
+        presentation.reference_snapshot_ids = [
+            str(snapshot_id) for snapshot_id in request.reference_snapshot_ids
+        ] or None
         presentation.outlines = outline.model_dump()
         presentation.layout = None
         presentation.structure = None

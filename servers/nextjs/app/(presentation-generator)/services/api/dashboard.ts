@@ -5,6 +5,7 @@ import { ApiResponseHandler } from "@/app/(presentation-generator)/services/api/
 import { getApiUrl } from "@/utils/api";
 import {
   buildPresentationListPath,
+  isPresentationListRequestAbort,
   normalizePresentationListEnvelope,
 } from "./dashboard-list-query";
 import type {
@@ -88,7 +89,12 @@ export class DashboardApi {
       );
       return normalizePresentationListEnvelope(payload, options);
     } catch (error) {
-      console.error("Error fetching presentations:", error);
+      // React Strict Mode and changing list filters both cancel obsolete
+      // requests. Logging those expected aborts with console.error makes the
+      // Next.js development overlay report a false runtime failure.
+      if (!isPresentationListRequestAbort(error, signal)) {
+        console.error("Error fetching presentations:", error);
+      }
       throw error;
     }
   }

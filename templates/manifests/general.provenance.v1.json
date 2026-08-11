@@ -1,0 +1,179 @@
+{
+  "schemaVersion": "presenton.template-package-provenance/v1",
+  "templateId": "general",
+  "upstream": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/general",
+    "commitUrl": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+    "license": {
+      "expression": "Apache-2.0",
+      "path": "LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE"
+    }
+  },
+  "extensions": [
+    {
+      "path": "static/Poppins Regular.ttf",
+      "kind": "added",
+      "reason": "Pinned local font replacement for the upstream Google Fonts stylesheet alias.",
+      "sourceRepository": "https://github.com/google/fonts",
+      "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sourcePath": "ofl/poppins/Poppins-Regular.ttf",
+      "sourceSha256": "7e65201e9b79159e2300267cc885e16c8dcef2424cdfa09a29bfb0980a94a7ba",
+      "sourceGitBlobSha1": "0bda228ade88b0bb5aac7da2c881d0c3f64d0817"
+    }
+  ],
+  "evidenceSources": [
+    {
+      "id": "upstream-commit",
+      "type": "git-commit",
+      "url": "https://github.com/presenton/presenton/commit/b940f7b4a51d473af830d96d441276af3540dae6",
+      "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6"
+    },
+    {
+      "id": "upstream-license",
+      "type": "repository-license",
+      "licenseExpression": "Apache-2.0",
+      "url": "https://github.com/presenton/presenton/blob/b940f7b4a51d473af830d96d441276af3540dae6/LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20"
+    },
+    {
+      "id": "google-fonts-commit",
+      "type": "git-commit",
+      "url": "https://github.com/google/fonts/commit/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5"
+    },
+    {
+      "id": "google-fonts-poppins-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/poppins/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "6be04893d770899a015649c7aa3b582f871b272f8747a92b78b17c3e5c8b2573"
+    }
+  ],
+  "claims": [
+    {
+      "id": "presenton-general-assets-apache-2.0",
+      "status": "verified",
+      "licenseExpression": "Apache-2.0",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "upstream-license"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/image11-6ce50168d7ec.png",
+          "sha256": "ee2886d82f8b6280285fbe7e1da14114f69d04e89e6d0733956fdf341babf0dd",
+          "upstreamGitBlobSha1": "6ddabed5cc47f85028537e10c19d878ccf45d8f3"
+        },
+        {
+          "path": "static/image12-2ed5eba60707.png",
+          "sha256": "e938c50d1e49bd852cf525babf82f7c68f5459d7c1b5ef40de93e2032687238a",
+          "upstreamGitBlobSha1": "b4b544c1bd1d6a59e059d0a69be635f14af77904"
+        },
+        {
+          "path": "static/image17-3bad1e1bf9ec.png",
+          "sha256": "642a8ea93898a6f95a92f935c50bc436670190a778b02b116c393fbbd23dc5de",
+          "upstreamGitBlobSha1": "6edc9943cd9b48fc4f8eb81c2e5cf5f5f2d6ff90"
+        },
+        {
+          "path": "static/image18-7076e2044973.png",
+          "sha256": "c24cad88ddf6b2f185171ef9cdacdc0e129df76568bb0b56219caf01f42499c6",
+          "upstreamGitBlobSha1": "4d141a8b2903087f92f44add4599997a34843aa2"
+        },
+        {
+          "path": "static/image19-8efba41be759.png",
+          "sha256": "8b80b7b6fa47db4e1c84adaea536dee337f6aa515ca57ada2d8e250233a83c89",
+          "upstreamGitBlobSha1": "a09b860543c5c243aabc64456b14a84379cbbf20"
+        },
+        {
+          "path": "static/image2-ec1c92dee7a3.png",
+          "sha256": "dd586cc51623585ed692e48d95e7886edcce0837d40b3aa6e0565f18bfe7f84f",
+          "upstreamGitBlobSha1": "cce74d4bb01461a3788895c55ad41e11364a4efd"
+        },
+        {
+          "path": "static/image20-6875b30b26c2.png",
+          "sha256": "dc1e0efd4a30939f3d319b0d83e9804a9ebd97892304a106e27989de0f03d32a",
+          "upstreamGitBlobSha1": "4f0c4beb1fcde54acb3969023bc0163406c72970"
+        },
+        {
+          "path": "static/image21-f2b82e740bc2.png",
+          "sha256": "e46f69944d73b80247436cd1e936365c4afbb13ebc335746a341d3465c1b14ee",
+          "upstreamGitBlobSha1": "1d1f50e84b05e8cc41c688e7bc55be49ea2241c3"
+        },
+        {
+          "path": "static/image22-6dd2f52e896c.png",
+          "sha256": "41648333dc334142fba341b4acef543f7d436f4b6640a614d02e738b592fc7d4",
+          "upstreamGitBlobSha1": "e4a453bc8177e29e09cc23b2050a648e229b214c"
+        },
+        {
+          "path": "static/image23-f21b824d69c7.png",
+          "sha256": "9c92a14da73b3d68faf5f705d12ad74901f87d3efbf6e97994fa9aba376194d7",
+          "upstreamGitBlobSha1": "dbbc4134e2f470aec65d8a021aed797fd980c7eb"
+        },
+        {
+          "path": "static/image26-6ba37bd671c7.png",
+          "sha256": "fbc5c7403ee2280cb4a9a52c3c1e2c8b56a6c6f4a2f9bd3f15958019dce3dec9",
+          "upstreamGitBlobSha1": "78b7b4f48a3523bad781e38dfd28f06a0a259e66"
+        },
+        {
+          "path": "static/image3-82be19a88965.png",
+          "sha256": "618da8794c670a9491402300eaa3bd802f04cbe648d76aa5f7b863e04e91d0ae",
+          "upstreamGitBlobSha1": "8d791434879e5f3e21010df9d6754697436e484e"
+        },
+        {
+          "path": "static/image32-e024f0f6ca8c.png",
+          "sha256": "f409f619ef8f75ddd98b47fea52a6d9c3c053739b0a2f885d291f60f884ed269",
+          "upstreamGitBlobSha1": "4caf3cc5fc7b958556b17ccf24a67a16bc5e25ed"
+        },
+        {
+          "path": "static/image33-ae1f10d83bac.png",
+          "sha256": "a1b4b0dc3b62c7bece6f828ea603f27a0ee330cd88a81a6b034066c6e7d6e6ee",
+          "upstreamGitBlobSha1": "2b24aaf22f4634f1822f666da34487016b498bf9"
+        },
+        {
+          "path": "static/image8-09632504cf99.png",
+          "sha256": "28f266dc9fe7e817fe603912fb543e671a7f940f5d2048aae05d58da1a42fbe9",
+          "upstreamGitBlobSha1": "99ce7aef0f67fe02682de1f756af690e831db315"
+        },
+        {
+          "path": "static/image9-68eb2d8ed47c.png",
+          "sha256": "2177f894a24b5d316c26b8539c1bd70eed7c60e137177815e7faba328709a419",
+          "upstreamGitBlobSha1": "7696c2861257e2d917a9a16737346b14a665e000"
+        },
+        {
+          "path": "static/thumbnail.png",
+          "sha256": "fca8dcd2c0a33254f9d78453f8c0882cea220696c8d2e183645aff8595db9227",
+          "upstreamGitBlobSha1": "6bdad1cce26565cc8e7a84930451d24d12b42b90"
+        }
+      ]
+    },
+    {
+      "id": "presenton-general-poppins-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "google-fonts-commit",
+        "google-fonts-poppins-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/Poppins Regular.ttf",
+          "sha256": "7e65201e9b79159e2300267cc885e16c8dcef2424cdfa09a29bfb0980a94a7ba",
+          "upstreamGitBlobSha1": "0bda228ade88b0bb5aac7da2c881d0c3f64d0817",
+          "sourceCommitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+          "sourcePath": "ofl/poppins/Poppins-Regular.ttf",
+          "evidenceSourceIds": [
+            "google-fonts-commit",
+            "google-fonts-poppins-ofl"
+          ]
+        }
+      ]
+    }
+  ]
+}

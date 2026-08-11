@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "presenton.template-package/v1",
+  "packageVersion": "1.2.0",
+  "templateId": "dynamic",
+  "sourceRoot": "templates/dynamic",
+  "entrypoint": {
+    "path": "template.json",
+    "sha256": "bf772065cbfb5a92fe0f33625bc9d88a47a2c7f0a92321dc007998a970749ad8",
+    "sizeBytes": 691427,
+    "mediaType": "application/json"
+  },
+  "engine": {
+    "id": "presenton.template-v2-json",
+    "contractVersion": "1",
+    "contractPath": "contracts/template_package/engines/template-v2-json.v1.json",
+    "contractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+    "requiredCapabilities": [
+      "asset.local-font",
+      "asset.raster-image",
+      "asset.safe-svg",
+      "chart.area",
+      "chart.bar",
+      "chart.line",
+      "chart.pie",
+      "chart.scatter",
+      "element.container",
+      "element.group",
+      "element.image",
+      "element.infographic",
+      "element.table",
+      "element.text",
+      "element.text-list",
+      "element.vector",
+      "layout.flex",
+      "layout.grid",
+      "normalization.legacy-authoring-extras",
+      "normalization.legacy-infographic-colors",
+      "repeat.flow",
+      "repeat.positioned"
+    ]
+  },
+  "presentation": {
+    "width": 1280,
+    "height": 720
+  },
+  "assets": {
+    "inventoryPath": "templates/manifests/dynamic.assets.v1.json",
+    "inventorySha256": "22d60a2b563355526bd64616b6e07260990d91b6cd8cdc21f7f32e515980a738",
+    "count": 22,
+    "totalSizeBytes": 10575315
+  },
+  "fonts": {
+    "faces": [
+      "static/Montserrat Medium.ttf",
+      "static/Montserrat SemiBold.ttf"
+    ],
+    "aliases": {
+      "Montserrat Medium": "static/Montserrat Medium.ttf",
+      "Montserrat Semi-Bold": "static/Montserrat SemiBold.ttf",
+      "Montserrat": "static/Montserrat Medium.ttf"
+    },
+    "unresolvedAliases": []
+  },
+  "license": {
+    "status": "approved",
+    "expression": "Apache-2.0 AND OFL-1.1",
+    "rightsEvidenceId": "presenton-dynamic-assets-apache-2.0"
+  },
+  "provenance": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "b940f7b4a51d473af830d96d441276af3540dae6",
+    "sourcePath": "templates/dynamic",
+    "sourceFileCount": 23,
+    "sourceInventorySha256": "22d60a2b563355526bd64616b6e07260990d91b6cd8cdc21f7f32e515980a738",
+    "evidencePath": "templates/manifests/dynamic.provenance.v1.json",
+    "evidenceSha256": "9a9a402c3de867fcabf3d4a3fbcf3f1a7dfdaa1fe3a9a4e043804cc00f9748ac",
+    "extensions": []
+  },
+  "thumbnail": {
+    "assetPath": "static/thumbnail.png",
+    "sha256": "66040ca8cfde6291091668c062158f0c4b15931a65dd58d5b4f39b541b8aa226",
+    "width": 1280,
+    "height": 720
+  },
+  "rendererSmoke": {
+    "receiptPath": "templates/manifests/dynamic.renderer-smoke.v1.json",
+    "receiptSha256": "531aeb7433783892b12a6283c73686c83f981f94230a0a7fe46640107c3e5047"
+  },
+  "browserGolden": {
+    "receiptPath": "templates/manifests/dynamic.browser-golden.v1.json",
+    "receiptSha256": "c734b7a11be7effeab652138144503f9aede84e4fbeeeee402da07aa9d3af1ca"
+  },
+  "publication": {
+    "status": "ready",
+    "default": false,
+    "blockers": []
+  }
+}

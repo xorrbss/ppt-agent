@@ -1,7 +1,11 @@
 import uuid
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Body, Header, HTTPException, Response, status
+# FastAPI dependency declarations intentionally call Depends in defaults.
+# ruff: noqa: B008
+
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.decompose_job import DecomposeJobSnapshot
 from services.decompose_job_service import (
@@ -9,6 +13,8 @@ from services.decompose_job_service import (
     DecomposeJobCapacityError,
     DecomposeJobConflictError,
 )
+from services.database import get_async_session
+from services.references import ReferenceProviderError, admit_reference_snapshot
 from utils.document_path_security import validate_document_paths
 from utils.owner_context import get_current_owner_id
 
@@ -30,19 +36,48 @@ def _owner_key() -> str:
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def create_decompose_job(
-    file_paths: Annotated[List[str], Body(embed=True)],
+    file_paths: Annotated[Optional[List[str]], Body(embed=True)] = None,
+    reference_snapshot_id: Annotated[Optional[uuid.UUID], Body()] = None,
     language: Annotated[Optional[str], Body()] = None,
     idempotency_key: Annotated[
         Optional[str], Header(alias="Idempotency-Key")
     ] = None,
+    session: AsyncSession = Depends(get_async_session),
 ):
     """Queue decomposition without holding an HTTP connection open."""
 
-    file_paths = validate_document_paths(file_paths)
+    document_count: Optional[int] = None
+    if file_paths:
+        file_paths = validate_document_paths(file_paths)
+    if reference_snapshot_id is not None:
+        try:
+            admitted = await admit_reference_snapshot(
+                session,
+                snapshot_id=reference_snapshot_id,
+            )
+        except ReferenceProviderError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=exc.code,
+            ) from exc
+        if admitted.provider_id != "uploaded_document":
+            raise HTTPException(
+                status_code=400,
+                detail="uploaded_reference_snapshot_required",
+            )
+        documents = admitted.payload().get("documents")
+        if not isinstance(documents, list) or not documents:
+            raise HTTPException(
+                status_code=409,
+                detail="reference_snapshot_payload_invalid",
+            )
+        document_count = len(documents)
     try:
         snapshot, _created = await DECOMPOSE_JOB_SERVICE.create_job(
             owner_key=_owner_key(),
             file_paths=file_paths,
+            reference_snapshot_id=reference_snapshot_id,
+            reference_document_count=document_count,
             language=language,
             idempotency_key=idempotency_key,
         )

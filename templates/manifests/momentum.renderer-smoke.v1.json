@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "presenton.template-renderer-smoke/v1",
+  "templateId": "momentum",
+  "engineId": "presenton.template-v2-json",
+  "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+  "entrypointSha256": "07d15e7283ab4f9ae5b0ff70cef306bdc5cfaea801e1b92e04ea41747b6c5e53",
+  "networkPolicy": "deny",
+  "scriptPolicy": "deny",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "layoutCount": 28,
+  "layoutIds": [
+    "title_with_accent_footer_6891",
+    "center_title_agenda_grid_wave_7815",
+    "title_text_image_columns_5015",
+    "title_with_side_callouts_2594",
+    "title_intro_cards_decorative_frame_6592",
+    "photo_collage_title_steps_1029",
+    "title_process_cards_9539",
+    "title_image_metrics_4860",
+    "title_over_cards_layout_8558",
+    "title_table_with_accents_1720",
+    "title_intro_staggered_cards_4014",
+    "title_metrics_cards_8330",
+    "title_chart_callout_footer_4748",
+    "title_text_chart_panel_cards_5852",
+    "title_chart_cards_grid_2766",
+    "title_chart_analysis_sections_9322",
+    "title_charts_card_grid_4598",
+    "title_infographic_sections_6705",
+    "title_quote_with_portrait_3397",
+    "image_sidebar_title_cards_7863",
+    "title_team_cards_grid_3062",
+    "title_timeline_cards_9036",
+    "title_text_with_staggered_cards_4998",
+    "title_with_pricing_cards_6716",
+    "title_metrics_cards_25_2120",
+    "title_timeline_cards_26_8744",
+    "title_text_image_metric_layout_3492",
+    "branded_title_wave_footer_8702"
+  ],
+  "checks": {
+    "jsonParsed": true,
+    "uniqueLayoutIds": true,
+    "nonEmptyRoots": true,
+    "browserGoldenRequiredForPublication": true,
+    "browserGoldenReceiptVerified": true
+  },
+  "status": "passed-static-browser-golden"
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -17,6 +18,8 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceArtifact,
@@ -49,10 +52,12 @@ from utils.owner_context import reset_current_owner_id, set_current_owner_id
 TABLES = [
     User.__table__,
     PresentationModel.__table__,
+    SlideModel.__table__,
     WorkspaceConversation.__table__,
     WorkspaceOperation.__table__,
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
+    PresentationExportAttempt.__table__,
     WorkspaceArtifact.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
 ]
@@ -932,6 +937,205 @@ def test_export_publication_is_immutable_fenced_and_revision_neutral(
     asyncio.run(scenario())
 
 
+def test_export_attempt_and_artifact_terminalize_in_one_publication_commit(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "linked-attempt.db")
+        app_data = tmp_path / "app-data"
+        source = app_data / "exports" / "linked.pptx"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"linked immutable pptx")
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            source_snapshot = "c" * 64
+            provenance = {
+                "schema_version": 1,
+                "adapter_chain": ["general"],
+                "capability_evidence": {"selected_adapter": "general"},
+                "fallback_reason": None,
+                "asset_digests": {},
+                "compiler_runtime": {
+                    "compiler": "presentation-export",
+                    "compiler_version": "0.4.3",
+                    "runtime": "chromium-dom-export",
+                    "runtime_version": "presenton.render-artifact/v1",
+                },
+                "freshness": {
+                    "source_revision": 7,
+                    "source_snapshot_sha256": source_snapshot,
+                    "package_sha256": None,
+                    "asset_digests_match": True,
+                    "package_digest_match": True,
+                },
+            }
+            async with maker() as session, session.begin():
+                attempt = PresentationExportAttempt(
+                    owner_id=None,
+                    owner_scope="anonymous",
+                    presentation_id=presentation_id,
+                    workspace_operation_id=operation_id,
+                    format="pptx",
+                    state="running",
+                    source_revision=7,
+                    source_snapshot_sha256=source_snapshot,
+                    request_hash="b" * 64,
+                    idempotency_key_hash="a" * 64,
+                    requested_adapter="auto",
+                    selected_adapter=None,
+                    provenance_schema_version=1,
+                    provenance=provenance,
+                    started_at=datetime.now(UTC),
+                )
+                session.add(attempt)
+                await session.flush()
+                attempt_id = attempt.id
+
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pptx",
+                    export_attempt_id=attempt_id,
+                    expected_source_sha256=hashlib.sha256(
+                        b"linked immutable pptx"
+                    ).hexdigest(),
+                    expected_source_size_bytes=len(b"linked immutable pptx"),
+                )
+                await publication.publish_workspace_export_artifact(
+                    session,
+                    artifact=artifact,
+                    attempt_token="attempt-1",
+                    fencing_token=3,
+                    export_format="pptx",
+                    export_source_snapshot_sha256=source_snapshot,
+                    export_selected_adapter="general",
+                    export_provenance=provenance,
+                )
+
+            async with maker() as session:
+                attempt = await session.get(PresentationExportAttempt, attempt_id)
+                artifact_row = await session.get(
+                    WorkspaceArtifact,
+                    artifact.artifact_id,
+                )
+                assert attempt.state == "succeeded"
+                assert attempt.artifact_sha256 == artifact.sha256
+                assert attempt.artifact_size_bytes == artifact.size_bytes
+                assert artifact_row.export_attempt_id == attempt_id
+                assert artifact_row.status == "ready"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_export_artifact_mutation_before_publication_compensates_without_success(
+    tmp_path: Path,
+    monkeypatch,
+):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "artifact-toctou.db")
+        app_data = tmp_path / "app-data-toctou"
+        source = app_data / "exports" / "source.pptx"
+        source.parent.mkdir(parents=True)
+        payload = b"router-verified-pptx"
+        source.write_bytes(payload)
+        monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+        try:
+            presentation_id, operation_id = await _seed_export(maker)
+            source_snapshot = "c" * 64
+            provenance = {
+                "schema_version": 1,
+                "adapter_chain": ["general"],
+                "capability_evidence": {"selected_adapter": "general"},
+                "fallback_reason": None,
+                "asset_digests": {},
+                "compiler_runtime": {
+                    "compiler": "presentation-export",
+                    "compiler_version": "0.4.3",
+                    "runtime": "chromium-dom-export",
+                    "runtime_version": "presenton.render-artifact/v1",
+                },
+                "freshness": {
+                    "source_revision": 7,
+                    "source_snapshot_sha256": source_snapshot,
+                    "package_sha256": None,
+                    "asset_digests_match": True,
+                    "package_digest_match": True,
+                },
+            }
+            async with maker() as session, session.begin():
+                attempt = PresentationExportAttempt(
+                    owner_id=None,
+                    owner_scope="anonymous",
+                    presentation_id=presentation_id,
+                    workspace_operation_id=operation_id,
+                    format="pptx",
+                    state="running",
+                    source_revision=7,
+                    source_snapshot_sha256=source_snapshot,
+                    request_hash="b" * 64,
+                    idempotency_key_hash="a" * 64,
+                    requested_adapter="auto",
+                    provenance_schema_version=1,
+                    provenance=provenance,
+                    started_at=datetime.now(UTC),
+                )
+                session.add(attempt)
+                await session.flush()
+                attempt_id = attempt.id
+
+            async with maker() as session:
+                artifact = await publication.prepare_workspace_generation_artifact(
+                    session,
+                    source_path=str(source),
+                    operation_id=operation_id,
+                    presentation_id=presentation_id,
+                    source_revision=7,
+                    kind="export.pptx",
+                    export_attempt_id=attempt_id,
+                    expected_source_sha256=hashlib.sha256(payload).hexdigest(),
+                    expected_source_size_bytes=len(payload),
+                )
+                artifact.absolute_path.write_bytes(b"mutated after prepare")
+                with pytest.raises(
+                    publication.WorkspaceArtifactPublicationError,
+                    match="workspace_artifact_source_digest_mismatch",
+                ):
+                    await publication.publish_workspace_export_artifact(
+                        session,
+                        artifact=artifact,
+                        attempt_token="attempt-1",
+                        fencing_token=3,
+                        export_format="pptx",
+                        export_source_snapshot_sha256=source_snapshot,
+                        export_selected_adapter="general",
+                        export_provenance=provenance,
+                    )
+
+            assert not artifact.absolute_path.exists()
+            async with maker() as session:
+                artifact_row = await session.get(
+                    WorkspaceArtifact,
+                    artifact.artifact_id,
+                )
+                attempt = await session.get(PresentationExportAttempt, attempt_id)
+                operation = await session.get(WorkspaceOperation, operation_id)
+                assert artifact_row is not None and artifact_row.status == "deleted"
+                assert attempt is not None and attempt.state == "running"
+                assert operation is not None and operation.state == "running"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_export_lease_loss_compensates_and_expired_artifact_is_not_resolved(
     tmp_path: Path, monkeypatch
 ):
@@ -1080,8 +1284,20 @@ def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
                 )
 
             monkeypatch.setattr(
-                "services.workspace_quality_export_operation_handlers.export_presentation",
+                "services.presentation_export_adapters.export_presentation",
                 fake_export,
+            )
+            prepare_calls: list[dict] = []
+            original_prepare = publication.prepare_workspace_generation_artifact
+
+            async def capture_prepare(session, **kwargs):
+                prepare_calls.append(kwargs)
+                return await original_prepare(session, **kwargs)
+
+            monkeypatch.setattr(
+                "services.workspace_quality_export_operation_handlers."
+                "prepare_workspace_generation_artifact",
+                capture_prepare,
             )
             claim = WorkspaceOperationClaim(
                 operation_id=operation_id,
@@ -1116,6 +1332,10 @@ def test_export_cancellation_after_prepare_cleans_artifact_and_staging_source(
                     internal_header_provider=fake_headers,
                 ).execute(CancellingContext())
             assert not source.exists()
+            assert prepare_calls[0]["expected_source_sha256"] == hashlib.sha256(
+                b"cancel me"
+            ).hexdigest()
+            assert prepare_calls[0]["expected_source_size_bytes"] == len(b"cancel me")
             async with maker() as session:
                 rows = (
                     await session.scalars(

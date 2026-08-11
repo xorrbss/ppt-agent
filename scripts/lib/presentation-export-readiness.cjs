@@ -7,6 +7,14 @@ const rendererReadinessLegacyReplacement =
   'await BXr(s),p&&await QXr(s),await s.waitForFunction(()=>!document.querySelector("script[data-presenton-template-v2-readiness]")||document.documentElement.dataset.templateV2RenderReady==="true",{timeout:15e3}),await s.screenshot';
 const rendererReadinessReplacement =
   'await BXr(s),p&&await QXr(s),await s.waitForFunction(()=>!document.querySelector("script[data-presenton-template-v2-readiness]")||document.documentElement.dataset.templateV2RenderReady==="true"||document.documentElement.dataset.templateV2ResourceError==="true",{timeout:15e3}),await s.evaluate(()=>{if(document.documentElement.dataset.templateV2ResourceError==="true")throw new Error(`Template V2 required resource failed: ${document.documentElement.dataset.templateV2ResourceErrorCode||"unknown"}`)}),await s.screenshot';
+const renderArtifactNeedle =
+  'try{await a.waitForFunction(()=>document.readyState==="complete")}catch{}try{await Att(a)}catch{}';
+const renderArtifactReplacement =
+  'try{await a.waitForFunction(()=>document.readyState==="complete")}catch{}await a.waitForFunction(()=>{let c=new URL(location.href).searchParams,l=c.get("render_contract");if(!l)return!0;let p=document.querySelector("[data-render-artifact-contract]");if(!p||p.getAttribute("data-render-artifact-contract")!==l)return!1;let C=c.get("format"),b=c.get("source_sha256"),k=p.getAttribute("data-render-artifact-version")||"";return(!C||p.getAttribute("data-render-artifact-target")===C)&&k.includes("/revision-")&&(!b||k.endsWith(`/${b}`))},{timeout:15e3});try{await Att(a)}catch{}';
+
+function count(source, needle) {
+  return source.split(needle).length - 1;
+}
 
 /** Apply the fork's fail-closed readiness contract to the pinned bundle. */
 function ensureRendererReadinessOverlay(runtimeRoot, { repair = true } = {}) {
@@ -15,33 +23,52 @@ function ensureRendererReadinessOverlay(runtimeRoot, { repair = true } = {}) {
     return { ok: false, reason: `Missing runtime bundle: ${indexJs}` };
   }
   const source = fs.readFileSync(indexJs, "utf8");
-  const sourceCount = source.split(rendererReadinessNeedle).length - 1;
-  const legacyCount = source.split(rendererReadinessLegacyReplacement).length - 1;
-  const patchedCount = source.split(rendererReadinessReplacement).length - 1;
-  if (sourceCount === 0 && legacyCount === 0 && patchedCount === 1) return { ok: true };
+  const sourceCount = count(source, rendererReadinessNeedle);
+  const legacyCount = count(source, rendererReadinessLegacyReplacement);
+  const patchedCount = count(source, rendererReadinessReplacement);
+  const artifactSourceCount = count(source, renderArtifactNeedle);
+  const artifactPatchedCount = count(source, renderArtifactReplacement);
+  if (
+    sourceCount === 0 &&
+    legacyCount === 0 &&
+    patchedCount === 1 &&
+    artifactSourceCount === 0 &&
+    artifactPatchedCount === 1
+  ) {
+    return { ok: true };
+  }
   if (!repair) {
     return {
       ok: false,
       reason: `Runtime browser capture readiness overlay is missing or ambiguous: ${indexJs}`,
     };
   }
-  const repairSource =
-    sourceCount === 1 && legacyCount === 0 && patchedCount === 0
+  const rendererAlreadyPatched =
+    sourceCount === 0 && legacyCount === 0 && patchedCount === 1;
+  const rendererRepairSource = rendererAlreadyPatched
+    ? undefined
+    : sourceCount === 1 && legacyCount === 0 && patchedCount === 0
       ? rendererReadinessNeedle
       : sourceCount === 0 && legacyCount === 1 && patchedCount === 0
         ? rendererReadinessLegacyReplacement
         : null;
-  if (repairSource === null) {
+  const artifactRepairable =
+    (artifactSourceCount === 1 && artifactPatchedCount === 0) ||
+    (artifactSourceCount === 0 && artifactPatchedCount === 1);
+  if (rendererRepairSource === null || !artifactRepairable) {
     return {
       ok: false,
       reason: `Runtime browser capture readiness overlay cannot be applied safely: ${indexJs}`,
     };
   }
-  fs.writeFileSync(
-    indexJs,
-    source.replace(repairSource, rendererReadinessReplacement),
-    "utf8"
-  );
+  const rendererPatched = rendererRepairSource
+    ? source.replace(rendererRepairSource, rendererReadinessReplacement)
+    : source;
+  const fullyPatched =
+    artifactPatchedCount === 1
+      ? rendererPatched
+      : rendererPatched.replace(renderArtifactNeedle, renderArtifactReplacement);
+  fs.writeFileSync(indexJs, fullyPatched, "utf8");
   return { ok: true };
 }
 

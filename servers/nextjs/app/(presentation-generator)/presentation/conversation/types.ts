@@ -6,6 +6,7 @@ export interface ConversationAsset {
   status: string;
   mimeType?: string;
   sizeBytes?: number;
+  downloadUrl?: string;
 }
 
 export interface ConversationViewport {

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildPresentationListPath,
+  isPresentationListRequestAbort,
   normalizePresentationListEnvelope,
 } from "./dashboard-list-query.ts";
 
@@ -30,5 +31,23 @@ test("presentation list response keeps legacy arrays compatible", () => {
       page: 2,
       page_size: 10,
     },
+  );
+});
+
+test("presentation list request aborts are distinguished from real failures", () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  assert.equal(
+    isPresentationListRequestAbort(new Error("cancelled"), controller.signal),
+    true,
+  );
+  assert.equal(
+    isPresentationListRequestAbort({ name: "AbortError" }),
+    true,
+  );
+  assert.equal(
+    isPresentationListRequestAbort(new TypeError("backend unavailable")),
+    false,
   );
 });

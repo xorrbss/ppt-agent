@@ -14,6 +14,19 @@ export interface PresentationListEnvelope<T> {
   page_size: number;
 }
 
+export function isPresentationListRequestAbort(
+  error: unknown,
+  signal?: AbortSignal,
+): boolean {
+  if (signal?.aborted) return true;
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AbortError"
+  );
+}
+
 export function buildPresentationListPath(
   options: PresentationListOptions = {},
 ): string {

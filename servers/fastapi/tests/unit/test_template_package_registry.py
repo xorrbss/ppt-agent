@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import shutil
@@ -7,12 +8,20 @@ from pathlib import Path
 
 import pytest
 
+from models.sql.template_v2 import TemplateV2
+from models.sql.template_v2_revision import TemplateV2Revision
+from templates.packages import defaults as package_defaults
 from templates.packages import (
     PackageAssetInventory,
     TemplatePackageAssetStore,
     TemplatePackageRegistry,
     TemplatePackageValidationError,
     validate_template_package,
+)
+from templates.packages.defaults import _template_from_package
+from templates.packages.registry import (
+    is_template_package_release_ready,
+    template_package_assets_binding,
 )
 from templates.packages.evidence_validation import validate_rights_evidence
 from templates.packages.models import PackageFile, TemplatePackageManifest
@@ -36,8 +45,111 @@ def test_editorial_is_verified_ready_and_discoverable() -> None:
     )
     assert editorial.manifest.fonts.unresolved_aliases == ()
     assert tuple(package.manifest.template_id for package in registry.discoverable()) == (
+        "dynamic",
         "editorial",
+        "executive",
+        "general",
+        "modern",
+        "momentum",
+        "standard",
+        "swift",
     )
+
+
+def test_every_ready_package_materializes_to_a_network_free_generation_payload() -> None:
+    registry = TemplatePackageRegistry(ROOT, Path("templates/package-registry.v1.json"))
+
+    for package in registry.discoverable():
+        payload = registry.materialize(package.manifest.template_id)
+        persisted = _template_from_package(package, payload)
+
+        assert len(persisted.layouts["layouts"]) > 0
+        assert persisted.assets["template_package"] == template_package_assets_binding(
+            package
+        )
+        assert is_template_package_release_ready(
+            persisted.id,
+            persisted.assets,
+        )
+        assert "http://" not in json.dumps(payload)
+        assert "https://" not in json.dumps(payload)
+
+
+def test_package_release_binding_rejects_a_stale_entrypoint_receipt() -> None:
+    registry = TemplatePackageRegistry(ROOT, Path("templates/package-registry.v1.json"))
+    package = registry.get("general")
+    assets = {"template_package": template_package_assets_binding(package)}
+    assets["template_package"]["entrypoint_sha256"] = "0" * 64
+
+    assert not is_template_package_release_ready("general", assets)
+
+
+def test_startup_import_uses_only_registry_admitted_packages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeSession:
+        def __init__(self) -> None:
+            self.templates: dict[str, TemplateV2] = {}
+            self.revisions: dict[tuple[str, int], TemplateV2Revision] = {}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, model, identity):
+            if model is TemplateV2:
+                return self.templates.get(identity)
+            if model is TemplateV2Revision:
+                return self.revisions.get(identity)
+            return None
+
+        def add(self, value) -> None:
+            if isinstance(value, TemplateV2):
+                self.templates[value.id] = value
+            elif isinstance(value, TemplateV2Revision):
+                self.revisions[(value.template_id, value.revision)] = value
+
+        async def flush(self) -> None:
+            return None
+
+        async def commit(self) -> None:
+            return None
+
+        async def scalars(self, _statement):
+            return list(self.templates.values())
+
+        async def delete(self, value) -> None:
+            self.templates.pop(value.id, None)
+
+    session = FakeSession()
+    monkeypatch.setattr(package_defaults, "async_session_maker", lambda: session)
+    monkeypatch.setattr(
+        package_defaults,
+        "get_app_data_directory_env",
+        lambda: str(tmp_path / "app-data"),
+    )
+    registry = TemplatePackageRegistry(ROOT, Path("templates/package-registry.v1.json"))
+
+    asyncio.run(package_defaults.import_template_packages_on_startup(registry))
+
+    assert set(session.templates) == {
+        package.manifest.template_id for package in registry.discoverable()
+    }
+    assert set(template_id for template_id, _revision in session.revisions) == set(
+        session.templates
+    )
+    for template_id in session.templates:
+        assert (
+            tmp_path
+            / "app-data"
+            / "templates"
+            / template_id
+            / "static"
+            / "thumbnail.png"
+        ).is_file()
 
 
 def test_manifest_path_escape_and_hash_tampering_fail_closed(tmp_path: Path) -> None:
@@ -207,6 +319,7 @@ def test_rights_evidence_is_generic_for_a_fontless_mit_package(tmp_path: Path) -
     manifest = editorial.model_copy(
         update={
             "template_id": "generic",
+            "provenance": editorial.provenance.model_copy(update={"extensions": ()}),
             "license": editorial.license.model_copy(
                 update={"expression": "MIT", "rights_evidence_id": "generic-assets-mit"}
             ),

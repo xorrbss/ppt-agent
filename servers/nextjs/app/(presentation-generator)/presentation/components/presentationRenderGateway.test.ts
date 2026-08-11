@@ -40,3 +40,14 @@ test("preview and export slot actions use revision-bound RenderArtifacts", () =>
     assert.equal(artifact.source.revision, 4);
   }
 });
+
+test("production preview computes and binds a source digest", async () => {
+  const actions = createPresentationRenderActionFactory();
+  const artifact = await actions.renderProduction("preview", presentation);
+
+  assert.match(artifact.source.source_sha256 ?? "", /^[0-9a-f]{64}$/);
+  assert.match(
+    artifact.artifact_version,
+    new RegExp(`${artifact.source.source_sha256}$`),
+  );
+});

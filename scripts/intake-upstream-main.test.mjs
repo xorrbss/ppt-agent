@@ -76,6 +76,26 @@ test("same accepted SHA verifies pinned metadata and reports unchanged", async (
   assert.equal(result.observedUpstream.subject, policy.acceptedBaseline.subject);
 });
 
+test("accepted committedAt compares ISO instants rather than timestamp spellings", async () => {
+  const snapshot = await fixture("v2-unchanged.json");
+  const equivalentOffsetPolicy = {
+    ...policy,
+    acceptedBaseline: {
+      ...policy.acceptedBaseline,
+      // This is the same instant as the fixture's +05:45 timestamp.
+      committedAt: "2026-08-10T16:21:57Z",
+    },
+  };
+
+  const equivalent = assessSnapshot(snapshot, equivalentOffsetPolicy, registry);
+  assert.equal(equivalent.status, "unchanged");
+
+  snapshot.commit.commit.committer.date = "2026-08-10T16:21:58Z";
+  const differentInstant = assessSnapshot(snapshot, equivalentOffsetPolicy, registry);
+  assert.equal(differentInstant.status, "intake-error");
+  assert.match(differentInstant.metadataMismatches[0], /^committedAt expected /);
+});
+
 test("pinned SHA with unexpected metadata is an integrity error, not a change", async () => {
   const snapshot = await fixture("v2-unchanged.json");
   snapshot.commit.commit.message = "unexpected subject";
@@ -83,6 +103,14 @@ test("pinned SHA with unexpected metadata is an integrity error, not a change", 
   assert.equal(result.status, "intake-error");
   assert.equal(result.changeDetected, false);
   assert.equal(result.error.code, "BASELINE_METADATA_MISMATCH");
+});
+
+test("intake output labels its accepted baseline separately from compatibility baselines", async () => {
+  const result = assessSnapshot(await fixture("v2-unchanged.json"), policy, registry);
+  const markdown = renderMarkdown(result);
+  assert.match(markdown, /Intake accepted baseline/);
+  assert.match(markdown, /Intake observed upstream/);
+  assert.doesNotMatch(markdown, /^- Accepted baseline:/m);
 });
 
 test("documentation and proxy v2 traces are not backend routes", async () => {

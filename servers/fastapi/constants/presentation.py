@@ -1,5 +1,8 @@
 DEFAULT_TEMPLATES = ["adaptive", "korean-biz", "financial-chart", "comparison-table", "roadmap", "org-chart"]
 MAX_NUMBER_OF_SLIDES = 100
+DEFAULT_ATTACHMENT_GENERATION_PROMPT = (
+    "Generate a presentation from the attached files."
+)
 
 # Authored slides are model-written HTML with no layout schema behind them.
 # The schema-driven chat tools can delete such a slide, but `save_slide` has no

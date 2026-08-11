@@ -15,13 +15,13 @@ from templates.handler import (
     TemplateExample,
     clone_slide_layout,
     clone_template,
-    create_slide_layout,
+    create_template_slide_layout,
     create_slide_layout_job_start,
     create_slide_layout_job_status,
     edit_slide_layout,
     edit_slide_layout_section,
     get_all_templates,
-    get_layouts,
+    get_template_layouts,
     get_template_by_id,
     get_template_example,
     init_create_template,
@@ -39,8 +39,8 @@ TEMPLATE_ROUTER = APIRouter(prefix="/template", tags=["Template"])
 
 TEMPLATE_ROUTER.get("/all", response_model=list[TemplateDetail])(get_all_templates)
 TEMPLATE_ROUTER.get(
-    "/{template_id}/layouts", response_model=GetTemplateLayoutsResponse
-)(get_layouts)
+    "/{template_id}/layouts", response_model=GetTemplateLayoutsResponse, name="get_template_layouts"
+)(get_template_layouts)
 TEMPLATE_ROUTER.get("/{template_id}", response_model=PresentationLayoutModel)(
     get_template_by_id
 )
@@ -52,9 +52,11 @@ TEMPLATE_ROUTER.post(
     response_model=FontsUploadAndSlidesPreviewResponse,
 )(upload_fonts_and_slides_preview)
 TEMPLATE_ROUTER.post("/create/init", response_model=uuid.UUID)(init_create_template)
-TEMPLATE_ROUTER.post("/slide-layout/create", response_model=CreateSlideLayoutResponse)(
-    create_slide_layout
-)
+TEMPLATE_ROUTER.post(
+    "/slide-layout/create",
+    response_model=CreateSlideLayoutResponse,
+    name="create_template_slide_layout",
+)(create_template_slide_layout)
 TEMPLATE_ROUTER.post(
     "/slide-layout/create/start",
     response_model=SlideLayoutJobStartResponse,
@@ -63,9 +65,11 @@ TEMPLATE_ROUTER.get(
     "/slide-layout/create/job/{job_id}",
     response_model=SlideLayoutJobStatusResponse,
 )(create_slide_layout_job_status)
-TEMPLATE_ROUTER.post("/create/slide-layout", response_model=CreateSlideLayoutResponse)(
-    create_slide_layout
-)
+TEMPLATE_ROUTER.post(
+    "/create/slide-layout",
+    response_model=CreateSlideLayoutResponse,
+    name="create_template_slide_layout_legacy",
+)(create_template_slide_layout)
 TEMPLATE_ROUTER.post("/slide-layout/edit", response_model=EditSlideLayoutResponse)(
     edit_slide_layout
 )

@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
             title,
             cookieHeader,
             expectedPresentationSha256,
+            expectedPresentationRevision,
           }) =>
             runBundledPresentationExport({
               format,
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
               title,
               cookieHeader,
               expectedPresentationSha256,
+              expectedPresentationRevision,
             }),
           hybrid: ({
             presentationId,

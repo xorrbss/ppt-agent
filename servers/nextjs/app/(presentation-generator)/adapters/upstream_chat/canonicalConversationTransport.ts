@@ -54,7 +54,15 @@ async function payload(response: Response): Promise<unknown> {
 
 function asset(value: unknown): ConversationAsset {
   const raw = record(value);
-  return { id: text(raw.id, text(raw.asset_id)), name: text(raw.name, text(raw.file_name, "Attachment")), status: text(raw.status, "unknown"), mimeType: typeof raw.mime_type === "string" ? raw.mime_type : undefined, sizeBytes: number(raw.size_bytes) };
+  return {
+    id: text(raw.id, text(raw.asset_id)),
+    name: text(raw.name, text(raw.file_name, "Attachment")),
+    status: text(raw.current_state, text(raw.status, "unknown")),
+    mimeType: typeof raw.mime_type === "string" ? raw.mime_type : undefined,
+    sizeBytes: number(raw.size_bytes),
+    downloadUrl:
+      typeof raw.download_url === "string" ? raw.download_url : undefined,
+  };
 }
 function run(value: unknown): AgentRun {
   const raw = record(value);
