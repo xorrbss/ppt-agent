@@ -5,11 +5,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from hashlib import sha256
 import json
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypeVar
 import uuid
 
 from fastapi import (
@@ -56,6 +57,7 @@ _IDEMPOTENCY_RECEIPT_TTL = timedelta(hours=24)
 _IDEMPOTENCY_CLEANUP_BATCH_SIZE = ASSET_GATEWAY_RECEIPT_CLEANUP_BATCH_SIZE
 _DOCUMENT_UPLOAD_OPERATION = "document.upload"
 _SNAPSHOT_CREATE_OPERATION = "reference.snapshot.create"
+_ReceiptT = TypeVar("_ReceiptT")
 
 
 def _owner_scope() -> str:
@@ -198,6 +200,59 @@ async def _complete_idempotency_receipt(
     receipt.updated_at = get_current_utc_datetime()
     session.add(receipt)
     await session.commit()
+
+
+async def _discard_pending_idempotency_receipt(
+    session: AsyncSession,
+    *,
+    receipt_id: uuid.UUID,
+) -> None:
+    """Release a reservation when its operation failed in this request."""
+
+    # The reservation was committed before the operation started. Roll back
+    # any partial operation writes, then remove only the still-pending row that
+    # this request reserved so an explicit retry can execute again.
+    await session.rollback()
+    await session.execute(
+        delete(AssetGatewayIdempotencyReceipt).where(
+            AssetGatewayIdempotencyReceipt.id == receipt_id,
+            AssetGatewayIdempotencyReceipt.state == "pending",
+        )
+    )
+    await session.commit()
+
+
+async def _create_and_complete_idempotency_receipt(
+    session: AsyncSession,
+    *,
+    pending: AssetGatewayIdempotencyReceipt,
+    create: Callable[[], Awaitable[_ReceiptT]],
+    response_payload: Callable[[_ReceiptT], dict[str, Any]],
+    asset_id: Callable[[_ReceiptT], uuid.UUID] | None = None,
+    snapshot_id: Callable[[_ReceiptT], uuid.UUID] | None = None,
+) -> _ReceiptT:
+    try:
+        receipt = await create()
+    except BaseException:
+        try:
+            await _discard_pending_idempotency_receipt(
+                session,
+                receipt_id=pending.id,
+            )
+        except Exception:
+            # Preserve the operation's original error. A cleanup failure leaves
+            # a fail-closed pending receipt that expires through normal TTL
+            # cleanup instead of misreporting a different server error.
+            await session.rollback()
+        raise
+    await _complete_idempotency_receipt(
+        session,
+        receipt_id=pending.id,
+        response_payload=response_payload(receipt),
+        asset_id=asset_id(receipt) if asset_id is not None else None,
+        snapshot_id=snapshot_id(receipt) if snapshot_id is not None else None,
+    )
+    return receipt
 
 
 async def _delete_resource_idempotency_receipts(
@@ -372,14 +427,13 @@ async def post_canonical_document_asset(
             ) from error
     if pending is None:
         raise HTTPException(status_code=409, detail="idempotency_record_incomplete")
-    receipt = await create()
-    await _complete_idempotency_receipt(
+    return await _create_and_complete_idempotency_receipt(
         session,
-        receipt_id=pending.id,
-        response_payload=receipt.model_dump(mode="json"),
-        asset_id=receipt.asset_id,
+        pending=pending,
+        create=create,
+        response_payload=lambda receipt: receipt.model_dump(mode="json"),
+        asset_id=lambda receipt: receipt.asset_id,
     )
-    return receipt
 
 
 @ASSET_GATEWAY_ROUTER.post(
@@ -407,8 +461,16 @@ async def post_reference_snapshot(
                 conversation_id=request.conversation_id,
             )
         except ReferenceProviderError as error:
+            detail: str | dict[str, Any] = error.code
+            if error.filename:
+                detail = {
+                    "code": error.code,
+                    "message": "The uploaded reference file could not be read.",
+                    "filename": error.filename,
+                    "retryable": error.retryable,
+                }
             raise HTTPException(
-                status_code=error.status_code, detail=error.code
+                status_code=error.status_code, detail=detail
             ) from error
         return ReferenceSnapshotReceipt(
             snapshot_id=snapshot.snapshot_id,
@@ -440,14 +502,13 @@ async def post_reference_snapshot(
             ) from error
     if pending is None:
         raise HTTPException(status_code=409, detail="idempotency_record_incomplete")
-    receipt = await create()
-    await _complete_idempotency_receipt(
+    return await _create_and_complete_idempotency_receipt(
         session,
-        receipt_id=pending.id,
-        response_payload=receipt.model_dump(mode="json"),
-        snapshot_id=receipt.snapshot_id,
+        pending=pending,
+        create=create,
+        response_payload=lambda receipt: receipt.model_dump(mode="json"),
+        snapshot_id=lambda receipt: receipt.snapshot_id,
     )
-    return receipt
 
 
 async def _expire_unclaimed_assets(

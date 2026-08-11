@@ -13,6 +13,7 @@ class APIErrorModel(BaseModel):
     detail: Any
     code: Optional[str] = None
     message: Optional[str] = None
+    filename: Optional[str] = None
     request_id: Optional[str] = None
     safe_message: Optional[str] = None
     retryable: Optional[bool] = None
@@ -25,17 +26,33 @@ class APIErrorModel(BaseModel):
 
     @model_validator(mode="after")
     def fill_compatible_defaults(self) -> "APIErrorModel":
+        structured_detail = self.detail if isinstance(self.detail, dict) else {}
+        detail_code = structured_detail.get("code")
         if not self.code:
             self.code = (
-                self.detail
-                if isinstance(self.detail, str)
-                and _STABLE_ERROR_CODE.fullmatch(self.detail)
-                else f"http_error_{self.status_code}"
+                detail_code
+                if isinstance(detail_code, str)
+                and _STABLE_ERROR_CODE.fullmatch(detail_code)
+                else (
+                    self.detail
+                    if isinstance(self.detail, str)
+                    and _STABLE_ERROR_CODE.fullmatch(self.detail)
+                    else f"http_error_{self.status_code}"
+                )
             )
         if not self.message:
-            self.message = (
+            detail_message = structured_detail.get("message")
+            self.message = detail_message if isinstance(detail_message, str) else (
                 self.detail if isinstance(self.detail, str) else "Request failed"
             )
+        if self.filename is None:
+            detail_filename = structured_detail.get("filename")
+            if isinstance(detail_filename, str):
+                self.filename = detail_filename
+        if self.retryable is None:
+            detail_retryable = structured_detail.get("retryable")
+            if isinstance(detail_retryable, bool):
+                self.retryable = detail_retryable
         return self
 
     @classmethod

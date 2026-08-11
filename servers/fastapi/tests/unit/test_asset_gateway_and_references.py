@@ -432,6 +432,93 @@ def test_uploaded_provider_persists_and_admits_immutable_asset_snapshot(tmp_path
     _run(scenario())
 
 
+def test_uploaded_provider_retries_transient_document_extraction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    attempts = 0
+
+    class FlakyLoader:
+        def __init__(self, *_args, **_kwargs):
+            self.documents: list[str] = []
+
+        async def load_documents(self):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise RuntimeError("transient converter failure")
+            self.documents = ["Recovered uploaded reference"]
+
+    monkeypatch.setattr("services.references.providers.DocumentsLoader", FlakyLoader)
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "uploaded-retry.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "uploaded-retry-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            asset = await _seed_asset(maker, root=root, owner_id=owner_id)
+            with _owner(owner_id):
+                async with maker() as session:
+                    normalized = await UploadedDocumentProvider().normalize(
+                        session,
+                        request={"asset_ids": [str(asset.id)]},
+                        asset_gateway=AssetGateway(storage_root=root),
+                        conversation_id=None,
+                    )
+            assert attempts == 2
+            assert normalized.normalized_payload["documents"][0]["text"] == (
+                "Recovered uploaded reference"
+            )
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
+def test_uploaded_provider_reports_filename_after_extraction_retry_exhausted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    attempts = 0
+
+    class FailingLoader:
+        def __init__(self, *_args, **_kwargs):
+            self.documents: list[str] = []
+
+        async def load_documents(self):
+            nonlocal attempts
+            attempts += 1
+            raise RuntimeError("persistent converter failure")
+
+    monkeypatch.setattr("services.references.providers.DocumentsLoader", FailingLoader)
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "uploaded-failure.db")
+        owner_id = uuid.uuid4()
+        root = tmp_path / "uploaded-failure-assets"
+        try:
+            await _seed_owner(maker, owner_id)
+            asset = await _seed_asset(maker, root=root, owner_id=owner_id)
+            with _owner(owner_id):
+                async with maker() as session:
+                    with pytest.raises(ReferenceProviderError) as raised:
+                        await UploadedDocumentProvider().normalize(
+                            session,
+                            request={"asset_ids": [str(asset.id)]},
+                            asset_gateway=AssetGateway(storage_root=root),
+                            conversation_id=None,
+                        )
+            assert attempts == 2
+            assert raised.value.code == "uploaded_reference_extraction_failed"
+            assert raised.value.filename == "reference.pdf"
+            assert raised.value.retryable is True
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
 def test_snapshot_accepts_exact_workspace_claim_but_rejects_later_version_drift(
     tmp_path: Path,
 ):

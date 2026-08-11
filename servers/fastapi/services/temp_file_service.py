@@ -157,8 +157,8 @@ class TempFileService:
             raise
         os.remove(file_path)
 
-    def _delete_dir_files(self, dir_path: str):
-        dir_path = self.resolve_temp_path(dir_path, must_exist=True)
+    @staticmethod
+    def _delete_resolved_dir_files(dir_path: str):
         for root, dirs, files in os.walk(dir_path, topdown=False):
             for name in files:
                 os.remove(os.path.join(root, name))
@@ -168,6 +168,10 @@ class TempFileService:
                     os.unlink(child_dir)
                 else:
                     os.rmdir(child_dir)
+
+    def _delete_dir_files(self, dir_path: str):
+        dir_path = self.resolve_temp_path(dir_path, must_exist=True)
+        self._delete_resolved_dir_files(dir_path)
 
     def cleanup_temp_dir(self, dir_path: str):
         try:
@@ -180,8 +184,13 @@ class TempFileService:
         os.rmdir(dir_path)
 
     def cleanup_base_dir(self):
-        os.makedirs(self.base_dir, exist_ok=True)
-        self._delete_dir_files(self.base_dir)
+        # Singleton construction may happen lazily while an authenticated
+        # request owner is active. Root startup cleanup must still target the
+        # exact configured base directory, not reinterpret it relative to that
+        # owner's subdirectory.
+        base_dir = self._base_dir_realpath()
+        os.makedirs(base_dir, exist_ok=True)
+        self._delete_resolved_dir_files(base_dir)
 
 
 TEMP_FILE_SERVICE = TempFileService()

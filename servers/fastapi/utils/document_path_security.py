@@ -42,6 +42,10 @@ def _allowed_document_roots() -> List[str]:
                 os.path.join(app_data, root_name, "users", str(owner_id))
                 for root_name in _PRIVATE_APP_DATA_ROOTS
             )
+            # Canonical conversation attachments use the asset gateway's
+            # owner-first layout rather than the legacy ``users/<owner>``
+            # layout used by the private artifact stores above.
+            roots.append(os.path.join(app_data, "workspace_assets", str(owner_id)))
     return [os.path.realpath(root) for root in roots]
 
 

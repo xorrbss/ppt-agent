@@ -57,6 +57,7 @@ from templates.v2.policy import (
     StructuredTemplatePolicyError,
     get_structured_template_policy,
 )
+from templates.v2.publication import evaluate_template_v2_publication
 from templates.v2.schema import get_template_schema
 from templates.v2.wire_codec import (
     UPSTREAM_TEMPLATE_V2_SHA,
@@ -328,9 +329,15 @@ def _native_source_from_assets(
         return None
     if not isinstance(value, dict):
         raise TemplateV2GenerationError("template_v2_native_source_invalid")
+    preservation_mode = value.get("preservation_mode")
+    if preservation_mode == "reconstructed":
+        publication = evaluate_template_v2_publication(assets)
+        if not publication.publishable:
+            raise TemplateV2GenerationError("template_v2_native_source_invalid")
+        return None
     if (
         value.get("schema_version") != NATIVE_SOURCE_SCHEMA_VERSION
-        or value.get("preservation_mode") != "native_clone"
+        or preservation_mode != "native_clone"
         or value.get("publication_status") != "publishable"
     ):
         raise TemplateV2GenerationError("template_v2_native_source_invalid")

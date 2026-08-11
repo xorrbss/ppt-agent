@@ -388,6 +388,92 @@ def test_snapshot_idempotency_is_owner_scoped(monkeypatch, tmp_path: Path) -> No
     asyncio.run(scenario())
 
 
+def test_failed_snapshot_releases_receipt_for_retry_with_reuploaded_assets(
+    monkeypatch, tmp_path: Path
+) -> None:
+    owner_id = uuid.uuid4()
+    first_asset_id = uuid.uuid4()
+    retry_asset_id = uuid.uuid4()
+    attempts = 0
+
+    async def capture(_session, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise HTTPException(
+                status_code=422,
+                detail="uploaded_reference_extraction_failed",
+            )
+        asset_id = uuid.UUID(kwargs["request"]["asset_ids"][0])
+        return ReferenceSnapshotView(
+            snapshot_id=uuid.uuid4(),
+            provider_id="uploaded_document",
+            source_revision="r1",
+            source_fingerprint="b" * 64,
+            normalized_payload_json="{}",
+            asset_bindings=(
+                AssetBinding(
+                    asset_id=asset_id,
+                    kind=AssetKind.CONVERSATION_ATTACHMENT,
+                    media_type="text/plain",
+                    size_bytes=4,
+                    sha256="a" * 64,
+                    version=3,
+                    conversation_id=None,
+                ),
+            ),
+            content_sha256="c" * 64,
+            conversation_id=None,
+            created_at=datetime.now(timezone.utc),
+            expires_at=None,
+        )
+
+    monkeypatch.setattr(asset_gateway, "get_current_owner_id", lambda: owner_id)
+    monkeypatch.setattr(asset_gateway, "create_reference_snapshot", capture)
+
+    async def scenario() -> None:
+        engine, sessions = await _receipt_database(
+            tmp_path / "failed-snapshot-retry.db"
+        )
+        try:
+            first_request = asset_gateway.ReferenceSnapshotCreateRequest(
+                provider_id="uploaded_document",
+                source={"asset_ids": [str(first_asset_id)]},
+            )
+            async with sessions() as session:
+                with pytest.raises(HTTPException) as raised:
+                    await asset_gateway.post_reference_snapshot(
+                        first_request,
+                        idempotency_key="snapshot-retry",
+                        session=session,
+                    )
+            assert raised.value.detail == "uploaded_reference_extraction_failed"
+
+            async with sessions() as session:
+                count = await session.scalar(
+                    select(func.count()).select_from(
+                        AssetGatewayIdempotencyReceipt
+                    )
+                )
+                assert count == 0
+
+            retry_request = first_request.model_copy(
+                update={"source": {"asset_ids": [str(retry_asset_id)]}}
+            )
+            async with sessions() as session:
+                retried = await asset_gateway.post_reference_snapshot(
+                    retry_request,
+                    idempotency_key="snapshot-retry",
+                    session=session,
+                )
+            assert retried.asset_ids == [retry_asset_id]
+            assert attempts == 2
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_cleanup_expires_only_unclaimed_asset(monkeypatch) -> None:
     asset_id = uuid.uuid4()
     asset = SimpleNamespace(

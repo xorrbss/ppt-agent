@@ -230,7 +230,10 @@ def _secure_config_file(file_path: str) -> bool:
                 file_path,
                 "/inheritance:r",
                 "/grant:r",
-                f"*{sid}:(R,W)",
+                # Atomic replacement and stale-temp cleanup require DELETE in
+                # addition to read/write. Modify keeps the file private to the
+                # current user while allowing those operations on Windows.
+                f"*{sid}:(M)",
                 "/grant:r",
                 "*S-1-5-18:(F)",
             ],
@@ -438,7 +441,33 @@ def _write_atomic_json(config_path: str, config: dict, primary_valid: bool) -> N
             json.dump(config, file, separators=(",", ":"))
             file.flush()
             os.fsync(file.fileno())
-        _retry("replace user config", lambda: os.replace(temp_path, config_path))
+        try:
+            _retry("replace user config", lambda: os.replace(temp_path, config_path))
+        except RuntimeError:
+            # Some legacy Windows configs are owned by Administrators with a
+            # protected read/write-only DACL. A non-elevated app can update the
+            # file but cannot delete the destination, so os.replace is denied.
+            # Keep the lock + recovery backup and use a fsynced in-place write
+            # only after verifying that the existing credential file is still
+            # private. New files continue to use the atomic path above.
+            if (
+                os.name != "nt"
+                or not os.path.isfile(config_path)
+                or os.path.islink(config_path)
+                or not _secure_config_file(config_path)
+            ):
+                raise
+
+            def overwrite_private_config() -> None:
+                with open(temp_path, "rb") as source:
+                    payload = source.read()
+                with open(config_path, "wb") as destination:
+                    destination.write(payload)
+                    destination.flush()
+                    os.fsync(destination.fileno())
+
+            _retry("overwrite private user config", overwrite_private_config)
+            _retry("remove replaced user config temp", lambda: os.unlink(temp_path))
         if not _secure_config_file(config_path):
             raise OSError("could not secure the Windows user config ACL")
         _copy_backup_if_possible(config_path, False)

@@ -1850,6 +1850,81 @@ async def _terminal_non_retryable_operation_rejects_retry_and_projects_safe_gate
         await engine.dispose()
 
 
+@pytest.mark.parametrize(
+    "error_code",
+    [
+        "template_v2_source_mode_not_supported",
+        "template_v2_native_source_invalid",
+    ],
+)
+def test_legacy_template_v2_outline_admission_failure_can_be_retried(
+    tmp_path: Path,
+    error_code: str,
+):
+    asyncio.run(
+        _legacy_template_v2_outline_admission_failure_can_be_retried(
+            tmp_path,
+            error_code=error_code,
+        )
+    )
+
+
+async def _legacy_template_v2_outline_admission_failure_can_be_retried(
+    tmp_path: Path,
+    *,
+    error_code: str,
+):
+    engine, maker = await _database(tmp_path / "template-v2-outline-retry.db")
+    try:
+        presentation = await _create_presentation(maker)
+        async with maker() as session:
+            _, _, source, _ = await bootstrap_workspace(
+                session,
+                presentation_id=presentation.id,
+                request=_bootstrap_request(key="template-v2-outline-retry"),
+            )
+            source.state = "failed"
+            source.error_code = error_code
+            source.error_detail = {"retryable": False}
+            source.request_payload = {
+                "generation_request": {
+                    "strategy": "template_v2",
+                    "slides_markdown": ["# Grounded slide"],
+                    "reference_snapshot_ids": [str(uuid.uuid4())],
+                }
+            }
+            source.version = 3
+            await session.commit()
+
+        async with maker() as session:
+            timeline = await workspace_timeline(
+                session,
+                presentation_id=presentation.id,
+            )
+            anchor = next(
+                item
+                for item in timeline["items"]
+                if item.get("operation_id") == str(source.id)
+            )
+            assert anchor["retryable"] is True
+            _, retry, duplicate = await apply_workspace_action(
+                session,
+                operation_id=source.id,
+                request=WorkspaceOperationActionRequest(
+                    action="retry",
+                    idempotency_key="retry-template-v2-outline",
+                    expected_operation_version=3,
+                    expected_revision=0,
+                ),
+            )
+
+        assert duplicate is False
+        assert retry.retry_of_operation_id == source.id
+        assert retry.state == "queued"
+    finally:
+        await engine.dispose()
+
+
 def test_cancelled_operation_remains_retryable_with_legacy_error_detail(tmp_path: Path):
     asyncio.run(_cancelled_operation_remains_retryable_with_legacy_error_detail(tmp_path))
 

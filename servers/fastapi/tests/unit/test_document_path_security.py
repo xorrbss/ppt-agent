@@ -148,6 +148,31 @@ def test_default_document_roots_deny_another_owners_temp_tree(
     _assert_generic_path_error(captured.value, str(foreign_file))
 
 
+def test_default_document_roots_accept_only_current_owners_workspace_assets(
+    tmp_path, monkeypatch
+):
+    owner_a = uuid.uuid4()
+    owner_b = uuid.uuid4()
+    app_data = tmp_path / "app-data"
+    own_root = app_data / "workspace_assets" / str(owner_a)
+    foreign_root = app_data / "workspace_assets" / str(owner_b)
+    own_root.mkdir(parents=True)
+    foreign_root.mkdir(parents=True)
+    own_file = own_root / "own.pdf"
+    foreign_file = foreign_root / "foreign.pdf"
+    own_file.write_bytes(b"own")
+    foreign_file.write_bytes(b"foreign")
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
+    monkeypatch.setattr(TEMP_FILE_SERVICE, "base_dir", str(tmp_path / "temp"))
+
+    with _owner(owner_a):
+        assert validate_document_path(str(own_file)) == os.path.realpath(own_file)
+        with pytest.raises(HTTPException) as captured:
+            validate_document_path(str(foreign_file))
+
+    _assert_generic_path_error(captured.value, str(foreign_file))
+
+
 def test_global_legacy_document_root_requires_explicit_admin_migration(
     tmp_path, monkeypatch
 ):

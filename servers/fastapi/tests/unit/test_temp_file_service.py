@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
+import uuid
 
 import pytest
 from fastapi import HTTPException
 
 from services.temp_file_service import TempFileService
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
 def _assert_http_error(
@@ -146,6 +148,26 @@ def test_temp_file_service_init_cleans_children_without_removing_base_directory(
     assert Path(service.base_dir) == base_dir
     assert base_dir.is_dir()
     assert list(base_dir.iterdir()) == []
+
+
+def test_temp_file_service_can_initialize_while_request_owner_is_active(
+    tmp_path: Path,
+) -> None:
+    base_dir = tmp_path / "temp-root"
+    stale_dir = base_dir / "stale"
+    stale_dir.mkdir(parents=True)
+    (stale_dir / "data.bin").write_bytes(b"data")
+    owner_id = uuid.uuid4()
+    token = set_current_owner_id(owner_id)
+    try:
+        service = TempFileService(str(base_dir))
+        owner_file = Path(service.create_temp_file("owner.txt", b"owner"))
+    finally:
+        reset_current_owner_id(token)
+
+    assert owner_file == base_dir / str(owner_id) / "owner.txt"
+    assert owner_file.read_bytes() == b"owner"
+    assert not stale_dir.exists()
 
 
 @pytest.mark.parametrize("invalid_name", ["", " ", ".", ".."])

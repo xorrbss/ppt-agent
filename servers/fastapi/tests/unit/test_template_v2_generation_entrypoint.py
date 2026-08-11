@@ -106,6 +106,29 @@ def _revision_entry(*layouts: SlideLayout) -> SimpleNamespace:
     )
 
 
+def _reconstructed_revision_entry(*layouts: SlideLayout) -> SimpleNamespace:
+    entry = _revision_entry(*layouts)
+    entry.assets = {
+        "native_pptx": {
+            "schema_version": "presenton.template-v2-publication/v1",
+            "preservation_mode": "reconstructed",
+            "publication_status": "publishable",
+            "publishable": True,
+            "native_pptx_preflight": {
+                "schema_version": "presenton.template-v2-native-pptx/v1",
+                "compiler_name": "presenton-template-v2-native-ooxml",
+                "compiler_version": "1",
+                "preservation_mode": "reconstructed",
+                "status": "compiled",
+                "unsupported": None,
+                "structural_sha256": f"sha256:{'b' * 64}",
+                "package_sha256": f"sha256:{'c' * 64}",
+            },
+        }
+    }
+    return entry
+
+
 def _target() -> TemplateV2GenerationTarget:
     layout = _layout()
     return TemplateV2GenerationTarget(
@@ -263,6 +286,59 @@ def test_template_v2_admission_stores_the_exact_snapshot(monkeypatch):
 
     loader.assert_awaited_once()
     assert request._template_v2_generation_target is admitted
+
+
+def test_template_v2_accepts_inherited_references_with_grounded_slides(monkeypatch):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
+    request = GeneratePresentationRequest(
+        content="Topic",
+        slides_markdown=["# Grounded slide"],
+        reference_snapshot_ids=[uuid.uuid4()],
+        strategy="template_v2",
+        template_v2_id="native-template",
+        template_v2_revision=7,
+    )
+    admitted = _target()
+
+    with (
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "_admit_generation_references",
+            new=AsyncMock(return_value=()),
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "load_template_v2_generation_target",
+            new=AsyncMock(return_value=admitted),
+        ),
+    ):
+        asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
+
+    assert request._template_v2_generation_target is admitted
+
+
+def test_template_v2_still_rejects_raw_reference_generation(monkeypatch):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
+    request = GeneratePresentationRequest(
+        content="Topic",
+        reference_snapshot_ids=[uuid.uuid4()],
+        strategy="template_v2",
+        template_v2_id="native-template",
+        template_v2_revision=7,
+    )
+
+    with patch(
+        "api.v1.ppt.endpoints.presentation_generate."
+        "_admit_generation_references",
+        new=AsyncMock(return_value=()),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(check_if_api_request_is_valid(request, RecordingSession()))
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "template_v2_source_mode_not_supported"
 
 
 def test_template_v2_fields_are_rejected_without_discriminator():
@@ -433,6 +509,66 @@ def test_target_loader_preserves_private_non_catalog_generation(monkeypatch):
     assert target.template_id == "native-template"
     assert target.revision == 7
     assert target.preservation_mode == "reconstructed"
+
+
+def test_target_loader_accepts_published_reconstructed_metadata(monkeypatch):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
+    record = SimpleNamespace(
+        revision=7,
+        name="Reconstructed Template",
+        layouts=_layouts_payload(_layout()),
+    )
+
+    with patch(
+        "services.template_v2_generation_service.TemplateV2Service.get",
+        new=AsyncMock(return_value=record),
+    ), patch(
+        "services.template_v2_generation_service.get_revision",
+        new=AsyncMock(return_value=_reconstructed_revision_entry(_layout())),
+    ):
+        target = asyncio.run(
+            load_template_v2_generation_target(
+                RecordingSession(),
+                template_id="native-template",
+                revision=7,
+            )
+        )
+
+    assert target.preservation_mode == "reconstructed"
+    assert target.native_source is None
+
+
+def test_target_loader_rejects_invalid_reconstructed_metadata(monkeypatch):
+    monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
+    monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", "native-template")
+    record = SimpleNamespace(
+        revision=7,
+        name="Reconstructed Template",
+        layouts=_layouts_payload(_layout()),
+    )
+    revision = _reconstructed_revision_entry(_layout())
+    revision.assets["native_pptx"]["native_pptx_preflight"]["status"] = (
+        "unsupported"
+    )
+
+    with patch(
+        "services.template_v2_generation_service.TemplateV2Service.get",
+        new=AsyncMock(return_value=record),
+    ), patch(
+        "services.template_v2_generation_service.get_revision",
+        new=AsyncMock(return_value=revision),
+    ):
+        with pytest.raises(TemplateV2GenerationError) as exc:
+            asyncio.run(
+                load_template_v2_generation_target(
+                    RecordingSession(),
+                    template_id="native-template",
+                    revision=7,
+                )
+            )
+
+    assert exc.value.code == "template_v2_native_source_invalid"
 
 
 def test_target_loader_rejects_a_non_current_revision(monkeypatch):

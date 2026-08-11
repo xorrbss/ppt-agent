@@ -565,7 +565,15 @@ async def check_if_api_request_is_valid(
             raise HTTPException(status_code=400, detail="template_v2_revision_invalid")
         if request.template.lower() != "adaptive":
             raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-        if request.files or request.web_search or request.reference_snapshot_ids:
+        # A chat-first deck keeps its uploaded-document snapshots attached for
+        # audit/download history.  Once the client supplies the already-grounded
+        # slide markdown, Template V2 does not consume those snapshots again, so
+        # their inherited identities are not an unsupported source mode.
+        # Direct Template V2 generation from raw references remains rejected.
+        unsupported_reference_source = (
+            bool(request.reference_snapshot_ids) and not request.slides_markdown
+        )
+        if request.files or request.web_search or unsupported_reference_source:
             raise HTTPException(
                 status_code=400,
                 detail="template_v2_source_mode_not_supported",

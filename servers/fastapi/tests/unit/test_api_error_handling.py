@@ -29,6 +29,18 @@ def _test_app() -> FastAPI:
     async def unexpected():
         raise RuntimeError("provider secret response")
 
+    @app.get("/uploaded-reference-failure")
+    async def uploaded_reference_failure():
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "uploaded_reference_extraction_failed",
+                "message": "The uploaded reference file could not be read.",
+                "filename": "proposal.pdf",
+                "retryable": True,
+            },
+        )
+
     return app
 
 
@@ -81,6 +93,28 @@ def test_unhandled_error_does_not_expose_internal_exception_text():
     assert response.json()["error"]["code"] == "internal_server_error"
     assert "provider secret response" not in response.text
     assert response.headers["X-Request-ID"] == response.json()["request_id"]
+
+
+def test_structured_http_detail_is_promoted_to_the_error_envelope():
+    client = TestClient(_test_app())
+
+    response = client.get("/uploaded-reference-failure")
+
+    assert response.status_code == 422
+    assert response.json()["error"] == {
+        "status_code": 422,
+        "detail": {
+            "code": "uploaded_reference_extraction_failed",
+            "message": "The uploaded reference file could not be read.",
+            "filename": "proposal.pdf",
+            "retryable": True,
+        },
+        "code": "uploaded_reference_extraction_failed",
+        "message": "The uploaded reference file could not be read.",
+        "filename": "proposal.pdf",
+        "request_id": response.json()["request_id"],
+        "retryable": True,
+    }
 
 
 def test_async_error_payload_can_retain_original_generation_request_id():

@@ -277,7 +277,9 @@ export class PresentationGenerationApi {
           assetIds: admittedAssets.map((asset) => asset.asset_id),
         });
       }
-      console.error("Upload error:", error);
+      // This error is handled by the upload page and shown as a toast. Logging
+      // it as an error makes Next.js display its development runtime overlay.
+      console.warn("Upload error:", error);
       throw error;
     }
   }

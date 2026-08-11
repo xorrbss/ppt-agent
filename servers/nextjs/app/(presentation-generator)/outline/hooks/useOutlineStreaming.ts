@@ -5,6 +5,7 @@ import { setOutlines } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
 import { RootState } from "@/store/store";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
+import { CodexAuthApi } from "@/app/(presentation-generator)/services/api/codex-auth";
 
 const MAX_STREAM_RETRIES = 3;
 const STREAM_RETRY_DELAY_MS = 1_000;
@@ -30,11 +31,15 @@ export const useOutlineStreaming = (
 ) => {
   const dispatch = useDispatch();
   const { outlines } = useSelector((state: RootState) => state.presentationGeneration);
+  const llmProvider = useSelector(
+    (state: RootState) => state.userConfig?.llm_config?.LLM,
+  );
   const [isStreaming, setIsStreaming] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompleted, setHasCompleted] = useState(false);
   const [activeSlideIndex, setActiveSlideIndex] = useState<number | null>(null);
   const [highestActiveIndex, setHighestActiveIndex] = useState<number>(-1);
+  const [retryNonce, setRetryNonce] = useState(0);
   const prevSlidesRef = useRef<{ content: string }[]>([]);
   const activeIndexRef = useRef<number>(-1);
   const highestIndexRef = useRef<number>(-1);
@@ -63,6 +68,7 @@ export const useOutlineStreaming = (
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let recoveryTimer: ReturnType<typeof setInterval> | null = null;
     let recoveryInFlight = false;
+    let codexRefreshAttempted = false;
 
     const closeEventSource = () => {
       if (eventSource) {
@@ -93,6 +99,28 @@ export const useOutlineStreaming = (
       setHighestActiveIndex(-1);
       activeIndexRef.current = -1;
       highestIndexRef.current = -1;
+    };
+
+    const refreshCodexSession = async (force = false): Promise<boolean> => {
+      if (llmProvider?.toLowerCase() !== "codex" || codexRefreshAttempted) {
+        return false;
+      }
+      const refreshed = force
+        ? (await CodexAuthApi.refresh(), true)
+        : await CodexAuthApi.refreshIfExpired();
+      codexRefreshAttempted = refreshed;
+      return refreshed;
+    };
+
+    const failExpiredCodexSession = () => {
+      resetStreamingState();
+      closeEventSource();
+      clearRetryTimer();
+      clearRecoveryTimer();
+      notify.error(
+        "ChatGPT 연결이 만료되었습니다",
+        "세션을 자동으로 갱신하지 못했습니다. 설정에서 ChatGPT 연결을 갱신한 뒤 다시 시도해 주세요.",
+      );
     };
 
     const finishStreaming = (outlineSlides: { content: string }[]) => {
@@ -251,6 +279,23 @@ export const useOutlineStreaming = (
             retryCount = 0;
             break;
           case "error":
+            if (
+              !codexRefreshAttempted &&
+              /(?:authentication|access) token (?:is |has )?expired/i.test(
+                data.detail || "",
+              )
+            ) {
+              closeEventSource();
+              void refreshCodexSession(true)
+                .then((refreshed) => {
+                  if (!isClosed && refreshed) {
+                    retryCount = 0;
+                    openStream();
+                  }
+                })
+                .catch(failExpiredCodexSession);
+              break;
+            }
             if (!scheduleRetry(data.detail || "server returned stream error")) {
               resetStreamingState();
               closeEventSource();
@@ -279,10 +324,15 @@ export const useOutlineStreaming = (
     recoveryTimer = setInterval(() => {
       void recoverSavedOutlines();
     }, OUTLINE_RECOVERY_INTERVAL_MS);
-    void recoverSavedOutlines().then((recovered) => {
-      if (!recovered && !isClosed) {
-        openStream();
+    void recoverSavedOutlines().then(async (recovered) => {
+      if (recovered || isClosed) return;
+      try {
+        await refreshCodexSession();
+      } catch {
+        failExpiredCodexSession();
+        return;
       }
+      if (!isClosed) openStream();
     });
 
     return () => {
@@ -291,7 +341,7 @@ export const useOutlineStreaming = (
       clearRetryTimer();
       clearRecoveryTimer();
     };
-  }, [presentationId, dispatch, createEventSource]);
+  }, [presentationId, dispatch, createEventSource, llmProvider, retryNonce]);
 
   return {
     isStreaming,
@@ -299,5 +349,6 @@ export const useOutlineStreaming = (
     hasCompleted,
     activeSlideIndex,
     highestActiveIndex,
+    retry: () => setRetryNonce((current) => current + 1),
   };
 };

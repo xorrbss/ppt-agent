@@ -10,6 +10,7 @@ from hashlib import sha256
 from html import escape
 from html.parser import HTMLParser
 import json
+import logging
 import re
 from typing import Any
 import uuid
@@ -40,6 +41,9 @@ MAX_COMMUNITY_CHARACTERS = 90_000
 MAX_COMMUNITY_RESPONSE_BYTES = 1_000_000
 MAX_UPLOADED_REFERENCES = 16
 MAX_UPLOADED_REFERENCE_CHARACTERS = 300_000
+UPLOADED_REFERENCE_EXTRACTION_ATTEMPTS = 2
+
+LOGGER = logging.getLogger(__name__)
 
 _DROP_TAGS = frozenset({"script", "style", "iframe", "object", "embed", "link", "meta"})
 _SAFE_TAGS = frozenset(
@@ -355,6 +359,42 @@ class CommunityReferenceProvider:
         )
 
 
+async def _extract_uploaded_document(
+    private_path: str,
+    *,
+    original_name: str,
+) -> str:
+    """Extract an uploaded document, retrying one transient converter failure."""
+
+    last_error: Exception | None = None
+    for attempt in range(1, UPLOADED_REFERENCE_EXTRACTION_ATTEMPTS + 1):
+        loader = DocumentsLoader(
+            [private_path],
+            allow_context_truncation=True,
+        )
+        try:
+            await loader.load_documents()
+            return "\n\n".join(loader.documents)
+        except Exception as error:
+            last_error = error
+            LOGGER.warning(
+                "Uploaded reference extraction failed "
+                "filename=%r attempt=%d/%d error_type=%s",
+                original_name,
+                attempt,
+                UPLOADED_REFERENCE_EXTRACTION_ATTEMPTS,
+                type(error).__name__,
+            )
+            if attempt < UPLOADED_REFERENCE_EXTRACTION_ATTEMPTS:
+                await asyncio.sleep(0)
+
+    raise ReferenceProviderError(
+        "uploaded_reference_extraction_failed",
+        retryable=True,
+        filename=original_name,
+    ) from last_error
+
+
 @dataclass(frozen=True, slots=True)
 class UploadedDocumentProvider:
     provider_id: str = "uploaded_document"
@@ -404,20 +444,14 @@ class UploadedDocumentProvider:
                         document = raw.decode("cp949")
                     except UnicodeDecodeError as error:
                         raise ReferenceProviderError(
-                            "uploaded_reference_extraction_failed"
+                            "uploaded_reference_extraction_failed",
+                            filename=asset.original_name,
                         ) from error
             else:
-                loader = DocumentsLoader(
-                    [str(private_path)],
-                    allow_context_truncation=True,
+                document = await _extract_uploaded_document(
+                    str(private_path),
+                    original_name=asset.original_name,
                 )
-                try:
-                    await loader.load_documents()
-                except Exception as error:
-                    raise ReferenceProviderError(
-                        "uploaded_reference_extraction_failed"
-                    ) from error
-                document = "\n\n".join(loader.documents)
             document = document.replace("\x00", "").strip()
             if not document:
                 raise ReferenceProviderError("uploaded_reference_empty")

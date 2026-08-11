@@ -9,6 +9,7 @@ import {
   isAbortError,
   PresentationGenerationApi,
 } from "../../../services/api/presentation-generation";
+import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { RootState } from "@/store/store";
@@ -36,7 +37,9 @@ export const useUploadPageState = ({
 }: UseUploadPageStateArgs) => {
   // Allocate the server-visible deck id before the create command so the
   // workspace operation and its retries hash the exact same stable id.
-  const [pendingPresentationId] = useState(() => crypto.randomUUID());
+  const [pendingPresentationId, setPendingPresentationId] = useState(
+    () => crypto.randomUUID(),
+  );
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useDispatch();
@@ -351,6 +354,12 @@ export const useUploadPageState = ({
    * Handles errors during presentation generation
    */
   const handleGenerationError = (error: any) => {
+    // This attempt can no longer be resumed safely. In particular, document
+    // cleanup may replace its reference snapshot, which changes the create
+    // payload while the old idempotency key still points at the prior payload.
+    // Give the next explicit generate click a fresh deck id/key.
+    setPendingPresentationId(crypto.randomUUID());
+
     // Aborts are expected when the user cancels, leaves this screen, or a
     // development refresh remounts it. Reset the local loader without
     // presenting the cancellation as a failed presentation generation.
@@ -364,21 +373,30 @@ export const useUploadPageState = ({
       return;
     }
 
-    console.error("Error in upload page", error);
+    // The upload flow presents this failure below. Keep it out of Next.js's
+    // development runtime overlay, which treats console.error as a page error.
+    console.warn("Error in upload page", error);
     setLoadingState({
       isLoading: false,
       message: "",
       duration: 0,
       showProgress: false,
     });
-    const errorTitle =
-      error?.code === "DOCUMENT_DRM_PROTECTED"
+    const extractionFailed =
+      error?.code === "uploaded_reference_extraction_failed";
+    const errorTitle = extractionFailed
+      ? "첨부파일을 읽지 못했습니다"
+      : error?.code === "DOCUMENT_DRM_PROTECTED"
         ? "DRM 보호 파일을 읽을 수 없습니다"
         : "생성에 실패했습니다";
-    notify.error(
-      errorTitle,
-      error.message || "발표자료를 시작하는 중 문제가 발생했습니다."
-    );
+    const filenamePrefix = error?.filename ? `"${error.filename}" ` : "";
+    const errorMessage = extractionFailed
+      ? `${filenamePrefix}텍스트 추출에 실패했습니다. 잠시 후 다시 시도하거나 PDF로 변환해 업로드해 주세요.`
+      : getApiErrorDisplayMessage(
+          error,
+          "발표자료를 시작하는 중 문제가 발생했습니다.",
+        );
+    notify.error(errorTitle, errorMessage);
   };
 
   return {

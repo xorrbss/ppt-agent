@@ -1,3 +1,4 @@
+import errno
 import json
 import os
 import stat
@@ -80,7 +81,7 @@ def test_windows_hardening_uses_current_user_sid_acl(monkeypatch, tmp_path):
         str(config_path),
         "/inheritance:r",
         "/grant:r",
-        "*S-1-5-21-1000:(R,W)",
+        "*S-1-5-21-1000:(M)",
         "/grant:r",
         "*S-1-5-18:(F)",
     ]
@@ -211,6 +212,35 @@ def test_atomic_write_never_serializes_credentials_when_acl_hardening_fails(
         )
 
     assert not config_path.exists()
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_windows_atomic_write_falls_back_for_private_legacy_target(
+    monkeypatch, tmp_path
+):
+    config_path = tmp_path / "userConfig.json"
+    config_path.write_text('{"LLM":"old"}', encoding="utf-8")
+    monkeypatch.setattr(user_config_store.os, "name", "nt")
+    monkeypatch.setattr(user_config_store, "_secure_config_file", lambda _path: True)
+    monkeypatch.setattr(user_config_store.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        user_config_store.os,
+        "replace",
+        lambda _source, _destination: (_ for _ in ()).throw(
+            PermissionError(errno.EACCES, "legacy target cannot be replaced")
+        ),
+    )
+
+    user_config_store._write_atomic_json(
+        str(config_path),
+        {"LLM": "codex", "CODEX_ACCESS_TOKEN": "fresh"},
+        True,
+    )
+
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {
+        "LLM": "codex",
+        "CODEX_ACCESS_TOKEN": "fresh",
+    }
     assert not list(tmp_path.glob("*.tmp"))
 
 

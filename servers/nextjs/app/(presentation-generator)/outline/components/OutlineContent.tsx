@@ -25,6 +25,7 @@ interface OutlineContentProps {
     highestActiveIndex: number;
     onDragEnd: (oldIndex: number, newIndex: number) => void;
     onAddSlide: () => void;
+    onRetry: () => void;
 }
 
 const OutlineContent: React.FC<OutlineContentProps> = ({
@@ -34,7 +35,8 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     activeSlideIndex,
     highestActiveIndex,
     onDragEnd,
-    onAddSlide
+    onAddSlide,
+    onRetry,
 }) => {
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -129,15 +131,23 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                 <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-200">
                     <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 mb-4">사용할 수 있는 개요가 없습니다</p>
-                    <Button
-                        variant="outline"
-                        onClick={() => {
-                            onAddSlide();
-                        }}
-                        className="text-blue-600 border-blue-200"
-                    >
-                        + 첫 슬라이드 추가
-                    </Button>
+                    <div className="flex justify-center gap-2">
+                        <Button
+                            onClick={onRetry}
+                            className="bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                            개요 다시 생성
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                onAddSlide();
+                            }}
+                            className="text-blue-600 border-blue-200"
+                        >
+                            + 첫 슬라이드 추가
+                        </Button>
+                    </div>
                 </div>
             )}
         </div>

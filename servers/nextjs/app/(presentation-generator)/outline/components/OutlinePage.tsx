@@ -139,6 +139,7 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     auto && (streamState.isStreaming || loadingState.isLoading);
   if (autoWorking) {
     const generating = loadingState.isLoading;
+    const streamedOutlineCount = outlines?.length ?? 0;
     return (
       <div className="font-syne pb-9">
         <OverlayLoader
@@ -147,12 +148,16 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
           // minutes) instead of a fixed 60s bar that parks at 95%.
           text={
             streamState.isStreaming
-              ? "개요를 생성하는 중…"
+              ? streamedOutlineCount > 0
+                ? `개요를 생성하는 중… ${streamedOutlineCount}장 작성됨`
+                : "자료를 분석하고 개요를 구성하는 중…"
               : generating
                 ? loadingState.message
                 : "발표자료를 준비하는 중…"
           }
-          showProgress={true}
+          // Outline generation has no deterministic completion percentage.
+          // A timed bar used to park at 95% for large decks and looked hung.
+          showProgress={generating}
           duration={generating ? loadingState.duration : 60}
           progress={generating ? slideProgress?.value : undefined}
           progressLabel={generating ? slideProgress?.label : undefined}
@@ -223,6 +228,7 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
                   highestActiveIndex={streamState.highestActiveIndex}
                   onDragEnd={handleDragEnd}
                   onAddSlide={handleAddSlide}
+                  onRetry={streamState.retry}
                 />
               </TabsContent>
 

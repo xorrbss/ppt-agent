@@ -4,6 +4,7 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 
 import presentationGenerationReducer from "@/store/slices/presentationGeneration";
+import userConfigReducer, { setLLMConfig } from "@/store/slices/userConfig";
 import {
   setOutlines,
 } from "@/store/slices/presentationGeneration";
@@ -11,6 +12,8 @@ import {
   OutlineEventSourceFactory,
   useOutlineStreaming,
 } from "./useOutlineStreaming";
+import { DashboardApi } from "../../services/api/dashboard";
+import { CodexAuthApi } from "../../services/api/codex-auth";
 
 function Harness({
   presentationId,
@@ -31,10 +34,21 @@ function Harness({
 }
 
 describe("useOutlineStreaming", () => {
-  const createTestStore = () =>
-    configureStore({
-      reducer: { presentationGeneration: presentationGenerationReducer },
+  const createTestStore = (llmProvider = "openai") => {
+    const testStore = configureStore({
+      reducer: {
+        presentationGeneration: presentationGenerationReducer,
+        userConfig: userConfigReducer,
+      },
     });
+    testStore.dispatch(
+      setLLMConfig({
+        LLM: llmProvider,
+        IMAGE_PROVIDER: "gpt-image-1.5",
+      }),
+    );
+    return testStore;
+  };
 
   it("clears streaming/loading when outlines already exist (back-nav into a completed flow)", () => {
     const testStore = createTestStore();
@@ -125,6 +139,38 @@ describe("useOutlineStreaming", () => {
     cy.get('[data-cy="completed"]').should("have.text", "true");
     cy.then(() => {
       expect(FakeEventSource.instances[0].closed).to.equal(true);
+    });
+  });
+
+  it("refreshes an expired Codex session before opening the outline stream", () => {
+    const testStore = createTestStore("codex");
+    const eventSourceUrls: string[] = [];
+    cy.stub(DashboardApi, "getPresentation").resolves({ outlines: null } as any);
+    cy.stub(CodexAuthApi, "refreshIfExpired").resolves(true).as("refreshCodex");
+
+    const createEventSource: OutlineEventSourceFactory = (url) => {
+      eventSourceUrls.push(url);
+      return {
+        addEventListener: () => undefined,
+        close: () => undefined,
+        onerror: null,
+      } as unknown as EventSource;
+    };
+
+    mount(
+      <Provider store={testStore}>
+        <Harness
+          presentationId="p-expired-codex"
+          createEventSource={createEventSource}
+        />
+      </Provider>,
+    );
+
+    cy.get("@refreshCodex").should("have.been.calledOnce");
+    cy.wrap(null).should(() => {
+      expect(eventSourceUrls).to.deep.equal([
+        "/api/outline-stream/p-expired-codex",
+      ]);
     });
   });
 });

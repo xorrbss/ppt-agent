@@ -20,11 +20,13 @@ class ReferenceProviderError(RuntimeError):
         *,
         status_code: int = 422,
         retryable: bool = False,
+        filename: str | None = None,
     ) -> None:
         super().__init__(code)
         self.code = code
         self.status_code = status_code
         self.retryable = retryable
+        self.filename = filename
 
 
 @dataclass(frozen=True, slots=True)
