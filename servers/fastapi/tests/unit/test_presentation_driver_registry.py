@@ -211,3 +211,16 @@ def test_generation_mode_is_a_codec_not_an_independent_profile_selector():
     smart = resolve_presentation_profile({"generation_mode": "smart"})
     assert GENERATION_MODE_COMPATIBILITY.encode_profile(standard) == "standard"
     assert GENERATION_MODE_COMPATIBILITY.encode_profile(smart) == "smart"
+
+
+def test_canonical_profile_is_source_of_truth_over_stale_legacy_codec():
+    profile = resolve_presentation_profile(
+        {
+            "profile_driver_id": "smart",
+            "profile_schema_version": 1,
+            "generation_mode": "standard",
+        }
+    )
+
+    assert profile.driver_id == "smart"
+    assert profile.generation_mode == "smart"

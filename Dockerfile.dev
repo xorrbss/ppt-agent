@@ -46,6 +46,7 @@ COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-e
 COPY tessdata /app/tessdata
 
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
+COPY scripts/lib/presentation-export-readiness.cjs /app/scripts/lib/presentation-export-readiness.cjs
 COPY scripts/presenton-terminal-banner.mjs /app/scripts/presenton-terminal-banner.mjs
 RUN mkdir -p /app_data-private/template-v2-imports \
     && chmod 0700 /app_data-private /app_data-private/template-v2-imports

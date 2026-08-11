@@ -1,7 +1,9 @@
 import asyncio
+from contextlib import contextmanager
 import os
 from io import BytesIO
 from pathlib import Path
+import uuid
 
 import pytest
 from fastapi import HTTPException, UploadFile
@@ -20,6 +22,23 @@ from utils.document_path_security import (
     validate_document_paths,
     validated_upload_extension,
 )
+from utils.owner_context import (
+    reset_current_owner_id,
+    reset_current_owner_is_admin,
+    set_current_owner_id,
+    set_current_owner_is_admin,
+)
+
+
+@contextmanager
+def _owner(owner_id: uuid.UUID, *, is_admin: bool = False):
+    owner_token = set_current_owner_id(owner_id)
+    admin_token = set_current_owner_is_admin(is_admin)
+    try:
+        yield
+    finally:
+        reset_current_owner_is_admin(admin_token)
+        reset_current_owner_id(owner_token)
 
 
 def _assert_generic_path_error(exc: HTTPException, secret_path: str) -> None:
@@ -104,6 +123,53 @@ def test_validator_rejects_symlink_escape(tmp_path):
     with pytest.raises(HTTPException) as captured:
         validate_document_path(str(link), allowed_roots=[str(allowed_root)])
     _assert_generic_path_error(captured.value, str(link))
+
+
+def test_default_document_roots_deny_another_owners_temp_tree(
+    tmp_path, monkeypatch
+):
+    owner_a = uuid.uuid4()
+    owner_b = uuid.uuid4()
+    own_root = tmp_path / str(owner_a)
+    foreign_root = tmp_path / str(owner_b)
+    own_root.mkdir()
+    foreign_root.mkdir()
+    own_file = own_root / "own.md"
+    foreign_file = foreign_root / "foreign.md"
+    own_file.write_text("own", encoding="utf-8")
+    foreign_file.write_text("foreign", encoding="utf-8")
+    monkeypatch.setattr(TEMP_FILE_SERVICE, "base_dir", str(tmp_path))
+
+    with _owner(owner_a):
+        assert validate_document_path(str(own_file)) == os.path.realpath(own_file)
+        with pytest.raises(HTTPException) as captured:
+            validate_document_path(str(foreign_file))
+
+    _assert_generic_path_error(captured.value, str(foreign_file))
+
+
+def test_global_legacy_document_root_requires_explicit_admin_migration(
+    tmp_path, monkeypatch
+):
+    owner = uuid.uuid4()
+    legacy_root = tmp_path / "audited-legacy"
+    legacy_root.mkdir()
+    legacy_file = legacy_root / "legacy.md"
+    legacy_file.write_text("legacy", encoding="utf-8")
+    monkeypatch.setattr(TEMP_FILE_SERVICE, "base_dir", str(tmp_path / "temp"))
+
+    with _owner(owner):
+        with pytest.raises(HTTPException) as denied:
+            validate_document_path(
+                str(legacy_file), admin_legacy_roots=[str(legacy_root)]
+            )
+        assert denied.value.status_code == 403
+        assert denied.value.detail == "admin_migration_required"
+
+    with _owner(owner, is_admin=True):
+        assert validate_document_path(
+            str(legacy_file), admin_legacy_roots=[str(legacy_root)]
+        ) == os.path.realpath(legacy_file)
 
 
 @pytest.mark.parametrize(

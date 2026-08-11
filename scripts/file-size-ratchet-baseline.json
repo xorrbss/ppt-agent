@@ -5,21 +5,46 @@
     "electron/app/ipc/libreoffice_install_handlers.ts": 627,
     "electron/app/ipc/setup_install_handlers.ts": 637,
     "electron/app/main.ts": 603,
-    "electron/scripts/verify-windows-release.cjs": 531,
     "electron/sync_export_runtime.js": 676,
     "scripts/ppt-agent.mjs": 607,
+    "scripts/intake-upstream-main.mjs": {
+      "lines": 597,
+      "rationale": "Committed intake v2 compatibility facade keeps policy parsing and report serialization together while upstream baseline migration is active.",
+      "owner": "upstream-intake",
+      "removalCondition": "Split report serialization after the accepted-baseline migration format is stable."
+    },
     "scripts/sync-presentation-export.cjs": 695,
     "scripts/test-local.mjs": 746,
-    "scripts/verify-upstream-compatibility.mjs": 576,
+    "scripts/verify-upstream-compatibility.mjs": {
+      "lines": 603,
+      "rationale": "Committed compatibility verifier is the single fail-closed orchestration facade for all domain contract checks.",
+      "owner": "upstream-intake",
+      "removalCondition": "Extract domain reporters once their machine-readable schemas reach v2."
+    },
     "servers/fastapi/api/v1/ppt/endpoints/pptx_slides.py": 628,
     "servers/fastapi/api/v1/ppt/endpoints/presentation_crud.py": 640,
-    "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py": 2691,
-    "servers/fastapi/api/v1/ppt/endpoints/presentation.py": 880,
+    "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py": {
+      "lines": 2810,
+      "rationale": "Generation admission remains a compatibility facade while legacy file locators are converted to immutable reference snapshots.",
+      "owner": "generation-runtime",
+      "removalCondition": "Remove the legacy files wire field and extract admission after compatibility readiness reaches complete."
+    },
+    "servers/fastapi/api/v1/ppt/endpoints/presentation.py": {
+      "lines": 881,
+      "rationale": "Presentation endpoint is a committed compatibility facade during profile-driver backfill.",
+      "owner": "presentation-profile",
+      "removalCondition": "Remove generation_mode fallback after profile readiness is complete."
+    },
     "servers/fastapi/api/v1/ppt/endpoints/structured_template_imports.py": 537,
     "servers/fastapi/api/v1/ppt/endpoints/structured_templates.py": 505,
     "servers/fastapi/api/v1/ppt/endpoints/workspace.py": 811,
     "servers/fastapi/evaluation/hybrid_review/LIVE_BENCHMARK.py": 760,
-    "servers/fastapi/migrations.py": 1662,
+    "servers/fastapi/migrations.py": {
+      "lines": 1680,
+      "rationale": "Migration compatibility facade records the sole Alembic head and legacy bootstrap checks in one startup boundary.",
+      "owner": "database-compatibility",
+      "removalCondition": "Retire bootstrap migration compatibility after all supported databases report the canonical head."
+    },
     "servers/fastapi/models/slidespec_v1.py": 805,
     "servers/fastapi/models/sql/workspace.py": 634,
     "servers/fastapi/models/workspace.py": 682,
@@ -32,12 +57,27 @@
     "servers/fastapi/services/authored_presentation_service.py": 1130,
     "servers/fastapi/services/authored_quality_ocr.py": 547,
     "servers/fastapi/services/authored_quality_review_service.py": 2162,
-    "servers/fastapi/services/chat/memory_layer.py": 1600,
+    "servers/fastapi/services/chat/memory_layer.py": {
+      "lines": 1870,
+      "rationale": "Committed unified-conversation memory boundary preserves legacy adapters while revision-aware canonical reads are adopted.",
+      "owner": "unified-conversation",
+      "removalCondition": "Delete legacy memory adapters after all conversation callers use canonical revisions."
+    },
     "servers/fastapi/services/chat/outline_context.py": 648,
-    "servers/fastapi/services/chat/service.py": 698,
+    "servers/fastapi/services/chat/service.py": {
+      "lines": 1072,
+      "rationale": "Committed conversation service is the compatibility facade joining AgentRun, Revision, and legacy chat callers.",
+      "owner": "unified-conversation",
+      "removalCondition": "Extract the legacy codec when no caller constructs chat state directly."
+    },
     "servers/fastapi/services/chat/slide_ui_content.py": 647,
     "servers/fastapi/services/chat/slide_ui_mutations.py": 503,
-    "servers/fastapi/services/chat/tools.py": 691,
+    "servers/fastapi/services/chat/tools.py": {
+      "lines": 775,
+      "rationale": "Committed tool facade centralizes capability-gated agent operations during driver migration.",
+      "owner": "unified-conversation",
+      "removalCondition": "Split driver-specific tool adapters after the legacy tool names are removed."
+    },
     "servers/fastapi/services/decompose_job_service.py": 631,
     "servers/fastapi/services/documents_loader.py": 519,
     "servers/fastapi/services/export_task_service.py": 680,
@@ -56,12 +96,33 @@
     "servers/fastapi/services/template_v2_service.py": 512,
     "servers/fastapi/services/workspace_artifact_publication_service.py": 2299,
     "servers/fastapi/services/workspace_asset_service.py": 1112,
-    "servers/fastapi/services/workspace_chat_operation_handler.py": 614,
+    "servers/fastapi/services/references/providers.py": {
+      "lines": 544,
+      "rationale": "New canonical provider contract keeps immutable snapshot normalization and the three initial source providers co-located for parity review.",
+      "owner": "reference-sources",
+      "removalCondition": "Split provider implementations when a fourth source provider is introduced."
+    },
+    "servers/fastapi/services/workspace_chat_operation_handler.py": {
+      "lines": 911,
+      "rationale": "Committed workspace compatibility handler bridges legacy chat operations into canonical AgentRun and Revision boundaries.",
+      "owner": "unified-conversation",
+      "removalCondition": "Remove legacy workspace chat operation payload support."
+    },
     "servers/fastapi/services/workspace_cleanup_journal_service.py": 1922,
     "servers/fastapi/services/workspace_error_registry.py": 533,
     "servers/fastapi/services/workspace_operation_outbox_dispatcher.py": 627,
-    "servers/fastapi/services/workspace_operation_runner.py": 2298,
-    "servers/fastapi/services/workspace_service.py": 2056,
+    "servers/fastapi/services/workspace_operation_runner.py": {
+      "lines": 2362,
+      "rationale": "Committed durable runner retains compatibility dispatch while canonical operation kinds are rolled out.",
+      "owner": "workspace-runtime",
+      "removalCondition": "Extract compatibility dispatch after all queued legacy operation kinds drain."
+    },
+    "servers/fastapi/services/workspace_service.py": {
+      "lines": 2097,
+      "rationale": "Committed workspace service owns the transitional canonical presentation and asset admission boundary.",
+      "owner": "workspace-runtime",
+      "removalCondition": "Remove compatibility admission methods after readiness reaches complete."
+    },
     "servers/fastapi/template_v2_schema_contract.py": 1664,
     "servers/fastapi/templates/fonts_and_slides_preview.py": 967,
     "servers/fastapi/templates/handler.py": 747,
@@ -83,7 +144,18 @@
     "servers/fastapi/utils/authored_styles.py": 679,
     "servers/fastapi/utils/llm_calls/author_slide.py": 719,
     "servers/fastapi/utils/llm_calls/author_vision_qa.py": 841,
-    "servers/fastapi/utils/llm_utils.py": 800,
+    "servers/fastapi/utils/llm_calls/generate_smart_presentation.py": {
+      "lines": 873,
+      "rationale": "Smart-generation compatibility facade preserves the upstream generation contract behind canonical driver capability checks.",
+      "owner": "generation-runtime",
+      "removalCondition": "Split prompt hydration from generation after smart driver migration is complete."
+    },
+    "servers/fastapi/utils/llm_utils.py": {
+      "lines": 973,
+      "rationale": "Committed LLM compatibility facade centralizes provider-registry capability enforcement for legacy call sites.",
+      "owner": "provider-registry",
+      "removalCondition": "Remove legacy provider argument codecs after all callers use generated provider descriptors."
+    },
     "servers/fastapi/utils/oauth/openai_codex.py": 614,
     "servers/fastapi/utils/slide_capture.py": 1752,
     "servers/fastapi/utils/slidespec_constraints.py": 1431,
@@ -140,7 +212,12 @@
     "servers/nextjs/scripts/lib/authored-hybrid-release-gates.mjs": 629,
     "servers/nextjs/scripts/qa-authored-hybrid-export.mjs": 529,
     "servers/nextjs/scripts/qa-authored-hybrid-visual.mjs": 556,
-    "servers/nextjs/scripts/run-workspace-e2e.mjs": 3233,
+    "servers/nextjs/scripts/run-workspace-e2e.mjs": {
+      "lines": 3321,
+      "rationale": "The durable browser runner keeps lock capture, compare-and-swap restoration, child fencing, and stale-owner recovery in one audited crash-safety boundary.",
+      "owner": "workspace-e2e-runtime",
+      "removalCondition": "Extract lock serialization only after the schema-v2 recovery contract has a cross-platform compatibility release."
+    },
     "servers/nextjs/store/slices/presentationGeneration.ts": 565,
     "start.js": 591
   }

@@ -38,7 +38,11 @@ CANONICAL_PUBLISH_MARKER = "[canonical-publish]"
 CANONICAL_CHECKPOINT_MARKER = "[canonical-checkpoint]"
 
 
-def _configure_production_environment(database_path: Path, app_data: Path) -> None:
+def _configure_production_environment(
+    database_path: Path,
+    app_data: Path,
+    temp_directory: Path,
+) -> None:
     """Configure globals consumed while importing ``api.main``/database.py."""
 
     resolved_database = database_path.resolve()
@@ -52,6 +56,10 @@ def _configure_production_environment(database_path: Path, app_data: Path) -> No
         {
             "DATABASE_URL": f"sqlite:///{resolved_database.as_posix()}",
             "APP_DATA_DIRECTORY": str(app_data.resolve()),
+            # The global TempFileService performs startup cleanup. Confine it
+            # to this harness run so a browser or another API process cannot
+            # hold a LevelDB file in the directory being cleaned on Windows.
+            "TEMP_DIRECTORY": str(temp_directory.resolve()),
             "USER_CONFIG_PATH": str((app_data / "userConfig.json").resolve()),
             "DISABLE_AUTH": "true",
             "CAN_CHANGE_KEYS": "false",
@@ -93,7 +101,11 @@ def create_app(database_path: Path | None = None):
         database_path = runtime_root / "workspace.db"
     else:
         runtime_root = database_path.resolve().parent
-    _configure_production_environment(database_path, runtime_root / "app-data")
+    _configure_production_environment(
+        database_path,
+        runtime_root / "app-data",
+        runtime_root / "temp",
+    )
 
     # These imports intentionally happen after DATABASE_URL is fixed.  The
     # production database module constructs its engine at import time.

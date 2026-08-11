@@ -37,6 +37,20 @@ const TINY_TEXT_HTML =
   "font-style:normal;font-weight:400;line-height:1.15;letter-spacing:0px;" +
   'text-decoration:none;">hi</span></span></div>';
 
+const EMPTY_RESOURCE_CONTRACT =
+  '<script type="application/json" data-presenton-template-v2-resource-contract="true">{"images":[],"fonts":[]}</script>';
+
+function assertReadinessContract(html) {
+  assert.match(html, /data-presenton-template-v2-readiness="true"/);
+  assert.match(html, /templateV2ResourceError='true'/);
+  assert.match(html, /required-resource-failed/);
+  assert.match(html, /face\.load\(\)/);
+  assert.match(html, /image\.naturalWidth>0/);
+  assert.match(html, /templateV2RenderState='pending'/);
+  assert.match(html, /chart-render-failed/);
+  assert.match(html, /chart-render-timeout/);
+}
+
 const CHART_ELEMENT = {
   type: "chart",
   position: { x: 0, y: 0 },
@@ -88,10 +102,14 @@ test("templateV2UiToHtml renders the default document shell", async () => {
   const { templateV2UiToHtml } = await loadTemplateV2HtmlRenderer();
   const shell = documentShell({});
 
-  assert.equal(
-    templateV2UiToHtml({ elements: [TINY_TEXT] }),
-    `${shell.head}${shell.slideRoot}${TINY_TEXT_HTML}</div></body></html>`,
+  const html = templateV2UiToHtml({ elements: [TINY_TEXT] });
+  assert.ok(
+    html.startsWith(
+      `${shell.head}${shell.slideRoot}${TINY_TEXT_HTML}</div>${EMPTY_RESOURCE_CONTRACT}`,
+    ),
   );
+  assert.ok(html.endsWith("</script></body></html>"));
+  assertReadinessContract(html);
 });
 
 test("templateV2UiToHtml honours width/height options and a bare hex background", async () => {
@@ -102,13 +120,16 @@ test("templateV2UiToHtml honours width/height options and a bare hex background"
     height: 360,
   });
 
-  assert.equal(
-    templateV2UiToHtml(
-      { elements: [TINY_TEXT], background: "0f172a" },
-      { width: 640, height: 360 },
-    ),
-    `${shell.head}${shell.slideRoot}${TINY_TEXT_HTML}</div></body></html>`,
+  const html = templateV2UiToHtml(
+    { elements: [TINY_TEXT], background: "0f172a" },
+    { width: 640, height: 360 },
   );
+  assert.ok(
+    html.startsWith(
+      `${shell.head}${shell.slideRoot}${TINY_TEXT_HTML}</div>${EMPTY_RESOURCE_CONTRACT}`,
+    ),
+  );
+  assertReadinessContract(html);
 });
 
 test("templateV2UiToHtml replaces an unsafe background with transparent", async () => {
@@ -121,6 +142,50 @@ test("templateV2UiToHtml replaces an unsafe background with transparent", async 
   assert.match(html, /background:transparent\}/);
   assert.match(html, /background:transparent;font-family:Arial/);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test("raw optional flags and placeholder-looking basenames cannot weaken the resource gate", async () => {
+  const { templateV2UiToHtml } = await loadTemplateV2HtmlRenderer();
+  const image = (data, extra = {}) => ({
+    type: "image",
+    position: { x: 0, y: 0 },
+    size: { width: 10, height: 10 },
+    data,
+    ...extra,
+  });
+  const html = templateV2UiToHtml(
+    {
+      elements: [
+        image("/required.png", { decorative: true }),
+        image("/explicit.png", { resource_policy: "optional" }),
+        image("/static/icons/placeholder.svg"),
+      ],
+    },
+    {
+      fonts: {
+        Required: "/required.ttf",
+        Optional: { url: "/optional.ttf", resourcePolicy: "optional" },
+      },
+    },
+  );
+  const encoded = html.match(
+    /data-presenton-template-v2-resource-contract="true">([^<]+)<\/script>/,
+  )?.[1];
+  assert.ok(encoded);
+  assert.deepEqual(JSON.parse(encoded), {
+    images: [
+      { source: "/required.png", policy: "required" },
+      { source: "/explicit.png", policy: "required" },
+      {
+        source: "http://127.0.0.1:8000/static/icons/placeholder.svg",
+        policy: "required",
+      },
+    ],
+    fonts: [
+      { family: "Required", source: "/required.ttf", policy: "required" },
+      { family: "Optional", source: "/optional.ttf", policy: "required" },
+    ],
+  });
 });
 
 test("templateV2UiToHtml returns null when there is nothing to render", async () => {
@@ -197,6 +262,8 @@ test("the inline chart bootstrap script is syntactically valid and self-escaping
   assert.doesNotThrow(() => new Function(inlineScripts[0]));
   assert.doesNotMatch(inlineScripts[0], /<\/script/);
   assert.match(inlineScripts[0], /Chart\.register\(window\.ChartDataLabels\)/);
+  assert.match(inlineScripts[0], /templateV2ChartState="pending"/);
+  assert.match(inlineScripts[0], /template-v2-chart-state/);
 });
 
 test("chart detection walks nested children, containers, item templates and components", async () => {

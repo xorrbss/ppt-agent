@@ -8,7 +8,7 @@
   },
   "commonRevision": "c7b70d0f31b1",
   "upstreamTipRevision": "b8e2f4a7c9d1",
-  "localTipRevision": "f7c9e1a3b5d8",
+  "localTipRevision": "a8c1e4f7b2d9",
   "databaseCompatibility": {
     "verified": [
       {
@@ -76,7 +76,8 @@
     { "revision": "c4e8f0a2b6d9", "downRevision": "b3d7f1a9c2e4", "file": "c4e8f0a2b6d9_add_presentation_search_and_share_metrics.py" },
     { "revision": "d5a9c1e3f7b2", "downRevision": "c4e8f0a2b6d9", "file": "d5a9c1e3f7b2_add_provider_settings_revision.py" },
     { "revision": "e6b8d0f2a4c6", "downRevision": "d5a9c1e3f7b2", "file": "e6b8d0f2a4c6_merge_smart_generation_and_provider_settings_heads.py" },
-    { "revision": "f7c9e1a3b5d8", "downRevision": "e6b8d0f2a4c6", "file": "f7c9e1a3b5d8_add_reference_snapshots.py" }
+    { "revision": "f7c9e1a3b5d8", "downRevision": "e6b8d0f2a4c6", "file": "f7c9e1a3b5d8_add_reference_snapshots.py" },
+    { "revision": "a8c1e4f7b2d9", "downRevision": "f7c9e1a3b5d8", "file": "a8c1e4f7b2d9_add_asset_profile_compatibility_bridges.py" }
   ],
   "translations": [
     {
@@ -244,6 +245,10 @@
     {
       "revision": "f7c9e1a3b5d8",
       "purpose": "Owner-scoped immutable reference snapshots for fail-closed generation admission"
+    },
+    {
+      "revision": "a8c1e4f7b2d9",
+      "purpose": "Additive canonical asset and presentation profile compatibility bridges with restartable owner-scoped backfill"
     }
   ]
 }

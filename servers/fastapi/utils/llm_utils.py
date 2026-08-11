@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import re
 import threading
 import time
@@ -22,7 +23,6 @@ from llmai.shared import (
 
 from utils.llm_config import get_extra_body
 from utils.schema_utils import get_schema_validation_errors
-
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
 TRANSIENT_LLM_STATUS_CODES = frozenset({429, 500, 502, 503, 504})

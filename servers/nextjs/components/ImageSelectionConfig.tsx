@@ -5,40 +5,10 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 import { LLMConfig } from '@/types/llm_config';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
-import { IMAGE_PROVIDERS } from '@/utils/providerConstants';
+import { IMAGE_PROVIDER_OPTIONS, IMAGE_QUALITY_OPTIONS } from '@/utils/provider-registry.generated';
 import { cn } from '@/lib/utils';
 import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from './ui/select';
 
-const DALLE_3_QUALITY_OPTIONS = [
-    {
-        label: "표준",
-        value: "standard",
-        description: "더 빠른 생성과 낮은 비용",
-    },
-    {
-        label: "HD",
-        value: "hd",
-        description: "비용은 높지만 더 높은 화질의 이미지",
-    },
-];
-
-const GPT_IMAGE_1_5_QUALITY_OPTIONS = [
-    {
-        label: "낮음",
-        value: "low",
-        description: "가장 빠르고 비용 효율적",
-    },
-    {
-        label: "보통",
-        value: "medium",
-        description: "화질과 속도의 균형",
-    },
-    {
-        label: "높음",
-        value: "high",
-        description: "생성 시간은 길지만 최고 화질",
-    },
-];
 const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => {
     if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
         return (
@@ -52,12 +22,12 @@ const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value
                             <SelectValue placeholder="화질 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                            {DALLE_3_QUALITY_OPTIONS.map((option) => (
+                            {IMAGE_QUALITY_OPTIONS["dall-e-3"].map((option) => (
                                 <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                    {/* {DALLE_3_QUALITY_OPTIONS.map((option) => (
+                    {/* {IMAGE_QUALITY_OPTIONS["dall-e-3"].map((option) => (
                         <button
                             key={option.value}
                             type="button"
@@ -102,12 +72,12 @@ const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value
                             <SelectValue placeholder="화질 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                            {GPT_IMAGE_1_5_QUALITY_OPTIONS.map((option) => (
+                            {IMAGE_QUALITY_OPTIONS["gpt-image-1.5"].map((option) => (
                                 <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                    {/* {GPT_IMAGE_1_5_QUALITY_OPTIONS.map((option) => (
+                    {/* {IMAGE_QUALITY_OPTIONS["gpt-image-1.5"].map((option) => (
                         <button
                             key={option.value}
                             type="button"
@@ -172,7 +142,7 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                                 <div className="flex gap-3 items-center">
                                                     <span className="text-sm font-medium text-gray-900">
                                                         {llmConfig.IMAGE_PROVIDER
-                                                            ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                                                            ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]
                                                                 ?.label || llmConfig.IMAGE_PROVIDER
                                                             : "이미지 제공자 선택"}
                                                     </span>
@@ -190,7 +160,7 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
                                                 <CommandList>
                                                     <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                                                     <CommandGroup>
-                                                        {Object.values(IMAGE_PROVIDERS).map(
+                                                        {Object.values(IMAGE_PROVIDER_OPTIONS).map(
                                                             (provider, index) => (
                                                                 <CommandItem
                                                                     key={index}
@@ -235,9 +205,9 @@ const ImageSelectionConfig = ({ isImageGenerationDisabled, openImageProviderSele
 
                             {/* Dynamic API Key Input for Image Provider */}
                             {llmConfig.IMAGE_PROVIDER &&
-                                IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER] &&
+                                IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER] &&
                                 (() => {
-                                    const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
+                                    const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
 
                                     // Show info message when using same API key as main provider
                                     if (

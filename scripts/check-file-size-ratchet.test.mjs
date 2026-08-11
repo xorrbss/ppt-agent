@@ -39,6 +39,30 @@ test("rejects growth of a baseline oversized file", async () => {
   assert.deepEqual(await checkRatchet(root, baselinePath), ["oversized file grew: src/large.ts (501 -> 502 lines)"]);
 });
 
+test("accepts a machine-readable documented exception", async () => {
+  const exception = {
+    lines: 501,
+    rationale: "Generated compatibility surface pending modular generator output.",
+    owner: "provider-registry",
+    removalCondition: "Remove when generated output is split below the line limit.",
+  };
+  const { root, baselinePath } = await fixture(
+    { "src/large.py": lines(501) },
+    { "src/large.py": exception }
+  );
+  assert.deepEqual(await checkRatchet(root, baselinePath), []);
+});
+
+test("rejects an undocumented object exception", async () => {
+  const { root, baselinePath } = await fixture(
+    { "src/large.py": lines(501) },
+    { "src/large.py": { lines: 501 } }
+  );
+  assert.deepEqual(await checkRatchet(root, baselinePath), [
+    "undocumented baseline exception: src/large.py",
+  ]);
+});
+
 test("rejects a baseline entry that no longer maps to an oversized source", async () => {
   const { root, baselinePath } = await fixture({ "src/small.ts": lines(500) }, { "src/legacy.ts": 501 });
   assert.deepEqual(await checkRatchet(root, baselinePath), ["baseline entry no longer maps to an oversized source: src/legacy.ts"]);
@@ -72,6 +96,7 @@ test("excludes tests, generated files, vendor files, and migrations", async () =
     "src/example.test.ts": lines(501),
     "cypress/e2e/example.cy.ts": lines(501),
     "src/layout.generated.ts": lines(501),
+    "src/provider_registry_generated.py": lines(501),
     "servers/nextjs/public/vendor/library.js": lines(501),
     "servers/fastapi/alembic/versions/0001_initial.py": lines(501),
   }, {});

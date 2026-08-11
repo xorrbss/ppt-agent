@@ -13,7 +13,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import secrets
 import uuid
 from collections.abc import Mapping
@@ -28,7 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session as SyncSession
 
-from constants.documents import UPLOAD_ACCEPTED_EXTENSIONS
+from models.sql.image_asset import ImageAsset
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -46,12 +45,27 @@ from models.sql.workspace import (
 )
 from services.authored_checkpoint_service import checkpoint_root
 from services.database import async_session_maker
-from services.template_v2_native_storage import native_source_root, remove_native_source
+from services.template_v2_native_storage import native_source_root
 from services.workspace_artifact_publication_service import (
-    WorkspaceArtifactCleanupClaim,
     _app_data_root,
-    _delete_claimed_artifact_files,
-    _remove_owned_tree,
+)
+from services.workspace_cleanup_storage import (
+    WorkspaceCleanupDeleteError,
+    _ACCOUNT_APP_DATA_TREE_NAMES,
+    _ACCOUNT_TEMP_TREE_KIND,
+    _AUTHORED_CHECKPOINT_ROOT_KIND,
+    _AUTHORED_IMAGES_ROOT_KIND,
+    _CHAT_IMAGE_SUFFIXES,
+    _LEGACY_GALLERY_IMAGE_ROOT_KIND,
+    _SHA256_PATTERN,
+    _TEMPLATE_V2_NATIVE_ROOT_KIND,
+    _WORKSPACE_ARTIFACT_ROOT_KIND,
+    _WORKSPACE_ASSET_ROOT_KIND,
+    _WORKSPACE_ASSET_SUFFIXES,
+    canonical_storage_root as _canonical_storage_root,
+    delete_claimed_storage as _delete_claimed_storage,
+    sha256_file as _sha256_file,
+    storage_root_metadata as _storage_root_metadata,
 )
 from services.workspace_metrics import WORKSPACE_METRICS
 from utils.datetime_utils import get_current_utc_datetime
@@ -62,30 +76,6 @@ DEFAULT_CLEANUP_LEASE_SECONDS = 60
 DEFAULT_CLEANUP_RETRY_SECONDS = 15
 DEFAULT_CLEANUP_MAX_ATTEMPTS = 8
 DEFAULT_CLEANUP_MAINTENANCE_INTERVAL_SECONDS = 60
-_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-_CLEANUP_METADATA_SCHEMA_VERSION = "workspace.cleanup-target/v2"
-_FILESYSTEM_STORAGE_BACKEND = "filesystem"
-_WORKSPACE_ASSET_ROOT_KIND = "workspace_assets"
-_WORKSPACE_ARTIFACT_ROOT_KIND = "app_data"
-_AUTHORED_CHECKPOINT_ROOT_KIND = "authored_checkpoints"
-_TEMPLATE_V2_NATIVE_ROOT_KIND = "template_v2_native"
-_AUTHORED_IMAGES_ROOT_KIND = "authored_images"
-_CHAT_IMAGE_SUFFIXES = frozenset(
-    {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
-)
-_WORKSPACE_ASSET_SUFFIXES = frozenset(UPLOAD_ACCEPTED_EXTENSIONS)
-_ACCOUNT_APP_DATA_TREE_NAMES = (
-    "images",
-    "exports",
-    "uploads",
-    "pptx-to-html",
-    "pptx-to-json",
-)
-_ACCOUNT_APP_DATA_ROOT_KINDS = {
-    f"app_data.{name}": name for name in _ACCOUNT_APP_DATA_TREE_NAMES
-}
-_ACCOUNT_TEMP_TREE_KIND = "temp"
-
 logger = logging.getLogger(__name__)
 _cleanup_maintenance_task: asyncio.Task[None] | None = None
 _cleanup_maintenance_stop: asyncio.Event | None = None
@@ -181,87 +171,6 @@ class WorkspaceCleanupRedriveResult:
     redrive_count: int | None
 
 
-class WorkspaceCleanupDeleteError(RuntimeError):
-    def __init__(self, code: str, *, retryable: bool) -> None:
-        self.code = code
-        self.retryable = retryable
-        super().__init__(code)
-
-
-def _canonical_storage_root(root: Path) -> Path:
-    """Return a stable absolute filesystem identity suitable for journaling."""
-
-    return Path(os.path.abspath(root)).resolve(strict=False)
-
-
-def _storage_backend_generation(*, root_kind: str, root: Path) -> str:
-    canonical = json.dumps(
-        {
-            "backend": _FILESYSTEM_STORAGE_BACKEND,
-            "root_kind": root_kind,
-            "root": os.path.normcase(str(_canonical_storage_root(root))),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return sha256(canonical.encode("utf-8")).hexdigest()
-
-
-def _storage_root_metadata(*, root_kind: str, root: Path) -> dict[str, str]:
-    canonical_root = _canonical_storage_root(root)
-    return {
-        "schema_version": _CLEANUP_METADATA_SCHEMA_VERSION,
-        "storage_backend": _FILESYSTEM_STORAGE_BACKEND,
-        "storage_root_kind": root_kind,
-        "storage_root": str(canonical_root),
-        "storage_backend_generation": _storage_backend_generation(
-            root_kind=root_kind,
-            root=canonical_root,
-        ),
-    }
-
-
-def _claim_storage_root(
-    claim: WorkspaceCleanupClaim,
-    *,
-    expected_root_kind: str,
-    invalid_code: str,
-) -> Path:
-    """Validate and recover the exact trusted root captured before mutation.
-
-    Cleanup intentionally never consults the current environment.  A root
-    rotation can therefore create the same relative key without an older
-    journal entry deleting the new generation.
-    """
-
-    metadata = claim.resource_metadata
-    root_value = metadata.get("storage_root")
-    generation = metadata.get("storage_backend_generation")
-    if (
-        metadata.get("schema_version") != _CLEANUP_METADATA_SCHEMA_VERSION
-        or metadata.get("storage_backend") != _FILESYSTEM_STORAGE_BACKEND
-        or metadata.get("storage_root_kind") != expected_root_kind
-        or not isinstance(root_value, str)
-        or not root_value
-        or os.path.normpath(root_value) != root_value
-        or not isinstance(generation, str)
-        or _SHA256_PATTERN.fullmatch(generation) is None
-    ):
-        raise WorkspaceCleanupDeleteError(invalid_code, retryable=False)
-    root = Path(root_value)
-    anchor = Path(root.anchor)
-    if (
-        not root.is_absolute()
-        or root == anchor
-        or root.is_symlink()
-        or root.resolve(strict=False) != root
-        or generation
-        != _storage_backend_generation(root_kind=expected_root_kind, root=root)
-    ):
-        raise WorkspaceCleanupDeleteError(invalid_code, retryable=False)
-    return root
-
-
 def _authored_images_root(owner_id: uuid.UUID | None) -> Path:
     root = _app_data_root() / "images"
     if owner_id is not None:
@@ -301,6 +210,69 @@ def workspace_asset_cleanup_target(
     )
 
 
+def legacy_gallery_image_cleanup_target(
+    image: ImageAsset,
+    *,
+    image_root: Path,
+    canonical_sha256: str,
+    canonical_size_bytes: int,
+) -> WorkspaceCleanupTarget:
+    """Snapshot one exact legacy gallery file for durable deletion.
+
+    Gallery paths are old private locators, so only a direct regular-file child
+    of the explicitly selected owner/shared root can become cleanup intent.
+    """
+
+    root = _canonical_storage_root(image_root)
+    unresolved = Path(image.path)
+    if unresolved.is_symlink():
+        raise WorkspaceCleanupDeleteError(
+            "workspace_cleanup_legacy_gallery_path_invalid", retryable=False
+        )
+    source = unresolved.resolve(strict=False)
+    try:
+        relative = source.relative_to(root)
+    except ValueError as error:
+        raise WorkspaceCleanupDeleteError(
+            "workspace_cleanup_legacy_gallery_path_invalid", retryable=False
+        ) from error
+    if (
+        len(relative.parts) != 1
+        or source == root
+        or source.suffix.lower() not in _CHAT_IMAGE_SUFFIXES
+        or (source.exists() and not source.is_file())
+    ):
+        raise WorkspaceCleanupDeleteError(
+            "workspace_cleanup_legacy_gallery_path_invalid", retryable=False
+        )
+    if source.is_file():
+        digest = _sha256_file(source)
+        if source.stat().st_size != canonical_size_bytes or digest != canonical_sha256:
+            raise WorkspaceCleanupDeleteError(
+                "workspace_cleanup_legacy_gallery_content_mismatch",
+                retryable=False,
+            )
+    owner_scope = str(image.owner_id) if image.owner_id is not None else "anonymous"
+    return WorkspaceCleanupTarget(
+        identity=f"legacy_gallery_image:{image.id}:{relative.as_posix()}",
+        owner_id=image.owner_id,
+        presentation_id=None,
+        operation_id=None,
+        storage_namespace="legacy_gallery_image",
+        resource_kind="legacy.gallery_image",
+        storage_key=relative.as_posix(),
+        sha256=canonical_sha256,
+        size_bytes=canonical_size_bytes,
+        source_revision=1,
+        metadata={
+            **_storage_root_metadata(
+                root_kind=_LEGACY_GALLERY_IMAGE_ROOT_KIND,
+                root=root,
+            ),
+            "image_id": str(image.id),
+            "owner_scope": owner_scope,
+        },
+    )
 def workspace_artifact_cleanup_target(
     artifact: WorkspaceArtifact,
     *,
@@ -606,14 +578,20 @@ def _idempotency_hash(
 ) -> str:
     # Physical immutable key identity makes duplicate commands, a chat journal
     # plus its child image rows, and legacy file_paths converge on one intent.
+    identity = {
+        "namespace": target.storage_namespace,
+        "storage_key": target.storage_key,
+        "storage_backend_generation": (
+            dict(target.metadata or {}).get("storage_backend_generation")
+        ),
+    }
+    if target.storage_namespace == "legacy_gallery_image":
+        # Legacy filenames are random but not content-addressed. A later image
+        # may legitimately reuse the same leaf after an earlier cleanup, so its
+        # immutable database identity must form part of the journal key.
+        identity["legacy_image_id"] = dict(target.metadata or {}).get("image_id")
     canonical = json.dumps(
-        {
-            "namespace": target.storage_namespace,
-            "storage_key": target.storage_key,
-            "storage_backend_generation": (
-                dict(target.metadata or {}).get("storage_backend_generation")
-            ),
-        },
+        identity,
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -1298,313 +1276,6 @@ async def claim_workspace_cleanup_target(
         return claim
 
 
-def _as_uuid(value: Any, *, code: str) -> uuid.UUID:
-    try:
-        return uuid.UUID(str(value))
-    except (TypeError, ValueError) as error:
-        raise WorkspaceCleanupDeleteError(code, retryable=False) from error
-
-
-def _strict_lexical_storage_path(
-    root: Path,
-    storage_key: str,
-    *,
-    invalid_code: str,
-) -> tuple[PurePosixPath, Path]:
-    if not isinstance(storage_key, str) or not storage_key or "\\" in storage_key:
-        raise WorkspaceCleanupDeleteError(invalid_code, retryable=False)
-    relative = PurePosixPath(storage_key)
-    if relative.is_absolute() or ".." in relative.parts or "." in relative.parts:
-        raise WorkspaceCleanupDeleteError(invalid_code, retryable=False)
-    current = root
-    for part in relative.parts:
-        current = current / part
-        # is_symlink also catches a dangling link and the loop includes the leaf.
-        if current.is_symlink():
-            raise WorkspaceCleanupDeleteError(invalid_code, retryable=False)
-    resolved = current.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as error:
-        raise WorkspaceCleanupDeleteError(invalid_code, retryable=False) from error
-    return relative, resolved
-
-
-def _remove_workspace_asset(claim: WorkspaceCleanupClaim) -> None:
-    root = _claim_storage_root(
-        claim,
-        expected_root_kind=_WORKSPACE_ASSET_ROOT_KIND,
-        invalid_code="workspace_cleanup_asset_root_invalid",
-    )
-    relative, target = _strict_lexical_storage_path(
-        root,
-        claim.storage_key,
-        invalid_code="workspace_cleanup_asset_path_invalid",
-    )
-    metadata = claim.resource_metadata
-    asset_id = _as_uuid(
-        metadata.get("asset_id"),
-        code="workspace_cleanup_asset_identity_invalid",
-    )
-    owner_scope = metadata.get("owner_scope")
-    expected_owner_scope = (
-        str(claim.owner_id) if claim.owner_id is not None else "anonymous"
-    )
-    parts = relative.parts
-    leaf = PurePosixPath(parts[-1]) if parts else PurePosixPath("")
-    suffix = leaf.suffix.lower()
-    if (
-        len(parts) != 3
-        or owner_scope != expected_owner_scope
-        or parts[0] != expected_owner_scope
-        or parts[1] != str(asset_id)
-        or not isinstance(claim.sha256, str)
-        or _SHA256_PATTERN.fullmatch(claim.sha256) is None
-        or suffix not in _WORKSPACE_ASSET_SUFFIXES
-        or leaf.name != f"{claim.sha256}{suffix}"
-        or target == root
-    ):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_asset_path_invalid", retryable=False
-        )
-    if target.exists() and not target.is_file():
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_asset_path_invalid", retryable=False
-        )
-    target.unlink(missing_ok=True)
-    parent = target.parent
-    while parent != root and root in parent.parents:
-        if parent.is_symlink():
-            raise WorkspaceCleanupDeleteError(
-                "workspace_cleanup_asset_path_invalid", retryable=False
-            )
-        try:
-            parent.rmdir()
-        except OSError:
-            break
-        parent = parent.parent
-
-
-def _remove_workspace_artifact(claim: WorkspaceCleanupClaim) -> None:
-    artifact_id = _as_uuid(
-        claim.resource_metadata.get("artifact_id"),
-        code="workspace_cleanup_artifact_identity_invalid",
-    )
-    operation_id = claim.operation_id
-    artifact_kind = claim.resource_metadata.get("artifact_kind")
-    if operation_id is None or not isinstance(artifact_kind, str):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_artifact_identity_invalid", retryable=False
-        )
-    root = _claim_storage_root(
-        claim,
-        expected_root_kind=_WORKSPACE_ARTIFACT_ROOT_KIND,
-        invalid_code="workspace_cleanup_artifact_root_invalid",
-    )
-    _strict_lexical_storage_path(
-        root,
-        claim.storage_key,
-        invalid_code="workspace_cleanup_artifact_symlink_invalid",
-    )
-    _delete_claimed_artifact_files(
-        WorkspaceArtifactCleanupClaim(
-            artifact_id=artifact_id,
-            owner_id=claim.owner_id,
-            operation_id=operation_id,
-            kind=artifact_kind,
-            storage_key=claim.storage_key,
-            token=claim.token,
-            attempts=claim.attempts,
-        ),
-        storage_root=root,
-    )
-
-
-def _remove_authored_checkpoint(claim: WorkspaceCleanupClaim) -> None:
-    job_id = _as_uuid(
-        claim.resource_metadata.get("job_id", claim.storage_key),
-        code="workspace_cleanup_checkpoint_identity_invalid",
-    )
-    if claim.storage_key != str(job_id):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_checkpoint_identity_invalid", retryable=False
-        )
-    root = _claim_storage_root(
-        claim,
-        expected_root_kind=_AUTHORED_CHECKPOINT_ROOT_KIND,
-        invalid_code="workspace_cleanup_checkpoint_root_invalid",
-    )
-    _relative, directory = _strict_lexical_storage_path(
-        root,
-        claim.storage_key,
-        invalid_code="workspace_cleanup_checkpoint_path_invalid",
-    )
-    if directory.parent != root or directory.name != str(job_id):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_checkpoint_path_invalid", retryable=False
-        )
-    if directory.exists() and not directory.is_dir():
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_checkpoint_path_invalid", retryable=False
-        )
-    _remove_owned_tree(directory)
-
-
-def _remove_template_v2_native(claim: WorkspaceCleanupClaim) -> None:
-    template_id = claim.resource_metadata.get("template_id")
-    revision = claim.resource_metadata.get("revision")
-    if not isinstance(template_id, str) or isinstance(revision, bool):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_template_identity_invalid", retryable=False
-        )
-    try:
-        revision_value = int(revision)
-    except (TypeError, ValueError) as error:
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_template_identity_invalid", retryable=False
-        ) from error
-    root = _claim_storage_root(
-        claim,
-        expected_root_kind=_TEMPLATE_V2_NATIVE_ROOT_KIND,
-        invalid_code="workspace_cleanup_template_root_invalid",
-    )
-    remove_native_source(
-        claim.storage_key,
-        template_id=template_id,
-        revision=revision_value,
-        storage_root=root,
-    )
-
-
-def _remove_authored_image_tree(claim: WorkspaceCleanupClaim) -> None:
-    presentation_id = claim.presentation_id
-    metadata = claim.resource_metadata
-    if (
-        presentation_id is None
-        or metadata.get("presentation_id") != str(presentation_id)
-        or metadata.get("owner_scope")
-        != (str(claim.owner_id) if claim.owner_id is not None else "anonymous")
-        or claim.resource_kind != "authored.slide_image_tree"
-    ):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_authored_image_identity_invalid", retryable=False
-        )
-    root = _claim_storage_root(
-        claim,
-        expected_root_kind=_AUTHORED_IMAGES_ROOT_KIND,
-        invalid_code="workspace_cleanup_authored_image_root_invalid",
-    )
-    relative, directory = _strict_lexical_storage_path(
-        root,
-        claim.storage_key,
-        invalid_code="workspace_cleanup_authored_image_path_invalid",
-    )
-    if (
-        relative.parts != ("authored", str(presentation_id))
-        or directory.parent != root / "authored"
-        or directory.name != str(presentation_id)
-        or directory == root
-    ):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_authored_image_path_invalid", retryable=False
-        )
-    if directory.exists() and not directory.is_dir():
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_authored_image_path_invalid", retryable=False
-        )
-    _remove_owned_tree(directory)
-
-
-def _remove_account_owned_tree(claim: WorkspaceCleanupClaim) -> None:
-    """Remove only an exact UUID child of the snapshotted owner root."""
-
-    owner_id = claim.owner_id
-    metadata = claim.resource_metadata
-    if owner_id is None or metadata.get("owner_id") != str(owner_id):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_account_tree_identity_invalid", retryable=False
-        )
-    root_kind = metadata.get("storage_root_kind")
-    if (
-        not isinstance(root_kind, str)
-        or (
-            root_kind not in _ACCOUNT_APP_DATA_ROOT_KINDS
-            and root_kind != _ACCOUNT_TEMP_TREE_KIND
-        )
-    ):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_account_tree_root_invalid", retryable=False
-        )
-    snapshotted_root = _claim_storage_root(
-        claim,
-        expected_root_kind=root_kind,
-        invalid_code="workspace_cleanup_account_tree_root_invalid",
-    )
-    if root_kind in _ACCOUNT_APP_DATA_ROOT_KINDS:
-        expected_suffix = (
-            _ACCOUNT_APP_DATA_ROOT_KINDS[root_kind],
-            "users",
-        )
-        if tuple(snapshotted_root.parts[-2:]) != expected_suffix:
-            raise WorkspaceCleanupDeleteError(
-                "workspace_cleanup_account_tree_root_invalid", retryable=False
-            )
-    expected = snapshotted_root / str(owner_id)
-    supplied = Path(claim.storage_key)
-    if (
-        not supplied.is_absolute()
-        or supplied != expected
-        or os.path.normpath(claim.storage_key) != claim.storage_key
-        or supplied.parent != snapshotted_root
-        or supplied.name != str(owner_id)
-        or claim.resource_kind != "account.owned_tree"
-        or expected == snapshotted_root
-        or expected.is_symlink()
-    ):
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_account_tree_path_invalid", retryable=False
-        )
-    if expected.exists() and not expected.is_dir():
-        raise WorkspaceCleanupDeleteError(
-            "workspace_cleanup_account_tree_path_invalid", retryable=False
-        )
-    if expected.is_dir():
-        _remove_owned_tree(expected)
-
-
-def _delete_claimed_storage(claim: WorkspaceCleanupClaim) -> None:
-    try:
-        if claim.storage_namespace == "workspace_asset":
-            _remove_workspace_asset(claim)
-        elif claim.storage_namespace == "workspace_artifact":
-            _remove_workspace_artifact(claim)
-        elif claim.storage_namespace == "authored_checkpoint":
-            _remove_authored_checkpoint(claim)
-        elif claim.storage_namespace == "template_v2_native":
-            _remove_template_v2_native(claim)
-        elif claim.storage_namespace == "authored_image_tree":
-            _remove_authored_image_tree(claim)
-        elif claim.storage_namespace == "account_owned_tree":
-            _remove_account_owned_tree(claim)
-        else:
-            raise WorkspaceCleanupDeleteError(
-                "workspace_cleanup_namespace_invalid", retryable=False
-            )
-    except WorkspaceCleanupDeleteError:
-        raise
-    except Exception as error:
-        code = getattr(error, "code", "workspace_cleanup_delete_failed")
-        normalized = str(code)
-        nonretryable = any(
-            marker in normalized
-            for marker in ("invalid", "escape", "mismatch", "forbidden", "unsafe")
-        )
-        raise WorkspaceCleanupDeleteError(
-            normalized,
-            retryable=not nonretryable,
-        ) from error
-
-
 async def finalize_workspace_cleanup_target(
     claim: WorkspaceCleanupClaim,
     *,
@@ -1909,6 +1580,7 @@ __all__ = [
     "claim_workspace_cleanup_target",
     "enqueue_workspace_cleanup_targets",
     "finalize_workspace_cleanup_target",
+    "legacy_gallery_image_cleanup_target",
     "redrive_workspace_cleanup_dead_letter",
     "snapshot_account_workspace_cleanup_targets",
     "snapshot_presentation_workspace_cleanup_targets",

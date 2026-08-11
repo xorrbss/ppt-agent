@@ -6,6 +6,7 @@ import json
 import re
 import time
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import llmai
@@ -97,7 +98,6 @@ Overflow prevention is a hard requirement:
   text is visible, cards contain their content, siblings do not overlap, and no
   meaningful element crosses the 1280×720 boundary.
 """
-
 SMART_VISUAL_EVIDENCE_PROMPT = """
 Visual evidence and asset decisions:
 - Before choosing visuals, identify what each slide needs to communicate:
@@ -137,7 +137,6 @@ Visual evidence and asset decisions:
   Earth, wildfires, or melting ice may support the story, but they must not
   replace the quantitative evidence.
 """
-
 CHART_JS_INSTRUCTIONS = """
 - Use Chart.js for every quantitative chart. Assume `Chart` and the `datalabels`
   plugin are already available; do not add CDN scripts or custom plugins.
@@ -152,9 +151,14 @@ CHART_JS_INSTRUCTIONS = """
 - A chart is incomplete unless the same slide contains both its canvas and its
   inline initialization script. Never return a chart canvas by itself.
 - Example:
-  `<canvas id="chart-f81a12" width="900" height="420"></canvas><script>(() => { const canvas = document.querySelector('#chart-f81a12'); if (!canvas) return; new Chart(canvas, { type: 'bar', data: { labels: ['A', 'B'], datasets: [{ data: [10, 20], backgroundColor: ['#866255', '#B78E7E'] }] }, options: { responsive: false, animation: false, plugins: { datalabels: { anchor: 'end', align: 'end' } } } }); })();</script>`
+  `<canvas id="chart-f81a12" width="900" height="420"></canvas>
+  <script>(() => { const canvas = document.querySelector('#chart-f81a12');
+  if (!canvas) return; new Chart(canvas, { type: 'bar', data: {
+  labels: ['A', 'B'], datasets: [{ data: [10, 20],
+  backgroundColor: ['#866255', '#B78E7E'] }] }, options: {
+  responsive: false, animation: false, plugins: { datalabels: {
+  anchor: 'end', align: 'end' } } } }); })();</script>`
 """
-
 SMART_DIRECT_HTML_PROMPT = (
     """
 Return exactly this delimiter format:
@@ -171,14 +175,12 @@ class="relative h-[720px] w-[1280px] overflow-hidden ...">
   ...editable slide HTML...
 </section>
 <!-- SLIDE_END -->
-
 Use `data-slide-type="title"` for the title slide,
 `data-slide-type="toc"` for a table of contents, and
 `data-slide-type="content"` or `"closing"` for other slides. Never place a
 delimiter inside a slide. The slide count includes title and TOC slides.
 When requested, the table of contents must immediately follow the title slide,
 or be the first slide when there is no title slide.
-
 Requirements for every slide:
 - Return one production-ready HTML/Tailwind `<section>` fragment per slide.
 - Every section must include `relative h-[720px] w-[1280px] overflow-hidden`.
@@ -334,9 +336,12 @@ def get_smart_messages(
         if community_design_context.strip()
         else ""
     )
+    generation_instruction = "Continue the presentation in one response."
+    if not completed_slides:
+        generation_instruction = "Generate the complete presentation in one response."
     user_prompt = (
         f"""
-{"Continue the presentation in one response." if completed_slides else "Generate the complete presentation in one response."}
+{generation_instruction}
 Plan the narrative, slide sequence, titles, content, and visual variety
 internally. Do not output an outline, manifest, plan, commentary, JSON, or
 markdown fences.
@@ -565,6 +570,17 @@ class SmartSlideStreamParser:
         return slides
 
 
+@dataclass(slots=True)
+class _SmartGenerationAttemptState:
+    parser: SmartSlideStreamParser
+    slides: list[dict[str, str]]
+    response_chunks: list[str]
+    thinking_chunks: list[str]
+    supports_thinking: bool
+    started_at: float
+    input_tokens: int
+
+
 def parse_smart_presentation_html(
     response: str,
     *,
@@ -693,17 +709,8 @@ def get_smart_reasoning_config(model: str) -> tuple[ReasoningConfig | None, bool
     if not supports_thinking:
         return None, False
 
-    return (
-        ReasoningConfig(
-            enabled=True,
-            effort=(
-                ReasoningEffortValue.LOW
-                if provider in {"openai", "azure"}
-                else None
-            ),
-        ),
-        True,
-    )
+    effort = ReasoningEffortValue.LOW if provider in {"openai", "azure"} else None
+    return ReasoningConfig(enabled=True, effort=effort), True
 
 
 async def generate_smart_presentation(
@@ -746,19 +753,16 @@ async def generate_smart_presentation(
             completed_slides=accepted_slides,
             retry_error=retry_error,
         )
-        parser = SmartSlideStreamParser()
-        attempt_slides: list[dict[str, str]] = []
-        streamed_response = ""
-        streamed_thinking = ""
-        model_supports_thinking = configured_thinking_support
-        attempt_started_at = time.perf_counter()
-        estimated_input_tokens = estimate_message_tokens(messages)
+        attempt_state = _SmartGenerationAttemptState(
+            parser=SmartSlideStreamParser(), slides=[], response_chunks=[], thinking_chunks=[],
+            supports_thinking=configured_thinking_support, started_at=time.perf_counter(),
+            input_tokens=estimate_message_tokens(messages),
+        )
 
-        async def handle_chunk(chunk: str) -> None:
-            nonlocal streamed_response
-            streamed_response += chunk
-            for slide in parser.feed(chunk):
-                index = len(accepted_slides) + len(attempt_slides)
+        async def handle_chunk(chunk: str, state: _SmartGenerationAttemptState = attempt_state) -> None:
+            state.response_chunks.append(chunk)
+            for slide in state.parser.feed(chunk):
+                index = len(accepted_slides) + len(state.slides)
                 if index >= n_slides:
                     raise HTTPException(
                         status_code=400,
@@ -770,38 +774,38 @@ async def generate_smart_presentation(
                     include_title_slide=include_title_slide,
                     include_table_of_contents=include_table_of_contents,
                 )
-                attempt_slides.append(slide)
+                state.slides.append(slide)
                 if on_slide is not None:
                     await on_slide(index, slide)
 
-        async def handle_thinking_chunk(chunk: str) -> None:
-            nonlocal streamed_thinking, model_supports_thinking
-            streamed_thinking += chunk
-            model_supports_thinking = True
+        async def handle_thinking_chunk(chunk: str, state: _SmartGenerationAttemptState = attempt_state) -> None:
+            state.thinking_chunks.append(chunk)
+            state.supports_thinking = True
 
-        async def emit_estimated_metrics_periodically() -> None:
+        async def emit_estimated_metrics_periodically(state: _SmartGenerationAttemptState = attempt_state) -> None:
             while True:
                 await asyncio.sleep(SMART_GENERATION_METRICS_INTERVAL_SECONDS)
-                duration = max(time.perf_counter() - attempt_started_at, 1e-9)
-                output_tokens = estimate_text_tokens(streamed_response)
+                duration = max(time.perf_counter() - state.started_at, 1e-9)
+                output_tokens = estimate_text_tokens("".join(state.response_chunks))
+                streamed_thinking = "".join(state.thinking_chunks)
                 thinking_tokens = (
                     estimate_thinking_tokens(streamed_thinking)
                     if streamed_thinking
-                    else (0 if model_supports_thinking else None)
+                    else (0 if state.supports_thinking else None)
                 )
                 if on_metrics is not None:
                     await on_metrics(
                         TextGenerationMetrics(
                             model=model,
-                            input_tokens=estimated_input_tokens,
+                            input_tokens=state.input_tokens,
                             output_tokens=output_tokens,
-                            total_tokens=estimated_input_tokens + output_tokens,
+                            total_tokens=state.input_tokens + output_tokens,
                             tokens_per_second=output_tokens / duration,
                             duration_seconds=duration,
                             estimated=True,
                             thinking_tokens=thinking_tokens,
-                            thinking_tokens_estimated=model_supports_thinking,
-                            supports_thinking=model_supports_thinking,
+                            thinking_tokens_estimated=state.supports_thinking,
+                            supports_thinking=state.supports_thinking,
                         )
                     )
 
@@ -819,7 +823,7 @@ async def generate_smart_presentation(
                     handle_chunk,
                     reasoning=reasoning,
                     on_thinking_chunk=handle_thinking_chunk,
-                    model_supports_thinking=model_supports_thinking,
+                    model_supports_thinking=attempt_state.supports_thinking,
                 )
             finally:
                 if metrics_task is not None:
@@ -834,28 +838,24 @@ async def generate_smart_presentation(
                 include_table_of_contents=include_table_of_contents,
                 start_index=len(accepted_slides),
             )
-            if len(parsed_slides) != len(attempt_slides):
+            if len(parsed_slides) != len(attempt_state.slides):
                 raise HTTPException(
                     status_code=400,
                     detail="Incremental Smart slide parsing did not match the final deck",
                 )
             title = title or parsed_title
-            accepted_slides.extend(attempt_slides)
+            accepted_slides.extend(attempt_state.slides)
             return {"title": title, "slides": accepted_slides, "metrics": metrics}
         except Exception as exc:
             if metrics_task is not None and not metrics_task.done():
                 metrics_task.cancel()
                 await asyncio.gather(metrics_task, return_exceptions=True)
             last_exception = exc
-            retry_error = (
-                str(exc.detail)
-                if isinstance(exc, HTTPException)
-                else str(exc)
-            )
-            title_match = SMART_DECK_TITLE_RE.search(parser.buffer)
+            retry_error = str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            title_match = SMART_DECK_TITLE_RE.search(attempt_state.parser.buffer)
             if not title and title_match is not None:
                 title = title_match.group(1).strip()
-            accepted_slides.extend(attempt_slides)
+            accepted_slides.extend(attempt_state.slides)
             if len(accepted_slides) >= n_slides:
                 return {
                     "title": title or accepted_slides[0]["title"],

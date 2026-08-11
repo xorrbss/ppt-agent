@@ -789,7 +789,7 @@ function projectFileRelativePath(file) {
 }
 
 function validateDurableSnapshot(snapshot) {
-  if (snapshot?.schemaVersion !== 1 || !Array.isArray(snapshot.files)) {
+  if (![1, 2].includes(snapshot?.schemaVersion) || !Array.isArray(snapshot.files)) {
     throw new Error(
       `The workspace E2E runner lock contains an invalid project snapshot.`,
     );
@@ -827,9 +827,22 @@ function validateDurableSnapshot(snapshot) {
         `The workspace E2E runner lock project snapshot failed its checksum.`,
       );
     }
+    const gitHeadObject = entry.gitHeadObject;
+    if (
+      snapshot.schemaVersion === 2 &&
+      gitHeadObject !== null &&
+      (typeof gitHeadObject !== "string" ||
+        !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(gitHeadObject))
+    ) {
+      throw new Error(
+        `The workspace E2E runner lock project snapshot has invalid Git HEAD proof.`,
+      );
+    }
     return {
       file: path.join(appDirectory, ...entry.path.split("/")),
       contents,
+      gitHeadObject:
+        snapshot.schemaVersion === 2 ? (gitHeadObject ?? undefined) : undefined,
     };
   });
 }
@@ -1302,12 +1315,13 @@ async function persistProjectFileSnapshots(snapshots) {
     `project-files.snapshot.${runnerLockToken}.tmp`,
   );
   const snapshot = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     createdAt: new Date().toISOString(),
-    files: snapshots.map(({ file, contents }) => ({
+    files: snapshots.map(({ file, contents, gitHeadObject }) => ({
       path: projectFileRelativePath(file),
       contentsBase64: contents.toString("base64"),
       sha256: createHash("sha256").update(contents).digest("hex"),
+      gitHeadObject: gitHeadObject ?? null,
     })),
   };
   writeDurableFileSync(temporaryFile, `${JSON.stringify(snapshot, null, 2)}\n`);
@@ -2642,10 +2656,14 @@ async function terminateRecordedChildProcesses(ownerToken) {
 
 async function snapshotProjectFiles() {
   return Promise.all(
-    nextGeneratedProjectFiles.map(async (file) => ({
-      file,
-      contents: await readFile(file),
-    })),
+    nextGeneratedProjectFiles.map(async (file) => {
+      const contents = await readFile(file);
+      return {
+        file,
+        contents,
+        gitHeadObject: gitHeadObjectForProjectFileContents(file, contents),
+      };
+    }),
   );
 }
 
@@ -2663,6 +2681,69 @@ async function readOptionalFile(file) {
     if (error?.code === "ENOENT") return undefined;
     throw error;
   });
+}
+
+export function gitHeadObjectForProjectFileContents(file, currentContents) {
+  if (typeof file !== "string" || !Buffer.isBuffer(currentContents)) {
+    return undefined;
+  }
+  const repository = spawnSync(
+    "git",
+    ["-C", path.dirname(file), "rev-parse", "--show-toplevel"],
+    { encoding: "utf8", windowsHide: true },
+  );
+  if (repository.status !== 0) return undefined;
+
+  const repositoryRoot = repository.stdout.trim();
+  const relativePath = path
+    .relative(repositoryRoot, path.resolve(file))
+    .split(path.sep)
+    .join("/");
+  if (
+    !repositoryRoot ||
+    !relativePath ||
+    relativePath.startsWith("../") ||
+    path.isAbsolute(relativePath)
+  ) {
+    return undefined;
+  }
+
+  // Hash the bytes through the path's Git clean filter, then compare that
+  // canonical object id with HEAD. This handles a repository's declared EOL
+  // conversion while avoiding status text, external diff drivers, or a path
+  // passed through a shell. A dirty/staged/untracked state has no matching
+  // HEAD blob and remains fail-closed.
+  const currentObject = spawnSync(
+    "git",
+    ["-C", repositoryRoot, "hash-object", `--path=${relativePath}`, "--stdin"],
+    {
+      encoding: "utf8",
+      input: currentContents,
+      maxBuffer: 8 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
+  const trackedObject = spawnSync(
+    "git",
+    ["-C", repositoryRoot, "rev-parse", `HEAD:${relativePath}`],
+    { encoding: "utf8", windowsHide: true },
+  );
+  if (
+    currentObject.status === 0 &&
+    trackedObject.status === 0 &&
+    currentObject.stdout.trim() === trackedObject.stdout.trim()
+  ) {
+    return trackedObject.stdout.trim();
+  }
+  return undefined;
+}
+
+function snapshotAndCurrentMatchSameGitHead(snapshot, currentContents) {
+  if (typeof snapshot?.gitHeadObject !== "string") return false;
+  return (
+    gitHeadObjectForProjectFileContents(snapshot.file, currentContents) ===
+    snapshot.gitHeadObject
+  );
 }
 
 export async function restoreProjectFileSnapshot(
@@ -2701,7 +2782,13 @@ export async function restoreProjectFileSnapshot(
     const currentAfterInterruptedRestore = await readOptionalFile(
       snapshot.file,
     );
-    if (currentAfterInterruptedRestore?.equals(snapshot.contents)) {
+    if (
+      currentAfterInterruptedRestore?.equals(snapshot.contents) ||
+      snapshotAndCurrentMatchSameGitHead(
+        snapshot,
+        currentAfterInterruptedRestore,
+      )
+    ) {
       await rm(recoveryFile);
       fsyncDirectorySync(lockDirectory);
       return;
@@ -2726,6 +2813,7 @@ export async function restoreProjectFileSnapshot(
 
   const current = await readOptionalFile(snapshot.file);
   if (current?.equals(snapshot.contents)) return;
+  if (snapshotAndCurrentMatchSameGitHead(snapshot, current)) return;
   if (!current) {
     throw concurrentProjectFileChangeError(
       snapshot.file,

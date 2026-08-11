@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowLeft,
   Check,
@@ -29,11 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { notify } from "@/components/ui/sonner";
-import {
-  IMAGE_PROVIDERS,
-  LLM_PROVIDERS,
-  WEB_SEARCH_PROVIDERS,
-} from "@/utils/providerConstants";
+import { CommunityCount, getProviderVisual, ProviderLogo, SetupChip, SetupRow } from "./CommunityPreviewPrimitives";
 
 interface CommunityDesignPreviewDialogProps {
   presentation: CommunityPresentation | null;
@@ -42,7 +38,6 @@ interface CommunityDesignPreviewDialogProps {
   onOpenChange: (open: boolean) => void;
   onUseDesign: (presentation: CommunityPresentation) => void;
 }
-
 export default function CommunityDesignPreviewDialog({
   presentation,
   open,
@@ -50,6 +45,7 @@ export default function CommunityDesignPreviewDialog({
   onOpenChange,
   onUseDesign,
 }: CommunityDesignPreviewDialogProps) {
+  const t = useTranslations("community");
   const [referenceView, setReferenceView] = useState<{
     sourceCommunityId: number;
     referenceId: number;
@@ -108,7 +104,7 @@ export default function CommunityDesignPreviewDialog({
     } catch (error) {
       if (referenceRequestId.current !== requestId) return;
       notify.error(
-        "Could not load the reference presentation",
+        t("loadReferenceError"),
         error instanceof Error ? error.message : undefined
       );
     } finally {
@@ -130,9 +126,9 @@ export default function CommunityDesignPreviewDialog({
 
     try {
       await navigator.clipboard.writeText(prompt);
-      notify.success("Prompt copied");
+      notify.success(t("promptCopied"));
     } catch {
-      notify.error("Could not copy the prompt");
+      notify.error(t("promptCopyError"));
     }
   };
 
@@ -177,7 +173,7 @@ export default function CommunityDesignPreviewDialog({
                       className="mb-1 inline-flex items-center gap-1 text-xs text-[#6847F4] transition hover:text-[#5137C8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/30"
                     >
                       <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
-                      Community preview
+                      {t("referenceBack")}
                     </button>
                   )}
                   <div className="flex items-center gap-2">
@@ -190,18 +186,18 @@ export default function CommunityDesignPreviewDialog({
                   </div>
                   <DialogDescription className="mt-1 line-clamp-2 text-sm font-normal leading-normal tracking-[-0.14px] text-[#808080]">
                     {displayedPresentation?.description?.trim() ||
-                      "Shared community presentation."}
+                      t("sharedDescription")}
                   </DialogDescription>
                 </div>
                 <div className="hidden shrink-0 items-center gap-2 sm:flex">
                   <CommunityCount
                     icon={<Eye aria-hidden="true" className="h-4 w-4" strokeWidth={1.5} />}
-                    label={`${presentation.views ?? 0} views`}
+                    label={t("views", { count: presentation.views ?? 0 })}
                     value={presentation.views ?? 0}
                   />
                   <CommunityCount
                     icon={<Heart aria-hidden="true" className="h-4 w-4" strokeWidth={1.5} />}
-                    label={`${presentation.likes ?? 0} likes`}
+                    label={t("likes", { count: presentation.likes ?? 0 })}
                     value={presentation.likes ?? 0}
                   />
                   <button
@@ -209,7 +205,7 @@ export default function CommunityDesignPreviewDialog({
                     onClick={() => onUseDesign(presentation)}
                     className="inline-flex h-[41px] shrink-0 items-center justify-center rounded-full border border-[#EDEEEF] px-[26px] font-syne text-sm font-normal tracking-[0.16px] text-[#191919] transition hover:bg-[#F8F8FA]"
                   >
-                    Use Design
+                    {t("useDesignLabel")}
                   </button>
                 </div>
               </header>
@@ -233,21 +229,21 @@ export default function CommunityDesignPreviewDialog({
                           <SmartHtmlSlide
                             html={slide}
                             fonts={displayedPresentation?.fonts}
-                            title={`${title} slide ${index + 1}`}
+                            title={t("slideTitle", { title, index: index + 1 })}
                           />
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-dashed border-[#D9D9DE] bg-white text-sm text-[#808080]">
-                      {loading ? "Loading slide previews ..." : "No slide previews available"}
+                      {loading ? t("slideLoading") : t("slideEmpty")}
                     </div>
                   )}
                 </div>
 
                 <aside className="shrink-0 overflow-visible border-t border-[#EDEEEF] bg-white p-4 font-syne sm:flex sm:min-h-0 sm:flex-col sm:overflow-hidden sm:border-l sm:border-t-0 sm:p-5">
                   <section className="shrink-0">
-                    <h3 className="text-base font-medium text-black">AI Setup</h3>
+                    <h3 className="text-base font-medium text-black">{t("aiSetup")}</h3>
 
                     <div className="mt-2.5 flex h-[22px] items-center">
                       {setupProviders.map((provider, index) => (
@@ -260,26 +256,26 @@ export default function CommunityDesignPreviewDialog({
                     </div>
 
                     <dl className="mt-2.5 space-y-2.5">
-                      <SetupRow label="Text">
+                      <SetupRow label={t("text")}>
                         <SetupChip>
-                          {textProvider ? getProviderVisual(textProvider).label : "Presenton managed"}
+                          {textProvider ? getProviderVisual(textProvider).label : t("managed")}
                         </SetupChip>
                         {setup?.text_model?.trim() && (
                           <SetupChip>{setup.text_model}</SetupChip>
                         )}
                       </SetupRow>
-                      <SetupRow label="Images">
+                      <SetupRow label={t("images")}>
                         <SetupChip>
-                          {imageProvider ? getProviderVisual(imageProvider).label : "Presenton managed"}
+                          {imageProvider ? getProviderVisual(imageProvider).label : t("managed")}
                         </SetupChip>
                       </SetupRow>
-                      <SetupRow label="Web Search">
+                      <SetupRow label={t("webSearch")}>
                         <SetupChip>
-                          {webSearchProvider ? getProviderVisual(webSearchProvider).label : "Presenton managed"}
+                          {webSearchProvider ? getProviderVisual(webSearchProvider).label : t("managed")}
                         </SetupChip>
                       </SetupRow>
                       {referencePresentationIds.length > 0 && (
-                        <SetupRow label="Reference">
+                        <SetupRow label={t("reference")}>
                           {referencePresentationIds.map((referenceId) => {
                             const isActiveReference =
                               isShowingReference &&
@@ -296,8 +292,8 @@ export default function CommunityDesignPreviewDialog({
                                 title={String(referenceId)}
                                 aria-label={
                                   isActiveReference
-                                    ? `Viewing reference presentation ${referenceId}`
-                                    : `Preview reference presentation ${referenceId}`
+                                    ? t("referenceViewing", { id: referenceId })
+                                    : t("referencePreview", { id: referenceId })
                                 }
                                 aria-pressed={isActiveReference}
                                 className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-[10px] border border-[#D9D6FE] bg-[#FAFAFF] px-2.5 py-0.5 text-xs font-normal text-[#4C4C4C] transition-colors hover:border-[#BDB4FD] hover:text-[#6847F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/30 disabled:cursor-wait disabled:opacity-60"
@@ -328,9 +324,9 @@ export default function CommunityDesignPreviewDialog({
                   <section className="sm:flex sm:min-h-0 sm:flex-1 sm:flex-col">
                     <div className="flex items-start gap-1.5">
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-medium text-black">Prompt</h3>
+                        <h3 className="text-base font-medium text-black">{t("prompt")}</h3>
                         <p className="mt-1 font-manrope text-xs font-normal text-[#4C4C4C]">
-                          Paste into the prompt field.
+                          {t("promptDescription")}
                         </p>
                       </div>
                       <button
@@ -338,7 +334,7 @@ export default function CommunityDesignPreviewDialog({
                         onClick={() => void copyPrompt()}
                         disabled={!displayedPresentation?.prompt?.trim()}
                         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#191919] transition hover:bg-[#F6F6F9] disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label="Copy example prompt"
+                        aria-label={t("copyPrompt")}
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </button>
@@ -346,28 +342,28 @@ export default function CommunityDesignPreviewDialog({
                     <div className="mt-2.5 max-h-[110px] overflow-y-auto overscroll-contain border-y border-[#EDEEEF] bg-[#F9FAFB] p-2.5 sm:mt-3.5 sm:min-h-0 sm:flex-1 sm:max-h-[165px]">
                       <p className="font-syne text-sm font-normal leading-5 text-[#191919]">
                         {displayedPresentation?.prompt?.trim() ||
-                          "No prompt was shared with this presentation."}
+                          t("noPrompt")}
                       </p>
                     </div>
                   </section>
 
                   <div className="mt-4 shrink-0 sm:mt-7">
                     <section className="min-w-0">
-                      <h3 className="text-base font-medium text-black">Creator</h3>
+                      <h3 className="text-base font-medium text-black">{t("creator")}</h3>
                       <p className="mt-1 break-all text-xs font-normal leading-4 text-[#4C4C4C]">
-                        by {author}
+                        {t("by", { author })}
                       </p>
                     </section>
 
                     <div className="mt-3 flex items-center gap-2 sm:hidden">
                       <CommunityCount
                         icon={<Eye aria-hidden="true" className="h-4 w-4" strokeWidth={1.5} />}
-                        label={`${presentation.views ?? 0} views`}
+                        label={t("views", { count: presentation.views ?? 0 })}
                         value={presentation.views ?? 0}
                       />
                       <CommunityCount
                         icon={<Heart aria-hidden="true" className="h-4 w-4" strokeWidth={1.5} />}
-                        label={`${presentation.likes ?? 0} likes`}
+                        label={t("likes", { count: presentation.likes ?? 0 })}
                         value={presentation.likes ?? 0}
                       />
                     </div>
@@ -377,7 +373,7 @@ export default function CommunityDesignPreviewDialog({
                       className="mt-2 inline-flex h-[41px] w-full min-w-0 items-center justify-center gap-2 rounded-full border border-[#EDEEEF] px-5 text-sm text-[#191919] sm:hidden"
                     >
                       <Check className="h-4 w-4" />
-                      Use Design
+                      {t("useDesignLabel")}
                     </button>
                   </div>
                 </aside>
@@ -389,118 +385,11 @@ export default function CommunityDesignPreviewDialog({
                 className="h-5 w-5 min-[1100px]:h-6 min-[1100px]:w-6"
                 strokeWidth={1.5}
               />
-              <span className="sr-only">Close preview</span>
+              <span className="sr-only">{t("closePreview")}</span>
             </DialogClose>
           </>
         )}
       </DialogContent>
     </Dialog>
   );
-}
-
-function CommunityCount({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: number;
-}) {
-  return (
-    <span
-      aria-label={label}
-      className="inline-flex h-[41px] min-w-[60px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-[#EDEEEF] bg-white px-2.5 font-syne text-sm font-normal text-[#4C4C4C] tabular-nums sm:min-w-[68px] sm:px-3"
-    >
-      {icon}
-      {formatCount(value)}
-    </span>
-  );
-}
-
-function ProviderLogo({
-  provider,
-  className = "",
-}: {
-  provider: string;
-  className?: string;
-}) {
-  const visual = getProviderVisual(provider);
-
-  return (
-    <span
-      className={`relative flex h-[22px] w-[22px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#EDEEEF] bg-white ${className}`}
-      title={visual.label}
-    >
-      {visual.src ? (
-        <Image
-          src={visual.src}
-          alt=""
-          aria-hidden="true"
-          fill
-          sizes="22px"
-          className="object-contain p-0.5"
-        />
-      ) : (
-        <span className="text-[8px] font-semibold text-[#4C4C4C]">
-          {visual.initials}
-        </span>
-      )}
-    </span>
-  );
-}
-
-function SetupRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex min-h-[18px] items-start gap-2.5">
-      <dt className="w-[76px] shrink-0 pt-0.5 text-sm font-normal text-[#808080]">
-        {label}
-      </dt>
-      <dd className="flex min-w-0 flex-wrap items-center gap-1">{children}</dd>
-    </div>
-  );
-}
-
-function SetupChip({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center justify-center rounded-[10px] border border-[#D9D6FE] bg-[#FAFAFF] px-2.5 py-0.5 text-xs font-normal text-[#4C4C4C]">
-      {children}
-    </span>
-  );
-}
-
-function getProviderVisual(provider: string) {
-  const normalized = provider.trim().toLowerCase();
-  const option =
-    LLM_PROVIDERS[normalized] ??
-    IMAGE_PROVIDERS[normalized] ??
-    WEB_SEARCH_PROVIDERS[normalized];
-  const label =
-    option?.label ??
-    normalized
-      .split(/[-_\s]+/)
-      .filter(Boolean)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ") ??
-    "Presenton";
-  const initials =
-    label
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase() || "P";
-
-  return { label, src: option?.icon, initials };
-}
-
-function formatCount(value: number) {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}m`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}k`;
-  }
-  return String(value);
 }

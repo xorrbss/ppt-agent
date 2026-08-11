@@ -396,8 +396,8 @@ export default function LLMProviderSelection({
                   <>
                     and{" "}
                     {llmConfig.IMAGE_PROVIDER &&
-                      IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
-                      ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER].label
+                      IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]
+                      ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label
                       : "xxxxx"}{" "}
                     for images
                   </>

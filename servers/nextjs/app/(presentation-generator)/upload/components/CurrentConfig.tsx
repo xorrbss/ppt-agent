@@ -1,5 +1,5 @@
 import { RootState } from '@/store/store';
-import { IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants';
+import { IMAGE_PROVIDER_OPTIONS, LLM_PROVIDER_OPTIONS } from '@/utils/provider-registry.generated';
 import React from 'react'
 import { useSelector } from 'react-redux';
 
@@ -8,7 +8,7 @@ const CurrentConfig = () => {
     const llmConfig = userConfigState.llm_config;
     const textProviderKey = llmConfig.LLM || "openai";
     const textProviderLabel =
-        LLM_PROVIDERS[textProviderKey]?.label || textProviderKey;
+        LLM_PROVIDER_OPTIONS[textProviderKey]?.label || textProviderKey;
     const selectedTextModel =
         textProviderKey === "openai"
             ? llmConfig.OPENAI_MODEL
@@ -48,7 +48,7 @@ const CurrentConfig = () => {
     const imageSummary = llmConfig.DISABLE_IMAGE_GENERATION
         ? "이미지 생성 사용 안 함"
         : llmConfig.IMAGE_PROVIDER
-            ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label || llmConfig.IMAGE_PROVIDER
+            ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]?.label || llmConfig.IMAGE_PROVIDER
             : "이미지 제공자 없음";
     return (
         <p className="text-[10px] px-2.5 py-0.5 rounded-[50px] text-[#7A5AF8] border border-[#EDEEEF]  font-medium ">

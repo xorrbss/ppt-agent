@@ -34,6 +34,26 @@
       "title": "AssetInventoryReference",
       "type": "object"
     },
+    "BrowserGolden": {
+      "additionalProperties": false,
+      "properties": {
+        "receiptPath": {
+          "title": "Receiptpath",
+          "type": "string"
+        },
+        "receiptSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Receiptsha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receiptPath",
+        "receiptSha256"
+      ],
+      "title": "BrowserGolden",
+      "type": "object"
+    },
     "EngineContract": {
       "additionalProperties": false,
       "properties": {
@@ -206,6 +226,15 @@
           "title": "Commitsha",
           "type": "string"
         },
+        "evidencePath": {
+          "title": "Evidencepath",
+          "type": "string"
+        },
+        "evidenceSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidencesha256",
+          "type": "string"
+        },
         "repository": {
           "title": "Repository",
           "type": "string"
@@ -230,7 +259,9 @@
         "commitSha",
         "sourcePath",
         "sourceFileCount",
-        "sourceInventorySha256"
+        "sourceInventorySha256",
+        "evidencePath",
+        "evidenceSha256"
       ],
       "title": "Provenance",
       "type": "object"
@@ -325,6 +356,9 @@
     "assets": {
       "$ref": "#/$defs/AssetInventoryReference"
     },
+    "browserGolden": {
+      "$ref": "#/$defs/BrowserGolden"
+    },
     "engine": {
       "$ref": "#/$defs/EngineContract"
     },
@@ -386,6 +420,7 @@
     "provenance",
     "thumbnail",
     "rendererSmoke",
+    "browserGolden",
     "publication"
   ],
   "title": "TemplatePackageManifest",

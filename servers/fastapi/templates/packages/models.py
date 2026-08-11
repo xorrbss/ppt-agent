@@ -75,6 +75,8 @@ class Provenance(PackageModel):
     source_inventory_sha256: str = Field(
         alias="sourceInventorySha256", pattern=r"^[0-9a-f]{64}$"
     )
+    evidence_path: str = Field(alias="evidencePath")
+    evidence_sha256: str = Field(alias="evidenceSha256", pattern=r"^[0-9a-f]{64}$")
 
 
 class Thumbnail(PackageModel):
@@ -85,6 +87,13 @@ class Thumbnail(PackageModel):
 
 
 class RendererSmoke(PackageModel):
+    receipt_path: str = Field(alias="receiptPath")
+    receipt_sha256: str = Field(
+        alias="receiptSha256", pattern=r"^[0-9a-f]{64}$"
+    )
+
+
+class BrowserGolden(PackageModel):
     receipt_path: str = Field(alias="receiptPath")
     receipt_sha256: str = Field(
         alias="receiptSha256", pattern=r"^[0-9a-f]{64}$"
@@ -121,6 +130,7 @@ class TemplatePackageManifest(PackageModel):
     provenance: Provenance
     thumbnail: Thumbnail
     renderer_smoke: RendererSmoke = Field(alias="rendererSmoke")
+    browser_golden: BrowserGolden = Field(alias="browserGolden")
     publication: Publication
 
 

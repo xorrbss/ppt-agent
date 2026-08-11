@@ -28,7 +28,8 @@ test("credential schemas contain references only, never credentials", () => {
   for (const provider of registry.providers) {
     for (const credential of provider.credentialSchema) {
       assert.match(credential.settingKey, /^[A-Z][A-Z0-9_]*$/);
-      assert.deepEqual(Object.keys(credential).sort(), ["kind", "required", "settingKey"]);
+      assert.ok(Object.keys(credential).every((key) => ["kind", "required", "settingKey", "widget"].includes(key)));
+      if (credential.widget !== undefined) assert.ok(["oauth-status", "password", "url", "text"].includes(credential.widget));
       assert.ok(
         settingsByKey.has(credential.settingKey),
         `provider credential reference is not in settings registry: ${credential.settingKey}`,
@@ -38,6 +39,16 @@ test("credential schemas contain references only, never credentials", () => {
       }
     }
   }
+});
+
+test("generated credential descriptors preserve every field reference but no value", () => {
+  assert.match(generated, /PUBLIC_PROVIDER_CREDENTIAL_DESCRIPTORS/);
+  for (const provider of registry.providers) {
+    for (const credential of provider.credentialSchema) {
+      assert.match(generated, new RegExp(`"settingKey": "${credential.settingKey}"`));
+    }
+  }
+  assert.doesNotMatch(generated, /secretValue|registry-must-never-render-this-secret/);
 });
 
 test("web-search settings and provider registry use the same closed ids", () => {

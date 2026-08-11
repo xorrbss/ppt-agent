@@ -17,6 +17,34 @@ from templates.v2.models.layouts import SlideLayouts
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 GENERATOR_PATH = REPOSITORY_ROOT / "contracts" / "template_v2" / "generate.py"
 SCHEMA_PATH = REPOSITORY_ROOT / "contracts" / "template_v2" / "v1" / "schema.json"
+AST_SCHEMA_PATH = (
+    REPOSITORY_ROOT / "contracts" / "template_v2" / "ast" / "v1" / "schema.json"
+)
+AST_TYPESCRIPT_PATH = (
+    REPOSITORY_ROOT
+    / "servers"
+    / "nextjs"
+    / "lib"
+    / "template-v2-ast"
+    / "template-v2-ast.generated.ts"
+)
+AST_FIXTURE_WIRE_PATH = (
+    REPOSITORY_ROOT
+    / "contracts"
+    / "template_v2"
+    / "fixtures"
+    / "repeatable-grouped-content.a3352f3c.json"
+)
+AST_FIXTURE_PATH = AST_FIXTURE_WIRE_PATH.with_suffix(".ast.json")
+TYPESCRIPT_PATH = (
+    REPOSITORY_ROOT
+    / "servers"
+    / "nextjs"
+    / "lib"
+    / "template-v2-html"
+    / "template-v2-contract.generated.ts"
+)
+JAVASCRIPT_PATH = TYPESCRIPT_PATH.with_suffix(".mjs")
 
 
 def _load_generator() -> ModuleType:
@@ -27,6 +55,13 @@ def _load_generator() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _stage_ast_wire_fixture(repository_root: Path) -> Path:
+    fixture_path = repository_root / AST_FIXTURE_WIRE_PATH.relative_to(REPOSITORY_ROOT)
+    fixture_path.parent.mkdir(parents=True, exist_ok=True)
+    fixture_path.write_bytes(AST_FIXTURE_WIRE_PATH.read_bytes())
+    return fixture_path
 
 
 def _root_element_union(schema: dict[str, object]) -> dict[str, object]:
@@ -86,18 +121,11 @@ def test_rendering_is_deterministic_utf8_with_lf() -> None:
     assert first == second
     assert set(first) == {
         SCHEMA_PATH,
-        REPOSITORY_ROOT
-        / "servers"
-        / "nextjs"
-        / "lib"
-        / "template-v2-html"
-        / "template-v2-contract.generated.ts",
-        REPOSITORY_ROOT
-        / "servers"
-        / "nextjs"
-        / "lib"
-        / "template-v2-html"
-        / "template-v2-contract.generated.mjs",
+        TYPESCRIPT_PATH,
+        JAVASCRIPT_PATH,
+        AST_SCHEMA_PATH,
+        AST_TYPESCRIPT_PATH,
+        AST_FIXTURE_PATH,
     }
     for content in first.values():
         assert content.endswith(b"\n")
@@ -142,6 +170,9 @@ def test_cli_check_is_cwd_independent_and_read_only(tmp_path: Path) -> None:
 def test_cli_check_fails_for_missing_outputs_without_creating_them(
     tmp_path: Path,
 ) -> None:
+    staged_fixture = _stage_ast_wire_fixture(tmp_path)
+    staged_fixture_bytes = staged_fixture.read_bytes()
+
     result = subprocess.run(
         [
             sys.executable,
@@ -158,4 +189,9 @@ def test_cli_check_fails_for_missing_outputs_without_creating_them(
 
     assert result.returncode == 1
     assert "generated contracts are stale" in result.stderr
-    assert list(tmp_path.iterdir()) == []
+    assert staged_fixture.read_bytes() == staged_fixture_bytes
+    assert {
+        path.relative_to(tmp_path)
+        for path in tmp_path.rglob("*")
+        if path.is_file()
+    } == {AST_FIXTURE_WIRE_PATH.relative_to(REPOSITORY_ROOT)}

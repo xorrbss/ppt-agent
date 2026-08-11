@@ -18,6 +18,7 @@ import { updateSlideContent, updateAdaptiveBlock } from "@/store/slices/presenta
 import { resolveAuthoredImageUrl } from "@/utils/api";
 import { useDispatch, useSelector } from "react-redux";
 import { Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
 import SmartHtmlEditor from "./SmartHtmlEditor";
 import type { RootState } from "@/store/store";
@@ -27,6 +28,7 @@ import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-pr
 
 
 export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml = false }: { slide: any, isEditMode: boolean, theme?: any, enableEditMode?: boolean, preferAuthoredHtml?: boolean }) => {
+    const t = useTranslations("community");
     const dispatch = useDispatch();
     const presentationData = useSelector(
         (state: RootState) => state.presentationGeneration.presentationData
@@ -124,7 +126,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
                                 slide={slide}
                                 renderIndex={slide.index}
                                 fonts={presentationData?.fonts}
-                                title={`Slide ${slide.index + 1}`}
+                                title={t("slideTitle", { title: "", index: slide.index + 1 }).trim()}
                             />
                         </div>
                     </SlideErrorBoundary>
@@ -153,7 +155,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
                         // eslint-disable-next-line @next/next/no-img-element -- Authored slide images may be backend, data, or blob URLs and must render unchanged.
                         <img
                             src={src}
-                            alt={`Slide ${slide.index + 1}`}
+                            alt={t("slideTitle", { title: "", index: slide.index + 1 }).trim()}
                             className="h-full w-full object-cover"
                             draggable={false}
                         />
@@ -270,7 +272,7 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
         );
     }
     return (
-        <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+        <SlideErrorBoundary label={t("slideTitle", { title: "", index: slide.index + 1 }).trim()}>
             <div ref={containerRef}>
                 {usesReplacer ? (
                     <TiptapTextReplacer

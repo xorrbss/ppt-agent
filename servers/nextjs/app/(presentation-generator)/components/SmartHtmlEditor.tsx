@@ -6,9 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { Sparkles } from "lucide-react";
 
 import IconsEditor from "./IconsEditor";
 import { useTailwindRuntimeReady } from "@/components/runtime/TailwindCdnRuntime";
@@ -21,57 +19,14 @@ import type { RootState } from "@/store/store";
 import ImageEditor from "./ImageEditor";
 import SmartHtmlSlide from "./SmartHtmlSlide";
 import { useSmartChartInjection } from "./useSmartChartInjection";
+import { SmartHtmlSelectionOverlay } from "./SmartHtmlSelectionOverlay";
+import { EXCLUDED_TEXT_TAGS, INLINE_TEXT_TAGS, SMART_EDITOR_SELECTION_STYLE, type SelectionRect } from "./smartHtmlEditorConstants";
 
 type ActiveMedia = {
   element: HTMLImageElement;
   kind: "icon" | "image";
   query: string;
 };
-
-type SelectionRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
-
-const EXCLUDED_TEXT_TAGS = new Set([
-  "SCRIPT",
-  "STYLE",
-  "NOSCRIPT",
-  "IFRAME",
-  "OBJECT",
-  "EMBED",
-  "SVG",
-  "IMG",
-  "VIDEO",
-  "AUDIO",
-  "CANVAS",
-]);
-
-const INLINE_TEXT_TAGS = new Set([
-  "B",
-  "STRONG",
-  "I",
-  "EM",
-  "SPAN",
-  "U",
-  "A",
-  "SMALL",
-  "SUB",
-  "SUP",
-  "S",
-  "MARK",
-  "CODE",
-  "KBD",
-  "VAR",
-  "ABBR",
-  "CITE",
-  "Q",
-  "TIME",
-  "BR",
-  "WBR",
-]);
 
 export default function SmartHtmlEditor({
   slide,
@@ -492,69 +447,8 @@ export default function SmartHtmlEditor({
         className="smart-html-editor relative h-full w-full overflow-hidden bg-white"
         aria-label={title}
       />
-      <style jsx global>{`
-        .smart-html-editor [contenteditable="true"] {
-          cursor: text;
-          user-select: text;
-          -webkit-user-select: text;
-        }
-        .smart-html-editor [contenteditable="true"]:focus {
-          outline: none;
-        }
-        .smart-html-editor [data-smart-editable-media="true"] {
-          cursor: pointer;
-          transition: opacity 160ms ease;
-        }
-        .smart-html-editor [data-smart-editable-media="true"]:hover {
-          opacity: 0.86;
-        }
-        .smart-html-editor[data-smart-selecting="true"],
-        .smart-html-editor[data-smart-selecting="true"] * {
-          cursor: crosshair !important;
-        }
-      `}</style>
-      {enableHtmlSelector &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <>
-            {hoverRect && (
-              <div
-                aria-hidden="true"
-                className="pointer-events-none fixed z-[80] rounded-[8px] border-2 border-dotted border-[#7A5AF8]"
-                style={{
-                  ...hoverRect,
-                  backgroundColor: "rgba(122, 90, 248, 0.07)",
-                  backgroundImage:
-                    "radial-gradient(rgba(122, 90, 248, 0.38) 1px, transparent 1px)",
-                  backgroundSize: "8px 8px",
-                  boxShadow:
-                    "0 0 0 1px rgba(255,255,255,0.9), 0 0 0 5px rgba(122,90,248,0.12)",
-                }}
-              />
-            )}
-            {selectionRect && (
-              <div
-                aria-hidden="true"
-                className="pointer-events-none fixed z-[81] rounded-[8px] border-2 border-dotted border-[#6941C6]"
-                style={{
-                  ...selectionRect,
-                  backgroundColor: "rgba(105, 65, 198, 0.08)",
-                  backgroundImage:
-                    "radial-gradient(rgba(105, 65, 198, 0.42) 1px, transparent 1px)",
-                  backgroundSize: "8px 8px",
-                  boxShadow:
-                    "0 0 0 1px rgba(255,255,255,0.95), 0 0 0 5px rgba(105,65,198,0.16)",
-                }}
-              >
-                <span className="absolute -top-8 left-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-[#6941C6] px-2 py-1.5 font-syne text-[11px] font-semibold text-white shadow-sm">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Selected for AI
-                </span>
-              </div>
-            )}
-          </>,
-          document.body
-        )}
+      <style jsx global>{SMART_EDITOR_SELECTION_STYLE}</style>
+      {enableHtmlSelector && <SmartHtmlSelectionOverlay hoverRect={hoverRect} selectionRect={selectionRect} />}
       {activeMedia?.kind === "image" && (
         <ImageEditor
           initialImage={activeMedia.element.src}

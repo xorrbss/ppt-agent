@@ -55,11 +55,11 @@ def resolve_provider(
     """
 
     provider = _provider_or_fail(provider_id)
+    if presentation_driver is not None and presentation_driver not in provider["presentationDrivers"]:
+        raise ProviderResolutionError("provider_driver_mismatch", provider_id)
     for capability in required_capabilities:
         if provider["capabilities"].get(capability) != "supported":
             raise ProviderResolutionError("provider_capability_mismatch", provider_id)
-    if presentation_driver is not None and presentation_driver not in provider["presentationDrivers"]:
-        raise ProviderResolutionError("provider_driver_mismatch", provider_id)
     return ResolvedProvider(
         provider_id=provider["id"],
         kind=provider["kind"],

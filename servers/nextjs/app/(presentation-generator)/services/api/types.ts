@@ -30,11 +30,7 @@ export interface ImageAssetResponse {
     message: string;
     id: string;
     file_url: string;
-    /** Remove after the legacy raw-path API compatibility window closes. */
-    path?: string;
 }
-
-
 
 export interface ThemeFont {
     name: string;

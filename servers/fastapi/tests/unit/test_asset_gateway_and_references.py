@@ -176,6 +176,18 @@ def test_reference_snapshot_migration_upgrade_downgrade_reupgrade(tmp_path: Path
             connection.exec_driver_sql(
                 "CREATE TABLE workspace_conversations (id CHAR(32) PRIMARY KEY)"
             )
+            # Later compatibility revisions require their real predecessor
+            # tables even though this fixture is focused on reference snapshots.
+            connection.exec_driver_sql(
+                "CREATE TABLE workspace_assets (id CHAR(32) PRIMARY KEY)"
+            )
+            connection.exec_driver_sql(
+                "CREATE TABLE presentations (id CHAR(32) PRIMARY KEY)"
+            )
+            connection.exec_driver_sql(
+                "CREATE TABLE imageasset ("
+                "id CHAR(32) PRIMARY KEY, path VARCHAR NOT NULL)"
+            )
             connection.exec_driver_sql(
                 "CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"
             )

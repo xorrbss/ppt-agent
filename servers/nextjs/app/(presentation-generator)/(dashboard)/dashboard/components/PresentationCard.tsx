@@ -17,6 +17,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { notify } from "@/components/ui/sonner";
 
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
@@ -37,19 +38,20 @@ export const PresentationCard = ({
   presentation: any;
   onDeleted?: (presentationId: string) => void;
 }) => {
+  const t = useTranslations("community");
   const router = useRouter();
   const pathname = usePathname();
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [showShareDialog, setShowShareDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const presentationRuntime = tryResolveServerIssuedPresentationProfile(presentation);
-  const presentationType = presentationRuntime?.profile.generation_mode ?? null;
+  const presentationDriverId = presentationRuntime?.profile.driver_id ?? null;
 
   const handlePreview = (e: React.MouseEvent) => {
     e.preventDefault();
     if (showDeleteDialog || showShareDialog) return;
-    if (!presentationType) {
-      notify.error("Unsupported presentation profile");
+    if (!presentationDriverId) {
+      notify.error(t("unsupportedProfile"));
       return;
     }
     trackEvent(MixpanelEvent.Dashboard_Presentation_Opened, {
@@ -57,9 +59,9 @@ export const PresentationCard = ({
       presentation_id: id,
       title_length: (title || "").length,
       slide_count: presentation?.slides?.length || 0,
-      presentation_type: presentationType,
+      presentation_driver_id: presentationDriverId,
     });
-    router.push(`/presentation?id=${id}&type=${presentationType}`);
+    router.push(`/presentation?id=${id}&driver=${presentationDriverId}`);
   };
   useEffect(() => {
     // Unified theme application (base 16 vars + fonts + adaptive tone & manner

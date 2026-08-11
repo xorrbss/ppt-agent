@@ -89,6 +89,18 @@ class PresentationModel(SQLModel, table=True):
         sa_column=Column(String, nullable=False, default="standard"),
         default="standard",
     )
+    # Canonical server-issued runtime identity. ``generation_mode`` remains a
+    # rolling-deployment codec only and is intentionally not dropped by this
+    # migration.
+    profile_driver_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(32), nullable=True, index=True),
+    )
+    profile_schema_version: Optional[int] = Field(default=None)
+    profile_backfilled_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
     community_design_ids: Optional[List[int]] = Field(
         sa_column=Column(JSON), default=None
     )
@@ -197,6 +209,9 @@ class PresentationModel(SQLModel, table=True):
             theme=self.theme,
             fonts=self.fonts,
             generation_mode=self.generation_mode,
+            profile_driver_id=self.profile_driver_id,
+            profile_schema_version=self.profile_schema_version,
+            profile_backfilled_at=self.profile_backfilled_at,
             community_design_ids=self.community_design_ids,
         )
 

@@ -78,6 +78,7 @@ from services.authored_presentation_service import (
 from services.concurrent_service import CONCURRENT_SERVICE
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
+from services.generation_provider_admission import generation_provider_admitted
 from services.generation_pipeline import build_template_structure
 from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
@@ -99,6 +100,7 @@ from services.references import (
     ReferenceProviderError,
     ReferenceSnapshotView,
     admit_reference_snapshots,
+    canonicalize_legacy_document_paths,
 )
 from services.template_v2_generation_observability import (
     log_template_v2_generation_observation,
@@ -157,7 +159,6 @@ from utils.authored_styles import (
     resolve_authored_style,
 )
 from utils.document_context import build_document_context
-from utils.document_path_security import validate_document_paths
 from utils.export_utils import export_presentation
 from utils.get_env import (
     get_authored_resume_max_attempts_env,
@@ -223,9 +224,14 @@ PRESENTATION_GENERATE_ROUTER = APIRouter(
 
 
 def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
-    """Persist private worker state without adding it to the public model schema."""
+    """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    # ``files`` is a compatibility-only admission field. Validation has already
+    # converted it to an immutable uploaded-document snapshot. Preserve the
+    # optional field's wire shape for old workers while ensuring its value can
+    # never contain a locator.
+    payload["files"] = None
     if request._authored_exact_snapshot_id is not None:
         payload[_INTERNAL_EXACT_SNAPSHOT_KEY] = request._authored_exact_snapshot_id
     return payload
@@ -593,7 +599,24 @@ async def check_if_api_request_is_valid(
         )
 
     if request.files:
-        request.files = validate_document_paths(request.files)
+        try:
+            snapshot = await canonicalize_legacy_document_paths(
+                sql_session,
+                file_paths=request.files,
+            )
+        except ReferenceProviderError as error:
+            exception = HTTPException(status_code=error.status_code, detail=error.code)
+            exception.code = error.code
+            exception.retryable = error.retryable
+            raise exception from error
+        # From this point onward only canonical snapshot identity survives.
+        # The private locator is consumed exactly once by the compatibility
+        # bridge and must not reach a presentation row or durable job payload.
+        request.files = None
+        request.reference_snapshot_ids = [
+            *request.reference_snapshot_ids,
+            snapshot.snapshot_id,
+        ]
 
     await _admit_generation_references(request, sql_session)
 
@@ -837,8 +860,16 @@ async def _record_chat_first_generation_admission_failure(
     ``operation.error`` projection makes response-loss replay unambiguous and
     gives terminal operation retry a durable job to rebind.
     """
-
     code, status_code, retryable = _generation_admission_failure_metadata(error)
+    if request.files or presentation.file_paths:
+        # A locator that failed before canonical snapshot creation cannot be
+        # retained for a durable retry. Require a fresh attachment instead of
+        # advertising a retry that has silently lost its source.
+        code = "legacy_file_reference_reattach_required"
+        status_code = 409
+        retryable = False
+        # Erase the locator in the same transaction as the terminal projection.
+        presentation.file_paths = None
     now = datetime.now(timezone.utc)
     safe_error = {
         "code": code,
@@ -848,10 +879,7 @@ async def _record_chat_first_generation_admission_failure(
         "stage": "admission",
     }
     payload = _durable_request_payload(request)
-    if presentation.file_paths is not None:
-        payload["files"] = list(presentation.file_paths)
     payload[_INTERNAL_ADMISSION_RETRY_KEY] = True
-
     status = AsyncPresentationGenerationTaskModel(
         status="error",
         message="Generation request was not admitted",
@@ -1275,6 +1303,7 @@ async def _generate_template_v2_presentation(
     return response
 
 
+@generation_provider_admitted
 async def generate_presentation_handler(
     request: GeneratePresentationRequest,
     presentation_id: uuid.UUID,
@@ -1283,9 +1312,8 @@ async def generate_presentation_handler(
     generation_job: Optional[PresentationGenerationJob] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    # Internal/sync callers can bypass the FastAPI validation dependency. Do
-    # not trust a durable snapshot UUID until the current worker has re-run
-    # owner, expiry, asset state, and digest admission.
+    # Internal callers can bypass validation, so re-run owner, expiry, asset
+    # state and digest admission before generation.
     if request.reference_snapshot_ids and not request._reference_snapshots:
         await _admit_generation_references(request, sql_session)
     # Bootstrap admission failures have a linked failed job so a terminal
@@ -2008,7 +2036,6 @@ async def generate_presentation_handler(
         else:
             raise safe_exception
 
-
 @PRESENTATION_GENERATE_ROUTER.post(
     "/generate", response_model=PresentationPathAndEditPath
 )
@@ -2515,6 +2542,9 @@ async def queue_presentation_generation(
                 code, status_code, _retryable = (
                     _generation_admission_failure_metadata(error)
                 )
+                if admitted_request.files or admitted_presentation.file_paths:
+                    code = "legacy_file_reference_reattach_required"
+                    status_code = 409
                 raise HTTPException(
                     status_code=status_code,
                     detail=code,
@@ -2552,11 +2582,11 @@ async def queue_presentation_generation(
             )
         presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
         sql_session.add(presentation)
-        # The bootstrap transaction copied legacy upload paths into immutable
-        # workspace storage. Workers must consume those durable paths, not the
-        # caller's potentially ephemeral upload references.
-        if presentation.file_paths is not None:
-            payload["files"] = list(presentation.file_paths)
+        # Admission converted any bootstrap paths into immutable reference
+        # snapshots. Erase the transitional locator from the presentation row;
+        # workers consume only ``reference_snapshot_ids`` from ``payload``.
+        presentation.file_paths = None
+        sql_session.add(presentation)
     target = request._template_v2_generation_target
     job = PresentationGenerationJob(
         task_id=async_status.id,

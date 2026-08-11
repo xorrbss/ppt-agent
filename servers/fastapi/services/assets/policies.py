@@ -129,7 +129,7 @@ DEFAULT_ASSET_POLICY_REGISTRY = AssetPolicyRegistry(
             20 * 1024 * 1024,
             True,
             False,
-            30 * 86400,
+            None,
         ),
         AssetPolicy(
             AssetKind.FONT,

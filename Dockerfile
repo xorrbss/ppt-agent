@@ -69,6 +69,7 @@ RUN mkdir -p /app/document-extraction-liteparse \
 
 COPY electron/resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
+COPY scripts/lib/presentation-export-readiness.cjs /app/scripts/lib/presentation-export-readiness.cjs
 # The sync installs the matching sharp native addon before recording its version marker.
 RUN rm -rf /app/presentation-export \
     && node /app/scripts/sync-presentation-export.cjs --force \
@@ -127,6 +128,7 @@ COPY --from=assets-builder /app/package.json /app/package.json
 COPY --from=assets-builder /app/document-extraction-liteparse /app/document-extraction-liteparse
 COPY --from=assets-builder /app/presentation-export /app/presentation-export
 COPY --from=assets-builder /app/scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
+COPY --from=assets-builder /app/scripts/lib/presentation-export-readiness.cjs /app/scripts/lib/presentation-export-readiness.cjs
 
 # Bundle Tesseract language data so OCR (LiteParse/tesseract.js) works offline.
 # Resolved by LiteParseService via PRESENTON_APP_ROOT (=/app) -> /app/tessdata.

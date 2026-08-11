@@ -14,6 +14,7 @@ import type {
   PresentationCapabilities,
   PresentationProfile,
 } from "@/lib/presentation-profile";
+import { setNestedMediaValue } from "./presentationGenerationMedia";
 
 /** Object/array container addressed by a dotted+indexed content data path. */
 type PathContainer = Record<string | number, unknown>;
@@ -46,7 +47,6 @@ export interface PresentationData {
   // elements). Narrowing this needs a discriminated slide model first.
   slides: any;
   theme: Theme | null;
-  generation_mode?: string;
   profile?: PresentationProfile;
   capabilities?: PresentationCapabilities;
   revision?: number;
@@ -413,59 +413,8 @@ const presentationGenerationSlice = createSlice({
         const slide = state.presentationData.slides[action.payload.slideIndex];
         const { dataPath, imageUrl, prompt } = action.payload;
 
-        // Helper function to set nested property value for images
-        const setNestedImageValue = (
-          obj: PathContainer,
-          path: string,
-          url: string,
-          promptText?: string
-        ) => {
-          const keys = path.split(/[.\[\]]+/).filter(Boolean);
-          let current = obj;
-
-          // Navigate to the parent object
-          for (let i = 0; i < keys.length - 1; i++) {
-            const key = keys[i];
-            if (isNaN(Number(key))) {
-              if (!current[key]) {
-                current[key] = {};
-              }
-              current = current[key] as PathContainer;
-            } else {
-              const index = Number(key);
-              if (!current[index]) {
-                current[index] = {};
-              }
-              current = current[index] as PathContainer;
-            }
-          }
-
-          // Set the image properties
-          const finalKey = keys[keys.length - 1];
-          const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
-          const targetRecord =
-            target && typeof target === 'object'
-              ? (target as PathContainer)
-              : undefined;
-
-          // Preserve existing properties if the target already exists
-          const updatedValue = {
-            ...(targetRecord ?? {}),
-            __image_url__: url,
-            __image_prompt__: promptText || (targetRecord?.__image_prompt__) || ''
-          };
-
-          if (isNaN(Number(finalKey))) {
-            current[finalKey] = updatedValue;
-          } else {
-            current[Number(finalKey)] = updatedValue;
-          }
-
-        };
-
-        // Update the slide image
         if (dataPath && slide.content) {
-          setNestedImageValue(slide.content, dataPath, imageUrl, prompt);
+          setNestedMediaValue(slide.content, dataPath, imageUrl, prompt, "__image_url__", "__image_prompt__");
         }
 
         // Also update the images array if it exists
@@ -519,58 +468,8 @@ const presentationGenerationSlice = createSlice({
         const slide = state.presentationData.slides[action.payload.slideIndex];
         const { dataPath, iconUrl, query } = action.payload;
 
-        // Helper function to set nested property value for icons
-        const setNestedIconValue = (
-          obj: PathContainer,
-          path: string,
-          url: string,
-          queryText?: string
-        ) => {
-          const keys = path.split(/[.\[\]]+/).filter(Boolean);
-          let current = obj;
-
-          // Navigate to the parent object
-          for (let i = 0; i < keys.length - 1; i++) {
-            const key = keys[i];
-            if (isNaN(Number(key))) {
-              if (!current[key]) {
-                current[key] = {};
-              }
-              current = current[key] as PathContainer;
-            } else {
-              const index = Number(key);
-              if (!current[index]) {
-                current[index] = {};
-              }
-              current = current[index] as PathContainer;
-            }
-          }
-
-          // Set the icon properties
-          const finalKey = keys[keys.length - 1];
-          const target = isNaN(Number(finalKey)) ? current[finalKey] : current[Number(finalKey)];
-          const targetRecord =
-            target && typeof target === 'object'
-              ? (target as PathContainer)
-              : undefined;
-
-          // Preserve existing properties if the target already exists
-          const updatedValue = {
-            ...(targetRecord ?? {}),
-            __icon_url__: url,
-            __icon_query__: queryText || (targetRecord?.__icon_query__) || ''
-          };
-
-          if (isNaN(Number(finalKey))) {
-            current[finalKey] = updatedValue;
-          } else {
-            current[Number(finalKey)] = updatedValue;
-          }
-        };
-
-        // Update the slide icon
         if (dataPath && slide.content) {
-          setNestedIconValue(slide.content, dataPath, iconUrl, query);
+          setNestedMediaValue(slide.content, dataPath, iconUrl, query, "__icon_url__", "__icon_query__");
         }
 
         // Also update the icons array if it exists

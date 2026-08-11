@@ -13,7 +13,7 @@ export type StockImageProvider = (typeof STOCK_IMAGE_PROVIDERS)[number];
 export const resolveEditorImageSource = (
   image:
     | string
-    | { file_url?: string | null; path?: string | null; url?: string | null }
+    | { asset_id?: string | null; file_url?: string | null }
     | null
     | undefined
 ) => resolveBackendAssetSource(image);

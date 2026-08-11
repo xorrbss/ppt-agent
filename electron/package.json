@@ -49,7 +49,7 @@
     "build:export-runtime": "node sync_export_runtime.js",
     "setup:export-runtime": "node sync_export_runtime.js",
     "fetch:export-runtime": "node sync_export_runtime.js --force",
-    "fetch:export-runtime:latest": "EXPORT_RUNTIME_VERSION=latest node sync_export_runtime.js --force",
+    "fetch:export-runtime:latest": "cross-env EXPORT_RUNTIME_VERSION=latest node sync_export_runtime.js --force --allow-version-override",
     "build:nextjs": "node build_nextjs_resources.js",
     "test:build-config": "node --test tests/build-config.test.cjs",
     "test:standalone-copy": "node --test tests/standalone-copy.test.cjs",

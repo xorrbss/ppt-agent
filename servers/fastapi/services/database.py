@@ -51,6 +51,7 @@ from models.sql.access_token import AccessToken
 from models.sql.provider_settings import ProviderSettings
 from models.sql.reference_snapshot import ReferenceSnapshot
 from templates.v2.catalog import get_template_v2_default_template_id
+from services.presentation_profile_persistence import stamp_presentation_profile
 from utils.owner_context import get_current_owner_id
 from utils.get_env import get_migrate_database_on_startup_env
 from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
@@ -180,6 +181,29 @@ def _scope_owned_selects(execute_state) -> None:
 
 @event.listens_for(Session, "before_flush")
 def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
+    profile_identity_fields = {
+        "generation_mode",
+        "mode",
+        "version",
+        "theme",
+        "community_design_ids",
+        "deck_plan",
+        "profile_driver_id",
+        "profile_schema_version",
+    }
+    for instance in session.new:
+        if isinstance(instance, PresentationModel):
+            stamp_presentation_profile(instance)
+    for instance in session.dirty:
+        if not isinstance(instance, PresentationModel):
+            continue
+        state = inspect(instance)
+        if any(
+            state.attrs[field].history.has_changes()
+            for field in profile_identity_fields
+        ):
+            stamp_presentation_profile(instance, allow_driver_transition=True)
+
     owner_id = get_current_owner_id()
     if owner_id is None:
         return

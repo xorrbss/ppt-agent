@@ -14,12 +14,12 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { LLMConfig } from "@/types/llm_config";
-import { LLM_PROVIDERS } from "@/utils/providerConstants";
+import { LLM_PROVIDER_OPTIONS } from "@/utils/provider-registry.generated";
 import { Check, ChevronUp } from "lucide-react";
 import React from "react";
 
 interface ProviderSelectFieldProps {
-  selectedProvider: keyof typeof LLM_PROVIDERS;
+  selectedProvider: keyof typeof LLM_PROVIDER_OPTIONS | null;
   llmConfig: LLMConfig;
   onInputChange: (value: string | boolean, field: string) => void;
   openProviderSelect: boolean;
@@ -57,7 +57,7 @@ const ProviderSelectField = ({
               <div className="flex gap-3 items-center">
                 <span className="text-sm font-medium text-gray-900">
                   {llmConfig.LLM
-                    ? LLM_PROVIDERS[llmConfig.LLM]?.label ||
+                    ? LLM_PROVIDER_OPTIONS[llmConfig.LLM]?.label ||
                       llmConfig.LLM
                     : "텍스트 제공자 선택"}
                 </span>
@@ -75,7 +75,7 @@ const ProviderSelectField = ({
               <CommandList>
                 <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                 <CommandGroup>
-                  {Object.values(LLM_PROVIDERS).map(
+                  {Object.values(LLM_PROVIDER_OPTIONS).map(
                     (provider, index) => (
                       <CommandItem
                         key={index}

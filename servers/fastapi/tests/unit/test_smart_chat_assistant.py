@@ -66,7 +66,7 @@ class _SmartSession:
 def _smart_presentation(presentation_id):
     return PresentationModel(
         id=presentation_id,
-        version=PresentationVersion.V2_STANDARD,
+        version=PresentationVersion.V1_STANDARD,
         content="Smart deck",
         n_slides=1,
         language="English",

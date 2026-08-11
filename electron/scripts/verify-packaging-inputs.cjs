@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { requireReadinessOverlay } = require("./export-readiness-verifier.cjs");
 
 const EXPECTED_EXPORT_VERSION = "v0.4.3";
 const DEFAULT_MAX_STANDALONE_FILES = 150000;
@@ -354,7 +355,12 @@ function validatePackagingInputs(options = {}) {
       `Export runtime marker must be ${EXPECTED_EXPORT_VERSION}, received ${installedVersion || "(empty)"}`
     );
   }
-  requireFile(path.join(exportRoot, "index.js"), "Export runtime bundle", 512);
+  const exportIndex = path.join(exportRoot, "index.js");
+  requireFile(exportIndex, "Export runtime bundle", 512);
+  requireReadinessOverlay(
+    fs.readFileSync(exportIndex, "utf8"),
+    "Export runtime bundle"
+  );
   const converter = converterCandidates(exportRoot, platform, arch).find((candidate) =>
     fs.existsSync(candidate)
   );

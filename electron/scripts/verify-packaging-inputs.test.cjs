@@ -20,6 +20,14 @@ function writeFile(filePath, contents = "fixture") {
   fs.writeFileSync(filePath, contents);
 }
 
+function readinessOverlayFixture() {
+  return Buffer.from(
+    `${"x".repeat(512)}data-presenton-template-v2-readiness ` +
+      'templateV2ResourceError==="true" ' +
+      "Template V2 required resource failed"
+  );
+}
+
 function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}) {
   const workspaceRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), "presenton-preflight-")
@@ -47,7 +55,7 @@ function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}
     path.join(exportRoot, ".installed-version"),
     `${EXPECTED_EXPORT_VERSION}\n`
   );
-  writeFile(path.join(exportRoot, "index.js"), Buffer.alloc(512, 1));
+  writeFile(path.join(exportRoot, "index.js"), readinessOverlayFixture());
   writeFile(
     path.join(exportRoot, "py", converterName),
     binaryHeader(platform)
@@ -140,7 +148,23 @@ test("rejects export marker mismatch and damaged Sharp", async (t) => {
       writeFile(path.join(fixture.exportRoot, ".installed-version"), "v0.3.3\n");
       assert.throws(
         () => validate(fixture),
-        /Export runtime marker must be v0\.4\.2, received v0\.3\.3/
+        /Export runtime marker must be v0\.4\.3, received v0\.3\.3/
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  await t.test("readiness overlay", () => {
+    const fixture = createFixture();
+    try {
+      writeFile(
+        path.join(fixture.exportRoot, "index.js"),
+        Buffer.alloc(512, 1)
+      );
+      assert.throws(
+        () => validate(fixture),
+        /missing the fail-closed renderer readiness overlay/
       );
     } finally {
       fixture.cleanup();

@@ -6,10 +6,19 @@ from typing import Iterable, List, Optional, Sequence
 from fastapi import HTTPException
 
 from utils.get_env import get_app_data_directory_env
+from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 
 
 INVALID_DOCUMENT_PATH_DETAIL = "Invalid document file path."
 INVALID_UPLOAD_FILENAME_DETAIL = "Invalid upload filename."
+_PRIVATE_APP_DATA_ROOTS = (
+    "images",
+    "exports",
+    "uploads",
+    "pptx-to-html",
+    "pptx-to-json",
+    "workspace-artifacts",
+)
 
 
 def _allowed_document_roots() -> List[str]:
@@ -17,11 +26,40 @@ def _allowed_document_roots() -> List[str]:
     # TempFileService itself imports environment helpers.
     from services.temp_file_service import TEMP_FILE_SERVICE
 
-    roots = [TEMP_FILE_SERVICE.base_dir]
+    owner_id = get_current_owner_id()
+    temp_root = TEMP_FILE_SERVICE.base_dir
+    roots = [
+        os.path.join(temp_root, str(owner_id))
+        if owner_id is not None
+        else temp_root
+    ]
     app_data = get_app_data_directory_env()
     if app_data:
-        roots.append(app_data)
+        if owner_id is None:
+            roots.append(app_data)
+        else:
+            roots.extend(
+                os.path.join(app_data, root_name, "users", str(owner_id))
+                for root_name in _PRIVATE_APP_DATA_ROOTS
+            )
     return [os.path.realpath(root) for root in roots]
+
+
+def _validated_admin_legacy_roots(
+    roots: Optional[Sequence[str]],
+) -> List[str]:
+    """Accept an explicitly audited global migration root for an admin only."""
+
+    if not roots:
+        return []
+    if not get_current_owner_is_admin() or get_current_owner_id() is None:
+        raise HTTPException(status_code=403, detail="admin_migration_required")
+    try:
+        return [os.path.realpath(root) for root in roots if root]
+    except (OSError, ValueError, TypeError):
+        raise HTTPException(
+            status_code=400, detail=INVALID_DOCUMENT_PATH_DETAIL
+        ) from None
 
 
 def _path_is_below_root(path: str, root: str) -> bool:
@@ -41,6 +79,7 @@ def validate_document_path(
     path: str,
     *,
     allowed_roots: Optional[Sequence[str]] = None,
+    admin_legacy_roots: Optional[Sequence[str]] = None,
 ) -> str:
     """Return a canonical, allowed regular-file path.
 
@@ -59,6 +98,7 @@ def validate_document_path(
             for root in (allowed_roots or _allowed_document_roots())
             if root
         ]
+        roots.extend(_validated_admin_legacy_roots(admin_legacy_roots))
     except (OSError, ValueError, TypeError):
         raise HTTPException(
             status_code=400, detail=INVALID_DOCUMENT_PATH_DETAIL
@@ -77,12 +117,17 @@ def validate_document_paths(
     paths: Iterable[str],
     *,
     allowed_roots: Optional[Sequence[str]] = None,
+    admin_legacy_roots: Optional[Sequence[str]] = None,
 ) -> List[str]:
     validated: List[str] = []
     seen = set()
 
     for path in paths:
-        real_path = validate_document_path(path, allowed_roots=allowed_roots)
+        real_path = validate_document_path(
+            path,
+            allowed_roots=allowed_roots,
+            admin_legacy_roots=admin_legacy_roots,
+        )
         identity = os.path.normcase(real_path)
         if identity in seen:
             raise HTTPException(

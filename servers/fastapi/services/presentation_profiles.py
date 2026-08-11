@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, Literal, TypeAlias, cast
 
-
 PresentationDriverId: TypeAlias = Literal[
     "standard", "smart", "template-v2", "authored"
 ]
@@ -106,6 +105,15 @@ class GenerationModeCompatibilityCodec:
             raise PresentationProfileError("unsupported_generation_mode")
         return cast(LegacyGenerationMode, value)
 
+    def decode_driver(self, value: object) -> PresentationDriverId:
+        """Decode a legacy value only when no canonical profile exists."""
+
+        mode = self.decode_persisted(value)
+        return cast(
+            PresentationDriverId,
+            {"standard": "standard", "smart": "smart"}[mode],
+        )
+
     def encode_profile(self, profile: PresentationProfile) -> LegacyGenerationMode:
         expected: LegacyGenerationMode = (
             "smart" if profile.driver_id == "smart" else "standard"
@@ -132,6 +140,25 @@ def _read(identity: PersistedIdentity, key: str, default: Any = None) -> Any:
     if isinstance(identity, Mapping):
         return identity.get(key, default)
     return getattr(identity, key, default)
+
+
+def _canonical_driver_id(
+    identity: PersistedIdentity,
+) -> PresentationDriverId | None:
+    value = _read(identity, "profile_driver_id")
+    if value is None:
+        return None
+    if value not in _DRIVER_IDS:
+        raise PresentationProfileError("unsupported_presentation_driver")
+    if _read(identity, "profile_schema_version") != PROFILE_SCHEMA_VERSION:
+        raise PresentationProfileError("presentation_profile_schema_unsupported")
+    return cast(PresentationDriverId, value)
+
+
+def uses_generation_mode_fallback(identity: PersistedIdentity) -> bool:
+    """Whether this row still needs the legacy discriminator to resolve."""
+
+    return _canonical_driver_id(identity) is None
 
 
 def _theme(identity: PersistedIdentity) -> Mapping[str, Any]:
@@ -180,8 +207,17 @@ def _style_source(
 def _validate_common_identity(identity: PersistedIdentity) -> tuple[
     LegacyGenerationMode, str | None, str, Mapping[str, Any]
 ]:
-    generation_mode = GENERATION_MODE_COMPATIBILITY.decode_persisted(
-        _read(identity, "generation_mode", "standard")
+    canonical_driver = _canonical_driver_id(identity)
+    generation_mode: LegacyGenerationMode = (
+        "smart"
+        if canonical_driver == "smart"
+        else (
+            "standard"
+            if canonical_driver is not None
+            else GENERATION_MODE_COMPATIBILITY.decode_persisted(
+                _read(identity, "generation_mode", "standard")
+            )
+        )
     )
     mode = _read(identity, "mode")
     if mode not in _KNOWN_MODES:
@@ -367,14 +403,21 @@ def resolve_presentation_profile(identity: PersistedIdentity) -> PresentationPro
     """
 
     generation_mode, mode, version, theme = _validate_common_identity(identity)
-    if generation_mode == "smart":
-        driver_id: PresentationDriverId = "smart"
-    elif mode == "authored" or theme.get("mode") == "authored":
-        driver_id = "authored"
-    elif version == "v2-standard" and mode in {None, "template"}:
-        driver_id = "template-v2"
+    canonical_driver = _canonical_driver_id(identity)
+    if canonical_driver is not None:
+        driver_id = canonical_driver
     else:
-        driver_id = "standard"
+        legacy_mode_driver = GENERATION_MODE_COMPATIBILITY.decode_driver(
+            generation_mode
+        )
+        if legacy_mode_driver == "smart":
+            driver_id = legacy_mode_driver
+        elif mode == "authored" or theme.get("mode") == "authored":
+            driver_id = "authored"
+        elif version == "v2-standard" and mode in {None, "template"}:
+            driver_id = "template-v2"
+        else:
+            driver_id = legacy_mode_driver
 
     driver = get_presentation_driver(driver_id)
     profile = PresentationProfile(
@@ -428,4 +471,5 @@ __all__ = [
     "resolve_presentation_capabilities",
     "resolve_presentation_driver",
     "resolve_presentation_profile",
+    "uses_generation_mode_fallback",
 ]

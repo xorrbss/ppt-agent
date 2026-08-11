@@ -1,0 +1,674 @@
+{
+  "schemaVersion": "presenton.template-package-provenance/v1",
+  "templateId": "editorial",
+  "upstream": {
+    "repository": "https://github.com/presenton/presenton",
+    "commitSha": "e271359ed91bfa48ba18c5717f8e19a7b69326ef",
+    "sourcePath": "templates/editorial",
+    "commitUrl": "https://github.com/presenton/presenton/commit/e271359ed91bfa48ba18c5717f8e19a7b69326ef",
+    "pullRequestUrl": "https://github.com/presenton/presenton/pull/813",
+    "license": {
+      "expression": "Apache-2.0",
+      "path": "LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20",
+      "url": "https://github.com/presenton/presenton/blob/e271359ed91bfa48ba18c5717f8e19a7b69326ef/LICENSE"
+    }
+  },
+  "evidenceSources": [
+    {
+      "id": "upstream-commit",
+      "type": "git-commit",
+      "url": "https://github.com/presenton/presenton/commit/e271359ed91bfa48ba18c5717f8e19a7b69326ef",
+      "commitSha": "e271359ed91bfa48ba18c5717f8e19a7b69326ef"
+    },
+    {
+      "id": "upstream-license",
+      "type": "repository-license",
+      "licenseExpression": "Apache-2.0",
+      "url": "https://github.com/presenton/presenton/blob/e271359ed91bfa48ba18c5717f8e19a7b69326ef/LICENSE",
+      "sha256": "23d6fd64bfcbd46b331098ed89454717fd1719faccbf632f8234b962aa43ed1a",
+      "upstreamGitBlobSha1": "5566576249c0c99a84455b2fc8454e03a9b18e20"
+    },
+    {
+      "id": "upstream-pr",
+      "type": "pull-request",
+      "url": "https://github.com/presenton/presenton/pull/813",
+      "assertion": "The Editorial template was merged with bundled fonts and assets."
+    },
+    {
+      "id": "google-fonts-playfair-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/playfairdisplay/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e"
+    },
+    {
+      "id": "google-fonts-dm-sans-ofl",
+      "type": "font-license",
+      "licenseExpression": "OFL-1.1",
+      "url": "https://github.com/google/fonts/blob/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/dmsans/OFL.txt",
+      "commitSha": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+      "sha256": "9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1"
+    }
+  ],
+  "claims": [
+    {
+      "id": "presenton-editorial-assets-apache-2.0",
+      "status": "verified",
+      "licenseExpression": "Apache-2.0",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "upstream-license",
+        "upstream-pr"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/freeform_10-1f2b381d0abf.svg",
+          "sha256": "e2f2e17eeefec9ccb5103ff2916c7e274c903dd697804d45ee4f4470d5b925b8",
+          "upstreamGitBlobSha1": "69eb1bd70d73c8ab43d1054d36b083e33cb341ef"
+        },
+        {
+          "path": "static/freeform_10-4b343a8f6dd6.svg",
+          "sha256": "f510261067d117e49bc5bc0d487f5b7d3d6141edd9bcf26a1561fa9aadc24b5f",
+          "upstreamGitBlobSha1": "0ae04ab5d53204ad8b828cd2cb60c2e85ef9a5e5"
+        },
+        {
+          "path": "static/freeform_10-6a93d756797e.svg",
+          "sha256": "c291bc088ba749b18ec0cf27e8c60fdc17a8c096944daf68191803a255f7b52b",
+          "upstreamGitBlobSha1": "e09a7cb0a325d028c6954fa364b1aa3014fc36ee"
+        },
+        {
+          "path": "static/freeform_10-7423a02c5a0b.svg",
+          "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+          "upstreamGitBlobSha1": "cd45ae1a7f2e1299e37c92262382dbee1cd81c5d"
+        },
+        {
+          "path": "static/freeform_10-91af3141e6fe.svg",
+          "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+          "upstreamGitBlobSha1": "ddd66c4339faca6049415b030893acd8fc9b5100"
+        },
+        {
+          "path": "static/freeform_10-dd282336b126.svg",
+          "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+          "upstreamGitBlobSha1": "8eb9b18a9131b4d203835122cc2d5505d30681cc"
+        },
+        {
+          "path": "static/freeform_10-dd285c6df16e.svg",
+          "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+          "upstreamGitBlobSha1": "f21d9b7440fa76d653df6d539fc9b0761b3641ea"
+        },
+        {
+          "path": "static/freeform_11-4e83e6c313c1.svg",
+          "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+          "upstreamGitBlobSha1": "04ffdb2b86ad1f104dac9bcbc99ccae2c9c0ddad"
+        },
+        {
+          "path": "static/freeform_11-6401af7d98d8.svg",
+          "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+          "upstreamGitBlobSha1": "5a9b65771610dd5690d16fe9c5f3890a1c87356b"
+        },
+        {
+          "path": "static/freeform_11-70096e1768aa.svg",
+          "sha256": "345789e22083809461706c2d9ac9c7099beb5b9059bdc19c33c5eaad83d9a15c",
+          "upstreamGitBlobSha1": "e7a8b212263c9ba3dc6f952f414d790c9413e4fd"
+        },
+        {
+          "path": "static/freeform_12-fb6e3747a40a.svg",
+          "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+          "upstreamGitBlobSha1": "735cd13a6c3e29281fd73d0e5a42c3b1624be948"
+        },
+        {
+          "path": "static/freeform_13-7423a02c5a0b.svg",
+          "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+          "upstreamGitBlobSha1": "cd45ae1a7f2e1299e37c92262382dbee1cd81c5d"
+        },
+        {
+          "path": "static/freeform_13-91af3141e6fe.svg",
+          "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+          "upstreamGitBlobSha1": "ddd66c4339faca6049415b030893acd8fc9b5100"
+        },
+        {
+          "path": "static/freeform_13-ae44a4bca002.svg",
+          "sha256": "270e25562cfa28bf28145cab16491af7901482628882f6d8204588c6b2ece544",
+          "upstreamGitBlobSha1": "f194c13722fe89ed589def62251849c240f6eb4c"
+        },
+        {
+          "path": "static/freeform_13-dd282336b126.svg",
+          "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+          "upstreamGitBlobSha1": "8eb9b18a9131b4d203835122cc2d5505d30681cc"
+        },
+        {
+          "path": "static/freeform_13-dd285c6df16e.svg",
+          "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+          "upstreamGitBlobSha1": "f21d9b7440fa76d653df6d539fc9b0761b3641ea"
+        },
+        {
+          "path": "static/freeform_14-304eff937d6d.svg",
+          "sha256": "cfcd40999574947c12a8b9dc1b3e0d688301a63e63af8316df870cd62b9c194c",
+          "upstreamGitBlobSha1": "0bb05de6cc2ae1fc86b1a9a21f47f0be89433e8f"
+        },
+        {
+          "path": "static/freeform_14-4e83e6c313c1.svg",
+          "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+          "upstreamGitBlobSha1": "04ffdb2b86ad1f104dac9bcbc99ccae2c9c0ddad"
+        },
+        {
+          "path": "static/freeform_14-549f7c1b88ef.svg",
+          "sha256": "049111e985d2b4837f9afded0ffe2df46a0765dd7561988c04a4717e65f15ff1",
+          "upstreamGitBlobSha1": "3e9be75d597dc7800f9eafe7c1d93c6b59866d24"
+        },
+        {
+          "path": "static/freeform_14-6401af7d98d8.svg",
+          "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+          "upstreamGitBlobSha1": "5a9b65771610dd5690d16fe9c5f3890a1c87356b"
+        },
+        {
+          "path": "static/freeform_15-4e83e6c313c1.svg",
+          "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+          "upstreamGitBlobSha1": "04ffdb2b86ad1f104dac9bcbc99ccae2c9c0ddad"
+        },
+        {
+          "path": "static/freeform_15-746ca951ec57.svg",
+          "sha256": "61fffe790e3bd80f4789b59222fd7470a3b485c403fb1ca57998d7e509278445",
+          "upstreamGitBlobSha1": "743512e47128eeed091ac1329112731ca53bd3ad"
+        },
+        {
+          "path": "static/freeform_16-7423a02c5a0b.svg",
+          "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+          "upstreamGitBlobSha1": "cd45ae1a7f2e1299e37c92262382dbee1cd81c5d"
+        },
+        {
+          "path": "static/freeform_16-91af3141e6fe.svg",
+          "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+          "upstreamGitBlobSha1": "ddd66c4339faca6049415b030893acd8fc9b5100"
+        },
+        {
+          "path": "static/freeform_16-b705ebb9bd02.svg",
+          "sha256": "11fcedcc59e309f5179cd2f80e48a3cd538c3abd94ab9bc6620e94513a202ead",
+          "upstreamGitBlobSha1": "d73e9b3ef86a2e5efdf6e87a47db9e5f74e77122"
+        },
+        {
+          "path": "static/freeform_16-dd282336b126.svg",
+          "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+          "upstreamGitBlobSha1": "8eb9b18a9131b4d203835122cc2d5505d30681cc"
+        },
+        {
+          "path": "static/freeform_16-dd285c6df16e.svg",
+          "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+          "upstreamGitBlobSha1": "f21d9b7440fa76d653df6d539fc9b0761b3641ea"
+        },
+        {
+          "path": "static/freeform_16-fb6e3747a40a.svg",
+          "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+          "upstreamGitBlobSha1": "735cd13a6c3e29281fd73d0e5a42c3b1624be948"
+        },
+        {
+          "path": "static/freeform_17-249f8fb76642.svg",
+          "sha256": "cc36dd5c8b1965352e31e4fe8cfe0787f12ba73432863e9bea783284d0fe25fe",
+          "upstreamGitBlobSha1": "99024145f905d902761ad8e79f371b7c7b8763f9"
+        },
+        {
+          "path": "static/freeform_17-6401af7d98d8.svg",
+          "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+          "upstreamGitBlobSha1": "5a9b65771610dd5690d16fe9c5f3890a1c87356b"
+        },
+        {
+          "path": "static/freeform_17-89b9975edf67.svg",
+          "sha256": "6422d3b467b924e7505efd2034e49123cc2df333d3de607118421ae5d3e9203d",
+          "upstreamGitBlobSha1": "81e0e907dfd73d19745586812b91b491c00f0666"
+        },
+        {
+          "path": "static/freeform_18-4e83e6c313c1.svg",
+          "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+          "upstreamGitBlobSha1": "04ffdb2b86ad1f104dac9bcbc99ccae2c9c0ddad"
+        },
+        {
+          "path": "static/freeform_19-196ae6b92dc2.svg",
+          "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+          "upstreamGitBlobSha1": "aa2d338f82dc64a0e30d75876e35d5a4891a9122"
+        },
+        {
+          "path": "static/freeform_19-7423a02c5a0b.svg",
+          "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+          "upstreamGitBlobSha1": "cd45ae1a7f2e1299e37c92262382dbee1cd81c5d"
+        },
+        {
+          "path": "static/freeform_19-94812e314f28.svg",
+          "sha256": "725a1284411e33edf93967749b47559c724b4f2452fadbe3a4ee3904da9c1b90",
+          "upstreamGitBlobSha1": "244f7e8786be7610e9dfeb96a89dc4278dd4dbb9"
+        },
+        {
+          "path": "static/freeform_20-683d921055a8.svg",
+          "sha256": "896785b55138ccbf85a509581e3997f7b198b2965ec7575ede1d259e74fc0740",
+          "upstreamGitBlobSha1": "976cb9881da182bc7dcfebece5d57b9be2ab0e00"
+        },
+        {
+          "path": "static/freeform_20-89b9975edf67.svg",
+          "sha256": "6422d3b467b924e7505efd2034e49123cc2df333d3de607118421ae5d3e9203d",
+          "upstreamGitBlobSha1": "81e0e907dfd73d19745586812b91b491c00f0666"
+        },
+        {
+          "path": "static/freeform_20-fb6e3747a40a.svg",
+          "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+          "upstreamGitBlobSha1": "735cd13a6c3e29281fd73d0e5a42c3b1624be948"
+        },
+        {
+          "path": "static/freeform_21-4e83e6c313c1.svg",
+          "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+          "upstreamGitBlobSha1": "04ffdb2b86ad1f104dac9bcbc99ccae2c9c0ddad"
+        },
+        {
+          "path": "static/freeform_22-196ae6b92dc2.svg",
+          "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+          "upstreamGitBlobSha1": "aa2d338f82dc64a0e30d75876e35d5a4891a9122"
+        },
+        {
+          "path": "static/freeform_22-d5361bea6e52.svg",
+          "sha256": "87c255b376f678e5cca8115576e8d258aaa2bb8117db960039959387f2aaa4ed",
+          "upstreamGitBlobSha1": "51766176e87ff9e931f8ee65e0abc1ab1783a0c0"
+        },
+        {
+          "path": "static/freeform_23-702066843570.svg",
+          "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+          "upstreamGitBlobSha1": "b72530e321e14b1b2ad5abcd36fb4d819c7f7eb6"
+        },
+        {
+          "path": "static/freeform_23-89b9975edf67.svg",
+          "sha256": "6422d3b467b924e7505efd2034e49123cc2df333d3de607118421ae5d3e9203d",
+          "upstreamGitBlobSha1": "81e0e907dfd73d19745586812b91b491c00f0666"
+        },
+        {
+          "path": "static/freeform_24-4e83e6c313c1.svg",
+          "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+          "upstreamGitBlobSha1": "04ffdb2b86ad1f104dac9bcbc99ccae2c9c0ddad"
+        },
+        {
+          "path": "static/freeform_24-fb6e3747a40a.svg",
+          "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+          "upstreamGitBlobSha1": "735cd13a6c3e29281fd73d0e5a42c3b1624be948"
+        },
+        {
+          "path": "static/freeform_25-196ae6b92dc2.svg",
+          "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+          "upstreamGitBlobSha1": "aa2d338f82dc64a0e30d75876e35d5a4891a9122"
+        },
+        {
+          "path": "static/freeform_26-702066843570.svg",
+          "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+          "upstreamGitBlobSha1": "b72530e321e14b1b2ad5abcd36fb4d819c7f7eb6"
+        },
+        {
+          "path": "static/freeform_27-4e83e6c313c1.svg",
+          "sha256": "64c96cbc703318c710182c8e0cf89826802bb2698caf92bf942548460023d82c",
+          "upstreamGitBlobSha1": "04ffdb2b86ad1f104dac9bcbc99ccae2c9c0ddad"
+        },
+        {
+          "path": "static/freeform_27-6bc95e6e02fe.svg",
+          "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+          "upstreamGitBlobSha1": "c416b8a751a03b71250de962baefc1a9787c3f96"
+        },
+        {
+          "path": "static/freeform_28-196ae6b92dc2.svg",
+          "sha256": "996d8117f86d37bbb0a66f942568d8695b0aff5dffce0a475809238c039c0e21",
+          "upstreamGitBlobSha1": "aa2d338f82dc64a0e30d75876e35d5a4891a9122"
+        },
+        {
+          "path": "static/freeform_28-1e4f486a0576.svg",
+          "sha256": "aabf864abf42fe9082f77b72801a14545778019593c83cf2288dff09e1e673cf",
+          "upstreamGitBlobSha1": "73acf3d6714899047b5ffb5c77edf51b833b4bc0"
+        },
+        {
+          "path": "static/freeform_28-fb6e3747a40a.svg",
+          "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+          "upstreamGitBlobSha1": "735cd13a6c3e29281fd73d0e5a42c3b1624be948"
+        },
+        {
+          "path": "static/freeform_29-63c413265c4c.svg",
+          "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+          "upstreamGitBlobSha1": "d93c96ac839ee98e6d9fe6400ff0c6be71061c7e"
+        },
+        {
+          "path": "static/freeform_29-702066843570.svg",
+          "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+          "upstreamGitBlobSha1": "b72530e321e14b1b2ad5abcd36fb4d819c7f7eb6"
+        },
+        {
+          "path": "static/freeform_3-aea2ce21dee0.svg",
+          "sha256": "bc497665eecfbcc082e1e49db8c9fc0b436e5ac12ea4b99e87882bd8b198b2e8",
+          "upstreamGitBlobSha1": "8932eeae36fd797bee87917db64feb94e3b01d4a"
+        },
+        {
+          "path": "static/freeform_3-eac87b3b9ab0.svg",
+          "sha256": "cf60f8a9c58121855e23ed1a0db0eb267736c1855af7b364864897c7be0586c1",
+          "upstreamGitBlobSha1": "8579a2a9a9e5e4e48542b356f2b189a703d2b485"
+        },
+        {
+          "path": "static/freeform_30-6bc95e6e02fe.svg",
+          "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+          "upstreamGitBlobSha1": "c416b8a751a03b71250de962baefc1a9787c3f96"
+        },
+        {
+          "path": "static/freeform_32-63c413265c4c.svg",
+          "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+          "upstreamGitBlobSha1": "d93c96ac839ee98e6d9fe6400ff0c6be71061c7e"
+        },
+        {
+          "path": "static/freeform_32-702066843570.svg",
+          "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+          "upstreamGitBlobSha1": "b72530e321e14b1b2ad5abcd36fb4d819c7f7eb6"
+        },
+        {
+          "path": "static/freeform_33-6bc95e6e02fe.svg",
+          "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+          "upstreamGitBlobSha1": "c416b8a751a03b71250de962baefc1a9787c3f96"
+        },
+        {
+          "path": "static/freeform_34-2e266b37115d.svg",
+          "sha256": "1a431b657205cdaf73afbda87356707cea556a2b82b584b4f583fa516f941ecc",
+          "upstreamGitBlobSha1": "1c1f4a5f20905382b9b1615fb4e32177abc023e5"
+        },
+        {
+          "path": "static/freeform_35-63c413265c4c.svg",
+          "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+          "upstreamGitBlobSha1": "d93c96ac839ee98e6d9fe6400ff0c6be71061c7e"
+        },
+        {
+          "path": "static/freeform_35-702066843570.svg",
+          "sha256": "c6b4036ac8a3061fa196c4d024f579e968b8145e6262d6e33bfc5c0e68dc23bd",
+          "upstreamGitBlobSha1": "b72530e321e14b1b2ad5abcd36fb4d819c7f7eb6"
+        },
+        {
+          "path": "static/freeform_36-6bc95e6e02fe.svg",
+          "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+          "upstreamGitBlobSha1": "c416b8a751a03b71250de962baefc1a9787c3f96"
+        },
+        {
+          "path": "static/freeform_38-63c413265c4c.svg",
+          "sha256": "2aacb1879999bd5eef166152f225435a03ccee276ead06ee5402709d4af28288",
+          "upstreamGitBlobSha1": "d93c96ac839ee98e6d9fe6400ff0c6be71061c7e"
+        },
+        {
+          "path": "static/freeform_39-517e97cf0da5.svg",
+          "sha256": "59bedbf6fbbcdfa6449733e3acf743ddaeb3424f166b19e49b418befb95005d6",
+          "upstreamGitBlobSha1": "dabc0c6c9ab19fd89bd47f99c92bf0f0da05db80"
+        },
+        {
+          "path": "static/freeform_39-6bc95e6e02fe.svg",
+          "sha256": "d0943b80c44253c196c6c0e57501bb3981379c112bd4865b47cc20d338652460",
+          "upstreamGitBlobSha1": "c416b8a751a03b71250de962baefc1a9787c3f96"
+        },
+        {
+          "path": "static/freeform_42-4747971af694.svg",
+          "sha256": "9762f6446a4d856602e7d5a9bc8b86fe49537cd57fe28025d8fdadc5c7ae8a4d",
+          "upstreamGitBlobSha1": "03860d438d8bf205dcc080a17b53e50f13249859"
+        },
+        {
+          "path": "static/freeform_45-2c4b6974e56f.svg",
+          "sha256": "5090fc6452bc9dad38147925968c5b68c538b9af12966ad923601e1d404ec07c",
+          "upstreamGitBlobSha1": "377a75ab337bd7470b675265ae1d631eb5a0ecea"
+        },
+        {
+          "path": "static/freeform_45-512b0c0e8c7a.svg",
+          "sha256": "f07ef7621a682eab19e88bfdbddbb27861d23f27ecaae4e2ce137cb546b2fb61",
+          "upstreamGitBlobSha1": "f44c27875050560d09a22d38d9188b13fa32409b"
+        },
+        {
+          "path": "static/freeform_46-bd7ae8588550.svg",
+          "sha256": "b7eeb57cf33a00592b1b861b2fb5065c124ab521d2d2ab15b5d3a3de586b2e12",
+          "upstreamGitBlobSha1": "99c4d68e772d2dbedf7d0fb132c2c6799991829c"
+        },
+        {
+          "path": "static/freeform_47-512b0c0e8c7a.svg",
+          "sha256": "f07ef7621a682eab19e88bfdbddbb27861d23f27ecaae4e2ce137cb546b2fb61",
+          "upstreamGitBlobSha1": "f44c27875050560d09a22d38d9188b13fa32409b"
+        },
+        {
+          "path": "static/freeform_48-2b116a92bc11.svg",
+          "sha256": "f53673bea9012bb3ada338b64bc04a3d7b08c23443e87e48b673bf6edbd52231",
+          "upstreamGitBlobSha1": "3d19e149a2f2d5853c76c49549ade0aa9452ddce"
+        },
+        {
+          "path": "static/freeform_48-3b3a9cc13ef2.svg",
+          "sha256": "032cf4064d9da25b7fb5b70f7af9262ac6628d8867034cce7741103cd8736285",
+          "upstreamGitBlobSha1": "b7178c1b2c34373e793c1790018be83bed1e1535"
+        },
+        {
+          "path": "static/freeform_49-3ab584d0fd10.svg",
+          "sha256": "5010b92335a4ad11487424df5e37d0ba4aa74b8f8ad4fc05f0f3c3dbcf6062f3",
+          "upstreamGitBlobSha1": "8b3b5bbc5d28429724498143e8f9afb8bdb4bace"
+        },
+        {
+          "path": "static/freeform_50-2b116a92bc11.svg",
+          "sha256": "f53673bea9012bb3ada338b64bc04a3d7b08c23443e87e48b673bf6edbd52231",
+          "upstreamGitBlobSha1": "3d19e149a2f2d5853c76c49549ade0aa9452ddce"
+        },
+        {
+          "path": "static/freeform_51-d305a9288a99.svg",
+          "sha256": "f5dfd191a42eb2ff07c95dd9700f00ae4c10830ce6f2fcc78601baec5c2a4c48",
+          "upstreamGitBlobSha1": "d6aa71d75a72612184f614a3775bd09b99b40d3b"
+        },
+        {
+          "path": "static/freeform_6-83d527cd6a35.svg",
+          "sha256": "1d21ffa9194ced29373cb0ef645ba6fad4523f64a9b32769b085a94c7d1cf12e",
+          "upstreamGitBlobSha1": "3945afdb7e2091fcc005e77bef5b936881164c4a"
+        },
+        {
+          "path": "static/freeform_6-b8ecad75aca7.svg",
+          "sha256": "fc9e280bf439d0602b9df8d9a8f8e2795842b9b34e2292ee9aa9d3d92bb108d5",
+          "upstreamGitBlobSha1": "272dba32cd0e10be0369b895b1b4e8622d68bfc9"
+        },
+        {
+          "path": "static/freeform_7-0859355ddfa6.svg",
+          "sha256": "f80e0eb0b77d4e9684f026b4ef73f39c2ea18466e595ccad81571a9235ea2881",
+          "upstreamGitBlobSha1": "994510295933e76399d5edd532a1891456056716"
+        },
+        {
+          "path": "static/freeform_7-7423a02c5a0b.svg",
+          "sha256": "aa782e36263980f5621823daf0c53c127e27b1b49cd7ec278f867ae3faa8c246",
+          "upstreamGitBlobSha1": "cd45ae1a7f2e1299e37c92262382dbee1cd81c5d"
+        },
+        {
+          "path": "static/freeform_7-91af3141e6fe.svg",
+          "sha256": "e8eeb32c5b8acce23ffa3dec53fc3d50a174cede75dcb2a5fcee2f92873475a4",
+          "upstreamGitBlobSha1": "ddd66c4339faca6049415b030893acd8fc9b5100"
+        },
+        {
+          "path": "static/freeform_7-9f3a942686b7.svg",
+          "sha256": "5570343f337b80a8ea3b80df38a1092d2ad079383c7c6179781496c2d6ac14fd",
+          "upstreamGitBlobSha1": "c4f1f021774d24fd76c341eac7685ba73c031603"
+        },
+        {
+          "path": "static/freeform_7-a20cd002a6e5.svg",
+          "sha256": "7fb7ab3dcd81fb6cd5312b255290a0a0d347db14d709ff56b0010982590e52c0",
+          "upstreamGitBlobSha1": "1af2d92ea497fcabc6bb65d66052a62b480687d7"
+        },
+        {
+          "path": "static/freeform_7-aceb3eb45350.svg",
+          "sha256": "29808474279452d0a936f6ac798f4b4bb38b773596782ebcbebd80ea48b309a6",
+          "upstreamGitBlobSha1": "d2473ca77b90cced47ffa0b556016b208d6fdadb"
+        },
+        {
+          "path": "static/freeform_7-dd282336b126.svg",
+          "sha256": "a37697501704a856627ee2d9e47503f5bb961d1fbec0583aff22c38f18c04daf",
+          "upstreamGitBlobSha1": "8eb9b18a9131b4d203835122cc2d5505d30681cc"
+        },
+        {
+          "path": "static/freeform_7-dd285c6df16e.svg",
+          "sha256": "1590201069cfc6e6f4b57b4967839463416ec66e751549e6baa1a9704f1539e4",
+          "upstreamGitBlobSha1": "f21d9b7440fa76d653df6d539fc9b0761b3641ea"
+        },
+        {
+          "path": "static/freeform_8-6401af7d98d8.svg",
+          "sha256": "c8485b339df9935d914a5a32703e330fafa8c786168918741ef9fe5a630e8e91",
+          "upstreamGitBlobSha1": "5a9b65771610dd5690d16fe9c5f3890a1c87356b"
+        },
+        {
+          "path": "static/freeform_8-c34af73bed7d.svg",
+          "sha256": "d331d29417f948de709535d21d4712c17a58810735f54f4d18c330faa08d3a42",
+          "upstreamGitBlobSha1": "aa8e0b10c43e9c130d5ec77d3e6138d286ea0dd7"
+        },
+        {
+          "path": "static/freeform_9-fb6e3747a40a.svg",
+          "sha256": "761dcdc6b34f3b44b7b36c649257e87661fbe12a31470ab1c9616ef4326c5298",
+          "upstreamGitBlobSha1": "735cd13a6c3e29281fd73d0e5a42c3b1624be948"
+        },
+        {
+          "path": "static/image-8d3c8ac86a1e8005.png",
+          "sha256": "514f02ac9b81bab558d56fb0e41024b10efcb38ee35dab4357f7c03f4d4ea905",
+          "upstreamGitBlobSha1": "aec33c688eeceee8a60d3d257527106dae057e9c"
+        },
+        {
+          "path": "static/image1-615fb2b5b0f5.png",
+          "sha256": "f4be961c9a95ac8be9c107c5ad8b3a346ce60c157fe38041e259e08ba8bae89f",
+          "upstreamGitBlobSha1": "0a921c9328ee916be1c21ab2d2e1b0ecb302fd67"
+        },
+        {
+          "path": "static/image105-ea477bc7a99e.png",
+          "sha256": "0942837f0c17fbec8b0b97cb0435c01af9cb510ffa9bf7c190d8ce58a98dbe6a",
+          "upstreamGitBlobSha1": "1d7774ee3cb1be137876fc7b062ec618f079a9c1"
+        },
+        {
+          "path": "static/image106-56f1a9276797.png",
+          "sha256": "72e07fe06200efcd60dfcd28252a12997d17f9e7c2c613d963c1e51329cf67bd",
+          "upstreamGitBlobSha1": "5c65c094de754c724a82415f500e4478d22a2b88"
+        },
+        {
+          "path": "static/image107-727072695219.png",
+          "sha256": "518437286eaa4e435006a93f9253615f6a8bee3dcc699c733436eac9e7ce1a62",
+          "upstreamGitBlobSha1": "3714ebb746dfd4f630907fc378f16ffc325c4814"
+        },
+        {
+          "path": "static/image108-a80fc6a4b9fe.png",
+          "sha256": "44f4690c5f18e448a48346dbc57c2648401cab5ea28505a513061bdbd3fbec92",
+          "upstreamGitBlobSha1": "51461e68eaf9300abc21c4ea158cdc2239e224a8"
+        },
+        {
+          "path": "static/image109-7e0acd3e157f.png",
+          "sha256": "a29d7c6283ee3521d29b9ce0e02d9f1d587394cd37ecb181403daea04271e78a",
+          "upstreamGitBlobSha1": "7d3a7a9385245f03b705241911811f829b8bffd0"
+        },
+        {
+          "path": "static/image27-01b214bfecdc.png",
+          "sha256": "8147b9f3a07bf89995567d139d7606fd4ce424f5918e5aaab1132243de5aa4c1",
+          "upstreamGitBlobSha1": "b3b515ba234a4921769dc59a411d88d7d41c2cee"
+        },
+        {
+          "path": "static/image29-b70f71ba92d8.png",
+          "sha256": "a7fbeb3d5196ec05c6d7c8d18e3a950094992805d51e8a82ff628e1e12039244",
+          "upstreamGitBlobSha1": "be3a7d9150d11ad676f493430f3cb394ef464b0f"
+        },
+        {
+          "path": "static/image31-b4c49ed0099a.png",
+          "sha256": "99101288c151406f3bd2bd053cf68960ed95b16e486aa00650c993d52ce22735",
+          "upstreamGitBlobSha1": "658c844e851fdabc475540ac032303cc01352475"
+        },
+        {
+          "path": "static/image33-038ae472424b.png",
+          "sha256": "18c36c2f764a5f37d10e1939f402bb63ae925bf1bb8739e13b32d043e861548f",
+          "upstreamGitBlobSha1": "0d4c556212c2dd1bc9f17e40238d0561b60c827b"
+        },
+        {
+          "path": "static/image35-8f1271ad4871.png",
+          "sha256": "9f72dd5007cb9191ddb1ae2921a3ea2bee4eed8760073ac47f9d420a0bf8cfad",
+          "upstreamGitBlobSha1": "aa3f9d6dd19d48702597c7094d0adcc1d6e8a0a6"
+        },
+        {
+          "path": "static/image37-7e1aac595afd.png",
+          "sha256": "d9f96431b072907d9a310b061095adf17700d434de057830cf7dd43ae0597936",
+          "upstreamGitBlobSha1": "2e5d7ad15123b117cc8578c8330ff4c7a5e30c8b"
+        },
+        {
+          "path": "static/image39-8fbe94b86c23.png",
+          "sha256": "066ec0c14410f14e69513e7c9406fbf7fd2e0ec776fb6d15ed02bb763004b66d",
+          "upstreamGitBlobSha1": "5a0be3d81779ad2a4e62031270c79675d788ccec"
+        },
+        {
+          "path": "static/image41-ba1074e5cab4.png",
+          "sha256": "8849f0dbc367366c924976228e88d0ea6b4f7045b36f7c93817144573379fd57",
+          "upstreamGitBlobSha1": "cb2e87378dd0fe58d69f0731b9995c83db64735f"
+        },
+        {
+          "path": "static/image43-582f1b0bd22b.png",
+          "sha256": "86beaea45c97eaff1256f649e096939152e07af5edefc7be72b1c00ccf05410e",
+          "upstreamGitBlobSha1": "742337715828e27df71e0e2186d124dfa23de5b6"
+        },
+        {
+          "path": "static/image5-c41a89af784e.png",
+          "sha256": "927eb5de828c8ba54c24c41f6b132050c1086bc93b592fb3b7d0cf441c8342ac",
+          "upstreamGitBlobSha1": "4b0ab7c4bc3237e035d174b6a92085aee5129239"
+        },
+        {
+          "path": "static/image6-16889f6f3a56.png",
+          "sha256": "9b9823afaed0396243c7b1c420d7d8910afc7a7ebc92b3091ccbf0b0cc7b09ed",
+          "upstreamGitBlobSha1": "8a9f0a3e6e7f79395c2341700c9fc610636b34ce"
+        },
+        {
+          "path": "static/image64-978b5a6e637c.png",
+          "sha256": "2fc4ed16680a6d3129a5ec8754d6ab074b4825d0b5fca9471c31e13c4df816cb",
+          "upstreamGitBlobSha1": "ce4fa7baf8e6cb74d7da4d34ec63ea03c241cca8"
+        },
+        {
+          "path": "static/image76-5e0300acacc6.png",
+          "sha256": "9d17fd30f9f2a76ec3c9d4bb465a9bc5339df0dd60eeb55f3aa885b416df4028",
+          "upstreamGitBlobSha1": "35d1063db8f9491491c57a9376a48445b82c0fcc"
+        },
+        {
+          "path": "static/image8-89cdbfb14e09.png",
+          "sha256": "7cab294f850f546de388b5c87dfe2456f24c83ddba44ed94308c1d8290a817b9",
+          "upstreamGitBlobSha1": "a052ff670ff706d89631dd57d543e4284dd4aeb4"
+        },
+        {
+          "path": "static/image96-15deb611fdd9.png",
+          "sha256": "1114644019edef4a83f4c585f3bdcd16b8ed5f71b736ae2f1eaa8a7c6c19eb3f",
+          "upstreamGitBlobSha1": "ef62dda0cc74770e84ebbcc7ec5fe2ac57825e85"
+        },
+        {
+          "path": "static/thumbnail.png",
+          "sha256": "443a2e796cba89bebed8f47259a2b42e0e20d8048fa8ac8257660280071e07b5",
+          "upstreamGitBlobSha1": "bc6c1acf1f5291f8075b0016a8563b5a3d8539fa"
+        }
+      ]
+    },
+    {
+      "id": "presenton-editorial-fonts-ofl-1.1",
+      "status": "verified",
+      "licenseExpression": "OFL-1.1",
+      "evidenceSourceIds": [
+        "upstream-commit",
+        "google-fonts-playfair-ofl",
+        "google-fonts-dm-sans-ofl"
+      ],
+      "coveredAssets": [
+        {
+          "path": "static/DM Sans Bold.ttf",
+          "sha256": "d415b88e3fe0224e9a1fd34acfdb3d7f1f390c834b440bc3117b68c1f86900e3",
+          "upstreamGitBlobSha1": "cf462333e0bfd100e984fa57921c07033ab4fb31",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-dm-sans-ofl"
+          ]
+        },
+        {
+          "path": "static/DM Sans Regular.ttf",
+          "sha256": "42939a84416e04f186a5e40988ff4df5fc588629bff89da5e0713cf74c0b3811",
+          "upstreamGitBlobSha1": "143a41735587011c50206f1d4a5b3d2fc413be2f",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-dm-sans-ofl"
+          ]
+        },
+        {
+          "path": "static/Playfair Display Bold Italic.ttf",
+          "sha256": "76805b08a7cea7dc244753746acc63165da9dd7578cd66cb95eceae93583dff5",
+          "upstreamGitBlobSha1": "9b0fdf023a561e00ad4200da4dc2847b10713f1f",
+          "evidenceSourceIds": [
+            "upstream-commit",
+            "google-fonts-playfair-ofl"
+          ]
+        }
+      ]
+    }
+  ]
+}

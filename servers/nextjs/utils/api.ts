@@ -245,9 +245,10 @@ export function resolveAuthoredImageUrl(
 }
 
 export type BackendAssetLike = {
+  /** Stable backend identifier for mutation/reference flows; not a render URL. */
+  asset_id?: string | null;
+  /** Canonical client-renderable asset URL emitted by the backend. */
   file_url?: string | null;
-  path?: string | null;
-  url?: string | null;
 };
 
 export function getBackendAssetSource(
@@ -261,7 +262,7 @@ export function getBackendAssetSource(
     return "";
   }
 
-  return (asset.file_url || asset.path || asset.url || "").trim();
+  return asset.file_url?.trim() || "";
 }
 
 export function resolveBackendAssetSource(

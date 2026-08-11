@@ -3,7 +3,7 @@
   "templateId": "editorial",
   "engineId": "presenton.template-v2-json",
   "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
-  "entrypointSha256": "f63282203b21e4a350f6ff87ffe5695ca4c92413c5aad485e6cdedfbb82f7e60",
+  "entrypointSha256": "83dfc203630ae8986472ca3ec545be4dea917bf29c7ebfccba73ba1189f56a16",
   "networkPolicy": "deny",
   "scriptPolicy": "deny",
   "viewport": {
@@ -41,7 +41,8 @@
     "jsonParsed": true,
     "uniqueLayoutIds": true,
     "nonEmptyRoots": true,
-    "browserGoldenRequiredForPublication": true
+    "browserGoldenRequiredForPublication": true,
+    "browserGoldenReceiptVerified": true
   },
-  "status": "passed-static-publication-blocked"
+  "status": "passed-static-browser-golden"
 }

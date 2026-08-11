@@ -42,6 +42,12 @@ import {
   PageRemakeHistory,
   usePageRemakeHistory,
 } from "../components/PageRemakeHistory";
+import {
+  CONNECTION_LABELS,
+  parseQualityReviewSlideRange,
+  type QualityReviewScope,
+  type SlideRangeParseResult,
+} from "./workspaceChatPanelUtils";
 
 const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
@@ -67,72 +73,6 @@ interface WorkspaceChatPanelProps {
     requester: WorkspacePageRemakeRequester | null,
   ) => void;
 }
-
-type QualityReviewScope = "all" | "current" | "subset";
-
-interface SlideRangeParseResult {
-  indices: number[];
-  normalized: string;
-}
-
-/** Parse user-facing, one-based page selections such as `3, 5-8, 12`. */
-export function parseQualityReviewSlideRange(
-  value: string,
-  slideCount?: number,
-): SlideRangeParseResult {
-  const input = value.trim();
-  if (!input) throw new Error("검수할 페이지 번호를 입력해 주세요.");
-
-  const seen = new Set<number>();
-  for (const token of input.split(",")) {
-    const part = token.trim();
-    const match = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(part);
-    if (!match) {
-      throw new Error("페이지는 3, 5-8, 12 형식으로 입력해 주세요.");
-    }
-    const start = Number(match[1]);
-    const end = Number(match[2] ?? match[1]);
-    if (start < 1 || end < 1) {
-      throw new Error("페이지 번호는 1 이상이어야 합니다.");
-    }
-    if (end < start) {
-      throw new Error("범위의 시작 페이지는 끝 페이지보다 클 수 없습니다.");
-    }
-    if (slideCount !== undefined && end > slideCount) {
-      throw new Error(`페이지 번호는 ${slideCount} 이하여야 합니다.`);
-    }
-    for (let page = start; page <= end; page += 1) {
-      if (seen.has(page)) {
-        throw new Error(`${page}번 페이지가 중복되었습니다.`);
-      }
-      seen.add(page);
-    }
-  }
-
-  const pages = [...seen].sort((left, right) => left - right);
-  const normalized: string[] = [];
-  for (let cursor = 0; cursor < pages.length;) {
-    const start = pages[cursor];
-    let end = start;
-    while (pages[cursor + 1] === end + 1) {
-      cursor += 1;
-      end = pages[cursor];
-    }
-    normalized.push(start === end ? String(start) : `${start}-${end}`);
-    cursor += 1;
-  }
-  return {
-    indices: pages.map((page) => page - 1),
-    normalized: normalized.join(", "),
-  };
-}
-
-const CONNECTION_LABELS = {
-  connecting: "연결 중",
-  live: "실시간 연결",
-  polling: "연결 복구 중",
-  offline: "오프라인",
-};
 
 export default function WorkspaceChatPanel({
   presentationId,

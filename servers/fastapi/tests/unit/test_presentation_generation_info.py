@@ -10,10 +10,7 @@ from api.v1.ppt.endpoints.presentation_crud import (
     get_presentation_generation_info,
 )
 from models.sql.presentation import PresentationModel
-from templates.v2.constants import (
-    LEGACY_PRESENTATION_VERSION,
-    TEMPLATE_V2_VERSION,
-)
+from templates.v2.constants import LEGACY_PRESENTATION_VERSION
 
 
 def _run(coro):
@@ -50,7 +47,7 @@ def test_generation_info_returns_basename_only_and_saved_settings(tmp_path):
                     include_title_slide=True,
                     web_search=False,
                     mode="authored",
-                    version=TEMPLATE_V2_VERSION,
+                    version=LEGACY_PRESENTATION_VERSION,
                 )
             )
             await session.commit()
@@ -74,7 +71,7 @@ def test_generation_info_returns_basename_only_and_saved_settings(tmp_path):
             assert info.settings.include_title_slide is True
             assert info.settings.web_search is False
             assert info.settings.mode == "authored"
-            assert info.settings.version == TEMPLATE_V2_VERSION
+            assert info.settings.version == LEGACY_PRESENTATION_VERSION
 
         await engine.dispose()
 

@@ -128,6 +128,7 @@ def _stable_presentation_snapshot(presentation: PresentationModel) -> dict:
     # transport details are unrelated to confirmation mutations.
     snapshot.pop("created_at", None)
     snapshot.pop("updated_at", None)
+    snapshot.pop("profile_backfilled_at", None)
     return snapshot
 
 

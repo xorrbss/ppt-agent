@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { LLMConfig } from '@/types/llm_config'
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields'
-import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, GPT_IMAGE_2_QUALITY_OPTIONS, IMAGE_PROVIDERS } from '@/utils/providerConstants'
+import { IMAGE_PROVIDER_OPTIONS, IMAGE_QUALITY_OPTIONS, PUBLIC_PROVIDERS_BY_ID } from '@/utils/provider-registry.generated'
 import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
@@ -68,7 +68,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {DALLE_3_QUALITY_OPTIONS.map((option) => (
+                                {IMAGE_QUALITY_OPTIONS["dall-e-3"].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -96,7 +96,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {GPT_IMAGE_1_5_QUALITY_OPTIONS.map((option) => (
+                                {IMAGE_QUALITY_OPTIONS["gpt-image-1.5"].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -122,7 +122,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {GPT_IMAGE_2_QUALITY_OPTIONS.map((option) => (
+                                {IMAGE_QUALITY_OPTIONS["gpt-image-2"].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -192,7 +192,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                         <div className="flex gap-3 items-center">
                                                             <span className="text-sm font-medium text-gray-900">
                                                                 {llmConfig.IMAGE_PROVIDER
-                                                                    ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                                                                    ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]
                                                                         ?.label || llmConfig.IMAGE_PROVIDER
                                                                     : "이미지 제공자 선택"}
                                                             </span>
@@ -210,7 +210,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                         <CommandList>
                                                             <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                                                             <CommandGroup>
-                                                                {Object.values(IMAGE_PROVIDERS).map(
+                                                                {Object.values(IMAGE_PROVIDER_OPTIONS).map(
                                                                     (provider, index) => (
                                                                         <CommandItem
                                                                             key={index}
@@ -255,13 +255,14 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
 
                                     {/* Dynamic API Key Input for Image Provider */}
                                     {llmConfig.IMAGE_PROVIDER &&
-                                        IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER] &&
+                                        IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER] &&
                                         (() => {
-                                            const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
+                                            const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
+                                            const layout = PUBLIC_PROVIDERS_BY_ID[provider.value]?.ui?.credentialLayout;
 
 
 
-                                            if (provider.value === "openai_compatible") {
+                                            if (layout === "openai-compatible") {
                                                 return (
                                                     <OpenAICompatibleImageFields
                                                         layout="textProviderSettings"
@@ -283,7 +284,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                             }
 
                                             // Show ComfyUI configuration
-                                            if (provider.value === "comfyui") {
+                                            if (layout === "comfyui-workflow") {
                                                 return (
                                                     <div className=" space-y-4">
                                                         <div className='w-[205px]'>
@@ -312,7 +313,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                             }
 
                                             // Show Open WebUI configuration
-                                            if (provider.value === "open_webui") {
+                                            if (layout === "open-webui") {
                                                 return (
                                                     <div className="space-y-4">
                                                         <div className='w-[205px]'>
@@ -376,7 +377,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                         {!isImageGenerationDisabled && <div className='flex justify-end items-center mt-[18px]'>
 
                             {renderQualitySelector(llmConfig, input_field_changed)}
-                            {llmConfig.IMAGE_PROVIDER === "open_webui" && (
+                            {PUBLIC_PROVIDERS_BY_ID[llmConfig.IMAGE_PROVIDER || ""]?.ui?.credentialLayout === "open-webui" && (
                                 <div className='w-[205px]'>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                         API 키 (선택 사항)
@@ -401,7 +402,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                     </div>
                                 </div>
                             )}
-                            {llmConfig.IMAGE_PROVIDER === "comfyui" && <div className='w-full'>
+                            {PUBLIC_PROVIDERS_BY_ID[llmConfig.IMAGE_PROVIDER || ""]?.ui?.credentialLayout === "comfyui-workflow" && <div className='w-full'>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     워크플로 JSON
                                 </label>
@@ -427,7 +428,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
             </div>
 
             {!isImageGenerationDisabled &&
-                llmConfig.IMAGE_PROVIDER === "openai_compatible" &&
+                PUBLIC_PROVIDERS_BY_ID[llmConfig.IMAGE_PROVIDER || ""]?.ui?.credentialLayout === "openai-compatible" &&
                 openaiCompatListMeta.modelsChecked &&
                 openaiCompatListMeta.modelCount === 0 && (
                     <>

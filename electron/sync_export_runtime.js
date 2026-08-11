@@ -3,6 +3,19 @@ const http = require("http");
 const https = require("https");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const {
+  prepareRuntimeReadiness,
+  readInstalledVersion: readRuntimeVersion,
+  validateRendererReadiness,
+  writeInstalledVersionAtomic: writeRuntimeVersion,
+} = require("./export_runtime_contract.js");
+const {
+  getPlatformAssetName,
+  helpText,
+  parseSyncCliArgs,
+  resolveTargetVersion,
+  verifyDownloadedAsset,
+} = require("./scripts/export-runtime-sync-contract.cjs");
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
 
@@ -12,36 +25,21 @@ const targetIndex = path.join(targetRoot, "index.js");
 const installedVersionFile = path.join(targetRoot, ".installed-version");
 const cacheDir = path.join(__dirname, ".cache", "export-runtime");
 const exportRepoBase = "https://github.com/presenton/presenton-export/releases/download";
-const exportVersion = packageJson.exportVersion || "v0.1.0";
+const exportVersion = packageJson.exportVersion;
 
-const cliArgs = new Set(process.argv.slice(2));
-const forceDownload = cliArgs.has("--force");
-const checkOnly = cliArgs.has("--check-only");
+const { forceDownload, checkOnly, allowVersionOverride, showHelp } = parseSyncCliArgs();
 
 async function getTargetVersion() {
-  const requestedVersion = process.env.EXPORT_RUNTIME_VERSION || exportVersion;
-  if (requestedVersion !== "latest") {
-    return requestedVersion;
-  }
-
-  const apiUrl = "https://api.github.com/repos/presenton/presenton-export/releases/latest";
-  const latest = await requestJson(apiUrl);
-  if (!latest.tag_name) {
-    throw new Error(`Could not resolve latest release tag from ${apiUrl}`);
-  }
-
-  return latest.tag_name;
-}
-
-function getPlatformAssetName() {
-  const platformArch = `${process.platform}-${process.arch}`;
-  if (platformArch === "linux-x64") return "export-Linux-X64.zip";
-  if (platformArch === "darwin-arm64") return "export-macOS-ARM64.zip";
-  if (platformArch === "win32-x64") return "export-Windows-X64.zip";
-
-  throw new Error(
-    `Unsupported export runtime platform: ${platformArch}. Supported: linux-x64, darwin-arm64, win32-x64`
-  );
+  return resolveTargetVersion({
+    pinnedVersion: exportVersion,
+    allowVersionOverride,
+    resolveLatest: async () => {
+      const apiUrl = "https://api.github.com/repos/presenton/presenton-export/releases/latest";
+      const latest = await requestJson(apiUrl);
+      if (!latest.tag_name) throw new Error(`Could not resolve latest release tag from ${apiUrl}`);
+      return latest.tag_name;
+    },
+  });
 }
 
 function getConverterCandidates(pyDir = targetPyDir) {
@@ -81,29 +79,9 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function readInstalledVersion(markerFile = installedVersionFile) {
-  if (!fs.existsSync(markerFile)) {
-    return null;
-  }
-  const version = fs.readFileSync(markerFile, "utf8").trim();
-  return version || null;
-}
-
-function writeInstalledVersionAtomic(version, markerFile = installedVersionFile) {
-  ensureDir(path.dirname(markerFile));
-  const tempFile = `${markerFile}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    fs.writeFileSync(tempFile, `${version}\n`, "utf8");
-    try {
-      fs.renameSync(tempFile, markerFile);
-    } catch {
-      fs.copyFileSync(tempFile, markerFile);
-      fs.rmSync(tempFile, { force: true });
-    }
-  } finally {
-    fs.rmSync(tempFile, { force: true });
-  }
-}
+const readInstalledVersion = (marker = installedVersionFile) => readRuntimeVersion(marker);
+const writeInstalledVersionAtomic = (version, marker = installedVersionFile) =>
+  writeRuntimeVersion(version, marker);
 
 function chmodIfPossible(filePath) {
   if (process.platform !== "win32") {
@@ -150,7 +128,7 @@ function isFormatCompatible(format) {
   return true;
 }
 
-function validateExistingRuntime(expectedVersion, runtimeRoot = targetRoot) {
+function validateExistingRuntime(expectedVersion, runtimeRoot = targetRoot, { repair = true } = {}) {
   const runtimeIndex = path.join(runtimeRoot, "index.js");
   const runtimePyDir = path.join(runtimeRoot, "py");
   const markerFile = path.join(runtimeRoot, ".installed-version");
@@ -172,6 +150,10 @@ function validateExistingRuntime(expectedVersion, runtimeRoot = targetRoot) {
 
   if (!fs.existsSync(runtimeIndex)) {
     return { ok: false, reason: `Missing runtime bundle: ${runtimeIndex}` };
+  }
+  const overlay = validateRendererReadiness(runtimeRoot, { repair });
+  if (!overlay.ok) {
+    return { ok: false, reason: overlay.reason };
   }
 
   const converterCandidates = getConverterCandidates(runtimePyDir);
@@ -492,6 +474,8 @@ async function downloadAndInstallRuntime(tag) {
   console.log(`[export-runtime] Downloading ${downloadUrl}`);
   try {
     await downloadFileWithRetries(downloadUrl, zipPath);
+    const checksum = verifyDownloadedAsset(zipPath, tag, assetName);
+    console.log(`[export-runtime] Verified ${assetName} sha256 ${checksum}`);
   } catch (err) {
     try {
       fs.unlinkSync(zipPath);
@@ -607,17 +591,28 @@ function ensureElectronRuntimeSharp() {
 function finalizeRuntimeInstall(
   tag,
   {
+    prepareRuntime = prepareElectronRuntimeArtifacts,
     assertSharp = assertElectronSharpLoadable,
     writeMarker = writeInstalledVersionAtomic,
   } = {}
 ) {
+  prepareRuntime();
   assertSharp();
   writeMarker(tag);
 }
 
+const prepareElectronRuntimeArtifacts = (runtimeRoot = targetRoot) =>
+  prepareRuntimeReadiness(runtimeRoot);
+
 async function main() {
+  if (showHelp) {
+    console.log(helpText);
+    return;
+  }
   const targetVersion = await getTargetVersion();
-  const existing = validateExistingRuntime(targetVersion);
+  const existing = validateExistingRuntime(targetVersion, targetRoot, {
+    repair: !checkOnly,
+  });
 
   if (checkOnly) {
     if (!existing.ok) {
@@ -647,7 +642,9 @@ async function main() {
   ensureElectronRuntimeSharp();
   finalizeRuntimeInstall(tag);
 
-  const installed = validateExistingRuntime(targetVersion);
+  const installed = validateExistingRuntime(targetVersion, targetRoot, {
+    repair: false,
+  });
   if (!installed.ok) {
     throw new Error(installed.reason);
   }
@@ -669,6 +666,7 @@ if (require.main === module) {
     assertElectronSharpLoadable,
     ensureElectronRuntimeSharp,
     finalizeRuntimeInstall,
+    prepareElectronRuntimeArtifacts,
     readInstalledVersion,
     validateExistingRuntime,
     writeInstalledVersionAtomic,

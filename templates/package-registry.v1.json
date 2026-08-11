@@ -5,7 +5,7 @@
       "templateId": "editorial",
       "manifest": "templates/manifests/editorial.package.v1.json",
       "enabled": true,
-      "discoverable": false
+      "discoverable": true
     }
   ],
   "legacyCompatibility": {

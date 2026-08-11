@@ -15,11 +15,11 @@ import {
 } from "@/store/slices/presentationGeneration";
 import "../../utils/prism-languages";
 import { Skeleton } from "@/components/ui/skeleton";
-import PresentationMode from "./PresentationMode";
 import SidePanel from "./SidePanel";
 import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle, Layers, PanelLeft } from "lucide-react";
 import {
@@ -44,7 +44,6 @@ import {
   presentationCapabilitySelectors,
   tryResolveServerIssuedPresentationProfile,
 } from "@/lib/presentation-profile";
-
 import PresentationHeader from "./PresentationHeader";
 import PresentationShell, {
   PresentationFeatureSlot,
@@ -61,21 +60,20 @@ import {
   type WorkspaceQualityReviewRequester,
 } from "../workspace";
 import { findMostVisibleSlideIndex } from "../utils/slideScrollSync";
-
+import { PresentationLoadError, PresentationModeView } from "./PresentationTerminalStates";
 /**
  * Every deck is served by the Slides Workbench, so the editor never takes a
  * direct write: the backend answers those with `chat_first_command_required`.
  * Inline editing stays rendered but read-only.
  */
 const INLINE_MUTATIONS_ENABLED = false;
-
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
   workspaceStaging = false,
 }) => {
+  const t = useTranslations("community");
   const pathname = usePathname();
   const dispatch = useDispatch();
-  // State management
   const [loading, setLoading] = useState(true);
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -119,7 +117,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [workspacePageRemakeRequester],
   );
-
   const { presentationData, isStreaming, chatHtmlSelection } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
@@ -142,7 +139,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         presentationRuntime.capabilities,
       )
     : false;
-
   useEffect(() => {
     dispatch(setEnableHtmlSelector(isSmartPresentation));
     if (!isSmartPresentation) dispatch(clearChatHtmlSelection());
@@ -151,7 +147,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       dispatch(clearChatHtmlSelection());
     };
   }, [dispatch, isSmartPresentation, presentation_id]);
-
   const currentConversationSlideId = presentationData?.slides?.[selectedSlide]?.id as
     | string
     | undefined;
@@ -176,7 +171,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     slidesLength > 0
       ? presentationData?.slides?.[slidesLength - 1]?.index
       : undefined;
-
   const scheduleHybridExportWarmup = useHybridExportWarmup({
     presentationId: presentation_id,
     title: presentationData?.title,
@@ -184,21 +178,16 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     isAuthoredDeck,
     isStreaming,
   });
-
-  // Auto-save functionality
   const { isSaving, saveFailed } = useAutoSave({
     debounceMs: 2000,
     enabled: INLINE_MUTATIONS_ENABLED && !!presentationData && !isStreaming,
     onSaveSuccess: scheduleHybridExportWarmup,
   });
-
-  // Custom hooks
   const { fetchUserSlides } = usePresentationData(
     presentation_id,
     setLoading,
     setError
   );
-
   const {
     isPresentMode,
     stream,
@@ -213,7 +202,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     setSelectedSlide,
     setIsFullscreen
   );
-
   const handleMobileThumbnailSelect = useCallback(
     (slideIndex: number) => {
       setCompactWorkspacePane("slides");
@@ -222,7 +210,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [handleSlideClick],
   );
-
   useEffect(() => {
     const desktopRail = window.matchMedia("(min-width: 768px)");
     const closeMobileDrawer = (event: MediaQueryListEvent | MediaQueryList) => {
@@ -232,8 +219,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     desktopRail.addEventListener("change", closeMobileDrawer);
     return () => desktopRail.removeEventListener("change", closeMobileDrawer);
   }, []);
-
-  // Initialize streaming
   usePresentationStreaming(
     presentation_id,
     stream,
@@ -241,40 +226,31 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     setError,
     fetchUserSlides
   );
-
   useEffect(() => {
     if (!isStreaming) return;
-
     const scrollContainer = slidesScrollContainerRef.current;
     if (!scrollContainer) return;
-
     const frame = window.requestAnimationFrame(() => {
       if (slidesLength <= 1) {
         scrollContainer.scrollTo({ top: 0, behavior: "auto" });
         return;
       }
-
       if (lastStreamingSlideIndex === undefined) return;
-
       const slideElement = document.getElementById(
         `slide-${lastStreamingSlideIndex}`
       );
       if (!slideElement) return;
-
       const containerRect = scrollContainer.getBoundingClientRect();
       const slideRect = slideElement.getBoundingClientRect();
       const slideTop =
         slideRect.top - containerRect.top + scrollContainer.scrollTop;
-
       scrollContainer.scrollTo({
         top: Math.max(slideTop, 0),
         behavior: "smooth",
       });
     });
-
     return () => window.cancelAnimationFrame(frame);
   }, [isStreaming, lastStreamingSlideIndex, slidesLength]);
-
   useEffect(() => {
     trackEvent(MixpanelEvent.Presentation_Editor_Viewed, {
       pathname,
@@ -283,7 +259,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       presentation_mode: isPresentMode ? "present" : "edit",
     });
   }, [pathname, presentation_id, stream, isPresentMode]);
-
   /** Editor tree unmounts in present mode; remount loses inline theme CSS — re-apply from Redux. */
   useLayoutEffect(() => {
     if (isPresentMode) return;
@@ -292,11 +267,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     const el = document.getElementById("presentation-slides-wrapper");
     applyPresentationThemeToElement(el, theme);
   }, [isPresentMode, presentationData?.theme]);
-
   const onSlideChange = (newSlide: number) => {
     handleSlideChange(newSlide, presentationData);
   };
-
   const handlePresentationChanged = useCallback(async (
     change?: WorkspacePresentationChange,
   ) => {
@@ -311,9 +284,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     ) {
       return;
     }
-
-    // A revision can remove/reorder slides. Keep the user's selection whenever
-    // it remains valid; only then fall back to the first slide that was changed.
     const fallbackIndex = change?.fixedSlideIndexes?.find(
       (index) => index >= 0 && index < slideCount,
     ) ?? 0;
@@ -323,7 +293,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     () => handlePresentationChanged(),
     [handlePresentationChanged],
   );
-
   const handleAgentActivityChange = useCallback((working: boolean) => {
     setIsAgentWorking(working);
     if (working) {
@@ -333,7 +302,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     setAgentFocusedSlide(null);
     setAgentFocusEventId(null);
   }, []);
-
   const handleAgentSlideFocus = useCallback(
     ({ slideIndex, eventId }: WorkspaceAgentSlideFocus) => {
       if (slideIndex < 0) {
@@ -347,14 +315,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     []
   );
-
   const totalSlides = presentationData?.slides?.length ?? 0;
   const highlightedSlideIndex = glowingSlideIndex;
   const targetedSlidesSet = useMemo(
     () => new Set(chatTargetedSlides),
     [chatTargetedSlides]
   );
-
   const handleSlidesScroll = useCallback(() => {
     if (slideScrollSyncFrameRef.current !== null) return;
     slideScrollSyncFrameRef.current = window.requestAnimationFrame(() => {
@@ -377,7 +343,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       );
     });
   }, []);
-
   useEffect(
     () => () => {
       if (slideScrollSyncFrameRef.current !== null) {
@@ -386,14 +351,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [],
   );
-
-  // The panel owns the "AI 따라가기" toggle and only reports a focus while it is
-  // on, so arriving here already means the canvas should move.
   useEffect(() => {
     if (totalSlides <= 0 || agentFocusedSlide === null) {
       return;
     }
-
     const clampedIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
     if (clampedIndex !== selectedSlide) {
       handleSlideClick(clampedIndex);
@@ -405,14 +366,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     selectedSlide,
     handleSlideClick,
   ]);
-
   useEffect(() => {
     if (totalSlides <= 0) {
       setGlowingSlideIndex(null);
       setChatTargetedSlides([]);
       return;
     }
-
     if (!isAgentWorking) {
       if (glowingSlideIndex === null && chatTargetedSlides.length === 0) {
         return;
@@ -423,16 +382,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       }, 900);
       return () => window.clearTimeout(clearTimer);
     }
-
-    // Do not show glow/scanner until a request names an actual target slide.
-    // This avoids the "instant scanner on send" effect before work begins.
     if (agentFocusedSlide === null) {
       if (glowingSlideIndex !== null) {
         setGlowingSlideIndex(null);
       }
       return;
     }
-
     const targetIndex = Math.min(Math.max(agentFocusedSlide, 0), totalSlides - 1);
     setGlowingSlideIndex(targetIndex);
   }, [
@@ -443,48 +398,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     chatTargetedSlides.length,
     glowingSlideIndex,
   ]);
-
-
-  // Presentation Mode View
   if (isPresentMode) {
-    return (
-      <PresentationMode
-        slides={presentationData?.slides!}
-        currentSlide={presentSlideFromUrl}
-        theme={presentationData?.theme ?? undefined}
-        isFullscreen={isFullscreen}
-        onFullscreenToggle={toggleFullscreen}
-        onExit={handlePresentExit}
-        onSlideChange={onSlideChange}
-      />
-    );
+    return <PresentationModeView presentationData={presentationData} presentSlide={presentSlideFromUrl} isFullscreen={isFullscreen} onFullscreenToggle={toggleFullscreen} onExit={handlePresentExit} onSlideChange={onSlideChange} />;
   }
-
   if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-100 font-syne">
-        <div
-          className="bg-white border border-red-300 text-red-700 px-6 py-8 rounded-lg shadow-lg flex flex-col items-center"
-          role="alert"
-        >
-          <AlertCircle className="w-16 h-16 mb-4 text-red-500" />
-          <h2 className="text-xl font-semibold mb-2">문제가 발생했습니다</h2>
-          <p className="text-center mb-4">
-            발표자료를 불러오지 못했습니다. 다시 시도해 주세요.
-          </p>
-          <div className="flex gap-2 justify-center items-center">
-
-            <Button onClick={() => { trackEvent(MixpanelEvent.PresentationPage_Refresh_Page_Button_Clicked, { pathname }); window.location.reload(); }}>페이지 새로고침</Button>
-            <Button onClick={() => { trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" }); router.push("/upload"); }}>업로드로 이동</Button>
-          </div>
-        </div>
-      </div>
-    );
+    return <PresentationLoadError pathname={pathname} router={router} />;
   }
-
   return (
     <PresentationShell
-      title={presentationData?.title ?? "프레젠테이션 편집기"}
+      title={presentationData?.title ?? t("presentationEditor")}
       background={isSmartPresentation ? "#F6F6F9" : "#EDEEEF"}
       viewModel={presentationFeatureView}
     >
@@ -673,11 +595,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                     )}
                   </div>
                 ) : presentationData.slides.length === 0 ? (
-                  // Loaded, not streaming, but the deck has 0 slides. Previously
-                  // this fell into the skeleton branch and showed permanent gray
-                  // bars with no message — a dead-end. Show a recoverable empty
-                  // state instead (the header's 재생성/regenerate button stays
-                  // available above this area).
                   <div className="flex w-full h-[calc(100vh-160px)] flex-col items-center justify-center text-center">
                     <div className="flex max-w-md flex-col items-center rounded-lg border border-gray-200 bg-white px-6 py-8 shadow-sm">
                       <Layers className="mb-4 h-14 w-14 text-gray-400" />
@@ -809,5 +726,4 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     </PresentationShell>
   );
 };
-
 export default PresentationPage;

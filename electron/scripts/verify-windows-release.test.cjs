@@ -36,6 +36,14 @@ function validSignature() {
   };
 }
 
+function readinessOverlayFixture() {
+  return Buffer.from(
+    "data-presenton-template-v2-readiness " +
+      'templateV2ResourceError==="true" ' +
+      "Template V2 required resource failed"
+  );
+}
+
 function archiveFixture(overrides = {}) {
   const prefix = APP_RESOURCE_PREFIX;
   const nextRoot = `${prefix}nextjs/servers/nextjs/`;
@@ -47,7 +55,7 @@ function archiveFixture(overrides = {}) {
     ["AppxSignature.p7x", Buffer.from("signature")],
     ["Presenton.exe", peFixture()],
     [`${prefix}export/.installed-version`, Buffer.from(`${EXPECTED_EXPORT_VERSION}\n`)],
-    [`${prefix}export/index.js`, Buffer.alloc(512)],
+    [`${prefix}export/index.js`, readinessOverlayFixture()],
     [`${prefix}export/py/convert-win32-x64.exe`, peFixture()],
     [`${prefix}fastapi/fastapi.exe`, peFixture()],
     [`${nextRoot}server.js`, Buffer.from("server")],
@@ -99,7 +107,7 @@ function addUnpacked(fixture) {
     path.join(resources, "export", ".installed-version"),
     `${EXPECTED_EXPORT_VERSION}\n`
   );
-  write(path.join(resources, "export", "index.js"), Buffer.alloc(512));
+  write(path.join(resources, "export", "index.js"), readinessOverlayFixture());
   write(
     path.join(resources, "export", "py", "convert-win32-x64.exe"),
     peFixture()
@@ -179,7 +187,23 @@ test("rejects AppX manifest identity, signature entry, and export marker regress
               [`${APP_RESOURCE_PREFIX}export/.installed-version`]: "v0.3.3",
             }),
           }),
-        /export marker must be v0\.4\.2/
+        /export marker must be v0\.4\.3/
+      );
+    } finally {
+      fixture.cleanup();
+    }
+  });
+  await t.test("readiness overlay", () => {
+    const fixture = releaseFixture();
+    try {
+      assert.throws(
+        () =>
+          validateAppx(fixture.appx, {
+            archiveReader: archiveFixture({
+              [`${APP_RESOURCE_PREFIX}export/index.js`]: "unpatched runtime",
+            }),
+          }),
+        /missing the fail-closed renderer readiness overlay/
       );
     } finally {
       fixture.cleanup();

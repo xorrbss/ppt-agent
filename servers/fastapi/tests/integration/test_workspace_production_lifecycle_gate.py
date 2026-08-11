@@ -357,6 +357,10 @@ def test_production_api_external_worker_restart_and_sse_backfill(
         {
             "DATABASE_URL": f"sqlite:///{database_path.as_posix()}",
             "APP_DATA_DIRECTORY": str(tmp_path / "app-data"),
+            # TempFileService clears its configured root when each production
+            # process imports it. Keep that startup cleanup inside this test
+            # run instead of racing another Windows process in /tmp/presenton.
+            "TEMP_DIRECTORY": str((tmp_path / "temp").resolve()),
             "USER_CONFIG_PATH": str(tmp_path / "userConfig.json"),
             "AUTH_USERNAME": "gate7_admin",
             "AUTH_PASSWORD": "gate7-password",

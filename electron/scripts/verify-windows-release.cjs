@@ -1,60 +1,18 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { requireReadinessOverlay } = require("./export-readiness-verifier.cjs");
+const {
+  readExpectedAppxVersion,
+  readExpectedExportVersion,
+} = require("./release-version-contract.cjs");
 
 const EXPECTED_EXPORT_VERSION = "v0.4.3";
 const EXPECTED_IDENTITY = "PresentonAI.Presenton";
 const EXPECTED_PUBLISHER = "CN=8A2C57B5-F1C6-473A-93EE-2E9B72134341";
 const APP_RESOURCE_PREFIX = "app/resources/app/resources/";
 
-function readExpectedAppxVersion(options = {}) {
-  const electronRoot = path.resolve(
-    options.electronRoot || path.join(__dirname, "..")
-  );
-  const electronPackage = JSON.parse(
-    fs.readFileSync(path.join(electronRoot, "package.json"), "utf8")
-  );
-  const parts = String(electronPackage.version || "").split(".");
-  if (
-    parts.length !== 3 ||
-    parts.some(
-      (part) =>
-        !/^\d+$/.test(part) ||
-        Number(part) > 65535
-    )
-  ) {
-    throw new Error(
-      `Electron version must be three numeric AppX-safe components: ${electronPackage.version || "(missing)"}`
-    );
-  }
-  return `${parts.join(".")}.0`;
-}
-
 const EXPECTED_APPX_VERSION = readExpectedAppxVersion();
-
-function readExpectedExportVersion(options = {}) {
-  const repoRoot = path.resolve(
-    options.repoRoot || path.join(__dirname, "..", "..")
-  );
-  const electronRoot = path.resolve(
-    options.electronRoot || path.join(__dirname, "..")
-  );
-  const repoPackage = JSON.parse(
-    fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")
-  );
-  const electronPackage = JSON.parse(
-    fs.readFileSync(path.join(electronRoot, "package.json"), "utf8")
-  );
-  const repoVersion = repoPackage.presentationExportVersion;
-  const electronVersion = electronPackage.exportVersion;
-  if (!repoVersion || !electronVersion || repoVersion !== electronVersion) {
-    throw new Error(
-      `presentation-export version mismatch: root=${repoVersion || "(missing)"}, ` +
-        `electron=${electronVersion || "(missing)"}`
-    );
-  }
-  return repoVersion;
-}
 
 function requireFile(filePath, label, minimumBytes = 1) {
   let stat;
@@ -313,7 +271,12 @@ function validateAppx(appxPath, options = {}) {
       `AppX export marker must be ${expectedExportVersion}, received ${markerVersion}`
     );
   }
-  findEntry(names, [resource("export/index.js")], "export index.js");
+  const exportIndex = findEntry(
+    names,
+    [resource("export/index.js")],
+    "export index.js"
+  );
+  requireReadinessOverlay(entries.read(appxPath, exportIndex), "AppX export index.js");
   const converter = findEntryBy(
     names,
     (name) => /^app\/resources\/app\/resources\/export\/py\/convert-win32-(x64|arm64)\.exe$/i.test(name),
@@ -399,7 +362,12 @@ function validateUnpacked(
   if (fs.readFileSync(marker, "utf8").trim() !== expectedExportVersion) {
     throw new Error(`unpacked export marker must be ${expectedExportVersion}`);
   }
-  requireFile(path.join(resources, "export", "index.js"), "unpacked export index.js");
+  const exportIndex = path.join(resources, "export", "index.js");
+  requireFile(exportIndex, "unpacked export index.js");
+  requireReadinessOverlay(
+    fs.readFileSync(exportIndex),
+    "unpacked export index.js"
+  );
   const converterRoot = path.join(resources, "export", "py");
   const converter = fs
     .readdirSync(converterRoot)

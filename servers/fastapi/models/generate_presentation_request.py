@@ -71,9 +71,12 @@ class GeneratePresentationRequest(BaseModel):
     )
     files: Optional[List[str]] = Field(
         default=None,
+        json_schema_extra={"deprecated": True},
         description=(
-            "Deprecated compatibility input. New callers must upload through the "
-            "asset gateway and pass immutable reference_snapshot_ids."
+            "Admission-only compatibility input. It is immediately copied into "
+            "canonical assets and replaced by an immutable reference snapshot; "
+            "it is never persisted in a generation job. New callers must upload "
+            "through the asset gateway and pass reference_snapshot_ids."
         ),
     )
     reference_snapshot_ids: List[uuid.UUID] = Field(

@@ -261,7 +261,8 @@ def inspect_smart_slide_layout(html: str) -> list[str]:
         rect = _positioned_rect(node)
         if rect is None:
             issues.append(
-                "Absolutely positioned meaningful content is missing a complete pixel box; use flex/grid or provide left/top/width/height."
+                "Absolutely positioned meaningful content is missing a complete pixel box; "
+                "use flex/grid or provide left/top/width/height."
             )
             continue
         x, y, width, height = rect
@@ -283,7 +284,8 @@ def inspect_smart_slide_layout(html: str) -> list[str]:
             for _, second_rect in siblings[first_index + 1 :]:
                 if _rectangles_overlap(first_rect, second_rect):
                     issues.append(
-                        "Absolutely positioned sibling content boxes overlap; reflow them with flex/grid and explicit gaps."
+                        "Absolutely positioned sibling content boxes overlap; "
+                        "reflow them with flex/grid and explicit gaps."
                     )
 
     return list(dict.fromkeys(issues))

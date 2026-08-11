@@ -110,6 +110,205 @@ def test_durable_deletion_upgrade_rejects_dangling_attachment_asset(tmp_path):
         engine.dispose()
 
 
+def test_durable_deletion_upgrade_tops_up_partially_applied_schema(tmp_path):
+    database_url = f"sqlite:///{(tmp_path / 'partial-durable-deletion.db').as_posix()}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ)
+
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE presentations ADD COLUMN deleted_at DATETIME")
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE workspace_message_attachments "
+                    "ADD COLUMN asset_id_snapshot CHAR(32)"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE TABLE workspace_cleanup_journal "
+                    "(id CHAR(32) NOT NULL PRIMARY KEY)"
+                )
+            )
+
+        command.upgrade(config, migrations.REVISION_DURABLE_DELETION)
+
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert {
+                "deleted_at",
+                "deletion_operation_id",
+            } <= {
+                column["name"]
+                for column in inspector.get_columns("presentations")
+            }
+            attachment_columns = {
+                column["name"]: column
+                for column in inspector.get_columns(
+                    "workspace_message_attachments"
+                )
+            }
+            assert attachment_columns["asset_id"]["nullable"] is True
+            assert attachment_columns["asset_id_snapshot"]["nullable"] is False
+            assert {
+                "asset_sha256",
+                "asset_failure_code",
+                "asset_failure_detail",
+            } <= attachment_columns.keys()
+            cleanup_columns = {
+                column["name"]
+                for column in inspector.get_columns("workspace_cleanup_journal")
+            }
+            assert {
+                "idempotency_key_hash",
+                "redrive_count",
+                "created_at",
+                "updated_at",
+            } <= cleanup_columns
+            cleanup_indexes = {
+                index["name"]
+                for index in inspector.get_indexes("workspace_cleanup_journal")
+            }
+            assert "ix_workspace_cleanup_journal_dispatch" in cleanup_indexes
+    finally:
+        engine.dispose()
+
+
+def test_durable_deletion_upgrade_rejects_same_named_wrong_check(tmp_path):
+    database_url = f"sqlite:///{(tmp_path / 'wrong-cleanup-check.db').as_posix()}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, migrations.REVISION_DURABLE_DELETION)
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            table_sql = connection.execute(
+                text(
+                    "SELECT sql FROM sqlite_master "
+                    "WHERE type = 'table' AND name = 'workspace_cleanup_journal'"
+                )
+            ).scalar_one()
+            wrong_sql = table_sql.replace(
+                "cleanup_attempts >= 0",
+                "cleanup_attempts >= -99",
+            )
+            assert wrong_sql != table_sql
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            connection.exec_driver_sql(
+                "ALTER TABLE workspace_cleanup_journal "
+                "RENAME TO workspace_cleanup_journal_old"
+            )
+            connection.exec_driver_sql(wrong_sql)
+            connection.exec_driver_sql(
+                "INSERT INTO workspace_cleanup_journal "
+                "SELECT * FROM workspace_cleanup_journal_old"
+            )
+            connection.exec_driver_sql("DROP TABLE workspace_cleanup_journal_old")
+            connection.execute(
+                text("UPDATE alembic_version SET version_num = :revision"),
+                {"revision": migrations.REVISION_ASYNC_PRESENTATION_TASK_TZ},
+            )
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+        with pytest.raises(
+            RuntimeError,
+            match="ck_workspace_cleanup_journal_attempts has an unexpected expression",
+        ):
+            command.upgrade(config, migrations.REVISION_DURABLE_DELETION)
+    finally:
+        engine.dispose()
+
+
+def test_slidespec_publication_attempts_upgrade_tops_up_partial_table(tmp_path):
+    database_url = f"sqlite:///{(tmp_path / 'partial-publication-attempts.db').as_posix()}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, "fb2c4d6e8a0b")
+
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE TABLE slidespec_publication_attempts "
+                    "(id CHAR(32) NOT NULL PRIMARY KEY)"
+                )
+            )
+
+        command.upgrade(config, "fc3d5e7f9a1b")
+
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            assert {
+                "id",
+                "attempt_id",
+                "artifact_bundle_id",
+                "presentation_id",
+                "slide_id",
+                "state",
+                "reason_code",
+                "evidence",
+                "created_at",
+            } == {
+                column["name"]
+                for column in inspector.get_columns(
+                    "slidespec_publication_attempts"
+                )
+            }
+            assert {
+                tuple(constraint["constrained_columns"])
+                for constraint in inspector.get_foreign_keys(
+                    "slidespec_publication_attempts"
+                )
+            } == {
+                ("artifact_bundle_id",),
+                ("presentation_id",),
+                ("slide_id",),
+            }
+            assert {
+                index["name"]
+                for index in inspector.get_indexes(
+                    "slidespec_publication_attempts"
+                )
+            } == {"ix_slidespec_publication_attempts_slide_created"}
+    finally:
+        engine.dispose()
+
+
+def test_slidespec_publication_attempts_rejects_same_named_wrong_state_check(
+    tmp_path,
+):
+    database_url = f"sqlite:///{(tmp_path / 'wrong-publication-state.db').as_posix()}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, "fb2c4d6e8a0b")
+
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE TABLE slidespec_publication_attempts ("
+                    "id CHAR(32) NOT NULL PRIMARY KEY, "
+                    "state VARCHAR(32) NOT NULL, "
+                    "CONSTRAINT ck_slidespec_publication_attempt_state CHECK ("
+                    "state IN ('staged', 'activation_committed', 'verified', "
+                    "'failed', 'rolled_back', 'rollback_conflict', 'evil')))"
+                )
+            )
+
+        with pytest.raises(
+            RuntimeError,
+            match=(
+                "ck_slidespec_publication_attempt_state "
+                "has an unexpected expression"
+            ),
+        ):
+            command.upgrade(config, "fc3d5e7f9a1b")
+    finally:
+        engine.dispose()
+
+
 def test_alembic_ini_preserves_existing_application_loggers(tmp_path, monkeypatch):
     """Loading the CLI config must not disable loggers imported by the app."""
     fastapi_root = Path(__file__).resolve().parents[2]

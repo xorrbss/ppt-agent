@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import React from "react";
 import ModelSelectField from "./text-provider/ModelSelectField";
 import ProviderCredentialFields from "./text-provider/ProviderCredentialFields";
@@ -7,6 +8,7 @@ import type { OpenAIConfigProps } from "./text-provider/types";
 import { useTextProviderForm } from "./text-provider/useTextProviderForm";
 
 const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
+  const t = useTranslations("providerSettings");
   const {
     openProviderSelect,
     setOpenProviderSelect,
@@ -18,17 +20,13 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
     showApiKey,
     setShowApiKey,
     selectedProvider,
+    configuredProviderId,
+    providerResolutionError,
     isManualModelProvider,
     currentModelField,
     currentModel,
-    currentApiKey,
-    currentCustomUrl,
-    currentLitellmUrl,
-    currentOllamaUrl,
-    useCustomOllamaUrl,
     modelLabel,
-    providerApiKeyLabel,
-    onApiKeyChange,
+    credentialFields,
     fetchAvailableModels,
   } = useTextProviderForm({ onInputChange, llmConfig });
 
@@ -98,21 +96,30 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                   : "items-end w-[282px]  shrink-0 max-w-full"
               }`}
             >
-              <ProviderCredentialFields
-                selectedProvider={selectedProvider}
-                llmConfig={llmConfig}
-                onInputChange={onInputChange}
-                onApiKeyChange={onApiKeyChange}
-                useCustomOllamaUrl={useCustomOllamaUrl}
-                currentOllamaUrl={currentOllamaUrl}
-                currentApiKey={currentApiKey}
-                currentCustomUrl={currentCustomUrl}
-                providerApiKeyLabel={providerApiKeyLabel}
-                showApiKey={showApiKey}
-                setShowApiKey={setShowApiKey}
-              />
-              {!isManualModelProvider &&
-                selectedProvider !== "ollama" &&
+              {providerResolutionError ? (
+                <div
+                  role="alert"
+                  className="w-full rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                >
+                  <p className="font-semibold">{t("unknownProviderTitle")}</p>
+                  <p>
+                    {t("unknownProviderDescription", {
+                      provider: configuredProviderId,
+                    })}
+                  </p>
+                </div>
+              ) : (
+                <ProviderCredentialFields
+                  selectedProvider={selectedProvider!}
+                  llmConfig={llmConfig}
+                  onInputChange={onInputChange}
+                  credentialFields={credentialFields}
+                  showApiKey={showApiKey}
+                  setShowApiKey={setShowApiKey}
+                />
+              )}
+              {!providerResolutionError &&
+                !isManualModelProvider &&
                 selectedProvider !== "codex" &&
                 (!modelsChecked ||
                   (modelsChecked && availableModels.length === 0)) && (
@@ -120,15 +127,12 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                     onClick={fetchAvailableModels}
                     disabled={
                       modelsLoading ||
-                      (selectedProvider === "openai" && !currentApiKey) ||
-                      (selectedProvider === "google" && !currentApiKey) ||
-                      (selectedProvider === "anthropic" && !currentApiKey) ||
-                      (selectedProvider === "openrouter" && !currentApiKey) ||
-                      (selectedProvider === "fireworks" && !currentApiKey) ||
-                      (selectedProvider === "together" && !currentApiKey) ||
-                      (selectedProvider === "cerebras" && !currentApiKey) ||
-                      (selectedProvider === "custom" && !currentCustomUrl) ||
-                      (selectedProvider === "litellm" && !currentLitellmUrl)
+                      credentialFields.some(
+                        (credential) =>
+                          credential.required &&
+                          (credential.kind === "secret" || credential.kind === "oauth") &&
+                          !(llmConfig as Record<string, unknown>)[credential.settingKey]
+                      )
                     }
                     className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${
                       modelsLoading
@@ -149,7 +153,9 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
             </div>
           </div>
           {/* Model Selection - only show if models are available */}
-          {!isManualModelProvider &&
+          {!providerResolutionError &&
+          selectedProvider !== null &&
+          !isManualModelProvider &&
           selectedProvider !== "codex" &&
           modelsChecked &&
           availableModels.length > 0 ? (
@@ -167,7 +173,7 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
         </div>
       </div>
       {/* Show message if no models found */}
-      {modelsChecked && availableModels.length === 0 && (
+      {!providerResolutionError && modelsChecked && availableModels.length === 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800">
             모델을 찾을 수 없습니다. 제공자 인증 정보가 올바른지, 선택한

@@ -1,6 +1,6 @@
 import React from 'react'
 import { LogOut, Shield, ShieldCheck } from 'lucide-react'
-import { IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants'
+import { IMAGE_PROVIDER_OPTIONS, LLM_PROVIDER_OPTIONS } from '@/utils/provider-registry.generated'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store/store'
 import Image from 'next/image'
@@ -9,8 +9,8 @@ type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'admin' 
 
 const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: SettingsSection, setSelectedProvider: (provider: SettingsSection) => void }) => {
     const { llm_config } = useSelector((state: RootState) => state.userConfig)
-    const textProviderIcon = LLM_PROVIDERS[llm_config.LLM as keyof typeof LLM_PROVIDERS]?.icon
-    const imageProviderIcon = IMAGE_PROVIDERS[llm_config.IMAGE_PROVIDER as keyof typeof IMAGE_PROVIDERS]?.icon || '/providers/pexel.png'
+    const textProviderIcon = LLM_PROVIDER_OPTIONS[llm_config.LLM || ""]?.icon
+    const imageProviderIcon = IMAGE_PROVIDER_OPTIONS[llm_config.IMAGE_PROVIDER || ""]?.icon || '/providers/pexel.png'
     return (
         <div className='w-full max-w-[230px] h-screen px-3 pt-[22px] bg-[#F9FAFB] flex flex-col'>
             <p className='text-xs text-black  font-medium border-b mt-[3.15rem]  border-[#E1E1E5] pb-3.5'>필터:</p>

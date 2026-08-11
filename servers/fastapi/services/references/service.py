@@ -7,6 +7,7 @@ from hashlib import sha256
 import hmac
 import json
 from pathlib import Path
+import asyncio
 from typing import Any
 import uuid
 
@@ -24,7 +25,10 @@ from services.references.providers import (
     ReferenceSourceProviderRegistry,
     default_reference_source_registry,
 )
+from services.workspace_asset_service import import_workspace_document_asset
+from services.workspace_service import WorkspaceServiceError
 from utils.datetime_utils import get_current_utc_datetime
+from utils.document_path_security import validate_document_paths
 from utils.owner_context import get_current_owner_id
 
 
@@ -127,6 +131,69 @@ def _utc_comparable(now: datetime, other: datetime) -> datetime:
     return now.replace(tzinfo=None) if other.tzinfo is None else now
 
 
+async def canonicalize_legacy_document_paths(
+    session: AsyncSession,
+    *,
+    file_paths: list[str],
+    conversation_id: uuid.UUID | None = None,
+    storage_root: Path | None = None,
+    admin_legacy_roots: list[str] | None = None,
+) -> ReferenceSnapshotView:
+    """Immediately turn legacy server paths into one immutable snapshot.
+
+    Raw paths are accepted only at this compatibility boundary. Each path is
+    containment-validated, copied, scanned, hashed and then forgotten. The
+    returned snapshot id is the only value generation jobs may persist.
+    """
+
+    validated = validate_document_paths(
+        file_paths,
+        admin_legacy_roots=admin_legacy_roots,
+    )
+    asset_ids: list[str] = []
+    imported_copies: list[Path] = []
+    try:
+        for path in validated:
+            asset, _private_copy = await import_workspace_document_asset(
+                session,
+                source_path=path,
+                original_name=Path(path).name,
+                storage_root=storage_root,
+            )
+            imported_copies.append(_private_copy)
+            asset_ids.append(str(asset.id))
+        return await create_reference_snapshot(
+            session,
+            provider_id="uploaded_document",
+            request={"asset_ids": asset_ids},
+            conversation_id=conversation_id,
+            asset_gateway=AssetGateway(storage_root=storage_root),
+        )
+    except BaseException as error:
+        # The import helper flushes rows and returns a promoted private copy, but
+        # deliberately leaves transaction ownership here. Compensate every
+        # successfully imported prefix if a later import, provider validation,
+        # or snapshot commit fails so rolled-back rows never strand files.
+        await session.rollback()
+        for private_copy in reversed(imported_copies):
+            await asyncio.to_thread(_remove_imported_private_copy, private_copy)
+        if isinstance(error, WorkspaceServiceError):
+            raise ReferenceProviderError(
+                error.code,
+                status_code=error.status_code,
+                retryable=error.retryable,
+            ) from error
+        raise
+
+
+def _remove_imported_private_copy(private_copy: Path) -> None:
+    private_copy.unlink(missing_ok=True)
+    try:
+        private_copy.parent.rmdir()
+    except OSError:
+        pass
+
+
 async def create_reference_snapshot(
     session: AsyncSession,
     *,
@@ -136,10 +203,18 @@ async def create_reference_snapshot(
     registry: ReferenceSourceProviderRegistry | None = None,
     asset_gateway: AssetGateway | None = None,
 ) -> ReferenceSnapshotView:
-    """Normalize one source and append an immutable persistence record."""
+    """Normalize, admit, and atomically append one immutable record.
+
+    Admission deliberately happens after ``flush`` but before ``commit``. A
+    failed live-asset revalidation therefore cannot leave a durable snapshot
+    pointing at bytes that the importing compatibility boundary compensates.
+    """
 
     provider = (registry or default_reference_source_registry()).require(provider_id)
     gateway = asset_gateway or AssetGateway()
+    row: ReferenceSnapshot | None = None
+    admitted: ReferenceSnapshotView | None = None
+    committing = False
     try:
         normalized = await provider.normalize(
             session,
@@ -147,35 +222,61 @@ async def create_reference_snapshot(
             asset_gateway=gateway,
             conversation_id=conversation_id,
         )
-    except AssetGatewayError as error:
-        raise ReferenceProviderError(
-            error.code,
-            status_code=error.status_code,
-            retryable=error.retryable,
-        ) from error
-    if normalized.provider_id != provider_id:
-        raise ReferenceProviderError("reference_provider_identity_mismatch")
+        if normalized.provider_id != provider_id:
+            raise ReferenceProviderError("reference_provider_identity_mismatch")
 
-    _serialized, content_digest, bindings = _snapshot_content(normalized)
-    row = ReferenceSnapshot(
-        conversation_id=conversation_id,
-        provider_id=provider_id,
-        source_revision=normalized.source_revision,
-        source_fingerprint=_source_fingerprint(normalized),
-        normalized_payload=json.loads(_canonical_json(normalized.normalized_payload)),
-        asset_bindings=bindings,
-        content_sha256=content_digest,
-        expires_at=normalized.expires_at,
-    )
-    session.add(row)
-    await session.commit()
-    await session.refresh(row)
-    return await admit_reference_snapshot(
-        session,
-        snapshot_id=row.id,
-        conversation_id=conversation_id,
-        asset_gateway=gateway,
-    )
+        _serialized, content_digest, bindings = _snapshot_content(normalized)
+        row = ReferenceSnapshot(
+            conversation_id=conversation_id,
+            provider_id=provider_id,
+            source_revision=normalized.source_revision,
+            source_fingerprint=_source_fingerprint(normalized),
+            normalized_payload=json.loads(_canonical_json(normalized.normalized_payload)),
+            asset_bindings=bindings,
+            content_sha256=content_digest,
+            expires_at=normalized.expires_at,
+        )
+        session.add(row)
+        await session.flush()
+        admitted = await admit_reference_snapshot(
+            session,
+            snapshot_id=row.id,
+            conversation_id=conversation_id,
+            asset_gateway=gateway,
+        )
+        committing = True
+        await session.commit()
+        return admitted
+    except BaseException as error:
+        await session.rollback()
+        if committing and row is not None and admitted is not None:
+            try:
+                committed = (
+                    await session.execute(
+                        select(ReferenceSnapshot).where(
+                            ReferenceSnapshot.id == row.id,
+                            _owner_predicate(),
+                        )
+                    )
+                ).scalar_one_or_none()
+            except BaseException:
+                await session.rollback()
+                committed = None
+            if (
+                committed is not None
+                and hmac.compare_digest(
+                    committed.content_sha256,
+                    row.content_sha256,
+                )
+            ):
+                return admitted
+        if isinstance(error, AssetGatewayError):
+            raise ReferenceProviderError(
+                error.code,
+                status_code=error.status_code,
+                retryable=error.retryable,
+            ) from error
+        raise
 
 
 async def admit_reference_snapshot(

@@ -12,6 +12,11 @@ from typing import Any
 from fontTools.ttLib import TTFont
 from PIL import Image
 
+from .evidence_validation import (
+    TemplatePackageValidationError,
+    validate_browser_golden,
+    validate_rights_evidence,
+)
 from .models import (
     PackageAssetInventory,
     PackageFile,
@@ -26,10 +31,6 @@ _SVG_FORBIDDEN = re.compile(
 )
 _MAX_ASSET_BYTES = 64 * 1024 * 1024
 _MAX_IMAGE_PIXELS = 80_000_000
-
-
-class TemplatePackageValidationError(ValueError):
-    pass
 
 
 def validate_template_package(
@@ -93,8 +94,19 @@ def validate_template_package(
     for item in inventory.files:
         _validate_asset(source_root, item)
 
+    evidence_file = _confined_file(root, Path(manifest.provenance.evidence_path))
+    evidence_bytes = evidence_file.read_bytes()
+    _verify_digest(evidence_bytes, manifest.provenance.evidence_sha256, "provenance")
+    evidence = _json_object(evidence_bytes, "provenance")
+    validate_rights_evidence(source_root, manifest, inventory, evidence)
+
+    inventory_fonts = {
+        item.path for item in inventory.files if item.media_type == "font/ttf"
+    }
+    if set(manifest.fonts.faces) != inventory_fonts:
+        raise TemplatePackageValidationError("template_package_font_inventory_mismatch")
     for alias_path in manifest.fonts.aliases.values():
-        if alias_path not in declared:
+        if alias_path not in inventory_fonts:
             raise TemplatePackageValidationError("template_package_font_alias_missing")
     if manifest.thumbnail.asset_path not in declared:
         raise TemplatePackageValidationError("template_package_thumbnail_missing")
@@ -121,6 +133,12 @@ def validate_template_package(
     ):
         raise TemplatePackageValidationError("template_package_renderer_smoke_invalid")
 
+    golden_file = _confined_file(root, Path(manifest.browser_golden.receipt_path))
+    golden_bytes = golden_file.read_bytes()
+    _verify_digest(golden_bytes, manifest.browser_golden.receipt_sha256, "browser_golden")
+    golden = _json_object(golden_bytes, "browser_golden")
+    validate_browser_golden(root, manifest, template, golden)
+
     remote_references = _remote_references(template)
     expected_blockers = set(manifest.publication.blockers)
     if remote_references and "remote_font_reference" not in expected_blockers:
@@ -132,6 +150,7 @@ def validate_template_package(
         or manifest.license.rights_evidence_id is None
         or remote_references
         or manifest.fonts.unresolved_aliases
+        or golden.get("status") != "passed-browser-golden"
     ):
         raise TemplatePackageValidationError("template_package_publication_not_proven")
 

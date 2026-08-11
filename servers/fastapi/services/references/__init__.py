@@ -15,6 +15,7 @@ from services.references.providers import (
 from services.references.service import (
     admit_reference_snapshot,
     admit_reference_snapshots,
+    canonicalize_legacy_document_paths,
     create_reference_snapshot,
 )
 
@@ -28,6 +29,7 @@ __all__ = [
     "UploadedDocumentProvider",
     "admit_reference_snapshot",
     "admit_reference_snapshots",
+    "canonicalize_legacy_document_paths",
     "create_reference_snapshot",
     "default_reference_source_registry",
 ]

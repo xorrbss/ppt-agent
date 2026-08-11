@@ -25,10 +25,15 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         {
           "settingKey": "CODEX_ACCESS_TOKEN",
           "kind": "oauth",
-          "required": true
+          "required": true,
+          "widget": "oauth-status"
         }
       ],
       "modelDiscovery": "server-managed",
+      "ui": {
+        "modelSettingKey": "CODEX_MODEL",
+        "credentialLayout": "oauth-status"
+      },
       "capabilities": {
         "webSearch": "supported",
         "vision": "supported",
@@ -112,12 +117,25 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
           "required": true
         },
         {
+          "settingKey": "VERTEX_LOCATION",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "VERTEX_BASE_URL",
+          "kind": "url",
+          "required": false
+        },
+        {
           "settingKey": "VERTEX_API_KEY",
           "kind": "secret",
           "required": false
         }
       ],
       "modelDiscovery": "remote",
+      "ui": {
+        "modelSettingKey": "VERTEX_MODEL"
+      },
       "capabilities": {
         "webSearch": "supported",
         "vision": "supported",
@@ -145,12 +163,30 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
           "required": true
         },
         {
+          "settingKey": "AZURE_OPENAI_BASE_URL",
+          "kind": "url",
+          "required": false
+        },
+        {
+          "settingKey": "AZURE_OPENAI_API_VERSION",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "AZURE_OPENAI_DEPLOYMENT",
+          "kind": "setting",
+          "required": false
+        },
+        {
           "settingKey": "AZURE_OPENAI_API_KEY",
           "kind": "secret",
           "required": true
         }
       ],
       "modelDiscovery": "configured",
+      "ui": {
+        "modelSettingKey": "AZURE_OPENAI_MODEL"
+      },
       "capabilities": {
         "webSearch": "conditional",
         "vision": "conditional",
@@ -178,12 +214,35 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
           "required": true
         },
         {
+          "settingKey": "BEDROCK_AWS_ACCESS_KEY_ID",
+          "kind": "setting",
+          "required": false
+        },
+        {
+          "settingKey": "BEDROCK_AWS_SECRET_ACCESS_KEY",
+          "kind": "secret",
+          "required": false
+        },
+        {
+          "settingKey": "BEDROCK_AWS_SESSION_TOKEN",
+          "kind": "secret",
+          "required": false
+        },
+        {
+          "settingKey": "BEDROCK_PROFILE_NAME",
+          "kind": "setting",
+          "required": false
+        },
+        {
           "settingKey": "BEDROCK_API_KEY",
           "kind": "secret",
           "required": false
         }
       ],
       "modelDiscovery": "configured",
+      "ui": {
+        "modelSettingKey": "BEDROCK_MODEL"
+      },
       "capabilities": {
         "webSearch": "unsupported",
         "vision": "conditional",
@@ -661,6 +720,9 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         }
       ],
       "modelDiscovery": "configured",
+      "ui": {
+        "credentialLayout": "comfyui-workflow"
+      },
       "capabilities": {
         "webSearch": "unsupported",
         "vision": "unsupported",
@@ -686,9 +748,17 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
           "settingKey": "OPEN_WEBUI_IMAGE_URL",
           "kind": "url",
           "required": true
+        },
+        {
+          "settingKey": "OPEN_WEBUI_IMAGE_API_KEY",
+          "kind": "secret",
+          "required": false
         }
       ],
       "modelDiscovery": "configured",
+      "ui": {
+        "credentialLayout": "open-webui"
+      },
       "capabilities": {
         "webSearch": "unsupported",
         "vision": "unsupported",
@@ -722,6 +792,9 @@ _RAW_PROVIDER_REGISTRY = json.loads(r'''{
         }
       ],
       "modelDiscovery": "configured",
+      "ui": {
+        "credentialLayout": "openai-compatible"
+      },
       "capabilities": {
         "webSearch": "unsupported",
         "vision": "unsupported",
@@ -881,7 +954,7 @@ PROVIDERS_BY_ID: Mapping[str, Mapping[str, Any]] = MappingProxyType(
 )
 
 def public_provider_metadata() -> tuple[Mapping[str, Any], ...]:
-    """Return client-safe fields only; credentials remain server-only."""
+    """Return client-safe provider metadata; credential descriptors use no values."""
     return tuple(
         _freeze({key: value for key, value in item.items() if key != "credentialSchema"})
         for item in PROVIDER_REGISTRY

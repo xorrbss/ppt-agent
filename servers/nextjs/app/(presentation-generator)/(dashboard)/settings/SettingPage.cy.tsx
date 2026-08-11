@@ -2,6 +2,8 @@ import React from "react";
 import { Provider } from "react-redux";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/i18n/messages/en.json";
 
 import { createMockRouter, ApiMockManager, testViewports } from "@/cypress/support/testHelpers";
 import { store } from "@/store/store";
@@ -28,14 +30,16 @@ describe("<SettingsPage />", () => {
     router = createMockRouter();
 
     cy.mount(
-      <AppRouterContext.Provider value={router as never}>
-        <PathnameContext.Provider value="/settings">
-          <Provider store={store}>
-            <SettingsPage />
-            <Toaster />
-          </Provider>
-        </PathnameContext.Provider>
-      </AppRouterContext.Provider>
+      <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+        <AppRouterContext.Provider value={router as never}>
+          <PathnameContext.Provider value="/settings">
+            <Provider store={store}>
+              <SettingsPage />
+              <Toaster />
+            </Provider>
+          </PathnameContext.Provider>
+        </AppRouterContext.Provider>
+      </NextIntlClientProvider>
     );
   };
 

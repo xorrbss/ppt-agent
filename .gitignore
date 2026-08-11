@@ -23,6 +23,7 @@ container.db
 .next-build
 servers/nextjs/.next-workspace-e2e/
 /.codex-tmp/
+/.codex-test-artifacts/
 .cursor
 .vscode
 .agents

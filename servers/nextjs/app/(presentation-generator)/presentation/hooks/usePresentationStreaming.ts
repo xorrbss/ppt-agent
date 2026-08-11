@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { useDispatch } from "react-redux";
 import {
   clearPresentationData,
@@ -168,6 +169,7 @@ export const usePresentationStreaming = (
   fetchUserSlides: () => void
 ) => {
   const dispatch = useDispatch();
+  const t = useTranslations("community");
   const previousSlidesLength = useRef(0);
 
   useEffect(() => {
@@ -281,7 +283,7 @@ export const usePresentationStreaming = (
                     index: slideIndex,
                     layout: "smart-html",
                     layout_group: "smart-html",
-                    content: { title: `Slide ${slideIndex + 1}` },
+                    content: { title: t("slideTitle", { title: "", index: slideIndex + 1 }).trim() },
                     html_content: html,
                   };
             const normalizedSlide = normalizeBackendAssetUrls(
@@ -427,5 +429,5 @@ export const usePresentationStreaming = (
       closeEventSource();
       clearRetryTimer();
     };
-  }, [presentationId, stream, dispatch, setLoading, setError, fetchUserSlides]);
+  }, [presentationId, stream, dispatch, setLoading, setError, fetchUserSlides, t]);
 };

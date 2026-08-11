@@ -17,6 +17,7 @@ from utils.llm_calls.generate_smart_presentation import (
     SMART_DECK_SYSTEM_PROMPT,
     SmartSlideStreamParser,
     _stream_deck_response,
+    generate_smart_presentation,
     get_smart_messages,
     get_smart_reasoning_config,
     normalize_smart_deck,
@@ -24,6 +25,7 @@ from utils.llm_calls.generate_smart_presentation import (
     parse_smart_presentation_html,
     resolve_smart_slide_count,
 )
+from utils.llm_utils import TextGenerationMetrics
 
 
 def _smart_slide_html(title="Slide", slide_type="content", body="Content"):
@@ -221,6 +223,80 @@ def test_smart_stream_separates_thinking_and_reports_exact_usage(monkeypatch):
     assert metrics.thinking_tokens == 5
     assert metrics.thinking_tokens_estimated is False
     assert metrics.supports_thinking is True
+
+
+def test_retry_callbacks_keep_their_iteration_local_parser_state(monkeypatch):
+    callbacks = []
+    attempts = 0
+
+    def response_for(*titles):
+        return "<!-- PRESENTATION_TITLE: Deck -->" + "".join(
+            "<!-- SLIDE_START -->"
+            + _smart_slide_html(title)
+            + "<!-- SLIDE_END -->"
+            for title in titles
+        )
+
+    async def fake_stream(
+        _client, _model, _messages, on_chunk, **_kwargs
+    ):
+        nonlocal attempts
+        attempts += 1
+        callbacks.append(on_chunk)
+        if attempts == 1:
+            await on_chunk(response_for("One"))
+            raise HTTPException(status_code=400, detail="retry this attempt")
+
+        # A delayed callback from attempt one must retain attempt one's parser
+        # and slide list. If it observes attempt two's loop locals, it corrupts
+        # the final incremental-parser count.
+        await callbacks[0](response_for("Delayed old attempt"))
+        response = response_for("Two", "Three")
+        await on_chunk(response)
+        return response, TextGenerationMetrics(
+            model="test-model",
+            input_tokens=1,
+            output_tokens=1,
+            total_tokens=2,
+            tokens_per_second=1.0,
+            duration_seconds=1.0,
+            estimated=False,
+        )
+
+    monkeypatch.setattr(
+        "utils.llm_calls.generate_smart_presentation.get_client", lambda **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        "utils.llm_calls.generate_smart_presentation.get_llm_config",
+        lambda **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "utils.llm_calls.generate_smart_presentation.get_model", lambda: "test-model"
+    )
+    monkeypatch.setattr(
+        "utils.llm_calls.generate_smart_presentation.get_smart_reasoning_config",
+        lambda _model: (None, False),
+    )
+    monkeypatch.setattr(
+        "utils.llm_calls.generate_smart_presentation._stream_deck_response",
+        fake_stream,
+    )
+
+    deck = asyncio.run(
+        generate_smart_presentation(
+            content="Build a deck",
+            n_slides=3,
+            language="en",
+            tone=None,
+            verbosity=None,
+            instructions=None,
+            include_title_slide=False,
+            include_table_of_contents=False,
+        )
+    )
+
+    assert attempts == 2
+    assert [slide["title"] for slide in deck["slides"]] == ["One", "Two", "Three"]
 
 
 def test_normalize_community_ids_preserves_order_and_deduplicates():

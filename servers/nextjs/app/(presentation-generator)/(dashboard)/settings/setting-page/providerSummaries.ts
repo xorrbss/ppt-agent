@@ -1,10 +1,10 @@
 import { LLMConfig } from "@/types/llm_config";
-import { IMAGE_PROVIDERS, LLM_PROVIDERS } from "@/utils/providerConstants";
+import { IMAGE_PROVIDER_OPTIONS, LLM_PROVIDER_OPTIONS } from "@/utils/provider-registry.generated";
 
 export const getTextSummary = (llmConfig: LLMConfig) => {
   const textProviderKey = llmConfig.LLM || "openai";
   const textProviderLabel =
-    LLM_PROVIDERS[textProviderKey]?.label || textProviderKey;
+    LLM_PROVIDER_OPTIONS[textProviderKey]?.label || textProviderKey;
   const selectedTextModel =
     textProviderKey === "openai"
       ? llmConfig.OPENAI_MODEL
@@ -46,6 +46,6 @@ export const getImageSummary = (llmConfig: LLMConfig) =>
   llmConfig.DISABLE_IMAGE_GENERATION
     ? "이미지 생성 비활성화됨"
     : llmConfig.IMAGE_PROVIDER
-      ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]?.label ||
+      ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]?.label ||
       llmConfig.IMAGE_PROVIDER
       : "이미지 제공자 없음";

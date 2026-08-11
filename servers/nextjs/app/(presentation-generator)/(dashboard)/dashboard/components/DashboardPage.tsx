@@ -179,7 +179,7 @@ const DashboardPage: React.FC = () => {
         slide_count: presentation.n_slides,
       });
       router.push(
-        `/presentation?id=${encodeURIComponent(presentation.id)}&type=standard`
+        `/presentation?id=${encodeURIComponent(presentation.id)}&driver=standard`
       );
     } catch (creationError) {
       const message =

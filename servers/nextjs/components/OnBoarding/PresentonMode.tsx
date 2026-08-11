@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { ArrowUpRight, Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Info, Loader2 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { DALLE_3_QUALITY_OPTIONS, GPT_IMAGE_1_5_QUALITY_OPTIONS, GPT_IMAGE_2_QUALITY_OPTIONS, IMAGE_PROVIDERS, LLM_PROVIDERS } from '@/utils/providerConstants';
+import { IMAGE_PROVIDER_OPTIONS, IMAGE_QUALITY_OPTIONS, LLM_PROVIDER_OPTIONS, PROVIDER_MODEL_BINDINGS, PUBLIC_PROVIDER_CREDENTIAL_DESCRIPTORS } from '@/utils/provider-registry.generated';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { RootState } from '@/store/store';
@@ -22,8 +22,6 @@ import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 import BedrockManualFields from '@/components/BedrockManualFields';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
 import Image from 'next/image';
-
-const MANUAL_MODEL_PROVIDERS = new Set(["vertex", "azure", "bedrock"]);
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const pathname = usePathname();
@@ -48,7 +46,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         status: string;
         done: boolean;
     } | null>(null);
-    const isManualModelProvider = MANUAL_MODEL_PROVIDERS.has(llmConfig.LLM || "");
+    const providerBinding = PROVIDER_MODEL_BINDINGS[llmConfig.LLM || ""];
+    const isManualModelProvider = providerBinding?.manual ?? true;
 
     const handleProviderChange = (provider: string) => {
         setLlmConfig(prev => ({
@@ -66,72 +65,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         }
     };
 
-    const currentModelField = useMemo(() => {
-        switch (llmConfig.LLM) {
-            case 'openai':
-                return 'OPENAI_MODEL';
-            case 'google':
-                return 'GOOGLE_MODEL';
-            case 'vertex':
-                return 'VERTEX_MODEL';
-            case 'azure':
-                return 'AZURE_OPENAI_MODEL';
-            case 'bedrock':
-                return 'BEDROCK_MODEL';
-            case 'openrouter':
-                return 'OPENROUTER_MODEL';
-            case 'fireworks':
-                return 'FIREWORKS_MODEL';
-            case 'together':
-                return 'TOGETHER_MODEL';
-            case 'cerebras':
-                return 'CEREBRAS_MODEL';
-            case 'anthropic':
-                return 'ANTHROPIC_MODEL';
-            case 'ollama':
-                return 'OLLAMA_MODEL';
-            case 'custom':
-                return 'CUSTOM_MODEL';
-            case 'litellm':
-                return 'LITELLM_MODEL';
-            case 'lmstudio':
-                return 'LMSTUDIO_MODEL';
-            default:
-                return '';
-        }
-    }, [llmConfig.LLM]);
-    const currentApiKeyField = useMemo(() => {
-        switch (llmConfig.LLM) {
-            case 'openai':
-                return 'OPENAI_API_KEY';
-            case 'google':
-                return 'GOOGLE_API_KEY';
-            case 'vertex':
-                return 'VERTEX_API_KEY';
-            case 'azure':
-                return 'AZURE_OPENAI_API_KEY';
-            case 'bedrock':
-                return 'BEDROCK_API_KEY';
-            case 'openrouter':
-                return 'OPENROUTER_API_KEY';
-            case 'fireworks':
-                return 'FIREWORKS_API_KEY';
-            case 'together':
-                return 'TOGETHER_API_KEY';
-            case 'cerebras':
-                return 'CEREBRAS_API_KEY';
-            case 'anthropic':
-                return 'ANTHROPIC_API_KEY';
-            case 'custom':
-                return 'CUSTOM_LLM_API_KEY';
-            case 'litellm':
-                return 'LITELLM_API_KEY';
-            case 'lmstudio':
-                return 'LMSTUDIO_API_KEY';
-            default:
-                return '';
-        }
-    }, [llmConfig.LLM]);
+    const currentModelField = providerBinding?.settingKey || '';
+    const currentApiKeyField = (PUBLIC_PROVIDER_CREDENTIAL_DESCRIPTORS[llmConfig.LLM || ""] || []).find(
+        (credential) => credential.kind === "secret" || credential.kind === "oauth"
+    )?.settingKey || '';
 
 
 
@@ -259,12 +196,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         : llmConfig.LLM === 'litellm'
                             ? currentLitellmUrl
                             : llmConfig.LLM === 'lmstudio'
-                                ? currentLmStudioUrl || LLM_PROVIDERS[llmConfig.LLM!]?.url || ''
+                                ? currentLmStudioUrl || LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.url || ''
                             : llmConfig.LLM === 'fireworks'
-                                ? currentFireworksUrl || LLM_PROVIDERS[llmConfig.LLM!]?.url || ''
+                                ? currentFireworksUrl || LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.url || ''
                                 : llmConfig.LLM === 'together'
-                                    ? currentTogetherUrl || LLM_PROVIDERS[llmConfig.LLM!]?.url || ''
-                            : LLM_PROVIDERS[llmConfig.LLM!]?.url || '';
+                                    ? currentTogetherUrl || LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.url || ''
+                            : LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.url || '';
                 response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
                     method: 'POST',
                     headers: {
@@ -291,36 +228,16 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 setModelsChecked(true);
 
                 if (normalizedModels.length > 0 && currentModelField) {
-                    if (llmConfig[currentModelField] && normalizedModels.includes(llmConfig[currentModelField])) {
+                    const configValues = llmConfig as Record<string, string | undefined>;
+                    if (configValues[currentModelField] && normalizedModels.includes(configValues[currentModelField]!)) {
                         setLlmConfig(prev => ({
                             ...prev,
-                            [currentModelField]: llmConfig[currentModelField]
+                            [currentModelField]: configValues[currentModelField]
                         }));
                         return;
                     }
 
-                    const preferredDefault =
-                        llmConfig.LLM === 'openai'
-                            ? 'gpt-4.1'
-                            : llmConfig.LLM === 'google'
-                                ? 'models/gemini-2.5-flash'
-                                : llmConfig.LLM === 'anthropic'
-                                    ? 'claude-sonnet-4-20250514'
-                                    : llmConfig.LLM === 'openrouter'
-                                        ? 'openai/gpt-4o'
-                                        : llmConfig.LLM === 'fireworks'
-                                            ? 'accounts/fireworks/models/llama-v3p1-8b-instruct'
-                                            : llmConfig.LLM === 'together'
-                                                ? 'openai/gpt-oss-20b'
-                                        : llmConfig.LLM === 'cerebras'
-                                            ? 'llama-3.3-70b'
-                                            : llmConfig.LLM === 'litellm'
-                                                ? 'gpt-4.1'
-                                            : llmConfig.LLM === 'lmstudio'
-                                                ? 'openai/gpt-oss-20b'
-                                                : normalizedModels[0];
-
-                    const nextModel = normalizedModels.includes(preferredDefault) ? preferredDefault : normalizedModels[0];
+                    const nextModel = normalizedModels[0];
                     setLlmConfig(prev => ({
                         ...prev,
                         [currentModelField]: nextModel
@@ -330,7 +247,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 console.error('Failed to fetch models');
                 setAvailableModels([]);
                 setModelsChecked(true);
-                notify.error("모델을 불러올 수 없습니다", `${LLM_PROVIDERS[llmConfig.LLM!]?.label} 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도하세요.`);
+                notify.error("모델을 불러올 수 없습니다", `${LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.label} 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도하세요.`);
             }
         } catch (error) {
             console.error('Error fetching models:', error);
@@ -367,7 +284,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {DALLE_3_QUALITY_OPTIONS.map((option) => (
+                                {IMAGE_QUALITY_OPTIONS["dall-e-3"].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -398,7 +315,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {GPT_IMAGE_1_5_QUALITY_OPTIONS.map((option) => (
+                                {IMAGE_QUALITY_OPTIONS["gpt-image-1.5"].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -427,7 +344,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 <SelectValue placeholder="품질 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                                {GPT_IMAGE_2_QUALITY_OPTIONS.map((option) => (
+                                {IMAGE_QUALITY_OPTIONS["gpt-image-2"].map((option) => (
                                     <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                                 ))}
                             </SelectContent>
@@ -498,13 +415,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             trackEvent(MixpanelEvent.Onboarding_Providers_Models_Selected, {
                 pathname,
                 text_provider: textProvider,
-                text_provider_label: LLM_PROVIDERS[textProvider]?.label || textProvider || '',
+                text_provider_label: LLM_PROVIDER_OPTIONS[textProvider]?.label || textProvider || '',
                 text_model: textModel,
                 uses_chatgpt_login: textProvider === 'chatgpt',
                 image_generation_enabled: imageGenerationEnabled,
                 image_provider: imageProvider,
                 image_provider_label: imageGenerationEnabled
-                    ? (IMAGE_PROVIDERS[imageProvider]?.label || imageProvider || '')
+                    ? (IMAGE_PROVIDER_OPTIONS[imageProvider]?.label || imageProvider || '')
                     : 'Image generation disabled',
                 image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : ''
             });
@@ -602,7 +519,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     <div className="flex gap-3 items-center">
                                         <span className="text-sm font-medium text-gray-900">
                                             {llmConfig.LLM
-                                                ? LLM_PROVIDERS[llmConfig.LLM]
+                                                ? LLM_PROVIDER_OPTIONS[llmConfig.LLM]
                                                     ?.label || llmConfig.LLM
                                                 : "텍스트 제공자 선택"}
                                         </span>
@@ -620,7 +537,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     <CommandList className='hide-scrollbar'>
                                         <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                                         <CommandGroup >
-                                            {Object.values(LLM_PROVIDERS).map(
+                                            {Object.values(LLM_PROVIDER_OPTIONS).map(
                                                 (provider, index) => (
                                                     <CommandItem
                                                         key={index}
@@ -777,7 +694,6 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         <label className="block text-sm font-medium capitalize text-gray-700 ">
                                             {providerApiKeyLabel}
                                         </label>
-                                        {llmConfig.LLM && LLM_PROVIDERS[llmConfig.LLM!]?.getApiKeyUrl && <a href={LLM_PROVIDERS[llmConfig.LLM!]?.getApiKeyUrl || ""} target='_blank' className='text-[#666666] text-xs font-normal flex items-center gap-1'>API 키 발급 <ArrowUpRight className='w-3.5 h-3.5' /></a>}
                                     </div>
 
                                     <div className="relative">
@@ -942,7 +858,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         <div className="w-full">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {llmConfig.LLM === 'ollama' ? '지원되는 모델 선택' : `${LLM_PROVIDERS[llmConfig.LLM!]?.label} 모델 선택`}
+                                    {llmConfig.LLM === 'ollama' ? '지원되는 모델 선택' : `${LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.label} 모델 선택`}
                                 </label>
                                 <div className="w-full">
                                     <Popover
@@ -1080,7 +996,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             <div className="flex gap-3 items-center">
                                                 <span className="text-sm font-medium capitalize text-gray-900">
                                                     {llmConfig.IMAGE_PROVIDER
-                                                        ? IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER]
+                                                        ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]
                                                             ?.label || llmConfig.IMAGE_PROVIDER
                                                         : '이미지 제공자 선택'}
                                                 </span>
@@ -1098,7 +1014,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             <CommandList>
                                                 <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
                                                 <CommandGroup>
-                                                    {Object.values(IMAGE_PROVIDERS).map(
+                                                    {Object.values(IMAGE_PROVIDER_OPTIONS).map(
                                                         (provider, index) => (
                                                             <CommandItem
                                                                 key={index}
@@ -1146,9 +1062,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
                         {/* Dynamic API Key Input for Image Provider */}
                         {llmConfig.IMAGE_PROVIDER &&
-                            IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER] &&
+                            IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER] &&
                             (() => {
-                                const provider = IMAGE_PROVIDERS[llmConfig.IMAGE_PROVIDER];
+                                const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
 
                                 if (provider.value === "openai_compatible") {
                                     return (

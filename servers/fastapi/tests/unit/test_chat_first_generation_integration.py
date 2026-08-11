@@ -601,6 +601,12 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             assert replay_status.id == first_status.id
 
             async with maker() as session:
+                persisted_presentation = await session.get(
+                    PresentationModel,
+                    presentation_id,
+                )
+                assert persisted_presentation is not None
+                assert persisted_presentation.file_paths is None
                 operation = (
                     await session.execute(select(WorkspaceOperation))
                 ).scalar_one()
@@ -617,9 +623,13 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
                 assert job.workspace_operation_id == operation.id
                 assert job.presentation_id == presentation_id
                 assert job.export_cookie_required is False
-                assert job.request_payload["files"] == [
-                    "C:/workspace-assets/durable-source.txt"
-                ]
+                assert job.request_payload["files"] is None
+                assert "C:/workspace-assets/durable-source.txt" not in str(
+                    job.request_payload
+                )
+                presentation = await session.get(PresentationModel, presentation_id)
+                assert presentation is not None
+                assert presentation.file_paths is None
                 assert await session.scalar(
                     select(func.count()).select_from(WorkspaceMessage)
                 ) == 1
@@ -814,7 +824,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
     asyncio.run(scenario())
 
 
-def test_retryable_admission_failure_revalidates_before_generation(
+def test_raw_path_admission_failure_requires_reattach_without_persisting_locator(
     tmp_path: Path,
     monkeypatch,
 ):
@@ -882,8 +892,8 @@ def test_retryable_admission_failure_revalidates_before_generation(
                         session,
                         idempotency_key=f"presentation-generate:{presentation_id}",
                     )
-                assert caught.value.status_code == 500
-                assert caught.value.detail == "generation_admission_unavailable"
+                assert caught.value.status_code == 409
+                assert caught.value.detail == "legacy_file_reference_reattach_required"
                 assert "private loader detail" not in str(caught.value.detail)
                 assert caught.value.headers == {
                     presentation_generate.CHAT_FIRST_WORKSPACE_PROJECTED_HEADER: "true"
@@ -902,44 +912,19 @@ def test_retryable_admission_failure_revalidates_before_generation(
                 )
                 assert status is not None
                 assert operation.state == "failed"
-                assert operation.error_code == "generation_admission_unavailable"
+                assert operation.error_code == "legacy_file_reference_reattach_required"
                 assert operation.error_detail is not None
-                assert operation.error_detail["retryable"] is True
+                assert operation.error_detail["retryable"] is False
                 assert "private loader detail" not in str(operation.error_detail)
                 assert job.state == "failed"
-                assert job.resume_allowed is True
-                assert job.request_payload["files"] == [durable_path]
+                assert job.resume_allowed is False
+                assert job.request_payload["files"] is None
+                assert durable_path not in str(job.request_payload)
 
                 restored = presentation_generate._request_from_durable_payload(
                     job.request_payload
                 )
-                assert restored.files == [durable_path]
-                retry_checks: list[list[str]] = []
-
-                async def retry_accept(_request, _session):
-                    retry_checks.append(list(_request.files or []))
-                    return (uuid.uuid4(),)
-
-                async def retry_load(paths, _language):
-                    retry_checks.append(list(paths))
-                    return "admitted"
-
-                monkeypatch.setattr(
-                    presentation_generate,
-                    "check_if_api_request_is_valid",
-                    retry_accept,
-                )
-                monkeypatch.setattr(
-                    presentation_generate,
-                    "_load_document_context",
-                    retry_load,
-                )
-                await presentation_generate._revalidate_generation_admission_for_retry(
-                    restored,
-                    job,
-                    session,
-                )
-                assert retry_checks == [[durable_path], [durable_path]]
+                assert restored.files is None
 
                 async def retry_rejected(_request, _session):
                     raise HTTPException(

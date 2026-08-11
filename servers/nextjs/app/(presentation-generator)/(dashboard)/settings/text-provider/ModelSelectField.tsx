@@ -13,13 +13,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { LLM_PROVIDERS } from "@/utils/providerConstants";
+import { LLM_PROVIDER_OPTIONS } from "@/utils/provider-registry.generated";
 import { Check, ChevronUp } from "lucide-react";
 import React from "react";
 import type { ModelOption } from "./types";
 
 interface ModelSelectFieldProps {
-  selectedProvider: keyof typeof LLM_PROVIDERS;
+  selectedProvider: keyof typeof LLM_PROVIDER_OPTIONS;
   modelLabel: string;
   availableModels: ModelOption[];
   currentModel: string;

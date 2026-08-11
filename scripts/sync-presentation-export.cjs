@@ -20,6 +20,10 @@ const https = require("https");
 const http = require("http");
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
+const {
+  ensureCommonJsEntrypoint,
+  ensureRendererReadinessOverlay: applyRendererReadinessOverlay,
+} = require("./lib/presentation-export-readiness.cjs");
 
 const repoRoot = path.join(__dirname, "..");
 const targetRoot = path.join(repoRoot, "presentation-export");
@@ -254,49 +258,11 @@ function normalizeRuntimeLayout(runtimeRoot = targetRoot) {
   }
 }
 
-function ensureCommonJsEntrypoint(
+function ensureRendererReadinessOverlay(
   runtimeRoot = targetRoot,
-  { repair = true } = {}
+  options = {}
 ) {
-  const indexJs = path.join(runtimeRoot, "index.js");
-  const indexCjs = path.join(runtimeRoot, "index.cjs");
-  if (!fs.existsSync(indexJs)) {
-    return { ok: false, reason: `Missing runtime bundle: ${indexJs}` };
-  }
-
-  if (!repair) {
-    if (!fs.existsSync(indexCjs)) {
-      return {
-        ok: false,
-        reason: `Missing CommonJS runtime bundle: ${indexCjs}`,
-      };
-    }
-
-    try {
-      if (!fs.readFileSync(indexJs).equals(fs.readFileSync(indexCjs))) {
-        return {
-          ok: false,
-          reason: `CommonJS runtime bundle does not match ${indexJs}: ${indexCjs}`,
-        };
-      }
-      return { ok: true, entrypointPath: indexCjs };
-    } catch (err) {
-      return {
-        ok: false,
-        reason: `Failed to verify CommonJS entrypoint ${indexCjs}: ${err.message}`,
-      };
-    }
-  }
-
-  try {
-    fs.copyFileSync(indexJs, indexCjs);
-    return { ok: true, entrypointPath: indexCjs };
-  } catch (err) {
-    return {
-      ok: false,
-      reason: `Failed to create CommonJS entrypoint ${indexCjs}: ${err.message}`,
-    };
-  }
+  return applyRendererReadinessOverlay(runtimeRoot, options);
 }
 
 function validateExistingRuntime(
@@ -325,7 +291,18 @@ function validateExistingRuntime(
     normalizeRuntimeLayout(runtimeRoot);
   }
 
-  const entrypoint = ensureCommonJsEntrypoint(runtimeRoot, { repair });
+  let overlay;
+  let entrypoint;
+  if (repair) {
+    overlay = ensureRendererReadinessOverlay(runtimeRoot, { repair: true });
+    if (!overlay.ok) return { ok: false, reason: overlay.reason };
+    entrypoint = ensureCommonJsEntrypoint(runtimeRoot, { repair: true });
+  } else {
+    entrypoint = ensureCommonJsEntrypoint(runtimeRoot, { repair: false });
+    if (!entrypoint.ok) return { ok: false, reason: entrypoint.reason };
+    overlay = ensureRendererReadinessOverlay(runtimeRoot, { repair: false });
+    if (!overlay.ok) return { ok: false, reason: overlay.reason };
+  }
   if (!entrypoint.ok) {
     return { ok: false, reason: entrypoint.reason };
   }
@@ -597,6 +574,10 @@ function ensureRuntimeSharp() {
 
 function prepareRuntimeArtifacts(runtimeRoot = targetRoot) {
   normalizeRuntimeLayout(runtimeRoot);
+  const overlay = ensureRendererReadinessOverlay(runtimeRoot);
+  if (!overlay.ok) {
+    throw new Error(overlay.reason);
+  }
   const entrypoint = ensureCommonJsEntrypoint(runtimeRoot);
   if (!entrypoint.ok) {
     throw new Error(entrypoint.reason);
@@ -685,6 +666,7 @@ if (require.main === module) {
     installedVersionFileName,
     assertRuntimeSharpLoadable,
     finalizeRuntimeInstall,
+    ensureRendererReadinessOverlay,
     getTargetVersion,
     helpText,
     parseCliArgs,

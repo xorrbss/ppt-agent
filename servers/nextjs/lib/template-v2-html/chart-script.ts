@@ -29,8 +29,8 @@ function readChartJsUrl(): string {
 function chartRendererScript(): string {
   return `
 (function(){
-var state=window.__PRESENTON_JSON_CHARTS__={status:"pending"};
-function finish(status,message){state.status=status;if(message)state.message=message}
+var state=window.__PRESENTON_JSON_CHARTS__={status:"pending"};document.documentElement.dataset.templateV2ChartState="pending";
+function finish(status,message){state.status=status;if(message)state.message=message;document.documentElement.dataset.templateV2ChartState=status;window.dispatchEvent(new Event("template-v2-chart-state"))}
 function readNumber(value){var parsed=Number(value);return Number.isFinite(parsed)?parsed:null}
 function chartValue(raw){if(typeof raw==="number")return raw;if(raw&&typeof raw==="object"){var value=raw.y!=null?raw.y:raw.value!=null?raw.value:raw.data;var numeric=readNumber(value);return numeric==null?0:numeric}var parsed=readNumber(raw);return parsed==null?0:parsed}
 var compactNumberSuffixes=["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc"];

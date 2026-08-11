@@ -1,12 +1,12 @@
 {
   "schemaVersion": "presenton.template-package/v1",
-  "packageVersion": "1.0.0",
+  "packageVersion": "1.1.0",
   "templateId": "editorial",
   "sourceRoot": "templates/editorial",
   "entrypoint": {
     "path": "template.json",
-    "sha256": "f63282203b21e4a350f6ff87ffe5695ca4c92413c5aad485e6cdedfbb82f7e60",
-    "sizeBytes": 1014838,
+    "sha256": "83dfc203630ae8986472ca3ec545be4dea917bf29c7ebfccba73ba1189f56a16",
+    "sizeBytes": 1014939,
     "mediaType": "application/json"
   },
   "engine": {
@@ -45,7 +45,7 @@
   },
   "assets": {
     "inventoryPath": "templates/manifests/editorial.assets.v1.json",
-    "inventorySha256": "ed13445b78a13b7da1d4ec5340f3b698fa12a53eaf341fe6cd7b8b6ac56128bc",
+    "inventorySha256": "337142d0294504d1f52a22bb3716ae6c5c9a437fdac7f75414a5fa1e3effe4f1",
     "count": 116,
     "totalSizeBytes": 5096023
   },
@@ -58,25 +58,26 @@
     "aliases": {
       "DM Sans": "static/DM Sans Regular.ttf",
       "DM Sans Bold": "static/DM Sans Bold.ttf",
-      "Playfair Display Bold": "static/Playfair Display Bold Italic.ttf"
+      "Playfair Display": "static/Playfair Display Bold Italic.ttf",
+      "Playfair Display Bold": "static/Playfair Display Bold Italic.ttf",
+      "Playfair Display Bold Italics": "static/Playfair Display Bold Italic.ttf",
+      "Playfair Display Semi-Bold Italics": "static/Playfair Display Bold Italic.ttf"
     },
-    "unresolvedAliases": [
-      "Playfair Display",
-      "Playfair Display Semi-Bold Italics",
-      "Playfair Display Bold Italics"
-    ]
+    "unresolvedAliases": []
   },
   "license": {
-    "status": "review-required",
-    "expression": "Apache-2.0 AND OFL-1.1 AND LicenseRef-Unverified-Upstream-Asset",
-    "rightsEvidenceId": null
+    "status": "approved",
+    "expression": "Apache-2.0 AND OFL-1.1",
+    "rightsEvidenceId": "presenton-editorial-assets-apache-2.0"
   },
   "provenance": {
     "repository": "https://github.com/presenton/presenton",
     "commitSha": "e271359ed91bfa48ba18c5717f8e19a7b69326ef",
     "sourcePath": "templates/editorial",
     "sourceFileCount": 117,
-    "sourceInventorySha256": "ed13445b78a13b7da1d4ec5340f3b698fa12a53eaf341fe6cd7b8b6ac56128bc"
+    "sourceInventorySha256": "337142d0294504d1f52a22bb3716ae6c5c9a437fdac7f75414a5fa1e3effe4f1",
+    "evidencePath": "templates/manifests/editorial.provenance.v1.json",
+    "evidenceSha256": "e3ae02f95731b774da36a9b2d8a4259091088b9da0a55d48df5dddbb072e7dd2"
   },
   "thumbnail": {
     "assetPath": "static/thumbnail.png",
@@ -86,16 +87,15 @@
   },
   "rendererSmoke": {
     "receiptPath": "templates/manifests/editorial.renderer-smoke.v1.json",
-    "receiptSha256": "bd5c80df25160181481c11e7b5776222fae08c3db248ba183af8675ddf096b58"
+    "receiptSha256": "01c0dda971b7c8d805b4e3d806dc5b023cf31852f740140b3c577e720915ee8e"
+  },
+  "browserGolden": {
+    "receiptPath": "templates/manifests/editorial.browser-golden.v1.json",
+    "receiptSha256": "7892ad0b6b495ee923a9a0eca117f969c53dc679ea8ff4d96c86e048e040bd6b"
   },
   "publication": {
-    "status": "blocked",
+    "status": "ready",
     "default": false,
-    "blockers": [
-      "remote_font_reference",
-      "unresolved_font_aliases",
-      "raster_rights_evidence_missing",
-      "browser_golden_receipt_missing"
-    ]
+    "blockers": []
   }
 }

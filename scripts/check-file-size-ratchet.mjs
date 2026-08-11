@@ -66,7 +66,11 @@ function isExcluded(relativePath) {
   if (relativePath.startsWith("servers/fastapi/alembic/versions/")) {
     return true;
   }
-  return /\.(?:test|spec|cy)\.[^.]+$/u.test(relativePath) || relativePath.includes(".generated.");
+  return (
+    /\.(?:test|spec|cy)\.[^.]+$/u.test(relativePath) ||
+    relativePath.includes(".generated.") ||
+    /_generated\.[^.]+$/u.test(relativePath)
+  );
 }
 
 function lineCount(source) {
@@ -126,6 +130,21 @@ export async function buildBaseline(root) {
   };
 }
 
+function baselineAllowance(entry) {
+  return Number.isInteger(entry) ? entry : entry?.lines;
+}
+
+function validDocumentedException(entry) {
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    Number.isInteger(entry.lines) &&
+    [entry.rationale, entry.owner, entry.removalCondition].every(
+      (value) => typeof value === "string" && value.trim().length > 0
+    )
+  );
+}
+
 export async function checkRatchet(root, baselinePath = path.join(root, BASELINE_FILE)) {
   const baseline = JSON.parse(await readFile(baselinePath, "utf8"));
   if (baseline.lineLimit !== LINE_LIMIT || !baseline.files || Array.isArray(baseline.files)) {
@@ -133,7 +152,8 @@ export async function checkRatchet(root, baselinePath = path.join(root, BASELINE
   }
   const current = await buildBaseline(root);
   const failures = [];
-  for (const [filePath, allowedLines] of Object.entries(baseline.files)) {
+  for (const [filePath, entry] of Object.entries(baseline.files)) {
+    const allowedLines = baselineAllowance(entry);
     if (
       !Number.isInteger(allowedLines) ||
       allowedLines < LINE_LIMIT + 1 ||
@@ -142,13 +162,16 @@ export async function checkRatchet(root, baselinePath = path.join(root, BASELINE
       filePath.split("/").includes("..")
     ) {
       failures.push(`invalid baseline entry: ${filePath}`);
+    } else if (typeof entry === "object" && !validDocumentedException(entry)) {
+      failures.push(`undocumented baseline exception: ${filePath}`);
     } else if (current.files[filePath] === undefined) {
       failures.push(`baseline entry no longer maps to an oversized source: ${filePath}`);
     }
   }
   for (const [filePath, lines] of Object.entries(current.files)) {
-    const allowedLines = baseline.files[filePath];
-    if (allowedLines === undefined) failures.push(`new oversized file: ${filePath} (${lines} lines)`);
+    const entry = baseline.files[filePath];
+    const allowedLines = baselineAllowance(entry);
+    if (entry === undefined) failures.push(`new oversized file: ${filePath} (${lines} lines)`);
     else if (!Number.isInteger(allowedLines) || allowedLines < LINE_LIMIT + 1) failures.push(`invalid baseline entry: ${filePath}`);
     else if (lines > allowedLines) failures.push(`oversized file grew: ${filePath} (${allowedLines} -> ${lines} lines)`);
   }

@@ -3,8 +3,9 @@ from unittest.mock import AsyncMock, Mock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.v1.ppt.endpoints.images import IMAGES_ROUTER
+from api.v1.ppt.endpoints.images import IMAGES_ROUTER, _image_asset_api_dict
 from models.sql.image_asset import ImageAsset
+from services.assets import AssetGatewayError
 from services.database import get_async_session
 
 
@@ -90,7 +91,12 @@ def test_generate_image_returns_image_path_and_persists_image_asset(fake_async_s
 
     with patch(
         "api.v1.ppt.endpoints.images.get_images_directory", return_value="/tmp"
-    ), patch("api.v1.ppt.endpoints.images.ImageGenerationService") as mock_service_cls:
+    ), patch(
+        "api.v1.ppt.endpoints.images.canonicalize_legacy_image_asset",
+        new_callable=AsyncMock,
+    ) as canonicalize, patch(
+        "api.v1.ppt.endpoints.images.ImageGenerationService"
+    ) as mock_service_cls:
         service = Mock()
         service.generate_image = AsyncMock(return_value=generated_asset)
         mock_service_cls.return_value = service
@@ -101,6 +107,7 @@ def test_generate_image_returns_image_path_and_persists_image_asset(fake_async_s
     assert response.json() == "/tmp/generated/a.png"
     assert fake_async_session.added[-1] == generated_asset
     assert fake_async_session.commit_count == 1
+    canonicalize.assert_awaited_once()
 
 
 def test_generate_image_returns_placeholder_without_db_write(fake_async_session):
@@ -118,3 +125,78 @@ def test_generate_image_returns_placeholder_without_db_write(fake_async_session)
     assert response.status_code == 200
     assert response.json() == "/static/images/placeholder.jpg"
     assert fake_async_session.added == []
+
+
+def test_upload_removes_raw_file_when_canonical_admission_fails(
+    fake_async_session,
+    tmp_path,
+):
+    client = _build_client(fake_async_session)
+    fake_async_session.flush = AsyncMock()
+
+    with patch(
+        "api.v1.ppt.endpoints.images.get_images_directory",
+        return_value=str(tmp_path),
+    ), patch(
+        "api.v1.ppt.endpoints.images.canonicalize_legacy_image_asset",
+        new_callable=AsyncMock,
+        side_effect=AssetGatewayError("asset_scan_failed", status_code=422),
+    ):
+        response = client.post(
+            "/images/upload",
+            files={"file": ("sample.png", b"\x89PNG\r\n\x1a\nrest", "image/png")},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "asset_scan_failed"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_image_endpoint_generic_failure_uses_stable_code_without_path(
+    fake_async_session,
+):
+    secret_path = r"C:\private\owner\gallery.png"
+    fake_async_session.scalars = AsyncMock(
+        side_effect=RuntimeError(f"database failed for {secret_path}")
+    )
+    client = _build_client(fake_async_session)
+
+    response = client.get("/images/generated")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "image_gallery_read_failed"
+    assert secret_path not in response.text
+
+
+def test_image_gallery_file_url_allows_only_public_or_confined_urls():
+    asset = ImageAsset(path="ignored", is_uploaded=True)
+    allowed = [
+        "https://images.example.test/a.png",
+        "http://images.example.test/a.png",
+        "data:image/png;base64,AAAA",
+        "blob:https://app.example.test/asset-id",
+        "/app_data/images/users/owner/a.png",
+    ]
+    rejected = [
+        "relative/image.png",
+        "/private/gallery.png",
+        "C:\\private\\gallery.png",
+        "/app_data/images/../secrets/a.png",
+        "/app_data/images/%2e%2e/secrets/a.png",
+        "/app_data/images/%252e%252e/secrets/a.png",
+        "javascript:alert(1)",
+        "//evil.example.test/a.png",
+        "http://[invalid-ipv6/a.png",
+    ]
+    for value in allowed:
+        with patch(
+            "api.v1.ppt.endpoints.images.filesystem_image_path_to_app_data_url",
+            return_value=value,
+        ):
+            assert _image_asset_api_dict(asset)["file_url"] == value
+    for value in rejected:
+        with patch(
+            "api.v1.ppt.endpoints.images.filesystem_image_path_to_app_data_url",
+            return_value=value,
+        ):
+            assert _image_asset_api_dict(asset)["file_url"] is None

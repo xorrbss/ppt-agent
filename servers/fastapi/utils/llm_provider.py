@@ -1,3 +1,8 @@
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+
 from fastapi import HTTPException
 from google import genai
 from openai import OpenAI
@@ -40,27 +45,133 @@ from utils.get_env import (
     get_vertex_model_env,
 )
 from constants.provider_registry import ProviderResolutionError, resolve_provider
+from services.presentation_profiles import (
+    PersistedIdentity,
+    PresentationDriverId,
+    PresentationProfile,
+    resolve_presentation_driver,
+)
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationProviderAdmission:
+    """Server-derived provider powers for one generation execution."""
+
+    profile: PresentationProfile
+    presentation_driver: PresentationDriverId
+    required_capabilities: tuple[str, ...]
+    provider_id: str | None
+
+
+_GENERATION_PROVIDER_ADMISSION: ContextVar[GenerationProviderAdmission | None] = (
+    ContextVar("generation_provider_admission", default=None)
+)
+
+
+def _resolve_configured_llm_provider(
+    settings: RuntimeSettings,
+    *,
+    presentation_driver: str | None = None,
+    required_capabilities: Iterable[str] = (),
+) -> LLMProvider:
+    provider_id = get_llm_provider_env(settings) or ""
+    try:
+        provider = LLMProvider(provider_id)
+    except ValueError as error:
+        raise ProviderResolutionError("provider_unknown", provider_id) from error
+    resolved = resolve_provider(
+        provider.value,
+        presentation_driver=presentation_driver,
+        required_capabilities=required_capabilities,
+    )
+    if resolved.kind != "llm":
+        raise ProviderResolutionError("provider_kind_mismatch", provider.value)
+    return provider
+
+
+def resolve_generation_provider(
+    identity: PersistedIdentity,
+    *,
+    required_capabilities: Iterable[str],
+    settings: RuntimeSettings | None = None,
+) -> GenerationProviderAdmission:
+    """Admit the configured LLM against a server-derived presentation profile."""
+
+    profile, _capabilities, _driver = resolve_presentation_driver(identity)
+    required = tuple(dict.fromkeys(required_capabilities))
+    snapshot = resolve_runtime_settings(settings)
+    provider = _resolve_configured_llm_provider(
+        snapshot,
+        presentation_driver=profile.driver_id,
+        required_capabilities=required,
+    )
+    return GenerationProviderAdmission(
+        profile=profile,
+        presentation_driver=profile.driver_id,
+        required_capabilities=required,
+        provider_id=provider.value,
+    )
+
+
+@contextmanager
+def generation_provider_policy(
+    identity: PersistedIdentity,
+    *,
+    required_capabilities: Iterable[str],
+) -> Iterator[GenerationProviderAdmission]:
+    """Install policy that resolves the provider at the client-call boundary."""
+
+    profile, _capabilities, _driver = resolve_presentation_driver(identity)
+    policy = GenerationProviderAdmission(
+        profile=profile,
+        presentation_driver=profile.driver_id,
+        required_capabilities=tuple(dict.fromkeys(required_capabilities)),
+        provider_id=None,
+    )
+    token = _GENERATION_PROVIDER_ADMISSION.set(policy)
+    try:
+        yield policy
+    finally:
+        _GENERATION_PROVIDER_ADMISSION.reset(token)
+
+
+@contextmanager
+def generation_provider_admission(
+    identity: PersistedIdentity,
+    *,
+    required_capabilities: Iterable[str],
+    settings: RuntimeSettings | None = None,
+) -> Iterator[GenerationProviderAdmission]:
+    """Pin fail-closed provider policy to one async generation task context."""
+
+    admission = resolve_generation_provider(
+        identity,
+        required_capabilities=required_capabilities,
+        settings=settings,
+    )
+    token = _GENERATION_PROVIDER_ADMISSION.set(admission)
+    try:
+        yield admission
+    finally:
+        _GENERATION_PROVIDER_ADMISSION.reset(token)
 
 
 def get_llm_provider(settings: RuntimeSettings | None = None):
     snapshot = resolve_runtime_settings(settings)
     try:
-        provider = LLMProvider(get_llm_provider_env(snapshot))
-        resolved = resolve_provider(provider.value)
-        if resolved.kind != "llm":
-            raise ProviderResolutionError("provider_kind_mismatch", provider.value)
-        return provider
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Invalid LLM provider. Please select one of: "
-                "openai, google, vertex, azure, bedrock, openrouter, "
-                "fireworks, together, cerebras, anthropic, litellm, "
-                "lmstudio, ollama, custom, codex"
+        admission = _GENERATION_PROVIDER_ADMISSION.get()
+        return _resolve_configured_llm_provider(
+            snapshot,
+            presentation_driver=(
+                admission.presentation_driver if admission is not None else None
+            ),
+            required_capabilities=(
+                admission.required_capabilities if admission is not None else ()
             ),
         )
+    except ProviderResolutionError as error:
+        raise HTTPException(status_code=422, detail=error.code) from error
 
 
 def is_openai_selected(settings: RuntimeSettings | None = None):
@@ -174,6 +285,7 @@ def get_model(settings: RuntimeSettings | None = None):
 
 def get_google_llm_client(settings: RuntimeSettings | None = None) -> genai.Client:
     snapshot = resolve_runtime_settings(settings)
+    get_llm_provider(snapshot)
     api_key = get_google_api_key_env(snapshot)
     if not api_key:
         raise HTTPException(status_code=400, detail="Google API Key is not set")
@@ -182,6 +294,7 @@ def get_google_llm_client(settings: RuntimeSettings | None = None) -> genai.Clie
 
 def get_llm_client(settings: RuntimeSettings | None = None) -> OpenAI:
     snapshot = resolve_runtime_settings(settings)
+    get_llm_provider(snapshot)
     api_key = get_openai_api_key_env(snapshot)
     if not api_key:
         raise HTTPException(status_code=400, detail="OpenAI API Key is not set")

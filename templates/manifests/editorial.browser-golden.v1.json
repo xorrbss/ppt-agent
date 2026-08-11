@@ -1,0 +1,262 @@
+{
+  "schemaVersion": "presenton.template-browser-golden/v1",
+  "templateId": "editorial",
+  "engineId": "presenton.template-v2-json",
+  "engineContractSha256": "65884934c0f2b0cd88c2e76b115d291e7455dee06b3091e41edb292eeb8034bf",
+  "entrypointSha256": "83dfc203630ae8986472ca3ec545be4dea917bf29c7ebfccba73ba1189f56a16",
+  "renderer": {
+    "modulePath": "servers/nextjs/lib/template-v2-json-to-html.ts",
+    "moduleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+    "captureAdapter": "chromium-headless-cli/readiness-contract",
+    "productionCaptureContract": "scripts/sync-presentation-export.cjs readiness overlay"
+  },
+  "browser": {
+    "family": "chromium",
+    "product": "Chrome/151.0.7922.76",
+    "revision": "@031bfd60f544af71d8dd7246970d1af3e1acf3ad",
+    "protocolVersion": "1.3"
+  },
+  "capturedAt": "2026-08-11T01:31:12.237Z",
+  "captureEvidence": {
+    "path": "templates/manifests/editorial.browser-golden.capture.v1.json",
+    "sha256": "e083f4f657229685fbd6a981780afc563a81f720835a08725232db9ea300adcc",
+    "adapter": "chromium-cdp/Page.captureScreenshot"
+  },
+  "networkPolicy": "deny",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "layoutIds": [
+    "title_slide_with_image_collage_and_footer",
+    "title_with_numbered_list_in_two_columns",
+    "large_title_with_curved_side_image",
+    "title_description_list_of_items_with_heading_description",
+    "title_with_four_callouts_around_center_graphic",
+    "title_with_stacked_rows_and_side_graphic",
+    "title_with_five_items_on_vertical_branching_path",
+    "title_description_with_four_items_on_arch",
+    "title_with_side_image_and_bottom_callout_cards",
+    "title_description_with_six_alternating_timeline_callouts",
+    "title_description_left_chart_right",
+    "title_with_large_chart_metric_cards_and_callouts",
+    "title_with_center_graphic_and_four_side_metric_callouts",
+    "title_with_four_callouts_on_wave_timeline",
+    "title_with_multi_panel_chart_and_metric_grid",
+    "title_with_three_chart_panels_and_three_gauge_cards",
+    "title_with_two_upper_charts_lower_description_and_metrics",
+    "title_with_concentric_circles_and_linked_side_cards",
+    "title_description_with_row_of_gauge_cards",
+    "title_description_above_full_width_line_chart",
+    "large_text_block_with_side_image",
+    "title_description_with_metric_list_and_bottom_timeline",
+    "title_with_row_of_image_heading_subheading_cards",
+    "title_description_with_items_along_winding_path"
+  ],
+  "screenshots": [
+    {
+      "layoutId": "title_slide_with_image_collage_and_footer",
+      "path": "templates/manifests/editorial.browser-golden/01-title_slide_with_image_collage_and_footer.png",
+      "sha256": "fa40ddf73151c141098b19f927944e1f8bca63c14b258fd857bb0bdd8ba6f815",
+      "sizeBytes": 108093,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_numbered_list_in_two_columns",
+      "path": "templates/manifests/editorial.browser-golden/02-title_with_numbered_list_in_two_columns.png",
+      "sha256": "a78ca5526aa09bbb0c95795da25a7d59b4641a6201ff016f183b1037f28184f7",
+      "sizeBytes": 89952,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "large_title_with_curved_side_image",
+      "path": "templates/manifests/editorial.browser-golden/03-large_title_with_curved_side_image.png",
+      "sha256": "e44d6a27da712ca2c89a95da977d7aeafc937d0beb6dcf0ce5dbda5557cfd28b",
+      "sizeBytes": 190575,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_list_of_items_with_heading_description",
+      "path": "templates/manifests/editorial.browser-golden/04-title_description_list_of_items_with_heading_description.png",
+      "sha256": "d233ae393e9481f00a160b412a82149f8dc27779884a75ce5307f9632c7b0805",
+      "sizeBytes": 121060,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_four_callouts_around_center_graphic",
+      "path": "templates/manifests/editorial.browser-golden/05-title_with_four_callouts_around_center_graphic.png",
+      "sha256": "e7a6149c4e7990b366ac7a91908949ee0376510b0e0b3e823df56930fe70c793",
+      "sizeBytes": 181467,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_stacked_rows_and_side_graphic",
+      "path": "templates/manifests/editorial.browser-golden/06-title_with_stacked_rows_and_side_graphic.png",
+      "sha256": "bc65750f8a8404440351c7de6e4bf7466be8b8b83475100414845dea9ba3752b",
+      "sizeBytes": 112594,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_five_items_on_vertical_branching_path",
+      "path": "templates/manifests/editorial.browser-golden/07-title_with_five_items_on_vertical_branching_path.png",
+      "sha256": "90925ef5bea00ca94a1021829fa5c50e324e8e7bc463abae7a6eb16184818af7",
+      "sizeBytes": 126655,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_with_four_items_on_arch",
+      "path": "templates/manifests/editorial.browser-golden/08-title_description_with_four_items_on_arch.png",
+      "sha256": "ca6311ca4c15dbfb53f9ca5ac7e4ce4ad0d4bdf30059404d796f3df6c5afdaa8",
+      "sizeBytes": 124468,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_side_image_and_bottom_callout_cards",
+      "path": "templates/manifests/editorial.browser-golden/09-title_with_side_image_and_bottom_callout_cards.png",
+      "sha256": "8ecd7b7ebc4cd65a5a59ccdc3e1d335cf5942ab0414c6a3b70100eb2f9eb6316",
+      "sizeBytes": 107428,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_with_six_alternating_timeline_callouts",
+      "path": "templates/manifests/editorial.browser-golden/10-title_description_with_six_alternating_timeline_callouts.png",
+      "sha256": "aa1b2200b046c75a2a386a993e6cc7327ae2301e53a1f6a6886a0caca55ce4c1",
+      "sizeBytes": 154118,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_left_chart_right",
+      "path": "templates/manifests/editorial.browser-golden/11-title_description_left_chart_right.png",
+      "sha256": "553396219bd93e317cc6f77fe58e37fa1614837482628e07302623017e5804e4",
+      "sizeBytes": 121960,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_large_chart_metric_cards_and_callouts",
+      "path": "templates/manifests/editorial.browser-golden/12-title_with_large_chart_metric_cards_and_callouts.png",
+      "sha256": "dc88155b830834430d565ce7e2674399a8ea7ca678b06f556ab40c6f873db5ab",
+      "sizeBytes": 125839,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_center_graphic_and_four_side_metric_callouts",
+      "path": "templates/manifests/editorial.browser-golden/13-title_with_center_graphic_and_four_side_metric_callouts.png",
+      "sha256": "e049b306b859dfacd2b34a71ef2a05ae2644333f17170710d86a1a1843e184f6",
+      "sizeBytes": 117426,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_four_callouts_on_wave_timeline",
+      "path": "templates/manifests/editorial.browser-golden/14-title_with_four_callouts_on_wave_timeline.png",
+      "sha256": "984b3749f995272ef27149b83ad34f33af5f0a00dc701314e1eaf814b61d0d67",
+      "sizeBytes": 105014,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_multi_panel_chart_and_metric_grid",
+      "path": "templates/manifests/editorial.browser-golden/15-title_with_multi_panel_chart_and_metric_grid.png",
+      "sha256": "988a0a3608592817d36921a06f749c6b267f05d39538aee4a713dbe042121a42",
+      "sizeBytes": 129489,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_three_chart_panels_and_three_gauge_cards",
+      "path": "templates/manifests/editorial.browser-golden/16-title_with_three_chart_panels_and_three_gauge_cards.png",
+      "sha256": "5b1db937e7c3c321ecf396367da39cb1228972de46894963613d506683ea0135",
+      "sizeBytes": 108142,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_two_upper_charts_lower_description_and_metrics",
+      "path": "templates/manifests/editorial.browser-golden/17-title_with_two_upper_charts_lower_description_and_metrics.png",
+      "sha256": "b3dbff00ddaae369e85b9566724cb675f3d8abd474d45c130901157ea9640690",
+      "sizeBytes": 134148,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_concentric_circles_and_linked_side_cards",
+      "path": "templates/manifests/editorial.browser-golden/18-title_with_concentric_circles_and_linked_side_cards.png",
+      "sha256": "b5b4feeef86e7f23d40ac3a635a757eb1910056abfa0abde9a2d5afdb889a614",
+      "sizeBytes": 157516,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_with_row_of_gauge_cards",
+      "path": "templates/manifests/editorial.browser-golden/19-title_description_with_row_of_gauge_cards.png",
+      "sha256": "0a5aae67b124b67ce6f99bce6d35c4a6a09dc9a498d5c69f1f23d94d368768df",
+      "sizeBytes": 110547,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_above_full_width_line_chart",
+      "path": "templates/manifests/editorial.browser-golden/20-title_description_above_full_width_line_chart.png",
+      "sha256": "80e394676ef99c11821c69267d129bad7e35c2964362d6d15aa5af7ab881f79b",
+      "sizeBytes": 116049,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "large_text_block_with_side_image",
+      "path": "templates/manifests/editorial.browser-golden/21-large_text_block_with_side_image.png",
+      "sha256": "964aaa3c70249fb49e76609843d138e323a8e5f65a1ffb64579d65970e4542af",
+      "sizeBytes": 99347,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_with_metric_list_and_bottom_timeline",
+      "path": "templates/manifests/editorial.browser-golden/22-title_description_with_metric_list_and_bottom_timeline.png",
+      "sha256": "a3a4e7875d2b7cecf939bda737593df0e1f5784b4f33a67064381c468071fd25",
+      "sizeBytes": 169748,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_with_row_of_image_heading_subheading_cards",
+      "path": "templates/manifests/editorial.browser-golden/23-title_with_row_of_image_heading_subheading_cards.png",
+      "sha256": "ba7dc7d3d537c2bf8b2917ac3e435d923b7d6f3b6f5827589c631036a09a9226",
+      "sizeBytes": 95884,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "layoutId": "title_description_with_items_along_winding_path",
+      "path": "templates/manifests/editorial.browser-golden/24-title_description_with_items_along_winding_path.png",
+      "sha256": "37d9c2d7a5c22120487e2ac323a5c2907d2f233ab072825900b77e63afae17b9",
+      "sizeBytes": 178800,
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "checks": {
+    "renderedLayoutCount": 24,
+    "nonBlankLayoutCount": 24,
+    "missingImages": 0,
+    "imageCount": 129,
+    "chartCanvasCount": 9,
+    "externalRequests": [],
+    "localFontsLoaded": true,
+    "consoleErrors": [],
+    "paintReadinessContract": "passed"
+  },
+  "status": "passed-browser-golden"
+}
