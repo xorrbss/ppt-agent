@@ -470,7 +470,9 @@ describe("WorkspaceChatPanel", () => {
           operationType: "version.restore",
           title: "버전 복원",
           status: "succeeded",
-          progress: 100,
+          // Older successful exports persisted their last publishing progress.
+          // The terminal card must still render completion as 100%.
+          progress: 80,
           result: {
             kind: "version.restore",
             restored_version_id: "version-7",
@@ -1341,6 +1343,9 @@ describe("WorkspaceChatPanel", () => {
           .click();
         cy.get('[data-testid="artifact-stale"]').should("be.visible");
       });
+    cy.get('[data-operation-id="operation-export"] [role="progressbar"]')
+      .should("have.attr", "aria-valuenow", "100")
+      .and("have.attr", "aria-valuetext", "100%");
     cy.wait("@artifactDownload");
     cy.get('[data-testid="artifact-expired"]').should("be.visible");
     cy.get('[data-testid="artifact-reexport"]').click();

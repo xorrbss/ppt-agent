@@ -29,6 +29,30 @@ LOGGER = logging.getLogger(__name__)
 
 EXPORT_DIRECTORY_MODE = 0o755
 EXPORT_FILE_MODE = 0o644
+DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS = 30 * 60
+MIN_EXPORT_TASK_TIMEOUT_SECONDS = 60
+
+
+def _export_task_timeout_seconds() -> int:
+    """Return the export runtime limit, keeping large decks configurable.
+
+    Image-heavy authored decks can legitimately take well over five minutes to
+    render.  The old fixed 300-second limit killed otherwise healthy exports at
+    exactly five minutes and then repeated the same work until dead-lettering.
+    """
+    raw_value = (os.getenv("EXPORT_TASK_TIMEOUT_SECONDS") or "").strip()
+    if not raw_value:
+        return DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS
+    try:
+        configured = int(raw_value)
+    except ValueError:
+        LOGGER.warning(
+            "Ignoring invalid EXPORT_TASK_TIMEOUT_SECONDS=%r; using %s seconds",
+            raw_value,
+            DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS,
+        )
+        return DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS
+    return max(configured, MIN_EXPORT_TASK_TIMEOUT_SECONDS)
 
 
 def _redact_export_url(url: str) -> str:
@@ -95,8 +119,12 @@ class ExtractSchemaDocument(BaseModel):
 
 
 class ExportTaskService:
-    def __init__(self, timeout_seconds: int = 300):
-        self.timeout_seconds = timeout_seconds
+    def __init__(self, timeout_seconds: int | None = None):
+        self.timeout_seconds = (
+            _export_task_timeout_seconds()
+            if timeout_seconds is None
+            else timeout_seconds
+        )
         self.node_binary = os.getenv("LITEPARSE_NODE_BINARY", "node")
         self.export_dir = self._resolve_export_dir()
         self.entrypoint_path = self._resolve_entrypoint_path(self.export_dir)
@@ -179,11 +207,18 @@ class ExportTaskService:
                 status_code=500,
                 detail="APP_DATA_DIRECTORY must be set for PPTX-to-HTML export",
             )
+        # The Node runtime is launched with ``presentation-export`` as its
+        # working directory.  Passing through a relative APP_DATA_DIRECTORY
+        # therefore makes Python and Node resolve the same setting against two
+        # different directories.  The renderer succeeds, but Python rejects
+        # the returned file URL because it is outside Python's app-data root.
+        app_data_directory = os.path.realpath(os.path.abspath(app_data_directory))
         env["APP_DATA_DIRECTORY"] = app_data_directory
 
         temp_directory = get_temp_directory_env() or os.path.join(
             tempfile.gettempdir(), "presenton"
         )
+        temp_directory = os.path.realpath(os.path.abspath(temp_directory))
         owner_id = get_current_owner_id()
         if owner_id is not None:
             temp_directory = os.path.join(temp_directory, str(owner_id))
@@ -260,7 +295,7 @@ class ExportTaskService:
             for root in allowed_roots:
                 if not root:
                     continue
-                resolved_root = os.path.realpath(root)
+                resolved_root = os.path.realpath(os.path.abspath(root))
                 if (
                     os.path.commonpath([resolved, resolved_root]) == resolved_root
                     and os.path.isfile(resolved)

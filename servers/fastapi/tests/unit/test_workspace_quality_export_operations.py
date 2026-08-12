@@ -190,6 +190,11 @@ def test_quality_review_result_sanitizer_keeps_only_user_visible_summary():
         "fixed_slide_indices": [0, True, -1, 2],
         "remaining_issue_count": 1,
         "remaining_slide_indices": [2],
+        "pattern_cluster_count": 2,
+        "pattern_recipe_count": 1,
+        "pattern_reuse_attempts": 3,
+        "pattern_reuse_hits": 2,
+        "pattern_reuse_applied": 1,
         "remaining_issues": [
             {
                 "slide_index": 2,
@@ -246,6 +251,11 @@ def test_quality_review_result_sanitizer_keeps_only_user_visible_summary():
         "fixed_slide_indices": [0, 2],
         "remaining_issue_count": 1,
         "remaining_slide_indices": [2],
+        "pattern_cluster_count": 2,
+        "pattern_recipe_count": 1,
+        "pattern_reuse_attempts": 3,
+        "pattern_reuse_hits": 2,
+        "pattern_reuse_applied": 1,
         "remaining_issues": [
             {
                 "slide_index": 2,
@@ -881,6 +891,10 @@ def test_export_publication_is_immutable_fenced_and_revision_neutral(
                 )
                 assert result_revision == presentation.revision == 7
                 assert operation.state == "succeeded"
+                assert operation.progress == {
+                    "stage": "export_completed",
+                    "percent": 100,
+                }
                 assert operation.result["source_revision"] == 7
                 assert "expires_at" in operation.result
                 assert "path" not in operation.result
@@ -889,6 +903,7 @@ def test_export_publication_is_immutable_fenced_and_revision_neutral(
                 assert artifact_row.expires_at is not None
                 assert artifact.absolute_path.read_bytes() == b"immutable pptx"
                 assert terminal is not None and outbox is not None
+                assert terminal.payload["percent"] == 100
 
             claim = WorkspaceOperationClaim(
                 operation_id=operation_id,

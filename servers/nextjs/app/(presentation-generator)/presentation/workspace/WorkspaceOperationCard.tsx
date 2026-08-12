@@ -608,7 +608,12 @@ export function WorkspaceOperationCard({
     !TERMINAL.has(operation.status) &&
     progress !== undefined &&
     progress >= 96;
-  const displayedProgress = qualityResultSaving ? 99 : progress;
+  const displayedProgress =
+    operation.status === "succeeded" && progress !== undefined
+      ? 100
+      : qualityResultSaving
+        ? 99
+        : progress;
   const artifactId = isExport
     ? stringValue(result.artifact_id, result.artifactId)
     : undefined;

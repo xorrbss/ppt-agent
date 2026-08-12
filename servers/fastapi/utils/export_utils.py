@@ -1,12 +1,15 @@
 import os
 import logging
+from pathlib import Path
 from typing import Literal
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 import uuid
 
+import httpx
 from pathvalidate import sanitize_filename
 
 from models.presentation_and_path import PresentationAndPath
+from utils.asset_directory_utils import get_exports_directory
 from utils.filename_utils import safe_export_basename
 from services.export_task_service import EXPORT_TASK_SERVICE
 from utils.runtime_limits import log_memory
@@ -14,6 +17,8 @@ from utils.simple_auth import SESSION_COOKIE_NAME
 
 
 LOGGER = logging.getLogger(__name__)
+_AUTHORED_HYBRID_EXPORT_TIMEOUT_SECONDS = 30 * 60
+_MAX_AUTHORED_HYBRID_EXPORT_BYTES = 512 * 1024 * 1024
 
 
 def _get_next_public_url() -> str:
@@ -119,3 +124,107 @@ async def export_presentation(
         presentation_id=presentation_id,
         path=export_result.path,
     )
+
+
+def _resolve_hybrid_export_path(download_path: str) -> Path | None:
+    parsed = urlparse(download_path)
+    if parsed.path != "/api/export-presentation/file":
+        return None
+    names = parse_qs(parsed.query).get("name", [])
+    if len(names) != 1 or not names[0]:
+        return None
+    exports_directory = Path(get_exports_directory()).resolve()
+    candidate = (exports_directory / names[0]).resolve()
+    try:
+        candidate.relative_to(exports_directory)
+    except ValueError:
+        return None
+    return candidate
+
+
+async def export_authored_hybrid_presentation(
+    presentation_id: uuid.UUID,
+    title: str,
+    *,
+    cookie_header: str | None,
+    expected_revision: int,
+    font_embedding: bool = False,
+) -> PresentationAndPath:
+    """Run the canonical authored-hybrid exporter instead of rasterizing HTML."""
+
+    if isinstance(expected_revision, bool) or expected_revision < 0:
+        raise ValueError("expected_revision must be non-negative")
+    base_url = _get_next_public_url().rstrip("/")
+    headers = {"cookie": cookie_header} if cookie_header else {}
+    timeout = httpx.Timeout(
+        _AUTHORED_HYBRID_EXPORT_TIMEOUT_SECONDS,
+        connect=20.0,
+    )
+    async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
+        response = await client.post(
+            f"{base_url}/api/export-presentation",
+            json={
+                "id": str(presentation_id),
+                "format": "pptx",
+                "title": title,
+                "pptxMode": "hybrid",
+                "fontEmbedding": font_embedding,
+            },
+        )
+        response.raise_for_status()
+        result = response.json()
+        download_path = result.get("path") if isinstance(result, dict) else None
+        if (
+            not isinstance(result, dict)
+            or result.get("success") is not True
+            or not isinstance(download_path, str)
+        ):
+            raise RuntimeError("authored_hybrid_export_invalid_response")
+        quality = result.get("quality")
+        if (
+            not isinstance(quality, dict)
+            or quality.get("status") == "image-only"
+            or not isinstance(quality.get("editableSlides"), int)
+            or quality["editableSlides"] <= 0
+        ):
+            raise RuntimeError("authored_hybrid_export_not_editable")
+
+        shared_path = _resolve_hybrid_export_path(download_path)
+        if shared_path is not None and shared_path.is_file():
+            return PresentationAndPath(
+                presentation_id=presentation_id,
+                path=str(shared_path),
+            )
+
+        safe_title = safe_export_basename(
+            sanitize_filename((title or "").strip() or str(presentation_id))
+        )
+        destination = Path(get_exports_directory()) / (
+            f"{safe_title}-{str(presentation_id)[:8]}-hybrid.pptx"
+        )
+        temporary = destination.with_name(
+            f"{destination.name}.{uuid.uuid4().hex}.exporting"
+        )
+        total = 0
+        try:
+            async with client.stream(
+                "GET",
+                urljoin(f"{base_url}/", download_path.lstrip("/")),
+            ) as download:
+                download.raise_for_status()
+                with temporary.open("xb") as stream:
+                    async for chunk in download.aiter_bytes():
+                        total += len(chunk)
+                        if total > _MAX_AUTHORED_HYBRID_EXPORT_BYTES:
+                            raise RuntimeError("authored_hybrid_export_too_large")
+                        stream.write(chunk)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            os.replace(temporary, destination)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        return PresentationAndPath(
+            presentation_id=presentation_id,
+            path=str(destination),
+        )

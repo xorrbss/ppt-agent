@@ -85,12 +85,14 @@ export async function POST(req: NextRequest) {
             title,
             cookieHeader,
             fontEmbedding,
+            expectedPresentationRevision,
           }) =>
             runAuthoredHybridPresentationExport({
               presentationId,
               title,
               cookieHeader,
               fontEmbedding,
+              expectedPresentationRevision,
             }),
         },
       },

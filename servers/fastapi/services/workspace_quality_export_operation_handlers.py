@@ -539,6 +539,17 @@ class WorkspaceExportOperationHandler:
                     )
             raise NonRetryableWorkspaceOperationError(error.code) from error
         except Exception as error:
+            LOGGER.exception(
+                "Workspace presentation export failed after execution",
+                extra={
+                    "operation_id": str(claim.operation_id),
+                    "presentation_id": str(claim.presentation_id),
+                    "format": export_format,
+                    "export_attempt_id": (
+                        str(execution.attempt_id) if execution is not None else None
+                    ),
+                },
+            )
             if execution is not None:
                 async with self._session_factory() as session:
                     await terminalize_export_attempt_failed(

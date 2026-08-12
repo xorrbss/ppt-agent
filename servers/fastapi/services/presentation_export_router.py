@@ -343,6 +343,7 @@ async def execute_presentation_export(
                 export_format=export_format,
                 expected_revision=expected_render_revision,
                 cookie_header=cookie_header,
+                profile_driver_id=presentation.profile_driver_id,
                 slides=slide_inputs,
                 template_target=template_target,
             ),

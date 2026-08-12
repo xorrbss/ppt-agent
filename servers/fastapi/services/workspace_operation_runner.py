@@ -169,6 +169,11 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "fixed_slide_indices",
             "remaining_issue_count",
             "remaining_slide_indices",
+            "pattern_cluster_count",
+            "pattern_recipe_count",
+            "pattern_reuse_attempts",
+            "pattern_reuse_hits",
+            "pattern_reuse_applied",
             "remaining_issues",
             "issues",
             "slide_results",
@@ -1080,6 +1085,13 @@ async def finalize_workspace_operation_success(
         # The nested result lets an already-open timeline render the result
         # card from the terminal event without waiting for a snapshot reload.
         event_payload.update(completion_progress, result=safe_result)
+        projection_values["progress"] = completion_progress
+    elif claim.kind in {"export.pptx", "export.pdf"}:
+        completion_progress = {
+            "stage": "export_completed",
+            "percent": 100,
+        }
+        event_payload.update(completion_progress)
         projection_values["progress"] = completion_progress
     async with session_factory() as session:
         operation_before = await session.get(WorkspaceOperation, claim.operation_id)

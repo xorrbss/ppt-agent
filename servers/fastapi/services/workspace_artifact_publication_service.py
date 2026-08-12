@@ -2310,6 +2310,10 @@ async def publish_workspace_export_artifact(
         "source_revision": artifact.source_revision,
         "expires_at": export_expires_at.isoformat(),
     }
+    completion_progress = {
+        "stage": "export_completed",
+        "percent": 100,
+    }
     try:
         _require_prepared_artifact_integrity(artifact)
         await _fence_artifact_publication_account(session, artifact=artifact)
@@ -2349,6 +2353,7 @@ async def publish_workspace_export_artifact(
                 state="succeeded",
                 result_revision=artifact.source_revision,
                 result=result_payload,
+                progress=completion_progress,
                 completed_at=now,
                 lease_expires_at=None,
                 heartbeat_at=now,
@@ -2401,7 +2406,11 @@ async def publish_workspace_export_artifact(
             session,
             operation_id=artifact.operation_id,
             event_type="operation.result",
-            payload={"state": "succeeded", **result_payload},
+            payload={
+                "state": "succeeded",
+                **completion_progress,
+                **result_payload,
+            },
             allowed_states=("succeeded",),
             additional_conditions=(
                 WorkspaceOperation.result_revision == artifact.source_revision,

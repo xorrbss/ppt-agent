@@ -60,10 +60,10 @@ const MAX_HYBRID_SLIDES = 100;
 const MAX_FIDELITY_PPTX_BYTES = 512 * 1024 * 1024;
 const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 // Total wall-clock budget for the bounded-concurrency per-slide hybrid pass. Each slide can
-// take ~60s worst case (extract + up to 2 backplate relaunches); without a ceiling a
+// take ~90s worst case (extract + font-layout + backplate relaunches); without a ceiling a
 // pathological deck holds the export request for tens of minutes. When the budget is
 // spent the remaining slides simply keep their fidelity (image) render.
-const HYBRID_DECK_BUDGET_MS = 8 * 60_000;
+const HYBRID_DECK_BUDGET_MS = 15 * 60_000;
 const HYBRID_CACHE_VERSION =
   "authored-hybrid-v6-windows-profile-cleanup-race";
 // The collector adds a bounded network step ahead of each browser pass, so
@@ -74,7 +74,7 @@ const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   process.env.AUTHORED_HYBRID_CONCURRENCY,
   resolveHybridExportConcurrencyDefault(),
   1,
-  8
+  12
 );
 
 const completedHybridExports = new Map<
@@ -104,6 +104,7 @@ interface AuthoredHybridExportParams {
   title?: string;
   cookieHeader?: string;
   fontEmbedding?: boolean;
+  expectedPresentationRevision?: number;
 }
 
 interface FetchedPresentation {
@@ -701,6 +702,7 @@ async function runUncachedAuthoredHybridExport(
     title: params.title,
     cookieHeader: params.cookieHeader,
     expectedPresentationSha256: sourceSha256,
+    expectedPresentationRevision: params.expectedPresentationRevision,
   });
   const fidelityMs = elapsedMs(fidelityStartedAt);
   const fontEmbedding = await prepareFontEmbedding(

@@ -2,7 +2,11 @@ import asyncio
 import os
 import sys
 
-from services.export_task_service import ExportTaskService
+from services.export_task_service import (
+    DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS,
+    MIN_EXPORT_TASK_TIMEOUT_SECONDS,
+    ExportTaskService,
+)
 from services.liteparse_service import LiteParseService
 from utils.runtime_limits import BoundedTextBuffer
 
@@ -54,3 +58,39 @@ def test_export_child_output_is_bounded(tmp_path):
     assert result["returncode"] == 7
     assert "truncated" in str(result["stdout"])
     assert "truncated" in str(result["stderr"])
+
+
+def test_export_timeout_defaults_to_large_deck_budget(monkeypatch):
+    monkeypatch.delenv("EXPORT_TASK_TIMEOUT_SECONDS", raising=False)
+
+    service = ExportTaskService()
+
+    assert service.timeout_seconds == DEFAULT_EXPORT_TASK_TIMEOUT_SECONDS
+
+
+def test_export_timeout_can_be_configured_with_a_safe_floor(monkeypatch):
+    monkeypatch.setenv("EXPORT_TASK_TIMEOUT_SECONDS", "30")
+
+    service = ExportTaskService()
+
+    assert service.timeout_seconds == MIN_EXPORT_TASK_TIMEOUT_SECONDS
+
+
+def test_export_runtime_receives_absolute_data_directories(monkeypatch, tmp_path):
+    process_directory = tmp_path / "servers" / "fastapi"
+    process_directory.mkdir(parents=True)
+    monkeypatch.chdir(process_directory)
+    monkeypatch.setenv("APP_DATA_DIRECTORY", "../../app_data")
+    monkeypatch.setenv("TEMP_DIRECTORY", "../../runtime-temp")
+    monkeypatch.setenv("NEXT_PUBLIC_FAST_API", "http://127.0.0.1:8000")
+    monkeypatch.setenv("PUPPETEER_EXECUTABLE_PATH", "test-browser")
+
+    service = ExportTaskService(timeout_seconds=10)
+    environment = service._build_node_env()
+
+    assert environment["APP_DATA_DIRECTORY"] == str(
+        (tmp_path / "app_data").resolve()
+    )
+    assert environment["TEMP_DIRECTORY"] == str(
+        (tmp_path / "runtime-temp").resolve()
+    )

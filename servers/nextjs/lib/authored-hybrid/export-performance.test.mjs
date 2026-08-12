@@ -11,7 +11,7 @@ test("resolveHybridExportConcurrencyDefault reserves two cores within bounds", (
   assert.equal(resolveHybridExportConcurrencyDefault(2), 4);
   assert.equal(resolveHybridExportConcurrencyDefault(4), 4);
   assert.equal(resolveHybridExportConcurrencyDefault(8), 6);
-  assert.equal(resolveHybridExportConcurrencyDefault(16), 8);
+  assert.equal(resolveHybridExportConcurrencyDefault(16), 12);
 });
 
 test("parseBoundedPositiveInt applies fallback and bounds", () => {

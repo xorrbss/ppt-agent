@@ -37,7 +37,10 @@ from templates.v2.pptx.native_compiler import (
     compile_template_v2_pptx,
 )
 from utils.asset_directory_utils import get_exports_directory
-from utils.export_utils import export_presentation
+from utils.export_utils import (
+    export_authored_hybrid_presentation,
+    export_presentation,
+)
 from utils.filename_utils import safe_export_basename
 
 
@@ -81,6 +84,7 @@ class PresentationExportAdapterRequest:
     export_format: Literal["pptx", "pdf"]
     expected_revision: int
     cookie_header: str | None
+    profile_driver_id: str | None = None
     slides: tuple[PresentationExportSlideInput, ...] = ()
     template_target: TemplateV2GenerationTarget | None = None
 
@@ -257,19 +261,35 @@ async def run_native_reconstructed_adapter(
 async def run_general_adapter(
     request: PresentationExportAdapterRequest,
 ) -> PresentationExportAdapterResult:
-    exported = await export_presentation(
-        request.presentation_id,
-        request.title,
-        request.export_format,
-        cookie_header=request.cookie_header,
-        expected_revision=request.expected_revision,
+    authored_hybrid = (
+        request.export_format == "pptx"
+        and request.profile_driver_id == "authored"
     )
+    if authored_hybrid:
+        exported = await export_authored_hybrid_presentation(
+            request.presentation_id,
+            request.title,
+            cookie_header=request.cookie_header,
+            expected_revision=request.expected_revision,
+        )
+    else:
+        exported = await export_presentation(
+            request.presentation_id,
+            request.title,
+            request.export_format,
+            cookie_header=request.cookie_header,
+            expected_revision=request.expected_revision,
+        )
     return _result(
         exported,
         adapter="general",
-        compiler="presentation-export",
+        compiler="authored-hybrid" if authored_hybrid else "presentation-export",
         compiler_version="0.4.3",
-        runtime="chromium-dom-export",
+        runtime=(
+            "chromium-native-layer-export"
+            if authored_hybrid
+            else "chromium-dom-export"
+        ),
         runtime_version="presenton.render-artifact/v1",
     )
 

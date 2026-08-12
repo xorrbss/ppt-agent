@@ -11,6 +11,7 @@ import pytest
 from models.presentation_and_path import PresentationAndPath
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from services import presentation_export_adapters as adapter_module
 from services import presentation_export_router as router
 from services.presentation_export_adapters import (
     PresentationExportAdapterRequest,
@@ -164,6 +165,50 @@ def _result(
         runtime_version="1",
         package_sha256=None,
     )
+
+
+def test_authored_general_adapter_uses_hybrid_exporter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    presentation_id = uuid.uuid4()
+    artifact = tmp_path / "authored-hybrid.pptx"
+    artifact.write_bytes(b"editable-pptx")
+    calls: dict = {}
+
+    async def hybrid(*args, **kwargs):
+        calls["hybrid"] = (args, kwargs)
+        return PresentationAndPath(
+            presentation_id=presentation_id,
+            path=str(artifact),
+        )
+
+    async def raster(*_args, **_kwargs):
+        raise AssertionError("authored PPTX must not use the raster exporter")
+
+    monkeypatch.setattr(
+        adapter_module,
+        "export_authored_hybrid_presentation",
+        hybrid,
+    )
+    monkeypatch.setattr(adapter_module, "export_presentation", raster)
+
+    result = asyncio.run(
+        adapter_module.run_general_adapter(
+            PresentationExportAdapterRequest(
+                presentation_id=presentation_id,
+                title="Authored",
+                export_format="pptx",
+                expected_revision=2,
+                cookie_header="session=test",
+                profile_driver_id="authored",
+            )
+        )
+    )
+
+    assert result.compiler == "authored-hybrid"
+    assert result.runtime == "chromium-native-layer-export"
+    assert calls["hybrid"][1]["expected_revision"] == 2
 
 
 def test_router_falls_back_only_after_explicit_unsupported(
