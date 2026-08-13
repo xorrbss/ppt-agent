@@ -6,6 +6,7 @@ import { jsonrepair } from "jsonrepair";
 import { RootState } from "@/store/store";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { CodexAuthApi } from "@/app/(presentation-generator)/services/api/codex-auth";
+import { useTranslations } from "next-intl";
 
 const MAX_STREAM_RETRIES = 3;
 const STREAM_RETRY_DELAY_MS = 1_000;
@@ -29,6 +30,7 @@ export const useOutlineStreaming = (
   presentationId: string | null,
   createEventSource: OutlineEventSourceFactory = createBrowserEventSource
 ) => {
+  const t = useTranslations("generation");
   const dispatch = useDispatch();
   const { outlines } = useSelector((state: RootState) => state.presentationGeneration);
   const llmProvider = useSelector(
@@ -118,8 +120,8 @@ export const useOutlineStreaming = (
       clearRetryTimer();
       clearRecoveryTimer();
       notify.error(
-        "ChatGPT 연결이 만료되었습니다",
-        "세션을 자동으로 갱신하지 못했습니다. 설정에서 ChatGPT 연결을 갱신한 뒤 다시 시도해 주세요.",
+        t("codexSessionExpiredTitle"),
+        t("codexSessionExpiredDescription"),
       );
     };
 
@@ -341,7 +343,7 @@ export const useOutlineStreaming = (
       clearRetryTimer();
       clearRecoveryTimer();
     };
-  }, [presentationId, dispatch, createEventSource, llmProvider, retryNonce]);
+  }, [presentationId, dispatch, createEventSource, llmProvider, retryNonce, t]);
 
   return {
     isStreaming,

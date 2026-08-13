@@ -3,10 +3,10 @@ from __future__ import annotations
 import posixpath
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 
 from .models import RelationshipEvidence, RelationshipGraphEvidence
 from .package_reader import PptxPackageReader, UnsafePptxPackage
+from .part_targets import resolve_internal_part_target
 
 
 PACKAGE_RELATIONSHIPS_NS = (
@@ -116,23 +116,6 @@ def _relationship_part(source_part: str) -> str:
     return posixpath.join(directory, "_rels", f"{basename}.rels")
 
 
-def _safe_part_target(source_part: str, target: str) -> str:
-    if (
-        "\\" in target
-        or target.startswith("/")
-        or target.startswith("//")
-        or ":" in target
-        or "\x00" in target
-    ):
-        raise UnsafePptxPackage("unsafe_relationship_target")
-    resolved = posixpath.normpath(
-        posixpath.join(posixpath.dirname(source_part), target)
-    )
-    if resolved in {"", ".", ".."} or resolved.startswith("../"):
-        raise UnsafePptxPackage("unsafe_relationship_target")
-    return str(PurePosixPath(resolved))
-
-
 def _external_kind(relationship_type: str) -> str:
     return _KNOWN_EXTERNAL_RELATIONSHIPS.get(relationship_type, "other")
 
@@ -205,7 +188,7 @@ def build_relationship_graph_evidence(
                         )
                     )
                     continue
-                target_part = _safe_part_target(source_part, target)
+                target_part = resolve_internal_part_target(source_part, target)
                 relationship_kind = _ALLOWED_INTERNAL_RELATIONSHIPS.get(
                     relationship_type
                 )

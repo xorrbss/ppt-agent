@@ -23,6 +23,7 @@ from services.slidespec_repair_pipeline import (
     DomDefect,
     DomEvidence,
     PublicationReceipt,
+    ProposalBatch,
     RenderedCandidate,
     SensorResult,
     SlideSpecInput,
@@ -201,6 +202,56 @@ def test_empty_proposal_negative_cache_uses_all_four_digest_dimensions():
     assert not cache.contains(ProposalCacheKey("spec", "dom-2", "cap", "model"))
     assert not cache.contains(ProposalCacheKey("spec", "dom", "cap-2", "model"))
     assert not cache.contains(ProposalCacheKey("spec", "dom", "cap", "model-2"))
+
+
+def test_typed_llm_funnel_and_no_candidate_reason_survive_terminal_fallback():
+    async def propose(spec, dom):
+        return ProposalBatch(
+            no_candidate_reason="llm_schema_rejected",
+            call_count=1,
+            response_count=1,
+            schema_rejection_count=1,
+        )
+
+    result = asyncio.run(
+        SlideSpecRepairPipeline(
+            _dependencies(propose=propose, cache=NegativeProposalCache())
+        ).run(spec=_spec(), baseline_dom=_dom(), rollout=_rollout())
+    )
+
+    assert result.reason_codes[:2] == (
+        "deterministic_no_candidate",
+        "llm_schema_rejected",
+    )
+    assert result.telemetry.llm_calls == 1
+    assert result.telemetry.llm_response_count == 1
+    assert result.telemetry.llm_schema_rejections == 1
+    assert result.telemetry.llm_render_count == 0
+    assert result.telemetry.no_candidate_reasons == (
+        "deterministic_no_candidate",
+        "llm_schema_rejected",
+    )
+
+
+def test_preflight_unprojectable_uses_typed_no_candidate_telemetry():
+    async def propose(spec, dom):
+        raise AssertionError("preflight must prevent the provider call")
+
+    async def preflight(spec, dom):
+        return SensorResult(False, "proposal.projection_unavailable")
+
+    result = asyncio.run(
+        SlideSpecRepairPipeline(
+            _dependencies(propose=propose, preflight=preflight)
+        ).run(spec=_spec(), baseline_dom=_dom(), rollout=_rollout())
+    )
+
+    assert result.telemetry.llm_calls == 0
+    assert result.telemetry.llm_preflight_pass_count == 0
+    assert result.telemetry.no_candidate_reasons == (
+        "deterministic_no_candidate",
+        "proposal_preflight_unprojectable",
+    )
 
 
 def test_pareto_pruning_happens_after_validation_and_before_render():

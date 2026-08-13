@@ -222,7 +222,10 @@ export const useUploadPageState = ({
     > | null = null;
 
     if (files.length > 0) {
-      documentAdmission = await PresentationGenerationApi.uploadDoc(files);
+      documentAdmission = await PresentationGenerationApi.uploadDoc(
+        files,
+        pendingPresentationId,
+      );
     }
 
     const selectedLanguage = config?.language ?? "";
@@ -296,15 +299,16 @@ export const useUploadPageState = ({
     });
 
     dispatch(setPresentationId(createResponse.id));
+    const outlineDestination = `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`;
     trackEvent(MixpanelEvent.Upload_Documents_Processed, {
       ...getUploadSnapshotProps(),
       uploaded_documents_count: documentAdmission?.assetIds.length ?? 0,
       decompose_job_count: responses.length,
       presentation_id: createResponse.id,
-      destination: "/outline?auto=1",
+      destination: outlineDestination,
     });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline?auto=1" });
-    router.push("/outline?auto=1");
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: outlineDestination });
+    router.push(outlineDestination);
   };
 
   /**
@@ -341,13 +345,14 @@ export const useUploadPageState = ({
 
     dispatch(setPresentationId(createResponse.id));
     dispatch(clearOutlines())
+    const outlineDestination = `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`;
     trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
       ...getUploadSnapshotProps(),
       presentation_id: createResponse.id,
-      destination: "/outline?auto=1",
+      destination: outlineDestination,
     });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline?auto=1" });
-    router.push("/outline?auto=1");
+    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: outlineDestination });
+    router.push(outlineDestination);
   };
 
   /**

@@ -683,10 +683,12 @@ async def _default_pipeline_merges_publication_result(tmp_path: Path, monkeypatc
             async_status,
             export_cookie_header,
             generation_job,
+            progress_reporter,
             sql_session,
         ):
             assert export_cookie_header is None
             assert generation_job.id == job_id
+            assert progress_reporter == context.progress
             async_status.status = "completed"
             presentation = await sql_session.get(
                 PresentationModel, presentation_id

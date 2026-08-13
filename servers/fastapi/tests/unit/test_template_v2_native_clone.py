@@ -79,6 +79,20 @@ def _nested_source_deck() -> bytes:
     return output.getvalue()
 
 
+def _source_deck_with_notes_and_unselected_slide() -> bytes:
+    presentation = Presentation(BytesIO(_source_deck()))
+    presentation.slides[0].notes_slide.notes_text_frame.text = (
+        "Private speaker note must not be published"
+    )
+    hidden = presentation.slides.add_slide(presentation.slide_layouts[6])
+    hidden.shapes.add_textbox(
+        Inches(0.5), Inches(0.5), Inches(6.0), Inches(1.0)
+    ).text = "Unselected source-only content"
+    output = BytesIO()
+    presentation.save(output)
+    return output.getvalue()
+
+
 def _nested_layout(container_type: str) -> SlideLayout:
     container = {
         "type": container_type,
@@ -375,6 +389,32 @@ def test_native_clone_reuses_slide_as_a_relationship_preserving_copy():
     )
     assert first_list.text_frame.paragraphs[1].text == "Value 1"
     assert second_list.text_frame.paragraphs[1].text == "Value 2"
+
+
+def test_native_clone_prunes_unselected_slides_and_private_notes():
+    compilation = compile_template_v2_native_clone(
+        _source_deck_with_notes_and_unselected_slide(),
+        [
+            (_layout(), _content("First", "1"), "ppt/slides/slide1.xml"),
+            (_layout(), _content("Second", "2"), "ppt/slides/slide1.xml"),
+        ],
+    )
+    parts = _package_parts(compilation.pptx)
+
+    slide_parts = {
+        name
+        for name in parts
+        if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+    }
+    assert slide_parts == {"ppt/slides/slide1.xml", "ppt/slides/slide3.xml"}
+    assert not any(name.startswith("ppt/notesSlides/") for name in parts)
+    assert not any(
+        b"notesSlide" in payload or b"commentAuthors" in payload
+        for name, payload in parts.items()
+        if name.endswith(".rels")
+    )
+    assert not any(b"Private speaker note" in payload for payload in parts.values())
+    assert not any(b"Unselected source-only" in payload for payload in parts.values())
 
 
 def test_native_clone_text_list_remains_editable_after_powerpoint_round_trip():

@@ -397,6 +397,100 @@ function issueLabel(value: unknown): string | undefined {
     : `${slide + (issue.slide_index !== undefined ? 1 : 0)}번 슬라이드 · ${message}`;
 }
 
+interface QualityReviewIssueDetail {
+  slideIndex?: number;
+  description: string;
+  reason?: string;
+}
+
+function qualityReviewIssueDetails(
+  result: Record<string, unknown>,
+  field: "detected_issues" | "resolved_issues" | "remaining_issues",
+): QualityReviewIssueDetail[] {
+  const slideResults = Array.isArray(result.slide_results)
+    ? result.slide_results
+    : Array.isArray(result.slideResults)
+      ? result.slideResults
+      : [];
+  const values: Array<{ value: unknown; slideIndex?: number }> = [
+    ...slideResults.flatMap((rawSlide) => {
+      const slide = recordValue(rawSlide);
+      const slideIndex = numberValue(slide.slide_index, slide.slideIndex);
+      const issues = Array.isArray(slide[field]) ? slide[field] : [];
+      return issues.map((value) => ({ value, slideIndex }));
+    }),
+    ...(Array.isArray(result[field])
+      ? result[field].map((value) => ({ value }))
+      : []),
+  ];
+  const seen = new Set<string>();
+  return values.flatMap(({ value, slideIndex }) => {
+    const issue = recordValue(value);
+    const description =
+      typeof value === "string"
+        ? value.trim()
+        : stringValue(issue.description, issue.message, issue.title, issue.code);
+    if (!description) return [];
+    const issueSlideIndex = numberValue(issue.slide_index, issue.slideIndex);
+    const reason = stringValue(
+      issue.reason,
+      issue.failure_reason,
+      issue.rejection_reason,
+      issue.detail,
+    );
+    const resolvedSlideIndex = issueSlideIndex ?? slideIndex;
+    const item: QualityReviewIssueDetail = {
+      ...(resolvedSlideIndex === undefined ? {} : { slideIndex: resolvedSlideIndex }),
+      description,
+      ...(reason && reason !== description ? { reason } : {}),
+    };
+    const identity = `${item.slideIndex ?? ""}\u0000${description}\u0000${item.reason ?? ""}`;
+    if (seen.has(identity)) return [];
+    seen.add(identity);
+    return [item];
+  });
+}
+
+function qualityMetric(
+  result: Record<string, unknown>,
+  key: string,
+  ...aliases: string[]
+): number | undefined {
+  const metrics = recordValue(result.metrics);
+  const telemetry = recordValue(result.telemetry);
+  const llm = recordValue(metrics.llm ?? metrics.llm_funnel ?? telemetry.llm);
+  const llmKeyAliases: Record<string, readonly string[]> = {
+    llm_eligible: ["eligible", "eligible_count", "llm_eligible_count"],
+    llm_calls: ["calls", "call_count"],
+    llm_responses: ["responses", "response_count"],
+    llm_valid_plans: ["valid_plans", "valid_plan_count"],
+    llm_schema_passes: ["schema_passes", "schema_pass_count"],
+    llm_provider_failures: ["provider_failures", "provider_failure_count"],
+    llm_empty: ["empty", "empty_count"],
+    llm_schema_rejected: ["schema_rejected", "schema_rejects", "schema_reject_count"],
+    proposal_preflight_unprojectable: ["preflight_unprojectable", "proposal_preflight_unprojectable"],
+    llm_preflight_passes: ["preflight_passes", "preflight_pass_count"],
+    llm_rendered: ["rendered", "render_count"],
+    llm_negative_cache_hits: ["negative_cache_hits", "negative_cache_hit_count"],
+    llm_circuit_open: ["circuit_open", "circuit_open_count", "llm_circuit_open_count"],
+  };
+  return numberValue(
+    ...[key, ...aliases].flatMap((candidate) => [
+      metrics[candidate],
+      telemetry[candidate],
+      llm[candidate],
+      ...(llmKeyAliases[candidate] ?? []).map((nested) => llm[nested]),
+      result[candidate],
+    ]),
+  );
+}
+
+function formatDuration(milliseconds: number): string {
+  return milliseconds >= 1_000
+    ? `${(milliseconds / 1_000).toFixed(milliseconds >= 10_000 ? 0 : 1)}초`
+    : `${Math.round(milliseconds)}ms`;
+}
+
 function useApprovalExpired(
   expiresAt: string | undefined,
   approvable: boolean,
@@ -468,6 +562,14 @@ export function WorkspaceOperationCard({
   const latestMessage = [...operation.events]
     .reverse()
     .find((event) => event.message)?.message;
+  const latestProgressEvent = [...operation.events]
+    .reverse()
+    .find((event) => event.type === "operation.progress");
+  const latestProgressAt = formatTimestamp(
+    latestProgressEvent?.createdAt ?? operation.updatedAt,
+  );
+  const isPresentationGeneration =
+    operation.operationType === "presentation.generate";
   const actor = actorSummary(operation);
   const createdAt = formatTimestamp(operation.createdAt);
   const updatedAt = formatTimestamp(operation.updatedAt);
@@ -554,7 +656,100 @@ export function WorkspaceOperationCard({
     result.remaining_issue_count,
     result.remainingIssueCount,
   );
+  const confirmedIssueCount = numberValue(
+    result.confirmed_issue_count,
+    result.confirmedIssueCount,
+  );
+  const resolvedIssueDetails = qualityReviewIssueDetails(result, "resolved_issues");
+  const remainingIssueDetails = qualityReviewIssueDetails(result, "remaining_issues");
+  const detectedIssueDetails = qualityReviewIssueDetails(result, "detected_issues");
+  const detailedIssueCount =
+    confirmedIssueCount ??
+    Math.max(
+      detectedIssueDetails.length,
+      resolvedIssueDetails.length + remainingIssueDetails.length,
+    );
+  const resolvedIssueCount = numberValue(
+    result.resolved_issue_count,
+    result.resolvedIssueCount,
+  ) ?? resolvedIssueDetails.length;
   const fixedCount = numberValue(result.fixed_count, result.fixedCount);
+  const patternClusterCount = qualityMetric(
+    result,
+    "pattern_cluster_count",
+    "patternClusterCount",
+  );
+  const patternRecipeCount = qualityMetric(
+    result,
+    "pattern_recipe_count",
+    "patternRecipeCount",
+  );
+  const patternReuseApplied = qualityMetric(
+    result,
+    "pattern_reuse_applied",
+    "patternReuseApplied",
+  );
+  const qualityPipelineMetrics: Array<[string, number | undefined]> = [
+    ["대표 표본", qualityMetric(result, "pattern_representative_count", "pattern_representatives")],
+    ["레시피", qualityMetric(result, "pattern_recipe_count")],
+    ["재사용 시도", qualityMetric(result, "pattern_reuse_attempts")],
+    ["재사용 적중", qualityMetric(result, "pattern_reuse_hits")],
+    ["재사용 적용", qualityMetric(result, "pattern_reuse_applied")],
+    ["복합 계획", qualityMetric(result, "composite_plan_count")],
+    ["병합 연산", qualityMetric(result, "composite_operations_merged")],
+    ["조기 렌더 거부", qualityMetric(result, "render_candidates_rejected_early", "early_render_rejections")],
+    ["전체 렌더", qualityMetric(result, "full_render_count", "full_renders")],
+    ["LLM 대상", qualityMetric(result, "llm_eligible", "llm_eligible_count", "eligible")],
+    ["LLM 호출", qualityMetric(result, "llm_calls")],
+    ["LLM 응답", qualityMetric(result, "llm_responses", "llm_response_count")],
+    ["유효 RepairPlan", qualityMetric(result, "llm_valid_plans", "llm_valid_plan_count", "valid_plans")],
+    ["LLM schema 통과", qualityMetric(result, "llm_schema_passes", "llm_schema_pass_count", "schema_passes")],
+    ["LLM provider 실패", qualityMetric(result, "llm_provider_failures", "llm_provider_failure_count", "provider_failures")],
+    ["LLM 빈 응답", qualityMetric(result, "llm_empty", "llm_empty_count", "empty_responses")],
+    ["LLM schema 거부", qualityMetric(result, "llm_schema_rejected", "llm_schema_rejects", "llm_schema_reject_count", "schema_rejected")],
+    ["투영 preflight 차단", qualityMetric(result, "proposal_preflight_unprojectable", "proposal_preflight_unprojectable_count", "proposal_preflight_rejected", "preflight_unprojectable")],
+    ["투영 preflight 통과", qualityMetric(result, "llm_preflight_passes", "llm_preflight_pass_count", "preflight_passes")],
+    ["LLM 후보 렌더", qualityMetric(result, "llm_rendered", "llm_render_count", "llm_rendered_count")],
+    ["LLM negative cache", qualityMetric(result, "llm_negative_cache_hits", "negative_cache_hits", "negative_cache_hit_count")],
+    ["LLM circuit open", qualityMetric(result, "llm_circuit_open", "llm_circuit_open_count", "circuit_open")],
+    ["LLM RepairPlan", qualityMetric(result, "llm_pattern_call_count", "llm_pattern_calls")],
+    ["개별 전환", qualityMetric(result, "individual_fallback_count", "individual_fallbacks")],
+  ].filter((item): item is [string, number] => item[1] !== undefined);
+  const qualityStageTimings = recordValue(
+    recordValue(result.metrics).stage_timings_ms ??
+      recordValue(result.metrics).stage_timings ??
+      result.stage_timings_ms,
+  );
+  const qualityLlmNoCandidateReasons = stringList(
+    result.no_candidate_reasons,
+    recordValue(result.metrics).no_candidate_reasons,
+    recordValue(result.metrics).llm &&
+      recordValue(recordValue(result.metrics).llm).no_candidate_reasons,
+  );
+  const qualityWallTime = qualityMetric(result, "wall_time_ms", "wall_ms", "elapsed_ms", "total_ms");
+  const reportedStageAggregateTime = qualityMetric(
+    result,
+    "aggregate_stage_time_ms",
+    "stage_aggregate_ms",
+    "aggregate_ms",
+  );
+  const derivedStageAggregateTime = Object.values(qualityStageTimings).reduce<number>(
+    (total, duration) =>
+      typeof duration === "number" && Number.isFinite(duration)
+        ? total + duration
+        : total,
+    0,
+  );
+  const qualityStageAggregateTime = reportedStageAggregateTime ??
+    (Object.keys(qualityStageTimings).length > 0 ? derivedStageAggregateTime : undefined);
+  const remainingSlideIndexes = Array.from(
+    new Set([
+      ...slideIndexes(result.remaining_slide_indices, result.remaining_pages),
+      ...remainingIssueDetails.flatMap((issue) =>
+        issue.slideIndex === undefined ? [] : [issue.slideIndex],
+      ),
+    ]),
+  ).sort((left, right) => left - right);
   const fixedSlideIndexes = slideIndexes(
     result.fixed_slide_indices ??
       result.fixedSlideIndices ??
@@ -574,7 +769,7 @@ export function WorkspaceOperationCard({
       : fixedCount !== undefined && fixedCount > 0
         ? `${fixedCount}개 슬라이드를 수정했습니다.`
         : "수정된 슬라이드가 없습니다.";
-  const qualityIssues = (
+  const allQualityIssues = (
     Array.isArray(result.remaining_issues)
       ? result.remaining_issues
       : Array.isArray(result.issues)
@@ -582,8 +777,12 @@ export function WorkspaceOperationCard({
         : []
   )
     .map(issueLabel)
-    .filter((issue): issue is string => Boolean(issue))
-    .slice(0, 3);
+    .filter((issue): issue is string => Boolean(issue));
+  const qualityIssues = allQualityIssues.slice(0, 8);
+  const shownRemainingIssues: QualityReviewIssueDetail[] =
+    remainingIssueDetails.length > 0
+      ? remainingIssueDetails.slice(0, 8)
+      : qualityIssues.map((description) => ({ description }));
   const qualityHistory = qualityReviewHistory(result);
   const qualityRevision = numberValue(
     result.revision,
@@ -823,6 +1022,14 @@ export function WorkspaceOperationCard({
               ? "결과 저장 중"
               : `${Math.round(displayedProgress)}%`}
           </p>
+          {isPresentationGeneration && latestProgressAt && (
+            <p
+              className="mt-1 text-xs text-slate-500"
+              data-testid="generation-last-progress-at"
+            >
+              서버 작업 확인됨 · 마지막 진행 업데이트 {latestProgressAt}
+            </p>
+          )}
         </div>
       )}
       {qualityResultSaving && (
@@ -929,18 +1136,33 @@ export function WorkspaceOperationCard({
             <dd>
               {reviewedCount !== undefined ? `${reviewedCount}장` : "검토 완료"}
             </dd>
-            <dt>이슈</dt>
+            <dt>문제 슬라이드</dt>
             <dd>
               {issueSlideCount !== undefined ? `${issueSlideCount}장` : "-"}
             </dd>
-            <dt>수정</dt>
-            <dd>{fixedCount !== undefined ? `${fixedCount}건` : "0건"}</dd>
+            <dt>상세 이슈</dt>
+            <dd>{detailedIssueCount > 0 ? `${detailedIssueCount}개` : "0개"}</dd>
+            <dt>수정 슬라이드</dt>
+            <dd>{fixedCount !== undefined ? `${fixedCount}장` : "0장"}</dd>
+            <dt>해결 이슈</dt>
+            <dd>{resolvedIssueCount > 0 ? `${resolvedIssueCount}개` : "0개"}</dd>
             <dt>잔여 이슈</dt>
             <dd>
               {remainingIssueCount !== undefined
                 ? `${remainingIssueCount}개`
                 : "-"}
             </dd>
+            {patternClusterCount !== undefined && (
+              <>
+                <dt>수정 패턴</dt>
+                <dd>
+                  {patternClusterCount}개 분류 · {patternRecipeCount ?? 0}개 학습
+                  {patternReuseApplied !== undefined
+                    ? ` · ${patternReuseApplied}장 재사용`
+                    : ""}
+                </dd>
+              </>
+            )}
             <dt>검토 리비전</dt>
             <dd>{inspectedRevision !== undefined ? inspectedRevision : "-"}</dd>
             <dt>저장 리비전</dt>
@@ -948,6 +1170,48 @@ export function WorkspaceOperationCard({
             <dt>PowerPoint 갱신</dt>
             <dd>{qualityRefreshMessage}</dd>
           </dl>
+          {(qualityWallTime !== undefined || qualityStageAggregateTime !== undefined || qualityPipelineMetrics.length > 0 || Object.keys(qualityStageTimings).length > 0) && (
+            <section
+              className="mt-3 border-t border-blue-100 pt-2"
+              aria-label="최대 수정 파이프라인 지표"
+              data-testid="quality-review-pipeline-metrics"
+            >
+              <h4 className="font-semibold">최대 수정 처리 내역</h4>
+              {(qualityWallTime !== undefined || qualityStageAggregateTime !== undefined) && (
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-blue-900">
+                  {qualityWallTime !== undefined && (
+                    <span data-testid="quality-review-wall-time">실제 경과 {formatDuration(qualityWallTime)}</span>
+                  )}
+                  {qualityStageAggregateTime !== undefined && (
+                    <span data-testid="quality-review-stage-aggregate-time">
+                      단계 누적 {formatDuration(qualityStageAggregateTime)} (병렬 합산)
+                    </span>
+                  )}
+                </div>
+              )}
+              {qualityPipelineMetrics.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-blue-900">
+                  {qualityPipelineMetrics.map(([label, value]) => (
+                    <span key={label}>{label} {value}</span>
+                  ))}
+                </div>
+              )}
+              {qualityLlmNoCandidateReasons.length > 0 && (
+                <p className="mt-1 text-[11px] text-amber-800" data-testid="quality-review-llm-no-candidate-reasons">
+                  LLM 후보 미생성 사유: {qualityLlmNoCandidateReasons.join(", ")}
+                </p>
+              )}
+              {Object.keys(qualityStageTimings).length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-blue-800">
+                  {Object.entries(qualityStageTimings).flatMap(([stage, duration]) =>
+                    typeof duration === "number" && Number.isFinite(duration)
+                      ? [<span key={stage}>{stage} {formatDuration(duration)}</span>]
+                      : [],
+                  )}
+                </div>
+              )}
+            </section>
+          )}
           <p className="mt-1 font-medium text-blue-900">
             {qualityChangeSummary}
           </p>
@@ -971,12 +1235,64 @@ export function WorkspaceOperationCard({
               ))}
             </div>
           )}
-          {qualityIssues.length > 0 && (
-            <ul className="mt-2 list-disc space-y-1 pl-4">
-              {qualityIssues.map((issue, index) => (
-                <li key={`${index}-${issue}`}>{issue}</li>
-              ))}
-            </ul>
+          {(remainingIssueDetails.length > 0 || qualityIssues.length > 0) && (
+            <section
+              className="mt-3 border-t border-blue-100 pt-2"
+              aria-label="잔여 이슈"
+              data-testid="quality-review-remaining-issues"
+            >
+              <h4 className="font-semibold">잔여 이슈</h4>
+              <ol className="mt-1.5 space-y-1.5">
+                {shownRemainingIssues.map((issue, index) => (
+                  <li
+                    key={`${issue.slideIndex ?? "unknown"}-${issue.description}-${index}`}
+                    className="rounded-md bg-white/70 px-2 py-1.5 text-[11px] text-blue-900"
+                  >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>
+                        {issue.slideIndex === undefined
+                          ? `슬라이드 미지정 · ${issue.description}`
+                          : `${issue.slideIndex + 1}번 슬라이드 · ${issue.description}`}
+                      </span>
+                      {issue.slideIndex !== undefined && (
+                        <button
+                          type="button"
+                          onClick={() => onFocusSlide?.(issue.slideIndex!)}
+                          disabled={!onFocusSlide}
+                          className="rounded border border-blue-200 bg-white px-1.5 py-0.5 font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
+                          data-testid={`quality-review-focus-remaining-slide-${issue.slideIndex + 1}`}
+                        >
+                          이동
+                        </button>
+                      )}
+                    </div>
+                    {issue.reason && (
+                      <p className="mt-0.5 text-blue-700">사유: {issue.reason}</p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+              {remainingIssueDetails.length === 0 && allQualityIssues.length > qualityIssues.length && (
+                <p className="mt-1 text-blue-700">
+                  외 {allQualityIssues.length - qualityIssues.length}개 이슈가 더 있습니다.
+                </p>
+              )}
+              {remainingSlideIndexes.length > 0 && remainingIssueDetails.length === 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5" aria-label="잔여 이슈 슬라이드로 이동">
+                  {remainingSlideIndexes.map((slideIndex) => (
+                    <button
+                      key={slideIndex}
+                      type="button"
+                      onClick={() => onFocusSlide?.(slideIndex)}
+                      disabled={!onFocusSlide}
+                      className="rounded-md border border-blue-200 bg-white px-2 py-1 font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
+                    >
+                      {slideIndex + 1}번으로 이동
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
           {qualityHistory.length > 0 && (
             <section

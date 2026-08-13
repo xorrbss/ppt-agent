@@ -25,3 +25,4 @@ class RepairArtifacts:
     geometry_glyph_compositions: list[dict[str, Any]] = field(default_factory=list)
     geometry_exact_compositions: list[dict[str, Any]] = field(default_factory=list)
     geometry_exact_diagnostics: list[dict[str, Any]] = field(default_factory=list)
+    coupled_repairs: list[dict[str, Any]] = field(default_factory=list)

@@ -43,7 +43,7 @@ def test_owned_text_fragment_gets_samples_when_parent_grid_misses_14px_footer() 
         **footer["occlusion_measurement_evidence"],
         "qid": "q-div-c6f2820b2605",
         "metric": "occlusion",
-        "sensor_version": "owned-paint-v4-per-rect-minimum",
+        "sensor_version": "owned-paint-v5-inset-retry",
         "stage": "chrome.owned_paint_sampling",
         "status": "measured",
         "reason": None,

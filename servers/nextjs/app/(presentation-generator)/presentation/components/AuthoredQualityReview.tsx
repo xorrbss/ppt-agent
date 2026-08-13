@@ -36,10 +36,6 @@ const POLL_INTERVAL_MS = 2_000;
 const REVIEW_TIMEOUT_MS = 30 * 60 * 1_000;
 const MAX_POLL_ERRORS = 4;
 const REVIEW_TASK_STORAGE_PREFIX = "presenton:authored-quality-review:task:";
-const SLIDESPEC_CANARY_UI_ENABLED =
-  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false";
-const SLIDESPEC_ALL_SLIDES_ENABLED =
-  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
 
 type ReviewScope = "all" | "current";
 
@@ -49,8 +45,11 @@ function slideNumbers(indices?: number[]) {
 }
 
 function reviewPathLabel(path: AuthoredReviewRepairPath) {
-  if (path === "local_patch") return "국소 패치";
-  if (path === "full_fallback") return "전체 재작성 fallback";
+  if (path === "pattern") return "패턴 레시피 재사용";
+  if (path === "deterministic") return "개별 결정론적 수정";
+  if (path === "llm_repair_plan") return "LLM RepairPlan";
+  if (path === "local_patch") return "기존 국소 수정";
+  if (path === "full_fallback") return "이전 검수 fallback (현재 자동 사용 안 함)";
   return "변경 없음";
 }
 
@@ -96,7 +95,8 @@ function measurementLabel(
 function isCleanReviewResult(result: AuthoredQualityReviewResult) {
   return result.remaining_issue_count === 0 &&
     result.unresolved_confirmed_issue_count === 0 &&
-    result.incomplete_measurement_count === 0;
+    result.incomplete_measurement_count === 0 &&
+    result.unattributed_issues.length === 0;
 }
 
 function lifecycleSlides(result: AuthoredQualityReviewResult) {
@@ -321,9 +321,6 @@ export default function AuthoredQualityReview({
 }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<ReviewScope>("all");
-  const [slidespecOptIn, setSlidespecOptIn] = useState(
-    SLIDESPEC_ALL_SLIDES_ENABLED,
-  );
   const [isReviewing, setIsReviewing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [result, setResult] = useState<AuthoredQualityReviewResult | null>(
@@ -376,7 +373,10 @@ export default function AuthoredQualityReview({
           {
             scope,
             slide_indices: scope === "current" ? [currentSlide] : [],
-            slidespec_opt_in: SLIDESPEC_CANARY_UI_ENABLED && slidespecOptIn,
+            // Quality review has one maximum-repair mode. The backend may use
+            // pattern, deterministic, and bounded typed LLM plans internally;
+            // users never select a lower-safety or legacy branch here.
+            slidespec_opt_in: true,
           },
         );
       const taskId = started?.id;
@@ -509,7 +509,7 @@ export default function AuthoredQualityReview({
                       ` ${result.fixed_count}개를 자동 수정했습니다.`}
                   </p>
                   <p className="mt-1 text-xs">
-                    Confirmed {result.confirmed_issue_count} · Incomplete measurements {result.incomplete_measurement_count} · Unresolved confirmed {result.unresolved_confirmed_issue_count} · Clean slides {result.clean_slide_count}
+                    문제 슬라이드 {result.issue_slide_count}장 · 상세 이슈 {result.detailed_issue_count}개 · 수정 슬라이드 {result.fixed_count}장 · 해결 이슈 {result.resolved_issue_count}개 · 잔여 이슈 {result.remaining_issue_count}개
                   </p>
                 </div>
               </div>
@@ -526,8 +526,8 @@ export default function AuthoredQualityReview({
                 <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>
-                    재검증 후 {result.remaining_issue_count}개 슬라이드에 확인이
-                    필요합니다
+                    재검증 후 잔여 상세 이슈 {result.remaining_issue_count}개가{" "}
+                    {result.remaining_slide_count}개 슬라이드에 남았습니다
                     {result.remaining_slide_indices?.length
                       ? `: ${slideNumbers(result.remaining_slide_indices)}`
                       : "."}
@@ -540,11 +540,26 @@ export default function AuthoredQualityReview({
                   수정 전 상태를 버전 기록에 저장했습니다.
                 </div>
               )}
-              {(result.metrics.total_ms !== undefined ||
+              {(result.metrics.wall_time_ms !== undefined ||
+                result.metrics.total_ms !== undefined ||
+                result.metrics.aggregate_stage_time_ms !== undefined ||
                 Object.keys(result.metrics.stage_timings_ms).length > 0 ||
                 result.metrics.cache_hits !== undefined ||
                 result.metrics.cache_misses !== undefined ||
+                result.metrics.llm_eligible !== undefined ||
                 result.metrics.llm_calls !== undefined ||
+                result.metrics.llm_responses !== undefined ||
+                result.metrics.llm_valid_plans !== undefined ||
+                result.metrics.llm_schema_passes !== undefined ||
+                result.metrics.llm_provider_failures !== undefined ||
+                result.metrics.llm_empty !== undefined ||
+                result.metrics.llm_schema_rejected !== undefined ||
+                result.metrics.proposal_preflight_unprojectable !== undefined ||
+                result.metrics.llm_preflight_passes !== undefined ||
+                result.metrics.llm_rendered !== undefined ||
+                result.metrics.llm_negative_cache_hits !== undefined ||
+                result.metrics.llm_circuit_open !== undefined ||
+                result.metrics.llm_no_candidate_reasons !== undefined ||
                 result.metrics.deterministic_resolved !== undefined ||
                 result.metrics.vqa_calls !== undefined ||
                 result.metrics.patch_count !== undefined ||
@@ -579,6 +594,18 @@ export default function AuthoredQualityReview({
                 result.metrics.corrected_false_positives !== undefined ||
                 result.metrics.true_positive_executor_verified !== undefined ||
                 result.metrics.true_positive_pending !== undefined ||
+                result.metrics.pattern_cluster_count !== undefined ||
+                result.metrics.pattern_representative_count !== undefined ||
+                result.metrics.pattern_recipe_count !== undefined ||
+                result.metrics.pattern_reuse_attempts !== undefined ||
+                result.metrics.pattern_reuse_hits !== undefined ||
+                result.metrics.pattern_reuse_applied !== undefined ||
+                result.metrics.composite_plan_count !== undefined ||
+                result.metrics.composite_operations_merged !== undefined ||
+                result.metrics.render_candidates_rejected_early !== undefined ||
+                result.metrics.full_render_count !== undefined ||
+                result.metrics.llm_pattern_call_count !== undefined ||
+                result.metrics.individual_fallback_count !== undefined ||
                 result.metrics.latency_percentiles !== undefined ||
                 result.metrics.stage_usage !== undefined) && (
                 <section
@@ -587,8 +614,15 @@ export default function AuthoredQualityReview({
                 >
                   <p className="font-semibold text-slate-900">검수 처리 내역</p>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                    {result.metrics.total_ms !== undefined && (
-                      <span>총 {formatDuration(result.metrics.total_ms)}</span>
+                    {(result.metrics.wall_time_ms ?? result.metrics.total_ms) !== undefined && (
+                      <span data-testid="quality-wall-time">
+                        실제 경과 {formatDuration(result.metrics.wall_time_ms ?? result.metrics.total_ms!) }
+                      </span>
+                    )}
+                    {result.metrics.aggregate_stage_time_ms !== undefined && (
+                      <span data-testid="quality-stage-aggregate-time">
+                        단계 누적 {formatDuration(result.metrics.aggregate_stage_time_ms)} (병렬 합산)
+                      </span>
                     )}
                     {result.metrics.cache_hits !== undefined && (
                       <span>캐시 적중 {result.metrics.cache_hits}</span>
@@ -596,8 +630,44 @@ export default function AuthoredQualityReview({
                     {result.metrics.cache_misses !== undefined && (
                       <span>캐시 미스 {result.metrics.cache_misses}</span>
                     )}
+                    {result.metrics.llm_eligible !== undefined && (
+                      <span data-testid="quality-llm-eligible">LLM 대상 {result.metrics.llm_eligible}</span>
+                    )}
                     {result.metrics.llm_calls !== undefined && (
-                      <span>LLM 호출 {result.metrics.llm_calls}</span>
+                      <span data-testid="quality-llm-calls">LLM 호출 {result.metrics.llm_calls}</span>
+                    )}
+                    {result.metrics.llm_responses !== undefined && (
+                      <span data-testid="quality-llm-responses">LLM 응답 {result.metrics.llm_responses}</span>
+                    )}
+                    {result.metrics.llm_valid_plans !== undefined && (
+                      <span data-testid="quality-llm-valid-plans">유효 RepairPlan {result.metrics.llm_valid_plans}</span>
+                    )}
+                    {result.metrics.llm_schema_passes !== undefined && (
+                      <span data-testid="quality-llm-schema-passes">LLM schema 통과 {result.metrics.llm_schema_passes}</span>
+                    )}
+                    {result.metrics.llm_provider_failures !== undefined && (
+                      <span data-testid="quality-llm-provider-failures">LLM provider 실패 {result.metrics.llm_provider_failures}</span>
+                    )}
+                    {result.metrics.llm_empty !== undefined && (
+                      <span data-testid="quality-llm-empty">LLM 빈 응답 {result.metrics.llm_empty}</span>
+                    )}
+                    {result.metrics.llm_schema_rejected !== undefined && (
+                      <span data-testid="quality-llm-schema-rejected">LLM schema 거부 {result.metrics.llm_schema_rejected}</span>
+                    )}
+                    {result.metrics.proposal_preflight_unprojectable !== undefined && (
+                      <span data-testid="quality-llm-preflight-unprojectable">투영 preflight 차단 {result.metrics.proposal_preflight_unprojectable}</span>
+                    )}
+                    {result.metrics.llm_preflight_passes !== undefined && (
+                      <span data-testid="quality-llm-preflight-passes">투영 preflight 통과 {result.metrics.llm_preflight_passes}</span>
+                    )}
+                    {result.metrics.llm_rendered !== undefined && (
+                      <span data-testid="quality-llm-rendered">LLM 후보 렌더 {result.metrics.llm_rendered}</span>
+                    )}
+                    {result.metrics.llm_negative_cache_hits !== undefined && (
+                      <span data-testid="quality-llm-negative-cache-hits">LLM negative cache {result.metrics.llm_negative_cache_hits}</span>
+                    )}
+                    {result.metrics.llm_circuit_open !== undefined && (
+                      <span data-testid="quality-llm-circuit-open">LLM circuit open {result.metrics.llm_circuit_open}</span>
                     )}
                     {result.metrics.deterministic_resolved !== undefined && (
                       <span>
@@ -628,18 +698,54 @@ export default function AuthoredQualityReview({
                     )}
                     {result.metrics.fallback_attempted !== undefined && (
                       <span>
-                        전체 재작성 시도 {result.metrics.fallback_attempted}
+                        개별 fallback 시도 {result.metrics.fallback_attempted}
                       </span>
                     )}
                     {result.metrics.fallback_succeeded !== undefined && (
                       <span>
-                        전체 재작성 후보 생성 {result.metrics.fallback_succeeded}
+                        개별 fallback 후보 생성 {result.metrics.fallback_succeeded}
                       </span>
                     )}
                     {result.metrics.fallback_failed !== undefined && (
                       <span>
-                        전체 재작성 실패 {result.metrics.fallback_failed}
+                        개별 fallback 실패 {result.metrics.fallback_failed}
                       </span>
+                    )}
+                    {result.metrics.pattern_cluster_count !== undefined && (
+                      <span>패턴 군집 {result.metrics.pattern_cluster_count}</span>
+                    )}
+                    {result.metrics.pattern_representative_count !== undefined && (
+                      <span>대표 표본 {result.metrics.pattern_representative_count}</span>
+                    )}
+                    {result.metrics.pattern_recipe_count !== undefined && (
+                      <span>레시피 {result.metrics.pattern_recipe_count}</span>
+                    )}
+                    {result.metrics.pattern_reuse_attempts !== undefined && (
+                      <span>패턴 재사용 시도 {result.metrics.pattern_reuse_attempts}</span>
+                    )}
+                    {result.metrics.pattern_reuse_hits !== undefined && (
+                      <span>패턴 재사용 적중 {result.metrics.pattern_reuse_hits}</span>
+                    )}
+                    {result.metrics.pattern_reuse_applied !== undefined && (
+                      <span>패턴 재사용 적용 {result.metrics.pattern_reuse_applied}</span>
+                    )}
+                    {result.metrics.composite_plan_count !== undefined && (
+                      <span>복합 RepairPlan {result.metrics.composite_plan_count}</span>
+                    )}
+                    {result.metrics.composite_operations_merged !== undefined && (
+                      <span>병합 연산 {result.metrics.composite_operations_merged}</span>
+                    )}
+                    {result.metrics.render_candidates_rejected_early !== undefined && (
+                      <span>조기 렌더 거부 {result.metrics.render_candidates_rejected_early}</span>
+                    )}
+                    {result.metrics.full_render_count !== undefined && (
+                      <span>전체 렌더 {result.metrics.full_render_count}</span>
+                    )}
+                    {result.metrics.llm_pattern_call_count !== undefined && (
+                      <span>LLM RepairPlan {result.metrics.llm_pattern_call_count}</span>
+                    )}
+                    {result.metrics.individual_fallback_count !== undefined && (
+                      <span>개별 경로 전환 {result.metrics.individual_fallback_count}</span>
                     )}
                     {result.metrics.candidate_proposed !== undefined && (
                       <span data-testid="quality-candidate-count">
@@ -758,6 +864,11 @@ export default function AuthoredQualityReview({
                       </span>
                     )}
                   </div>
+                  {result.metrics.llm_no_candidate_reasons && result.metrics.llm_no_candidate_reasons.length > 0 && (
+                    <p data-testid="quality-llm-no-candidate-reasons" className="mt-2 text-amber-800">
+                      LLM 후보 미생성 사유: {result.metrics.llm_no_candidate_reasons.join(", ")}
+                    </p>
+                  )}
                   {Object.keys(result.metrics.stage_timings_ms).length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-slate-600">
                       {Object.entries(result.metrics.stage_timings_ms).map(
@@ -772,6 +883,22 @@ export default function AuthoredQualityReview({
                 </section>
               )}
               <OpsDashboard metrics={result.metrics} />
+              {result.unattributed_issues.length > 0 && (
+                <section
+                  data-testid="quality-review-unattributed-issues"
+                  className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950"
+                >
+                  <p className="font-semibold">슬라이드 미지정 상세 이슈</p>
+                  <p className="mt-1 text-amber-800">
+                    측정 불완전과 별개입니다. 슬라이드 인덱스가 없어 이동이나 자동 수정 대상으로 추정하지 않았습니다.
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {result.unattributed_issues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               {result.slide_results.length > 0 && (
                 <section
                   data-testid="quality-review-lifecycle"
@@ -1067,30 +1194,6 @@ export default function AuthoredQualityReview({
                   </label>
                 </RadioGroup>
               </fieldset>
-
-              {SLIDESPEC_CANARY_UI_ENABLED && (
-                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={slidespecOptIn}
-                    onChange={(event) => setSlidespecOptIn(event.target.checked)}
-                    data-testid="slidespec-canary-opt-in"
-                    className="mt-0.5 h-4 w-4"
-                  />
-                  <span>
-                    <span className="block font-semibold text-amber-950">
-                      {SLIDESPEC_ALL_SLIDES_ENABLED
-                        ? "SlideSpec 전체 슬라이드 적용"
-                        : "SlideSpec 11페이지 canary 참여"}
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-amber-800">
-                      {SLIDESPEC_ALL_SLIDES_ENABLED
-                        ? "체크하면 선택한 검수 범위의 모든 슬라이드에 적용됩니다. 체크를 끄면 기존 검수 경로와 비교할 수 있습니다."
-                        : "서버 canary와 적용 플래그가 모두 허용할 때만 11페이지에 적용됩니다. 선택하지 않으면 기존 검수 경로를 유지합니다."}
-                    </span>
-                  </span>
-                </label>
-              )}
 
               <div className="flex items-center gap-2 rounded-xl bg-[#F6F3FF] px-4 py-3 text-xs text-[#5141E5]">
                 <History className="h-4 w-4 shrink-0" />

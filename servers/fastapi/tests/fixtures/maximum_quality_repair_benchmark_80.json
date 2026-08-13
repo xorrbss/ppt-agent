@@ -1,0 +1,23 @@
+{
+  "description": "Synthetic but realistic 80-slide authored review fixture. Aggregate-only by design: it contains no slide HTML, OCR text, or provider output.",
+  "baseline": {
+    "slide_count": 80,
+    "detailed_issue_count": 96,
+    "resolved_issue_count": 58,
+    "remaining_issue_count": 38,
+    "fixed_count": 41,
+    "full_render_count": 186,
+    "hard_violation_count": 0,
+    "content_loss_count": 0
+  },
+  "maximum_repair": {
+    "slide_count": 80,
+    "detailed_issue_count": 96,
+    "resolved_issue_count": 71,
+    "remaining_issue_count": 25,
+    "fixed_count": 48,
+    "full_render_count": 124,
+    "hard_violation_count": 0,
+    "content_loss_count": 0
+  }
+}

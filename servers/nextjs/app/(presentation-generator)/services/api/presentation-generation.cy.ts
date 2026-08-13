@@ -2,6 +2,34 @@ import { PresentationGenerationApi } from "./presentation-generation";
 import { ApiError } from "./api-error-handler";
 import ThemeApi from "./theme";
 import { resolveDeckTheme } from "../../upload/components/applyDeckTheme";
+import { canonicalUploadAdmissionKey } from "./canonical-document-admission";
+
+describe("canonical document admission", () => {
+  it("isolates identical uploads between presentation workspaces", () => {
+    const document = new File(["same document"], "reference.pdf", {
+      type: "application/pdf",
+      lastModified: 1_700_000_000_000,
+    });
+
+    cy.then(async () => {
+      const first = await canonicalUploadAdmissionKey(
+        [document],
+        "presentation-a",
+      );
+      const replay = await canonicalUploadAdmissionKey(
+        [document],
+        "presentation-a",
+      );
+      const second = await canonicalUploadAdmissionKey(
+        [document],
+        "presentation-b",
+      );
+
+      expect(replay).to.equal(first);
+      expect(second).not.to.equal(first);
+    });
+  });
+});
 
 describe("resolveDeckTheme", () => {
   it("allowlists a custom theme before create admission", () => {

@@ -11,6 +11,8 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass, replace
+import hashlib
+from io import BytesIO
 import json
 import logging
 import math
@@ -25,7 +27,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.slidespec_v1 import (
     AcceptanceDecision,
-    LayoutConstraints,
     LayoutNode,
     RenderRequest,
     RepairPlan,
@@ -64,6 +65,13 @@ from services.slidespec_repair import (
     realized_repair_cost,
 )
 from services.slidespec_repair_context import build_repair_context
+from services.slidespec_repair_patterns import (
+    PATTERN_POLICY_VERSION,
+    PatternObservation,
+    RepairPatternRegistry,
+    pattern_observation,
+    repair_pattern_key,
+)
 from services.slidespec_pipeline_performance import (
     BoundedSlideScheduler,
     IncrementalInspectionCache,
@@ -78,6 +86,9 @@ from services.slidespec_repair_pipeline import (
     DomEvidence,
     EvidenceAtom,
     PublicationReceipt,
+    ProposalBatch,
+    RepairConflictFootprint,
+    RepairIterationGuard,
     RenderedCandidate,
     SensorResult,
     SlideSpecInput,
@@ -105,9 +116,10 @@ from utils.llm_calls.author_vision_qa import (
 )
 from utils.llm_calls.propose_slidespec_repair import (
     PROMPT_VERSION as PROPOSAL_PROMPT_VERSION,
+    RESPONSE_SCHEMA_VERSION as PROPOSAL_RESPONSE_SCHEMA_VERSION,
     propose_slidespec_repair,
 )
-from utils.llm_provider import get_model
+from utils.llm_provider import get_llm_provider, get_model
 from utils.slide_capture import (
     DOM_METRICS_VERSION,
     RENDER_CACHE_VERSION,
@@ -124,6 +136,12 @@ from utils.slidespec_constraints import (
     observations_from_browser_metrics,
 )
 from utils.slidespec_core import SlideSpecError, apply_repair_plan, render_slidespec, validate_slidespec
+from utils.slidespec_projection import (
+    PROJECTION_CAPABILITY_VERSION,
+    ProjectionDryRun,
+    dry_project_plan,
+    projection_schema_context,
+)
 from utils.slidespec_solver import (
     FeasibilityResult,
     build_constraint_repair_plan,
@@ -132,6 +150,24 @@ from utils.slidespec_solver import (
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _proposal_llm_enabled() -> bool:
+    """Allow deterministic-only repair runs without disabling paired VQA.
+
+    The proposal model and the paired visual acceptance reviewer have different
+    reliability characteristics.  Keep the production default unchanged while
+    allowing replay/operations to stop proposal calls explicitly when that
+    provider path is unhealthy; all deterministic candidates still traverse the
+    unchanged hard/content/OCR/source/VQA gates.
+    """
+
+    return os.getenv("SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 
 _DOM_CODE = {
     "clipping": "dom.clipping",
@@ -176,9 +212,121 @@ class _BaselineInspection:
     solver_elapsed_ms: float
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedBaselineInput:
+    request: RenderRequest
+    html: str
+    active_pointer: Mapping[str, Any]
+
+
 _BASELINE_INSPECTION_CACHE: IncrementalInspectionCache[_BaselineInspection] = (
     IncrementalInspectionCache(max_entries=256)
 )
+_BASELINE_INSPECTION_EPOCH: dict[str, int] = {}
+
+
+def _baseline_inspection_cache_key(
+    *,
+    slide_id: object,
+    request: RenderRequest,
+    html: str,
+    adjacent_digest: str,
+) -> str:
+    """Key every baseline by revision, sealed digests and render environment."""
+
+    source_digest = (
+        request.source.htmlHash
+        if request.source is not None
+        else digest_parts("native-html/1", html)
+    )
+    return inspection_cache_digest(
+        spec_digest=digest_parts(
+            "revision-spec/1",
+            request.spec.specRevision,
+            request.spec.digests.spec,
+            _BASELINE_INSPECTION_EPOCH.get(str(slide_id), 0),
+        ),
+        content_digest=request.spec.digests.content,
+        source_digest=source_digest,
+        font_digest=digest_parts(
+            request.fonts.model_dump(mode="json", by_alias=True)
+        ),
+        browser_digest=digest_parts(
+            RENDER_CACHE_VERSION,
+            DOM_METRICS_VERSION,
+            chrome_runtime_digest(),
+            request.renderer.model_dump(mode="json", by_alias=True),
+        ),
+        adjacent_digest=adjacent_digest,
+    )
+
+
+async def _get_baseline_inspection(
+    *,
+    slide_id: object,
+    request: RenderRequest,
+    html: str,
+    adjacent_digest: str,
+) -> tuple[_BaselineInspection, bool]:
+    cache_key = _baseline_inspection_cache_key(
+        slide_id=slide_id,
+        request=request,
+        html=html,
+        adjacent_digest=adjacent_digest,
+    )
+    cached = _BASELINE_INSPECTION_CACHE.get(cache_key)
+    if cached is not None:
+        return cached, True
+
+    baseline_png, baseline_metrics = await render_html_to_png_with_metrics(html)
+    baseline_report = inspect_authored_dom(html, baseline_metrics)
+    qids = _qid_to_semantic(request)
+    baseline_observations = observations_from_browser_metrics(
+        request, baseline_metrics
+    )
+    baseline_constraints = evaluate_constraints(
+        request.spec,
+        observations=baseline_observations,
+        baseline_observations=baseline_observations,
+        source=request.source,
+    )
+    solver_started = time.perf_counter()
+    solver_result = solve_constraints(request.spec)
+    inspection = _BaselineInspection(
+        baseline_png,
+        baseline_metrics,
+        baseline_report,
+        qids,
+        baseline_observations,
+        baseline_constraints,
+        solver_result,
+        round((time.perf_counter() - solver_started) * 1000, 3),
+    )
+    _BASELINE_INSPECTION_CACHE.put(cache_key, inspection)
+    return inspection, False
+
+
+def _invalidate_baseline_inspection(slide_id: object) -> None:
+    """Make every pre-publication cache entry unreachable after a mutation."""
+
+    key = str(slide_id)
+    _BASELINE_INSPECTION_EPOCH[key] = _BASELINE_INSPECTION_EPOCH.get(key, 0) + 1
+
+
+def _slide_execution_controls(
+    positions: Sequence[int], *, max_incremental_repairs: int
+) -> tuple[dict[int, asyncio.Lock], dict[int, RepairIterationGuard]]:
+    """Allocate publication and history state at slide, not pass, granularity."""
+
+    return (
+        {position: asyncio.Lock() for position in positions},
+        {
+            position: RepairIterationGuard(
+                max_incremental_applies=max_incremental_repairs
+            )
+            for position in positions
+        },
+    )
 
 
 def _render_request(bundle: Any) -> RenderRequest:
@@ -277,6 +425,89 @@ def _walk_layout(node: LayoutNode) -> Sequence[LayoutNode]:
     for child in node.children:
         result.extend(_walk_layout(child))
     return result
+
+
+def _repair_conflict_footprint(
+    request: RenderRequest, plan: RepairPlan
+) -> RepairConflictFootprint:
+    """Resolve publication dependencies from the canonical layout/constraints."""
+
+    by_id: dict[str, LayoutNode] = {}
+    by_semantic: dict[str, LayoutNode] = {}
+    parent_by_id: dict[str, LayoutNode | None] = {}
+
+    def visit(node: LayoutNode, parent: LayoutNode | None) -> None:
+        by_id[node.layoutId] = node
+        parent_by_id[node.layoutId] = parent
+        if node.contentSemanticId is not None:
+            by_semantic[node.contentSemanticId] = node
+        for child in node.children:
+            visit(child, node)
+
+    visit(request.spec.layout, None)
+    target_refs = set(plan.scope)
+    target_refs.update(operation.target for operation in plan.operations)
+    target_nodes: set[str] = set()
+    for target in target_refs:
+        node = by_id.get(target) or by_semantic.get(target)
+        target_nodes.add(node.layoutId if node is not None else target)
+
+    ancestor_cones: set[str] = set()
+    parent_space_pools: set[str] = set()
+    coupled_containers: set[str] = set()
+    coupled_kinds = {"connector", "group", "table", "grid", "stack", "frame"}
+    content_kinds = {
+        content.semanticId: content.kind for content in request.spec.content
+    }
+    for target in tuple(target_nodes):
+        node = by_id.get(target)
+        if node is None:
+            continue
+        parent = parent_by_id.get(node.layoutId)
+        if parent is not None:
+            parent_space_pools.add(parent.layoutId)
+        current: LayoutNode | None = node
+        while current is not None:
+            if (
+                current.kind in coupled_kinds
+                or content_kinds.get(current.contentSemanticId or "")
+                in coupled_kinds
+            ):
+                coupled_containers.add(current.layoutId)
+            current = parent_by_id.get(current.layoutId)
+            if current is not None:
+                ancestor_cones.add(current.layoutId)
+
+    def string_refs(value: object) -> set[str]:
+        if isinstance(value, str):
+            return {value}
+        if isinstance(value, Mapping):
+            return {
+                item
+                for nested in value.values()
+                for item in string_refs(nested)
+            }
+        if isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
+            return {item for nested in value for item in string_refs(nested)}
+        return set()
+
+    constraints: set[str] = set()
+    dependency_refs = target_refs | target_nodes
+    for constraint in request.spec.constraints:
+        raw = constraint.model_dump(mode="json", by_alias=True, exclude_none=True)
+        if dependency_refs.intersection(string_refs(raw)):
+            constraints.add(
+                str(raw.get("constraintId") or raw.get("id") or constraint.kind)
+            )
+    return RepairConflictFootprint(
+        nodes=frozenset(target_nodes),
+        ancestor_cones=frozenset(ancestor_cones),
+        parent_space_pools=frozenset(parent_space_pools),
+        constraints=frozenset(constraints),
+        coupled_containers=frozenset(coupled_containers),
+    )
 
 
 def _qid_to_semantic(request: RenderRequest) -> dict[str, str]:
@@ -780,6 +1011,11 @@ def _constraint_evidence(
                 diagnostics={
                     "missing_targets": missing_targets,
                     "missing_measurements": missing_measurements,
+                    "target_qids": {
+                        target: qid_by_layout.get(target)
+                        for target in targets
+                        if qid_by_layout.get(target)
+                    },
                 },
             )
         )
@@ -984,6 +1220,206 @@ def _token_recall(tokens: Sequence[str], text: str | None) -> float:
         for token in tokens
     )
     return found / len(tokens)
+
+
+async def _inspect_ocr_with_bounded_multiscale(
+    image: bytes,
+    *,
+    expected_text: str,
+) -> OcrQualityResult:
+    """Retry only borderline OCR at two bounded raster scales.
+
+    Geometry remains the primary repair mechanism.  This retry changes no
+    candidate content and cannot turn a clear OCR regression into a pass: it is
+    limited to results already near the expected-text threshold and the normal
+    baseline/token gates still evaluate the selected OCR result.
+    """
+
+    initial = await inspect_authored_ocr(image, expected_text=expected_text)
+    metrics = initial.metrics if isinstance(initial.metrics, Mapping) else {}
+    cer = float(metrics.get("cer", math.inf))
+    missing = float(metrics.get("missing_rate", math.inf))
+    if not initial.available or initial.text is None:
+        return initial
+
+    def coverage(result: OcrQualityResult) -> tuple[float, float, float, float]:
+        comparison = compare_expected_candidate_order_insensitive(
+            expected_text,
+            result,
+            result,
+            source_text_preserved=True,
+        )
+        candidate = comparison.metrics.get("candidate", {})
+        character = candidate.get("character", {})
+        token = candidate.get("token", {})
+        return (
+            float(character.get("recall", 0.0)),
+            float(token.get("recall", 0.0)),
+            float(character.get("precision", 0.0)),
+            float(token.get("precision", 0.0)),
+        )
+
+    initial_coverage = coverage(initial)
+    borderline_coverage = (
+        initial_coverage[0] >= 0.55 and initial_coverage[1] >= 0.45
+    )
+    if not (
+        0.03 < cer <= 0.15
+        or 0.03 < missing <= 0.08
+        or borderline_coverage
+    ):
+        return initial
+
+    try:
+        from PIL import Image
+
+        source = Image.open(BytesIO(image)).convert("RGB")
+    except Exception:
+        return initial
+
+    def selection_score(
+        values: tuple[float, float, float, float],
+        *,
+        result_cer: float,
+        result_missing: float,
+        scale: float,
+    ) -> tuple[float, float, float, float, float, float]:
+        return (
+            min(values[0] / 0.75, values[1] / 0.65),
+            values[0] + values[1],
+            values[2] + values[3],
+            -result_cer,
+            -result_missing,
+            -scale,
+        )
+
+    ranked: list[
+        tuple[tuple[float, float, float, float, float, float], float, OcrQualityResult]
+    ] = [
+        (
+            selection_score(
+                initial_coverage,
+                result_cer=cer,
+                result_missing=missing,
+                scale=1.0,
+            ),
+            1.0,
+            initial,
+        )
+    ]
+    for scale in (1.5, 2.0):
+        resized = source.resize(
+            (
+                max(1, round(source.width * scale)),
+                max(1, round(source.height * scale)),
+            ),
+            Image.Resampling.LANCZOS,
+        )
+        encoded = BytesIO()
+        resized.save(encoded, format="PNG", optimize=True)
+        retry = await inspect_authored_ocr(
+            encoded.getvalue(), expected_text=expected_text
+        )
+        retry_metrics = retry.metrics if isinstance(retry.metrics, Mapping) else {}
+        retry_cer = float(retry_metrics.get("cer", math.inf))
+        retry_missing = float(retry_metrics.get("missing_rate", math.inf))
+        retry_coverage = (0.0, 0.0, 0.0, 0.0)
+        if retry.available and retry.text is not None:
+            retry_coverage = coverage(retry)
+            ranked.append(
+                (
+                    selection_score(
+                        retry_coverage,
+                        result_cer=retry_cer,
+                        result_missing=retry_missing,
+                        scale=scale,
+                    ),
+                    scale,
+                    retry,
+                )
+            )
+        if (
+            retry_cer <= 0.03
+            and retry_missing <= 0.03
+            and retry_coverage[0] >= 0.75
+            and retry_coverage[1] >= 0.65
+        ):
+            break
+    _score, selected_scale, selected = max(ranked, key=lambda item: item[0])
+    return replace(
+        selected,
+        metrics={
+            **selected.metrics,
+            "multiscale_selected": selected_scale,
+            "multiscale_attempted": [item[1] for item in ranked],
+        },
+    )
+
+
+def _ocr_gate_diagnostics(
+    *,
+    spec: SlideSpec,
+    request: RenderRequest,
+    baseline: OcrQualityResult,
+    candidate: OcrQualityResult,
+    comparison: Any,
+) -> dict[str, Any]:
+    """Expose text-free token mapping and OCR comparison evidence for replay."""
+
+    bindings_by_semantic: dict[str, list[str]] = {}
+    for binding in request.source.bindings if request.source is not None else ():
+        bindings_by_semantic.setdefault(binding.semanticId, []).append(binding.qid)
+    token_by_name = {token.name: str(token.value) for token in spec.tokens}
+    mapped_names = {
+        name
+        for node in spec.content
+        for name in node.importantTokens
+        if name in token_by_name
+    }
+    entries: list[dict[str, Any]] = []
+    baseline_text = baseline.text or ""
+    candidate_text = candidate.text or ""
+    for token in spec.tokens:
+        if not token.important and token.name not in mapped_names:
+            continue
+        value = str(token.value)
+        normalized = re.sub(r"\s+", "", normalize_ocr_text(value)).casefold()
+        semantic_ids = [
+            node.semanticId
+            for node in spec.content
+            if token.name in node.importantTokens
+        ]
+        entries.append(
+            {
+                "token_name": token.name,
+                "token_digest": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+                "semantic_ids": semantic_ids,
+                "qids": sorted(
+                    {
+                        qid
+                        for semantic_id in semantic_ids
+                        for qid in bindings_by_semantic.get(semantic_id, ())
+                    }
+                ),
+                "mapping_complete": bool(semantic_ids)
+                and all(bindings_by_semantic.get(value) for value in semantic_ids),
+                "baseline_present": normalized
+                in re.sub(r"\s+", "", normalize_ocr_text(baseline_text)).casefold(),
+                "candidate_present": normalized
+                in re.sub(r"\s+", "", normalize_ocr_text(candidate_text)).casefold(),
+            }
+        )
+    return {
+        "comparison": comparison.to_dict(),
+        "baseline": baseline.to_dict(),
+        "candidate": candidate.to_dict(),
+        "important_tokens": entries,
+        "important_token_count": len(entries),
+        "token_mapping_complete": bool(entries)
+        and all(item["mapping_complete"] for item in entries),
+        "token_mapping_status": "complete" if entries else "not_applicable",
+        "crop_evidence_available": False,
+    }
 
 
 def _target_issue_evidence(
@@ -1293,6 +1729,41 @@ def _evidence_atom_payload(evidence: DomEvidence) -> list[dict[str, Any]]:
     ]
 
 
+def _incomplete_measurement_payload(evidence: DomEvidence) -> list[dict[str, Any]]:
+    """Project one row per missing physical measurement, retaining consumers."""
+
+    result: list[dict[str, Any]] = []
+    for (scope, metric), atoms in evidence.incomplete_measurement_groups:
+        result.append(
+            {
+                "scope": scope,
+                "metric": metric,
+                "state": "unknown",
+                "sensors": sorted({atom.sensor for atom in atoms}),
+                "stages": sorted({atom.stage for atom in atoms}),
+                "qids": sorted({atom.qid for atom in atoms if atom.qid}),
+                "semantic_ids": sorted(
+                    {atom.semantic_id for atom in atoms if atom.semantic_id}
+                ),
+                "constraint_ids": sorted(
+                    {atom.constraint_id for atom in atoms if atom.constraint_id}
+                ),
+                "reason_codes": sorted(
+                    {atom.reason_code for atom in atoms if atom.reason_code}
+                ),
+                "dependency_refs": sorted(
+                    {
+                        dependency
+                        for atom in atoms
+                        for dependency in atom.dependency_refs
+                    }
+                ),
+                "evidence_atom_count": len(atoms),
+            }
+        )
+    return result
+
+
 def _dependency_blocker_payload(
     outcomes: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -1472,6 +1943,21 @@ def _canonical_outcome_projection(
     }
 
 
+def _maximum_repair_path(
+    outcomes: Sequence[Mapping[str, Any]],
+) -> str:
+    """Expose the internal route without turning it into a user choice."""
+
+    terminal = _canonical_terminal_outcome(outcomes)
+    plan_id = str(terminal.get("plan_id") or "")
+    source = str(terminal.get("source") or "")
+    if plan_id.startswith("rp_pattern_"):
+        return "pattern"
+    if source == "llm":
+        return "llm_repair_plan"
+    return "deterministic" if terminal else "none"
+
+
 def _merge_incremental_slide_results(
     passes: Sequence[Mapping[str, Any]],
     *,
@@ -1561,6 +2047,10 @@ def _merge_incremental_slide_results(
                     stages[str(stage)] = stages.get(str(stage), 0.0) + float(duration)
             elif key == "repair_costs" and isinstance(value, list):
                 telemetry.setdefault(key, []).extend(value)
+            elif key == "no_candidate_reasons" and isinstance(value, list):
+                telemetry[key] = sorted(
+                    set(telemetry.get(key, ())) | {str(item) for item in value}
+                )
             elif isinstance(value, (int, float)) and not isinstance(value, bool):
                 telemetry[key] = telemetry.get(key, 0) + value
             else:
@@ -1771,6 +2261,32 @@ def _passed_evidence(
     )
 
 
+def _execution_rollout(
+    presentation_id: uuid.UUID,
+    *,
+    position: int,
+    opt_in: bool,
+    owner_id: object | None,
+    dry_run: bool,
+):
+    rollout = resolve_slidespec_repair_rollout(
+        presentation_id, slide_index=position, opt_in=opt_in, owner_id=owner_id
+    )
+    if dry_run and rollout.should_run_repair:
+        # Dry-run is an authority boundary, not merely a telemetry mode.  Force
+        # the canonical pipeline down its shadow path even when the process-wide
+        # apply flag is enabled, so publisher callbacks and their DB/CAS writes
+        # are unreachable by construction.
+        rollout = replace(
+            rollout,
+            route="repair_shadow",
+            repair_shadow=True,
+            apply_enabled=False,
+            reason_code="legacy_preserved.dry_run",
+        )
+    return rollout
+
+
 async def _run_one(
     *,
     presentation_id: uuid.UUID,
@@ -1782,6 +2298,9 @@ async def _run_one(
     session: AsyncSession,
     adjacent_digest: str = "",
     publish_gate: asyncio.Lock | None = None,
+    pattern_registry: RepairPatternRegistry | None = None,
+    iteration_guard: RepairIterationGuard | None = None,
+    prepared_baseline: _PreparedBaselineInput | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     started = time.perf_counter()
@@ -1789,8 +2308,12 @@ async def _run_one(
     # expires ORM attributes, and fail-closed telemetry must never trigger a
     # second database access while handling the original error.
     slide_id = slide.id
-    rollout = resolve_slidespec_repair_rollout(
-        presentation_id, slide_index=position, opt_in=opt_in, owner_id=owner_id
+    rollout = _execution_rollout(
+        presentation_id,
+        position=position,
+        opt_in=opt_in,
+        owner_id=owner_id,
+        dry_run=dry_run,
     )
 
     def empty_metrics() -> dict[str, Any]:
@@ -1812,16 +2335,31 @@ async def _run_one(
             "transaction": {"rollback_count": 0},
             "rollout": {"kill_switch_enabled": rollout.kill_switch_active},
         }
-    try:
-        bundle = await load_active_slidespec_bundle(session, slide)
-        if bundle is None:  # defensive; callers claim only pointer-bearing slides
+    current_pointer = (
+        slide.properties.get(ACTIVE_POINTER_KEY)
+        if isinstance(slide.properties, Mapping)
+        else None
+    )
+    if (
+        prepared_baseline is not None
+        and isinstance(current_pointer, Mapping)
+        and dict(current_pointer) == dict(prepared_baseline.active_pointer)
+        and slide.html_content == prepared_baseline.html
+    ):
+        request = prepared_baseline.request
+        baseline_html = prepared_baseline.html
+    else:
+        try:
+            bundle = await load_active_slidespec_bundle(session, slide)
+            if bundle is None:  # defensive; callers claim only pointer-bearing slides
+                return {"slide_index": position, "route": rollout.route, "applied": False,
+                        "reason_codes": ["artifact.pointer.missing"], "metrics": empty_metrics()}
+            request = _render_request(bundle)
+            baseline_html = bundle.html
+        except (SlideSpecArtifactError, ValueError, TypeError) as error:
+            code = error.code if isinstance(error, SlideSpecArtifactError) else "artifact.manifest.invalid"
             return {"slide_index": position, "route": rollout.route, "applied": False,
-                    "reason_codes": ["artifact.pointer.missing"], "metrics": empty_metrics()}
-        request = _render_request(bundle)
-    except (SlideSpecArtifactError, ValueError, TypeError) as error:
-        code = error.code if isinstance(error, SlideSpecArtifactError) else "artifact.manifest.invalid"
-        return {"slide_index": position, "route": rollout.route, "applied": False,
-                "reason_codes": [code, "legacy_preserved"], "metrics": empty_metrics()}
+                    "reason_codes": [code, "legacy_preserved"], "metrics": empty_metrics()}
 
     if not rollout.should_run_repair:
         return {
@@ -1833,73 +2371,24 @@ async def _run_one(
             "metrics": empty_metrics(),
         }
 
-    source_digest = (
-        request.source.htmlHash
-        if request.source is not None
-        else digest_parts("native-html/1", bundle.html)
-    )
-    baseline_cache_key = inspection_cache_digest(
-        spec_digest=request.spec.digests.spec,
-        content_digest=request.spec.digests.content,
-        source_digest=source_digest,
-        font_digest=digest_parts(
-            request.fonts.model_dump(mode="json", by_alias=True)
-        ),
-        browser_digest=digest_parts(
-            RENDER_CACHE_VERSION,
-            DOM_METRICS_VERSION,
-            chrome_runtime_digest(),
-            request.renderer.model_dump(mode="json", by_alias=True),
-        ),
-        adjacent_digest=adjacent_digest,
-    )
-    cached_inspection = _BASELINE_INSPECTION_CACHE.get(baseline_cache_key)
-    inspection_cache_hit = cached_inspection is not None
-    if cached_inspection is None:
-        try:
-            baseline_png, baseline_metrics = await render_html_to_png_with_metrics(
-                bundle.html
-            )
-            baseline_report = inspect_authored_dom(bundle.html, baseline_metrics)
-        except Exception:  # renderer boundary is deliberately fail closed
-            return {"slide_index": position, "route": rollout.route, "applied": False,
-                    "reason_codes": ["render.failed", "legacy_preserved"], "metrics": empty_metrics()}
-
-        qids = _qid_to_semantic(request)
-        baseline_observations = observations_from_browser_metrics(
-            request, baseline_metrics
+    try:
+        baseline, inspection_cache_hit = await _get_baseline_inspection(
+            slide_id=slide_id,
+            request=request,
+            html=baseline_html,
+            adjacent_digest=adjacent_digest,
         )
-        baseline_constraints = evaluate_constraints(
-            request.spec,
-            observations=baseline_observations,
-            baseline_observations=baseline_observations,
-            source=request.source,
-        )
-        solver_started = time.perf_counter()
-        solver_result = solve_constraints(request.spec)
-        solver_elapsed_ms = round((time.perf_counter() - solver_started) * 1000, 3)
-        _BASELINE_INSPECTION_CACHE.put(
-            baseline_cache_key,
-            _BaselineInspection(
-                baseline_png,
-                baseline_metrics,
-                baseline_report,
-                qids,
-                baseline_observations,
-                baseline_constraints,
-                solver_result,
-                solver_elapsed_ms,
-            ),
-        )
-    else:
-        baseline_png = cached_inspection.png
-        baseline_metrics = cached_inspection.metrics
-        baseline_report = cached_inspection.report
-        qids = cached_inspection.qids
-        baseline_observations = cached_inspection.observations
-        baseline_constraints = cached_inspection.constraints
-        solver_result = cached_inspection.solver_result
-        solver_elapsed_ms = 0.0
+    except Exception:  # renderer boundary is deliberately fail closed
+        return {"slide_index": position, "route": rollout.route, "applied": False,
+                "reason_codes": ["render.failed", "legacy_preserved"], "metrics": empty_metrics()}
+    baseline_png = baseline.png
+    baseline_metrics = baseline.metrics
+    baseline_report = baseline.report
+    qids = baseline.qids
+    baseline_observations = baseline.observations
+    baseline_constraints = baseline.constraints
+    solver_result = baseline.solver_result
+    solver_elapsed_ms = 0.0 if inspection_cache_hit else baseline.solver_elapsed_ms
     solver_metrics: dict[str, Any] = {
         **solver_result.metrics(),
         "elapsed_ms": solver_elapsed_ms,
@@ -1912,13 +2401,40 @@ async def _run_one(
                 request, baseline_constraints, baseline_observations
             ),
     )
+    pattern_key = repair_pattern_key(request, baseline_evidence)
     expected = _expected_text(request.spec)
     tokens = _important_tokens(request.spec)
     baseline_ocr: OcrQualityResult | None = None
     candidates: dict[str, _CandidateState] = {}
     projection_rejections: list[dict[str, str]] = []
 
+    def record_projection_rejections(
+        plan: RepairPlan | None,
+        projection: ProjectionDryRun,
+        *,
+        stage: str,
+    ) -> None:
+        for rejection in projection.rejections:
+            payload = {
+                "target": rejection.target,
+                "feature": rejection.operation,
+                "reason_code": rejection.reason_code
+                or "render.source_projection.unsupported",
+                "stage": stage,
+            }
+            if rejection.qid is not None:
+                payload["qid"] = rejection.qid
+            if plan is not None:
+                payload["plan_id"] = plan.plan_id
+            if payload not in projection_rejections:
+                projection_rejections.append(payload)
+
     async def deterministic(_spec: SlideSpecInput, dom: DomEvidence) -> Sequence[RepairPlan]:
+        reused = (
+            pattern_registry.instantiate(pattern_key, request)
+            if pattern_registry is not None
+            else ()
+        )
         solver_plan = build_constraint_repair_plan(
             request.spec, feasibility=solver_result
         )
@@ -1933,13 +2449,50 @@ async def _run_one(
         projection_rejections[:] = [
             *(asdict(item) for item in cascade.rejections),
             *(asdict(item) for item in cascade.geometry_rejections),
+            *(asdict(item) for item in cascade.coupled_rejections),
         ]
-        return ((solver_plan,) if solver_plan is not None else ()) + cascade.plans
+        proposed = (
+            reused
+            + ((solver_plan,) if solver_plan is not None else ())
+            + cascade.plans
+        )
+        projectable: list[RepairPlan] = []
+        for plan in proposed:
+            projection = dry_project_plan(request, plan)
+            if projection.supported:
+                projectable.append(plan)
+            else:
+                record_projection_rejections(
+                    plan, projection, stage="deterministic_preflight"
+                )
+        return tuple(projectable)
 
     async def validate(_spec: SlideSpecInput, plan: RepairPlan) -> SensorResult:
+        projection = dry_project_plan(request, plan)
+        if not projection.supported:
+            record_projection_rejections(plan, projection, stage="proposal_preflight")
+            return SensorResult(
+                False,
+                projection.reason_code or "proposal_preflight_unprojectable",
+                diagnostics={
+                    "projection_rejections": [
+                        rejection.telemetry() for rejection in projection.rejections
+                    ]
+                },
+            )
         try:
             applied = apply_repair_plan(request.spec, plan)
             validate_slidespec(applied.spec)
+            feasibility = solve_constraints(
+                applied.spec,
+                compute_unsat_core=False,
+            )
+            if not feasibility.feasible and feasibility.search_complete:
+                return SensorResult(
+                    False,
+                    "constraint.static_infeasible",
+                    diagnostics={"solver": feasibility.metrics()},
+                )
             return SensorResult(True)
         except (SlideSpecError, ValueError) as error:
             return SensorResult(False, getattr(error, "code", "schema.invalid_value"))
@@ -2045,8 +2598,12 @@ async def _run_one(
         nonlocal baseline_ocr
         state = candidates[candidate.html_hash]
         if baseline_ocr is None:
-            baseline_ocr = await inspect_authored_ocr(baseline_png, expected_text=expected)
-        result = await inspect_authored_ocr(state.image, expected_text=expected)
+            baseline_ocr = await _inspect_ocr_with_bounded_multiscale(
+                baseline_png, expected_text=expected
+            )
+        result = await _inspect_ocr_with_bounded_multiscale(
+            state.image, expected_text=expected
+        )
         if not baseline_ocr.available or not result.available or baseline_ocr.text is None or result.text is None:
             return SensorResult(False, "ocr.unavailable", conclusive=False)
         comparison = compare_expected_candidate(expected, baseline_ocr, result)
@@ -2062,11 +2619,22 @@ async def _run_one(
         recall = _token_recall(tokens, result.text)
         state.ocr_non_regression = comparison.no_regression
         state.token_recall = recall
+        diagnostics = _ocr_gate_diagnostics(
+            spec=request.spec,
+            request=request,
+            baseline=baseline_ocr,
+            candidate=result,
+            comparison=comparison,
+        )
         if not comparison.no_regression:
-            return SensorResult(False, "ocr.recall_regressed")
+            return SensorResult(
+                False, "ocr.recall_regressed", diagnostics=diagnostics
+            )
         if recall < 1.0:
-            return SensorResult(False, "ocr.important_token_missing")
-        return SensorResult(True)
+            return SensorResult(
+                False, "ocr.important_token_missing", diagnostics=diagnostics
+            )
+        return SensorResult(True, diagnostics=diagnostics)
 
     async def run_vqa(candidate: RenderedCandidate) -> SensorResult:
         state = candidates[candidate.html_hash]
@@ -2126,6 +2694,48 @@ async def _run_one(
             if issue.category in {"overlap", "clipping", "overflow"}
             and issue.severity in {"high", "medium"}
         ]
+        candidate_target_dom = _dom_evidence(
+            state.dom,
+            _qid_to_semantic(state.request),
+            diagnostic_refs=state.plan.diagnostic_refs,
+            browser_metrics=state.metrics,
+        )
+        required_target_issues, target_issue_deltas = _target_issue_evidence(
+            request=request,
+            plan=state.plan,
+            baseline_dom=baseline_evidence,
+            candidate_dom=candidate_target_dom,
+            baseline_constraints=baseline_constraints,
+            candidate_constraints=state.constraints,
+        )
+        state.required_target_issues = required_target_issues
+        state.target_issue_deltas = target_issue_deltas
+        resolved_issue_count = 0
+        resolved_issue_severity = 0.0
+        if target_issue_deltas is not None:
+            severity_by_identity = {
+                (defect.code, defect.semantic_id, defect.qid): (
+                    2.0 if defect.severity == "high" else 1.0
+                )
+                for defect in baseline_evidence.defects
+            }
+            for delta in target_issue_deltas:
+                if _target_issue_failure_code(
+                    (delta.identity,), (delta,)
+                ) is not None:
+                    continue
+                resolved_issue_count += 1
+                resolved_issue_severity += severity_by_identity.get(
+                    (
+                        delta.identity.code,
+                        delta.identity.semantic_id,
+                        delta.identity.qid,
+                    ),
+                    1.0,
+                )
+        remaining_issue_count = max(
+            0, len(required_target_issues) - resolved_issue_count
+        )
         prompt_context, context_payload = _paired_vqa_context(
             request,
             state.plan,
@@ -2219,12 +2829,22 @@ async def _run_one(
             and not style_comparison_has_regression(critique)
         )
         state.vqa_improved = accepted
+        quality_gain = style_comparison_quality_gain(critique)
+        quality_interval = style_comparison_quality_interval(critique)
         return SensorResult(
             accepted,
             None if accepted else decision_reason,
             conclusive=conclusive,
-            quality_gain=style_comparison_quality_gain(critique),
-            quality_gain_interval=style_comparison_quality_interval(critique),
+            quality_gain=quality_gain,
+            quality_gain_interval=quality_interval,
+            resolved_issue_count=resolved_issue_count,
+            resolved_issue_severity=resolved_issue_severity,
+            remaining_issue_count=remaining_issue_count,
+            quality_margin=(
+                quality_interval[0]
+                if accepted and quality_interval is not None
+                else None
+            ),
             diagnostics={
                 "prompt_context": context_payload,
                 "critique": (
@@ -2345,6 +2965,17 @@ async def _run_one(
         # Persist accepted evidence before touching the live slide. A failed CAS
         # or verification can therefore always be audited after the transaction.
         try:
+            candidate_blueprint = build_slidespec_artifact_bundle(
+                presentation_id=presentation_id,
+                slide=slide,
+                route="slidespec_active",
+                status="candidate",
+                render_request=state.request,
+                repair_plan=plan,
+                acceptance=decision,
+                evidence=evidence_payload,
+                image_bytes=state.image,
+            )
             candidate_artifact = (
                 await session.execute(
                     select(SlideSpecArtifactBundle).where(
@@ -2357,19 +2988,19 @@ async def _run_one(
                 )
             ).scalar_one_or_none()
             if candidate_artifact is None:
-                candidate_artifact = build_slidespec_artifact_bundle(
-                    presentation_id=presentation_id,
-                    slide=slide,
-                    route="slidespec_active",
-                    status="candidate",
-                    render_request=state.request,
-                    repair_plan=plan,
-                    acceptance=decision,
-                    evidence=evidence_payload,
-                    image_bytes=state.image,
-                )
+                candidate_artifact = candidate_blueprint
                 session.add(candidate_artifact)
                 await session.flush()
+            elif (
+                candidate_artifact.render_input_hash
+                != candidate_blueprint.render_input_hash
+                or candidate_artifact.html_hash != candidate_blueprint.html_hash
+                or candidate_artifact.render_hash != candidate_blueprint.render_hash
+                or candidate_artifact.manifest != candidate_blueprint.manifest
+            ):
+                raise SlideSpecArtifactError(
+                    "artifact.publish.render_fingerprint_conflict"
+                )
             await record_publication_attempt(
                 session,
                 attempt_id=attempt_id,
@@ -2404,6 +3035,24 @@ async def _run_one(
             ):
                 raise SlideSpecArtifactError("artifact.publish.cas_conflict")
 
+            published_blueprint = build_slidespec_artifact_bundle(
+                presentation_id=presentation_id,
+                slide=live_slide,
+                route="slidespec_active",
+                status="published",
+                render_request=state.request,
+                repair_plan=plan,
+                acceptance=decision,
+                evidence=evidence_payload,
+                publication_receipt={
+                    "attempt_id": str(attempt_id),
+                    "candidate_bundle_id": str(candidate_artifact.id),
+                    "commit_state": "activation_pending",
+                    "cas": "required",
+                    "post_commit_readback": "required",
+                },
+                image_bytes=state.image,
+            )
             artifact = (
                 await session.execute(
                     select(SlideSpecArtifactBundle).where(
@@ -2416,23 +3065,15 @@ async def _run_one(
                 )
             ).scalar_one_or_none()
             if artifact is None:
-                artifact = build_slidespec_artifact_bundle(
-                    presentation_id=presentation_id,
-                    slide=live_slide,
-                    route="slidespec_active",
-                    status="published",
-                    render_request=state.request,
-                    repair_plan=plan,
-                    acceptance=decision,
-                    evidence=evidence_payload,
-                    publication_receipt={
-                        "attempt_id": str(attempt_id),
-                        "candidate_bundle_id": str(candidate_artifact.id),
-                        "commit_state": "activation_pending",
-                        "cas": "required",
-                        "post_commit_readback": "required",
-                    },
-                    image_bytes=state.image,
+                artifact = published_blueprint
+            elif (
+                artifact.render_input_hash != published_blueprint.render_input_hash
+                or artifact.html_hash != published_blueprint.html_hash
+                or artifact.render_hash != published_blueprint.render_hash
+                or artifact.manifest != published_blueprint.manifest
+            ):
+                raise SlideSpecArtifactError(
+                    "artifact.publish.render_fingerprint_conflict"
                 )
             await version_service.snapshot_slides(
                 session,
@@ -2521,6 +3162,7 @@ async def _run_one(
                 )
 
         if verification_reason is None:
+            _invalidate_baseline_inspection(slide.id)
             return PublicationReceipt(
                 True,
                 True,
@@ -2578,6 +3220,10 @@ async def _run_one(
                     )
                 await recovery_session.commit()
         except Exception as error:
+            # The UPDATE and its audit rows share this transaction.  A commit
+            # failure rolls both back, so never report the in-memory CAS result
+            # as a durable rollback.
+            rollback_succeeded = False
             recovery_reason = getattr(
                 error, "code", "artifact.publish.rollback_failed"
             )
@@ -2604,107 +3250,48 @@ async def _run_one(
     async def proposal_preflight(
         _spec: SlideSpecInput, dom: DomEvidence
     ) -> SensorResult:
-        """Skip the model only when every diagnosed imported target is immutable.
+        """Skip the model when diagnosed targets have no provable projection."""
 
-        Native SlideSpecs remain model-eligible.  For authored imports, this is a
-        conservative capability check over the already imported binding and closed
-        mutation envelope; it does not attempt to reproduce projection logic.
-        """
+        def allow_pattern_call() -> SensorResult:
+            if pattern_registry is None or pattern_registry.claim_llm(pattern_key):
+                return SensorResult(True)
+            return SensorResult(False, "proposal.pattern_call_already_used")
 
-        if request.source is None:
-            return SensorResult(True)
-        nodes_by_semantic = {
-            node.contentSemanticId: node
-            for node in _walk_layout(request.spec.layout)
-            if node.contentSemanticId is not None
-        }
-        bindings_by_semantic = {
-            binding.semanticId: binding for binding in request.source.bindings
-        }
-        all_operations = {
-            "setSpacing",
-            "setPadding",
-            "setFlow",
-            "setTracks",
-            "setColumnRatio",
-            "setGridPlacement",
-            "setBounds",
-            "translateWithinParent",
-            "resizeWithinBounds",
-            "setFontScale",
-            "setLineHeightToken",
-            "setTextFitPolicy",
-            "setImageFit",
-            "setCropFocalPoint",
-        }
-        for defect in dom.defects:
-            for semantic_id in (defect.semantic_id, *defect.related_semantic_ids):
-                node = nodes_by_semantic.get(semantic_id)
-                binding = bindings_by_semantic.get(semantic_id)
-                if node is None or binding is None:
-                    continue
-                envelope = node.constraints or LayoutConstraints()
-                if envelope.locked:
-                    continue
-                allowed = (
-                    set(envelope.allowedOperations)
-                    if envelope.allowedOperations is not None
-                    else set(all_operations)
-                )
-                projectable: set[str] = set()
-                if defect.code in {"dom.clipping", "dom.overflow"}:
-                    if binding.position != "static":
-                        projectable.update({"setBounds", "resizeWithinBounds"})
-                    if binding.fontSizePx is not None:
-                        projectable.update(
-                            {"setFontScale", "setLineHeightToken", "setTextFitPolicy"}
-                        )
-                    if binding.tag == "img":
-                        projectable.update({"setImageFit", "setCropFocalPoint"})
-                elif defect.code in {
-                    "dom.off_canvas",
-                    "constraint.containment.violated",
-                }:
-                    if binding.position != "static":
-                        projectable.update({"setBounds", "translateWithinParent"})
-                    elif binding.staticTranslationSafe and binding.transform == "none":
-                        projectable.add("translateWithinParent")
-                elif defect.code in {
-                    "constraint.gap.violated",
-                    "constraint.alignment.violated",
-                    "constraint.order.violated",
-                }:
-                    if binding.display in {
-                        "flex",
-                        "inline-flex",
-                        "grid",
-                        "inline-grid",
-                    }:
-                        projectable.update({"setSpacing", "setFlow", "setPadding"})
-                    if binding.position != "static":
-                        projectable.update({"setBounds", "translateWithinParent"})
-                elif defect.code in {
-                    "dom.unintended_overlap",
-                    "constraint.non_overlap.violated",
-                }:
-                    # Imported connector topology has no round-trip mutation
-                    # contract.  Non-connectors need an explicitly projectable
-                    # position change; arbitrary flow relayout remains blocked.
-                    if binding.tag != "svg" and binding.position != "static":
-                        projectable.update({"setBounds", "translateWithinParent"})
-                if allowed.intersection(projectable):
-                    return SensorResult(True)
-        reason = (
-            "proposal.mutation_envelope_unavailable"
-            if any(
-                item.get("reason_code", "").startswith("repair.mutation_envelope")
-                for item in projection_rejections
-            )
-            else "proposal.projection_unavailable"
+        target_semantic_ids = sorted(
+            {
+                semantic_id
+                for defect in dom.defects
+                for semantic_id in (defect.semantic_id, *defect.related_semantic_ids)
+                if semantic_id
+            }
         )
-        return SensorResult(False, reason)
+        capability = projection_schema_context(
+            request, target_semantic_ids=target_semantic_ids
+        )
+        if capability["supportedOperations"]:
+            return allow_pattern_call()
+        projection_rejections.append(
+            {
+                "target": ",".join(target_semantic_ids) or "diagnostic-scope",
+                "feature": "closed-operation-vocabulary",
+                "reason_code": "proposal_preflight_unprojectable",
+                "stage": "llm_call_preflight",
+            }
+        )
+        return SensorResult(False, "proposal_preflight_unprojectable")
 
-    async def propose(spec_input: SlideSpecInput, dom: DomEvidence) -> Sequence[RepairPlan]:
+    async def propose(spec_input: SlideSpecInput, dom: DomEvidence) -> ProposalBatch:
+        target_semantic_ids = sorted(
+            {
+                semantic_id
+                for defect in dom.defects
+                for semantic_id in (defect.semantic_id, *defect.related_semantic_ids)
+                if semantic_id
+            }
+        )
+        capability = projection_schema_context(
+            request, target_semantic_ids=target_semantic_ids
+        )
         diagnostics = [
             {"code": defect.code, "severity": defect.severity, "semanticId": defect.semantic_id}
             for defect in dom.defects
@@ -2715,37 +3302,78 @@ async def _run_one(
             base_spec_revision=request.spec.specRevision,
             base_spec_hash=request.spec.digests.spec,
             expected_content_digest=request.spec.digests.content,
+            projection_context=capability,
         )
-        if not result.ok:
-            if "proposal.model_timeout" in result.reason_codes:
-                raise TimeoutError("proposal.model_timeout")
-            if "system.internal_error" in result.reason_codes:
-                # Provider/configuration failures are transient and must never
-                # become a conclusive empty-result cache entry.
-                raise RuntimeError("proposal.provider_unavailable")
-            return ()
-        return result.plans
+        projectable: list[RepairPlan] = []
+        if result.ok:
+            for plan in result.plans:
+                projection = dry_project_plan(request, plan)
+                if projection.supported:
+                    projectable.append(plan)
+                else:
+                    record_projection_rejections(
+                        plan, projection, stage="llm_proposal_preflight"
+                    )
+        return ProposalBatch(
+            plans=tuple(projectable),
+            no_candidate_reason=(
+                result.no_candidate_reason
+                if result.no_candidate_reason is not None or projectable
+                else "proposal_preflight_unprojectable"
+            ),
+            call_count=result.call_count,
+            response_count=result.response_count,
+            schema_pass_count=result.schema_pass_count,
+            provider_failure_count=result.provider_failure_count,
+            schema_rejection_count=result.schema_rejection_count,
+            empty_count=result.empty_count,
+            negative_cache_hit_count=result.negative_cache_hit_count,
+            circuit_open_count=result.circuit_open_count,
+        )
 
+    capability_context = projection_schema_context(request)
     capability_digest = digest_parts(
         PIPELINE_CAPABILITY_VERSION,
         CASCADE_POLICY_VERSION,
-        request.source.importerVersion if request.source is not None else "native",
-        [
-            (
-                node.layoutId,
-                node.constraints.model_dump(mode="json")
-                if node.constraints is not None
-                else None,
-            )
-            for node in _walk_layout(request.spec.layout)
-        ],
+        PROJECTION_CAPABILITY_VERSION,
+        capability_context,
     )
     try:
         proposal_model = str(get_model() or "")
+        selected_provider = get_llm_provider()
+        proposal_provider = str(
+            getattr(selected_provider, "value", selected_provider) or ""
+        )
     except Exception:
         proposal_model = "unconfigured"
-    model_digest = digest_parts(PROPOSAL_PROMPT_VERSION, proposal_model)
+        proposal_provider = "unconfigured"
+    model_digest = digest_parts(
+        proposal_provider,
+        proposal_model,
+        PROPOSAL_RESPONSE_SCHEMA_VERSION,
+        PROPOSAL_PROMPT_VERSION,
+    )
 
+    def partition_pattern_candidates(
+        plans: Sequence[RepairPlan],
+    ) -> tuple[Sequence[RepairPlan], Sequence[RepairPlan]]:
+        preferred = tuple(
+            plan
+            for plan in plans
+            if plan.provenance.policy_version == PATTERN_POLICY_VERSION
+        )
+        remaining = tuple(
+            plan
+            for plan in plans
+            if plan.provenance.policy_version != PATTERN_POLICY_VERSION
+        )
+        return preferred, remaining
+
+    def remember_applied_pattern(plan: RepairPlan) -> None:
+        if pattern_registry is not None:
+            pattern_registry.record_applied(pattern_key, request, plan)
+
+    proposal_llm_enabled = _proposal_llm_enabled()
     pipeline = SlideSpecRepairPipeline(
         SlideSpecRepairDependencies(
             deterministic_cascade=deterministic,
@@ -2755,10 +3383,14 @@ async def _run_one(
             run_ocr=run_ocr,
             run_vqa=run_vqa,
             publish=publish,
-            propose=propose,
-            proposal_preflight=proposal_preflight,
+            propose=propose if proposal_llm_enabled else None,
+            proposal_preflight=proposal_preflight if proposal_llm_enabled else None,
             proposal_capability_digest=capability_digest,
             proposal_model_digest=model_digest,
+            candidate_partition=partition_pattern_candidates,
+            applied_plan_observer=remember_applied_pattern,
+            plan_footprint=lambda plan: _repair_conflict_footprint(request, plan),
+            iteration_guard=iteration_guard or RepairIterationGuard(),
         )
     )
     spec_input = SlideSpecInput(
@@ -2985,21 +3617,9 @@ async def _run_one(
             if issue.get("code")
         ],
         "evidence_atoms": _evidence_atom_payload(baseline_evidence),
-        "incomplete_measurements": [
-            {
-                "sensor": atom.sensor,
-                "metric": atom.metric,
-                "stage": atom.stage,
-                "qid": atom.qid,
-                "semantic_id": atom.semantic_id,
-                "constraint_id": atom.constraint_id,
-                "reason": atom.reason_code,
-                "reason_code": atom.reason_code,
-                "dependency_refs": list(atom.dependency_refs),
-                "diagnostics": dict(atom.diagnostics),
-            }
-            for atom in baseline_evidence.unknown_atoms
-        ],
+        "incomplete_measurements": _incomplete_measurement_payload(
+            baseline_evidence
+        ),
         "publish_blockers": _dependency_blocker_payload(serialized_outcomes),
         "reason_codes": reason_codes,
         "shadow_artifact_id": shadow_artifact_id,
@@ -3025,6 +3645,35 @@ async def _run_one(
             "proposal_cache_misses": result.telemetry.proposal_cache_misses,
             "proposal_preflight_skips": result.telemetry.proposal_preflight_skips,
             "pareto_pruned": result.telemetry.pareto_pruned,
+            "composite_plan_count": result.telemetry.composite_plan_count,
+            "composite_operations_merged": result.telemetry.composite_operations_merged,
+            "render_candidates_rejected_early": result.telemetry.render_candidates_rejected_early,
+            "full_render_count": result.telemetry.full_render_count,
+            "llm_pattern_call_count": result.telemetry.llm_pattern_call_count,
+            "llm_response_count": result.telemetry.llm_response_count,
+            "llm_schema_pass_count": result.telemetry.llm_schema_pass_count,
+            "llm_preflight_pass_count": result.telemetry.llm_preflight_pass_count,
+            "llm_render_count": result.telemetry.llm_render_count,
+            "llm_provider_failures": result.telemetry.llm_provider_failures,
+            "llm_schema_rejections": result.telemetry.llm_schema_rejections,
+            "llm_empty_responses": result.telemetry.llm_empty_responses,
+            "llm_circuit_open_count": result.telemetry.llm_circuit_open_count,
+            "llm_negative_cache_hits": result.telemetry.llm_negative_cache_hits,
+            "no_candidate_reasons": list(result.telemetry.no_candidate_reasons),
+            # Canonical public funnel contract.  Keep the internal aliases above
+            # for existing consumers while the UI migrates.
+            "llm_valid_plan_count": result.telemetry.llm_candidates,
+            "llm_provider_failure_count": result.telemetry.llm_provider_failures,
+            "llm_schema_reject_count": result.telemetry.llm_schema_rejections,
+            "llm_rendered_count": result.telemetry.llm_render_count,
+            "proposal_preflight_unprojectable_count": (
+                result.telemetry.proposal_preflight_skips
+            ),
+            "negative_cache_hit_count": result.telemetry.llm_negative_cache_hits,
+            "individual_fallback_count": result.telemetry.individual_fallback_count,
+            "repeated_plan_blocked": result.telemetry.repeated_plan_blocked,
+            "oscillation_blocked": result.telemetry.oscillation_blocked,
+            "iteration_limit_blocked": result.telemetry.iteration_limit_blocked,
             "repair_costs": [list(cost) for cost in result.telemetry.repair_costs],
         },
         "total_ms": round((time.perf_counter() - started) * 1000, 3),
@@ -3063,7 +3712,115 @@ async def execute_slidespec_authored_review(
     except ValueError:
         slide_concurrency = 3
     scheduler = BoundedSlideScheduler(slide_concurrency)
-    publish_gate = asyncio.Lock()
+    pattern_registry = RepairPatternRegistry()
+    max_incremental_repairs = 12
+    publication_locks, iteration_guards = _slide_execution_controls(
+        claimed, max_incremental_repairs=max_incremental_repairs
+    )
+    bind = session.bind
+    worker_sessions = (
+        async_sessionmaker(bind, expire_on_commit=False)
+        if len(claimed) > 1 and bind is not None
+        else None
+    )
+
+    async def preinspect_position(
+        position: int, worker_session: AsyncSession
+    ) -> tuple[PatternObservation | None, bool, _PreparedBaselineInput | None]:
+        """Populate the immutable baseline cache and emit one strict fingerprint."""
+
+        slide = await worker_session.get(
+            SlideModel, slide_ids[position], populate_existing=True
+        )
+        if slide is None:
+            return None, False, None
+        rollout = resolve_slidespec_repair_rollout(
+            presentation_id,
+            slide_index=position,
+            opt_in=opt_in,
+            owner_id=owner_id,
+        )
+        if not rollout.should_run_repair:
+            return None, False, None
+        try:
+            bundle = await load_active_slidespec_bundle(worker_session, slide)
+            if bundle is None:
+                return None, False, None
+            request = _render_request(bundle)
+            baseline, cache_hit = await _get_baseline_inspection(
+                slide_id=slide.id,
+                request=request,
+                html=bundle.html,
+                adjacent_digest=adjacency[position],
+            )
+            evidence = _merge_dom_evidence(
+                _dom_evidence(
+                    baseline.report,
+                    baseline.qids,
+                    browser_metrics=baseline.metrics,
+                ),
+                _constraint_evidence(
+                    request, baseline.constraints, baseline.observations
+                ),
+            )
+            pointer = (
+                slide.properties.get(ACTIVE_POINTER_KEY)
+                if isinstance(slide.properties, Mapping)
+                else None
+            )
+            prepared = (
+                _PreparedBaselineInput(request, bundle.html, dict(pointer))
+                if isinstance(pointer, Mapping)
+                else None
+            )
+            return pattern_observation(position, request, evidence), cache_hit, prepared
+        except Exception:
+            # The normal slide path retains the canonical fail-closed diagnostic.
+            return None, False, None
+
+    preinspection_started = time.perf_counter()
+    if worker_sessions is not None:
+        async def isolated_preinspect(
+            position: int,
+        ) -> tuple[PatternObservation | None, bool, _PreparedBaselineInput | None]:
+            async with worker_sessions() as worker_session:
+                return await preinspect_position(position, worker_session)
+
+        preinspection_results = await scheduler.map(claimed, isolated_preinspect)
+    else:
+        preinspection_results = tuple(
+            [await preinspect_position(position, session) for position in claimed]
+        )
+    preinspection_elapsed_ms = (
+        time.perf_counter() - preinspection_started
+    ) * 1000
+    pattern_registry.prepare(
+        tuple(
+            observation
+            for observation, _cache_hit, _prepared in preinspection_results
+            if observation is not None
+        ),
+        elapsed_ms=preinspection_elapsed_ms,
+        cache_hits=sum(
+            prepared is not None and cache_hit
+            for _observation, cache_hit, prepared in preinspection_results
+        ),
+        cache_misses=sum(
+            prepared is not None and not cache_hit
+            for _observation, cache_hit, prepared in preinspection_results
+        ),
+        inspected_count=sum(
+            prepared is not None
+            for _observation, _cache_hit, prepared in preinspection_results
+        ),
+    )
+    prepared_baselines = {
+        position: prepared
+        for position, (_observation, _cache_hit, prepared) in zip(
+            claimed, preinspection_results, strict=True
+        )
+        if prepared is not None
+    }
 
     async def run_position(
         position: int, worker_session: AsyncSession
@@ -3081,7 +3838,8 @@ async def execute_slidespec_authored_review(
         passes: list[dict[str, Any]] = []
         accepted_repairs = 0
         complete = False
-        while accepted_repairs <= 4:
+        prepared_baseline = prepared_baselines.get(position)
+        while accepted_repairs < max_incremental_repairs:
             current = await _run_one(
                 presentation_id=presentation_id,
                 slide=slide,
@@ -3091,18 +3849,27 @@ async def execute_slidespec_authored_review(
                 owner_id=owner_id,
                 session=worker_session,
                 adjacent_digest=adjacency[position],
-                publish_gate=publish_gate,
+                publish_gate=publication_locks[position],
+                pattern_registry=pattern_registry,
+                iteration_guard=iteration_guards[position],
+                prepared_baseline=prepared_baseline,
                 dry_run=dry_run,
             )
+            prepared_baseline = None
             passes.append(current)
             if not current.get("applied") or dry_run:
                 complete = not bool(current.get("trigger"))
                 break
             accepted_repairs += 1
-            if accepted_repairs >= 4:
+            if accepted_repairs >= max_incremental_repairs:
                 current.setdefault("reason_codes", []).append(
                     "incremental_repair_limit_reached"
                 )
+                current["unresolved_confirmed_issue_count"] = max(
+                    int(current.get("unresolved_confirmed_issue_count", 0)),
+                    int(current.get("confirmed_issue_count", 0)),
+                )
+                current["clean_slide_count"] = 0
                 break
             slide = await worker_session.get(
                 SlideModel,
@@ -3114,19 +3881,37 @@ async def execute_slidespec_authored_review(
                 break
         return _merge_incremental_slide_results(passes, complete=complete)
 
-    bind = session.bind
-    if len(claimed) > 1 and bind is not None:
-        worker_sessions = async_sessionmaker(bind, expire_on_commit=False)
+    async def execute_batch(positions_to_run: Sequence[int]) -> tuple[dict[str, Any], ...]:
+        if not positions_to_run:
+            return ()
+        if worker_sessions is not None:
+            async def isolated(position: int) -> dict[str, Any]:
+                async with worker_sessions() as worker_session:
+                    return await run_position(position, worker_session)
 
-        async def isolated(position: int) -> dict[str, Any]:
-            async with worker_sessions() as worker_session:
-                return await run_position(position, worker_session)
-
-        raw_results = await scheduler.map(claimed, isolated)
-    else:
-        raw_results = tuple(
-            [await run_position(position, session) for position in claimed]
+            return await scheduler.map(positions_to_run, isolated)
+        return tuple(
+            [await run_position(position, session) for position in positions_to_run]
         )
+
+    results_by_position: dict[int, dict[str, Any]] = {}
+    representative_positions: set[int] = set()
+    for wave in pattern_registry.representative_waves():
+        representative_positions.update(wave)
+        wave_results = await execute_batch(wave)
+        results_by_position.update(zip(wave, wave_results, strict=True))
+    remaining_positions = tuple(
+        position for position in claimed if position not in representative_positions
+    )
+    remaining_results = await execute_batch(remaining_positions)
+    results_by_position.update(
+        zip(remaining_positions, remaining_results, strict=True)
+    )
+    raw_results = tuple(results_by_position[position] for position in claimed)
+
+    # The staged waves validate low/mid/high-pressure representatives before
+    # general reuse. Singleton fingerprints are only in ``remaining`` and
+    # therefore always enter the individual deterministic path.
 
     results = []
     for result in raw_results:
@@ -3195,10 +3980,7 @@ async def execute_slidespec_authored_review(
                 "clean_slide_count": int(
                     confirmed_for_slide == 0 and incomplete_for_slide == 0
                 ),
-                # Keep the established authored-review API contract so the
-                # frontend can distinguish a canonical SlideSpec patch from a
-                # full-slide fallback instead of normalizing it to ``none``.
-                "path": "local_patch" if outcomes_for_slide else "none",
+                "path": _maximum_repair_path(outcomes_for_slide),
             }
         )
         results.append(result)
@@ -3221,11 +4003,45 @@ async def execute_slidespec_authored_review(
         "proposal_cache_misses",
         "proposal_preflight_skips",
         "pareto_pruned",
+        "composite_plan_count",
+        "composite_operations_merged",
+        "render_candidates_rejected_early",
+        "full_render_count",
+        "llm_pattern_call_count",
+        "llm_response_count",
+        "llm_schema_pass_count",
+        "llm_preflight_pass_count",
+        "llm_render_count",
+        "llm_provider_failures",
+        "llm_schema_rejections",
+        "llm_empty_responses",
+        "llm_circuit_open_count",
+        "llm_negative_cache_hits",
+        "llm_valid_plan_count",
+        "llm_provider_failure_count",
+        "llm_schema_reject_count",
+        "llm_rendered_count",
+        "proposal_preflight_unprojectable_count",
+        "negative_cache_hit_count",
+        "individual_fallback_count",
+        "repeated_plan_blocked",
+        "oscillation_blocked",
+        "iteration_limit_blocked",
     )
     for key in telemetry_keys:
         funnel[key] = sum(
             int(result.get("telemetry", {}).get(key, 0)) for result in results
         )
+    funnel["no_candidate_reasons"] = sorted(
+        {
+            str(reason)
+            for result in results
+            for reason in result.get("telemetry", {}).get(
+                "no_candidate_reasons", ()
+            )
+            if str(reason)
+        }
+    )
     stage_timings_ms: dict[str, float] = {}
     for result in results:
         for stage, duration in result.get("telemetry", {}).get(
@@ -3258,6 +4074,14 @@ async def execute_slidespec_authored_review(
             for outcome in result.get("outcomes", [])
         )
         for result in results
+    )
+    pattern_metrics = pattern_registry.metrics()
+    funnel.update(pattern_metrics)
+    funnel.setdefault("stage_timings_ms", {})["pattern_preinspection"] = float(
+        pattern_metrics.get("pattern_preinspection_ms", 0.0)
+    )
+    funnel["preinspection_render_count"] = int(
+        pattern_metrics.get("pattern_preinspection_cache_misses", 0)
     )
     def metric_number(value: object) -> float:
         try:
@@ -3387,6 +4211,28 @@ async def execute_slidespec_authored_review(
             "cache_misses": int(funnel.get("postverify_passed", 0)),
         },
     }
+    detailed_issue_count = sum(
+        int(item.get("confirmed_issue_count", 0)) for item in results
+    )
+    remaining_issue_count = sum(
+        int(item.get("unresolved_confirmed_issue_count", 0))
+        for item in results
+    )
+    resolved_issue_count = max(0, detailed_issue_count - remaining_issue_count)
+    remaining_slide_indices = [
+        item["slide_index"]
+        for item in results
+        if int(item.get("unresolved_confirmed_issue_count", 0)) > 0
+        or int(item.get("incomplete_measurement_count", 0)) > 0
+    ]
+    funnel.update(
+        {
+            "detailed_issue_count": detailed_issue_count,
+            "resolved_issue_count": resolved_issue_count,
+            "remaining_slide_count": len(remaining_slide_indices),
+            "remaining_issue_count": remaining_issue_count,
+        }
+    )
     return CanonicalReviewExecution(
         claimed_positions=claimed,
         data={
@@ -3395,9 +4241,8 @@ async def execute_slidespec_authored_review(
                 int(item.get("confirmed_issue_count", 0)) > 0
                 for item in results
             ),
-            "confirmed_issue_count": sum(
-                int(item.get("confirmed_issue_count", 0)) for item in results
-            ),
+            "detailed_issue_count": detailed_issue_count,
+            "confirmed_issue_count": detailed_issue_count,
             "incomplete_measurement_count": sum(
                 int(item.get("incomplete_measurement_count", 0))
                 for item in results
@@ -3416,19 +4261,15 @@ async def execute_slidespec_authored_review(
                 if isinstance(issue, Mapping)
             ],
             "fixed_count": len(applied),
+            "resolved_issue_count": resolved_issue_count,
             "candidate_count": candidate_count,
             "accepted_candidate_count": accepted_candidate_count,
             "rejected_candidate_count": rejected_candidate_count,
             "fixed_slide_indices": applied,
-            "remaining_issue_count": sum(
-                int(item.get("unresolved_confirmed_issue_count", 0))
-                for item in results
-            ),
-            "remaining_issue_indices": [
-                item["slide_index"]
-                for item in results
-                if item.get("remaining_issues")
-            ],
+            "remaining_slide_count": len(remaining_slide_indices),
+            "remaining_issue_count": remaining_issue_count,
+            "remaining_issue_indices": remaining_slide_indices,
+            "remaining_slide_indices": remaining_slide_indices,
             "remaining_issues": [
                 issue
                 for item in results
@@ -3438,6 +4279,7 @@ async def execute_slidespec_authored_review(
             ],
             "candidate_decisions": outcomes,
             "rejection_reasons": rejection_reasons,
+            **pattern_metrics,
             "version_saved": bool(applied),
             "slide_results": results,
             "routing": {"slidespec": True, "claimed_positions": list(claimed)},

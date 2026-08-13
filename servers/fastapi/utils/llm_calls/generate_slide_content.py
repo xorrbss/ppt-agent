@@ -203,20 +203,10 @@ def get_messages(
     ]
 
 
-async def get_slide_content_from_type_and_outline(
-    slide_layout: SlideLayoutModel,
-    outline: SlideOutlineModel,
-    language: Optional[str],
-    tone: Optional[str] = None,
-    verbosity: Optional[str] = None,
-    instructions: Optional[str] = None,
-    disconnect_checker: Optional[DisconnectChecker] = None,
-):
-    client = get_client(config=get_llm_config())
-    model = get_model()
-
+def _prepare_response_schema(slide_layout: SlideLayoutModel) -> dict:
     response_schema = remove_fields_from_schema(
-        slide_layout.json_schema, ["__image_url__", "__icon_url__"]
+        slide_layout.json_schema,
+        ["__image_url__", "__icon_url__", "image_url", "icon_url"],
     )
     response_schema = add_field_in_schema(
         response_schema,
@@ -230,7 +220,22 @@ async def get_slide_content_from_type_and_outline(
         },
         True,
     )
-    response_schema = ensure_array_schemas_have_items(response_schema)
+    return ensure_array_schemas_have_items(response_schema)
+
+
+async def get_slide_content_from_type_and_outline(
+    slide_layout: SlideLayoutModel,
+    outline: SlideOutlineModel,
+    language: Optional[str],
+    tone: Optional[str] = None,
+    verbosity: Optional[str] = None,
+    instructions: Optional[str] = None,
+    disconnect_checker: Optional[DisconnectChecker] = None,
+):
+    client = get_client(config=get_llm_config())
+    model = get_model()
+
+    response_schema = _prepare_response_schema(slide_layout)
 
     try:
         response_format = JSONSchemaResponse(

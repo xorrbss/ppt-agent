@@ -6,7 +6,7 @@
   "entrypointSha256": "07d15e7283ab4f9ae5b0ff70cef306bdc5cfaea801e1b92e04ea41747b6c5e53",
   "renderer": {
     "modulePath": "servers/nextjs/lib/template-v2-json-to-html.ts",
-    "moduleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+    "moduleSha256": "3a7603f702e4b80421500be604371f8e9a3dfbf014f7bbcacc9f47248ed178b9",
     "captureAdapter": "chromium-headless-cli/readiness-contract",
     "productionCaptureContract": "scripts/sync-presentation-export.cjs readiness overlay"
   },
@@ -19,7 +19,7 @@
   "capturedAt": "2026-08-11T04:04:39.114Z",
   "captureEvidence": {
     "path": "templates/manifests/momentum.browser-golden.capture.v1.json",
-    "sha256": "882e9e81ebb86ed491f881751a05b843113b09653df69da82b4eda9934590c09",
+    "sha256": "37367b45913468b0fde7873ae44d081f5f2a457eda4797db5cbf9cb5edd7b00d",
     "adapter": "chromium-cdp/Page.captureScreenshot"
   },
   "networkPolicy": "deny",

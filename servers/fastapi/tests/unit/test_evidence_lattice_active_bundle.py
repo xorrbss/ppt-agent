@@ -6,6 +6,7 @@ from models.slidespec_v1 import REPAIR_PLAN_SCHEMA, RepairPlan
 from services.slidespec_authored_executor import (
     _confirmed_issue_payload,
     _dom_evidence,
+    _incomplete_measurement_payload,
     _merge_dom_evidence,
 )
 from services.slidespec_repair_pipeline import (
@@ -238,6 +239,63 @@ def test_unknown_cannot_erase_proven_issue_in_monotonic_join():
 
     assert merge_evidence_atoms((issue,), (unknown,))[0].state == "proven_issue"
     assert merge_evidence_atoms((unknown,), (issue,))[0].state == "proven_issue"
+
+
+def test_incomplete_count_dedupes_one_missing_occlusion_sample_across_consumers():
+    chrome = EvidenceAtom(
+        "chrome_occlusion",
+        "occlusion",
+        "unknown",
+        qid="q-target",
+        semantic_id="sem:target",
+        reason_code="dom.occlusion.measurement_unavailable",
+    )
+    readability = EvidenceAtom(
+        "slidespec_constraint",
+        "readability",
+        "unknown",
+        stage="constraint_measurement",
+        qid="q-target",
+        semantic_id="sem:target",
+        constraint_id="con:readability-target",
+        reason_code="constraint.evidence.missing",
+        diagnostics={
+            "missing_measurements": {
+                "lay:target": ["occluded_fraction"],
+            },
+            "target_qids": {"lay:target": "q-target"},
+        },
+    )
+
+    evidence = DomEvidence(atoms=(chrome, readability))
+
+    assert len(evidence.unknown_atoms) == 2
+    assert evidence.incomplete_measurement_count == 1
+    key, consumers = evidence.incomplete_measurement_groups[0]
+    assert key == ("q-target", "occluded_fraction")
+    assert {atom.sensor for atom in consumers} == {
+        "chrome_occlusion",
+        "slidespec_constraint",
+    }
+    payload = _incomplete_measurement_payload(evidence)
+    assert payload == [
+        {
+            "scope": "q-target",
+            "metric": "occluded_fraction",
+            "state": "unknown",
+            "sensors": ["chrome_occlusion", "slidespec_constraint"],
+            "stages": ["constraint_measurement", "detection"],
+            "qids": ["q-target"],
+            "semantic_ids": ["sem:target"],
+            "constraint_ids": ["con:readability-target"],
+            "reason_codes": [
+                "constraint.evidence.missing",
+                "dom.occlusion.measurement_unavailable",
+            ],
+            "dependency_refs": [],
+            "evidence_atom_count": 2,
+        }
+    ]
 
 
 def test_exact_bundle_nested_findings_are_one_physical_issue_with_raw_atoms():

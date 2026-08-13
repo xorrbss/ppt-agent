@@ -1187,7 +1187,12 @@ test("presentation creation and outline generation retain one stable deck identi
 
   assert.match(
     uploadState,
-    /const \[pendingPresentationId\] = useState\(\(\) => crypto\.randomUUID\(\)\)/u,
+    /const \[pendingPresentationId,\s*setPendingPresentationId\]\s*=\s*useState\(\s*\(\) => crypto\.randomUUID\(\),?\s*\)/u,
+  );
+  assert.match(
+    uploadState,
+    /setPendingPresentationId\(crypto\.randomUUID\(\)\)/u,
+    "a failed create attempt must rotate the deck id before an explicit retry",
   );
   assert.equal(
     uploadState.match(/const presentationId = pendingPresentationId;/gu)?.length,

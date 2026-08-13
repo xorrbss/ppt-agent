@@ -2,6 +2,7 @@ import React from "react";
 import { mount } from "cypress/react";
 import { Provider } from "react-redux";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { NextIntlClientProvider } from "next-intl";
 
 import {
   setOutlines,
@@ -14,6 +15,7 @@ import { AUTHORED_TEMPLATE_ID } from "./TemplateSelection";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { DashboardApi } from "../../services/api/dashboard";
 import OutlinePage from "./OutlinePage";
+import koMessages from "@/i18n/messages/ko.json";
 
 import "@/app/globals.css";
 
@@ -56,13 +58,25 @@ const seedRetryableTask = (
   });
 };
 
-const mountOutlinePage = (pageStore = store) =>
+const mountOutlinePage = (
+  pageStore = store,
+  initialPresentationId?: string,
+) =>
   mount(
-    <AppRouterContext.Provider value={router as any}>
-      <Provider store={pageStore}>
-        <OutlinePage auto={true} />
-      </Provider>
-    </AppRouterContext.Provider>
+    <NextIntlClientProvider
+      locale="ko"
+      messages={koMessages}
+      timeZone="Asia/Seoul"
+    >
+      <AppRouterContext.Provider value={router as any}>
+        <Provider store={pageStore}>
+          <OutlinePage
+            auto={true}
+            initialPresentationId={initialPresentationId}
+          />
+        </Provider>
+      </AppRouterContext.Provider>
+    </NextIntlClientProvider>
   );
 
 describe("<OutlinePage /> resume banner", () => {
@@ -129,6 +143,19 @@ describe("<OutlinePage /> resume banner", () => {
 });
 
 describe("<OutlinePage /> reload recovery", () => {
+  it("restores the presentation identity carried by the outline URL", () => {
+    const reloadStore = makeStore();
+    reloadStore.dispatch(setOutlines([{ content: "# Route-restored outline" }]));
+
+    mountOutlinePage(reloadStore, "presentation-from-route");
+
+    cy.wrap(null).should(() => {
+      expect(
+        reloadStore.getState().presentationGeneration.presentation_id,
+      ).to.equal("presentation-from-route");
+    });
+  });
+
   // A real reload rebuilds the Redux store from scratch, so nothing may be
   // dispatched before mount: the page must rehydrate the outline shell and
   // the resume banner from the stored durable task alone.

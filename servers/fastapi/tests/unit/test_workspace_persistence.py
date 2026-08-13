@@ -13,6 +13,7 @@ from sqlmodel import SQLModel
 
 import migrations
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -54,6 +55,7 @@ WORKSPACE_TABLES = [
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
     WorkspaceActionReceipt.__table__,
+    PresentationExportAttempt.__table__,
     WorkspaceArtifact.__table__,
     WorkspaceCleanupJournal.__table__,
 ]
@@ -387,7 +389,7 @@ def test_workspace_migration_upgrades_sqlite(tmp_path: Path):
                     set(inspector.get_table_names()),
                     migrations.REVISION_ACCOUNT_DELETION_FENCE,
                 )
-                    == migrations.HEAD_REVISION
+                    == migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY
             )
     finally:
         engine.dispose()

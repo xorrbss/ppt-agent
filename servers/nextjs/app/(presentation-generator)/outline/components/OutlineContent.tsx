@@ -16,6 +16,7 @@ import {
 import { OutlineItem } from "./OutlineItem";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface OutlineContentProps {
     outlines: { content: string }[] | null;
@@ -38,6 +39,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
     onAddSlide,
     onRetry,
 }) => {
+    const t = useTranslations("generation");
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
@@ -136,7 +138,7 @@ const OutlineContent: React.FC<OutlineContentProps> = ({
                             onClick={onRetry}
                             className="bg-blue-600 text-white hover:bg-blue-700"
                         >
-                            개요 다시 생성
+                            {t("retryOutline")}
                         </Button>
                         <Button
                             variant="outline"

@@ -11,8 +11,20 @@ export interface AuthoredStylePreview {
   image?: string;
 }
 
-/** Public, backwards-compatible result contract for authored quality review. */
-export type AuthoredReviewRepairPath = "local_patch" | "full_fallback" | "none";
+/**
+ * The internal maximum-repair pipeline may choose a path, but the UI never
+ * exposes that choice to users. `legacy_*` values are normalized to their
+ * current semantic equivalent so historic operation results remain readable.
+ */
+export type AuthoredReviewRepairPath =
+  | "pattern"
+  | "deterministic"
+  | "llm_repair_plan"
+  /** Historic result only; it never authorizes automatic page regeneration. */
+  | "local_patch"
+  /** Historic result only; the current quality-review path never emits it. */
+  | "full_fallback"
+  | "none";
 
 export interface AuthoredQualityReviewElementChange {
   element_id?: string;
@@ -139,10 +151,41 @@ export interface AuthoredQualityReviewStageUsage {
 
 export interface AuthoredQualityReviewMetrics {
   stage_timings_ms: Record<string, number>;
+  /** End-to-end elapsed time. This is not the sum of parallel stage timings. */
+  wall_time_ms?: number;
+  /** Sum of stage timings for capacity analysis; parallel work may make it exceed wall time. */
+  aggregate_stage_time_ms?: number;
+  /** Legacy end-to-end elapsed time alias retained for historic operation results. */
   total_ms?: number;
   cache_hits?: number;
   cache_misses?: number;
+  /** Repair groups eligible to enter the bounded LLM proposal path. */
+  llm_eligible?: number;
   llm_calls?: number;
+  /** Responses received from the provider, before schema validation. */
+  llm_responses?: number;
+  /** Closed, schema-valid RepairPlans that passed proposal validation. */
+  llm_valid_plans?: number;
+  /** Provider responses that passed the closed RepairPlan schema. */
+  llm_schema_passes?: number;
+  /** Provider/network/model failures before a usable response was received. */
+  llm_provider_failures?: number;
+  /** Empty but otherwise successful provider responses. */
+  llm_empty?: number;
+  /** Responses rejected by the closed RepairPlan schema. */
+  llm_schema_rejected?: number;
+  /** Plans rejected before rendering because source projection is unavailable. */
+  proposal_preflight_unprojectable?: number;
+  /** Plans that passed proposal preflight before render admission. */
+  llm_preflight_passes?: number;
+  /** LLM-originated candidates that reached a render attempt. */
+  llm_rendered?: number;
+  /** Bounded provider/model/schema negative-cache hits. */
+  llm_negative_cache_hits?: number;
+  /** LLM proposal attempts suppressed because the provider circuit was open. */
+  llm_circuit_open?: number;
+  /** Distinct bounded reason codes for why the LLM produced no candidate. */
+  llm_no_candidate_reasons?: string[];
   llm_candidates?: number;
   render_calls?: number;
   dom_calls?: number;
@@ -182,6 +225,18 @@ export interface AuthoredQualityReviewMetrics {
   kill_switch_active?: boolean;
   deterministic_resolved?: number;
   llm_resolved?: number;
+  pattern_cluster_count?: number;
+  pattern_representative_count?: number;
+  pattern_recipe_count?: number;
+  pattern_reuse_attempts?: number;
+  pattern_reuse_hits?: number;
+  pattern_reuse_applied?: number;
+  composite_plan_count?: number;
+  composite_operations_merged?: number;
+  render_candidates_rejected_early?: number;
+  full_render_count?: number;
+  llm_pattern_call_count?: number;
+  individual_fallback_count?: number;
   ocr_executed?: boolean;
   ocr_calls?: number;
   ocr_cache_hits?: number;
@@ -201,15 +256,26 @@ export interface AuthoredQualityReviewResult {
   scope?: "all" | "current" | "subset";
   reviewed_count: number;
   issue_slide_count: number;
+  detailed_issue_count: number;
   fixed_count: number;
+  resolved_issue_count: number;
   fixed_slide_indices: number[];
+  remaining_slide_count: number;
   remaining_issue_count: number;
   remaining_slide_indices: number[];
+  pattern_cluster_count?: number;
+  pattern_representative_count?: number;
+  pattern_recipe_count?: number;
+  pattern_reuse_attempts?: number;
+  pattern_reuse_hits?: number;
+  pattern_reuse_applied?: number;
   version_saved: boolean;
   confirmed_issue_count: number;
   incomplete_measurement_count: number;
   unresolved_confirmed_issue_count: number;
   clean_slide_count: number;
+  /** Detailed detector issues that could not be safely associated with a slide. */
+  unattributed_issues: string[];
   slide_results: AuthoredQualityReviewSlideResult[];
   metrics: AuthoredQualityReviewMetrics;
 }
@@ -296,11 +362,62 @@ function normalizeIssueList(value: unknown): string[] {
 }
 
 function normalizeRepairPath(value: unknown): AuthoredReviewRepairPath {
-  return value === "local_patch" ||
-    value === "full_fallback" ||
-    value === "none"
-    ? value
-    : "none";
+  switch (value) {
+    case "pattern":
+    case "pattern_reuse":
+      return "pattern";
+    case "deterministic":
+    case "individual":
+      return "deterministic";
+    case "llm_repair_plan":
+    case "local_patch":
+    case "full_fallback":
+      return value;
+    case "llm":
+      return "llm_repair_plan";
+    default:
+      return "none";
+  }
+}
+
+function normalizeUnattributedIssues(
+  payload: Record<string, unknown>,
+  slideResults: readonly AuthoredQualityReviewSlideResult[],
+): string[] {
+  const attributed = new Set(
+    slideResults.flatMap((slide) => [
+      ...slide.detected_issues,
+      ...slide.resolved_issues,
+      ...slide.remaining_issues,
+    ]),
+  );
+  const candidates = [
+    payload.unattributed_issues,
+    payload.unscoped_issues,
+    payload.issues_without_slide_index,
+    payload.issues,
+    payload.remaining_issues,
+    payload.detected_issues,
+  ];
+  const seen = new Set<string>();
+  return candidates.flatMap((candidate) => {
+    if (!Array.isArray(candidate)) return [];
+    return candidate.flatMap((rawIssue) => {
+      const issue = isRecord(rawIssue) ? rawIssue : {};
+      const index = firstDefined(issue.slide_index, issue.slideIndex);
+      if (
+        typeof index === "number" &&
+        Number.isInteger(index) &&
+        index >= 0
+      ) {
+        return [];
+      }
+      const detail = normalizeIssueList([rawIssue])[0];
+      if (!detail || attributed.has(detail) || seen.has(detail)) return [];
+      seen.add(detail);
+      return [detail];
+    });
+  });
 }
 
 function normalizeOptionalString(value: unknown): string | null {
@@ -942,6 +1059,13 @@ export function normalizeAuthoredQualityReviewResult(
     : isRecord(payload.candidates)
       ? payload.candidates
       : {};
+  const llmMetrics = isRecord(metricsSource.llm)
+    ? metricsSource.llm
+    : isRecord(metricsSource.llm_funnel)
+      ? metricsSource.llm_funnel
+      : isRecord(payload.llm)
+        ? payload.llm
+        : {};
   const transactionMetrics = isRecord(metricsSource.transaction)
     ? metricsSource.transaction
     : isRecord(payload.transaction)
@@ -960,6 +1084,10 @@ export function normalizeAuthoredQualityReviewResult(
   const metrics: AuthoredQualityReviewMetrics = {
     stage_timings_ms: stageTimings,
   };
+  const derivedAggregateStageTime = Object.values(stageTimings).reduce(
+    (total, duration) => total + duration,
+    0,
+  );
   const latencyPercentiles = normalizeLatencyPercentiles(
     firstDefined(
       metricsSource.latency_percentiles,
@@ -977,10 +1105,28 @@ export function normalizeAuthoredQualityReviewResult(
   );
   if (stageUsage) metrics.stage_usage = stageUsage;
   const metricAliases = {
+    wall_time_ms: ["wall_ms", "elapsed_ms"],
+    aggregate_stage_time_ms: ["stage_aggregate_ms", "aggregate_ms"],
     total_ms: [],
     cache_hits: [],
     cache_misses: [],
+    llm_eligible: ["llm_eligible_count", "eligible", "eligible_count"],
     llm_calls: [],
+    llm_responses: ["llm_response_count", "provider_responses"],
+    llm_valid_plans: ["llm_valid_plan_count", "valid_plans"],
+    llm_schema_passes: ["llm_schema_pass_count", "schema_passes"],
+    llm_provider_failures: ["llm_provider_failure_count", "provider_failures"],
+    llm_empty: ["llm_empty_count", "empty_responses"],
+    llm_schema_rejected: ["llm_schema_rejects", "llm_schema_reject_count", "schema_rejected"],
+    proposal_preflight_unprojectable: [
+      "proposal_preflight_rejected",
+      "proposal_preflight_unprojectable_count",
+      "preflight_unprojectable",
+    ],
+    llm_preflight_passes: ["llm_preflight_pass_count", "preflight_passes"],
+    llm_rendered: ["llm_render_count", "llm_rendered_count", "rendered"],
+    llm_negative_cache_hits: ["negative_cache_hits", "negative_cache_hit_count", "llm_cache_negative_hits"],
+    llm_circuit_open: ["llm_circuit_open_count", "circuit_open", "circuit_open_count"],
     llm_candidates: [],
     render_calls: [],
     dom_calls: [],
@@ -1014,6 +1160,18 @@ export function normalizeAuthoredQualityReviewResult(
     solver_unsat_core_size: ["unsat_core_size"],
     deterministic_resolved: [],
     llm_resolved: [],
+    pattern_cluster_count: [],
+    pattern_representative_count: ["pattern_representatives"],
+    pattern_recipe_count: [],
+    pattern_reuse_attempts: [],
+    pattern_reuse_hits: [],
+    pattern_reuse_applied: [],
+    composite_plan_count: [],
+    composite_operations_merged: [],
+    render_candidates_rejected_early: ["early_render_rejections"],
+    full_render_count: ["full_renders"],
+    llm_pattern_call_count: ["llm_pattern_calls"],
+    individual_fallback_count: ["individual_fallbacks"],
   } as const;
   for (const [key, aliases] of Object.entries(metricAliases) as Array<
     [keyof typeof metricAliases, readonly string[]]
@@ -1024,6 +1182,17 @@ export function normalizeAuthoredQualityReviewResult(
       .find((candidate) => candidate !== undefined);
     const normalized = normalizeNumber(raw);
     if (normalized !== undefined) metrics[key] = normalized;
+  }
+  if (
+    metrics.aggregate_stage_time_ms === undefined &&
+    Object.keys(stageTimings).length > 0
+  ) {
+    metrics.aggregate_stage_time_ms = derivedAggregateStageTime;
+  }
+  // `total_ms` was the original wall-clock field. Keep it readable but do not
+  // use it as an aggregate stage duration when the explicit field is absent.
+  if (metrics.wall_time_ms === undefined && metrics.total_ms !== undefined) {
+    metrics.wall_time_ms = metrics.total_ms;
   }
   const assignNestedMetric = (
     key:
@@ -1077,6 +1246,53 @@ export function normalizeAuthoredQualityReviewResult(
     "rolled_back",
     firstDefined(metrics.rolled_back, transactionMetrics.rollback_count),
   );
+  const assignLlmMetric = (
+    key:
+      | "llm_calls"
+      | "llm_responses"
+      | "llm_valid_plans"
+      | "llm_schema_passes"
+      | "llm_provider_failures"
+      | "llm_empty"
+      | "llm_schema_rejected"
+      | "proposal_preflight_unprojectable"
+      | "llm_preflight_passes"
+      | "llm_rendered"
+      | "llm_negative_cache_hits"
+      | "llm_eligible"
+      | "llm_circuit_open",
+    ...values: unknown[]
+  ) => {
+    const normalized = normalizeNumber(firstDefined(metrics[key], ...values));
+    if (normalized !== undefined) metrics[key] = normalized;
+  };
+  assignLlmMetric("llm_calls", llmMetrics.calls, llmMetrics.call_count);
+  assignLlmMetric("llm_eligible", llmMetrics.eligible, llmMetrics.eligible_count);
+  assignLlmMetric("llm_responses", llmMetrics.responses, llmMetrics.response_count);
+  assignLlmMetric("llm_valid_plans", llmMetrics.valid_plans, llmMetrics.valid_plan_count);
+  assignLlmMetric("llm_schema_passes", llmMetrics.schema_passes, llmMetrics.schema_pass_count);
+  assignLlmMetric("llm_provider_failures", llmMetrics.provider_failures, llmMetrics.provider_failure_count);
+  assignLlmMetric("llm_empty", llmMetrics.empty, llmMetrics.empty_count);
+  assignLlmMetric("llm_schema_rejected", llmMetrics.schema_rejected, llmMetrics.schema_rejects);
+  assignLlmMetric(
+    "proposal_preflight_unprojectable",
+    llmMetrics.preflight_unprojectable,
+    llmMetrics.proposal_preflight_unprojectable,
+  );
+  assignLlmMetric("llm_preflight_passes", llmMetrics.preflight_passes, llmMetrics.preflight_pass_count);
+  assignLlmMetric("llm_rendered", llmMetrics.rendered, llmMetrics.render_count);
+  assignLlmMetric("llm_negative_cache_hits", llmMetrics.negative_cache_hits);
+  assignLlmMetric("llm_circuit_open", llmMetrics.circuit_open, llmMetrics.circuit_open_count);
+  const noCandidateReasons = normalizeStringList(
+    firstDefined(
+      metricsSource.no_candidate_reasons,
+      payload.no_candidate_reasons,
+      llmMetrics.no_candidate_reasons,
+    ),
+  );
+  if (noCandidateReasons.length > 0) {
+    metrics.llm_no_candidate_reasons = noCandidateReasons;
+  }
   const killSwitchActive = normalizeBoolean(
     firstDefined(
       metricsSource.kill_switch_active,
@@ -1193,6 +1409,16 @@ export function normalizeAuthoredQualityReviewResult(
         )
         .map((slide) => slide.slide_index),
     ).size);
+  const detailedIssueCount = normalizeNumber(payload.detailed_issue_count) ??
+    confirmedIssueCount;
+  const resolvedIssueCount = normalizeNumber(payload.resolved_issue_count) ??
+    Math.max(0, detailedIssueCount - unresolvedConfirmedIssueCount);
+  const remainingSlideIndices = normalizeIndexList(
+    payload.remaining_slide_indices ?? payload.remaining_issue_indices,
+  );
+  const remainingSlideCount = normalizeNumber(payload.remaining_slide_count) ??
+    remainingSlideIndices.length;
+  const unattributedIssues = normalizeUnattributedIssues(payload, slideResults);
   return {
     presentation_id:
       typeof payload.presentation_id === "string"
@@ -1207,17 +1433,19 @@ export function normalizeAuthoredQualityReviewResult(
         : undefined,
     reviewed_count: normalizeNumber(payload.reviewed_count) ?? 0,
     issue_slide_count: normalizeNumber(payload.issue_slide_count) ?? 0,
+    detailed_issue_count: detailedIssueCount,
     fixed_count: normalizeNumber(payload.fixed_count) ?? 0,
+    resolved_issue_count: resolvedIssueCount,
     fixed_slide_indices: fixedSlideIndices,
+    remaining_slide_count: remainingSlideCount,
     remaining_issue_count: normalizeNumber(payload.remaining_issue_count) ?? 0,
-    remaining_slide_indices: normalizeIndexList(
-      payload.remaining_slide_indices,
-    ),
+    remaining_slide_indices: remainingSlideIndices,
     version_saved: payload.version_saved === true,
     confirmed_issue_count: confirmedIssueCount,
     incomplete_measurement_count: incompleteMeasurementCount,
     unresolved_confirmed_issue_count: unresolvedConfirmedIssueCount,
     clean_slide_count: cleanSlideCount,
+    unattributed_issues: unattributedIssues,
     slide_results: slideResults,
     metrics,
   };

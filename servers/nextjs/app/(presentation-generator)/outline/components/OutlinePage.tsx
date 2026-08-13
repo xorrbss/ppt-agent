@@ -23,10 +23,14 @@ import { TemplateLayoutsWithSettings } from "@/app/presentation-templates/utils"
 import { resolveTemplateSelection } from "@/app/presentation-templates/select";
 import { Separator } from "@/components/ui/separator";
 
-const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
+const OutlinePage: React.FC<{
+  auto?: boolean;
+  initialPresentationId?: string;
+}> = ({ auto = false, initialPresentationId }) => {
   const { presentation_id, outlines } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
+  const resolvedPresentationId = presentation_id || initialPresentationId || null;
   const storedTemplateId = useSelector(
     (state: RootState) => state.pptGenUpload.selectedTemplate
   );
@@ -45,11 +49,11 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   // Custom hooks
   const dispatch = useDispatch();
   const router = useRouter();
-  const streamState = useOutlineStreaming(presentation_id);
+  const streamState = useOutlineStreaming(resolvedPresentationId);
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
   const { loadingState, handleSubmit, cancelGeneration } =
     usePresentationGeneration(
-      presentation_id,
+      resolvedPresentationId,
       outlines,
       generationTemplate,
       setActiveTab
@@ -90,7 +94,7 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
   useEffect(() => {
     if (!auto || autoSubmittedRef.current) return;
     if (outlinesPreexistingRef.current) return;
-    if (!presentation_id || streamState.isStreaming) return;
+    if (!resolvedPresentationId || streamState.isStreaming) return;
     if (!streamState.hasCompleted) return;
     if (!outlines || outlines.length === 0) return;
     if (!generationTemplate) return;
@@ -98,7 +102,7 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     handleSubmit();
   }, [
     auto,
-    presentation_id,
+    resolvedPresentationId,
     streamState.isStreaming,
     streamState.hasCompleted,
     outlines,
@@ -106,13 +110,21 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     handleSubmit,
   ]);
 
+  // Redux can be rebuilt during a reload or development hot update between
+  // create admission and this route. Keep the durable presentation identity in
+  // the URL and restore the client store without falling back to the empty view.
+  useEffect(() => {
+    if (presentation_id || !initialPresentationId) return;
+    dispatch(setPresentationId(initialPresentationId));
+  }, [presentation_id, initialPresentationId, dispatch]);
+
   // A reload rebuilds Redux from scratch (nothing is persisted and /outline
   // carries no id), which would strand an interrupted-but-resumable generation
   // behind the EmptyStateView. Rehydrate the outline shell from the stored
   // durable task; storage is client-only, so read it in an effect to keep the
   // server and hydration renders identical.
   useEffect(() => {
-    if (presentation_id) return;
+    if (resolvedPresentationId) return;
     const storedTask = findResumableGenerationTask();
     if (!storedTask?.sourcePresentationId) return;
     // The auto-bridge submit is only for an outline stream run by a fresh
@@ -125,9 +137,9 @@ const OutlinePage: React.FC<{ auto?: boolean }> = ({ auto = false }) => {
     setSelectedTemplate(AUTHORED_TEMPLATE_ID);
     dispatch(setPptGenUploadState({ selectedTemplate: AUTHORED_TEMPLATE_ID }));
     dispatch(setPresentationId(storedTask.sourcePresentationId));
-  }, [presentation_id, dispatch]);
+  }, [resolvedPresentationId, dispatch]);
 
-  if (!presentation_id) {
+  if (!resolvedPresentationId) {
     return <EmptyStateView />;
   }
 

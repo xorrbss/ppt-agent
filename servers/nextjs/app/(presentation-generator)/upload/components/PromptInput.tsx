@@ -1,6 +1,6 @@
 import { Textarea } from "@/components/ui/textarea";
-import { PencilIcon } from "lucide-react";
-import React from "react";
+import { useTranslations } from "next-intl";
+import React, { useEffect, useRef } from "react";
 
 interface PromptInputProps {
   value: string;
@@ -9,41 +9,40 @@ interface PromptInputProps {
 }
 
 export function PromptInput({ value, onChange, onSubmit }: PromptInputProps) {
-  const handleChange = (val: string) => {
-    onChange(val);
-  };
+  const t = useTranslations("upload");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Enter submits (like Claude); Shift+Enter inserts a newline. Skip while an
-  // IME composition is active so confirming Korean input doesn't submit.
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, 76), 184)}px`;
+  }, [value]);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent.isComposing
+    ) {
+      event.preventDefault();
       onSubmit?.();
     }
   };
 
   return (
-
-    <div className="relative font-syne border border-[#DBDBDB99] rounded-[8px] px-[10px] py-3"
-      style={{
-        boxShadow: "0 4px 14px 0 rgba(0, 0, 0, 0.04)",
-
-      }}
-    >
-      <div className="flex items-center gap-2 mb-1">
-        <PencilIcon className="w-3.5 h-3.5" />
-        <p className="text-sm font-normal text-[#333333] font-syne ">프롬프트 입력</p>
-      </div>
-      <Textarea
-        value={value}
-        autoFocus={true}
-        rows={4}
-        onChange={(e) => handleChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="아이디어만 입력하세요… 슬라이드는 저희가 만들어 드립니다"
-        data-testid="prompt-input"
-        className={`px-2 py-0 font-medium shadow-none font-syne indent-4 text-base min-h-[120px] max-h-[250px] focus-visible:ring-offset-0  focus-visible:ring-transparent focus-visible:ring-0 border-none overflow-y-auto  custom_scrollbar  `}
-      />
-    </div>
+    <Textarea
+      ref={textareaRef}
+      value={value}
+      autoFocus
+      rows={2}
+      aria-label={t("promptLabel")}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={handleKeyDown}
+      placeholder={t("promptPlaceholder")}
+      data-testid="prompt-input"
+      className="custom_scrollbar min-h-[76px] max-h-[184px] resize-none overflow-y-auto border-0 bg-transparent px-1 py-1 font-syne text-base font-medium leading-7 text-[#242629] shadow-none placeholder:font-normal placeholder:text-[#909499] focus-visible:ring-0 focus-visible:ring-offset-0 md:text-[17px]"
+    />
   );
 }

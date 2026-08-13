@@ -64,8 +64,9 @@ class AuthoredQualityReviewRequest(BaseModel):
     scope: ReviewScope = "all"
     slide_indices: List[SlideIndex] = Field(default_factory=list)
     mode: Literal["analyze_and_fix"] = "analyze_and_fix"
-    # SlideSpec is the default repair path. Set false for a per-request legacy
-    # comparison; the server kill switch remains the authoritative rollback.
+    # Retained for wire compatibility with older clients. ``quality.review`` is
+    # maximum-repair-only and ignores false; the server kill switch remains the
+    # authoritative operational rollback.
     slidespec_opt_in: bool = Field(default=True, strict=True)
 
     @model_validator(mode="after")

@@ -28,6 +28,8 @@ from templates.v2.models.elements import (
 )
 from templates.v2.models.layouts import SlideLayout
 from templates.v2.pptx.native_compiler import TemplateV2NativePptxCompileError
+from templates.v2.pptx.package_reader import UnsafePptxPackage
+from templates.v2.pptx.part_targets import resolve_internal_part_target
 from templates.v2.pptx.repeat_adapter import (
     TemplateV2PptxRepeatAdapterError,
     prepare_repeatable_pptx_slide,
@@ -51,6 +53,12 @@ _SLIDE_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
 )
 _XML_NS = "http://www.w3.org/XML/1998/namespace"
+_PRIVATE_PRESENTATION_RELATIONSHIP_SUFFIXES = (
+    "/notesSlide",
+    "/notesMaster",
+    "/comments",
+    "/commentAuthors",
+)
 
 # ElementTree's anonymous ``ns0`` prefix is legal XML, but LibreOffice rejects
 # a package when independently serialized OPC roots reuse it for different
@@ -130,7 +138,6 @@ def compile_template_v2_native_clone(
         source_xml = parts[source_part]
         target_part = source_part
         if source_part in used_parts:
-            _reject_unsafe_slide_duplication(parts, source_part, slide_index)
             target_part = f"ppt/slides/slide{next_slide_number}.xml"
             next_slide_number += 1
             source_rels_part = _slide_relationship_part(source_part)
@@ -170,6 +177,7 @@ def compile_template_v2_native_clone(
     parts["ppt/_rels/presentation.xml.rels"] = _serialize_xml(presentation_rels)
     if content_types_changed:
         parts["[Content_Types].xml"] = _serialize_content_types(content_types)
+    parts = _retain_generated_package(parts, output_slide_ids)
     package = _write_package(parts)
     manifest = {
         "schema_version": TEMPLATE_V2_NATIVE_CLONE_SCHEMA_VERSION,
@@ -269,30 +277,18 @@ def _source_slide_identifiers(root: ET.Element) -> dict[str, int]:
 
 
 def _relationship_target(source_part: str, target: str) -> str:
-    if target.startswith("/"):
-        return posixpath.normpath(target.lstrip("/"))
-    return posixpath.normpath(posixpath.join(posixpath.dirname(source_part), target))
+    try:
+        return resolve_internal_part_target(source_part, target)
+    except UnsafePptxPackage as error:
+        raise TemplateV2NativePptxCompileError(
+            "template_v2_native_clone_relationship_target_invalid",
+            path=source_part,
+        ) from error
 
 
 def _slide_relationship_part(slide_part: str) -> str:
     directory, filename = posixpath.split(slide_part)
     return f"{directory}/_rels/{filename}.rels"
-
-
-def _reject_unsafe_slide_duplication(
-    parts: Mapping[str, bytes], source_part: str, slide_index: int
-) -> None:
-    rels_name = _slide_relationship_part(source_part)
-    if rels_name not in parts:
-        return
-    rels = _xml_part(parts, rels_name)
-    for relationship in rels.findall(f"{{{_REL_NS}}}Relationship"):
-        relationship_type = relationship.get("Type", "").lower()
-        if "notesslide" in relationship_type or "comment" in relationship_type:
-            raise TemplateV2NativePptxCompileError(
-                "template_v2_native_clone_slide_reuse_unsupported",
-                path=f"slides.{slide_index}.source_part",
-            )
 
 
 def _append_slide_relationship(root: ET.Element, target_part: str) -> str:
@@ -342,6 +338,110 @@ def _replace_slide_order(root: ET.Element, slides: Sequence[tuple[int, str]]) ->
             f"{{{_P_NS}}}sldId",
             {"id": str(slide_id), f"{{{_R_NS}}}id": relationship_id},
         )
+
+
+def _retain_generated_package(
+    parts: Mapping[str, bytes],
+    output_slides: Sequence[tuple[int, str]],
+) -> dict[str, bytes]:
+    """Keep only generated-deck reachable parts and remove notes/comments."""
+
+    retained = dict(parts)
+    presentation_rels_name = "ppt/_rels/presentation.xml.rels"
+    presentation_rels = _xml_part(retained, presentation_rels_name)
+    output_relationship_ids = {relationship_id for _, relationship_id in output_slides}
+    for relationship in list(
+        presentation_rels.findall(f"{{{_REL_NS}}}Relationship")
+    ):
+        if (
+            relationship.get("Type") == _SLIDE_REL_TYPE
+            and relationship.get("Id") not in output_relationship_ids
+        ):
+            presentation_rels.remove(relationship)
+    retained[presentation_rels_name] = _serialize_xml(presentation_rels)
+
+    reachable: set[str] = set()
+    relationship_parts: set[str] = set()
+    pending = ["ppt/presentation.xml"]
+    root_rels_name = "_rels/.rels"
+    if root_rels_name in retained:
+        relationship_parts.add(root_rels_name)
+        pending.extend(
+            _sanitize_relationships(
+                retained,
+                root_rels_name,
+                source_part="",
+            )
+        )
+
+    while pending:
+        part = pending.pop()
+        if part in reachable:
+            continue
+        if part not in retained:
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_clone_relationship_part_missing",
+                path=part,
+            )
+        reachable.add(part)
+        rels_name = _part_relationship_name(part)
+        if rels_name not in retained:
+            continue
+        relationship_parts.add(rels_name)
+        pending.extend(
+            _sanitize_relationships(
+                retained,
+                rels_name,
+                source_part=part,
+            )
+        )
+
+    keep = reachable | relationship_parts | {"[Content_Types].xml"}
+    retained = {name: payload for name, payload in retained.items() if name in keep}
+    content_types = _xml_part(retained, "[Content_Types].xml")
+    content_types_changed = False
+    for override in list(content_types.findall(f"{{{_CT_NS}}}Override")):
+        part_name = (override.get("PartName") or "").lstrip("/")
+        if part_name and part_name not in retained:
+            content_types.remove(override)
+            content_types_changed = True
+    if content_types_changed:
+        retained["[Content_Types].xml"] = _serialize_content_types(content_types)
+    return retained
+
+
+def _sanitize_relationships(
+    parts: dict[str, bytes],
+    rels_name: str,
+    *,
+    source_part: str,
+) -> list[str]:
+    root = _xml_part(parts, rels_name)
+    targets: list[str] = []
+    changed = False
+    for relationship in list(root.findall(f"{{{_REL_NS}}}Relationship")):
+        relationship_type = relationship.get("Type", "")
+        if relationship_type.endswith(_PRIVATE_PRESENTATION_RELATIONSHIP_SUFFIXES):
+            root.remove(relationship)
+            changed = True
+            continue
+        if relationship.get("TargetMode") == "External":
+            continue
+        target = relationship.get("Target")
+        if not target:
+            raise TemplateV2NativePptxCompileError(
+                "template_v2_native_clone_relationship_target_invalid",
+                path=rels_name,
+            )
+        targets.append(_relationship_target(source_part, target))
+    if changed:
+        parts[rels_name] = _serialize_xml(root)
+    return targets
+
+
+def _part_relationship_name(part: str) -> str:
+    directory, filename = posixpath.split(part)
+    return posixpath.join(directory, "_rels", f"{filename}.rels")
 
 
 def _patch_slide(

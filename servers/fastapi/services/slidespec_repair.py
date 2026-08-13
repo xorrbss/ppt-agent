@@ -10,6 +10,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from models.slidespec_v1 import REPAIR_PLAN_SCHEMA, LayoutNode, RepairPlan, SlideSpec
+from services.slidespec_coupled_repair import (
+    CoupledRepairRejection,
+    build_coupled_repair_candidates,
+)
 from services.slidespec_geometry_candidates import (
     GeometryCandidateRejection,
     generate_geometry_candidates,
@@ -56,6 +60,7 @@ class RepairCascadeBuildResult:
     plans: tuple[RepairPlan, ...]
     rejections: tuple[RepairProjectionRejection, ...] = ()
     geometry_rejections: tuple[GeometryCandidateRejection, ...] = ()
+    coupled_rejections: tuple[CoupledRepairRejection, ...] = ()
 
 
 def _mapping(value: object) -> Mapping[str, Any]:
@@ -821,8 +826,16 @@ def _plan(
     operations: list[dict[str, Any]],
     *,
     diagnostic_refs: Sequence[str] | None = None,
+    scope_targets: Sequence[str] | None = None,
 ) -> RepairPlan:
-    targets = tuple(dict.fromkeys(str(operation["target"]) for operation in operations))
+    targets = tuple(
+        dict.fromkeys(
+            (
+                *(str(target) for target in (scope_targets or ())),
+                *(str(operation["target"]) for operation in operations),
+            )
+        )
+    )
     refs_by_target = _mapping(context.get("diagnosticRefsByTarget", {}))
     targeted_refs = tuple(
         dict.fromkeys(
@@ -1068,10 +1081,20 @@ def build_deterministic_cascade_report(
         )
         for candidate in geometry.candidates
     )
+    coupled = build_coupled_repair_candidates(context)
+    plans.extend(
+        _plan(
+            context,
+            list(candidate.operations),
+            diagnostic_refs=candidate.diagnostic_refs,
+            scope_targets=candidate.scope,
+        )
+        for candidate in coupled.candidates
+    )
     plans.extend(_cross_issue_compositions(context, plans))
     plans = list({plan.plan_id: plan for plan in plans}.values())
     return RepairCascadeBuildResult(
-        tuple(plans), tuple(rejected), geometry.rejections
+        tuple(plans), tuple(rejected), geometry.rejections, coupled.rejections
     )
 
 

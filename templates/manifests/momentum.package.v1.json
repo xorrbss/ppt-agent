@@ -91,7 +91,7 @@
   },
   "browserGolden": {
     "receiptPath": "templates/manifests/momentum.browser-golden.v1.json",
-    "receiptSha256": "b3728d502f1da47d4d0363cab59702860ea134783bc1eda92087b24504eff022"
+    "receiptSha256": "3822deb5bb161474ec2217c94def8acde971724e2dacc085c51a3c64666661a9"
   },
   "publication": {
     "status": "ready",

@@ -19,7 +19,7 @@ import time
 import uuid
 import weakref
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
@@ -1853,6 +1853,43 @@ def _merge_canonical_metric_group(
     return merged
 
 
+def _indexed_canonical_issues(
+    canonical: Mapping[str, Any], *, remaining_only: bool
+) -> list[dict[str, Any]]:
+    """Flatten slide findings without discarding their navigation index."""
+
+    indexed: list[dict[str, Any]] = []
+    raw_slides = canonical.get("slide_results")
+    if isinstance(raw_slides, Sequence) and not isinstance(
+        raw_slides, (str, bytes, bytearray)
+    ):
+        for raw_slide in raw_slides:
+            if not isinstance(raw_slide, Mapping):
+                continue
+            slide_index = raw_slide.get("slide_index")
+            if not isinstance(slide_index, int) or isinstance(slide_index, bool):
+                continue
+            if remaining_only and int(
+                raw_slide.get("unresolved_confirmed_issue_count", 0)
+            ) <= 0:
+                continue
+            raw_issues = raw_slide.get("confirmed_issues")
+            if not isinstance(raw_issues, Sequence) or isinstance(
+                raw_issues, (str, bytes, bytearray)
+            ):
+                continue
+            indexed.extend(
+                {**dict(issue), "slide_index": slide_index}
+                for issue in raw_issues
+                if isinstance(issue, Mapping)
+            )
+    if indexed:
+        return indexed
+    fallback_key = "remaining_issues" if remaining_only else "issues"
+    fallback = canonical.get(fallback_key)
+    return [dict(issue) for issue in fallback or () if isinstance(issue, Mapping)]
+
+
 def _merge_slidespec_review_data(
     *,
     presentation_id: uuid.UUID,
@@ -1869,16 +1906,30 @@ def _merge_slidespec_review_data(
     additive = (
         "reviewed_count",
         "issue_slide_count",
+        "detailed_issue_count",
+        "confirmed_issue_count",
+        "incomplete_measurement_count",
+        "unresolved_confirmed_issue_count",
+        "clean_slide_count",
         "fixed_count",
+        "resolved_issue_count",
         "candidate_count",
         "accepted_candidate_count",
         "rejected_candidate_count",
+        "remaining_slide_count",
         "remaining_issue_count",
     )
     for key in additive:
         result[key] = int(result.get(key, 0)) + int(canonical.get(key, 0))
-    for key in ("issues", "remaining_issues", "slide_results"):
-        result[key] = list(result.get(key, [])) + list(canonical.get(key, []))
+    result["issues"] = list(result.get("issues", [])) + _indexed_canonical_issues(
+        canonical, remaining_only=False
+    )
+    result["remaining_issues"] = list(
+        result.get("remaining_issues", [])
+    ) + _indexed_canonical_issues(canonical, remaining_only=True)
+    result["slide_results"] = list(result.get("slide_results", [])) + list(
+        canonical.get("slide_results", [])
+    )
     result["candidate_decisions"] = list(result.get("candidate_decisions", [])) + list(
         canonical.get("candidate_decisions", [])
     )
@@ -1934,6 +1985,93 @@ def _merge_slidespec_review_data(
     return result
 
 
+def _unclaimed_slidespec_review_data(
+    positions: Iterable[int],
+    failures: Mapping[int, str],
+) -> dict[str, Any]:
+    """Describe slides that could not enter the typed repair pipeline.
+
+    Quality review must never turn an import/rollout failure into an automatic
+    full-page rewrite.  These entries therefore remain revision-neutral and
+    carry a concrete reason that the UI can surface next to the existing,
+    explicitly user-invoked single-page remake action.
+    """
+
+    ordered = tuple(sorted(set(int(position) for position in positions)))
+    slide_results: list[dict[str, Any]] = []
+    remaining_issues: list[dict[str, Any]] = []
+    for position in ordered:
+        reason = str(failures.get(position) or "repair.typed_pipeline_unavailable")
+        issue = {
+            "slide_index": position,
+            "type": "quality_measurement_incomplete",
+            "severity": "high",
+            "detail": reason,
+            "reason_code": reason,
+            "applied": False,
+        }
+        remaining_issues.append(issue)
+        slide_results.append(
+            {
+                "slide_index": position,
+                "path": "none",
+                "attempted": False,
+                "applied": False,
+                "reason_codes": (
+                    reason,
+                    "quality_review.automatic_page_regeneration_disabled",
+                ),
+                "confirmed_issues": [],
+                "remaining_issues": [reason],
+                "confirmed_issue_count": 0,
+                "incomplete_measurement_count": 1,
+                "unresolved_confirmed_issue_count": 0,
+                "clean_slide_count": 0,
+            }
+        )
+    return {
+        "reviewed_count": len(ordered),
+        "issue_slide_count": 0,
+        "detailed_issue_count": 0,
+        "confirmed_issue_count": 0,
+        "incomplete_measurement_count": len(ordered),
+        "unresolved_confirmed_issue_count": 0,
+        "clean_slide_count": 0,
+        "issues": [],
+        "fixed_count": 0,
+        "resolved_issue_count": 0,
+        "fixed_slide_indices": [],
+        "remaining_slide_count": len(ordered),
+        "remaining_issue_count": len(ordered),
+        "remaining_slide_indices": list(ordered),
+        "remaining_issues": remaining_issues,
+        "candidate_count": 0,
+        "accepted_candidate_count": 0,
+        "rejected_candidate_count": 0,
+        "candidate_decisions": [],
+        "rejection_reasons": dict(
+            Counter(
+                str(
+                    failures.get(position)
+                    or "repair.typed_pipeline_unavailable"
+                )
+                for position in ordered
+            )
+        ),
+        "version_saved": False,
+        "slide_results": slide_results,
+        "routing": {
+            "slidespec": True,
+            "claimed_positions": [],
+            "automatic_page_regeneration": False,
+        },
+        "metrics": {
+            "individual_fallback_count": len(ordered),
+            "automatic_page_regeneration_calls": 0,
+        },
+    }
+
+
 async def _run_authored_quality_review_unlocked(
     presentation_id: uuid.UUID,
     request: AuthoredQualityReviewRequest,
@@ -1974,7 +2112,10 @@ async def _run_authored_quality_review_unlocked(
         presentation_id=presentation_id,
         slides=slides,
         positions=positions,
-        opt_in=request.slidespec_opt_in,
+        # ``analyze_and_fix`` is the maximum-repair product mode.  Retain the
+        # request field for wire compatibility, but do not let an old canary UI
+        # opt the operation into the legacy full-page rewrite path.
+        opt_in=True,
         owner_id=getattr(presentation, "owner_id", None),
         session=session,
     )
@@ -1986,37 +2127,34 @@ async def _run_authored_quality_review_unlocked(
         if isinstance(slides[position].properties, Mapping)
         and ACTIVE_POINTER_KEY in slides[position].properties
     }
+    # Import/rollout failures remain unresolved.  Falling back to the legacy
+    # review service here would let its ``revise_authored_deck`` path regenerate
+    # whole pages, which is explicitly outside quality.review.  The separately
+    # invoked single-page remake operation remains available to the user.
+    unclaimed_positions = [
+        position for position in positions if position not in claimed_hint
+    ]
+    unclaimed_data: Mapping[str, Any] | None = (
+        _unclaimed_slidespec_review_data(unclaimed_positions, imported.failures)
+        if unclaimed_positions
+        else None
+    )
+
     if not claimed_hint:
-        await _run_legacy_authored_quality_review_unlocked(
-            presentation_id, request, task, session
+        data = _merge_slidespec_review_data(
+            presentation_id=presentation_id,
+            request=request,
+            legacy=unclaimed_data,
+            canonical={},
+        )
+        await _set_status(
+            session,
+            task,
+            status="completed",
+            message="검수는 완료되었지만 자동 수정으로 확정된 변경은 없습니다.",
+            data=data,
         )
         return
-
-    # Run legacy owners first.  It may commit; canonical publication then takes a
-    # fresh snapshot and CASes only its disjoint pointer-backed slides.  This avoids
-    # reporting a failed mixed-deck task after a canonical mutation already landed.
-    legacy_positions = [position for position in positions if position not in claimed_hint]
-    legacy_data: Mapping[str, Any] | None = None
-    if legacy_positions:
-        legacy_request = AuthoredQualityReviewRequest(
-            scope="subset",
-            slide_indices=legacy_positions,
-            mode=request.mode,
-            slidespec_opt_in=False,
-        )
-        await _run_legacy_authored_quality_review_unlocked(
-            presentation_id, legacy_request, task, session
-        )
-        legacy_data = task.data if isinstance(task.data, Mapping) else None
-
-        refreshed_rows = await _execute_sqlalchemy(
-            session,
-            select(SlideModel)
-            .where(SlideModel.presentation == presentation_id)
-            .order_by(SlideModel.index)
-            .execution_options(populate_existing=True),
-        )
-        slides = list(refreshed_rows.scalars().all())
 
     from services.slidespec_authored_executor import execute_slidespec_authored_review
 
@@ -2024,7 +2162,7 @@ async def _run_authored_quality_review_unlocked(
         presentation_id=presentation_id,
         slides=slides,
         positions=sorted(claimed_hint),
-        opt_in=request.slidespec_opt_in,
+        opt_in=True,
         owner_id=getattr(presentation, "owner_id", None),
         session=session,
     )
@@ -2042,7 +2180,7 @@ async def _run_authored_quality_review_unlocked(
     data = _merge_slidespec_review_data(
         presentation_id=presentation_id,
         request=request,
-        legacy=legacy_data,
+        legacy=unclaimed_data,
         canonical=canonical.data,
     )
     await _set_status(

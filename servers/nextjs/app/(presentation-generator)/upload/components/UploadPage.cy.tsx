@@ -15,6 +15,8 @@ import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared
 import { Toaster } from '@/components/ui/sonner'
 import { NextIntlClientProvider } from 'next-intl'
 import koMessages from '@/i18n/messages/ko.json'
+import { setPptGenUploadState } from '@/store/slices/presentationGenUpload'
+import { catalogStyles } from '../../outline/components/TemplateSelection.test-data'
 
 import '@/app/globals.css'
 
@@ -50,6 +52,44 @@ const checkToast = (message: string) =>
 describe('<UploadPage />', () => {
   beforeEach(() => {
     cy.viewport(1440, 900)
+    store.dispatch(
+      setPptGenUploadState({
+        selectedTemplate: null,
+        selectedTheme: null,
+        authoredStyle: 'default',
+      })
+    )
+    cy.intercept('GET', '**/api/v1/ppt/structured-templates*', {
+      statusCode: 200,
+      body: Array.from({ length: 5 }, (_, index) => ({
+        id: `catalog-template-${index + 1}`,
+        name: `카탈로그 템플릿 ${index + 1}`,
+        description: '편집 가능한 프레젠테이션 템플릿',
+        revision: 1,
+        is_default: index === 0,
+        source: index === 4 ? 'custom-upload' : 'Presenton',
+        assets: null,
+        layouts: { layouts: [{ id: 'cover' }, { id: 'content' }] },
+      })),
+    }).as('structuredTemplates')
+    cy.intercept('GET', '**/api/v1/ppt/authored/styles', {
+      statusCode: 200,
+      body: catalogStyles.slice(0, 2).map((style, index) =>
+        index === 0
+          ? {
+              ...style,
+              preview: {
+                ...style.preview,
+                image: '/create_presentation_card_1.png',
+              },
+            }
+          : style
+      ),
+    }).as('authoredStyles')
+    cy.intercept('GET', '**/api/v1/ppt/themes/all', {
+      statusCode: 200,
+      body: [],
+    })
     mountUploadPage()
   })
 
@@ -61,8 +101,9 @@ describe('<UploadPage />', () => {
     // Language + tone/verbosity live behind the advanced-settings modal.
     cy.get('[data-testid="advanced-settings-button"]').should('exist')
     cy.get('[data-testid="file-upload-input"]').should('exist')
-    cy.get('[data-testid="generate-action-bar"]').should('be.visible')
-    cy.get('[data-testid="appearance-settings"]').should('not.have.attr', 'open')
+    cy.get('[data-testid="template-catalog"]').should('be.visible')
+    cy.get('[data-testid="structured-mode-button"]').should('have.attr', 'aria-pressed', 'true')
+    cy.get('[data-testid="authored-mode-button"]').should('have.attr', 'aria-pressed', 'false')
   })
 
   it('keeps the primary CTA inside the desktop viewport', () => {
@@ -75,20 +116,18 @@ describe('<UploadPage />', () => {
 
   it('keeps the primary CTA inside a 390x844 mobile viewport', () => {
     cy.viewport(390, 844)
-    cy.get('[data-testid="generate-action-bar"]').should(($bar) => {
-      const rect = $bar[0].getBoundingClientRect()
+    cy.get('[data-testid="compose-card"]').should(($composer) => {
+      const rect = $composer[0].getBoundingClientRect()
       expect(rect.left).to.be.at.least(0)
       expect(rect.right).to.be.at.most(390)
-      expect(rect.bottom).to.be.at.most(844)
     })
     cy.get('[data-testid="generate-presentation-button"]').should('be.visible')
   })
 
-  it('opens optional design settings and runs the CTA from the keyboard', () => {
-    cy.get('[data-testid="appearance-settings"] summary')
-      .focus()
-      .type('{enter}')
-    cy.get('[data-testid="appearance-settings"]').should('have.attr', 'open')
+  it('opens theme settings and runs the CTA from the keyboard', () => {
+    cy.get('[data-testid="theme-settings-button"]').click()
+    cy.get('[role="dialog"]').should('be.visible').and('contain', '프레젠테이션 테마')
+    cy.get('body').type('{esc}')
 
     cy.get('[data-testid="generate-presentation-button"]')
       .focus()
@@ -246,13 +285,79 @@ describe('<UploadPage />', () => {
 
   describe('Theme gallery', () => {
     it('lists presets and selecting one marks it active', () => {
-      cy.get('[data-testid="appearance-settings"] summary').click()
+      cy.get('[data-testid="theme-settings-button"]').click()
       cy.get('[data-testid="theme-gallery"]').should('exist')
       cy.get('[data-testid="theme-option-carbon"]').should('exist')
       cy.get('[data-testid="theme-option-broadsheet"]').should('exist')
       cy.get('[data-testid="theme-option-carbon"]').click()
       cy.get('[data-testid="theme-option-carbon"]').should('have.attr', 'aria-checked', 'true')
       cy.get('[data-testid="theme-option-none"]').should('have.attr', 'aria-checked', 'false')
+    })
+  })
+
+  describe('Responsive template catalog', () => {
+    it('shows an AI-authored style in the first row of the default mixed catalog', () => {
+      cy.wait(['@structuredTemplates', '@authoredStyles'])
+      cy.get('[data-testid="template-catalog-grid"]')
+        .children()
+        .eq(0)
+        .should('have.attr', 'data-testid', 'catalog-structured-catalog-template-1')
+      cy.get('[data-testid="template-catalog-grid"]')
+        .children()
+        .eq(1)
+        .should('have.attr', 'data-testid', 'catalog-authored-default')
+        .and('be.visible')
+        .then(($card) => {
+          expect($card[0].getBoundingClientRect().top).to.be.lessThan(900)
+        })
+    })
+
+    it('reuses the original AI-authored reference thumbnail', () => {
+      cy.wait(['@structuredTemplates', '@authoredStyles'])
+      cy.get('[data-testid="catalog-authored-default"]')
+        .find('[data-testid="authored-style-preview-default"]')
+        .should('have.attr', 'data-preview-family', 'reference')
+        .find('img')
+        .should('have.attr', 'src')
+        .and('contain', '/create_presentation_card_1.png')
+    })
+
+    it('adds fluid columns from the actual catalog width', () => {
+      cy.wait(['@structuredTemplates', '@authoredStyles'])
+      const cases = [
+        { width: 768, columns: 2 },
+        { width: 1048, columns: 3 },
+        { width: 1280, columns: 3 },
+        { width: 1536, columns: 4 },
+        { width: 1920, columns: 5 },
+      ]
+
+      cases.forEach(({ width, columns: expectedColumns }) => {
+        cy.viewport(width, 900)
+        cy.get('[data-testid="template-catalog-grid"]').should(($grid) => {
+          const columns = getComputedStyle($grid[0]).gridTemplateColumns
+            .split(' ')
+            .filter(Boolean)
+          expect(columns, `${width}px catalog columns`).to.have.length(expectedColumns)
+          const rect = $grid[0].getBoundingClientRect()
+          expect(rect.left).to.be.at.least(0)
+          expect(rect.right).to.be.at.most(width)
+        })
+      })
+    })
+
+    it('keeps two columns without horizontal overflow on mobile', () => {
+      cy.viewport(390, 844)
+      cy.wait(['@structuredTemplates', '@authoredStyles'])
+      cy.get('[data-testid="template-catalog-grid"]').should(($grid) => {
+        const columns = getComputedStyle($grid[0]).gridTemplateColumns
+          .split(' ')
+          .filter(Boolean)
+        expect(columns).to.have.length(2)
+        const rect = $grid[0].getBoundingClientRect()
+        expect(rect.left).to.be.at.least(0)
+        expect(rect.right).to.be.at.most(390)
+      })
     })
   })
 })

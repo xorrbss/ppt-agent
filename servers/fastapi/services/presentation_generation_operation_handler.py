@@ -179,6 +179,7 @@ class PresentationGenerationOperationHandler:
                 async_status=status,
                 export_cookie_header=export_cookie_header,
                 generation_job=job,
+                progress_reporter=context.progress,
                 sql_session=session,
             )
             await session.refresh(status)

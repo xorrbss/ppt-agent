@@ -46,6 +46,41 @@ from utils.llm_calls.author_slide import (
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 
+def test_slidespec_merge_preserves_slide_index_on_flattened_issue_details():
+    request = AuthoredQualityReviewRequest()
+    merged = quality_service._merge_slidespec_review_data(
+        presentation_id=uuid.uuid4(),
+        request=request,
+        legacy=None,
+        canonical={
+            "issue_slide_count": 1,
+            "detailed_issue_count": 1,
+            "confirmed_issue_count": 1,
+            "remaining_issue_count": 1,
+            "unresolved_confirmed_issue_count": 1,
+            "slide_results": [
+                {
+                    "slide_index": 27,
+                    "confirmed_issues": [
+                        {"code": "dom.clipping", "severity": "high"}
+                    ],
+                    "unresolved_confirmed_issue_count": 1,
+                }
+            ],
+            # Producer-level aggregate aliases historically omitted the index.
+            "issues": [{"code": "dom.clipping", "severity": "high"}],
+            "remaining_issues": [
+                {"code": "dom.clipping", "severity": "high"}
+            ],
+        },
+    )
+
+    assert merged["issues"] == [
+        {"code": "dom.clipping", "severity": "high", "slide_index": 27}
+    ]
+    assert merged["remaining_issues"] == merged["issues"]
+
+
 @pytest.fixture(autouse=True)
 def _complete_browser_telemetry(monkeypatch):
     monkeypatch.setattr(
@@ -168,7 +203,7 @@ def _slides(presentation_id):
     ]
 
 
-def test_existing_authored_deck_repairs_only_flagged_slide_and_saves_version(
+def test_unimportable_authored_deck_is_preserved_without_page_regeneration(
     tmp_path, monkeypatch
 ):
     _mock_text_preserving_ocr(monkeypatch)
@@ -290,18 +325,22 @@ def test_existing_authored_deck_repairs_only_flagged_slide_and_saves_version(
                 )
             )
 
+            # Maximum mode never falls back to the legacy full-page HTML
+            # rewriter. This minimal fixture has no importable DOM nodes, so it
+            # remains unresolved and byte-preserved.
             assert live_slides[0].html_content == (
-                "<html><body>fixed cover</body></html>"
+                "<html><body>old cover</body></html>"
             )
             assert live_slides[1].html_content == (
                 "<html><body>old detail</body></html>"
             )
-            assert len(versions) == 1
-            assert versions[0].label == "고품질 검수 전"
+            assert versions == []
             assert task.status == "completed"
-            assert task.data["fixed_slide_indices"] == [0]
-            assert task.data["remaining_issue_count"] == 0
-            assert task.data["version_saved"] is True
+            assert task.data["fixed_slide_indices"] == []
+            assert task.data["remaining_issue_count"] == 2
+            assert task.data["rejection_reasons"] == {"import.dom.empty": 2}
+            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
+            assert task.data["version_saved"] is False
 
         await engine.dispose()
 
@@ -340,7 +379,7 @@ def _exact_provenance_row(presentation_id, style) -> AuthoredExactProvenance:
     )
 
 
-def test_exact_partial_fix_restore_and_restore_undo_preserve_png_bytes(
+def test_unimportable_exact_deck_preserves_original_png_bytes_without_snapshot(
     tmp_path, monkeypatch
 ):
     app_data = tmp_path / "app-data"
@@ -434,6 +473,7 @@ def test_exact_partial_fix_restore_and_restore_undo_preserve_png_bytes(
                 session,
             )
 
+            review_data = dict(task.data)
             session.expire_all()
             fixed_slides = list(
                 await session.scalars(
@@ -443,68 +483,27 @@ def test_exact_partial_fix_restore_and_restore_undo_preserve_png_bytes(
                 )
             )
             fixed_reference = fixed_slides[0].content["image"]
-            assert fixed_reference != old_references[0]
+            assert fixed_reference == old_references[0]
             assert fixed_slides[0].properties["image"] == fixed_reference
             assert fixed_slides[1].content["image"] == old_references[1]
             assert (
                 app_data / "images" / Path(fixed_reference)
-            ).read_bytes() == b"strictly-improved-zero"
-
-            versions = await version_service.list_versions(
-                session, presentation_id
-            )
-            before_review = next(
-                version
-                for version in versions
-                if version.slides[0]["html_content"]
-                == "<html><body>old cover</body></html>"
-            )
-            restored = await version_service.restore_version(
-                session, presentation_id, before_review.id
-            )
-            await session.commit()
-            assert restored is not None
-            assert restored[0].html_content == (
-                "<html><body>old cover</body></html>"
-            )
-            assert restored[0].content["image"] == old_references[0]
-            assert restored[0].properties["image"] == old_references[0]
-            assert (
-                app_data / "images" / Path(old_references[0])
             ).read_bytes() == old_pngs[0]
 
             versions = await version_service.list_versions(
                 session, presentation_id
             )
-            restore_undo = next(
-                version
-                for version in versions
-                if version.slides[0]["html_content"]
-                == "<html><body>fixed exact zero</body></html>"
-            )
-            undone = await version_service.restore_version(
-                session, presentation_id, restore_undo.id
-            )
-            await session.commit()
-            assert undone is not None
-            assert undone[0].html_content == (
-                "<html><body>fixed exact zero</body></html>"
-            )
-            assert undone[0].content["image"] == fixed_reference
-            assert undone[0].properties["image"] == fixed_reference
-            assert (
-                app_data / "images" / Path(fixed_reference)
-            ).read_bytes() == b"strictly-improved-zero"
-            assert (
-                app_data / "images" / Path(old_references[0])
-            ).is_file()
+            assert versions == []
+            assert review_data["fixed_count"] == 0
+            assert review_data["rejection_reasons"] == {"import.dom.empty": 2}
+            assert review_data["metrics"]["automatic_page_regeneration_calls"] == 0
 
         await engine.dispose()
 
     _run(runner())
 
 
-def test_exact_generation_persists_private_provenance_then_reviews_current_nonzero_once(
+def test_exact_generation_provenance_survives_unimportable_review_without_model_call(
     tmp_path, monkeypatch
 ):
     async def runner():
@@ -678,18 +677,12 @@ def test_exact_generation_persists_private_provenance_then_reviews_current_nonze
                 session,
             )
 
-            assert critique_calls == [
-                (
-                    [b"<html><body>generated detail</body></html>"],
-                    {
-                        "source_images": [source_paths[1].read_bytes()],
-                        "reference_mode": EXACT_RECONSTRUCTION,
-                    },
-                )
-            ]
+            assert critique_calls == []
             assert task.data["reviewed_count"] == 1
+            assert task.data["fixed_count"] == 0
+            assert task.data["rejection_reasons"] == {"import.dom.empty": 1}
+            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
             assert materialize_calls == [
-                ("exact-source", snapshot_id, 2),
                 ("exact-source", snapshot_id, 2),
             ]
 
@@ -698,7 +691,7 @@ def test_exact_generation_persists_private_provenance_then_reviews_current_nonze
     _run(runner())
 
 
-def test_legacy_exact_theme_without_private_provenance_fails_before_render_or_model(
+def test_unimportable_legacy_exact_theme_stops_before_render_or_model(
     tmp_path, monkeypatch
 ):
     async def runner():
@@ -732,15 +725,16 @@ def test_legacy_exact_theme_without_private_provenance_fails_before_render_or_mo
                 lambda *_args, **_kwargs: pytest.fail("model must not run"),
             )
 
-            with pytest.raises(
-                ValueError, match="exact reconstruction provenance is missing"
-            ):
-                await quality_service.run_authored_quality_review(
-                    presentation.id,
-                    AuthoredQualityReviewRequest(scope="all"),
-                    task,
-                    session,
-                )
+            await quality_service.run_authored_quality_review(
+                presentation.id,
+                AuthoredQualityReviewRequest(scope="all"),
+                task,
+                session,
+            )
+            assert task.status == "completed"
+            assert task.data["fixed_count"] == 0
+            assert task.data["rejection_reasons"] == {"import.dom.empty": 2}
+            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
 
         await engine.dispose()
 
@@ -793,7 +787,7 @@ def test_analyze_and_fix_uses_process_local_lock(monkeypatch):
 
 
 @pytest.mark.parametrize("competing_change", ["html", "image"])
-def test_analyze_and_fix_cas_rejects_stale_slide_and_rolls_back_snapshot(
+def test_unimportable_review_never_reaches_legacy_revise_or_cas(
     tmp_path, monkeypatch, competing_change
 ):
     _mock_text_preserving_ocr(monkeypatch)
@@ -905,15 +899,17 @@ def test_analyze_and_fix_cas_rejects_stale_slide_and_rolls_back_snapshot(
                 lambda *_: "authored/reviewed/immutable.png",
             )
 
-            with pytest.raises(RuntimeError, match="changed during quality review"):
-                await quality_service.run_authored_quality_review(
-                    presentation_id,
-                    AuthoredQualityReviewRequest(
-                        scope="all", mode="analyze_and_fix"
-                    ),
-                    task,
-                    session,
-                )
+            await quality_service.run_authored_quality_review(
+                presentation_id,
+                AuthoredQualityReviewRequest(
+                    scope="all", mode="analyze_and_fix"
+                ),
+                task,
+                session,
+            )
+            assert task.data["fixed_count"] == 0
+            assert task.data["rejection_reasons"] == {"import.dom.empty": 2}
+            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
 
         async with AsyncSession(engine) as verification_session:
             live_slide = (
@@ -931,24 +927,19 @@ def test_analyze_and_fix_cas_rejects_stale_slide_and_rolls_back_snapshot(
                     )
                 )
             )
-            if competing_change == "html":
-                assert live_slide.html_content == (
-                    "<html><body>concurrent editor update</body></html>"
-                )
-            else:
-                assert live_slide.content["image"] == (
-                    "authored/concurrent-editor.png"
-                )
-                assert live_slide.properties["image"] == (
-                    "authored/concurrent-editor.png"
-                )
+            assert live_slide.html_content == (
+                "<html><body>old cover</body></html>"
+            )
+            assert live_slide.content["image"] == (
+                "authored/original/slide_0.png"
+            )
             assert versions == []
         await engine.dispose()
 
     _run(runner())
 
 
-def test_exact_quality_review_compares_ordered_source_render_pairs_once_when_clean(
+def test_unimportable_exact_review_does_not_call_legacy_image_critique(
     tmp_path, monkeypatch, caplog
 ):
     caplog.set_level(logging.INFO, logger=quality_service.__name__)
@@ -996,17 +987,10 @@ def test_exact_quality_review_compares_ordered_source_render_pairs_once_when_cle
                 session,
             )
 
-            assert critique_calls == [
-                (
-                    [b"<html><body>old cover</body></html>", b"<html><body>old detail</body></html>"],
-                    ["Cover content", "Detail content"],
-                    {
-                        "source_images": [b"source-0", b"source-1"],
-                        "reference_mode": EXACT_RECONSTRUCTION,
-                    },
-                )
-            ]
+            assert critique_calls == []
             assert task.data["fixed_slide_indices"] == []
+            assert task.data["rejection_reasons"] == {"import.dom.empty": 2}
+            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
             assert task.data["version_saved"] is False
 
         await engine.dispose()
@@ -1017,21 +1001,10 @@ def test_exact_quality_review_compares_ordered_source_render_pairs_once_when_cle
         for record in caplog.records
         if record.getMessage().startswith("authored_quality_review ")
     ]
-    assert [
-        (
-            event["stage"],
-            event["critique_batch_count"],
-            event["critique_slide_request_count"],
-        )
-        for event in review_events
-        if event["critique_batch_count"] and event["stage"] != "completed"
-    ] == [("initial_review", 1, 2)]
-    completed = next(event for event in review_events if event["stage"] == "completed")
-    assert completed["vqa_calls"] == 2
-    assert completed["vqa_cost_status"] == "provider_usage_unavailable"
+    assert review_events == []
 
 
-def test_exact_quality_review_reuses_initial_critique_rechecks_only_candidates_and_accepts_improvement(
+def test_unimportable_exact_review_does_not_accept_legacy_html_rewrite(
     tmp_path, monkeypatch, caplog
 ):
     caplog.set_level(logging.INFO, logger=quality_service.__name__)
@@ -1098,15 +1071,14 @@ def test_exact_quality_review_reuses_initial_critique_rechecks_only_candidates_a
 
             live_slides = list(await session.scalars(select(SlideModel).where(SlideModel.presentation == presentation.id).order_by(SlideModel.index)))
             versions = list(await session.scalars(select(PresentationVersionModel).where(PresentationVersionModel.presentation_id == presentation.id)))
-            assert critique_calls == [
-                ([b"<html><body>old cover</body></html>", b"<html><body>old detail</body></html>"], {"source_images": [b"source-0", b"source-1"], "reference_mode": EXACT_RECONSTRUCTION}),
-                ([b"fixed"], {"source_images": [b"source-0"], "reference_mode": EXACT_RECONSTRUCTION}),
-            ]
-            assert live_slides[0].html_content == "<html><body>fixed</body></html>"
+            assert critique_calls == []
+            assert live_slides[0].html_content == "<html><body>old cover</body></html>"
             assert live_slides[1].html_content == "<html><body>old detail</body></html>"
-            assert len(versions) == 1
-            assert task.data["fixed_slide_indices"] == [0]
-            assert task.data["remaining_issue_count"] == 0
+            assert versions == []
+            assert task.data["fixed_slide_indices"] == []
+            assert task.data["remaining_issue_count"] == 2
+            assert task.data["rejection_reasons"] == {"import.dom.empty": 2}
+            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
 
         await engine.dispose()
 
@@ -1116,20 +1088,7 @@ def test_exact_quality_review_reuses_initial_critique_rechecks_only_candidates_a
         for record in caplog.records
         if record.getMessage().startswith("authored_quality_review ")
     ]
-    assert [
-        (
-            event["stage"],
-            event["critique_batch_count"],
-            event["critique_slide_request_count"],
-        )
-        for event in review_events
-        if event["critique_batch_count"] and event["stage"] != "completed"
-    ] == [("initial_review", 1, 2), ("final_review", 1, 1)]
-    completed = next(event for event in review_events if event["stage"] == "completed")
-    assert completed["critique_batch_count"] == 2
-    assert completed["vqa_calls"] == 3
-    assert completed["patch_attempted"] == 0
-    assert completed["fallback_attempted"] == 0
+    assert review_events == []
 
 
 @pytest.mark.parametrize(

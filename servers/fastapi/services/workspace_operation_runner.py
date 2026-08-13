@@ -7,6 +7,7 @@ wake event only reduces polling latency; losing it never loses an operation.
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -169,11 +170,40 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
             "fixed_slide_indices",
             "remaining_issue_count",
             "remaining_slide_indices",
+            "remaining_issue_indices",
+            "remaining_slide_count",
+            "detailed_issue_count",
+            "confirmed_issue_count",
+            "resolved_issue_count",
             "pattern_cluster_count",
+            "pattern_diagnostic_family_count",
+            "pattern_representative_count",
             "pattern_recipe_count",
             "pattern_reuse_attempts",
             "pattern_reuse_hits",
             "pattern_reuse_applied",
+            "composite_plan_count",
+            "composite_operations_merged",
+            "render_candidates_rejected_early",
+            "full_render_count",
+            "llm_pattern_call_count",
+            "llm_eligible_count",
+            "llm_response_count",
+            "llm_schema_pass_count",
+            "llm_valid_plan_count",
+            "llm_provider_failure_count",
+            "llm_schema_reject_count",
+            "llm_preflight_pass_count",
+            "llm_rendered_count",
+            "proposal_preflight_unprojectable_count",
+            "negative_cache_hit_count",
+            "llm_circuit_open_count",
+            "no_candidate_reasons",
+            "individual_fallback_count",
+            "stage_timings_ms",
+            "wall_time_ms",
+            "aggregate_stage_time_ms",
+            "total_ms",
             "remaining_issues",
             "issues",
             "slide_results",
@@ -194,11 +224,178 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
 }
 
 _QUALITY_REVIEW_INDEX_LIST_KEYS = frozenset(
-    {"slide_indices", "fixed_slide_indices", "remaining_slide_indices"}
+    {
+        "slide_indices",
+        "fixed_slide_indices",
+        "remaining_slide_indices",
+        "remaining_issue_indices",
+    }
 )
 _QUALITY_REVIEW_ISSUE_LIST_KEYS = frozenset({"issues", "remaining_issues"})
+_QUALITY_REVIEW_REASON_LIST_KEYS = frozenset({"no_candidate_reasons"})
 _MAX_QUALITY_REVIEW_ISSUES = 500
 _MAX_QUALITY_REVIEW_MESSAGE_LENGTH = 500
+_MAX_QUALITY_REVIEW_REASON_CODE_LENGTH = 128
+_MAX_QUALITY_REVIEW_REASON_CODES = 32
+_MAX_QUALITY_REVIEW_METRIC_VALUE = 1_000_000
+_MAX_QUALITY_REVIEW_TIMING_MS = 86_400_000
+_MAX_QUALITY_REVIEW_STAGE_TIMINGS = 32
+_QUALITY_REVIEW_COUNT_KEYS = frozenset(
+    {
+        "reviewed_count",
+        "issue_slide_count",
+        "detailed_issue_count",
+        "confirmed_issue_count",
+        "fixed_count",
+        "resolved_issue_count",
+        "remaining_slide_count",
+        "remaining_issue_count",
+        "pattern_cluster_count",
+        "pattern_diagnostic_family_count",
+        "pattern_representative_count",
+        "pattern_recipe_count",
+        "pattern_reuse_attempts",
+        "pattern_reuse_hits",
+        "pattern_reuse_applied",
+        "composite_plan_count",
+        "composite_operations_merged",
+        "render_candidates_rejected_early",
+        "full_render_count",
+        "llm_pattern_call_count",
+        "llm_eligible_count",
+        "llm_response_count",
+        "llm_schema_pass_count",
+        "llm_valid_plan_count",
+        "llm_provider_failure_count",
+        "llm_schema_reject_count",
+        "llm_preflight_pass_count",
+        "llm_rendered_count",
+        "proposal_preflight_unprojectable_count",
+        "negative_cache_hit_count",
+        "llm_circuit_open_count",
+        "individual_fallback_count",
+    }
+)
+
+
+def _quality_review_number(value: Any) -> int | float | None:
+    """Keep bounded finite counters/timings out of an untrusted task payload."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return min(value, _MAX_QUALITY_REVIEW_TIMING_MS)
+
+
+def _quality_review_count(value: Any) -> int | None:
+    """Counters are integral; timings use the broader finite-number helper."""
+
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return min(value, _MAX_QUALITY_REVIEW_METRIC_VALUE)
+
+
+def _sanitize_quality_review_stage_timings(value: Any) -> dict[str, float]:
+    if not isinstance(value, Mapping):
+        return {}
+    safe: dict[str, float] = {}
+    for raw_stage, raw_duration in value.items():
+        stage = str(raw_stage).strip()
+        duration = _quality_review_number(raw_duration)
+        if not stage or duration is None:
+            continue
+        safe[stage[:128]] = float(duration)
+        if len(safe) >= _MAX_QUALITY_REVIEW_STAGE_TIMINGS:
+            break
+    return safe
+
+
+def _sanitize_quality_review_reason_codes(value: Any) -> list[str]:
+    """Keep only bounded, low-cardinality LLM no-candidate reason codes."""
+
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        return []
+    safe: list[str] = []
+    for raw_reason in value:
+        if not isinstance(raw_reason, str):
+            continue
+        reason = raw_reason.strip()
+        if not reason or reason in safe:
+            continue
+        safe.append(reason[:_MAX_QUALITY_REVIEW_REASON_CODE_LENGTH])
+        if len(safe) >= _MAX_QUALITY_REVIEW_REASON_CODES:
+            break
+    return safe
+
+
+def _normalize_quality_review_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Project approved review telemetry to stable top-level result fields.
+
+    The executor can evolve its nested ``metrics`` layout without making the
+    workspace event contract depend on it.  Only aggregate counters and bounded
+    timings are promoted; candidate diagnostics, source content and model output
+    remain private to the review task.
+    """
+
+    normalized = dict(payload)
+    raw_metrics = payload.get("metrics")
+    metrics = raw_metrics if isinstance(raw_metrics, Mapping) else {}
+    for key in _QUALITY_REVIEW_COUNT_KEYS:
+        value = payload.get(key, metrics.get(key))
+        count = _quality_review_count(value)
+        if count is not None:
+            normalized[key] = count
+        else:
+            normalized.pop(key, None)
+    total_ms = _quality_review_number(payload.get("total_ms", metrics.get("total_ms")))
+    if total_ms is not None:
+        normalized["total_ms"] = total_ms
+    else:
+        normalized.pop("total_ms", None)
+    wall_time_ms = _quality_review_number(
+        payload.get("wall_time_ms", metrics.get("deck_wall_ms"))
+    )
+    if wall_time_ms is not None:
+        normalized["wall_time_ms"] = wall_time_ms
+    else:
+        normalized.pop("wall_time_ms", None)
+    # ``confirmed_issue_count`` is the established executor name.  Keep it as
+    # a compatibility alias while making the UI-facing unit explicit.
+    detailed = _quality_review_count(
+        payload.get(
+            "detailed_issue_count",
+            payload.get("confirmed_issue_count", metrics.get("confirmed_issue_count")),
+        )
+    )
+    if detailed is not None:
+        normalized["detailed_issue_count"] = detailed
+        normalized["confirmed_issue_count"] = detailed
+    raw_timings = payload.get("stage_timings_ms", metrics.get("stage_timings_ms"))
+    timings = _sanitize_quality_review_stage_timings(raw_timings)
+    if timings:
+        normalized["stage_timings_ms"] = timings
+        aggregate_stage_time_ms = _quality_review_number(
+            payload.get(
+                "aggregate_stage_time_ms",
+                metrics.get("aggregate_stage_time_ms", sum(timings.values())),
+            )
+        )
+        if aggregate_stage_time_ms is not None:
+            normalized["aggregate_stage_time_ms"] = aggregate_stage_time_ms
+        else:
+            normalized.pop("aggregate_stage_time_ms", None)
+    else:
+        normalized.pop("stage_timings_ms", None)
+        normalized.pop("aggregate_stage_time_ms", None)
+    reason_codes = _sanitize_quality_review_reason_codes(
+        payload.get("no_candidate_reasons", metrics.get("no_candidate_reasons"))
+    )
+    if reason_codes:
+        normalized["no_candidate_reasons"] = reason_codes
+    else:
+        normalized.pop("no_candidate_reasons", None)
+    return normalized
 
 
 def _quality_review_issue_message(value: Mapping[str, Any]) -> str | None:
@@ -450,6 +647,8 @@ def sanitize_workspace_event_payload(
 
     if not payload:
         return {}
+    if operation_kind == "quality.review":
+        payload = _normalize_quality_review_payload(payload)
     allowed_keys = _SAFE_PAYLOAD_KEYS | _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND.get(
         operation_kind or "", frozenset()
     )
@@ -482,8 +681,16 @@ def sanitize_workspace_event_payload(
             and normalized in _QUALITY_REVIEW_ISSUE_LIST_KEYS
         ):
             safe[normalized] = _sanitize_quality_review_issues(value)
+        elif (
+            operation_kind == "quality.review"
+            and normalized in _QUALITY_REVIEW_REASON_LIST_KEYS
+        ):
+            safe[normalized] = _sanitize_quality_review_reason_codes(value)
         elif operation_kind == "quality.review" and normalized == "slide_results":
             safe[normalized] = _sanitize_quality_review_slide_results(value)
+        elif operation_kind == "quality.review" and normalized == "stage_timings_ms":
+            # This was normalized from approved aggregate telemetry above.
+            safe[normalized] = _sanitize_quality_review_stage_timings(value)
         elif (
             operation_kind == "quality.review"
             and normalized == "result"
@@ -1900,6 +2107,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         current: int | None = None,
         total: int | None = None,
         percent: int | None = None,
+        message: str | None = None,
     ) -> bool:
         progress = {
             "stage": stage,
@@ -1907,13 +2115,16 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
             "total": total,
             "percent": percent,
         }
+        event_payload = {"state": "running", **progress}
+        if message:
+            event_payload["message"] = message
         try:
             async with self._session_factory() as session:
                 event = await append_operation_event(
                     session,
                     operation_id=self.claim.operation_id,
                     event_type="operation.progress",
-                    payload={"state": "running", **progress},
+                    payload=event_payload,
                     attempt_token=self.claim.attempt_token,
                     allowed_states=("running",),
                     projection_values={

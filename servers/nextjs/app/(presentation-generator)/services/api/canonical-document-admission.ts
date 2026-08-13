@@ -28,6 +28,20 @@ export async function canonicalUploadBatchKey(
   return sha256Hex(JSON.stringify(identities));
 }
 
+export async function canonicalUploadAdmissionKey(
+  documents: File[],
+  admissionScope: string,
+): Promise<string> {
+  const normalizedScope = admissionScope.trim();
+  if (!normalizedScope) {
+    throw new Error("Canonical document admission scope is required");
+  }
+  const batchKey = await canonicalUploadBatchKey(documents);
+  return sha256Hex(
+    JSON.stringify({ admissionScope: normalizedScope, batchKey }),
+  );
+}
+
 export function rememberCanonicalAdmission(
   referenceSnapshotId: string,
   assetIds: string[],

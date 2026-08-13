@@ -168,14 +168,20 @@
       "safe_message": "The exported file was not found.",
       "retryable": false
     },
-    {
-      "code": "workspace_export_expired",
-      "status_code": 410,
-      "safe_message": "The exported file expired. Export it again.",
-      "retryable": false
-    },
-    {
-      "code": "workspace_export_not_ready",
+      {
+        "code": "workspace_export_expired",
+        "status_code": 410,
+        "safe_message": "The exported file expired. Export it again.",
+        "retryable": false
+      },
+      {
+        "code": "workspace_export_operation_invalid",
+        "status_code": 409,
+        "safe_message": "The export operation no longer matches this presentation.",
+        "retryable": false
+      },
+      {
+        "code": "workspace_export_not_ready",
       "status_code": 409,
       "safe_message": "The exported file is not ready yet.",
       "retryable": true

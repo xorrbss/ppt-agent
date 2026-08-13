@@ -90,6 +90,50 @@ async function withFetch(fakeFetch, callback, { onConsoleError = () => {} } = {}
   }
 }
 
+test("uploadDoc isolates idempotency keys between presentation workspaces", async () => {
+  const { PresentationGenerationApi } = await loadApi();
+  const uploadKeys = [];
+  const snapshotKeys = [];
+  let requestNumber = 0;
+  const document = new File(["same document"], "reference.pdf", {
+    type: "application/pdf",
+    lastModified: 1_700_000_000_000,
+  });
+
+  await withFetch(async (url, init) => {
+    const key = init?.headers?.["Idempotency-Key"];
+    if (url === "/api/v1/ppt/assets/documents") {
+      uploadKeys.push(key);
+      requestNumber += 1;
+      return new Response(JSON.stringify({
+        asset_id: `asset-${requestNumber}`,
+        kind: "document",
+        state: "ready",
+        size_bytes: document.size,
+        sha256: "a".repeat(64),
+        version: 1,
+      }), { status: 200 });
+    }
+    if (url === "/api/v1/ppt/references/snapshots") {
+      snapshotKeys.push(key);
+      return new Response(
+        JSON.stringify({ snapshot_id: `snapshot-${requestNumber}` }),
+        { status: 200 },
+      );
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  }, async () => {
+    await PresentationGenerationApi.uploadDoc([document], "presentation-a");
+    await PresentationGenerationApi.uploadDoc([document], "presentation-a");
+    await PresentationGenerationApi.uploadDoc([document], "presentation-b");
+  });
+
+  assert.equal(uploadKeys[0], uploadKeys[1]);
+  assert.notEqual(uploadKeys[0], uploadKeys[2]);
+  assert.equal(snapshotKeys[0], snapshotKeys[1]);
+  assert.notEqual(snapshotKeys[0], snapshotKeys[2]);
+});
+
 test("decomposeDocuments starts a job and polls it to its result", async () => {
   const { PresentationGenerationApi } = await loadApi();
   const calls = [];
@@ -182,7 +226,7 @@ test("canonical upload, decompose, and create use only asset and snapshot identi
     const admission = await PresentationGenerationApi.uploadDoc([
       new File(["one"], "one.pdf", { type: "application/pdf" }),
       new File(["two"], "two.pdf", { type: "application/pdf" }),
-    ]);
+    ], "presentation-1");
     assert.deepEqual(admission.assetIds, ["asset-1", "asset-2"]);
     assert.equal(admission.referenceSnapshotId, "snapshot-1");
 
@@ -237,13 +281,13 @@ test("canonical upload sends stable idempotency keys", async () => {
       type: "text/plain",
       lastModified: 42,
     });
-    await PresentationGenerationApi.uploadDoc([first]);
-    await PresentationGenerationApi.uploadDoc([second]);
+    await PresentationGenerationApi.uploadDoc([first], "presentation-stable");
+    await PresentationGenerationApi.uploadDoc([second], "presentation-stable");
   });
   assert.equal(observedKeys[0], observedKeys[2]);
   assert.equal(observedKeys[1], observedKeys[3]);
-  assert.match(observedKeys[0], /^document-upload:v1:[a-f0-9]{64}:0$/);
-  assert.match(observedKeys[1], /^document-snapshot:v1:[a-f0-9]{64}$/);
+  assert.match(observedKeys[0], /^document-upload:v2:[a-f0-9]{64}:0$/);
+  assert.match(observedKeys[1], /^document-snapshot:v2:[a-f0-9]{64}$/);
 });
 
 test("partial canonical admission compensates uploaded assets", async () => {
@@ -278,7 +322,7 @@ test("partial canonical admission compensates uploaded assets", async () => {
       PresentationGenerationApi.uploadDoc([
         new File(["one"], "one.txt", { type: "text/plain" }),
         new File(["two"], "two.txt", { type: "text/plain" }),
-      ]),
+      ], "presentation-partial-failure"),
       /Failed to upload document/,
     );
   });
@@ -320,7 +364,7 @@ test("failed presentation creation compensates its canonical snapshot", async ()
   }, async () => {
     const admission = await PresentationGenerationApi.uploadDoc([
       new File(["one"], "one.txt", { type: "text/plain" }),
-    ]);
+    ], "presentation-create-failure");
     await assert.rejects(
       PresentationGenerationApi.createPresentation({
         presentation_id: "presentation-create-failure",

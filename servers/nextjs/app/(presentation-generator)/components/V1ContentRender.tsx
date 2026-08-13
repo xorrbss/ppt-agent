@@ -21,6 +21,10 @@ import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
 import SmartHtmlEditor from "./SmartHtmlEditor";
+import {
+    shouldRenderTemplateV2HtmlPreview,
+    TemplateV2HtmlSlidePreview,
+} from "./TemplateV2HtmlSlidePreview";
 import type { RootState } from "@/store/store";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 
@@ -107,6 +111,22 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
             return template?.component ?? null;
         }
     }, [isCustomTemplate, customTemplate, slide.layout, slide.layout_group]);
+
+    // Native Template V2 layouts are immutable, server-issued JSON UI. They are
+    // not members of the legacy static template registry, so resolving their
+    // imported ``pptx_layout_*`` ids through getLayoutByLayoutId would render a
+    // false "layout not found" placeholder even though slide.ui is complete.
+    if (shouldRenderTemplateV2HtmlPreview(slide, presentationData?.version)) {
+        return (
+            <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+                <TemplateV2HtmlSlidePreview
+                    slide={slide}
+                    fonts={presentationData?.fonts}
+                    fixedSize
+                />
+            </SlideErrorBoundary>
+        );
+    }
 
     // Authored HTML is the source of truth; the generated PNG is a preview cache.
     // Main-canvas previews use an isolated HTML frame when requested; thumbnail and

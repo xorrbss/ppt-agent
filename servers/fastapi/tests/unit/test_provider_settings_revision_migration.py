@@ -54,7 +54,7 @@ def test_provider_settings_revision_upgrade_downgrade_and_schema_inference(
                 tables,
                 migrations.HEAD_REVISION,
             )
-        assert inferred == migrations.HEAD_REVISION
+        assert inferred == migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY
 
         command.downgrade(
             config,
@@ -152,7 +152,7 @@ def test_pre_c4_create_all_topup_does_not_skip_cumulative_migrations(tmp_path):
                     set(inspector.get_table_names()),
                     migrations.HEAD_REVISION,
                 )
-                == migrations.HEAD_REVISION
+                == migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY
             )
     finally:
         engine.dispose()

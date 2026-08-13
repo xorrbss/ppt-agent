@@ -4,3 +4,4 @@ servers/fastapi/tests/fixtures/slidespec_active_bundle_*_slide_*.html -text
 # Generated contracts are byte-compared by the cross-platform drift gate.
 contracts/template_v2/v1/schema.json text eol=lf
 servers/nextjs/lib/template-v2-html/template-v2-contract.generated.* text eol=lf
+servers/nextjs/lib/template-v2-json-to-html.ts text eol=lf

@@ -18,7 +18,7 @@ import os
 import re
 import traceback
 import uuid
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from time import perf_counter
@@ -127,6 +127,7 @@ from services.template_v2_generation_service import (
     build_template_v2_slides,
     load_template_v2_generation_target,
     preflight_template_v2_native_pptx,
+    refresh_template_v2_slide_ui,
     source_content_sha256,
 )
 from services.webhook_service import WebhookService
@@ -201,6 +202,8 @@ from utils.owner_context import get_current_owner_id
 from utils.process_slides import process_slide_and_fetch_assets
 
 logger = logging.getLogger(__name__)
+
+GenerationProgressReporter = Callable[..., Awaitable[bool]]
 
 AUTHORED_RESUME_MAX_ATTEMPTS_DEFAULT = 5
 _INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
@@ -922,6 +925,7 @@ async def _generate_template_v2_presentation(
     async_status: Optional[AsyncPresentationGenerationTaskModel],
     generation_job: Optional[PresentationGenerationJob],
     export_cookie_header: Optional[str],
+    progress_reporter: GenerationProgressReporter | None,
     sql_session: AsyncSession,
 ) -> PresentationPathAndEditPath:
     """Execute the explicit, revision-pinned Template V2 generation branch."""
@@ -936,12 +940,49 @@ async def _generate_template_v2_presentation(
         else presentation_id
     )
     target_presentation: PresentationModel | None = None
+    image_staging: PreparedWorkspaceChatArtifactStaging | None = None
+    promoted_images = PromotedWorkspaceChatArtifacts(artifacts=(), replacements={})
+    generated_assets_by_slide: dict[int, list[ImageAsset]] = {}
+
+    async def compensate_template_v2_images(*, reconcile: bool = False) -> None:
+        if image_staging is None:
+            return
+        try:
+            if reconcile and await workspace_chat_artifacts_were_published(
+                sql_session,
+                staging=image_staging,
+                artifacts=promoted_images.artifacts,
+            ):
+                return
+            await sql_session.rollback()
+            await compensate_workspace_chat_artifact_staging(
+                sql_session,
+                image_staging,
+            )
+        except BaseException:
+            logger.exception(
+                "Failed to compensate Template V2 image staging %s",
+                image_staging.artifact_id,
+            )
+
+    async def report_template_v2_progress(**update: Any) -> None:
+        if progress_reporter is None:
+            return
+        if await progress_reporter(**update) is False:
+            raise WorkspaceArtifactPublicationError("operation_lease_lost")
 
     generation_started_at = perf_counter()
     try:
         target = request._template_v2_generation_target
         if target is None:
             raise TemplateV2GenerationError("template_v2_snapshot_missing")
+        await report_template_v2_progress(
+            stage="template_v2_layout_selection",
+            current=0,
+            total=None,
+            percent=5,
+            message="템플릿 레이아웃을 분석하고 있습니다.",
+        )
         if async_status:
             async_status.message = "Selecting Template V2 layouts"
             async_status.updated_at = datetime.now(timezone.utc)
@@ -958,11 +999,67 @@ async def _generate_template_v2_presentation(
             target_n_slides=request.n_slides,
         )
 
+        target_presentation = await sql_session.get(PresentationModel, presentation_id)
+        image_output_directory = get_images_directory()
+        if isolated_render:
+            if generation_job is None or target_presentation is None:
+                raise WorkspaceArtifactPublicationError("operation_lease_lost")
+            fencing_token = await _workspace_operation_fencing_token(
+                sql_session,
+                generation_job=generation_job,
+                presentation_id=presentation_id,
+            )
+            image_staging = await prepare_workspace_chat_artifact_staging(
+                sql_session,
+                operation_id=generation_job.workspace_operation_id,
+                presentation_id=presentation_id,
+                source_revision=target_presentation.revision + 1,
+                attempt_token=generation_job.attempt_token,
+                fencing_token=fencing_token,
+            )
+            image_output_directory = str(image_staging.staging_directory)
+        image_generation_service = ImageGenerationService(image_output_directory)
+        outline_image_urls = (
+            get_images_for_slides_from_outline(presentation_outlines.slides)
+            if using_slides_markdown
+            else [[] for _ in presentation_structure.slides]
+        )
+
+        async def process_template_v2_assets(slide: SlideModel) -> None:
+            generated_assets_by_slide[slide.index] = (
+                await process_slide_and_fetch_assets(
+                    image_generation_service,
+                    slide,
+                    outline_image_urls=outline_image_urls[slide.index],
+                    icon_weight=target.as_pipeline_layout().icon_weight,
+                    template_v2=True,
+                )
+            )
+
+        total_slides = len(presentation_structure.slides)
+        await report_template_v2_progress(
+            stage="template_v2_slide_generation",
+            current=0,
+            total=total_slides,
+            percent=10,
+            message=f"슬라이드 내용을 생성하고 있습니다. 0/{total_slides}장 완료",
+        )
+
         if async_status:
             async_status.message = "Generating Template V2 slides"
             async_status.updated_at = datetime.now(timezone.utc)
             sql_session.add(async_status)
             await sql_session.commit()
+
+        async def report_slide_progress(completed: int, total: int) -> None:
+            percent = 10 + int((completed * 70) / max(1, total))
+            await report_template_v2_progress(
+                stage="template_v2_slide_generation",
+                current=completed,
+                total=total,
+                percent=min(80, percent),
+                message=f"슬라이드 내용을 생성하고 있습니다. {completed}/{total}장 완료",
+            )
 
         slides = await build_template_v2_slides(
             target=target,
@@ -973,6 +1070,41 @@ async def _generate_template_v2_presentation(
             tone=request.tone.value,
             verbosity=request.verbosity.value,
             instructions=request.instructions,
+            on_progress=report_slide_progress,
+            process_assets=process_template_v2_assets,
+        )
+
+        generated_assets = [
+            asset
+            for index in sorted(generated_assets_by_slide)
+            for asset in generated_assets_by_slide[index]
+        ]
+        if isolated_render and image_staging is not None:
+            promoted_images = await promote_workspace_chat_image_artifacts(
+                sql_session,
+                image_staging,
+            )
+            for slide in slides:
+                slide.content = _replace_workspace_image_paths(
+                    slide.content,
+                    promoted_images.replacements,
+                )
+                refresh_template_v2_slide_ui(target=target, slide=slide)
+            for generated_asset in generated_assets:
+                generated_asset.path = _replace_workspace_image_paths(
+                    generated_asset.path,
+                    promoted_images.replacements,
+                )
+                generated_asset.extras = _replace_workspace_image_paths(
+                    generated_asset.extras,
+                    promoted_images.replacements,
+                )
+        await report_template_v2_progress(
+            stage="template_v2_pptx_validation",
+            current=total_slides,
+            total=total_slides,
+            percent=84,
+            message="PowerPoint 구성을 검사하고 있습니다.",
         )
         native_pptx_preflight = preflight_template_v2_native_pptx(
             target=target,
@@ -1003,7 +1135,6 @@ async def _generate_template_v2_presentation(
             created_at=created_at,
             native_pptx_preflight=native_pptx_preflight,
         )
-        target_presentation = await sql_session.get(PresentationModel, presentation_id)
         if isolated_render:
             if target_presentation is None:
                 raise TemplateV2GenerationError("template_v2_generation_invalid")
@@ -1056,8 +1187,17 @@ async def _generate_template_v2_presentation(
         if resolve_presentation_strategies(presentation, slides) != TEMPLATE_V2_STRATEGIES:
             raise TemplateV2GenerationError("template_v2_generation_invalid")
 
+        await report_template_v2_progress(
+            stage="template_v2_saving",
+            current=total_slides,
+            total=total_slides,
+            percent=88,
+            message="생성된 슬라이드를 저장하고 있습니다.",
+        )
         sql_session.add(presentation)
         sql_session.add_all(slides)
+        if not isolated_render:
+            sql_session.add_all(generated_assets)
         if generation_job is not None:
             generation_job.state = "staging"
             generation_job.updated_at = datetime.now(timezone.utc)
@@ -1079,6 +1219,7 @@ async def _generate_template_v2_presentation(
             duration_ms=(perf_counter() - generation_started_at) * 1000,
             code=error.code,
         )
+        await compensate_template_v2_images()
         if isolated_render:
             try:
                 await _discard_render_staging(
@@ -1101,6 +1242,7 @@ async def _generate_template_v2_presentation(
             duration_ms=(perf_counter() - generation_started_at) * 1000,
             code="template_v2_unexpected_failure",
         )
+        await compensate_template_v2_images()
         if isolated_render:
             try:
                 await _discard_render_staging(
@@ -1126,6 +1268,13 @@ async def _generate_template_v2_presentation(
     export_started_at = perf_counter()
     export_execution: PresentationExportExecution | None = None
     try:
+        await report_template_v2_progress(
+            stage="template_v2_exporting",
+            current=len(slides),
+            total=len(slides),
+            percent=92,
+            message="PowerPoint 파일을 만들고 있습니다.",
+        )
         export_execution = await _execute_generation_export(
             sql_session,
             publication_target=publication_target,
@@ -1159,6 +1308,7 @@ async def _generate_template_v2_presentation(
             export_type=request.export_as,
             code="template_v2_export_failed",
         )
+        await compensate_template_v2_images()
         # The exporter reads through committed database state. Chat-first writes
         # use an isolated render identity, so compensating it never deletes or
         # mutates the durable target deck. Legacy generation retains its prior
@@ -1192,6 +1342,13 @@ async def _generate_template_v2_presentation(
         edit_path=f"/presentation?id={presentation_id}",
     )
     try:
+        await report_template_v2_progress(
+            stage="template_v2_publishing",
+            current=len(slides),
+            total=len(slides),
+            percent=97,
+            message="최종 결과를 게시하고 있습니다.",
+        )
         published_path = await _publish_staged_presentation(
             sql_session,
             publication_target,
@@ -1199,6 +1356,9 @@ async def _generate_template_v2_presentation(
             generation_job,
             async_status,
             render_presentation=presentation if isolated_render else None,
+            generated_assets=tuple(generated_assets) if isolated_render else (),
+            image_staging=image_staging,
+            image_artifacts=promoted_images.artifacts,
             export_execution=export_execution,
         )
     except BaseException as error:
@@ -1207,6 +1367,7 @@ async def _generate_template_v2_presentation(
             export_execution,
             error,
         )
+        await compensate_template_v2_images(reconcile=True)
         if isolated_render:
             try:
                 await _discard_render_staging(
@@ -1240,6 +1401,7 @@ async def generate_presentation_handler(
     async_status: Optional[AsyncPresentationGenerationTaskModel],
     export_cookie_header: Optional[str] = None,
     generation_job: Optional[PresentationGenerationJob] = None,
+    progress_reporter: GenerationProgressReporter | None = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     # Internal callers can bypass validation, so re-run owner, expiry, asset
@@ -1474,6 +1636,7 @@ async def generate_presentation_handler(
                 async_status=async_status,
                 generation_job=generation_job,
                 export_cookie_header=export_cookie_header,
+                progress_reporter=progress_reporter,
                 sql_session=sql_session,
             )
 

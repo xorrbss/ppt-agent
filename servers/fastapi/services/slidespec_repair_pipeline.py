@@ -10,8 +10,10 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+import hashlib
+import json
 import time
-from typing import Literal
+from typing import Any, Literal
 
 from models.slidespec_v1 import RepairPlan
 from services.slidespec_pipeline_performance import (
@@ -24,6 +26,7 @@ from services.slidespec_pipeline_performance import (
 )
 from services.slidespec_repair import repair_cost
 from services.slidespec_rollout_policy import SlideSpecRepairRolloutDecision
+from utils.llm_calls.slidespec_repair_resilience import NoCandidateReason
 
 
 ReasonCode = str
@@ -247,6 +250,47 @@ class DomEvidence:
     def unknown_atoms(self) -> tuple[EvidenceAtom, ...]:
         return tuple(atom for atom in self.atoms if atom.state == "unknown")
 
+    @staticmethod
+    def _unknown_measurement_keys(
+        atom: EvidenceAtom,
+    ) -> tuple[tuple[str, str], ...]:
+        """Identify physical missing measurements independently of consumers.
+
+        Chrome's occlusion probe and a readability constraint can report the
+        same absent ``occluded_fraction`` sample.  They remain separate audit
+        atoms, but counting both as incomplete measurements inflates the review
+        funnel and makes one missing sensor value look like two unknowns.
+        """
+
+        scope = atom.qid or atom.semantic_id or atom.constraint_id or "global"
+        if atom.sensor == "chrome_occlusion" and atom.metric == "occlusion":
+            return ((scope, "occluded_fraction"),)
+        missing = atom.diagnostics.get("missing_measurements")
+        target_qids = atom.diagnostics.get("target_qids")
+        if isinstance(missing, Mapping):
+            qids = target_qids if isinstance(target_qids, Mapping) else {}
+            keys: list[tuple[str, str]] = []
+            for target, names in missing.items():
+                target_scope = str(qids.get(target) or scope)
+                if isinstance(names, Sequence) and not isinstance(names, (str, bytes)):
+                    keys.extend((target_scope, str(name)) for name in names)
+            if keys:
+                return tuple(dict.fromkeys(keys))
+        return ((scope, f"{atom.sensor}:{atom.metric}:{atom.stage}"),)
+
+    @property
+    def incomplete_measurement_groups(
+        self,
+    ) -> tuple[tuple[tuple[str, str], tuple[EvidenceAtom, ...]], ...]:
+        grouped: dict[tuple[str, str], list[EvidenceAtom]] = {}
+        for atom in self.unknown_atoms:
+            for key in self._unknown_measurement_keys(atom):
+                grouped.setdefault(key, []).append(atom)
+        return tuple(
+            (key, tuple(grouped[key]))
+            for key in sorted(grouped)
+        )
+
     @property
     def confirmed_issue_count(self) -> int:
         physical = {
@@ -266,7 +310,7 @@ class DomEvidence:
 
     @property
     def incomplete_measurement_count(self) -> int:
-        return len(self.unknown_atoms)
+        return len(self.incomplete_measurement_groups)
 
     @property
     def clean_slide_count(self) -> int:
@@ -318,6 +362,10 @@ class SensorResult:
     cache_hit: bool = False
     quality_gain: float | None = None
     quality_gain_interval: tuple[float, float] | None = None
+    resolved_issue_count: int | None = None
+    resolved_issue_severity: float | None = None
+    remaining_issue_count: int | None = None
+    quality_margin: float | None = None
     diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
@@ -400,11 +448,106 @@ class PipelineTelemetry:
     proposal_cache_misses: int = 0
     proposal_preflight_skips: int = 0
     pareto_pruned: int = 0
+    composite_plan_count: int = 0
+    composite_operations_merged: int = 0
+    render_candidates_rejected_early: int = 0
+    full_render_count: int = 0
+    llm_pattern_call_count: int = 0
+    llm_response_count: int = 0
+    llm_schema_pass_count: int = 0
+    llm_preflight_pass_count: int = 0
+    llm_render_count: int = 0
+    llm_provider_failures: int = 0
+    llm_schema_rejections: int = 0
+    llm_empty_responses: int = 0
+    llm_circuit_open_count: int = 0
+    llm_negative_cache_hits: int = 0
+    no_candidate_reasons: tuple[NoCandidateReason, ...] = ()
+    individual_fallback_count: int = 0
+    repeated_plan_blocked: int = 0
+    oscillation_blocked: int = 0
+    iteration_limit_blocked: int = 0
     repair_costs: tuple[tuple[int, int, float, float, int, str], ...] = ()
     realized_repair_costs: tuple[tuple[int, int, float, float, int, str], ...] = ()
     quality_gains: tuple[float, ...] = ()
     quality_gain_intervals: tuple[tuple[float, float], ...] = ()
     selected_quality_gain: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RepairConflictFootprint:
+    """Slide-local dependency cone used to decide whether plans may merge.
+
+    Callers with a layout tree should supply this explicitly.  The pipeline's
+    fallback derives conservative tokens from plan scope and diagnostic refs so
+    legacy callers remain compatible without treating raw coordinates as proof
+    of independence.
+    """
+
+    nodes: frozenset[str] = frozenset()
+    ancestor_cones: frozenset[str] = frozenset()
+    parent_space_pools: frozenset[str] = frozenset()
+    constraints: frozenset[str] = frozenset()
+    coupled_containers: frozenset[str] = frozenset()
+
+
+def _operation_payloads(plan: RepairPlan) -> tuple[dict[str, Any], ...]:
+    return tuple(
+        operation.model_dump(mode="json", by_alias=True, exclude_none=True)
+        for operation in plan.operations
+    )
+
+
+def _plan_signature(plan: RepairPlan) -> str:
+    payload = {
+        "slide": plan.slide_id,
+        "scope": sorted(plan.scope),
+        "operations": _operation_payloads(plan),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _operation_state_signature(plan: RepairPlan) -> str:
+    """Signature for A->B->A oscillation detection, independent of plan id."""
+
+    encoded = json.dumps(
+        _operation_payloads(plan), sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+@dataclass(slots=True)
+class RepairIterationGuard:
+    """Request/deck-scoped monotonic repair history for repeated slide passes."""
+
+    max_incremental_applies: int = 12
+    _applied_signatures: dict[str, set[str]] = field(default_factory=dict)
+    _operation_history: dict[str, list[str]] = field(default_factory=dict)
+    _apply_counts: dict[str, int] = field(default_factory=dict)
+
+    def rejection_reason(self, plan: RepairPlan) -> ReasonCode | None:
+        slide_id = plan.slide_id
+        if self._apply_counts.get(slide_id, 0) >= self.max_incremental_applies:
+            return "repair.iteration_limit"
+        operation_state = _operation_state_signature(plan)
+        history = self._operation_history.get(slide_id, ())
+        if len(history) >= 2 and operation_state == history[-2]:
+            return "repair.oscillation_detected"
+        signature = _plan_signature(plan)
+        if signature in self._applied_signatures.get(slide_id, set()):
+            return "repair.plan_signature_repeated"
+        return None
+
+    def record_applied(self, plan: RepairPlan) -> None:
+        slide_id = plan.slide_id
+        self._applied_signatures.setdefault(slide_id, set()).add(
+            _plan_signature(plan)
+        )
+        self._operation_history.setdefault(slide_id, []).append(
+            _operation_state_signature(plan)
+        )
+        self._apply_counts[slide_id] = self._apply_counts.get(slide_id, 0) + 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -415,54 +558,46 @@ class _AcceptedCandidate:
     quality_gain_interval: tuple[float, float]
     constraint_cost: float
     realized_cost: tuple[int, int, float, float, int, str]
+    resolved_issue_count: int = 0
+    resolved_issue_severity: float = 0
+    remaining_issue_count: int | None = None
+    quality_margin: float | None = None
     diagnostics: Mapping[str, object] = field(default_factory=dict)
+
+
+def _rank_accepted_candidates(
+    candidates: Sequence[_AcceptedCandidate],
+) -> tuple[_AcceptedCandidate, ...]:
+    """Rank safe candidates for the single maximum-repair behavior.
+
+    Every item has already passed the invariant, DOM, OCR and VQA gates.  Within
+    that safe set, prefer the candidate with the greatest measured improvement;
+    change cost is only a tie-break.  Keeping the complete order also lets the
+    publisher try the next validated candidate when a candidate-specific final
+    gate rejects the first choice.
+    """
+
+    return tuple(
+        sorted(
+            candidates,
+            key=lambda item: (
+                -item.resolved_issue_count,
+                -item.resolved_issue_severity,
+                -item.quality_gain,
+                -item.quality_gain_interval[0],
+                -item.quality_gain_interval[1],
+                item.constraint_cost,
+                item.realized_cost,
+                item.plan.plan_id,
+            ),
+        )
+    )
 
 
 def _select_accepted_candidate(
     candidates: Sequence[_AcceptedCandidate],
 ) -> _AcceptedCandidate:
-    """Select from the uncertainty-aware Pareto frontier with stable tie breaks."""
-
-    def dominates(left: _AcceptedCandidate, right: _AcceptedCandidate) -> bool:
-        quality_certainly_better = (
-            left.quality_gain_interval[0] > right.quality_gain_interval[1] + 1e-9
-        )
-        quality_equivalent = left.quality_gain_interval == right.quality_gain_interval
-        costs_no_worse = (
-            left.constraint_cost <= right.constraint_cost
-            and left.realized_cost <= right.realized_cost
-        )
-        costs_strictly_better = (
-            left.constraint_cost < right.constraint_cost
-            or left.realized_cost < right.realized_cost
-        )
-        return costs_no_worse and (
-            quality_certainly_better or (quality_equivalent and costs_strictly_better)
-        )
-
-    frontier = [
-        candidate
-        for candidate in candidates
-        if not any(
-            other is not candidate and dominates(other, candidate)
-            for other in candidates
-        )
-    ]
-    best_lower = max(item.quality_gain_interval[0] for item in frontier)
-    equivalent = [
-        item
-        for item in frontier
-        if item.quality_gain_interval[1] + 1e-9 >= best_lower
-    ]
-    return min(
-        equivalent,
-        key=lambda item: (
-            item.constraint_cost,
-            item.realized_cost,
-            -item.quality_gain,
-            item.plan.plan_id,
-        ),
-    )
+    return _rank_accepted_candidates(candidates)[0]
 
 
 @dataclass(frozen=True, slots=True)
@@ -502,8 +637,184 @@ RunVqa = Callable[[RenderedCandidate], Awaitable[SensorResult]]
 PublishCandidate = Callable[
     [SlideSpecInput, RepairPlan, RenderedCandidate], Awaitable[PublicationReceipt]
 ]
-PlanFactory = Callable[[SlideSpecInput, DomEvidence], Awaitable[Sequence[RepairPlan]]]
+@dataclass(frozen=True, slots=True)
+class ProposalBatch:
+    """Per-request model funnel result without unbounded provider details."""
+
+    plans: tuple[RepairPlan, ...] = ()
+    no_candidate_reason: NoCandidateReason | None = None
+    call_count: int = 0
+    response_count: int = 0
+    schema_pass_count: int = 0
+    provider_failure_count: int = 0
+    schema_rejection_count: int = 0
+    empty_count: int = 0
+    negative_cache_hit_count: int = 0
+    circuit_open_count: int = 0
+
+
+PlanFactory = Callable[
+    [SlideSpecInput, DomEvidence],
+    Awaitable[Sequence[RepairPlan] | ProposalBatch],
+]
 ProposalPreflight = Callable[[SlideSpecInput, DomEvidence], Awaitable[SensorResult]]
+CandidatePartition = Callable[
+    [Sequence[RepairPlan]], tuple[Sequence[RepairPlan], Sequence[RepairPlan]]
+]
+AppliedPlanObserver = Callable[[RepairPlan], None]
+PlanFootprint = Callable[[RepairPlan], RepairConflictFootprint]
+
+
+def _default_plan_footprint(plan: RepairPlan) -> RepairConflictFootprint:
+    nodes = set(plan.scope)
+    nodes.update(operation.target for operation in plan.operations)
+    ancestors: set[str] = set()
+    parent_space: set[str] = set()
+    constraints: set[str] = set()
+    coupled: set[str] = set()
+    for reference in plan.diagnostic_refs:
+        prefix, separator, value = reference.partition(":")
+        if not separator or not value:
+            continue
+        if prefix in {"ancestor", "descendant-cone"}:
+            ancestors.add(value)
+        elif prefix in {"parent-space", "space-pool"}:
+            parent_space.add(value)
+        elif prefix in {"constraint", "footprint"}:
+            constraints.add(value)
+        elif prefix in {"connector", "group", "table", "auto-layout"}:
+            coupled.add(f"{prefix}:{value}")
+    # Tree-like ids can express ancestry without a separate layout callback.
+    for node in tuple(nodes):
+        pieces = node.replace("\\", "/").split("/")
+        ancestors.update("/".join(pieces[:index]) for index in range(1, len(pieces)))
+    return RepairConflictFootprint(
+        nodes=frozenset(nodes),
+        ancestor_cones=frozenset(ancestors),
+        parent_space_pools=frozenset(parent_space),
+        constraints=frozenset(constraints),
+        coupled_containers=frozenset(coupled),
+    )
+
+
+def _footprints_conflict(
+    left: RepairConflictFootprint, right: RepairConflictFootprint
+) -> bool:
+    return bool(
+        left.nodes.intersection(right.nodes)
+        or left.nodes.intersection(right.ancestor_cones)
+        or right.nodes.intersection(left.ancestor_cones)
+        or left.ancestor_cones.intersection(right.ancestor_cones)
+        or left.parent_space_pools.intersection(right.parent_space_pools)
+        or left.constraints.intersection(right.constraints)
+        or left.coupled_containers.intersection(right.coupled_containers)
+    )
+
+
+def _merge_nonconflicting_plans(
+    members: Sequence[RepairPlan],
+) -> RepairPlan | None:
+    if len(members) < 2:
+        return None
+    first = members[0]
+    identity = (
+        first.slide_id,
+        first.base_spec_revision,
+        first.base_spec_hash,
+        first.expected_content_digest,
+        first.provenance.source,
+    )
+    if any(
+        (
+            member.slide_id,
+            member.base_spec_revision,
+            member.base_spec_hash,
+            member.expected_content_digest,
+            member.provenance.source,
+        )
+        != identity
+        for member in members[1:]
+    ):
+        return None
+    operations = tuple(
+        operation for member in members for operation in member.operations
+    )
+    scope = tuple(
+        dict.fromkeys(
+            (
+                *(target for member in members for target in member.scope),
+                *(operation.target for operation in operations),
+            )
+        )
+    )
+    if len(operations) > 16 or len(scope) > 8:
+        return None
+    max_operations = min(member.budget.maxOperations for member in members)
+    max_touched = min(member.budget.maxTouchedLayoutNodes for member in members)
+    if len(operations) > max_operations or len(scope) > max_touched:
+        return None
+    refs = tuple(
+        dict.fromkeys(
+            reference
+            for member in members
+            for reference in member.diagnostic_refs
+        )
+    )
+    payload = first.model_dump(mode="json", by_alias=True, exclude_none=True)
+    payload["scope"] = list(scope)
+    payload["diagnosticRefs"] = list(refs)
+    payload["operations"] = [
+        operation.model_dump(mode="json", by_alias=True, exclude_none=True)
+        for operation in operations
+    ]
+    payload["strategy"] = "deterministic_cascade"
+    payload["limits"] = {
+        "maxOperations": max_operations,
+        "maxAffectedBlocks": max_touched,
+        "maxLayoutDepth": min(member.budget.maxLayoutDepth for member in members),
+    }
+    payload.pop("planId", None)
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    payload["planId"] = "rp_composite_" + hashlib.sha256(
+        encoded.encode("utf-8")
+    ).hexdigest()[:20]
+    try:
+        return RepairPlan.model_validate(payload)
+    except ValueError:
+        return None
+
+
+def _composite_candidates(
+    plans: Sequence[RepairPlan],
+    footprint_for: PlanFootprint,
+) -> tuple[tuple[RepairPlan, ...], dict[str, tuple[RepairPlan, ...]]]:
+    """Greedily color the conflict graph into deterministic independent sets."""
+
+    groups: list[list[RepairPlan]] = []
+    footprints: dict[str, RepairConflictFootprint] = {
+        plan.plan_id: footprint_for(plan) for plan in plans
+    }
+    for plan in deterministic_candidate_order(plans):
+        for group in groups:
+            if all(
+                not _footprints_conflict(
+                    footprints[plan.plan_id], footprints[member.plan_id]
+                )
+                for member in group
+            ):
+                group.append(plan)
+                break
+        else:
+            groups.append([plan])
+    composites: list[RepairPlan] = []
+    members_by_id: dict[str, tuple[RepairPlan, ...]] = {}
+    for group in groups[:8]:
+        composite = _merge_nonconflicting_plans(group)
+        if composite is None:
+            continue
+        composites.append(composite)
+        members_by_id[composite.plan_id] = tuple(group)
+    return tuple(composites), members_by_id
 
 
 @dataclass(slots=True)
@@ -520,6 +831,11 @@ class SlideSpecRepairDependencies:
     proposal_capability_digest: str = "projection-capability:unknown"
     proposal_model_digest: str = "model:unknown"
     proposal_cache: NegativeProposalCache | None = None
+    candidate_partition: CandidatePartition | None = None
+    applied_plan_observer: AppliedPlanObserver | None = None
+    plan_footprint: PlanFootprint | None = None
+    iteration_guard: RepairIterationGuard = field(default_factory=RepairIterationGuard)
+    lazy_quality_margin: float = 0.05
 
 
 class SlideSpecRepairPipeline:
@@ -527,6 +843,48 @@ class SlideSpecRepairPipeline:
 
     def __init__(self, dependencies: SlideSpecRepairDependencies) -> None:
         self._dependencies = dependencies
+
+    async def _try_stage(
+        self,
+        spec: SlideSpecInput,
+        plans: Sequence[RepairPlan],
+        rollout: SlideSpecRepairRolloutDecision,
+        state: "_MutableFunnel",
+        outcomes: list[CandidateOutcome],
+        baseline_dom: DomEvidence,
+    ) -> Literal["accepted", "exhausted", "inconclusive"]:
+        if not plans:
+            return "exhausted"
+        started = time.perf_counter()
+        footprint_for = self._dependencies.plan_footprint or _default_plan_footprint
+        composites, members_by_id = _composite_candidates(plans, footprint_for)
+        state.add_timing("conflict_graph", started)
+        if composites:
+            state.composite_plan_count += len(composites)
+            state.composite_operations_merged += sum(
+                len(composite.operations) for composite in composites
+            )
+            outcome = await self._try_plans(
+                spec, composites, rollout, state, outcomes, baseline_dom
+            )
+            if outcome != "exhausted":
+                return outcome
+            # A failed composite is evidence about that combined mutation only.
+            # Decompose it back to its original candidates and retain every gate.
+            state.individual_fallback_count += 1
+            decomposed_by_id = {
+                member.plan_id: member
+                for composite in composites
+                for member in members_by_id[composite.plan_id]
+            }
+            decomposed = tuple(decomposed_by_id.values())
+            unmerged = tuple(
+                plan for plan in plans if plan.plan_id not in decomposed_by_id
+            )
+            plans = (*decomposed, *unmerged)
+        return await self._try_plans(
+            spec, plans, rollout, state, outcomes, baseline_dom
+        )
 
     async def run(
         self,
@@ -555,7 +913,29 @@ class SlideSpecRepairPipeline:
         started = time.perf_counter()
         deterministic = tuple(await self._dependencies.deterministic_cascade(spec, baseline_dom))
         state.add_timing("deterministic_cascade", started)
-        outcome = await self._try_plans(
+        had_deterministic_candidates = bool(deterministic)
+        preferred: Sequence[RepairPlan] = ()
+        if self._dependencies.candidate_partition is not None:
+            preferred, deterministic = self._dependencies.candidate_partition(
+                deterministic
+            )
+        if preferred:
+            outcome = await self._try_stage(
+                spec, preferred, rollout, state, outcomes, baseline_dom
+            )
+            if outcome == "accepted":
+                return self._result(rollout, outcomes, state, (), baseline_dom)
+            if outcome == "inconclusive":
+                state.legacy_preserved += 1
+                return self._result(
+                    rollout,
+                    outcomes,
+                    state,
+                    ("acceptance.inconclusive", "legacy_preserved"),
+                    baseline_dom,
+                )
+            state.individual_fallback_count += 1
+        outcome = await self._try_stage(
             spec, deterministic, rollout, state, outcomes, baseline_dom
         )
         if outcome == "accepted":
@@ -569,6 +949,8 @@ class SlideSpecRepairPipeline:
                 ("acceptance.inconclusive", "legacy_preserved"),
                 baseline_dom,
             )
+        if not had_deterministic_candidates:
+            state.record_no_candidate("deterministic_no_candidate")
 
         if self._dependencies.propose is not None:
             if self._dependencies.proposal_preflight is not None:
@@ -592,6 +974,7 @@ class SlideSpecRepairPipeline:
                             baseline_dom,
                         )
                     state.proposal_preflight_skips += 1
+                    state.record_no_candidate("proposal_preflight_unprojectable")
                     state.legacy_preserved += 1
                     return self._result(
                         rollout,
@@ -604,6 +987,7 @@ class SlideSpecRepairPipeline:
                         ),
                         baseline_dom,
                     )
+                state.llm_preflight_pass_count += 1
 
             proposal_cache = (
                 self._dependencies.proposal_cache
@@ -618,6 +1002,8 @@ class SlideSpecRepairPipeline:
             )
             if proposal_cache.contains(proposal_key):
                 state.proposal_cache_hits += 1
+                state.llm_negative_cache_hits += 1
+                state.record_no_candidate("negative_cache_hit")
                 state.legacy_preserved += 1
                 return self._result(
                     rollout,
@@ -628,11 +1014,41 @@ class SlideSpecRepairPipeline:
                 )
             state.proposal_cache_misses += 1
             try:
-                state.llm_calls += 1
                 started = time.perf_counter()
-                proposed = tuple(await self._dependencies.propose(spec, baseline_dom))
+                proposal_result = await self._dependencies.propose(spec, baseline_dom)
                 state.add_timing("llm_proposal", started)
+                if isinstance(proposal_result, ProposalBatch):
+                    proposed = proposal_result.plans
+                    state.llm_calls += proposal_result.call_count
+                    state.llm_pattern_call_count += proposal_result.call_count
+                    state.llm_response_count += proposal_result.response_count
+                    state.llm_schema_pass_count += proposal_result.schema_pass_count
+                    state.llm_provider_failures += proposal_result.provider_failure_count
+                    state.llm_schema_rejections += proposal_result.schema_rejection_count
+                    state.llm_empty_responses += proposal_result.empty_count
+                    state.llm_negative_cache_hits += (
+                        proposal_result.negative_cache_hit_count
+                    )
+                    state.llm_circuit_open_count += proposal_result.circuit_open_count
+                    if proposal_result.no_candidate_reason is not None:
+                        state.record_no_candidate(
+                            proposal_result.no_candidate_reason
+                        )
+                else:
+                    proposed = tuple(proposal_result)
+                    state.llm_calls += 1
+                    state.llm_pattern_call_count += 1
+                    state.llm_response_count += 1
+                    if proposed:
+                        state.llm_schema_pass_count += 1
+                    else:
+                        state.record_no_candidate("llm_empty")
+                        state.llm_empty_responses += 1
             except Exception as error:
+                state.llm_calls += 1
+                state.llm_pattern_call_count += 1
+                state.llm_provider_failures += 1
+                state.record_no_candidate("llm_provider_error")
                 state.inconclusive += 1
                 state.legacy_preserved += 1
                 reason = (
@@ -671,11 +1087,16 @@ class SlideSpecRepairPipeline:
                 )
 
         state.legacy_preserved += 1
+        terminal_reasons: tuple[str, ...] = (
+            *state.no_candidate_reasons,
+            "acceptance.required_gate_failed",
+            "legacy_preserved",
+        )
         return self._result(
             rollout,
             outcomes,
             state,
-            ("acceptance.required_gate_failed", "legacy_preserved"),
+            terminal_reasons,
             baseline_dom,
         )
 
@@ -696,6 +1117,20 @@ class SlideSpecRepairPipeline:
             plan = candidate
             state.proposed += 1
             state.repair_costs.append(repair_cost(plan).sort_key)
+            guard_reason = self._dependencies.iteration_guard.rejection_reason(plan)
+            if guard_reason is not None:
+                state.rejected += 1
+                state.render_candidates_rejected_early += 1
+                if guard_reason == "repair.plan_signature_repeated":
+                    state.repeated_plan_blocked += 1
+                elif guard_reason == "repair.oscillation_detected":
+                    state.oscillation_blocked += 1
+                else:
+                    state.iteration_limit_blocked += 1
+                outcomes.append(
+                    self._outcome(plan, "not_started", "rejected", guard_reason)
+                )
+                continue
             started = time.perf_counter()
             validation = await self._dependencies.validate_plan(spec, plan)
             state.add_timing("schema_invariant", started)
@@ -705,6 +1140,7 @@ class SlideSpecRepairPipeline:
                     outcomes.append(self._outcome(plan, "not_started", "inconclusive", validation.reason_code or "acceptance.inconclusive"))
                     return "inconclusive"
                 state.rejected += 1
+                state.render_candidates_rejected_early += 1
                 outcomes.append(self._outcome(plan, "not_started", "rejected", validation.reason_code or "schema.invalid_value"))
                 continue
             validated.append(plan)
@@ -712,15 +1148,20 @@ class SlideSpecRepairPipeline:
         renderable, pruned = pareto_prune_plans(validated)
         state.pareto_pruned += len(pruned)
         state.rejected += len(pruned)
+        state.render_candidates_rejected_early += len(pruned)
 
         for plan in renderable:
             try:
                 state.render_calls += 1
+                state.full_render_count += 1
+                if plan.provenance.source == "llm":
+                    state.llm_render_count += 1
                 started = time.perf_counter()
                 artifact = await self._dependencies.render_plan(spec, plan)
                 state.add_timing("render", started)
             except Exception as error:
                 state.rejected += 1
+                state.render_candidates_rejected_early += 1
                 outcomes.append(
                     self._outcome(
                         plan,
@@ -747,6 +1188,7 @@ class SlideSpecRepairPipeline:
             )
             if failing_defect is not None:
                 state.rejected += 1
+                state.render_candidates_rejected_early += 1
                 outcomes.append(
                     self._outcome(
                         plan,
@@ -907,6 +1349,23 @@ class SlideSpecRepairPipeline:
                     )
                 )
                 return "inconclusive"
+            resolved_issue_count = max(0, vqa.resolved_issue_count or 0)
+            if vqa.quality_gain < 0 or (
+                resolved_issue_count == 0 and vqa.quality_gain <= 0
+            ):
+                state.rejected += 1
+                outcomes.append(
+                    self._outcome(
+                        plan,
+                        "succeeded",
+                        "rejected",
+                        "vqa.non_monotonic",
+                        quality_gain=vqa.quality_gain,
+                        quality_gain_interval=vqa.quality_gain_interval,
+                        diagnostics={"vqa": dict(vqa.diagnostics)},
+                    )
+                )
+                continue
             state.validated += 1
             state.accepted += 1
             if accepted_insert_at is None:
@@ -922,18 +1381,33 @@ class SlideSpecRepairPipeline:
             state.realized_repair_costs.append(realized_cost)
             accepted_candidates.append(
                 _AcceptedCandidate(
-                    plan,
-                    artifact,
-                    quality_gain,
-                    quality_gain_interval,
-                    artifact.constraint_cost,
-                    realized_cost,
-                    {
+                    plan=plan,
+                    artifact=artifact,
+                    quality_gain=quality_gain,
+                    quality_gain_interval=quality_gain_interval,
+                    constraint_cost=artifact.constraint_cost,
+                    realized_cost=realized_cost,
+                    resolved_issue_count=resolved_issue_count,
+                    resolved_issue_severity=max(
+                        0, vqa.resolved_issue_severity or 0
+                    ),
+                    remaining_issue_count=vqa.remaining_issue_count,
+                    quality_margin=vqa.quality_margin,
+                    diagnostics={
                         "ocr": dict(ocr.diagnostics),
                         "vqa": dict(vqa.diagnostics),
                     },
                 )
             )
+            if (
+                vqa.remaining_issue_count == 0
+                and vqa.quality_margin is not None
+                and vqa.quality_margin >= self._dependencies.lazy_quality_margin
+            ):
+                # Explicit full-resolution proof with sufficient safety margin
+                # makes later expensive candidates unnecessary.  Missing proof,
+                # partial resolution or a narrow margin deliberately expands.
+                break
 
         outcomes.extend(
             self._outcome(
@@ -950,121 +1424,168 @@ class SlideSpecRepairPipeline:
         if not accepted_candidates:
             return "exhausted"
 
-        selected = _select_accepted_candidate(accepted_candidates)
+        ranked = _rank_accepted_candidates(accepted_candidates)
+        selected = ranked[0]
         state.selected_quality_gain = selected.quality_gain
-        nonselected_outcomes: list[CandidateOutcome] = []
-        for candidate in accepted_candidates:
-            if candidate is selected:
-                continue
-            nonselected_outcomes.append(
+        assert accepted_insert_at is not None
+
+        def not_selected(candidate: _AcceptedCandidate) -> CandidateOutcome:
+            return self._outcome(
+                candidate.plan,
+                "succeeded",
+                "accepted",
+                "candidate.not_selected",
+                quality_gain=candidate.quality_gain,
+                quality_gain_interval=candidate.quality_gain_interval,
+                realized_cost=candidate.realized_cost,
+                diagnostics=candidate.diagnostics,
+            )
+
+        def record_publication_outcomes(
+            attempted: Sequence[CandidateOutcome],
+            remaining: Sequence[_AcceptedCandidate] = (),
+        ) -> None:
+            outcomes[accepted_insert_at:accepted_insert_at] = [
+                *attempted,
+                *(not_selected(candidate) for candidate in remaining),
+            ]
+
+        if rollout.shadow_mode or not rollout.publisher_allowed:
+            state.legacy_preserved += 1
+            record_publication_outcomes(
+                [
+                    self._outcome(
+                        selected.plan,
+                        "succeeded",
+                        "accepted",
+                        "legacy_preserved.shadow",
+                        quality_gain=selected.quality_gain,
+                        quality_gain_interval=selected.quality_gain_interval,
+                        realized_cost=selected.realized_cost,
+                        selected=True,
+                        diagnostics=selected.diagnostics,
+                    )
+                ],
+                ranked[1:],
+            )
+            return "accepted"
+
+        attempted_outcomes: list[CandidateOutcome] = []
+        for offset, candidate in enumerate(ranked):
+            plan = candidate.plan
+            artifact = candidate.artifact
+            try:
+                started = time.perf_counter()
+                receipt = await self._dependencies.publish(spec, plan, artifact)
+                state.add_timing("publication", started)
+            except Exception as error:
+                state.legacy_preserved += 1
+                attempted_outcomes.append(
+                    self._outcome(
+                        plan,
+                        "succeeded",
+                        "accepted",
+                        getattr(error, "code", "artifact.publish.unexpected_error"),
+                        apply_status="failed",
+                        publish_status="failed",
+                        quality_gain=candidate.quality_gain,
+                        quality_gain_interval=candidate.quality_gain_interval,
+                        realized_cost=candidate.realized_cost,
+                        selected=True,
+                        diagnostics=candidate.diagnostics,
+                    )
+                )
+                record_publication_outcomes(attempted_outcomes, ranked[offset + 1 :])
+                return "accepted"
+            applied = (
+                receipt.cas_committed
+                and receipt.active_switched
+                and receipt.readback_hashes_match
+            )
+            if applied:
+                state.apply_committed += 1
+                state.publish_active += 1
+                state.postverify_passed += 1
+                state.applied += 1
+                state.selected_quality_gain = candidate.quality_gain
+                self._dependencies.iteration_guard.record_applied(plan)
+                attempted_outcomes.append(
+                    self._outcome(
+                        plan,
+                        "succeeded",
+                        "accepted",
+                        None,
+                        applied=True,
+                        quality_gain=candidate.quality_gain,
+                        quality_gain_interval=candidate.quality_gain_interval,
+                        realized_cost=candidate.realized_cost,
+                        selected=True,
+                        diagnostics=candidate.diagnostics,
+                    )
+                )
+                record_publication_outcomes(attempted_outcomes, ranked[offset + 1 :])
+                observer = self._dependencies.applied_plan_observer
+                if observer is not None:
+                    try:
+                        observer(plan)
+                    except Exception:
+                        # Recipe learning is an optimization.  A successfully
+                        # published repair must not be converted into a failure
+                        # because the request-local positive cache rejected it.
+                        pass
+                return "accepted"
+
+            reason = receipt.reason_code or "artifact.publish.readback_mismatch"
+            retryable_candidate_failure = (
+                not receipt.cas_committed
+                and not receipt.active_switched
+                and not receipt.rolled_back
+                and reason.startswith(
+                    (
+                        "acceptance.",
+                        "candidate.",
+                        "constraint.",
+                        "dom.",
+                        "invariant.",
+                        "ocr.",
+                        "schema.",
+                        "vqa.",
+                    )
+                )
+            )
+            if receipt.rolled_back:
+                state.rolled_back += 1
+            attempted_outcomes.append(
                 self._outcome(
-                    candidate.plan,
+                    plan,
                     "succeeded",
-                    "accepted",
-                    "candidate.not_selected",
+                    "rejected" if retryable_candidate_failure else "accepted",
+                    reason,
+                    apply_status="committed" if receipt.cas_committed else "failed",
+                    publish_status="active" if receipt.active_switched else "failed",
+                    post_verify_status=(
+                        "failed" if receipt.cas_committed and receipt.active_switched
+                        else "not_started"
+                    ),
+                    rolled_back=receipt.rolled_back,
                     quality_gain=candidate.quality_gain,
                     quality_gain_interval=candidate.quality_gain_interval,
                     realized_cost=candidate.realized_cost,
+                    selected=True,
                     diagnostics=candidate.diagnostics,
                 )
             )
-        assert accepted_insert_at is not None
-
-        def record_selected(outcome: CandidateOutcome) -> None:
-            outcomes[accepted_insert_at:accepted_insert_at] = [
-                outcome,
-                *nonselected_outcomes,
-            ]
-
-        plan = selected.plan
-        artifact = selected.artifact
-        if rollout.shadow_mode or not rollout.publisher_allowed:
+            if retryable_candidate_failure:
+                continue
             state.legacy_preserved += 1
-            record_selected(
-                self._outcome(
-                    plan,
-                    "succeeded",
-                    "accepted",
-                    "legacy_preserved.shadow",
-                    quality_gain=selected.quality_gain,
-                    quality_gain_interval=selected.quality_gain_interval,
-                    realized_cost=selected.realized_cost,
-                    selected=True,
-                    diagnostics=selected.diagnostics,
-                )
-            )
+            record_publication_outcomes(attempted_outcomes, ranked[offset + 1 :])
             return "accepted"
-        try:
-            started = time.perf_counter()
-            receipt = await self._dependencies.publish(spec, plan, artifact)
-            state.add_timing("publication", started)
-        except Exception as error:
-            state.legacy_preserved += 1
-            record_selected(
-                self._outcome(
-                    plan,
-                    "succeeded",
-                    "accepted",
-                    getattr(error, "code", "artifact.publish.unexpected_error"),
-                    apply_status="failed",
-                    publish_status="failed",
-                    quality_gain=selected.quality_gain,
-                    quality_gain_interval=selected.quality_gain_interval,
-                    realized_cost=selected.realized_cost,
-                    selected=True,
-                    diagnostics=selected.diagnostics,
-                )
-            )
-            return "accepted"
-        applied = (
-            receipt.cas_committed
-            and receipt.active_switched
-            and receipt.readback_hashes_match
-        )
-        if applied:
-            state.apply_committed += 1
-            state.publish_active += 1
-            state.postverify_passed += 1
-            state.applied += 1
-            record_selected(
-                self._outcome(
-                    plan,
-                    "succeeded",
-                    "accepted",
-                    None,
-                    applied=True,
-                    quality_gain=selected.quality_gain,
-                    quality_gain_interval=selected.quality_gain_interval,
-                    realized_cost=selected.realized_cost,
-                    selected=True,
-                    diagnostics=selected.diagnostics,
-                )
-            )
-            return "accepted"
-        if receipt.rolled_back:
-            state.rolled_back += 1
-        state.legacy_preserved += 1
-        record_selected(
-            self._outcome(
-                plan,
-                "succeeded",
-                "accepted",
-                receipt.reason_code or "artifact.publish.readback_mismatch",
-                apply_status="committed" if receipt.cas_committed else "failed",
-                publish_status="active" if receipt.active_switched else "failed",
-                post_verify_status=(
-                    "failed" if receipt.cas_committed and receipt.active_switched
-                    else "not_started"
-                ),
-                rolled_back=receipt.rolled_back,
-                quality_gain=selected.quality_gain,
-                quality_gain_interval=selected.quality_gain_interval,
-                realized_cost=selected.realized_cost,
-                selected=True,
-                diagnostics=selected.diagnostics,
-            )
-        )
-        return "accepted"
+
+        # Every safe candidate was rejected by a candidate-specific final gate.
+        # Preserve their evidence, then let the caller continue to the remaining
+        # deterministic plans or the bounded LLM layout-plan fallback.
+        record_publication_outcomes(attempted_outcomes)
+        return "exhausted"
 
     @staticmethod
     def _outcome(
@@ -1166,6 +1687,25 @@ class _MutableFunnel:
     proposal_cache_misses: int = 0
     proposal_preflight_skips: int = 0
     pareto_pruned: int = 0
+    composite_plan_count: int = 0
+    composite_operations_merged: int = 0
+    render_candidates_rejected_early: int = 0
+    full_render_count: int = 0
+    llm_pattern_call_count: int = 0
+    llm_response_count: int = 0
+    llm_schema_pass_count: int = 0
+    llm_preflight_pass_count: int = 0
+    llm_render_count: int = 0
+    llm_provider_failures: int = 0
+    llm_schema_rejections: int = 0
+    llm_empty_responses: int = 0
+    llm_circuit_open_count: int = 0
+    llm_negative_cache_hits: int = 0
+    no_candidate_reasons: list[NoCandidateReason] = field(default_factory=list)
+    individual_fallback_count: int = 0
+    repeated_plan_blocked: int = 0
+    oscillation_blocked: int = 0
+    iteration_limit_blocked: int = 0
     timings: dict[str, float] = field(default_factory=dict)
     repair_costs: list[tuple[int, int, float, float, int, str]] = field(
         default_factory=list
@@ -1176,6 +1716,10 @@ class _MutableFunnel:
     quality_gains: list[float] = field(default_factory=list)
     quality_gain_intervals: list[tuple[float, float]] = field(default_factory=list)
     selected_quality_gain: float | None = None
+
+    def record_no_candidate(self, reason: NoCandidateReason) -> None:
+        if reason not in self.no_candidate_reasons:
+            self.no_candidate_reasons.append(reason)
 
     def add_timing(self, stage: str, started: float) -> None:
         elapsed = (time.perf_counter() - started) * 1000
@@ -1198,6 +1742,25 @@ class _MutableFunnel:
             proposal_cache_misses=self.proposal_cache_misses,
             proposal_preflight_skips=self.proposal_preflight_skips,
             pareto_pruned=self.pareto_pruned,
+            composite_plan_count=self.composite_plan_count,
+            composite_operations_merged=self.composite_operations_merged,
+            render_candidates_rejected_early=self.render_candidates_rejected_early,
+            full_render_count=self.full_render_count,
+            llm_pattern_call_count=self.llm_pattern_call_count,
+            llm_response_count=self.llm_response_count,
+            llm_schema_pass_count=self.llm_schema_pass_count,
+            llm_preflight_pass_count=self.llm_preflight_pass_count,
+            llm_render_count=self.llm_render_count,
+            llm_provider_failures=self.llm_provider_failures,
+            llm_schema_rejections=self.llm_schema_rejections,
+            llm_empty_responses=self.llm_empty_responses,
+            llm_circuit_open_count=self.llm_circuit_open_count,
+            llm_negative_cache_hits=self.llm_negative_cache_hits,
+            no_candidate_reasons=tuple(self.no_candidate_reasons),
+            individual_fallback_count=self.individual_fallback_count,
+            repeated_plan_blocked=self.repeated_plan_blocked,
+            oscillation_blocked=self.oscillation_blocked,
+            iteration_limit_blocked=self.iteration_limit_blocked,
             repair_costs=tuple(self.repair_costs),
             realized_repair_costs=tuple(self.realized_repair_costs),
             quality_gains=tuple(self.quality_gains),

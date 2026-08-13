@@ -96,7 +96,7 @@
   },
   "browserGolden": {
     "receiptPath": "templates/manifests/swift.browser-golden.v1.json",
-    "receiptSha256": "cae407e7e0c870103e7987bdd48651b8203d993057f0a9eb0ca7dfca6e180b38"
+    "receiptSha256": "f6a4be0513cc5e97c969219528087534b40942dbc0fe348145c548ce04c0fb19"
   },
   "publication": {
     "status": "ready",

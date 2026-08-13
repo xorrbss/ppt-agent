@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -35,6 +37,7 @@ from services.template_v2_native_storage import (
     read_native_source,
 )
 from templates.v2.generation import build_generated_slide
+from templates.v2.content import hydrate_layout_content
 from templates.v2.catalog import (
     get_template_v2_catalog_entry,
     is_template_v2_release_ready,
@@ -82,6 +85,8 @@ _NATIVE_CAPABILITIES = {
     "master_layout_theme",
     "relationships_media",
 }
+_SLIDE_CONTENT_BATCH_SIZE = 10
+_SLIDE_ASSET_CONCURRENCY = 10
 
 
 def _canonical_json(value: Any, *, error_code: str) -> str:
@@ -506,6 +511,8 @@ async def build_template_v2_slides(
     tone: str | None,
     verbosity: str | None,
     instructions: str | None,
+    on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+    process_assets: Callable[[SlideModel], Awaitable[Any]] | None = None,
 ) -> list[SlideModel]:
     """Generate against fillable schemas, validate again, then persist native UI."""
 
@@ -513,7 +520,7 @@ async def build_template_v2_slides(
     if len(outlines.slides) != len(structure.slides):
         raise TemplateV2GenerationError("template_v2_generation_invalid")
 
-    slides: list[SlideModel] = []
+    generation_inputs = []
     for index, layout_index in enumerate(structure.slides):
         if (
             not isinstance(layout_index, int)
@@ -522,46 +529,136 @@ async def build_template_v2_slides(
         ):
             raise TemplateV2GenerationError("template_v2_generation_invalid")
         try:
-            target_layout = target.layouts[layout_index]
-            pipeline_slide_layout = pipeline_layout.slides[layout_index]
+            generation_inputs.append(
+                (
+                    index,
+                    target.layouts[layout_index],
+                    pipeline_layout.slides[layout_index],
+                    outlines.slides[index],
+                )
+            )
         except IndexError as error:
             raise TemplateV2GenerationError(
                 "template_v2_generation_invalid"
             ) from error
 
-        generated_content = await get_slide_content_from_type_and_outline(
-            pipeline_slide_layout,
-            outlines.slides[index],
-            language,
-            tone,
-            verbosity,
-            instructions,
-        )
-        if not isinstance(generated_content, dict):
-            raise TemplateV2GenerationError("template_v2_generation_invalid")
-        speaker_note = generated_content.pop("__speaker_note__", None)
-        try:
-            generated = build_generated_slide(
-                target_layout.layout,
-                generated_content,
-            )
-        except (ValueError, JSONSchemaValidationError) as error:
-            raise TemplateV2GenerationError(
-                "template_v2_generation_invalid"
-            ) from error
+    slides: list[SlideModel] = []
+    content_tasks: list[asyncio.Task[dict[str, Any]]] = []
+    asset_tasks: list[asyncio.Task[Any]] = []
+    asset_semaphore = asyncio.Semaphore(_SLIDE_ASSET_CONCURRENCY)
 
-        slides.append(
-            SlideModel(
-                presentation=presentation_id,
-                layout_group="native",
-                layout=generated.layout_id,
-                index=index,
-                speaker_note=speaker_note,
-                content=generated.content,
-                ui=generated.ui,
-            )
-        )
+    async def process_slide_assets(slide: SlideModel) -> Any:
+        if process_assets is None:
+            return None
+        async with asset_semaphore:
+            return await process_assets(slide)
+
+    try:
+        for start in range(0, len(generation_inputs), _SLIDE_CONTENT_BATCH_SIZE):
+            for task in asset_tasks:
+                if task.done():
+                    task.result()
+            batch_inputs = generation_inputs[
+                start : start + _SLIDE_CONTENT_BATCH_SIZE
+            ]
+            content_tasks = [
+                asyncio.create_task(
+                    get_slide_content_from_type_and_outline(
+                        pipeline_slide_layout,
+                        outline,
+                        language,
+                        tone,
+                        verbosity,
+                        instructions,
+                    )
+                )
+                for _, _, pipeline_slide_layout, outline in batch_inputs
+            ]
+            batch_contents = await asyncio.gather(*content_tasks)
+            content_tasks = []
+
+            batch_slides: list[SlideModel] = []
+            for (index, target_layout, _, _), generated_content in zip(
+                batch_inputs, batch_contents, strict=True
+            ):
+                if not isinstance(generated_content, dict):
+                    raise TemplateV2GenerationError(
+                        "template_v2_generation_invalid"
+                    )
+                slide_content = dict(generated_content)
+                speaker_note = slide_content.pop("__speaker_note__", None)
+                try:
+                    generated = build_generated_slide(
+                        target_layout.layout,
+                        slide_content,
+                    )
+                except (ValueError, JSONSchemaValidationError) as error:
+                    raise TemplateV2GenerationError(
+                        "template_v2_generation_invalid"
+                    ) from error
+
+                batch_slides.append(
+                    SlideModel(
+                        presentation=presentation_id,
+                        layout_group="native",
+                        layout=generated.layout_id,
+                        index=index,
+                        speaker_note=speaker_note,
+                        content=generated.content,
+                        ui=generated.ui,
+                    )
+                )
+
+            slides.extend(batch_slides)
+            completed = start + len(batch_slides)
+            if process_assets is not None:
+                asset_tasks.extend(
+                    asyncio.create_task(process_slide_assets(slide))
+                    for slide in batch_slides
+                )
+            if on_progress is not None:
+                await on_progress(completed, len(generation_inputs))
+
+        if asset_tasks:
+            await asyncio.gather(*asset_tasks)
+
+        if process_assets is not None:
+            for slide in slides:
+                refresh_template_v2_slide_ui(target=target, slide=slide)
+    except BaseException:
+        outstanding_tasks = [*content_tasks, *asset_tasks]
+        for task in outstanding_tasks:
+            if not task.done():
+                task.cancel()
+        if outstanding_tasks:
+            await asyncio.gather(*outstanding_tasks, return_exceptions=True)
+        raise
+
     return slides
+
+
+def refresh_template_v2_slide_ui(
+    *,
+    target: TemplateV2GenerationTarget,
+    slide: SlideModel,
+) -> None:
+    """Rebuild pinned native UI after controlled asset URL enrichment."""
+
+    target_layout = next(
+        (item for item in target.layouts if item.layout.id == slide.layout),
+        None,
+    )
+    if target_layout is None or not isinstance(slide.content, dict):
+        raise TemplateV2GenerationError("template_v2_generation_invalid")
+    try:
+        slide.ui = hydrate_layout_content(
+            target_layout.layout.model_dump(mode="json"),
+            slide.content,
+        )
+    except (ValueError, JSONSchemaValidationError) as error:
+        raise TemplateV2GenerationError(
+            "template_v2_generation_invalid"
+        ) from error
 
 
 def preflight_template_v2_native_pptx(

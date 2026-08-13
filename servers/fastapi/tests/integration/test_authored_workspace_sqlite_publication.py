@@ -24,6 +24,7 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -46,6 +47,7 @@ TABLES = [
     WorkspaceOperation.__table__,
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
+    PresentationExportAttempt.__table__,
     WorkspaceArtifact.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
     PresentationGenerationJob.__table__,

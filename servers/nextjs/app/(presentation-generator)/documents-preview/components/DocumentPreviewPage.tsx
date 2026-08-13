@@ -29,6 +29,7 @@ import ToolTip from "@/components/ToolTip";
 import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 
 // Types
 interface LoadingState {
@@ -55,6 +56,7 @@ interface LegacyFileItem {
 }
 
 const DocumentsPreviewPage: React.FC = () => {
+  const t = useTranslations("generation");
   // Hooks
   const dispatch = useDispatch();
   const router = useRouter();
@@ -149,8 +151,8 @@ const DocumentsPreviewPage: React.FC = () => {
   const handleCreatePresentation = async () => {
     if (!LEGACY_DOCUMENT_PREVIEW_ENABLED) {
       notify.error(
-        "Legacy document preview is disabled",
-        "Upload documents again through the Asset Gateway.",
+        t("legacyPreviewDisabledTitle"),
+        t("legacyPreviewDisabledDescription"),
       );
       router.replace("/");
       return;

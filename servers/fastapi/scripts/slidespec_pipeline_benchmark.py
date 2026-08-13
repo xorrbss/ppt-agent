@@ -241,15 +241,24 @@ async def _one_replay(
                     {
                         name: measurement.get(name)
                         for name in (
+                            "scope",
                             "sensor",
+                            "sensors",
                             "metric",
                             "stage",
+                            "stages",
                             "qid",
+                            "qids",
                             "semantic_id",
+                            "semantic_ids",
                             "constraint_id",
+                            "constraint_ids",
                             "reason_code",
+                            "reason_codes",
                             "dependency_refs",
+                            "evidence_atom_count",
                         )
+                        if measurement.get(name) is not None
                     }
                     for measurement in raw.get("incomplete_measurements", ())
                     if isinstance(measurement, Mapping)

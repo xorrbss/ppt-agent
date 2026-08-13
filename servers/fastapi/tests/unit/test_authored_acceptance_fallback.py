@@ -280,7 +280,10 @@ def test_rejected_local_patch_gets_one_bounded_full_fallback(
             session.add(slide)
             session.add(task)
             await session.commit()
-            await quality_service.run_authored_quality_review(
+            # Exercise the retained legacy implementation directly.  The public
+            # quality.review entry point is maximum-repair-only and must not
+            # route to this full-page fallback.
+            await quality_service._run_legacy_authored_quality_review_unlocked(
                 presentation.id,
                 AuthoredQualityReviewRequest(
                     scope="all",

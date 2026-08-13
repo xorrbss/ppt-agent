@@ -53,7 +53,14 @@ function run(files, extraArgs) {
   if (!files.length) return;
   const result = spawnSync(
     process.execPath,
-    ["--experimental-strip-types", "--test", ...extraArgs, ...files],
+    [
+      "--experimental-strip-types",
+      "--import",
+      "./scripts/register-node-test-loader.mjs",
+      "--test",
+      ...extraArgs,
+      ...files,
+    ],
     { stdio: "inherit" },
   );
   if (result.status !== 0) process.exit(result.status ?? 1);

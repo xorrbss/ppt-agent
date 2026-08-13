@@ -49,7 +49,13 @@ function getReadableTextColor(background: string): string {
   return luminance > 0.179 ? "#0F172A" : "#F8FAFC";
 }
 
-function AuthoredStylePreview({ style }: { style: AuthoredStyleSummary }) {
+export function AuthoredStylePreview({
+  style,
+  compact = false,
+}: {
+  style: AuthoredStyleSummary;
+  compact?: boolean;
+}) {
   const [imageFailed, setImageFailed] = useState(false);
   const family = getPreviewFamily(style.preview.variant);
   const colors = style.preview.palette;
@@ -69,14 +75,21 @@ function AuthoredStylePreview({ style }: { style: AuthoredStyleSummary }) {
         data-testid={`authored-style-preview-${style.id}`}
         data-variant={style.preview.variant}
         data-preview-family="reference"
-        className="relative h-[168px] overflow-hidden bg-slate-950"
+        className={cn(
+          "relative overflow-hidden bg-slate-950",
+          compact ? "aspect-video w-full" : "h-[168px]"
+        )}
         aria-hidden="true"
       >
         <Image
           src={style.preview.image}
           alt=""
           fill
-          sizes="(max-width: 768px) 100vw, 360px"
+          sizes={
+            compact
+              ? "(max-width: 640px) 50vw, (max-width: 1024px) 45vw, 320px"
+              : "(max-width: 768px) 100vw, 360px"
+          }
           className="pointer-events-none object-cover"
           unoptimized
           onError={() => setImageFailed(true)}
@@ -91,7 +104,10 @@ function AuthoredStylePreview({ style }: { style: AuthoredStyleSummary }) {
       data-testid={`authored-style-preview-${style.id}`}
       data-variant={style.preview.variant}
       data-preview-family={family}
-      className="relative h-[168px] overflow-hidden"
+      className={cn(
+        "relative overflow-hidden",
+        compact ? "aspect-video w-full" : "h-[168px]"
+      )}
       style={{ backgroundColor: background, color: ink }}
       aria-hidden="true"
     >

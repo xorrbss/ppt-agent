@@ -148,6 +148,11 @@ WORKSPACE_ERROR_REGISTRY: dict[str, WorkspaceErrorDefinition] = {
             status_code=410,
         ),
         _definition(
+            "workspace_export_operation_invalid",
+            "The export operation no longer matches this presentation.",
+            status_code=409,
+        ),
+        _definition(
             "workspace_export_not_ready",
             "The exported file is not ready yet.",
             retryable=True,

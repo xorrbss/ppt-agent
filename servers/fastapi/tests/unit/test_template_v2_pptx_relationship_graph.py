@@ -213,6 +213,53 @@ def test_disallowed_internal_relationship_still_rejects_unsafe_path(
     assert caught.value.code == "unsafe_relationship_target"
 
 
+def test_package_absolute_relationship_targets_are_resolved_from_package_root(
+    tmp_path: Path,
+) -> None:
+    payload = _pptx_bytes(
+        presentation_relationships=[
+            _relationship("rId1", SLIDE_REL_TYPE, "/ppt/slides/slide1.xml")
+        ]
+    )
+
+    reader = _reader(tmp_path, payload)
+    evidence = build_relationship_graph_evidence(reader)
+    candidates = parse_presentation_candidates(
+        reader,
+        source_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+
+    slide_relationship = next(
+        item for item in evidence.relationships if item.relationship_kind == "slide"
+    )
+    assert slide_relationship.target_part == "ppt/slides/slide1.xml"
+    assert len(candidates.slides) == 1
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "//ppt/slides/slide1.xml",
+        "/../escape.xml",
+        "C:/ppt/slides/slide1.xml",
+        "\\ppt\\slides\\slide1.xml",
+        "/",
+    ],
+)
+def test_unsafe_package_absolute_relationship_targets_stay_rejected(
+    tmp_path: Path,
+    target: str,
+) -> None:
+    payload = _pptx_bytes(
+        presentation_relationships=[_relationship("rId1", SLIDE_REL_TYPE, target)]
+    )
+
+    with pytest.raises(UnsafePptxPackage) as caught:
+        build_relationship_graph_evidence(_reader(tmp_path, payload))
+
+    assert caught.value.code == "unsafe_relationship_target"
+
+
 @pytest.mark.parametrize(
     ("limits", "expected_code"),
     [

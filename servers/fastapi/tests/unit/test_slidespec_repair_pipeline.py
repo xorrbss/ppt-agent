@@ -7,6 +7,8 @@ from services.slidespec_repair_pipeline import (
     DomDefect,
     DomEvidence,
     PublicationReceipt,
+    RepairConflictFootprint,
+    RepairIterationGuard,
     RenderedCandidate,
     SensorResult,
     SlideSpecInput,
@@ -49,7 +51,13 @@ def _plan(
     source="deterministic",
     operation=None,
     strategy=None,
+    diagnostic_refs=(),
 ):
+    operation = operation or {
+        "op": "setSpacing",
+        "target": "sem:title",
+        "gap": 4,
+    }
     return RepairPlan.model_validate(
         {
             "$schema": REPAIR_PLAN_SCHEMA,
@@ -58,17 +66,15 @@ def _plan(
             "baseSpecRevision": 17,
             "baseSpecHash": "sha256:" + "1" * 64,
             "expectedContentDigest": "sha256:" + "2" * 64,
-            "scope": ["sem:title"],
+            "scope": [operation["target"]],
+            "diagnosticRefs": list(diagnostic_refs),
             "strategy": strategy
             or (
                 "deterministic_cascade"
                 if source == "deterministic"
                 else "minimal_change"
             ),
-            "operations": [
-                operation
-                or {"op": "setSpacing", "target": "sem:title", "gap": 4}
-            ],
+            "operations": [operation],
             "limits": {
                 "maxOperations": 4,
                 "maxAffectedBlocks": 2,
@@ -370,7 +376,9 @@ def test_missing_visual_gain_fails_closed_and_preserves_original(monkeypatch):
     assert "publish" not in events
 
 
-def test_visual_non_regression_with_zero_gain_can_publish(monkeypatch):
+def test_zero_gain_without_resolved_issue_is_not_monotonic_and_cannot_publish(
+    monkeypatch,
+):
     events = []
     dependencies = _dependencies(events)
 
@@ -385,11 +393,12 @@ def test_visual_non_regression_with_zero_gain_can_publish(monkeypatch):
         )
     )
 
-    assert result.outcomes[0].validation_status == "accepted"
+    assert result.outcomes[0].validation_status == "rejected"
+    assert result.outcomes[0].reason_codes == ("vqa.non_monotonic",)
     assert result.outcomes[0].quality_gain == 0.0
-    assert result.outcomes[0].applied is True
-    assert result.funnel.publish_active == 1
-    assert "publish" in events
+    assert result.outcomes[0].applied is False
+    assert result.funnel.publish_active == 0
+    assert "publish" not in events
 
 
 def test_conclusive_sensor_failure_tries_next_candidate_when_peer_is_unavailable(
@@ -552,7 +561,7 @@ def test_equal_visual_gain_uses_realized_minimum_change_cost(monkeypatch):
     assert result.outcomes[0].selected is True
 
 
-def test_overlapping_vqa_intervals_choose_minimal_change_not_point_estimate(
+def test_maximum_repair_prefers_larger_measured_gain_when_safe_intervals_overlap(
     monkeypatch,
 ):
     events = []
@@ -596,9 +605,9 @@ def test_overlapping_vqa_intervals_choose_minimal_change_not_point_estimate(
         )
     )
 
-    assert ("published-plan", "small-change") in events
-    assert result.outcomes[0].plan_id == "small-change"
-    assert result.outcomes[0].quality_gain_interval == (0.48, 0.72)
+    assert ("published-plan", "uncertain-high-score") in events
+    assert result.outcomes[0].plan_id == "uncertain-high-score"
+    assert result.outcomes[0].quality_gain_interval == (0.45, 0.80)
     assert result.telemetry.quality_gain_intervals == (
         (0.48, 0.72),
         (0.45, 0.80),
@@ -679,6 +688,401 @@ def test_llm_is_one_call_and_at_most_two_candidates(monkeypatch):
     ]
     assert result.telemetry.llm_calls == 1
     assert result.telemetry.llm_candidates == 2
+
+
+def test_pattern_fast_path_stops_before_full_local_candidate_search(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    learned = _plan(
+        "rp-pattern",
+        operation={"op": "setSpacing", "target": "sem:title", "gap": 8},
+    )
+    local = _plan(
+        "rp-local",
+        operation={"op": "setSpacing", "target": "sem:title", "gap": 12},
+    )
+
+    async def cascade(spec, dom):
+        return [local, learned]
+
+    async def validate(spec, plan):
+        events.append(("validated-plan", plan.plan_id))
+        return SensorResult(True)
+
+    applied = []
+    dependencies.deterministic_cascade = cascade
+    dependencies.validate_plan = validate
+    dependencies.candidate_partition = lambda plans: (
+        tuple(plan for plan in plans if plan.plan_id == "rp-pattern"),
+        tuple(plan for plan in plans if plan.plan_id != "rp-pattern"),
+    )
+    dependencies.applied_plan_observer = lambda plan: applied.append(plan.plan_id)
+
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert ("validated-plan", "rp-pattern") in events
+    assert ("validated-plan", "rp-local") not in events
+    assert result.outcomes[0].plan_id == "rp-pattern"
+    assert result.outcomes[0].applied is True
+    assert applied == ["rp-pattern"]
+
+
+def test_candidate_specific_publish_rejection_tries_next_validated_candidate(
+    monkeypatch,
+):
+    events = []
+    dependencies = _dependencies(events)
+    first = _plan("largest-gain")
+    second = _plan(
+        "next-gain",
+        operation={"op": "setSpacing", "target": "sem:title", "gap": 8},
+    )
+
+    async def cascade(spec, dom):
+        return [first, second]
+
+    async def render(spec, plan):
+        return RenderedCandidate(
+            f"html:{plan.plan_id}",
+            f"render:{plan.plan_id}",
+            (0, 1, 0.0, 0.01, 1, plan.plan_id),
+        )
+
+    async def vqa(artifact):
+        gain = 0.8 if artifact.html_hash.endswith("largest-gain") else 0.6
+        return SensorResult(True, quality_gain=gain)
+
+    async def publish(spec, plan, artifact):
+        events.append(("published-plan", plan.plan_id))
+        if plan.plan_id == "largest-gain":
+            return PublicationReceipt(
+                False,
+                False,
+                False,
+                reason_code="constraint.evidence.missing",
+            )
+        return PublicationReceipt(True, True, True, "receipt-next")
+
+    dependencies.deterministic_cascade = cascade
+    dependencies.render_plan = render
+    dependencies.run_vqa = vqa
+    dependencies.publish = publish
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert [
+        event
+        for event in events
+        if isinstance(event, tuple) and event[0] == "published-plan"
+    ] == [
+        ("published-plan", "largest-gain"),
+        ("published-plan", "next-gain"),
+    ]
+    assert result.outcomes[0].plan_id == "largest-gain"
+    assert result.outcomes[0].validation_status == "rejected"
+    assert result.outcomes[0].reason_codes == ("constraint.evidence.missing",)
+    assert result.outcomes[1].plan_id == "next-gain"
+    assert result.outcomes[1].applied is True
+
+
+def test_nonconflicting_plans_merge_into_one_composite_and_stop_lazily(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    title = _plan("title", operation={"op": "setSpacing", "target": "sem:title", "gap": 4})
+    body = _plan("body", operation={"op": "setSpacing", "target": "sem:body", "gap": 6})
+
+    async def cascade(spec, dom):
+        return [title, body]
+
+    async def render(spec, plan):
+        events.append(("rendered-plan", plan.plan_id, len(plan.operations)))
+        return RenderedCandidate(f"html:{plan.plan_id}", f"render:{plan.plan_id}")
+
+    async def vqa(artifact):
+        return SensorResult(
+            True,
+            quality_gain=0.8,
+            resolved_issue_count=2,
+            remaining_issue_count=0,
+            quality_margin=0.2,
+        )
+
+    async def publish(spec, plan, artifact):
+        events.append(("published-plan", plan.plan_id))
+        return PublicationReceipt(True, True, True, "receipt-composite")
+
+    dependencies.deterministic_cascade = cascade
+    dependencies.render_plan = render
+    dependencies.run_vqa = vqa
+    dependencies.publish = publish
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    rendered = [event for event in events if isinstance(event, tuple) and event[0] == "rendered-plan"]
+    assert len(rendered) == 1
+    assert rendered[0][1].startswith("rp_composite_")
+    assert rendered[0][2] == 2
+    assert result.telemetry.composite_plan_count == 1
+    assert result.telemetry.composite_operations_merged == 2
+    assert result.telemetry.full_render_count == 1
+
+
+def test_failed_composite_is_decomposed_to_individual_candidates(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    title = _plan("title", operation={"op": "setSpacing", "target": "sem:title", "gap": 4})
+    body = _plan("body", operation={"op": "setSpacing", "target": "sem:body", "gap": 6})
+
+    async def cascade(spec, dom):
+        return [title, body]
+
+    async def render(spec, plan):
+        events.append(("rendered-plan", plan.plan_id))
+        return RenderedCandidate(f"html:{plan.plan_id}", f"render:{plan.plan_id}")
+
+    async def inspect(artifact):
+        if artifact.html_hash.startswith("html:rp_composite_"):
+            return DomEvidence((DomDefect("dom.unintended_overlap", "high", "sem:title"),))
+        return DomEvidence()
+
+    async def vqa(artifact):
+        return SensorResult(
+            True,
+            quality_gain=0.5,
+            resolved_issue_count=1,
+            remaining_issue_count=0,
+            quality_margin=0.2,
+        )
+
+    dependencies.deterministic_cascade = cascade
+    dependencies.render_plan = render
+    dependencies.inspect_dom = inspect
+    dependencies.run_vqa = vqa
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    rendered_ids = [event[1] for event in events if isinstance(event, tuple) and event[0] == "rendered-plan"]
+    assert rendered_ids[0].startswith("rp_composite_")
+    assert rendered_ids[1] in {"title", "body"}
+    assert result.outcomes[-1].applied is True
+    assert result.telemetry.individual_fallback_count == 1
+
+
+def test_shared_constraint_footprint_keeps_candidates_sequential(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    title = _plan("title", operation={"op": "setSpacing", "target": "sem:title", "gap": 4})
+    body = _plan("body", operation={"op": "setSpacing", "target": "sem:body", "gap": 6})
+
+    async def cascade(spec, dom):
+        return [title, body]
+
+    dependencies.deterministic_cascade = cascade
+    dependencies.plan_footprint = lambda plan: RepairConflictFootprint(
+        nodes=frozenset(plan.scope), constraints=frozenset({"shared-grid"})
+    )
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert result.funnel.applied == 1
+    assert result.telemetry.composite_plan_count == 0
+
+
+def test_pattern_then_deterministic_then_bounded_llm_route(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    pattern = _plan("pattern", operation={"op": "setSpacing", "target": "sem:title", "gap": 4})
+    local = _plan("local", operation={"op": "setSpacing", "target": "sem:body", "gap": 6})
+    llm = _plan("llm", source="llm")
+
+    async def cascade(spec, dom):
+        return [local, pattern]
+
+    async def validate(spec, plan):
+        events.append(("validated-plan", plan.plan_id))
+        if plan.plan_id in {"pattern", "local"}:
+            return SensorResult(False, "constraint.infeasible")
+        return SensorResult(True)
+
+    async def propose(spec, dom):
+        events.append("proposal")
+        return [llm]
+
+    dependencies.deterministic_cascade = cascade
+    dependencies.validate_plan = validate
+    dependencies.propose = propose
+    dependencies.candidate_partition = lambda plans: (
+        tuple(plan for plan in plans if plan.plan_id == "pattern"),
+        tuple(plan for plan in plans if plan.plan_id != "pattern"),
+    )
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert [event[1] for event in events if isinstance(event, tuple) and event[0] == "validated-plan"] == [
+        "pattern",
+        "local",
+        "llm",
+    ]
+    assert result.outcomes[-1].plan_id == "llm"
+    assert result.outcomes[-1].applied is True
+    assert result.telemetry.llm_pattern_call_count == 1
+    assert result.telemetry.individual_fallback_count == 1
+
+
+def test_lazy_validation_expands_partial_result_but_skips_later_full_render(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    plans = [
+        _plan("a", operation={"op": "setSpacing", "target": "sem:title", "gap": 4}),
+        _plan("b", operation={"op": "setSpacing", "target": "sem:title", "gap": 8}),
+        _plan("c", operation={"op": "setSpacing", "target": "sem:title", "gap": 12}),
+    ]
+
+    async def cascade(spec, dom):
+        return plans
+
+    async def render(spec, plan):
+        events.append(("rendered-plan", plan.plan_id))
+        return RenderedCandidate(f"html:{plan.plan_id}", f"render:{plan.plan_id}")
+
+    async def vqa(artifact):
+        plan_id = artifact.html_hash.rsplit(":", 1)[-1]
+        if plan_id == "a":
+            return SensorResult(
+                True,
+                quality_gain=0.3,
+                resolved_issue_count=1,
+                remaining_issue_count=1,
+                quality_margin=0.2,
+            )
+        return SensorResult(
+            True,
+            quality_gain=0.7,
+            resolved_issue_count=2,
+            remaining_issue_count=0,
+            quality_margin=0.2,
+        )
+
+    dependencies.deterministic_cascade = cascade
+    dependencies.render_plan = render
+    dependencies.run_vqa = vqa
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert [event[1] for event in events if isinstance(event, tuple) and event[0] == "rendered-plan"] == ["a", "b"]
+    assert result.outcomes[0].plan_id == "b"
+    assert result.outcomes[0].applied is True
+    assert result.telemetry.full_render_count == 2
+
+
+def test_cas_failure_stops_without_trying_validated_alternative(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    first = _plan("first")
+    second = _plan("second", operation={"op": "setSpacing", "target": "sem:title", "gap": 8})
+
+    async def cascade(spec, dom):
+        return [first, second]
+
+    async def publish(spec, plan, artifact):
+        events.append(("published-plan", plan.plan_id))
+        return PublicationReceipt(False, False, False, reason_code="artifact.publish.cas_conflict")
+
+    dependencies.deterministic_cascade = cascade
+    dependencies.publish = publish
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert [
+        event
+        for event in events
+        if isinstance(event, tuple) and event[0] == "published-plan"
+    ] == [("published-plan", "first")]
+    assert result.funnel.applied == 0
+    assert result.funnel.legacy_preserved == 1
+
+
+def test_iteration_guard_blocks_repeat_oscillation_and_thirteenth_apply(monkeypatch):
+    guard = RepairIterationGuard()
+    first = _plan("first", operation={"op": "setSpacing", "target": "sem:title", "gap": 4})
+    second = _plan("second", operation={"op": "setSpacing", "target": "sem:title", "gap": 8})
+    guard.record_applied(first)
+    assert guard.rejection_reason(first) == "repair.plan_signature_repeated"
+    guard.record_applied(second)
+    assert guard.rejection_reason(first) == "repair.oscillation_detected"
+
+    capped = RepairIterationGuard()
+    for index in range(12):
+        capped.record_applied(
+            _plan(
+                f"applied-{index}",
+                operation={"op": "setSpacing", "target": "sem:title", "gap": index},
+            )
+        )
+    assert capped.rejection_reason(
+        _plan("thirteenth", operation={"op": "setSpacing", "target": "sem:title", "gap": 20})
+    ) == "repair.iteration_limit"
+
+
+def test_pipeline_rejects_previously_applied_signature_before_render(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+    dependencies.iteration_guard.record_applied(_plan())
+
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert "render" not in events
+    assert result.outcomes[0].reason_codes == ("repair.plan_signature_repeated",)
+    assert result.telemetry.repeated_plan_blocked == 1
+    assert result.telemetry.render_candidates_rejected_early == 1
+
+
+def test_negative_quality_gain_is_not_published(monkeypatch):
+    events = []
+    dependencies = _dependencies(events)
+
+    async def vqa(artifact):
+        return SensorResult(True, quality_gain=-0.01)
+
+    dependencies.run_vqa = vqa
+    result = asyncio.run(
+        SlideSpecRepairPipeline(dependencies).run(
+            spec=_spec(), baseline_dom=_baseline(), rollout=_rollout(monkeypatch)
+        )
+    )
+
+    assert "publish" not in events
+    assert result.outcomes[0].reason_codes == ("vqa.non_monotonic",)
+    assert result.funnel.applied == 0
 
 
 def test_readback_mismatch_is_not_applied_and_records_rollback(monkeypatch):

@@ -71,7 +71,7 @@ def test_sqlite_account_deletion_migration_defaults_constraints_and_cycle(tmp_pa
                 inspector,
                 set(inspector.get_table_names()),
                 "future-head",
-            ) == migrations.HEAD_REVISION
+            ) == migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY
 
         with pytest.raises(IntegrityError):
             with engine.begin() as connection:

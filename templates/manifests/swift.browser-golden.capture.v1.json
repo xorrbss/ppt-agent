@@ -1,7 +1,7 @@
 {
   "schemaVersion": "presenton.template-browser-capture-evidence/v1",
   "templateId": "swift",
-  "rendererModuleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+  "rendererModuleSha256": "3a7603f702e4b80421500be604371f8e9a3dfbf014f7bbcacc9f47248ed178b9",
   "entrypointSha256": "1992d63d104ddae4a51cdd70c0afb6f2b03f12e5c6fc9512866673e578bb0619",
   "captureAdapter": "chromium-cdp/Page.captureScreenshot",
   "browser": {

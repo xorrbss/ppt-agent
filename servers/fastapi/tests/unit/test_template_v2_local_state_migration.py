@@ -160,7 +160,7 @@ def test_local_state_migration_backfills_and_validates_sidecars(tmp_path):
                 connection.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-                == migrations.HEAD_REVISION
+                    == migrations.HEAD_REVISION
             )
             assert set(inspector.get_table_names()) >= {
                 "presentation_generation_jobs",
@@ -248,7 +248,7 @@ def test_complete_schema_inference_recognizes_local_state_head(tmp_path):
                     set(inspector.get_table_names()),
                     "ignored-future-head",
                 )
-                == migrations.HEAD_REVISION
+                == migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY
             )
     finally:
         engine.dispose()

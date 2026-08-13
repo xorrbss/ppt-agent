@@ -264,9 +264,28 @@ def test_output_revalidates_against_the_strict_layout_models():
     assert "rounded shape" not in vector_layout.description
 
 
-def test_unrepresentable_ellipse_vector_fails_closed():
+def test_runtime_sampled_ellipse_is_canonicalized_to_its_bounding_pair():
+    original = _ellipse_layout()
+
+    result = build_runtime_slide_layouts([original])
+
+    ellipse = _only_element(result, 0)
+    assert [(point.x, point.y) for point in ellipse.points] == [
+        (96.0, 96.0),
+        (384.01, 288.0),
+    ]
+    assert ellipse.fill.color == "#22AA66"
+    assert ellipse.stroke.color == "#112233"
+    assert ellipse.stroke.width == 5.33
+    assert len(original["elements"][0]["points"]) == 8
+
+
+def test_non_runtime_ellipse_point_count_still_fails_closed():
+    malformed = _ellipse_layout()
+    malformed["elements"][0]["points"] = malformed["elements"][0]["points"][:3]
+
     with pytest.raises(ValueError) as error:
-        build_runtime_slide_layouts([_vector_layout(), _ellipse_layout()])
+        build_runtime_slide_layouts([malformed])
 
     message = str(error.value)
     assert message.startswith("runtime_element_not_representable:slide_1:0:")

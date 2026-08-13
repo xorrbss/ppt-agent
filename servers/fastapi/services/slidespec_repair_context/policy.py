@@ -15,6 +15,9 @@ DEFECT_PRIORITY = {
 
 TEXT_KINDS = frozenset({"title", "text", "list", "metric", "table"})
 
-MAX_OPERATIONS = 8
-MAX_AFFECTED_BLOCKS = 4
-MAX_GEOMETRY_COMPOSITIONS = 4
+# Maximum-repair is the only user-visible behavior.  These remain bounded to
+# prevent combinatorial explosion, but allow coordinated card/container repair
+# instead of abandoning a slide as soon as four related blocks are involved.
+MAX_OPERATIONS = 16
+MAX_AFFECTED_BLOCKS = 8
+MAX_GEOMETRY_COMPOSITIONS = 8

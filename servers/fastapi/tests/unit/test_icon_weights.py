@@ -89,3 +89,40 @@ def test_process_slide_fetches_icons_with_template_weight(monkeypatch):
     assert slide.content["icon"]["__icon_url__"].endswith(
         "/static/icons/thin/checks-thin.svg"
     )
+
+
+def test_process_slide_fetches_template_v2_asset_fields_explicitly(monkeypatch):
+    captured = {}
+
+    async def fake_search_icons(query, k=1, weight=None):
+        captured["query"] = query
+        return ["/static/icons/regular/arrow-up.svg"]
+
+    monkeypatch.setattr(
+        process_slides.ICON_FINDER_SERVICE,
+        "search_icons",
+        fake_search_icons,
+    )
+    slide = SlideModel(
+        presentation=uuid.uuid4(),
+        layout_group="native",
+        layout="layout-v2",
+        index=0,
+        content={"icon": {"icon_query": "arrow up"}},
+        ui={"id": "layout-v2"},
+    )
+
+    assets = asyncio.run(
+        process_slides.process_slide_and_fetch_assets(
+            image_generation_service=Mock(),
+            slide=slide,
+            template_v2=True,
+        )
+    )
+
+    assert assets == []
+    assert captured == {"query": "arrow up"}
+    assert slide.content["icon"] == {
+        "icon_query": "arrow up",
+        "icon_url": "/static/icons/regular/arrow-up.svg",
+    }

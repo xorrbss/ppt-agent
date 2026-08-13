@@ -24,6 +24,7 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.slide import SlideModel
 from models.sql.workspace import (
     WorkspaceAsset,
@@ -117,6 +118,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                     WorkspaceConversation.__table__,
                     WorkspaceMessage.__table__,
                     WorkspaceAsset.__table__,
+                    PresentationExportAttempt.__table__,
                     WorkspaceArtifact.__table__,
                     WorkspaceMessageAttachment.__table__,
                     WorkspaceOperation.__table__,

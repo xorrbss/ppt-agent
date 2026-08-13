@@ -79,7 +79,7 @@ describe("CanonicalWorkspaceChatPanel with live FastAPI", () => {
         operation_context: { slide_index: 0, source: "canonical-live" },
       });
     });
-    cy.contains('[data-testid="agent-run"]', "approval", { timeout: 15_000 })
+    cy.contains('[data-testid="agent-run"]', /approval/i, { timeout: 15_000 })
       .within(() => cy.contains("button", "Approve").should("be.enabled"));
   });
 });

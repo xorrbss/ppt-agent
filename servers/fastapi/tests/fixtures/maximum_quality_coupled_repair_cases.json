@@ -1,0 +1,133 @@
+{
+  "schema": "maximum-quality-coupled-replay/1",
+  "presentation_id": "7bd35251-77bc-48e4-b375-ecbd14702fd2",
+  "operation_id": "b9a26c08164a42258bcb79d8deba58df",
+  "revision": 2,
+  "note": "Sanitized deterministic replay contracts derived from the reported page classes; no production DB or authored text is included.",
+  "cases": [
+    {
+      "slide_index": 11,
+      "family": "coupled_overlap",
+      "candidate": {
+        "issueGroupId": "constraint:slide11:cards",
+        "code": "dom.unintended_overlap",
+        "semanticId": "sem:slide11:card-a",
+        "qid": "slide11-card-a",
+        "constraintId": "constraint:slide11:cards",
+        "target": "lay:slide11:card-a",
+        "operations": [
+          {"op": "setPadding", "target": "lay:slide11:row", "padding": {"top": 0.02, "right": 0.01, "bottom": 0.02, "left": 0.01}, "precondition": {"currentPadding": {"top": 0.02, "right": 0.025, "bottom": 0.02, "left": 0.025}}},
+          {"op": "setSpacing", "target": "lay:slide11:row", "gap": 20, "precondition": {"currentGap": 8}}
+        ],
+        "operationProofs": [
+          {"target": "lay:slide11:row", "op": "setPadding", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true},
+          {"target": "lay:slide11:row", "op": "setSpacing", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true}
+        ],
+        "constraintFootprint": {"blockingCore": ["constraint:slide11:cards"], "layoutIds": ["lay:slide11:row", "lay:slide11:card-a", "lay:slide11:card-b"], "parentSpaceId": "lay:slide11:row", "siblingIds": ["lay:slide11:card-a", "lay:slide11:card-b"]},
+        "proof": {"source": "chrome", "telemetryComplete": true, "hardGatePolicy": "preserve", "baselineDeficitPx": 12, "predictedResidualPx": 0, "requiredClearancePx": 12, "predictedClearancePx": 12, "requiredTextFitPx": 0, "predictedTextFitPx": 0}
+      }
+    },
+    {
+      "slide_index": 73,
+      "family": "coupled_overlap",
+      "candidate": {
+        "issueGroupId": "constraint:slide73:stack",
+        "code": "constraint.non_overlap.violated",
+        "semanticId": "sem:slide73:warning",
+        "qid": "slide73-warning",
+        "constraintId": "constraint:slide73:stack",
+        "target": "lay:slide73:warning",
+        "operations": [{"op": "setSpacing", "target": "lay:slide73:stack", "gap": 10, "precondition": {"currentGap": 2}}],
+        "operationProofs": [{"target": "lay:slide73:stack", "op": "setSpacing", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true}],
+        "constraintFootprint": {"blockingCore": ["constraint:slide73:stack"], "layoutIds": ["lay:slide73:stack", "lay:slide73:warning", "lay:slide73:footer"], "parentSpaceId": "lay:slide73:stack", "siblingIds": ["lay:slide73:warning", "lay:slide73:footer"]},
+        "proof": {"source": "chrome", "telemetryComplete": true, "hardGatePolicy": "preserve", "baselineDeficitPx": 8, "predictedResidualPx": 0, "requiredClearancePx": 8, "predictedClearancePx": 8, "requiredTextFitPx": 0, "predictedTextFitPx": 0}
+      }
+    },
+    {
+      "slide_index": 77,
+      "family": "coupled_readability",
+      "candidate": {
+        "issueGroupId": "constraint:slide77:readability",
+        "code": "constraint.readability.violated",
+        "semanticId": "sem:slide77:metric",
+        "qid": "slide77-metric",
+        "constraintId": "constraint:slide77:readability",
+        "target": "lay:slide77:metric",
+        "operations": [
+          {"op": "setPadding", "target": "lay:slide77:grid", "padding": {"top": 0.01, "right": 0.01, "bottom": 0.01, "left": 0.01}, "precondition": {"currentPadding": {"top": 0.01, "right": 0.02, "bottom": 0.01, "left": 0.02}}},
+          {"op": "setColumnRatio", "target": "lay:slide77:grid", "value": [1.18, 0.82], "precondition": {"currentRatio": [1, 1]}}
+        ],
+        "operationProofs": [
+          {"target": "lay:slide77:grid", "op": "setPadding", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true},
+          {"target": "lay:slide77:grid", "op": "setColumnRatio", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true}
+        ],
+        "constraintFootprint": {"blockingCore": ["constraint:slide77:readability", "constraint:slide77:grid-gap"], "layoutIds": ["lay:slide77:grid", "lay:slide77:metric", "lay:slide77:caption"], "parentSpaceId": "lay:slide77:grid", "siblingIds": ["lay:slide77:metric", "lay:slide77:caption"]},
+        "proof": {"source": "chrome", "telemetryComplete": true, "hardGatePolicy": "preserve", "baselineDeficitPx": 24, "predictedResidualPx": 0.2, "requiredClearancePx": 0, "predictedClearancePx": 0, "requiredTextFitPx": 244, "predictedTextFitPx": 244}
+      }
+    },
+    {
+      "slide_index": 14,
+      "page_number": 15,
+      "family": "ocr_safe_parent_geometry",
+      "observedReplayBlockers": ["ocr.recall_regressed", "constraint.evidence.missing", "invariant.content_digest_changed"],
+      "candidate": {
+        "issueGroupId": "dom:slide15:clipping",
+        "code": "dom.clipping",
+        "semanticId": "sem:slide15:title",
+        "qid": "slide15-title",
+        "target": "lay:slide15:title",
+        "operations": [{"op": "setPadding", "target": "lay:slide15:header", "padding": {"top": 0.01, "right": 0.02, "bottom": 0.01, "left": 0.02}, "precondition": {"currentPadding": {"top": 0.02, "right": 0.02, "bottom": 0.02, "left": 0.02}}}],
+        "operationProofs": [{"target": "lay:slide15:header", "op": "setPadding", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true}],
+        "constraintFootprint": {"blockingCore": ["dom:slide15:clipping"], "layoutIds": ["lay:slide15:header", "lay:slide15:title"], "parentSpaceId": "lay:slide15:header", "siblingIds": ["lay:slide15:title"]},
+        "proof": {"source": "chrome", "telemetryComplete": true, "hardGatePolicy": "preserve", "baselineDeficitPx": 7, "predictedResidualPx": 0, "requiredClearancePx": 0, "predictedClearancePx": 0, "requiredTextFitPx": 61, "predictedTextFitPx": 62}
+      }
+    },
+    {
+      "slide_index": 24,
+      "page_number": 25,
+      "family": "ocr_safe_parent_geometry",
+      "observedReplayBlockers": ["dom.unintended_overlap", "constraint.evidence.missing", "invariant.content_digest_changed"],
+      "candidate": {
+        "issueGroupId": "dom:slide25:clipping",
+        "code": "dom.clipping",
+        "semanticId": "sem:slide25:body",
+        "qid": "slide25-body",
+        "target": "lay:slide25:body",
+        "operations": [
+          {"op": "setPadding", "target": "lay:slide25:stack", "padding": {"top": 0.01, "right": 0.02, "bottom": 0.01, "left": 0.02}, "precondition": {"currentPadding": {"top": 0.02, "right": 0.02, "bottom": 0.02, "left": 0.02}}},
+          {"op": "setSpacing", "target": "lay:slide25:stack", "gap": 6, "precondition": {"currentGap": 10}}
+        ],
+        "operationProofs": [
+          {"target": "lay:slide25:stack", "op": "setPadding", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true},
+          {"target": "lay:slide25:stack", "op": "setSpacing", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true}
+        ],
+        "constraintFootprint": {"blockingCore": ["dom:slide25:clipping", "constraint:slide25:gap"], "layoutIds": ["lay:slide25:stack", "lay:slide25:body", "lay:slide25:footer"], "parentSpaceId": "lay:slide25:stack", "siblingIds": ["lay:slide25:body", "lay:slide25:footer"]},
+        "proof": {"source": "chrome", "telemetryComplete": true, "hardGatePolicy": "preserve", "baselineDeficitPx": 10, "predictedResidualPx": 0, "requiredClearancePx": 0, "predictedClearancePx": 0, "requiredTextFitPx": 182, "predictedTextFitPx": 183}
+      }
+    },
+    {
+      "slide_index": 45,
+      "page_number": 46,
+      "family": "ocr_safe_bounded_font",
+      "observedReplayBlockers": ["ocr.recall_regressed"],
+      "candidate": {
+        "issueGroupId": "dom:slide46:clipping",
+        "code": "dom.clipping",
+        "semanticId": "sem:slide46:label",
+        "qid": "slide46-label",
+        "target": "lay:slide46:label",
+        "operations": [
+          {"op": "setPadding", "target": "lay:slide46:cell", "padding": {"top": 0.01, "right": 0.01, "bottom": 0.01, "left": 0.01}, "precondition": {"currentPadding": {"top": 0.015, "right": 0.015, "bottom": 0.015, "left": 0.015}}},
+          {"op": "setFontScale", "target": "lay:slide46:label", "scale": 0.94, "bounds": {"minScale": 0.92, "maxScale": 1}, "precondition": {"currentScale": 1}}
+        ],
+        "operationProofs": [
+          {"target": "lay:slide46:cell", "op": "setPadding", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true},
+          {"target": "lay:slide46:label", "op": "setFontScale", "mutationAllowed": true, "roundTripSupported": true, "baselineMatched": true}
+        ],
+        "constraintFootprint": {"blockingCore": ["dom:slide46:clipping", "constraint:slide46:readability"], "layoutIds": ["lay:slide46:cell", "lay:slide46:label"], "parentSpaceId": "lay:slide46:cell", "siblingIds": ["lay:slide46:label"]},
+        "proof": {"source": "chrome", "telemetryComplete": true, "hardGatePolicy": "preserve", "baselineDeficitPx": 4, "predictedResidualPx": 0.4, "requiredClearancePx": 0, "predictedClearancePx": 0, "requiredTextFitPx": 118, "predictedTextFitPx": 118},
+        "ocrSafety": {"textNodeMappingComplete": true, "tokenMappingComplete": true, "retryScales": [1, 1.5, 2]}
+      }
+    }
+  ]
+}

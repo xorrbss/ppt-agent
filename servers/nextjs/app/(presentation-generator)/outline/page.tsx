@@ -24,13 +24,13 @@ export const metadata: Metadata = {
 const page = async ({
   searchParams,
 }: {
-  searchParams: Promise<{ auto?: string }>
+  searchParams: Promise<{ auto?: string; id?: string }>
 }) => {
-  const { auto } = await searchParams
+  const { auto, id } = await searchParams
   return (
     <div className='relative min-h-screen'>
       <Header />
-      <OutlinePage auto={auto === '1'} />
+      <OutlinePage auto={auto === '1'} initialPresentationId={id} />
     </div>
   );
 };

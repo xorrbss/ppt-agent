@@ -1,7 +1,7 @@
 {
   "schemaVersion": "presenton.template-browser-capture-evidence/v1",
   "templateId": "momentum",
-  "rendererModuleSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+  "rendererModuleSha256": "3a7603f702e4b80421500be604371f8e9a3dfbf014f7bbcacc9f47248ed178b9",
   "entrypointSha256": "07d15e7283ab4f9ae5b0ff70cef306bdc5cfaea801e1b92e04ea41747b6c5e53",
   "captureAdapter": "chromium-cdp/Page.captureScreenshot",
   "browser": {

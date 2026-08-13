@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import posixpath
-from pathlib import PurePosixPath
 
 from .chart_parser import parse_cached_chart
 from .models import (
@@ -13,6 +12,7 @@ from .models import (
     TableCellSpanCandidate,
 )
 from .package_reader import PptxPackageReader, UnsafePptxPackage
+from .part_targets import resolve_internal_part_target
 from .relationship_graph import build_relationship_graph_evidence
 from .smartart_parser import (
     parse_smartart_data_model,
@@ -45,16 +45,6 @@ SMARTART_DATA_REL_TYPES = frozenset(
 )
 
 
-def _safe_part_target(source_part: str, target: str) -> str:
-    if "\\" in target or target.startswith("/") or ":" in target:
-        raise UnsafePptxPackage("unsafe_relationship_target")
-    base = posixpath.dirname(source_part)
-    resolved = posixpath.normpath(posixpath.join(base, target))
-    if resolved == ".." or resolved.startswith("../"):
-        raise UnsafePptxPackage("unsafe_relationship_target")
-    return str(PurePosixPath(resolved))
-
-
 def _relationships(
     reader: PptxPackageReader,
     rels_part: str,
@@ -74,7 +64,7 @@ def _relationships(
             continue
         internal[rel_id] = (
             rel_type,
-            _safe_part_target(source_part, target),
+            resolve_internal_part_target(source_part, target),
         )
     return internal, external
 

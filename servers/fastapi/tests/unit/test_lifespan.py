@@ -115,9 +115,10 @@ def test_unsupported_sql_runtime_precedes_schema_mutation(monkeypatch):
 def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     bootstrap_admin = AsyncMock()
     async_steps = (
-        "migrate_database_on_startup",
-        "create_db_and_tables",
-        "log_template_v2_operational_health",
+            "migrate_database_on_startup",
+            "create_db_and_tables",
+            "import_template_packages_on_startup",
+            "log_template_v2_operational_health",
         "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
         "start_presentation_generation_dispatcher",
@@ -191,9 +192,10 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
     )
 
     for name in (
-        "migrate_database_on_startup",
-        "create_db_and_tables",
-        "log_template_v2_operational_health",
+            "migrate_database_on_startup",
+            "create_db_and_tables",
+            "import_template_packages_on_startup",
+            "log_template_v2_operational_health",
         "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
         "start_presentation_generation_dispatcher",

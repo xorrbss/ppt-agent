@@ -289,6 +289,208 @@ def test_quality_review_result_sanitizer_keeps_only_user_visible_summary():
     }
 
 
+def test_quality_review_result_sanitizer_promotes_maximum_repair_telemetry():
+    payload = {
+        "kind": "quality.review",
+        "issues": [
+            {
+                "slide_index": 1,
+                "issues": [{"code": "overflow", "detail": "Title is clipped."}],
+            }
+        ],
+        "remaining_issues": [
+            {
+                "slide_index": 3,
+                "issues": [{"code": "contrast", "detail": "Contrast remains low."}],
+            }
+        ],
+        "fixed_slide_indices": [1, True, 2],
+        "remaining_issue_indices": [3, -1, True],
+        # Public aggregates may originate from either legacy top-level output
+        # or the executor's nested telemetry; private nested fields may not.
+        "metrics": {
+            "reviewed_count": 4,
+            "issue_slide_count": 2,
+            "confirmed_issue_count": 3,
+            "fixed_count": 2,
+            "resolved_issue_count": 2,
+            "remaining_slide_count": 1,
+            "remaining_issue_count": 1,
+            "pattern_cluster_count": 2,
+            "pattern_representative_count": 3,
+            "pattern_recipe_count": 2,
+            "pattern_reuse_attempts": 4,
+            "pattern_reuse_hits": 3,
+            "pattern_reuse_applied": 2,
+            "composite_plan_count": 1,
+            "composite_operations_merged": 2,
+            "render_candidates_rejected_early": 5,
+            "full_render_count": 2,
+            "llm_pattern_call_count": 1,
+            "llm_eligible_count": 8,
+            "llm_response_count": 1,
+            "llm_schema_pass_count": 1,
+            "llm_valid_plan_count": 1,
+            "llm_provider_failure_count": 2,
+            "llm_schema_reject_count": 3,
+            "llm_preflight_pass_count": 1,
+            "llm_rendered_count": 1,
+            "proposal_preflight_unprojectable_count": 4,
+            "negative_cache_hit_count": 5,
+            "llm_circuit_open_count": 2,
+            "no_candidate_reasons": [
+                "llm_provider_error",
+                "negative_cache_hit",
+                "llm_provider_error",
+                7,
+            ],
+            "individual_fallback_count": 1,
+            "total_ms": 91.25,
+            "deck_wall_ms": 44.5,
+            "stage_timings_ms": {
+                "preflight": 3.5,
+                "render": 20,
+                "private_trace": "must-not-persist",
+                "bad": -1,
+            },
+            "private_candidate_diagnostics": [{"html": "must-not-persist"}],
+        },
+        # Explicit top-level values win over nested compatibility aliases.
+        "resolved_issue_count": 3,
+        "candidate_decisions": [{"model_prompt": "must-not-persist"}],
+    }
+
+    safe = sanitize_workspace_event_payload(payload, operation_kind="quality.review")
+
+    assert safe["detailed_issue_count"] == 3
+    assert safe["confirmed_issue_count"] == 3
+    assert safe["resolved_issue_count"] == 3
+    assert safe["remaining_issue_indices"] == [3]
+    assert safe["fixed_slide_indices"] == [1, 2]
+    assert safe["stage_timings_ms"] == {"preflight": 3.5, "render": 20.0}
+    assert safe["total_ms"] == 91.25
+    assert safe["wall_time_ms"] == 44.5
+    assert safe["aggregate_stage_time_ms"] == 23.5
+    assert {
+        key: safe[key]
+        for key in (
+            "pattern_cluster_count",
+            "pattern_representative_count",
+            "pattern_recipe_count",
+            "pattern_reuse_attempts",
+            "pattern_reuse_hits",
+            "pattern_reuse_applied",
+            "composite_plan_count",
+            "composite_operations_merged",
+            "render_candidates_rejected_early",
+            "full_render_count",
+            "llm_pattern_call_count",
+            "llm_eligible_count",
+            "llm_response_count",
+            "llm_schema_pass_count",
+            "llm_valid_plan_count",
+            "llm_provider_failure_count",
+            "llm_schema_reject_count",
+            "llm_preflight_pass_count",
+            "llm_rendered_count",
+            "proposal_preflight_unprojectable_count",
+            "negative_cache_hit_count",
+            "llm_circuit_open_count",
+            "individual_fallback_count",
+        )
+    } == {
+        "pattern_cluster_count": 2,
+        "pattern_representative_count": 3,
+        "pattern_recipe_count": 2,
+        "pattern_reuse_attempts": 4,
+        "pattern_reuse_hits": 3,
+        "pattern_reuse_applied": 2,
+        "composite_plan_count": 1,
+        "composite_operations_merged": 2,
+        "render_candidates_rejected_early": 5,
+        "full_render_count": 2,
+        "llm_pattern_call_count": 1,
+        "llm_eligible_count": 8,
+        "llm_response_count": 1,
+        "llm_schema_pass_count": 1,
+        "llm_valid_plan_count": 1,
+        "llm_provider_failure_count": 2,
+        "llm_schema_reject_count": 3,
+        "llm_preflight_pass_count": 1,
+        "llm_rendered_count": 1,
+        "proposal_preflight_unprojectable_count": 4,
+        "negative_cache_hit_count": 5,
+        "llm_circuit_open_count": 2,
+        "individual_fallback_count": 1,
+    }
+    assert safe["no_candidate_reasons"] == [
+        "llm_provider_error",
+        "negative_cache_hit",
+    ]
+    assert "metrics" not in safe
+    assert "candidate_decisions" not in safe
+
+
+def test_quality_review_result_sanitizer_rejects_nonfinite_or_negative_telemetry():
+    safe = sanitize_workspace_event_payload(
+        {
+            "metrics": {
+                "full_render_count": -1,
+                "llm_pattern_call_count": float("nan"),
+                "resolved_issue_count": 1.5,
+                "stage_timings_ms": {"valid": 1, "infinite": float("inf")},
+            }
+        },
+        operation_kind="quality.review",
+    )
+
+    assert "full_render_count" not in safe
+    assert "llm_pattern_call_count" not in safe
+    assert "resolved_issue_count" not in safe
+    assert safe["stage_timings_ms"] == {"valid": 1.0}
+
+
+def test_quality_review_result_sanitizer_removes_invalid_top_level_telemetry():
+    safe = sanitize_workspace_event_payload(
+        {
+            "full_render_count": -1,
+            "resolved_issue_count": 1.5,
+            "total_ms": float("nan"),
+            "wall_time_ms": float("inf"),
+            "aggregate_stage_time_ms": -2,
+            "no_candidate_reasons": [7, "", "provider_error"],
+        },
+        operation_kind="quality.review",
+    )
+
+    assert "full_render_count" not in safe
+    assert "resolved_issue_count" not in safe
+    assert "total_ms" not in safe
+    assert "wall_time_ms" not in safe
+    assert "aggregate_stage_time_ms" not in safe
+    assert safe["no_candidate_reasons"] == ["provider_error"]
+
+
+def test_quality_review_parallel_stage_aggregate_is_not_capped_like_a_count():
+    safe = sanitize_workspace_event_payload(
+        {
+            "kind": "quality.review",
+            "metrics": {
+                "deck_wall_ms": 608_000.0,
+                "stage_timings_ms": {
+                    "llm_proposal": 557_264.0,
+                    "ocr_vqa": 367_892.0,
+                    "render": 222_175.0,
+                },
+            },
+        },
+        operation_kind="quality.review",
+    )
+
+    assert safe["wall_time_ms"] == 608_000.0
+    assert safe["aggregate_stage_time_ms"] == 1_147_331.0
+
+
 def test_quality_review_emits_live_progress_during_long_analysis(monkeypatch):
     async def scenario():
         release_review = asyncio.Event()
@@ -507,6 +709,16 @@ def test_quality_review_auto_fix_publishes_new_revision(
                 "services.workspace_quality_export_operation_handlers.run_authored_quality_review",
                 fake_review,
             )
+            remake_calls: list[object] = []
+
+            async def forbidden_page_remake(*args, **kwargs):
+                remake_calls.append((args, kwargs))
+                raise AssertionError("quality.review must never auto-regenerate a page")
+
+            monkeypatch.setattr(
+                "services.workspace_page_remake_operation_handler.WorkspacePageRemakeOperationHandler.execute",
+                forbidden_page_remake,
+            )
             claim = WorkspaceOperationClaim(
                 operation_id=operation_id,
                 owner_id=None,
@@ -550,6 +762,7 @@ def test_quality_review_auto_fix_publishes_new_revision(
             assert result.payload["canvas_refresh_required"] is True
             assert result.payload["canvas_refresh_slide_index"] == 0
             assert max(update["percent"] for update in context.progress_updates) == 96
+            assert remake_calls == []
             async with maker() as session:
                 presentation = await session.get(PresentationModel, presentation_id)
                 operation = await session.get(WorkspaceOperation, operation_id)

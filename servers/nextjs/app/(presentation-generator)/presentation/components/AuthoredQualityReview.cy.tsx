@@ -69,7 +69,7 @@ describe("AuthoredQualityReview result details", () => {
 
   it("shows repair truth and OCR execution outcomes without exposing OCR source text", () => {
     cy.clock();
-    cy.stub(PresentationGenerationApi, "reviewAuthoredPresentation")
+    const reviewAuthoredPresentation = cy.stub(PresentationGenerationApi, "reviewAuthoredPresentation")
       .resolves({ id: "quality-task" });
     cy.stub(PresentationGenerationApi, "getGenerationStatus").resolves({
       status: "completed",
@@ -195,6 +195,15 @@ describe("AuthoredQualityReview result details", () => {
     cy.get('[data-testid="quality-review-confirm"]').click();
     cy.tick(2_000);
 
+    cy.then(() => {
+      expect(reviewAuthoredPresentation).to.have.been.calledWith("deck-1", {
+        scope: "all",
+        slide_indices: [],
+        slidespec_opt_in: true,
+      });
+    });
+    cy.get('[data-testid="slidespec-canary-opt-in"]').should("not.exist");
+
     cy.window().then((window) => {
       expect(
         window.sessionStorage.getItem(
@@ -207,7 +216,7 @@ describe("AuthoredQualityReview result details", () => {
       .should("contain.text", "VQA 호출 1")
       .and("contain.text", "국소 패치 1")
       .and("contain.text", "국소 패치 시도 2")
-      .and("contain.text", "전체 재작성 실패 1")
+      .and("contain.text", "개별 fallback 실패 1")
       .and("contain.text", "OCR 실행됨")
       .and("contain.text", "OCR 호출 2")
       .and("contain.text", "OCR 캐시 적중 1")
@@ -709,9 +718,10 @@ describe("AuthoredQualityReview result details", () => {
 
     cy.get('[data-testid="quality-review-summary"]')
       .should("contain.text", "후속 조치 필요")
-      .and("contain.text", "Confirmed 1")
-      .and("contain.text", "Incomplete measurements 1")
-      .and("contain.text", "Unresolved confirmed 1")
+      .and("contain.text", "문제 슬라이드 1장")
+      .and("contain.text", "상세 이슈 1개")
+      .and("contain.text", "수정 슬라이드 0장")
+      .and("contain.text", "잔여 이슈 1개")
       .and("not.contain.text", "검수 완료 · clean");
     cy.get('[data-testid="quality-lifecycle-detected"]').should("contain.text", "Slide 5");
     cy.get('[data-testid="quality-lifecycle-incomplete"]')
@@ -735,5 +745,90 @@ describe("AuthoredQualityReview result details", () => {
       .and("contain.text", "availableDownPx=37.359375")
       .and("contain.text", "lowerBoundary=q-div-c6f2820b2605")
       .and("contain.text", "candidateContained=false");
+  });
+
+  it("normalizes maximum-repair metrics and keeps LLM work as a typed repair-plan path", () => {
+    const result = normalizeAuthoredQualityReviewResult({
+      metrics: {
+        pattern_cluster_count: 4,
+        pattern_representatives: 7,
+        pattern_recipe_count: 3,
+        pattern_reuse_attempts: 18,
+        pattern_reuse_hits: 14,
+        pattern_reuse_applied: 11,
+        composite_plan_count: 5,
+        composite_operations_merged: 9,
+        early_render_rejections: 6,
+        full_renders: 8,
+        llm_pattern_calls: 2,
+        individual_fallbacks: 3,
+        llm_eligible_count: 20,
+        llm_circuit_open_count: 4,
+        no_candidate_reasons: ["llm_provider_error", "negative_cache_hit"],
+        wall_time_ms: 484_000,
+        stage_timings: { prescan: 21, publish: 44 },
+        llm: {
+          calls: 18,
+          responses: 8,
+          valid_plans: 0,
+          provider_failures: 5,
+          schema_rejected: 3,
+          preflight_unprojectable: 9,
+          rendered: 0,
+        },
+      },
+      slide_results: [{
+        slide_index: 1,
+        attempted: true,
+        accepted: true,
+        applied: true,
+        path: "llm_repair_plan",
+        resolved_issues: ["caption overflow"],
+        remaining_issues: [],
+      }],
+    });
+
+    expect(result.metrics).to.include({
+      pattern_cluster_count: 4,
+      pattern_representative_count: 7,
+      pattern_recipe_count: 3,
+      pattern_reuse_attempts: 18,
+      pattern_reuse_hits: 14,
+      pattern_reuse_applied: 11,
+      composite_plan_count: 5,
+      composite_operations_merged: 9,
+      render_candidates_rejected_early: 6,
+      full_render_count: 8,
+      llm_pattern_call_count: 2,
+      individual_fallback_count: 3,
+      wall_time_ms: 484_000,
+      aggregate_stage_time_ms: 65,
+      llm_calls: 18,
+      llm_eligible: 20,
+      llm_responses: 8,
+      llm_valid_plans: 0,
+      llm_provider_failures: 5,
+      llm_schema_rejected: 3,
+      proposal_preflight_unprojectable: 9,
+      llm_rendered: 0,
+      llm_circuit_open: 4,
+    });
+    expect(result.metrics.llm_no_candidate_reasons).to.deep.equal([
+      "llm_provider_error",
+      "negative_cache_hit",
+    ]);
+    expect(result.metrics.stage_timings_ms).to.deep.equal({ prescan: 21, publish: 44 });
+    expect(result.slide_results[0]?.path).to.equal("llm_repair_plan");
+  });
+
+  it("keeps slide-index-free issue details distinct from incomplete measurement", () => {
+    const result = normalizeAuthoredQualityReviewResult({
+      remaining_issue_count: 1,
+      incomplete_measurement_count: 0,
+      remaining_issues: [{ code: "dom.clipping", detail: "source summary omitted the slide index" }],
+    });
+
+    expect(result.unattributed_issues).to.deep.equal(["source summary omitted the slide index"]);
+    expect(result.incomplete_measurement_count).to.equal(0);
   });
 });

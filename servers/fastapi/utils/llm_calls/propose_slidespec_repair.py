@@ -15,12 +15,23 @@ from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
 
 from models.slidespec_v1 import REPAIR_PLAN_SCHEMA, RepairPlan
 from utils.llm_config import get_llm_config
-from utils.llm_provider import get_model
+from utils.llm_provider import get_llm_provider, get_model
+from utils.llm_calls.slidespec_repair_resilience import (
+    CANONICAL_ISSUE_CODES,
+    DEFAULT_REPAIR_LLM_CIRCUIT_BREAKER,
+    DEFAULT_REPAIR_LLM_NEGATIVE_CACHE,
+    NoCandidateReason,
+    RepairLlmCacheKey,
+    RepairLlmIdentity,
+    canonicalize_issue_code,
+    repair_llm_input_digest,
+)
 from utils.llm_utils import extract_structured_content, get_generate_kwargs
 
 
 LOGGER = logging.getLogger(__name__)
-PROMPT_VERSION = "slidespec-repair-plan/1.0"
+PROMPT_VERSION = "slidespec-repair-plan/1.1"
+RESPONSE_SCHEMA_VERSION = "slidespec-repair-response/1.1"
 MAX_CANDIDATES = 2
 MAX_OPERATIONS = 8
 MAX_AFFECTED_BLOCKS = 4
@@ -88,7 +99,17 @@ class RepairProposalResult:
     plans: tuple[RepairPlan, ...] = ()
     reason_codes: tuple[str, ...] = ()
     model: str | None = None
+    provider: str | None = None
     prompt_version: str = PROMPT_VERSION
+    no_candidate_reason: NoCandidateReason | None = None
+    call_count: int = 0
+    response_count: int = 0
+    schema_pass_count: int = 0
+    provider_failure_count: int = 0
+    schema_rejection_count: int = 0
+    empty_count: int = 0
+    negative_cache_hit_count: int = 0
+    circuit_open_count: int = 0
 
 
 _SYSTEM = """\
@@ -107,12 +128,17 @@ CONTRACT:
 """
 
 
-def _schema() -> dict[str, Any]:
+def _schema(allowed_operations: Sequence[str] | None = None) -> dict[str, Any]:
+    operation_enum = sorted(
+        set(allowed_operations or ALLOWED_OPERATIONS).intersection(ALLOWED_OPERATIONS)
+    )
+    if not operation_enum:
+        operation_enum = sorted(ALLOWED_OPERATIONS)
     operation = {
         "type": "object",
         "required": ["op", "target"],
         "properties": {
-            "op": {"type": "string", "enum": sorted(ALLOWED_OPERATIONS)},
+            "op": {"type": "string", "enum": operation_enum},
             "target": {"type": "string", "minLength": 1, "maxLength": 256},
         },
         "additionalProperties": True,
@@ -202,9 +228,19 @@ def build_messages(
     spec_view: Mapping[str, Any], diagnostics: Sequence[Mapping[str, Any]], *,
     slide_id: str, base_spec_revision: int, base_spec_hash: str,
     expected_content_digest: str,
+    projection_context: Mapping[str, Any] | None = None,
 ) -> tuple[list[Any], set[str]]:
     safe_spec = _safe_value(spec_view)
-    safe_diagnostics = _safe_value(diagnostics)
+    safe_diagnostics = []
+    for diagnostic in diagnostics:
+        canonical_code = canonicalize_issue_code(
+            diagnostic.get("code", diagnostic.get("category"))
+        )
+        if canonical_code is None:
+            continue
+        safe_diagnostics.append(
+            _safe_value({**dict(diagnostic), "code": canonical_code})
+        )
     semantic_ids = _semantic_ids(spec_view)
     if not semantic_ids:
         raise ValueError("redacted spec view has no semanticId scope")
@@ -220,7 +256,9 @@ def build_messages(
             "maxOperations": MAX_OPERATIONS,
             "maxAffectedBlocks": MAX_AFFECTED_BLOCKS,
         },
+        "issueEnum": sorted(CANONICAL_ISSUE_CODES),
         "semanticIdScope": sorted(semantic_ids),
+        "projectionCapability": _safe_value(projection_context or {}),
         "specView": safe_spec,
         "diagnostics": safe_diagnostics,
     }
@@ -323,9 +361,17 @@ def validate_proposal(
     return tuple(plans)
 
 
-async def _generate_once(client: Any, model: str, messages: list[Any]) -> object:
+async def _generate_once(
+    client: Any,
+    model: str,
+    messages: list[Any],
+    *,
+    allowed_operations: Sequence[str] | None = None,
+) -> object:
     response_format = JSONSchemaResponse(
-        name="slidespec_repair", json_schema=_schema(), strict=False
+        name="slidespec_repair",
+        json_schema=_schema(allowed_operations),
+        strict=False,
     )
     kwargs = get_generate_kwargs(model, messages, response_format=response_format)
     response = await asyncio.to_thread(client.generate, **kwargs)
@@ -338,6 +384,7 @@ async def propose_slidespec_repair(
     spec_view: Mapping[str, Any], diagnostics: Sequence[Mapping[str, Any]], *,
     slide_id: str, base_spec_revision: int, base_spec_hash: str,
     expected_content_digest: str,
+    projection_context: Mapping[str, Any] | None = None,
 ) -> RepairProposalResult:
     """Make exactly one provider call and fail closed on any invalid response."""
 
@@ -349,15 +396,82 @@ async def propose_slidespec_repair(
             base_spec_revision=base_spec_revision,
             base_spec_hash=base_spec_hash,
             expected_content_digest=expected_content_digest,
+            projection_context=projection_context,
         )
     except (TypeError, ValueError):
         return RepairProposalResult(False, reason_codes=("schema.invalid_value",))
 
     model: str | None = None
+    provider: str | None = None
+    identity: RepairLlmIdentity | None = None
+    cache_key: RepairLlmCacheKey | None = None
     try:
-        client = get_client(config=get_llm_config())
-        model = get_model()
-        content = await _generate_once(client, model, messages)
+        config = get_llm_config()
+        try:
+            selected_provider = get_llm_provider()
+            provider = str(getattr(selected_provider, "value", selected_provider))
+        except Exception:  # provider was already admitted by the config boundary
+            provider = type(config).__name__ or "configured"
+        model = str(get_model())
+        identity = RepairLlmIdentity(
+            provider=provider,
+            model=model,
+            schema_version=RESPONSE_SCHEMA_VERSION,
+            prompt_version=PROMPT_VERSION,
+        )
+        cache_key = RepairLlmCacheKey(
+            identity=identity,
+            input_digest=repair_llm_input_digest(
+                {
+                    "slide_id": slide_id,
+                    "base_spec_revision": base_spec_revision,
+                    "base_spec_hash": base_spec_hash,
+                    "expected_content_digest": expected_content_digest,
+                    "messages": [getattr(message, "content", "") for message in messages],
+                }
+            ),
+        )
+        if DEFAULT_REPAIR_LLM_NEGATIVE_CACHE.get(cache_key) is not None:
+            return RepairProposalResult(
+                False,
+                reason_codes=("proposal.negative_cache_hit",),
+                model=model,
+                provider=provider,
+                no_candidate_reason="negative_cache_hit",
+                negative_cache_hit_count=1,
+            )
+        if not DEFAULT_REPAIR_LLM_CIRCUIT_BREAKER.allow_call(identity):
+            return RepairProposalResult(
+                False,
+                reason_codes=("proposal.circuit_open",),
+                model=model,
+                provider=provider,
+                no_candidate_reason="llm_provider_error",
+                provider_failure_count=1,
+                circuit_open_count=1,
+            )
+        client = get_client(config=config)
+        raw_allowed = (
+            projection_context.get("supportedOperations", ())
+            if isinstance(projection_context, Mapping)
+            else ()
+        )
+        allowed_operations = (
+            tuple(str(item) for item in raw_allowed)
+            if raw_allowed
+            and isinstance(raw_allowed, Sequence)
+            and not isinstance(raw_allowed, (str, bytes))
+            else None
+        )
+        if allowed_operations is None:
+            content = await _generate_once(client, model, messages)
+        else:
+            content = await _generate_once(
+                client,
+                model,
+                messages,
+                allowed_operations=allowed_operations,
+            )
         plans = validate_proposal(
             content,
             semantic_ids=semantic_ids,
@@ -366,9 +480,42 @@ async def propose_slidespec_repair(
             base_spec_hash=base_spec_hash,
             expected_content_digest=expected_content_digest,
         )
-        return RepairProposalResult(True, plans=plans, model=model)
+        if not plans:
+            DEFAULT_REPAIR_LLM_CIRCUIT_BREAKER.record_success(identity)
+            DEFAULT_REPAIR_LLM_NEGATIVE_CACHE.put(cache_key, "llm_empty")
+            return RepairProposalResult(
+                False,
+                reason_codes=("proposal.empty",),
+                model=model,
+                provider=provider,
+                no_candidate_reason="llm_empty",
+                call_count=1,
+                response_count=1,
+                schema_pass_count=1,
+                empty_count=1,
+            )
+        DEFAULT_REPAIR_LLM_CIRCUIT_BREAKER.record_success(identity)
+        return RepairProposalResult(
+            True,
+            plans=plans,
+            model=model,
+            provider=provider,
+            call_count=1,
+            response_count=1,
+            schema_pass_count=1,
+        )
     except (asyncio.TimeoutError, TimeoutError):
-        return RepairProposalResult(False, reason_codes=("proposal.model_timeout",), model=model)
+        if identity is not None:
+            DEFAULT_REPAIR_LLM_CIRCUIT_BREAKER.record_failure(identity)
+        return RepairProposalResult(
+            False,
+            reason_codes=("proposal.model_timeout",),
+            model=model,
+            provider=provider,
+            no_candidate_reason="llm_provider_error",
+            call_count=1,
+            provider_failure_count=1,
+        )
     except (TypeError, ValueError) as error:
         code = str(error)
         if code not in {
@@ -378,10 +525,46 @@ async def propose_slidespec_repair(
             "invariant.content_digest_changed",
         }:
             code = "proposal.invalid_json"
-        return RepairProposalResult(False, reason_codes=(code,), model=model)
+        # Validation errors occur after a provider response.  Configuration and
+        # identity errors happen before the call and are provider failures.
+        if cache_key is None:
+            return RepairProposalResult(
+                False,
+                reason_codes=("proposal.provider_unavailable",),
+                model=model,
+                provider=provider,
+                no_candidate_reason="llm_provider_error",
+                provider_failure_count=1,
+            )
+        # A syntactically returned but contract-invalid response is not a
+        # healthy outcome for this provider/model/schema identity.  Count it
+        # toward the same bounded circuit while preserving its distinct schema
+        # telemetry and per-input negative-cache reason.
+        DEFAULT_REPAIR_LLM_CIRCUIT_BREAKER.record_failure(identity)
+        DEFAULT_REPAIR_LLM_NEGATIVE_CACHE.put(cache_key, "llm_schema_rejected")
+        return RepairProposalResult(
+            False,
+            reason_codes=(code,),
+            model=model,
+            provider=provider,
+            no_candidate_reason="llm_schema_rejected",
+            call_count=1,
+            response_count=1,
+            schema_rejection_count=1,
+        )
     except Exception as error:  # noqa: BLE001 - fail-closed provider boundary
         LOGGER.warning("SlideSpec repair model call failed: %s", type(error).__name__)
-        return RepairProposalResult(False, reason_codes=("system.internal_error",), model=model)
+        if identity is not None:
+            DEFAULT_REPAIR_LLM_CIRCUIT_BREAKER.record_failure(identity)
+        return RepairProposalResult(
+            False,
+            reason_codes=("proposal.provider_unavailable",),
+            model=model,
+            provider=provider,
+            no_candidate_reason="llm_provider_error",
+            call_count=int(identity is not None),
+            provider_failure_count=1,
+        )
 
 
 __all__ = [
@@ -390,6 +573,7 @@ __all__ = [
     "FORBIDDEN_OPERATIONS",
     "MAX_CANDIDATES",
     "PROMPT_VERSION",
+    "RESPONSE_SCHEMA_VERSION",
     "RepairProposalResult",
     "build_messages",
     "propose_slidespec_repair",

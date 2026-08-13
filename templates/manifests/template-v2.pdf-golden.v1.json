@@ -90,7 +90,7 @@
     "kind": "existing-browser-png-only",
     "duplicatePdfOrPngBaselines": false,
     "totalLayouts": 158,
-    "rendererSha256": "61df282b04398f09e9834c79f9da08b291080bdd9029cece60fe75e86cb24afc",
+    "rendererSha256": "3a7603f702e4b80421500be604371f8e9a3dfbf014f7bbcacc9f47248ed178b9",
     "templates": [
       {
         "templateId": "dynamic",

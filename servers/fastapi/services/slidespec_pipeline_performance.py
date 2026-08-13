@@ -111,33 +111,50 @@ class ProposalCacheKey:
 
 
 class NegativeProposalCache:
-    """Bounded process-local cache containing only conclusive empty proposals."""
+    """Bounded TTL cache containing only conclusive empty proposals."""
 
-    def __init__(self, max_entries: int = 256) -> None:
+    def __init__(
+        self,
+        max_entries: int = 256,
+        *,
+        ttl_seconds: float = 120.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.max_entries = max(0, max_entries)
-        self._entries: OrderedDict[str, None] = OrderedDict()
+        self.ttl_seconds = max(0.0, float(ttl_seconds))
+        self._clock = clock
+        self._entries: OrderedDict[str, float] = OrderedDict()
+        self._lock = threading.Lock()
 
     def contains(self, key: ProposalCacheKey) -> bool:
         digest = key.digest
-        if digest not in self._entries:
-            return False
-        self._entries.move_to_end(digest)
-        return True
+        with self._lock:
+            expires_at = self._entries.get(digest)
+            if expires_at is None:
+                return False
+            if expires_at <= self._clock():
+                self._entries.pop(digest, None)
+                return False
+            self._entries.move_to_end(digest)
+            return True
 
     def put(self, key: ProposalCacheKey) -> None:
-        if self.max_entries == 0:
+        if self.max_entries == 0 or self.ttl_seconds <= 0:
             return
         digest = key.digest
-        self._entries[digest] = None
-        self._entries.move_to_end(digest)
-        while len(self._entries) > self.max_entries:
-            self._entries.popitem(last=False)
+        with self._lock:
+            self._entries[digest] = self._clock() + self.ttl_seconds
+            self._entries.move_to_end(digest)
+            while len(self._entries) > self.max_entries:
+                self._entries.popitem(last=False)
 
     def clear(self) -> None:
-        self._entries.clear()
+        with self._lock:
+            self._entries.clear()
 
     def __len__(self) -> int:
-        return len(self._entries)
+        with self._lock:
+            return len(self._entries)
 
 
 DEFAULT_NEGATIVE_PROPOSAL_CACHE = NegativeProposalCache()

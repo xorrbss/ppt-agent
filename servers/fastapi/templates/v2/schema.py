@@ -204,7 +204,14 @@ def _content_schema(element: Mapping[str, Any]) -> dict[str, Any]:
         )
     if element_type == "image":
         prompt_key = "icon_query" if element.get("is_icon") is True else "image_prompt"
-        return _object_schema({prompt_key: {"type": "string"}})
+        url_key = "icon_url" if element.get("is_icon") is True else "image_url"
+        return _object_schema(
+            {
+                prompt_key: {"type": "string"},
+                url_key: {"type": "string"},
+            },
+            required=[prompt_key],
+        )
     if element_type == "text-list":
         return _compact(
             {
@@ -640,6 +647,7 @@ def _component_content_schema(
         }
     elif element_type == "image":
         prompt_key = "icon_query" if element.get("is_icon") is True else "image_prompt"
+        url_key = "icon_url" if element.get("is_icon") is True else "image_url"
         prompt_description = (
             "Search query for the replacement icon."
             if element.get("is_icon") is True
@@ -650,8 +658,10 @@ def _component_content_schema(
                 prompt_key: {
                     "type": "string",
                     "description": prompt_description,
-                }
-            }
+                },
+                url_key: {"type": "string"},
+            },
+            required=[prompt_key],
         )
     elif element_type == "text-list":
         schema = {

@@ -32,6 +32,11 @@ from utils.slidespec_constraints import (
     evaluate_repair_transition,
 )
 from utils.authored_patch_engine import apply_authored_patch
+from utils.slidespec_projection import (
+    dry_project_request,
+    project_positioned_bounds_styles,
+    projected_source_box_px,
+)
 
 ZERO_DIGEST = "sha256:" + "0" * 64
 ADAPTER_VERSION = "adaptive-minimal/1"
@@ -685,6 +690,17 @@ def _render_imported_html(request: RenderRequest) -> RenderResult:
     if len({binding.qid for binding in source.bindings}) != len(source.bindings):
         raise SlideSpecError("render.source_binding.qid_duplicate")
 
+    # Use the same dry planner as deterministic/LLM preflight before touching
+    # authored HTML.  The CSS action builder below only realizes capabilities
+    # that this authoritative boundary has already proved round-trippable.
+    projection = dry_project_request(request)
+    if not projection.supported:
+        rejection = projection.rejections[0]
+        raise SlideSpecError(
+            rejection.reason_code or "render.source_projection.unsupported",
+            rejection.qid or rejection.target,
+        )
+
     html = source.html
     entries: list[SemanticDomEntry] = []
     for binding in source.bindings:
@@ -705,24 +721,30 @@ def _render_imported_html(request: RenderRequest) -> RenderResult:
             )
         )
         actions: list[dict[str, Any]] = []
-        if (
-            node.bounds.width != binding.bounds.width
-            or node.bounds.height != binding.bounds.height
-        ):
+        delta_x_px = (node.bounds.x - binding.bounds.x) * source.viewportWidth
+        delta_y_px = (node.bounds.y - binding.bounds.y) * source.viewportHeight
+        delta_width_px = (
+            node.bounds.width - binding.bounds.width
+        ) * source.viewportWidth
+        delta_height_px = (
+            node.bounds.height - binding.bounds.height
+        ) * source.viewportHeight
+        _, _, projected_width_px, projected_height_px = projected_source_box_px(
+            source, node, binding
+        )
+        x_changed = abs(delta_x_px) > 1e-12
+        y_changed = abs(delta_y_px) > 1e-12
+        width_changed = abs(delta_width_px) > 1e-12
+        height_changed = abs(delta_height_px) > 1e-12
+        if width_changed or height_changed:
             resize_action: dict[str, Any] = {
                 "action": "resize",
                 "qid": binding.qid,
             }
-            if node.bounds.width != binding.bounds.width:
-                desired_width = binding.sourceBoundsPx.width + (
-                    node.bounds.width - binding.bounds.width
-                ) * source.viewportWidth
-                resize_action["width"] = f"{desired_width:.4f}px"
-            if node.bounds.height != binding.bounds.height:
-                desired_height = binding.sourceBoundsPx.height + (
-                    node.bounds.height - binding.bounds.height
-                ) * source.viewportHeight
-                resize_action["height"] = f"{desired_height:.4f}px"
+            if width_changed:
+                resize_action["width"] = f"{projected_width_px:.4f}px"
+            if height_changed:
+                resize_action["height"] = f"{projected_height_px:.4f}px"
             actions.append(resize_action)
             # Authored CSS frequently carries a responsive min/max constraint.
             # ``setBounds`` is an explicit, closed mutation-envelope operation;
@@ -733,14 +755,14 @@ def _render_imported_html(request: RenderRequest) -> RenderResult:
                 changed_width = str(resize_action["width"])
                 bound_styles[
                     "max-width"
-                    if desired_width >= binding.sourceBoundsPx.width
+                    if projected_width_px >= binding.sourceBoundsPx.width
                     else "min-width"
                 ] = changed_width
             if "height" in resize_action:
                 changed_height = str(resize_action["height"])
                 bound_styles[
                     "max-height"
-                    if desired_height >= binding.sourceBoundsPx.height
+                    if projected_height_px >= binding.sourceBoundsPx.height
                     else "min-height"
                 ] = changed_height
             if bound_styles:
@@ -751,12 +773,14 @@ def _render_imported_html(request: RenderRequest) -> RenderResult:
                         "styles": bound_styles,
                     }
                 )
-        if node.bounds.x != binding.bounds.x or node.bounds.y != binding.bounds.y:
-            if (
-                binding.position == "static"
-                and binding.transform == "none"
-                and binding.staticTranslationSafe
-            ):
+        if binding.position == "static":
+            if x_changed or y_changed:
+                if not (
+                    binding.transform == "none" and binding.staticTranslationSafe
+                ):
+                    raise SlideSpecError(
+                        "render.source_projection.position_unsupported", binding.qid
+                    )
                 # CSS transforms are paint-only and therefore do not reflow
                 # static siblings.  The importer must have explicitly captured a
                 # composable baseline transform; older/missing telemetry stays
@@ -769,47 +793,34 @@ def _render_imported_html(request: RenderRequest) -> RenderResult:
                         "styles": {
                             "transform": (
                                 "translate("
-                                f"{(node.bounds.x - binding.bounds.x) * source.viewportWidth:.4f}px, "
-                                f"{(node.bounds.y - binding.bounds.y) * source.viewportHeight:.4f}px)"
+                                f"{delta_x_px:.4f}px, {delta_y_px:.4f}px)"
                             )
                         },
                     }
                 )
-            elif binding.position not in {"relative", "absolute", "fixed", "sticky"}:
+        elif binding.position in {"relative", "absolute", "fixed", "sticky"} and (
+            x_changed or y_changed or width_changed or height_changed
+        ):
+            anchor_styles = project_positioned_bounds_styles(
+                binding,
+                delta_x_px=delta_x_px,
+                delta_y_px=delta_y_px,
+                delta_width_px=delta_width_px,
+                delta_height_px=delta_height_px,
+            )
+            if (x_changed or width_changed) and not (
+                {"left", "right"} & anchor_styles.keys()
+            ):
                 raise SlideSpecError(
-                    "render.source_projection.position_unsupported", binding.qid
+                    "render.source_projection.horizontal_anchor_missing", binding.qid
                 )
-            else:
-                delta_x = (
-                    node.bounds.x - binding.bounds.x
-                ) * source.viewportWidth
-                delta_y = (
-                    node.bounds.y - binding.bounds.y
-                ) * source.viewportHeight
-                anchor_styles: dict[str, str] = {}
-                if node.bounds.x != binding.bounds.x:
-                    if binding.leftPx is not None:
-                        anchor_styles["left"] = f"{binding.leftPx + delta_x:.4f}px"
-                    elif binding.rightPx is not None:
-                        anchor_styles["right"] = f"{binding.rightPx - delta_x:.4f}px"
-                    else:
-                        raise SlideSpecError(
-                            "render.source_projection.horizontal_anchor_missing",
-                            binding.qid,
-                        )
-                if node.bounds.y != binding.bounds.y:
-                    if binding.topPx is not None:
-                        anchor_styles["top"] = f"{binding.topPx + delta_y:.4f}px"
-                    elif binding.bottomPx is not None:
-                        anchor_styles["bottom"] = f"{binding.bottomPx - delta_y:.4f}px"
-                    else:
-                        raise SlideSpecError(
-                            "render.source_projection.vertical_anchor_missing",
-                            binding.qid,
-                        )
-                # A right/bottom anchored element must remain right/bottom
-                # anchored.  Replacing an absent top/left with zero changes the
-                # containing-block equation and can stretch or pin fixed nodes.
+            if (y_changed or height_changed) and not (
+                {"top", "bottom"} & anchor_styles.keys()
+            ):
+                raise SlideSpecError(
+                    "render.source_projection.vertical_anchor_missing", binding.qid
+                )
+            if anchor_styles:
                 actions.append(
                     {
                         "action": "setStyle",
@@ -845,12 +856,6 @@ def _render_imported_html(request: RenderRequest) -> RenderResult:
         # element extends past the canvas.  Using ``node.bounds`` directly here
         # caused baseline imports to round off-canvas footer padding and mutate
         # otherwise untouched slides.
-        projected_width_px = binding.sourceBoundsPx.width + (
-            node.bounds.width - binding.bounds.width
-        ) * source.viewportWidth
-        projected_height_px = binding.sourceBoundsPx.height + (
-            node.bounds.height - binding.bounds.height
-        ) * source.viewportHeight
         desired_padding = (
             node.padding.top * projected_height_px,
             node.padding.right * projected_width_px,

@@ -13,6 +13,9 @@ from services.slidespec_repair_context.composition_groups import (
 from services.slidespec_repair_context.constraint_projection import (
     project_geometry_issues,
 )
+from services.slidespec_repair_context.coupled_projection import (
+    project_coupled_repairs,
+)
 from services.slidespec_repair_context.exact_compositions import (
     build_exact_compositions,
 )
@@ -52,6 +55,7 @@ def build_repair_context(
     )
     artifacts = project_base_candidates(state)
     project_geometry_issues(state, artifacts)
+    project_coupled_repairs(state, artifacts)
     build_issue_groups(state, artifacts)
     build_composition_groups(state, artifacts)
     build_glyph_compositions(state, artifacts)
@@ -81,6 +85,7 @@ def build_repair_context(
         "geometryGlyphCompositions": tuple(artifacts.geometry_glyph_compositions),
         "geometryExactCompositions": tuple(artifacts.geometry_exact_compositions),
         "geometryExactDiagnostics": tuple(artifacts.geometry_exact_diagnostics),
+        "coupledRepairs": tuple(artifacts.coupled_repairs),
         "requiredGeometryIssueGroups": artifacts.required_geometry_issue_groups,
         "maxGeometryCompositions": MAX_GEOMETRY_COMPOSITIONS,
         "relationalConstraints": tuple(

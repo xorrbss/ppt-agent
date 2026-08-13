@@ -8,6 +8,7 @@ from fastapi import HTTPException
 import pytest
 
 from api.v1.ppt.endpoints.presentation_generate import (
+    _generate_template_v2_presentation,
     _template_v2_http_exception,
     check_if_api_request_is_valid,
     generate_presentation_handler,
@@ -19,7 +20,10 @@ from models.presentation_outline_model import (
     SlideOutlineModel,
 )
 from models.presentation_structure_model import PresentationStructureModel
+from models.presentation_layout import SlideLayoutModel
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.image_asset import ImageAsset
 from models.sql.slide import SlideModel
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -34,6 +38,7 @@ from services.template_v2_generation_service import (
 )
 from templates.v2.constants import TEMPLATE_V2_VERSION
 from templates.v2.models.layouts import SlideLayout
+from utils.llm_calls.generate_slide_content import _prepare_response_schema
 
 
 def _layout(
@@ -156,6 +161,67 @@ def _target() -> TemplateV2GenerationTarget:
                         }
                     },
                     "required": ["hero"],
+                    "additionalProperties": False,
+                },
+            ),
+        ),
+    )
+
+
+def _image_target() -> TemplateV2GenerationTarget:
+    layout = SlideLayout.model_validate(
+        {
+            "id": "image-slide",
+            "description": "Native editable image slide",
+            "components": [
+                {
+                    "id": "visual",
+                    "description": "Editable image component",
+                    "position": {"x": 0, "y": 0},
+                    "elements": [
+                        {
+                            "type": "image",
+                            "position": {"x": 1, "y": 1},
+                            "size": {"width": 8, "height": 4},
+                            "data": "/static/images/placeholder.jpg",
+                            "decorative": False,
+                            "name": "photo",
+                            "is_icon": False,
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    return TemplateV2GenerationTarget(
+        template_id="image-template",
+        revision=3,
+        name="Image Template",
+        snapshot_sha256="d" * 64,
+        layouts=(
+            TemplateV2GenerationLayout(
+                layout=layout,
+                content_schema={
+                    "type": "object",
+                    "properties": {
+                        "visual": {
+                            "type": "object",
+                            "properties": {
+                                "photo": {
+                                    "type": "object",
+                                    "properties": {
+                                        "image_prompt": {"type": "string"},
+                                        "image_url": {"type": "string"},
+                                    },
+                                    "required": ["image_prompt"],
+                                    "additionalProperties": False,
+                                }
+                            },
+                            "required": ["photo"],
+                            "additionalProperties": False,
+                        }
+                    },
+                    "required": ["visual"],
                     "additionalProperties": False,
                 },
             ),
@@ -624,6 +690,292 @@ def test_generated_content_is_json_schema_validated_before_slide_persistence():
     assert exc.value.code == "template_v2_generation_invalid"
 
 
+def test_template_v2_slide_builder_batches_concurrently_and_preserves_order():
+    outlines = PresentationOutlineModel(
+        slides=[
+            SlideOutlineModel(content=str(index)) for index in range(12)
+        ]
+    )
+    structure = PresentationStructureModel(slides=[0] * 12)
+    updates: list[tuple[int, int]] = []
+    active = 0
+    peak_active = 0
+    first_batch_started = asyncio.Event()
+    second_batch_started = asyncio.Event()
+    started_by_batch = [0, 0]
+
+    async def record_progress(completed: int, total: int) -> None:
+        updates.append((completed, total))
+
+    async def generate_content(_layout, outline, *_args):
+        nonlocal active, peak_active
+        index = int(outline.content)
+        batch_index = 0 if index < 10 else 1
+        batch_size = 10 if batch_index == 0 else 2
+        active += 1
+        peak_active = max(peak_active, active)
+        started_by_batch[batch_index] += 1
+        gate = first_batch_started if batch_index == 0 else second_batch_started
+        if started_by_batch[batch_index] == batch_size:
+            gate.set()
+        try:
+            await gate.wait()
+            await asyncio.sleep((batch_size - (index % 10)) / 1000)
+            return {"hero": {"title": f"Generated {index}"}}
+        finally:
+            active -= 1
+
+    with patch(
+        "services.template_v2_generation_service."
+        "get_slide_content_from_type_and_outline",
+        new=AsyncMock(side_effect=generate_content),
+    ):
+        slides = asyncio.run(
+            build_template_v2_slides(
+                target=_target(),
+                presentation_id=uuid.uuid4(),
+                outlines=outlines,
+                structure=structure,
+                language="English",
+                tone="professional",
+                verbosity="standard",
+                instructions=None,
+                on_progress=record_progress,
+            )
+        )
+
+    assert peak_active == 10
+    assert [slide.index for slide in slides] == list(range(12))
+    assert [slide.content["hero"]["title"] for slide in slides] == [
+        f"Generated {index}" for index in range(12)
+    ]
+    assert updates == [(10, 12), (12, 12)]
+
+
+def test_template_v2_slide_builder_pipelines_assets_with_next_content_batch():
+    outlines = PresentationOutlineModel(
+        slides=[SlideOutlineModel(content=str(index)) for index in range(11)]
+    )
+    structure = PresentationStructureModel(slides=[0] * 11)
+    first_batch_assets_started = asyncio.Event()
+    second_batch_content_started = asyncio.Event()
+    first_batch_assets_finished = asyncio.Event()
+    started_assets = 0
+    finished_assets = 0
+
+    async def generate_content(_layout, outline, *_args):
+        if outline.content == "10":
+            second_batch_content_started.set()
+            await first_batch_assets_started.wait()
+        return {"hero": {"title": f"Generated {outline.content}"}}
+
+    async def process_assets(slide: SlideModel) -> None:
+        nonlocal started_assets, finished_assets
+        if slide.index == 10:
+            return
+        started_assets += 1
+        if started_assets == 10:
+            first_batch_assets_started.set()
+        await second_batch_content_started.wait()
+        finished_assets += 1
+        if finished_assets == 10:
+            first_batch_assets_finished.set()
+
+    with patch(
+        "services.template_v2_generation_service."
+        "get_slide_content_from_type_and_outline",
+        new=AsyncMock(side_effect=generate_content),
+    ):
+        slides = asyncio.run(
+            build_template_v2_slides(
+                target=_target(),
+                presentation_id=uuid.uuid4(),
+                outlines=outlines,
+                structure=structure,
+                language="English",
+                tone="professional",
+                verbosity="standard",
+                instructions=None,
+                process_assets=process_assets,
+            )
+        )
+
+    assert len(slides) == 11
+    assert first_batch_assets_started.is_set()
+    assert second_batch_content_started.is_set()
+    assert first_batch_assets_finished.is_set()
+
+
+def test_template_v2_slide_builder_rehydrates_native_ui_after_asset_resolution():
+    async def process_assets(slide: SlideModel) -> None:
+        slide.content["visual"]["photo"]["image_url"] = (
+            "https://cdn.example/generated.jpg"
+        )
+
+    with patch(
+        "services.template_v2_generation_service."
+        "get_slide_content_from_type_and_outline",
+        new=AsyncMock(
+            return_value={
+                "visual": {"photo": {"image_prompt": "quiet mountain lake"}}
+            }
+        ),
+    ):
+        slides = asyncio.run(
+            build_template_v2_slides(
+                target=_image_target(),
+                presentation_id=uuid.uuid4(),
+                outlines=PresentationOutlineModel(
+                    slides=[SlideOutlineModel(content="Image slide")]
+                ),
+                structure=PresentationStructureModel(slides=[0]),
+                language="English",
+                tone="professional",
+                verbosity="standard",
+                instructions=None,
+                process_assets=process_assets,
+            )
+        )
+
+    assert slides[0].content["visual"]["photo"] == {
+        "image_prompt": "quiet mountain lake",
+        "image_url": "https://cdn.example/generated.jpg",
+    }
+    assert slides[0].ui["components"][0]["elements"][0]["data"] == (
+        "https://cdn.example/generated.jpg"
+    )
+
+
+def test_template_v2_asset_urls_are_not_exposed_to_the_content_model():
+    schema = _prepare_response_schema(
+        SlideLayoutModel(
+            id="image-slide",
+            json_schema=_image_target().layouts[0].content_schema,
+        )
+    )
+
+    image_properties = schema["properties"]["visual"]["properties"]["photo"][
+        "properties"
+    ]
+    assert "image_prompt" in image_properties
+    assert "image_url" not in image_properties
+
+
+def test_template_v2_slide_builder_cancels_content_and_asset_tasks_on_failure():
+    outlines = PresentationOutlineModel(
+        slides=[SlideOutlineModel(content=str(index)) for index in range(12)]
+    )
+    structure = PresentationStructureModel(slides=[0] * 12)
+    sibling_content_started = asyncio.Event()
+    first_batch_assets_started = asyncio.Event()
+    content_cancelled = asyncio.Event()
+    started_assets = 0
+    cancelled_assets = 0
+    updates: list[tuple[int, int]] = []
+
+    async def generate_content(_layout, outline, *_args):
+        index = int(outline.content)
+        if index < 10:
+            return {"hero": {"title": f"Generated {index}"}}
+        if index == 10:
+            sibling_content_started.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                content_cancelled.set()
+                raise
+        await sibling_content_started.wait()
+        await first_batch_assets_started.wait()
+        raise RuntimeError("batch exploded")
+
+    async def process_assets(_slide: SlideModel) -> None:
+        nonlocal started_assets, cancelled_assets
+        started_assets += 1
+        if started_assets == 10:
+            first_batch_assets_started.set()
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            cancelled_assets += 1
+            raise
+
+    async def record_progress(completed: int, total: int) -> None:
+        updates.append((completed, total))
+
+    with patch(
+        "services.template_v2_generation_service."
+        "get_slide_content_from_type_and_outline",
+        new=AsyncMock(side_effect=generate_content),
+    ):
+        with pytest.raises(RuntimeError, match="batch exploded"):
+            asyncio.run(
+                build_template_v2_slides(
+                    target=_target(),
+                    presentation_id=uuid.uuid4(),
+                    outlines=outlines,
+                    structure=structure,
+                    language="English",
+                    tone="professional",
+                    verbosity="standard",
+                    instructions=None,
+                    on_progress=record_progress,
+                    process_assets=process_assets,
+                )
+            )
+
+    assert updates == [(10, 12)]
+    assert content_cancelled.is_set()
+    assert cancelled_assets == 10
+
+
+def test_template_v2_slide_builder_drains_content_tasks_on_outer_cancellation():
+    outlines = PresentationOutlineModel(
+        slides=[SlideOutlineModel(content=str(index)) for index in range(10)]
+    )
+    structure = PresentationStructureModel(slides=[0] * 10)
+    all_content_started = asyncio.Event()
+    started_content = 0
+    cancelled_content = 0
+
+    async def generate_content(_layout, _outline, *_args):
+        nonlocal started_content, cancelled_content
+        started_content += 1
+        if started_content == 10:
+            all_content_started.set()
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            cancelled_content += 1
+            raise
+
+    async def run_and_cancel() -> None:
+        task = asyncio.create_task(
+            build_template_v2_slides(
+                target=_target(),
+                presentation_id=uuid.uuid4(),
+                outlines=outlines,
+                structure=structure,
+                language="English",
+                tone="professional",
+                verbosity="standard",
+                instructions=None,
+            )
+        )
+        await all_content_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    with patch(
+        "services.template_v2_generation_service."
+        "get_slide_content_from_type_and_outline",
+        new=AsyncMock(side_effect=generate_content),
+    ):
+        asyncio.run(run_and_cancel())
+
+    assert cancelled_content == 10
+
+
 def test_native_pptx_preflight_records_explicit_unsupported_capability():
     target = _unsupported_chart_target()
     preflight = preflight_template_v2_native_pptx(
@@ -683,6 +1035,15 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
     session = RecordingSession()
     request._template_v2_generation_target = _target()
     observations: list[dict[str, object]] = []
+    progress_updates: list[dict[str, object]] = []
+
+    async def report_progress(**update):
+        progress_updates.append(update)
+        return True
+
+    async def publish_staged(_session, presentation, export_path, *args, **kwargs):
+        presentation.lifecycle_status = "published"
+        return export_path
 
     with (
         patch(
@@ -707,18 +1068,28 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
             ),
         ),
         patch(
+            "api.v1.ppt.endpoints.presentation_generate.get_images_directory",
+            return_value="/tmp/images",
+        ),
+        patch(
             "services.template_v2_generation_service."
             "get_slide_content_from_type_and_outline",
             new=AsyncMock(return_value={"hero": {"title": "Generated title"}}),
         ),
         patch(
-            "api.v1.ppt.endpoints.presentation_generate.export_presentation",
+            "api.v1.ppt.endpoints.presentation_generate._execute_generation_export",
             new=AsyncMock(
-                return_value=PresentationAndPath(
-                    presentation_id=presentation_id,
-                    path="/tmp/native-template.pptx",
+                return_value=SimpleNamespace(
+                    presentation=PresentationAndPath(
+                        presentation_id=presentation_id,
+                        path="/tmp/native-template.pptx",
+                    )
                 )
             ),
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate._publish_staged_presentation",
+            new=AsyncMock(side_effect=publish_staged),
         ),
     ):
         response = asyncio.run(
@@ -726,6 +1097,7 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
                 request,
                 presentation_id,
                 async_status=None,
+                progress_reporter=report_progress,
                 sql_session=session,
             )
         )
@@ -780,6 +1152,151 @@ def test_handler_persists_v2_identity_provenance_and_native_ui():
     )
     assert observations[1]["export_type"] == "pptx"
     assert all("code" not in event for event in observations)
+    assert [update["stage"] for update in progress_updates] == [
+        "template_v2_layout_selection",
+        "template_v2_slide_generation",
+        "template_v2_slide_generation",
+        "template_v2_pptx_validation",
+        "template_v2_saving",
+        "template_v2_exporting",
+        "template_v2_publishing",
+    ]
+    assert progress_updates[2] == {
+        "stage": "template_v2_slide_generation",
+        "current": 1,
+        "total": 1,
+        "percent": 80,
+        "message": "슬라이드 내용을 생성하고 있습니다. 1/1장 완료",
+    }
+
+
+def test_durable_template_v2_assets_use_fenced_staging_and_atomic_publication():
+    presentation_id = uuid.uuid4()
+    operation_id = uuid.uuid4()
+    target_presentation = PresentationModel(
+        id=presentation_id,
+        revision=4,
+        lifecycle_status="staging",
+    )
+    job = PresentationGenerationJob(
+        task_id="task-id",
+        presentation_id=presentation_id,
+        workspace_operation_id=operation_id,
+        request_sha256="e" * 64,
+        request_payload={},
+        attempt_token="attempt-token",
+    )
+    request = GeneratePresentationRequest(
+        content="Topic",
+        slides_markdown=["A title"],
+        strategy="template_v2",
+        template_v2_id="native-template",
+        template_v2_revision=7,
+    )
+    request._template_v2_generation_target = _target()
+    outlines = PresentationOutlineModel(
+        slides=[SlideOutlineModel(content="A title")]
+    )
+    session = RecordingSession()
+    session.add(target_presentation)
+    staging = SimpleNamespace(
+        artifact_id=uuid.uuid4(),
+        staging_directory="/tmp/staging",
+    )
+    image_artifact = SimpleNamespace(artifact_id=uuid.uuid4())
+    promoted = SimpleNamespace(
+        artifacts=(image_artifact,),
+        replacements={"/tmp/staging/generated.png": "/tmp/artifacts/generated.png"},
+    )
+    generated_asset = ImageAsset(path="/tmp/staging/generated.png")
+    publish = AsyncMock(return_value="/tmp/native-template.pptx")
+
+    async def report_progress(**_update):
+        return True
+
+    with (
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate.build_template_structure",
+            new=AsyncMock(
+                return_value=(outlines, PresentationStructureModel(slides=[0]))
+            ),
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate.get_images_directory",
+            return_value="/tmp/images",
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "_workspace_operation_fencing_token",
+            new=AsyncMock(return_value=9),
+        ) as fencing_token,
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "prepare_workspace_chat_artifact_staging",
+            new=AsyncMock(return_value=staging),
+        ) as prepare_staging,
+        patch(
+            "services.template_v2_generation_service."
+            "get_slide_content_from_type_and_outline",
+            new=AsyncMock(return_value={"hero": {"title": "Generated title"}}),
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "process_slide_and_fetch_assets",
+            new=AsyncMock(return_value=[generated_asset]),
+        ) as process_assets,
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "promote_workspace_chat_image_artifacts",
+            new=AsyncMock(return_value=promoted),
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate._execute_generation_export",
+            new=AsyncMock(
+                return_value=SimpleNamespace(
+                    presentation=PresentationAndPath(
+                        presentation_id=presentation_id,
+                        path="/tmp/native-template.pptx",
+                    )
+                )
+            ),
+        ),
+        patch(
+            "api.v1.ppt.endpoints.presentation_generate."
+            "_publish_staged_presentation",
+            new=publish,
+        ),
+    ):
+        response = asyncio.run(
+            _generate_template_v2_presentation(
+                request=request,
+                presentation_id=presentation_id,
+                presentation_outlines=outlines,
+                using_slides_markdown=True,
+                language_to_use="English",
+                async_status=None,
+                generation_job=job,
+                export_cookie_header=None,
+                progress_reporter=report_progress,
+                sql_session=session,
+            )
+        )
+
+    assert response.path == "/tmp/native-template.pptx"
+    fencing_token.assert_awaited_once()
+    assert prepare_staging.await_args.kwargs == {
+        "operation_id": operation_id,
+        "presentation_id": presentation_id,
+        "source_revision": 5,
+        "attempt_token": "attempt-token",
+        "fencing_token": 9,
+    }
+    assert process_assets.await_args.kwargs["template_v2"] is True
+    publish_kwargs = publish.await_args.kwargs
+    assert publish_kwargs["generated_assets"] == (generated_asset,)
+    assert publish_kwargs["image_staging"] is staging
+    assert publish_kwargs["image_artifacts"] == (image_artifact,)
+    assert generated_asset.path == "/tmp/artifacts/generated.png"
 
 
 def test_async_export_failure_removes_partial_deck_and_rolls_back_session():
@@ -825,12 +1342,16 @@ def test_async_export_failure_removes_partial_deck_and_rolls_back_session():
             ),
         ),
         patch(
+            "api.v1.ppt.endpoints.presentation_generate.get_images_directory",
+            return_value="/tmp/images",
+        ),
+        patch(
             "services.template_v2_generation_service."
             "get_slide_content_from_type_and_outline",
             new=AsyncMock(return_value={"hero": {"title": "Generated title"}}),
         ),
         patch(
-            "api.v1.ppt.endpoints.presentation_generate.export_presentation",
+            "api.v1.ppt.endpoints.presentation_generate._execute_generation_export",
             new=AsyncMock(side_effect=RuntimeError("export failed")),
         ),
     ):

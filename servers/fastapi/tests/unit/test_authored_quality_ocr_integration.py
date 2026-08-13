@@ -334,7 +334,9 @@ async def _style_scenario(
         session.add(slide)
         session.add(task)
         await session.commit()
-        await quality_service.run_authored_quality_review(
+        # OCR behavior for the retained legacy implementation remains covered
+        # directly; public quality.review no longer selects it.
+        await quality_service._run_legacy_authored_quality_review_unlocked(
             presentation.id,
             AuthoredQualityReviewRequest(
                 scope="all",

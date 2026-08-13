@@ -5993,6 +5993,7 @@
       "servers/nextjs/app/(presentation-generator)/services/api/authored.cy.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/authored.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/canonical-document-admission.ts",
+      "servers/nextjs/app/(presentation-generator)/services/api/codex-auth.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/community.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/dashboard-list-query.test.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/dashboard-list-query.ts",
@@ -6442,6 +6443,7 @@
       "servers/nextjs/scripts/lib/template-v2-pdf-golden-runtime.mjs",
       "servers/nextjs/scripts/lib/template-v2-pdf-golden.mjs",
       "servers/nextjs/scripts/lib/template-v2-pdf-golden.test.mjs",
+      "servers/nextjs/scripts/node-test-resolver.mjs",
       "servers/nextjs/scripts/powerpoint-desktop-calibration.ps1",
       "servers/nextjs/scripts/qa-authored-hybrid-element-map.mjs",
       "servers/nextjs/scripts/qa-authored-hybrid-export.mjs",
@@ -6451,6 +6453,7 @@
       "servers/nextjs/scripts/qa-authored-hybrid-visual.mjs",
       "servers/nextjs/scripts/qa-powerpoint-desktop.ps1",
       "servers/nextjs/scripts/qa-upload-http-e2e.ps1",
+      "servers/nextjs/scripts/register-node-test-loader.mjs",
       "servers/nextjs/scripts/run-ci-node-tests.mjs",
       "servers/nextjs/scripts/run-next-build.mjs",
       "servers/nextjs/scripts/run-workspace-e2e.mjs",
@@ -6803,14 +6806,16 @@
   },
   "receipt": {
     "source": {
-      "mode": "index"
+      "mode": "working-tree",
+      "trackedRule": "Index entries overlaid with unstaged tracked file changes, deletions, and POSIX chmod changes.",
+      "untrackedRule": "Nonignored untracked paths reported by git ls-files --others --exclude-standard."
     },
     "counts": {
       "upstreamOwned": 10163,
       "identical": 9463,
       "exceptions": 700,
-      "localOnly": 1879
+      "localOnly": 1882
     },
-    "policySha256": "366ed6830683425675a40b69c32e51d1d81977e1aa0d1783b8e7ccd7f701b688"
+    "policySha256": "5715d2c349a8a3140345bfbc8aef86e5c6c79bba99907662711ba30d1fec6cf6"
   }
 }

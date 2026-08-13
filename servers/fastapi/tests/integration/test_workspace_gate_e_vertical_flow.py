@@ -18,6 +18,7 @@ from sqlmodel import SQLModel
 
 from api.v1.ppt.endpoints import workspace as workspace_endpoint
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -51,6 +52,7 @@ WORKSPACE_TABLES = [
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
     WorkspaceActionReceipt.__table__,
+    PresentationExportAttempt.__table__,
     WorkspaceArtifact.__table__,
 ]
 

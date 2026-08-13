@@ -44,6 +44,16 @@ from utils.slide_capture import find_chrome
 from utils.slidespec_core import ZERO_DIGEST, seal_slidespec
 
 
+def test_proposal_llm_can_be_disabled_without_disabling_vqa(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED", "0")
+    assert executor._proposal_llm_enabled() is False
+
+    monkeypatch.setenv("SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED", "true")
+    assert executor._proposal_llm_enabled() is True
+
+
 def _request(slide_id: uuid.UUID) -> RenderRequest:
     spec = seal_slidespec(
         SlideSpec(
@@ -208,6 +218,15 @@ async def _run_executor_canary(
     monkeypatch.setattr(executor, "inspect_authored_ocr", fake_ocr)
     monkeypatch.setattr(executor, "critique_authored_style_comparison", fake_vqa)
     monkeypatch.setattr(executor, "propose_slidespec_repair", unexpected_llm)
+    real_run_one = executor._run_one
+    pass_controls: list[tuple[object, object]] = []
+
+    async def capture_run_controls(**kwargs):
+        pass_controls.append((kwargs["publish_gate"], kwargs["iteration_guard"]))
+        return await real_run_one(**kwargs)
+
+    monkeypatch.setattr(executor, "_run_one", capture_run_controls)
+    cache_epoch_before = executor._BASELINE_INSPECTION_EPOCH.get(str(target_id), 0)
     if fail_postcommit_verification:
         real_load_active = executor.load_active_slidespec_bundle
         load_calls = 0
@@ -269,8 +288,25 @@ async def _run_executor_canary(
     assert result.data["metrics"]["vqa_calls"] >= 1
     assert result.data["metrics"]["total_ms"] > 0
     assert result.data["metrics"]["stage_timings_ms"]
+    assert result.data["metrics"]["pattern_preinspection_count"] == 1
+    assert result.data["metrics"]["pattern_preinspection_cache_misses"] == 1
+    assert result.data["metrics"]["preinspection_render_count"] == 1
+    assert result.data["detailed_issue_count"] >= 1
+    assert result.data["resolved_issue_count"] == (
+        0 if fail_postcommit_verification else result.data["detailed_issue_count"]
+    )
+    assert result.data["remaining_slide_count"] == int(
+        fail_postcommit_verification
+    )
+    assert pass_controls
+    assert len({id(lock) for lock, _guard in pass_controls}) == 1
+    assert len({id(guard) for _lock, guard in pass_controls}) == 1
+    assert all(isinstance(lock, asyncio.Lock) for lock, _guard in pass_controls)
+    assert executor._BASELINE_INSPECTION_EPOCH.get(str(target_id), 0) == (
+        cache_epoch_before + (0 if fail_postcommit_verification else 1)
+    )
     assert result.data["slide_results"][0]["route"] == "slidespec_active"
-    assert result.data["slide_results"][0]["path"] == "local_patch"
+    assert result.data["slide_results"][0]["path"] == "deterministic"
     assert result.data["slide_results"][0]["applied"] is (
         not fail_postcommit_verification
     )
@@ -379,6 +415,68 @@ def test_plan_qualified_candidate_state_keys_do_not_alias_identical_renders() ->
     assert len(states) == 2
     assert states[first_key].decision == "accepted"
     assert states[second_key].decision == "rejected"
+
+
+def test_slide_execution_controls_are_isolated_per_slide_and_reused_by_pass() -> None:
+    locks, guards = executor._slide_execution_controls(
+        (3, 7), max_incremental_repairs=12
+    )
+
+    assert locks[3] is locks[3]
+    assert guards[3] is guards[3]
+    assert locks[3] is not locks[7]
+    assert guards[3] is not guards[7]
+    assert guards[3].max_incremental_applies == 12
+
+
+def test_dry_run_removes_publication_authority_even_when_apply_is_enabled(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("SLIDESPEC_REPAIR_CANARY", "100")
+    monkeypatch.setenv("SLIDESPEC_REPAIR_APPLY", "true")
+    monkeypatch.delenv("SLIDESPEC_KILL_SWITCH", raising=False)
+
+    rollout = executor._execution_rollout(
+        uuid.uuid4(),
+        position=10,
+        opt_in=True,
+        owner_id=None,
+        dry_run=True,
+    )
+
+    assert rollout.should_run_repair is True
+    assert rollout.shadow_mode is True
+    assert rollout.publisher_allowed is False
+    assert rollout.apply_enabled is False
+    assert rollout.reason_code == "legacy_preserved.dry_run"
+
+
+def test_successful_publication_epoch_changes_the_baseline_cache_key() -> None:
+    slide_id = uuid.uuid4()
+    request = _request(slide_id)
+    epoch_key = str(slide_id)
+    previous = executor._BASELINE_INSPECTION_EPOCH.get(epoch_key)
+    try:
+        before = executor._baseline_inspection_cache_key(
+            slide_id=slide_id,
+            request=request,
+            html="<section>baseline</section>",
+            adjacent_digest="adjacent:stable",
+        )
+        executor._invalidate_baseline_inspection(slide_id)
+        after = executor._baseline_inspection_cache_key(
+            slide_id=slide_id,
+            request=request,
+            html="<section>baseline</section>",
+            adjacent_digest="adjacent:stable",
+        )
+    finally:
+        if previous is None:
+            executor._BASELINE_INSPECTION_EPOCH.pop(epoch_key, None)
+        else:
+            executor._BASELINE_INSPECTION_EPOCH[epoch_key] = previous
+
+    assert before != after
 
 
 def test_canonical_terminal_prefers_selected_outcome() -> None:
@@ -495,3 +593,35 @@ def test_paired_vqa_context_includes_authoritative_chrome_geometry() -> None:
 
     assert payload["verifiedGeometry"]["sourceProjectionRoundTrip"] is True
     assert "Chrome geometry facts are authoritative" in context
+
+
+def test_executor_conflict_footprint_resolves_layout_ancestry_and_space_pool() -> None:
+    request = _request(uuid.uuid4())
+    target = request.spec.layout.children[0]
+    plan = RepairPlan.model_validate(
+        {
+            "$schema": "urn:ppt-agent:repair-plan:1.0",
+            "planId": "rp_rule_footprint",
+            "slideId": request.spec.slideId,
+            "baseSpecRevision": request.spec.specRevision,
+            "baseSpecHash": request.spec.digests.spec,
+            "expectedContentDigest": request.spec.digests.content,
+            "strategy": "minimal_change",
+            "operations": [
+                {
+                    "op": "translateWithinParent",
+                    "target": target.contentSemanticId,
+                    "value": {"x": 0, "y": 0.01},
+                }
+            ],
+            "proposedBy": {"kind": "rule_engine", "policyVersion": "test"},
+        }
+    )
+
+    footprint = executor._repair_conflict_footprint(request, plan)
+
+    assert footprint.nodes == frozenset({target.layoutId})
+    assert request.spec.layout.layoutId in footprint.ancestor_cones
+    assert footprint.parent_space_pools == frozenset(
+        {request.spec.layout.layoutId}
+    )

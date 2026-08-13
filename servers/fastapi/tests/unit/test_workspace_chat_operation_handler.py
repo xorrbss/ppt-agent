@@ -17,6 +17,7 @@ from sqlmodel import SQLModel
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
+from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.template_v2 import TemplateV2
 from models.sql.user import User
 from models.sql.workspace import (
@@ -61,6 +62,7 @@ TABLES = [
     WorkspaceActionReceipt.__table__,
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
+    PresentationExportAttempt.__table__,
     WorkspaceArtifact.__table__,
     WorkspaceAsset.__table__,
 ]

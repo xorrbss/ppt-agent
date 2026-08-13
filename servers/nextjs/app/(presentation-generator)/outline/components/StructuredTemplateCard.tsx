@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React, { memo, useMemo } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   makeTemplateV2SelectionId,
@@ -80,6 +81,7 @@ function getThumbnail(template: StructuredTemplateSummary): string | null {
 }
 
 function TemplatePreview({ template }: { template: StructuredTemplateSummary }) {
+  const t = useTranslations("generation");
   const thumbnail = getThumbnail(template);
 
   return (
@@ -89,7 +91,7 @@ function TemplatePreview({ template }: { template: StructuredTemplateSummary }) 
     >
       {thumbnail ? (
         <Image
-          alt={`${template.name} 템플릿 미리보기`}
+          alt={t("templatePreviewAlt", { name: template.name })}
           className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           fill
           sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 100vw"
@@ -105,7 +107,7 @@ function TemplatePreview({ template }: { template: StructuredTemplateSummary }) 
               {template.name}
             </p>
             <p className="mt-1 text-[11px] font-medium text-blue-100">
-              EDITABLE PRESENTATION
+              {t("editablePresentation")}
             </p>
           </div>
         </div>
@@ -116,7 +118,7 @@ function TemplatePreview({ template }: { template: StructuredTemplateSummary }) 
       </div>
       {template.is_default ? (
         <div className="absolute right-3 top-3 rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
-          기본
+          {t("defaultTemplate")}
         </div>
       ) : null}
     </div>
@@ -132,6 +134,7 @@ export const StructuredTemplateCard = memo(function StructuredTemplateCard({
   onSelectTemplate: (template: string) => void;
   selectedTemplate: string | null;
 }) {
+  const t = useTranslations("generation");
   const selectionId = makeTemplateV2SelectionId(template.id, template.revision);
   const isSelected = selectedTemplate === selectionId;
   const sourceLabel = useMemo(() => getSourceLabel(template), [template]);
@@ -159,7 +162,7 @@ export const StructuredTemplateCard = memo(function StructuredTemplateCard({
             {template.name}
           </h3>
           <span className="shrink-0 text-[10px] font-semibold text-slate-400">
-            R{template.revision}
+            {t("templateRevision", { revision: template.revision })}
           </span>
         </div>
         {template.description ? (
@@ -168,7 +171,7 @@ export const StructuredTemplateCard = memo(function StructuredTemplateCard({
           </p>
         ) : (
           <p className="mt-1.5 min-h-10 text-xs leading-5 text-slate-500">
-            편집 가능한 범용 프레젠테이션 템플릿
+            {t("genericEditableTemplate")}
           </p>
         )}
 
@@ -179,7 +182,7 @@ export const StructuredTemplateCard = memo(function StructuredTemplateCard({
           >
             {layoutCount ? (
               <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">
-                {layoutCount}개 레이아웃
+                {t("layoutCount", { count: layoutCount })}
               </span>
             ) : null}
             {capabilityLabels.map((capability) => (

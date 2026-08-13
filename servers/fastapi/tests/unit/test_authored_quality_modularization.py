@@ -106,7 +106,7 @@ def test_sqlalchemy_execution_boundary_avoids_sqlmodel_deprecation(tmp_path):
     asyncio.run(runner())
 
 
-def test_service_rejects_vqa_clean_candidate_with_retained_local_high_issue(
+def test_unimportable_fixture_stops_before_legacy_vqa_candidate_path(
     tmp_path, monkeypatch
 ):
     """Regression for the live case where image comparison missed DOM defects."""
@@ -204,10 +204,9 @@ def test_service_rejects_vqa_clean_candidate_with_retained_local_high_issue(
             )
             assert live_slides[0].html_content == "<html><body>old cover</body></html>"
             assert task.data["fixed_count"] == 0
-            assert task.data["rejection_reasons"] == {"local_high_remaining": 1}
-            assert task.data["candidate_decisions"][0]["reason"] == (
-                "local_high_remaining"
-            )
+            assert task.data["rejection_reasons"] == {"import.dom.empty": 2}
+            assert task.data["candidate_decisions"] == []
+            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
 
         await engine.dispose()
 

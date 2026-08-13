@@ -17,6 +17,8 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
+import migrations
+
 from models.sql.reference_snapshot import ReferenceSnapshot
 from models.sql.presentation import PresentationModel
 from models.sql.template_v2 import TemplateV2
@@ -198,7 +200,7 @@ def test_reference_snapshot_migration_upgrade_downgrade_reupgrade(tmp_path: Path
                 {"revision": "e6b8d0f2a4c6"},
             )
 
-        command.upgrade(config, "head")
+        command.upgrade(config, migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY)
         assert "reference_snapshots" in sa.inspect(engine).get_table_names()
         columns = {
             column["name"]
@@ -217,7 +219,7 @@ def test_reference_snapshot_migration_upgrade_downgrade_reupgrade(tmp_path: Path
             column["name"]
             for column in sa.inspect(engine).get_columns("presentations")
         }
-        command.upgrade(config, "head")
+        command.upgrade(config, migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY)
         assert "reference_snapshots" in sa.inspect(engine).get_table_names()
         assert "reference_snapshot_ids" in {
             column["name"]

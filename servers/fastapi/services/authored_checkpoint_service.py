@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.workspace import WorkspaceOperation
 from services.authored_generation_observability import (
     log_authored_generation_observation,
     log_authored_slide_failure_observation,
@@ -822,12 +823,52 @@ async def progress_for_task(
             )
         )
     ).scalar_one_or_none()
-    if (
-        job is None
-        or job.request_payload.get("template") != "authored"
-        or not job.total_slides
-    ):
+    if job is None:
         return None, None
+    if job.request_payload.get("template") != "authored":
+        if job.workspace_operation_id is None:
+            return None, job.last_error
+        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        raw = operation.progress if operation is not None else None
+        if not isinstance(raw, dict) or not raw:
+            return None, job.last_error
+
+        def safe_count(value: Any) -> int:
+            try:
+                return max(0, int(value or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        total = safe_count(raw.get("total"))
+        completed = min(total, safe_count(raw.get("current"))) if total else 0
+        stage = str(raw.get("stage") or "generation_started")
+        try:
+            percent = max(0, min(100, int(raw.get("percent") or 0)))
+        except (TypeError, ValueError):
+            percent = 0
+        published = job.state == "published"
+        if published:
+            completed = total
+            percent = 100
+            stage = "completed"
+        return (
+            {
+                "completed_slides": completed,
+                "total_slides": total,
+                "percent": percent,
+                "current_slide": (
+                    completed + 1
+                    if total and completed < total and stage.endswith("slide_generation")
+                    else None
+                ),
+                "current_stage": stage,
+                "stage_counts": {},
+                "finalizing": bool(total and completed == total and not published),
+            },
+            job.last_error,
+        )
+    if not job.total_slides:
+        return None, job.last_error
     total = max(0, job.total_slides or 0)
     completed = min(total, max(0, job.completed_slides or 0))
     percent = 0 if total == 0 else int(completed * 100 / total)

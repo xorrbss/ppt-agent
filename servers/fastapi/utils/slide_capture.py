@@ -475,14 +475,28 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
           if (group !== null) groupCovered.set(group, (groupCovered.get(group) || 0) + 1);
           continue;
         }}
-        const stack = document.elementsFromPoint(x, y);
-        const owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
+        let hitX = x, hitY = y;
+        let stack = document.elementsFromPoint(hitX, hitY);
+        let owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
+        // Anti-aliased glyph/border edge samples can miss the owner by a
+        // subpixel even though the adjacent owned paint is measurable. Retry
+        // two bounded points toward the target centre before declaring an
+        // unknown atom; the normal occlusion threshold remains unchanged.
+        if (owner < 0) {{
+          for (const inset of [.5, 1]) {{
+            hitX = x + Math.sign(rect.left + rect.width / 2 - x) * inset;
+            hitY = y + Math.sign(rect.top + rect.height / 2 - y) * inset;
+            stack = document.elementsFromPoint(hitX, hitY);
+            owner = stack.findIndex((candidate) => candidate === node || node.contains(candidate));
+            if (owner >= 0) break;
+          }}
+        }}
         if (owner < 0) {{
           sample.state = -2; if (cells[row][col] === -1) cells[row][col] = -2;
           unknown += 1; continue;
         }}
         const occluders = stack.slice(0, owner).filter((candidate) =>
-          candidate !== node && !node.contains(candidate) && candidatePaintsAt(candidate, x, y));
+          candidate !== node && !node.contains(candidate) && candidatePaintsAt(candidate, hitX, hitY));
         const isCovered = occluders.length > 0;
         for (const candidate of occluders) {{
           const ownerNode = candidate.closest?.('[data-qid]');
@@ -1671,8 +1685,8 @@ RENDER_CACHE_VERSION = "authored-render-v8-owned-paint-cdp"
 _render_cache: "OrderedDict[str, bytes]" = OrderedDict()
 _render_inflight: Dict[str, "asyncio.Task[bytes]"] = {}
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
-OCCLUSION_SENSOR_VERSION = "owned-paint-v4-per-rect-minimum"
-DOM_METRICS_VERSION = "authored-dom-metrics-v12-owned-paint-atoms"
+OCCLUSION_SENSOR_VERSION = "owned-paint-v5-inset-retry"
+DOM_METRICS_VERSION = "authored-dom-metrics-v13-inset-retry"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 _browser_metrics_cache: "OrderedDict[str, Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[str, "asyncio.Task[Mapping[str, Any] | None]"] = {}

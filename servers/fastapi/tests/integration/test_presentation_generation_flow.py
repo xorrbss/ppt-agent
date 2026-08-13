@@ -117,13 +117,19 @@ def test_generate_presentation_handler_full_flow_uses_mocked_dependencies(fake_a
         return_value=Mock(),
     ), patch.object(
         presentation_endpoint,
-        "export_presentation",
+        "_execute_generation_export",
         new=AsyncMock(
-            return_value=PresentationAndPath(
-                presentation_id=presentation_id,
-                path="/tmp/generated/deck.pptx",
+            return_value=types.SimpleNamespace(
+                presentation=PresentationAndPath(
+                    presentation_id=presentation_id,
+                    path="/tmp/generated/deck.pptx",
+                ),
             )
         ),
+    ), patch.object(
+        presentation_endpoint,
+        "_publish_staged_presentation",
+        new=AsyncMock(return_value="/tmp/generated/deck.pptx"),
     ), patch.object(
         presentation_endpoint.CONCURRENT_SERVICE,
         "run_task",

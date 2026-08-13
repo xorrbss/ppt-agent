@@ -8,7 +8,7 @@ import { apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
 import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
 import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
 import {
-  canonicalUploadBatchKey,
+  canonicalUploadAdmissionKey,
   cleanupCanonicalDocumentAdmission,
   forgetCanonicalAdmission,
   rememberCanonicalAdmission,
@@ -25,7 +25,18 @@ export type BlankPresentationResponse = {
 };
 
 export type GenerationStage =
-  "author" | "illustrate" | "render" | "persist" | "finalize" | "completed";
+  | "author"
+  | "illustrate"
+  | "render"
+  | "persist"
+  | "finalize"
+  | "template_v2_layout_selection"
+  | "template_v2_slide_generation"
+  | "template_v2_pptx_validation"
+  | "template_v2_saving"
+  | "template_v2_exporting"
+  | "template_v2_publishing"
+  | "completed";
 
 export type GenerationProgress = {
   completed_slides: number;
@@ -210,8 +221,17 @@ const generationPreferencesPayload = (body: GenerationPreferences) => ({
 });
 
 export class PresentationGenerationApi {
-  static async uploadDoc(documents: File[]): Promise<DocumentUploadAdmission> {
-    const batchKey = await canonicalUploadBatchKey(documents);
+  static async uploadDoc(
+    documents: File[],
+    admissionScope: string,
+  ): Promise<DocumentUploadAdmission> {
+    // Reference snapshots are single-workspace resources. Scope idempotency to
+    // the destination presentation so another deck cannot replay assets that
+    // an earlier workspace already claimed.
+    const admissionKey = await canonicalUploadAdmissionKey(
+      documents,
+      admissionScope,
+    );
     const admittedAssets: CanonicalDocumentAsset[] = [];
     try {
       const settled = await Promise.allSettled(
@@ -224,7 +244,7 @@ export class PresentationGenerationApi {
               method: "POST",
               headers: {
                 ...getHeaderForFormData(),
-                "Idempotency-Key": `document-upload:v1:${batchKey}:${index}`,
+                "Idempotency-Key": `document-upload:v2:${admissionKey}:${index}`,
               },
               body: formData,
               cache: "no-cache",
@@ -252,7 +272,7 @@ export class PresentationGenerationApi {
           method: "POST",
           headers: {
             ...getHeader(),
-            "Idempotency-Key": `document-snapshot:v1:${batchKey}`,
+            "Idempotency-Key": `document-snapshot:v2:${admissionKey}`,
           },
           body: JSON.stringify({
             provider_id: "uploaded_document",

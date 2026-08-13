@@ -39,6 +39,7 @@ class WorkspaceOperationExecutionContext(Protocol):
         current: int | None = None,
         total: int | None = None,
         percent: int | None = None,
+        message: str | None = None,
     ) -> bool: ...
 
     async def emit_durable_event(

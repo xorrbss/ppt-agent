@@ -96,7 +96,7 @@
   },
   "browserGolden": {
     "receiptPath": "templates/manifests/general.browser-golden.v1.json",
-    "receiptSha256": "13fba1d4ebbf4018219b1e003a88367688918ecdadb6f679c6b18a6149d5dee3"
+    "receiptSha256": "1b500137d957c4aaa5a2e93bac8b20e7079bafebdc65af8e9c5e0b20efc2e979"
   },
   "publication": {
     "status": "ready",

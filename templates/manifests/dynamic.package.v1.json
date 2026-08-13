@@ -88,7 +88,7 @@
   },
   "browserGolden": {
     "receiptPath": "templates/manifests/dynamic.browser-golden.v1.json",
-    "receiptSha256": "c734b7a11be7effeab652138144503f9aede84e4fbeeeee402da07aa9d3af1ca"
+    "receiptSha256": "c06200724fe7517285c565b8dea8f7b1c9e2dda7a4e1e78dfd9d358310292e38"
   },
   "publication": {
     "status": "ready",

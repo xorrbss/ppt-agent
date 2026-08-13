@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -551,12 +552,56 @@ def _validated_element(
     index: int,
 ) -> SlideElement:
     try:
-        return _ELEMENT_ADAPTER.validate_python(element)
+        return _ELEMENT_ADAPTER.validate_python(
+            _canonicalize_runtime_element(element)
+        )
     except ValidationError as error:
         raise ValueError(
             "runtime_element_not_representable:"
             f"{layout_id}:{index}:{_failure_detail(error)}"
         ) from error
+
+
+def _canonicalize_runtime_element(element: Any) -> Any:
+    """Translate the runtime's sampled ellipse into the strict bounding-pair form."""
+
+    if not isinstance(element, Mapping):
+        return element
+    if element.get("type") != "vector" or element.get("shape") != "ellipse":
+        return element
+    points = element.get("points")
+    if not isinstance(points, list) or len(points) != 8:
+        return element
+
+    coordinates: list[tuple[float, float]] = []
+    for point in points:
+        if not isinstance(point, Mapping):
+            return element
+        x = point.get("x")
+        y = point.get("y")
+        if (
+            isinstance(x, bool)
+            or not isinstance(x, (int, float))
+            or isinstance(y, bool)
+            or not isinstance(y, (int, float))
+            or not math.isfinite(float(x))
+            or not math.isfinite(float(y))
+        ):
+            return element
+        coordinates.append((float(x), float(y)))
+
+    normalized = copy.deepcopy(dict(element))
+    normalized["points"] = [
+        {
+            "x": min(x for x, _ in coordinates),
+            "y": min(y for _, y in coordinates),
+        },
+        {
+            "x": max(x for x, _ in coordinates),
+            "y": max(y for _, y in coordinates),
+        },
+    ]
+    return normalized
 
 
 def _failure_detail(error: ValidationError) -> str:

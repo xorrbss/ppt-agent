@@ -23,6 +23,7 @@ from models.slidespec_v1 import (
     SlideConstraint,
     SlideSpec,
 )
+from utils.slidespec_projection import projected_source_box_px
 
 
 @dataclass(frozen=True, slots=True)
@@ -1246,17 +1247,14 @@ def imported_projection_roundtrip_errors(
         # footer overhang).  Apply only the canonical delta to that exact source
         # rectangle; comparing every candidate to the clamped baseline creates
         # false mismatches and double-counts parent translations on descendants.
+        projected_x, projected_y, projected_width, projected_height = (
+            projected_source_box_px(source, node, binding)
+        )
         expected = (
-            binding.sourceBoundsPx.x
-            + (node.bounds.x - binding.bounds.x) * source.viewportWidth
-            + inherited_x,
-            binding.sourceBoundsPx.y
-            + (node.bounds.y - binding.bounds.y) * source.viewportHeight
-            + inherited_y,
-            binding.sourceBoundsPx.width
-            + (node.bounds.width - binding.bounds.width) * source.viewportWidth,
-            binding.sourceBoundsPx.height
-            + (node.bounds.height - binding.bounds.height) * source.viewportHeight,
+            projected_x + inherited_x,
+            projected_y + inherited_y,
+            projected_width,
+            projected_height,
         )
         actual = tuple(
             _number(bbox.get(key)) for key in ("x", "y", "width", "height")
@@ -1286,10 +1284,10 @@ def imported_projection_roundtrip_errors(
         if abs(node.spacing - binding.gapPx) > 1e-6:
             checks.append(("gap", node.spacing, css_number(style.get("gap"), -1)))
         desired_padding = (
-            node.padding.top * node.bounds.height * source.viewportHeight,
-            node.padding.right * node.bounds.width * source.viewportWidth,
-            node.padding.bottom * node.bounds.height * source.viewportHeight,
-            node.padding.left * node.bounds.width * source.viewportWidth,
+            node.padding.top * projected_height,
+            node.padding.right * projected_width,
+            node.padding.bottom * projected_height,
+            node.padding.left * projected_width,
         )
         for name, wanted, css_name in zip(
             ("padding-top", "padding-right", "padding-bottom", "padding-left"),
