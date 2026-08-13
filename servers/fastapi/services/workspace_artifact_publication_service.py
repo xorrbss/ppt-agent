@@ -45,6 +45,10 @@ from services.account_deletion_service import (
 from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
+from services.workspace_artifact_copy import copy_and_hash as _copy_and_hash
+from services.workspace_artifact_runtime_config import (
+    configured_positive_int as _configured_positive_int,
+)
 from utils.get_env import get_app_data_directory_env
 from utils.owner_context import get_current_owner_id
 
@@ -145,15 +149,6 @@ class ResolvedWorkspaceExportArtifact:
     size_bytes: int
     expires_at: datetime
     absolute_path: Path
-
-
-def _configured_positive_int(name: str, default: int, *, minimum: int = 1) -> int:
-    raw = (os.getenv(name) or "").strip()
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return max(minimum, value) if value > 0 else default
 
 
 def _app_data_root() -> Path:
@@ -294,19 +289,6 @@ def _remove_prepared_file(artifact: PreparedWorkspaceArtifact) -> bool:
                 exc_info=True,
             )
     return removed
-
-
-def _copy_and_hash(source: Path, output: BinaryIO) -> tuple[str, int]:
-    """Copy one source while computing the immutable artifact identity."""
-
-    digest = hashlib.sha256()
-    size_bytes = 0
-    with source.open("rb") as input_file:
-        while chunk := input_file.read(1024 * 1024):
-            output.write(chunk)
-            digest.update(chunk)
-            size_bytes += len(chunk)
-    return digest.hexdigest(), size_bytes
 
 
 def _fsync_output(output: BinaryIO) -> None:

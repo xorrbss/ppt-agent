@@ -51,6 +51,11 @@ interface FastApiEnv {
   GPT_IMAGE_1_5_QUALITY?: string,
   GPT_IMAGE_2_QUALITY?: string,
   APP_DATA_DIRECTORY?: string,
+  PROVIDER_CREDENTIAL_SCOPE_USER_ID?: string,
+  PROVIDER_SECURE_MODE?: string,
+  PROVIDER_SECURE_CREDENTIALS_REQUIRED?: string,
+  PROVIDER_CREDENTIAL_BACKEND?: string,
+  PROVIDER_DESKTOP_VAULT_DIRECTORY?: string,
   /** Same origin the Next.js app uses for FastAPI (assets + API). Passed through to Python. */
   NEXT_PUBLIC_FAST_API?: string,
   TEMP_DIRECTORY?: string,

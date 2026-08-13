@@ -170,7 +170,7 @@ def test_style_reference_mixed_gate_publishes_only_strictly_improved_slide(
 
             original_second_content = dict(original_slides[1].content)
             original_second_properties = dict(original_slides[1].properties)
-            await quality_service.run_authored_quality_review(
+            await quality_service._run_legacy_authored_quality_review_unlocked(
                 presentation_id,
                 AuthoredQualityReviewRequest(scope="all", mode="analyze_and_fix"),
                 task,
@@ -221,7 +221,7 @@ def test_style_reference_zero_accepted_skips_png_writes_and_snapshot(
             session.add(task)
             await session.commit()
 
-            await quality_service.run_authored_quality_review(
+            await quality_service._run_legacy_authored_quality_review_unlocked(
                 presentation_id,
                 AuthoredQualityReviewRequest(scope="all", mode="analyze_and_fix"),
                 task,
@@ -280,7 +280,7 @@ def test_style_reference_png_write_failure_leaves_live_slides_and_history_untouc
             await session.commit()
 
             with pytest.raises(RuntimeError, match="simulated atomic publish failure"):
-                await quality_service.run_authored_quality_review(
+                await quality_service._run_legacy_authored_quality_review_unlocked(
                     presentation_id,
                     AuthoredQualityReviewRequest(scope="all", mode="analyze_and_fix"),
                     task,

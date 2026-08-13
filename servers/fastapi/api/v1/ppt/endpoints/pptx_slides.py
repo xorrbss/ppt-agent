@@ -7,12 +7,14 @@ import uuid
 from typing import List, Optional, Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
-import aiohttp
 import asyncio
 import xml.etree.ElementTree as ET
 import re
 
 from services.documents_loader import DocumentsLoader
+from services.provider_font_runtime import (
+    check_google_font_availability as _check_google_font_availability,
+)
 from utils.asset_directory_utils import absolute_fastapi_asset_url, get_images_directory
 from utils.upload_limits import (
     get_single_upload_limit_bytes,
@@ -230,19 +232,7 @@ async def check_google_font_availability(font_name: str) -> bool:
     Returns:
         True if font is available in Google Fonts, False otherwise
     """
-    try:
-        formatted_name = font_name.replace(" ", "+")
-        url = f"https://fonts.googleapis.com/css2?family={formatted_name}&display=swap"
-
-        async with aiohttp.ClientSession() as session:
-            async with session.head(
-                url, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                return response.status == 200
-
-    except Exception as e:
-        print(f"Error checking Google Font availability for {font_name}: {e}")
-        return False
+    return await _check_google_font_availability(font_name)
 
 
 async def analyze_fonts_in_all_slides(slide_xmls: List[str]) -> FontAnalysisResult:

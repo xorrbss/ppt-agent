@@ -1,0 +1,27 @@
+{
+  "build_elapsed_ms": 12918.992,
+  "harness_elapsed_ms": 21179.308,
+  "harness_exit": {
+    "error": "",
+    "exit_code": 1,
+    "oom_killed": false
+  },
+  "harness_start_monotonic": 286.432269222,
+  "harness_started_after_product_ready": true,
+  "product_readiness": {
+    "criterion": "worker-process-blocked-on-request-pipe",
+    "elapsed_ms": 1343.061,
+    "ready": true,
+    "samples": [
+      {
+        "container_running": true,
+        "elapsed_ms": 1343.061,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 anon_pipe_read"
+      }
+    ]
+  },
+  "schema_version": "authored-renderer-lifecycle/v1",
+  "started_monotonic": 267.7662023
+}

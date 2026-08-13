@@ -7,6 +7,9 @@ from models.presentation_with_slides import PresentationWithSlides
 from models.sql.presentation import PresentationModel, PresentationVersion
 from models.sql.slide import SlideModel
 from services.database import get_async_session
+from services.compatibility_migration.admission import (
+    require_legacy_creation_closed,
+)
 
 PRESENTATION_BLANK_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 BLANK_PRESENTATION_LAYOUT_GROUP = "blank"
@@ -19,6 +22,7 @@ BLANK_PRESENTATION_LAYOUT_ID = "__blank_slide__"
 async def create_blank_presentation(
     sql_session: Annotated[AsyncSession, Depends(get_async_session)],
 ):
+    require_legacy_creation_closed(operation="blank")
     presentation = PresentationModel(
         version=PresentationVersion.V2_STANDARD,
         content="",

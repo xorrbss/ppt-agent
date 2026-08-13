@@ -22,6 +22,9 @@ chroma
 container.db
 .next-build
 servers/nextjs/.next-workspace-e2e/
+servers/nextjs/.next-build-checkpoint8/
+servers/nextjs/.tmp/
+servers/nextjs/servers/nextjs/.tmp/
 /.codex-tmp/
 /.codex-test-artifacts/
 .cursor
@@ -82,6 +85,25 @@ electron/kor.traineddata
 # manifests deliberately added through the release process belong in Git.
 electron/dist/
 test-artifacts/
+
+# Disposable packaged renderer probes are rebuilt from the checked-in probe,
+# policy, provenance, and compact JSON observations. Keep the hundreds-of-MB
+# Electron runtime out of Git while retaining its final evidence receipts.
+contracts/authored-renderer/evidence/*-electron-probe-package/
+contracts/authored-renderer/evidence/*-electron-probe-package-source/
+contracts/authored-renderer/evidence/*.tmp-*
+contracts/authored-renderer/evidence/*/probe-stdout.txt
+contracts/authored-renderer/evidence/*/probe-stderr.txt
+
+# Prototype and compatibility experiments keep their reproducible source,
+# manifests, and checked-in vendor boundary, but not generated Office files,
+# LibreOffice profiles, probe captures, or intermediate run receipts.
+docs/experiments/authored-vnext/**/agent-probe/
+docs/experiments/authored-vnext/**/artifacts/
+docs/experiments/authored-vnext/**/output/
+docs/experiments/authored-vnext/**/results/
+docs/experiments/authored-vnext/**/runs/
+docs/experiments/authored-vnext/**/tmp/
 
 # This project is npm-based (package-lock.json). Block stray pnpm artifacts left
 # by a one-off `pnpm install` so they cannot cause dual-lockfile drift.

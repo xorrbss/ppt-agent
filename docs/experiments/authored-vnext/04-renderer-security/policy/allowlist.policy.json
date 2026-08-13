@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "defaultDeny": true,
+  "allowedTags": [
+    "html", "head", "title", "meta", "body", "main", "section", "article",
+    "header", "footer", "div", "span", "p", "h1", "h2", "h3", "h4",
+    "h5", "h6", "ul", "ol", "li", "table", "thead", "tbody", "tr",
+    "th", "td", "strong", "em", "small", "br", "hr", "img", "style"
+  ],
+  "dropWithContents": [
+    "script", "iframe", "object", "embed", "svg", "math", "template", "noscript"
+  ],
+  "voidTags": ["meta", "br", "hr", "img"],
+  "globalAttributes": ["id", "class", "role", "aria-label", "aria-hidden", "lang", "dir"],
+  "tagAttributes": {
+    "meta": ["charset"],
+    "img": ["src", "alt", "width", "height"],
+    "th": ["colspan", "rowspan", "scope"],
+    "td": ["colspan", "rowspan"]
+  },
+  "urlAttributes": ["src", "href", "action", "formaction", "poster", "data", "xlink:href"],
+  "allowedUrlSchemes": ["data"],
+  "allowedDataMediaTypes": ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  "allowedCssProperties": [
+    "background", "background-color", "border", "border-color", "border-radius",
+    "border-style", "border-width", "color", "display", "flex", "flex-basis",
+    "flex-direction", "flex-grow", "flex-shrink", "flex-wrap", "gap", "height",
+    "justify-content", "align-items", "align-content", "letter-spacing",
+    "line-height", "margin", "margin-bottom", "margin-left", "margin-right",
+    "margin-top", "max-height", "max-width", "min-height", "min-width", "opacity",
+    "overflow", "padding", "padding-bottom", "padding-left", "padding-right",
+    "padding-top", "text-align", "text-decoration", "text-transform",
+    "vertical-align", "white-space", "width"
+  ],
+  "limits": {
+    "maxSourceBytes": 65536,
+    "maxNodes": 32,
+    "maxDepth": 12,
+    "maxAttributesPerElement": 12,
+    "maxTextBytes": 8192,
+    "maxDataUrlBytes": 96,
+    "maxImageDimension": 4096
+  },
+  "reservedMetadataToken": "__METADATA_ENDPOINT_DO_NOT_RESOLVE__"
+}

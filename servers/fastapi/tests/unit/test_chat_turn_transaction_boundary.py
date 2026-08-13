@@ -18,6 +18,7 @@ import copy
 import os
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -162,13 +163,20 @@ def _content(title: str) -> dict:
 
 
 def _patch_external_side_effects(monkeypatch) -> None:
-    """Silence asset/image/memory side effects; they are not under test."""
+    """Silence policy and external side effects outside the boundary under test."""
 
     async def no_assets(**_kwargs):
         return []
 
     async def no_memory_index(**_kwargs):
         return None
+
+    async def allow_transaction_fixture(_session, _presentation):
+        # The replay deck intentionally uses native Template V2 UI to exercise
+        # the legacy chat-tool transaction buffer. Authored-only admission has
+        # separate fail-closed tests; this fixture isolates transaction
+        # semantics without weakening the production policy.
+        return SimpleNamespace(driver_id="standard")
 
     monkeypatch.setattr(memory_layer, "process_slide_and_fetch_assets", no_assets)
     monkeypatch.setattr(
@@ -178,6 +186,10 @@ def _patch_external_side_effects(monkeypatch) -> None:
         memory_layer.MEM0_PRESENTATION_MEMORY_SERVICE,
         "store_slide_edit",
         no_memory_index,
+    )
+    monkeypatch.setattr(
+        "services.workspace_chat_operation_handler.require_authored_mutation_evidence",
+        allow_transaction_fixture,
     )
     monkeypatch.setenv("ENABLE_TEMPLATE_V2", "true")
     monkeypatch.setenv("TEMPLATE_V2_TEMPLATE_ALLOWLIST", TEMPLATE_ID)

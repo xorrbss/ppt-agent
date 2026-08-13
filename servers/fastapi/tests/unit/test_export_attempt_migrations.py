@@ -666,7 +666,7 @@ def test_d2_adds_only_attempt_table_and_nullable_unique_artifact_link(
                 }
                 for table in before_tables
             }
-        command.upgrade(config, "head")
+        command.upgrade(config, migrations.REVISION_PRESENTATION_EXPORT_ATTEMPTS)
         with engine.connect() as connection:
             inspector = inspect(connection)
             after_tables = set(inspector.get_table_names())
@@ -809,7 +809,7 @@ def test_d2_database_checks_idempotency_and_downgrade_data_safety(
         ):
             command.downgrade(config, migrations.REVISION_ASSET_GATEWAY_IDEMPOTENCY)
         with engine.connect() as connection:
-            assert _version(connection) == migrations.HEAD_REVISION
+            assert _version(connection) == migrations.REVISION_PRESENTATION_EXPORT_ATTEMPTS
             assert connection.execute(
                 text(f"SELECT COUNT(*) FROM {ATTEMPTS}")
             ).scalar_one() == 1

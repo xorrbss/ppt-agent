@@ -1,0 +1,588 @@
+{
+  "schema_version": 1,
+  "corpus_id": "provider-ops-90-v1",
+  "fixture_kind": "fixed_non_sensitive_90",
+  "slides": [
+    {
+      "slide_id": "slide-001",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-002",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-003",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-004",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-005",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-006",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-007",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-008",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-009",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-010",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-011",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-012",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-013",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-014",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-015",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-016",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-017",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-018",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-019",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-020",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-021",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-022",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-023",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-024",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-025",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-026",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-027",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-028",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-029",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-030",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-031",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-032",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-033",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-034",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-035",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-036",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-037",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-038",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-039",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-040",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-041",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-042",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-043",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-044",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-045",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-046",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-047",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-048",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-049",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-050",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-051",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-052",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-053",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-054",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-055",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-056",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-057",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-058",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-059",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-060",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-061",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-062",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-063",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-064",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-065",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-066",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-067",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-068",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-069",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-070",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-071",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-072",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-073",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-074",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-075",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-076",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-077",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-078",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-079",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-080",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-081",
+      "archetype": "title",
+      "complexity_units": 1,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-082",
+      "archetype": "section",
+      "complexity_units": 2,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-083",
+      "archetype": "text",
+      "complexity_units": 3,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-084",
+      "archetype": "comparison",
+      "complexity_units": 4,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-085",
+      "archetype": "process",
+      "complexity_units": 5,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-086",
+      "archetype": "data",
+      "complexity_units": 1,
+      "export_units": 2
+    },
+    {
+      "slide_id": "slide-087",
+      "archetype": "image",
+      "complexity_units": 2,
+      "export_units": 3
+    },
+    {
+      "slide_id": "slide-088",
+      "archetype": "summary",
+      "complexity_units": 3,
+      "export_units": 4
+    },
+    {
+      "slide_id": "slide-089",
+      "archetype": "quote",
+      "complexity_units": 4,
+      "export_units": 1
+    },
+    {
+      "slide_id": "slide-090",
+      "archetype": "timeline",
+      "complexity_units": 5,
+      "export_units": 2
+    }
+  ],
+  "runs": 3,
+  "pricing": {
+    "version": "ops-ceiling-20260813",
+    "input_microunits_per_1k": 5000,
+    "output_microunits_per_1k": 15000,
+    "image_microunits_each": 40000
+  },
+  "capacity": {
+    "input_tokens_per_complexity": 800,
+    "output_tokens_per_complexity": 1200,
+    "images_per_slide": 1,
+    "max_attempts_per_slide": 2,
+    "provider_rpm": 60,
+    "concurrency": 4
+  },
+  "chaos": {
+    "retry": {
+      "run": 2,
+      "slide_id": "slide-037",
+      "attempt": 1
+    },
+    "cancel_resume": {
+      "run": 3,
+      "slide_id": "slide-061",
+      "attempt": 1
+    }
+  },
+  "kill_conditions": {
+    "estimated_cost_microunits": 20000000,
+    "retry_amplification": 1.05,
+    "critical_path_p99_ms": 5000,
+    "ram_peak_mib": 400,
+    "export_p99_ms": 500
+  },
+  "staging": {
+    "hostname_allowlist": [
+      "api.openai.com"
+    ],
+    "endpoint": "https://api.openai.com",
+    "currency": "USD"
+  }
+}

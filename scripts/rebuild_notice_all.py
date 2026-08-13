@@ -37,7 +37,13 @@ NODE_LICENSE_CANDIDATES = [
 
 def read_text_safe(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="replace").strip()
+        lines = []
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            normalized = line.rstrip()
+            if normalized in {"<<<<<<<", "=======", ">>>>>>>"}:
+                normalized = f" {normalized}"
+            lines.append(normalized)
+        return "\n".join(lines).strip()
     except Exception:
         return ""
 
@@ -289,7 +295,18 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Rebuild NOTICE from installed packages")
     parser.add_argument("--python-venv", dest="python_venv", default=None, help="Path to Python venv to scan")
-    parser.add_argument("--node-modules", dest="node_modules", default=None, help="Path to node_modules to scan")
+    parser.add_argument(
+        "--node-modules",
+        dest="node_modules",
+        action="append",
+        default=None,
+        help="Path to node_modules to scan; repeat for multiple product runtimes",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Fail when the checked-in NOTICE differs from the generated content",
+    )
     args = parser.parse_args()
     python_entries: List[Dict[str, str]] = []
     node_entries: List[Dict[str, str]] = []
@@ -306,11 +323,29 @@ def main():
         print("Warning: Python venv not found. Set NOTICE_PYTHON_VENV or create servers/fastapi/.venv", file=sys.stderr)
 
     # Node scan
-    node_modules_dir = Path(args.node_modules or os.environ.get("NOTICE_NODE_MODULES") or (NEXT_DIR / "node_modules"))
-    if node_modules_dir.exists():
-        node_entries = scan_node_modules(node_modules_dir)
-    else:
-        print(f"Warning: node_modules not found at {node_modules_dir}", file=sys.stderr)
+    configured_node_modules = args.node_modules
+    if configured_node_modules is None:
+        configured_node_modules = [
+            value
+            for value in os.environ.get("NOTICE_NODE_MODULES", "").split(os.pathsep)
+            if value
+        ] or [
+            str(REPO_ROOT / "node_modules"),
+            str(NEXT_DIR / "node_modules"),
+            str(REPO_ROOT / "electron" / "node_modules"),
+        ]
+    merged_node_entries: Dict[Tuple[str, str], Dict[str, str]] = {}
+    for value in configured_node_modules:
+        node_modules_dir = Path(value)
+        if node_modules_dir.exists():
+            for entry in scan_node_modules(node_modules_dir):
+                merged_node_entries[(entry["name"], entry["version"])] = entry
+        else:
+            print(f"Warning: node_modules not found at {node_modules_dir}", file=sys.stderr)
+    node_entries = sorted(
+        merged_node_entries.values(),
+        key=lambda entry: (entry["name"].lower(), entry["version"]),
+    )
 
     # Build NOTICE content
     parts: List[str] = []
@@ -318,13 +353,50 @@ def main():
         parts.append(format_section("PYTHON PACKAGES", python_entries))
     if node_entries:
         parts.append(format_section("NODE PACKAGES", node_entries))
+    supplemental_notices = [
+        (
+            "REVIEWED COPYLEFT CORRESPONDING SOURCE OFFER",
+            REPO_ROOT / "compliance" / "copyleft-source-offer.md",
+        ),
+        (
+            "BUNDLED FONT SOFTWARE — SIL OPEN FONT LICENSE 1.1",
+            REPO_ROOT / "compliance" / "fonts" / "OFL-1.1.txt",
+        ),
+        (
+            "GENOFFICE PPTX ENGINE NOTICE",
+            REPO_ROOT
+            / "docs"
+            / "experiments"
+            / "authored-vnext"
+            / "03-ooxml-roundtrip"
+            / "compliance"
+            / "NOTICE.genoffice.txt",
+        ),
+    ]
+    for title, notice_path in supplemental_notices:
+        notice = read_text_safe(notice_path)
+        if not notice:
+            print(f"Error: Required supplemental notice is missing: {notice_path}", file=sys.stderr)
+            sys.exit(1)
+        parts.append(
+            "\n".join(
+                ["-------------------------------------", title, "-------------------------------------", "", notice]
+            )
+        )
     if not parts:
         print("Error: No sections generated. Ensure .venv and node_modules exist.", file=sys.stderr)
         sys.exit(1)
 
-    content = "\n".join(parts)
-    NOTICE_PATH.write_text(content, encoding="utf-8")
-    print("NOTICE rebuilt from installed packages")
+    content = "\n".join(parts).rstrip() + "\n"
+    if args.check:
+        existing = read_text_safe(NOTICE_PATH) + "\n"
+        if existing != content:
+            print("Error: NOTICE is stale; run python scripts/rebuild_notice_all.py", file=sys.stderr)
+            sys.exit(1)
+        print("NOTICE is current")
+    else:
+        NOTICE_PATH.write_text(content, encoding="utf-8")
+        print("NOTICE rebuilt from installed product packages")
 
 
 if __name__ == "__main__":

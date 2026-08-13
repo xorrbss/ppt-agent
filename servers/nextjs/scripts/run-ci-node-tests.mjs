@@ -48,8 +48,15 @@ const included = all.filter((file) => {
 // serial exactly as the hand-written script did with --test-concurrency=1.
 const serial = included.filter((file) => file.includes("template-v2"));
 const parallel = included.filter((file) => !file.includes("template-v2"));
+// Chrome integration tests exercise the opt-in renderer. They must not turn
+// on the product feature for the default-off and fail-closed test group.
+const RENDERER_REQUIRED = /^lib\/authored-hybrid\/(?:authored-hybrid-e2e|chrome|cleanup|font-layout-chrome|google-fonts-trust-boundary|security)\.test\.mjs$/;
+const rendererRequired = parallel.filter((file) => RENDERER_REQUIRED.test(file));
+const defaultOffParallel = parallel.filter(
+  (file) => !RENDERER_REQUIRED.test(file),
+);
 
-function run(files, extraArgs) {
+function run(files, extraArgs, env = process.env) {
   if (!files.length) return;
   const result = spawnSync(
     process.execPath,
@@ -61,7 +68,7 @@ function run(files, extraArgs) {
       ...extraArgs,
       ...files,
     ],
-    { stdio: "inherit" },
+    { stdio: "inherit", env },
   );
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
@@ -70,5 +77,9 @@ console.log(
   `ci-node: running ${parallel.length} parallel + ${serial.length} serial test files; ${skipped.length} excluded:`,
 );
 for (const line of skipped) console.log(`  excluded: ${line}`);
-run(parallel, []);
+run(defaultOffParallel, []);
+run(rendererRequired, [], {
+  ...process.env,
+  AUTHORED_VNEXT_RENDERER_ENABLED: "true",
+});
 run(serial, ["--test-concurrency=1"]);

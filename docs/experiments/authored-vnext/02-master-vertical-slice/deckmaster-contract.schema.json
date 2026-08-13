@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ppt-agent:deck-master-contract:1.0",
+  "title": "DeckMasterContract + SlideSpec v2 vertical slice",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "deckMaster", "slides", "stressCorpus"],
+  "properties": {
+    "contractVersion": { "const": "deckmaster-contract/v1" },
+    "deckMaster": { "$ref": "#/$defs/deckMaster" },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/slideSpecV2" }
+    },
+    "stressCorpus": {
+      "type": "array",
+      "minItems": 10,
+      "items": { "$ref": "#/$defs/stressCase" }
+    }
+  },
+  "$defs": {
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locked", "modelWritable"],
+      "properties": {
+        "locked": { "type": "boolean" },
+        "modelWritable": { "type": "boolean" }
+      }
+    },
+    "fontManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "fallbacks", "windowsFallback", "themeScripts", "windowsResolved", "digest"],
+      "properties": {
+        "primary": { "type": "string", "minLength": 1 },
+        "fallbacks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "windowsFallback": { "type": "string", "minLength": 1 },
+        "themeScripts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["latin", "Hang", "Jpan", "Hans", "Hant"],
+          "properties": {
+            "latin": { "type": "string", "minLength": 1 },
+            "Hang": { "type": "string", "minLength": 1 },
+            "Jpan": { "type": "string", "minLength": 1 },
+            "Hans": { "type": "string", "minLength": 1 },
+            "Hant": { "type": "string", "minLength": 1 }
+          }
+        },
+        "windowsResolved": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "cloud", "embedded", "files"],
+          "properties": {
+            "state": { "const": "installed-system" },
+            "cloud": { "const": false },
+            "embedded": { "const": false },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["style", "path", "version", "sizeBytes", "sha256"],
+                "properties": {
+                  "style": { "enum": ["regular", "bold", "semilight"] },
+                  "path": { "type": "string", "minLength": 1 },
+                  "version": { "type": "string", "minLength": 1 },
+                  "sizeBytes": { "type": "integer", "minimum": 1 },
+                  "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                }
+              }
+            }
+          }
+        },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    },
+    "furniture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "bounds", "ownership"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^furniture:[a-z0-9._-]+$" },
+        "kind": { "enum": ["rect", "line", "text"] },
+        "text": { "type": "string" },
+        "bounds": { "$ref": "#/$defs/rect" },
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "ownership": { "$ref": "#/$defs/ownership" }
+      }
+    },
+    "placeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "index", "bounds", "ownership", "textStyle"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^placeholder:[a-z0-9._-]+$" },
+        "type": { "enum": ["title", "body", "content"] },
+        "index": { "type": "integer", "minimum": 0 },
+        "bounds": { "$ref": "#/$defs/rect" },
+        "ownership": { "$ref": "#/$defs/ownership" },
+        "textStyle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fontPt", "lineHeight", "maxLines", "marginsPx"],
+          "properties": {
+            "fontPt": { "type": "number", "minimum": 16 },
+            "lineHeight": { "type": "number", "minimum": 0.8, "maximum": 2 },
+            "maxLines": { "type": "integer", "minimum": 1, "maximum": 3 },
+            "marginsPx": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["top", "right", "bottom", "left"],
+              "properties": {
+                "top": { "type": "number", "minimum": 0 },
+                "right": { "type": "number", "minimum": 0 },
+                "bottom": { "type": "number", "minimum": 0 },
+                "left": { "type": "number", "minimum": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "kind", "placeholders"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^layout:[a-z0-9._-]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["standard", "long-title"] },
+        "placeholders": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/placeholder" }
+        }
+      }
+    },
+    "deckMaster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "slideSizePx", "theme", "fontManifest", "furniture", "layouts", "digest"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^master:[a-z0-9._-]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "slideSizePx": { "$ref": "#/$defs/rect" },
+        "theme": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "colors"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "colors": { "type": "object", "minProperties": 16, "additionalProperties": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" } }
+          }
+        },
+        "fontManifest": { "$ref": "#/$defs/fontManifest" },
+        "furniture": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/furniture" } },
+        "layouts": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/layout" } },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    },
+    "slideSpecV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "layoutId", "title", "body", "ownership", "digests"],
+      "properties": {
+        "schemaVersion": { "const": "slidespec/v2" },
+        "id": { "type": "string", "pattern": "^slide:[a-z0-9._-]+$" },
+        "layoutId": { "type": "string", "pattern": "^layout:[a-z0-9._-]+$" },
+        "title": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "lines", "lineBreakPolicy", "uax14Version", "tailoring", "kinsokuPolicy"],
+          "properties": {
+            "text": { "type": "string", "minLength": 1 },
+            "lines": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "string", "minLength": 1 } },
+            "lineBreakPolicy": { "const": "canonical-explicit-uax14-v1" },
+            "uax14Version": { "const": "17.0.0" },
+            "tailoring": { "const": "ko-space-first-with-id-fallback-v1" },
+            "kinsokuPolicy": { "const": "cjk-no-leading-closing-no-trailing-opening" }
+          }
+        },
+        "body": { "type": "string", "minLength": 1 },
+        "ownership": { "$ref": "#/$defs/ownership" },
+        "digests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["content", "spec"],
+          "properties": {
+            "content": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "spec": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        }
+      }
+    },
+    "stressCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "text", "expectedLines"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^stress:[a-z0-9._-]+$" },
+        "category": { "enum": ["ko", "en", "mixed", "numeric-parenthetical"] },
+        "text": { "type": "string", "minLength": 1 },
+        "expectedLines": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

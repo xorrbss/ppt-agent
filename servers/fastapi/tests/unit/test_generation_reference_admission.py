@@ -113,6 +113,8 @@ def test_legacy_files_are_immediately_replaced_by_snapshot_identity(
     request = GeneratePresentationRequest(
         content="legacy upload",
         files=["C:/temporary/upload.txt"],
+        strategy="authored",
+        template="authored",
     )
 
     asyncio.run(presentation_generate.check_if_api_request_is_valid(request, object()))

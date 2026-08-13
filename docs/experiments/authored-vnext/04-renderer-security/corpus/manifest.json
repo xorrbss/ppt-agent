@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "mode": "static-analysis-only",
+  "defaultExecutionAllowed": false,
+  "networkPolicy": {
+    "dns": "deny",
+    "http": "deny",
+    "loopback": "deny",
+    "metadata": "deny",
+    "allowedExternalTargets": [],
+    "documentationDnsSuffix": ".invalid",
+    "metadataToken": "__METADATA_ENDPOINT_DO_NOT_RESOLVE__"
+  },
+  "limits": {
+    "maxCaseBytes": 65536,
+    "maxCases": 32
+  },
+  "cases": [
+    {
+      "id": "safe-control",
+      "file": "cases/00-safe-control.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": false,
+      "expectedRuleIds": []
+    },
+    {
+      "id": "script-event",
+      "file": "cases/01-script-event.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["H001", "H002", "U006"]
+    },
+    {
+      "id": "css-import-url-font",
+      "file": "cases/02-css-import-url-font.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["C001", "C002", "C003", "U001", "U002", "U004"]
+    },
+    {
+      "id": "svg-active-content",
+      "file": "cases/03-svg-active-content.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["H001", "U001"]
+    },
+    {
+      "id": "iframe-object",
+      "file": "cases/04-iframe-object.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["H001", "U001", "U002", "U004"]
+    },
+    {
+      "id": "file-url",
+      "file": "cases/05-file-url.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["U001"]
+    },
+    {
+      "id": "metadata-shape",
+      "file": "cases/06-metadata-shape.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["U003"]
+    },
+    {
+      "id": "dns-http-invalid",
+      "file": "cases/07-dns-http-invalid.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["U004"]
+    },
+    {
+      "id": "path-traversal",
+      "file": "cases/08-path-traversal.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["P001"]
+    },
+    {
+      "id": "oversized-dom",
+      "file": "cases/09-oversized-dom.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["R002"]
+    },
+    {
+      "id": "oversized-image",
+      "file": "cases/10-oversized-image.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["R006", "R007"]
+    },
+    {
+      "id": "oversized-font-shape",
+      "file": "cases/11-oversized-font-shape.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["C002", "C003", "U008"]
+    },
+    {
+      "id": "crash-timeout-shape",
+      "file": "cases/12-crash-timeout-shape.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["H001", "X002"]
+    },
+    {
+      "id": "process-ipc-shape",
+      "file": "cases/13-process-ipc-shape.html",
+      "executionAllowed": false,
+      "hostStabilityRisk": true,
+      "expectedRuleIds": ["H001", "X001"]
+    }
+  ]
+}

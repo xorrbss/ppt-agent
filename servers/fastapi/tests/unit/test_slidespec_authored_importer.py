@@ -942,7 +942,10 @@ def test_roundtrip_accepts_size_preserving_child_reflow_under_resized_parent(
 def test_set_bounds_projects_through_authored_max_height(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    html = '<section data-qid="root" style="position:relative;max-height:260px">Body</section>'
+    html = (
+        '<section data-qid="root" '
+        'style="position:relative;top:0px;max-height:260px">Body</section>'
+    )
     metrics = {
         "width": 1280,
         "height": 720,
@@ -959,6 +962,7 @@ def test_set_bounds_projects_through_authored_max_height(
                 "text": "Body",
                 "computed_style": {
                     "position": "relative",
+                    "top": "0px",
                     "display": "block",
                     "maxHeight": "260px",
                     "paddingTop": "0px",

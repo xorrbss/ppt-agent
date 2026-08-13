@@ -42,6 +42,9 @@ import {
 import { installSafeConsole, safeError, safeLog, safeStderrWrite, safeWarn } from "./utils/safe-console";
 import { memorySnapshotMb } from "./utils/memory";
 import { createWindowSecurityController } from "./utils/window-security";
+import { getAppWebPreferences as buildSecureAppWebPreferences } from "./utils/authored-renderer-policy";
+import { buildProviderSecureEnv } from "./utils/provider-secure-env";
+import { buildProviderNonSecretStartupConfig } from "./utils/provider-startup-config";
 import {
   finishChromiumCacheRecovery,
   prepareChromiumCacheRecovery,
@@ -49,25 +52,13 @@ import {
 } from "./utils/chromium-cache-recovery";
 
 installSafeConsole();
+// Enforce Chromium's OS sandbox for every renderer, including windows that a
+// future code path might create without an explicit BrowserWindow preference.
+app.enableSandbox();
 
-// Linux Chromium requires chrome-sandbox to be root-owned mode 4755; unpacked
-// dist/linux-unpacked builds usually lack that. Disable sandbox only when invalid.
+// Chromium sandboxing is a launch requirement. Packaging/deployment must provide a
+// valid Linux sandbox instead of weakening every renderer when it is unavailable.
 if (process.platform === "linux") {
-  try {
-    const sandboxPath = path.join(path.dirname(process.execPath), "chrome-sandbox");
-    if (fs.existsSync(sandboxPath)) {
-      const st = fs.statSync(sandboxPath);
-      const hasSetuid = (st.mode & 0o4777) === 0o4755;
-      const rootOwned = st.uid === 0;
-      if (!(hasSetuid && rootOwned)) {
-        app.commandLine.appendSwitch("no-sandbox");
-      }
-    } else {
-      app.commandLine.appendSwitch("no-sandbox");
-    }
-  } catch {
-    app.commandLine.appendSwitch("no-sandbox");
-  }
   // Fall back to /tmp instead of shared memory to avoid Chromium crashes
   // on systems where /dev/shm is unavailable/misconfigured.
   app.commandLine.appendSwitch("disable-dev-shm-usage");
@@ -161,6 +152,9 @@ function resolveElectronDisableAuth(): string {
 }
 
 app.commandLine.appendSwitch('gtk-version', '3');
+// Electron authored previews are PNG-only. Keep site isolation explicit as a
+// defense-in-depth boundary for every untrusted or cross-origin application frame.
+app.commandLine.appendSwitch("site-per-process");
 
 // Work around Chromium/Electron GPU compositor issues that can cause
 // startup white screens on some Linux/driver combinations.
@@ -194,25 +188,15 @@ safeLog("[Presenton] Startup memory:", {
 });
 
 function getAppWebPreferences(): Electron.WebPreferences {
-  return {
-    webSecurity: false,
-    // Ensure a known preload path and explicit isolation settings so
-    // the `contextBridge` API is exposed reliably to renderer pages.
-    contextIsolation: true,
-    nodeIntegration: false,
-    sandbox: false,
-    preload: (() => {
-      const preloadPath = path.join(__dirname, "preloads/index.js");
-      try {
-        if (!fs.existsSync(preloadPath)) {
-          safeWarn(`[Presenton] Preload not found at ${preloadPath}`);
-        }
-      } catch (error) {
-        safeWarn("[Presenton] Failed to stat preload path", error);
-      }
-      return preloadPath;
-    })(),
-  };
+  const preloadPath = path.join(__dirname, "preloads/index.js");
+  try {
+    if (!fs.existsSync(preloadPath)) {
+      safeWarn(`[Presenton] Preload not found at ${preloadPath}`);
+    }
+  } catch (error) {
+    safeWarn("[Presenton] Failed to stat preload path", error);
+  }
+  return buildSecureAppWebPreferences(preloadPath);
 }
 
 function getPresentationWindowOptions(): BrowserWindowConstructorOptions {
@@ -288,42 +272,7 @@ async function startServers(fastApiPort: number, nextjsPort: number, userConfigR
       fastApiPort,
       {
         DEBUG: isDev ? "True" : "False",
-        CAN_CHANGE_KEYS: process.env.CAN_CHANGE_KEYS,
-        LLM: process.env.LLM,
-        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-        OPENAI_MODEL: process.env.OPENAI_MODEL,
-        GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
-        GOOGLE_MODEL: process.env.GOOGLE_MODEL,
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-        ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
-        OLLAMA_URL: process.env.OLLAMA_URL,
-        OLLAMA_MODEL: process.env.OLLAMA_MODEL,
-        CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL,
-        CUSTOM_LLM_API_KEY: process.env.CUSTOM_LLM_API_KEY,
-        CUSTOM_MODEL: process.env.CUSTOM_MODEL,
-        BEDROCK_REGION: process.env.BEDROCK_REGION,
-        BEDROCK_API_KEY: process.env.BEDROCK_API_KEY,
-        BEDROCK_AWS_ACCESS_KEY_ID: process.env.BEDROCK_AWS_ACCESS_KEY_ID,
-        BEDROCK_AWS_SECRET_ACCESS_KEY: process.env.BEDROCK_AWS_SECRET_ACCESS_KEY,
-        BEDROCK_AWS_SESSION_TOKEN: process.env.BEDROCK_AWS_SESSION_TOKEN,
-        BEDROCK_PROFILE_NAME: process.env.BEDROCK_PROFILE_NAME,
-        BEDROCK_MODEL: process.env.BEDROCK_MODEL,
-        FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY,
-        FIREWORKS_MODEL: process.env.FIREWORKS_MODEL,
-        FIREWORKS_BASE_URL: process.env.FIREWORKS_BASE_URL,
-        TOGETHER_API_KEY: process.env.TOGETHER_API_KEY,
-        TOGETHER_MODEL: process.env.TOGETHER_MODEL,
-        TOGETHER_BASE_URL: process.env.TOGETHER_BASE_URL,
-        LMSTUDIO_BASE_URL: process.env.LMSTUDIO_BASE_URL,
-        LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
-        LMSTUDIO_MODEL: process.env.LMSTUDIO_MODEL,
-        PEXELS_API_KEY: process.env.PEXELS_API_KEY,
-        PIXABAY_API_KEY: process.env.PIXABAY_API_KEY,
-        IMAGE_PROVIDER: process.env.IMAGE_PROVIDER,
-        DISABLE_IMAGE_GENERATION: process.env.DISABLE_IMAGE_GENERATION,
-        TOOL_CALLS: process.env.TOOL_CALLS,
-        DISABLE_THINKING: process.env.DISABLE_THINKING,
-        WEB_GROUNDING: process.env.WEB_GROUNDING,
+        ...buildProviderNonSecretStartupConfig(process.env),
         DATABASE_URL: process.env.DATABASE_URL,
         SLIDESPEC_IMPORT_SHADOW: process.env.SLIDESPEC_IMPORT_SHADOW,
         SLIDESPEC_REPAIR_SHADOW: process.env.SLIDESPEC_REPAIR_SHADOW,
@@ -332,13 +281,8 @@ async function startServers(fastApiPort: number, nextjsPort: number, userConfigR
         SLIDESPEC_REPAIR_ALL_SLIDES: process.env.SLIDESPEC_REPAIR_ALL_SLIDES,
         SLIDESPEC_KILL_SWITCH: process.env.SLIDESPEC_KILL_SWITCH,
         SLIDESPEC_REPAIR_ROLLOUT_SALT: process.env.SLIDESPEC_REPAIR_ROLLOUT_SALT,
-        DISABLE_ANONYMOUS_TRACKING: process.env.DISABLE_ANONYMOUS_TRACKING,
-        COMFYUI_URL: process.env.COMFYUI_URL,
-        COMFYUI_WORKFLOW: process.env.COMFYUI_WORKFLOW,
-        DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
-        GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
-        GPT_IMAGE_2_QUALITY: process.env.GPT_IMAGE_2_QUALITY,
         APP_DATA_DIRECTORY: appDataDir,
+        ...buildProviderSecureEnv(appDataDir),
         TEMP_DIRECTORY: tempDir,
         USER_CONFIG_PATH: userConfigPath, ...userConfigRuntimeEnv,
         MIGRATE_DATABASE_ON_STARTUP: "True",
@@ -501,51 +445,7 @@ app.whenReady().then(async () => {
   }
 
   try {
-    setUserConfig({
-      CAN_CHANGE_KEYS: process.env.CAN_CHANGE_KEYS,
-      LLM: process.env.LLM,
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-      OPENAI_MODEL: process.env.OPENAI_MODEL,
-      GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
-      GOOGLE_MODEL: process.env.GOOGLE_MODEL,
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-      ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
-      OLLAMA_URL: process.env.OLLAMA_URL,
-      OLLAMA_MODEL: process.env.OLLAMA_MODEL,
-      CUSTOM_LLM_URL: process.env.CUSTOM_LLM_URL,
-      CUSTOM_LLM_API_KEY: process.env.CUSTOM_LLM_API_KEY,
-      CUSTOM_MODEL: process.env.CUSTOM_MODEL,
-      BEDROCK_REGION: process.env.BEDROCK_REGION,
-      BEDROCK_API_KEY: process.env.BEDROCK_API_KEY,
-      BEDROCK_AWS_ACCESS_KEY_ID: process.env.BEDROCK_AWS_ACCESS_KEY_ID,
-      BEDROCK_AWS_SECRET_ACCESS_KEY: process.env.BEDROCK_AWS_SECRET_ACCESS_KEY,
-      BEDROCK_AWS_SESSION_TOKEN: process.env.BEDROCK_AWS_SESSION_TOKEN,
-      BEDROCK_PROFILE_NAME: process.env.BEDROCK_PROFILE_NAME,
-      BEDROCK_MODEL: process.env.BEDROCK_MODEL,
-      FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY,
-      FIREWORKS_MODEL: process.env.FIREWORKS_MODEL,
-      FIREWORKS_BASE_URL: process.env.FIREWORKS_BASE_URL,
-      TOGETHER_API_KEY: process.env.TOGETHER_API_KEY,
-      TOGETHER_MODEL: process.env.TOGETHER_MODEL,
-      TOGETHER_BASE_URL: process.env.TOGETHER_BASE_URL,
-      LMSTUDIO_BASE_URL: process.env.LMSTUDIO_BASE_URL,
-      LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
-      LMSTUDIO_MODEL: process.env.LMSTUDIO_MODEL,
-      PEXELS_API_KEY: process.env.PEXELS_API_KEY,
-      PIXABAY_API_KEY: process.env.PIXABAY_API_KEY,
-      IMAGE_PROVIDER: process.env.IMAGE_PROVIDER,
-      DISABLE_IMAGE_GENERATION: process.env.DISABLE_IMAGE_GENERATION,
-      TOOL_CALLS: process.env.TOOL_CALLS,
-      DISABLE_THINKING: process.env.DISABLE_THINKING,
-      WEB_GROUNDING: process.env.WEB_GROUNDING,
-      DATABASE_URL: process.env.DATABASE_URL,
-      DISABLE_ANONYMOUS_TRACKING: process.env.DISABLE_ANONYMOUS_TRACKING,
-      COMFYUI_URL: process.env.COMFYUI_URL,
-      COMFYUI_WORKFLOW: process.env.COMFYUI_WORKFLOW,
-      DALL_E_3_QUALITY: process.env.DALL_E_3_QUALITY,
-      GPT_IMAGE_1_5_QUALITY: process.env.GPT_IMAGE_1_5_QUALITY,
-      GPT_IMAGE_2_QUALITY: process.env.GPT_IMAGE_2_QUALITY,
-    })
+    setUserConfig(buildProviderNonSecretStartupConfig(process.env))
   } catch (error) {
     safeWarn("[Presenton] Failed to persist startup user config", error);
   }
@@ -556,7 +456,10 @@ app.whenReady().then(async () => {
 
   //? Setup environment variables to be used in the preloads
   setupEnv(fastApiPort, nextjsPort);
-  const userConfigRuntimeEnv = setupUserConfigRuntime(fastApiPort);
+  const userConfigRuntimeEnv = setupUserConfigRuntime(
+    fastApiPort,
+    () => trustedAppOrigin,
+  );
 
   await startServers(fastApiPort, nextjsPort, userConfigRuntimeEnv);
   if (isStopping) {

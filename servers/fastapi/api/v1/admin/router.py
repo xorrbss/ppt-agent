@@ -1,8 +1,12 @@
+import asyncio
 import logging
+import os
+from pathlib import Path
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from pydantic import BaseModel, SecretStr
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,12 +23,21 @@ from api.v1.auth.users import (
 )
 from models.sql.key_value import KeyValueSqlModel
 from models.sql.user import User
+from models.sql.provider_credential_reference import ProviderCredentialReference
 from services.account_deletion_service import (
     AccountNotFoundError,
     ProtectedAccountError,
     delete_account_restricted_dependents,
+    cancel_authored_vnext_exports_for_account,
     lock_account_deletion_marker,
     mark_account_deleting,
+)
+from services.authored_vnext.generation.account_lifecycle import (
+    cancel_authored_vnext_generation_operations_for_account,
+)
+from services.authored_vnext.master.assets import quarantine_owner_master_assets
+from services.authored_vnext.ooxml.account_lifecycle import (
+    fence_authored_vnext_ooxml_packages_for_account,
 )
 from services.database import get_async_session
 from services.provider_settings import (
@@ -36,6 +49,25 @@ from services.provider_settings import (
     redact_provider_settings,
     save_provider_settings_record,
 )
+from services.provider_egress_policy import (
+    EgressCategory,
+    EgressPolicyError,
+    validate_configured_provider_endpoint,
+)
+from services.provider_credential_reference_service import (
+    revoke_provider_credential,
+    revoke_account_provider_credentials,
+    rotate_provider_credential,
+)
+from services.provider_credential_vault import (
+    CredentialScope,
+    CredentialVaultError,
+    provider_credential_vault_from_environment,
+)
+from services.provider_secure_runtime import (
+    resolve_provider_secret,
+    setting_credential_id,
+)
 from utils.available_models import list_available_openai_compatible_models
 from services.workspace_cleanup_journal_service import (
     account_cleanup_tombstone_exists,
@@ -43,6 +75,7 @@ from services.workspace_cleanup_journal_service import (
     snapshot_account_workspace_cleanup_targets,
 )
 from utils.get_env import (
+    get_app_data_directory_env,
     get_can_change_keys_env,
     is_disable_auth_enabled,
 )
@@ -50,6 +83,10 @@ from utils.user_config import refresh_process_runtime_settings
 
 API_V1_ADMIN_ROUTER = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 logger = logging.getLogger(__name__)
+
+
+class ProviderCredentialWrite(BaseModel):
+    secret: SecretStr
 
 
 async def require_settings_admin(
@@ -106,6 +143,78 @@ async def update_provider_settings(
         return redact_provider_settings(committed.config)
 
 
+@API_V1_ADMIN_ROUTER.get("/provider-credentials")
+async def list_provider_credentials(
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict[str, object]:
+    rows = list(
+        (
+            await session.scalars(
+                select(ProviderCredentialReference).where(
+                    ProviderCredentialReference.user_id == admin.id
+                )
+            )
+        ).all()
+    )
+    return {
+        "providers": [
+            {"provider": row.provider, "backend": row.backend, "configured": True}
+            for row in sorted(rows, key=lambda item: item.provider)
+        ]
+    }
+
+
+@API_V1_ADMIN_ROUTER.put("/provider-credentials/{provider}")
+async def put_provider_credential(
+    provider: str,
+    body: ProviderCredentialWrite,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_async_session),
+) -> dict[str, object]:
+    scope = CredentialScope(
+        os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"), admin.id
+    )
+    try:
+        vault = provider_credential_vault_from_environment()
+        reference = await rotate_provider_credential(
+            session,
+            vault=vault,
+            scope=scope,
+            provider=provider,
+            secret=body.secret.get_secret_value(),
+        )
+    except CredentialVaultError as error:
+        await session.rollback()
+        raise HTTPException(status_code=503, detail=error.code) from error
+    return {
+        "provider": provider,
+        "backend": reference.backend,
+        "configured": True,
+    }
+
+
+@API_V1_ADMIN_ROUTER.delete("/provider-credentials/{provider}", status_code=204)
+async def delete_provider_credential(
+    provider: str,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_async_session),
+) -> None:
+    scope = CredentialScope(
+        os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"), admin.id
+    )
+    try:
+        vault = provider_credential_vault_from_environment()
+        removed = await revoke_provider_credential(
+            session, vault=vault, scope=scope, provider=provider
+        )
+    except CredentialVaultError as error:
+        await session.rollback()
+        raise HTTPException(status_code=503, detail=error.code) from error
+    if not removed:
+        raise HTTPException(status_code=404, detail="provider_credential_not_found")
+
+
 @API_V1_ADMIN_ROUTER.post("/provider-settings/custom-model-available")
 async def check_stored_custom_model_available(
     _: None = Depends(require_settings_admin),
@@ -114,14 +223,14 @@ async def check_stored_custom_model_available(
     """Validate the selected custom model without exposing its stored secret."""
     config = await get_provider_settings(session)
     url = config.get("CUSTOM_LLM_URL")
-    api_key = config.get("CUSTOM_LLM_API_KEY", "")
+    configured_api_key = config.get("CUSTOM_LLM_API_KEY", "")
     model = config.get("CUSTOM_MODEL")
 
     if (
         not isinstance(url, str)
         or not url
-        or not isinstance(api_key, str)
-        or api_key == REDACTED_SECRET_PLACEHOLDER
+        or not isinstance(configured_api_key, str)
+        or configured_api_key == REDACTED_SECRET_PLACEHOLDER
         or not isinstance(model, str)
         or not model
     ):
@@ -131,7 +240,23 @@ async def check_stored_custom_model_available(
         )
 
     try:
-        models = await list_available_openai_compatible_models(url, api_key)
+        api_key = resolve_provider_secret(
+            setting_credential_id("CUSTOM_LLM_API_KEY"),
+            configured_api_key,
+        )
+        if not api_key:
+            raise CredentialVaultError("credential_reference_required")
+        endpoint = validate_configured_provider_endpoint(
+            url,
+            category=EgressCategory.PROVIDER,
+            service_id="custom-llm",
+            allowlist_env="PROVIDER_CUSTOM_EGRESS_ALLOWLIST",
+        )
+        models = await list_available_openai_compatible_models(
+            endpoint.url, api_key
+        )
+    except (CredentialVaultError, EgressPolicyError) as error:
+        raise HTTPException(status_code=400, detail=error.code) from error
     except Exception:
         # Upstream errors can contain request details. Keep credentials and the
         # private endpoint out of both the API response and application logs.
@@ -252,6 +377,33 @@ async def delete_user(
         await snapshot_account_workspace_cleanup_targets(session, owner_id=user.id)
         await session.flush()
         await snapshot_account_workspace_cleanup_targets(session, owner_id=user.id)
+        await cancel_authored_vnext_generation_operations_for_account(
+            session, owner_id=user.id
+        )
+        await cancel_authored_vnext_exports_for_account(session, owner_id=user.id)
+        app_data_directory = (get_app_data_directory_env() or "").strip()
+        if app_data_directory:
+            await asyncio.to_thread(
+                quarantine_owner_master_assets,
+                Path(app_data_directory),
+                owner_id=str(user.id),
+                expected_generation=marker.generation,
+            )
+            await asyncio.to_thread(
+                fence_authored_vnext_ooxml_packages_for_account,
+                Path(app_data_directory),
+                owner_id=str(user.id),
+                expected_generation=marker.generation,
+            )
+        elif any(
+            os.getenv(flag, "false").lower() in {"1", "true", "yes", "on"}
+            for flag in (
+                "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
+                "AUTHORED_VNEXT_MASTER_ENABLED",
+            )
+        ):
+            raise RuntimeError("authored_vnext_ooxml_storage_unavailable")
+        await revoke_account_provider_credentials(session, owner_id=user.id)
         await delete_account_restricted_dependents(session, owner_id=user.id)
         await session.execute(
             delete(KeyValueSqlModel).where(

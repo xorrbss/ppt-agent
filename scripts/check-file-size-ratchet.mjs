@@ -66,6 +66,12 @@ function isExcluded(relativePath) {
   if (relativePath.startsWith("servers/fastapi/alembic/versions/")) {
     return true;
   }
+  // Executable experiment harnesses are retained as research evidence under
+  // docs, not imported into a product runtime. Production source remains
+  // covered by the 500-line gate.
+  if (relativePath.startsWith("docs/experiments/")) {
+    return true;
+  }
   return (
     /\.(?:test|spec|cy)\.[^.]+$/u.test(relativePath) ||
     relativePath.includes(".generated.") ||

@@ -6,7 +6,7 @@ import {
 } from "./contract.ts";
 import {
   type AuthoredHybridChromeOptions,
-  runAuthoredHybridChrome,
+  runTrustedSelfContainedAuthoredHybridChrome,
 } from "./chrome-runner.ts";
 import {
   instrumentAuthoredHtml,
@@ -24,6 +24,8 @@ import {
   AUTHORED_SLIDE_WIDTH_PX,
 } from "./schema.ts";
 import sharp from "sharp";
+import { preflightTrustedSelfContainedAuthoredHtml } from "./security.ts";
+import { authoredRendererIsolationPolicy } from "./renderer-isolation.ts";
 
 export interface AuthoredHybridExtractionOptions
   extends AuthoredHybridChromeOptions {
@@ -51,7 +53,7 @@ async function captureWithFixedViewport(
   };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const capture = await runAuthoredHybridChrome({
+    const capture = await runTrustedSelfContainedAuthoredHybridChrome({
       html: instrumentedHtml,
       dumpDom: true,
       screenshot,
@@ -90,7 +92,16 @@ export async function extractAuthoredSlideDom(
   html: string,
   options: AuthoredHybridExtractionOptions = {}
 ): Promise<AuthoredHybridSlideV1> {
+  const preflight = preflightTrustedSelfContainedAuthoredHtml(html);
+  if (!preflight.ok) {
+    throw new Error(`Authored renderer preflight rejected HTML: ${preflight.reason ?? "unknown"}.`);
+  }
   const baseUrl = normalizeAuthoredHybridBaseUrl(options.baseUrl);
+  if (baseUrl && !authoredRendererIsolationPolicy().legacyFileFallbackEnabled) {
+    throw new Error(
+      "Authored renderer baseUrl values are disabled; assets must be embedded data URLs."
+    );
+  }
   const domCompletionToken = randomUUID();
   const instrumented = instrumentAuthoredHtml(html, {
     baseUrl,
@@ -253,6 +264,10 @@ export async function renderAuthoredBackplate(
   promotedElementIds: readonly string[],
   options: AuthoredHybridExtractionOptions = {}
 ): Promise<AuthoredHybridBackplateRenderResult> {
+  const preflight = preflightTrustedSelfContainedAuthoredHtml(html);
+  if (!preflight.ok) {
+    throw new Error(`Authored renderer preflight rejected HTML: ${preflight.reason ?? "unknown"}.`);
+  }
   assertAuthoredHybridSlide(slide);
   if (authoredHtmlSha256(html) !== slide.source.htmlSha256) {
     throw new Error(
@@ -260,6 +275,11 @@ export async function renderAuthoredBackplate(
     );
   }
   const baseUrl = normalizeAuthoredHybridBaseUrl(options.baseUrl);
+  if (baseUrl && !authoredRendererIsolationPolicy().legacyFileFallbackEnabled) {
+    throw new Error(
+      "Authored renderer baseUrl values are disabled; assets must be embedded data URLs."
+    );
+  }
   if ((baseUrl ?? null) !== slide.source.baseUrl) {
     throw new Error(
       "Authored hybrid backplate baseUrl does not match the analysed source context."

@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "ExplicitTitle": {
+      "additionalProperties": false,
+      "properties": {
+        "kinsokuPolicy": {
+          "const": "cjk-no-leading-closing-no-trailing-opening",
+          "default": "cjk-no-leading-closing-no-trailing-opening",
+          "title": "Kinsokupolicy",
+          "type": "string"
+        },
+        "lineBreakPolicy": {
+          "const": "canonical-explicit-uax14-v1",
+          "default": "canonical-explicit-uax14-v1",
+          "title": "Linebreakpolicy",
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Lines",
+          "type": "array"
+        },
+        "tailoring": {
+          "const": "ko-space-first-with-id-fallback-v1",
+          "default": "ko-space-first-with-id-fallback-v1",
+          "title": "Tailoring",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "uax14Version": {
+          "const": "17.0.0",
+          "default": "17.0.0",
+          "title": "Uax14Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "lines"
+      ],
+      "title": "ExplicitTitle",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:slide-draft:v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "body": {
+      "maxLength": 50000,
+      "minLength": 1,
+      "title": "Body",
+      "type": "string"
+    },
+    "layoutId": {
+      "pattern": "^layout:[a-z0-9][a-z0-9._-]*$",
+      "title": "Layoutid",
+      "type": "string"
+    },
+    "slideId": {
+      "pattern": "^slide:[a-z0-9][a-z0-9._-]*$",
+      "title": "Slideid",
+      "type": "string"
+    },
+    "title": {
+      "$ref": "#/$defs/ExplicitTitle"
+    }
+  },
+  "required": [
+    "slideId",
+    "layoutId",
+    "title",
+    "body"
+  ],
+  "title": "SlideDraft",
+  "type": "object",
+  "x-pydantic-strict": true
+}

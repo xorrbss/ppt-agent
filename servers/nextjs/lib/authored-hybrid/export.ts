@@ -55,6 +55,7 @@ import {
   type PresentationExportQualityReport,
   type PresentationExportSlideQuality,
 } from "../presentation-export-quality.ts";
+import { fallbackElementForContractElement, imageFallbackSlide, noFontRenderingTelemetry } from "./export-slide-quality.ts";
 
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 const MAX_HYBRID_SLIDES = 100;
@@ -123,55 +124,6 @@ interface PreparedSlideOutcome {
   fontRendering: {
     browserFontFilesCollected: number;
     browserCollectionFailures: number;
-  };
-}
-
-function imageFallbackSlide(
-  slideNumber: number,
-  reason: string
-): PresentationExportSlideQuality {
-  return {
-    slideNumber,
-    editable: false,
-    imageFallback: true,
-    nativeTextElements: 0,
-    nativeShapeElements: 0,
-    nativeGroupElements: 0,
-    nativeImageElements: 0,
-    rasterFallbackElements: 1,
-    fallbackReasons: [reason],
-    fallbackElements: [
-      {
-        elementId: `slide:${slideNumber}`,
-        candidateKind: "slide",
-        reasons: [reason],
-      },
-    ],
-  };
-}
-
-function noFontRenderingTelemetry(): PreparedSlideOutcome["fontRendering"] {
-  return {
-    browserFontFilesCollected: 0,
-    browserCollectionFailures: 0,
-  };
-}
-
-function fallbackElementForContractElement(
-  element: Awaited<ReturnType<typeof extractAuthoredSlideDom>>["elements"][number]
-): PresentationExportFallbackElement {
-  const candidateKind =
-    element.classification.mode === "native"
-      ? element.classification.kind
-      : element.classification.candidateKind;
-  return {
-    elementId: element.id,
-    domPath: element.domPath,
-    candidateKind,
-    reasons:
-      element.classification.mode === "raster"
-        ? element.classification.reasons
-        : ["native-preparation-or-layer-safety-rejected"],
   };
 }
 

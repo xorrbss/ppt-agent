@@ -1,9 +1,16 @@
 import React from "react";
 import { mount } from "cypress/react";
 
-import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
+import {
+  AuthoredSlidePreview,
+  isolateAuthoredPreviewHtml,
+} from "./AuthoredSlidePreview";
 
 describe("AuthoredSlidePreview", () => {
+  beforeEach(() => {
+    delete (window as typeof window & { electron?: unknown }).electron;
+  });
+
   it("uses persisted HTML for the main canvas without executing authored scripts", () => {
     const html = `<!doctype html><html><body><div>실행·운영 요구 묶음</div><script>window.parent.__authoredScriptRan = true</script></body></html>`;
 
@@ -17,7 +24,7 @@ describe("AuthoredSlidePreview", () => {
     );
 
     cy.get('[data-testid="authored-html-preview-2"]')
-      .should("have.attr", "srcdoc", html)
+      .should("have.attr", "srcdoc", isolateAuthoredPreviewHtml(html))
       .and("have.attr", "sandbox", "")
       .and("have.attr", "loading", "lazy")
       .and("have.class", "h-full")
@@ -60,7 +67,7 @@ describe("AuthoredSlidePreview", () => {
     });
 
     cy.get('[data-testid="authored-html-preview-89"]')
-      .should("have.attr", "srcdoc", html)
+      .should("have.attr", "srcdoc", isolateAuthoredPreviewHtml(html))
       .then(([frame]) => {
         originalFrame = frame as HTMLIFrameElement;
       });
@@ -79,7 +86,7 @@ describe("AuthoredSlidePreview", () => {
     cy.get('[data-testid="authored-slide-preview-89"]')
       .should("have.class", "aspect-video");
     cy.get('[data-testid="authored-html-preview-89"]')
-      .should("have.attr", "srcdoc", html)
+      .should("have.attr", "srcdoc", isolateAuthoredPreviewHtml(html))
       .and("have.class", "h-full")
       .and("have.class", "w-full")
       .then(([frame]) => {
@@ -118,7 +125,7 @@ describe("AuthoredSlidePreview", () => {
     });
 
     cy.get('[data-testid="authored-html-preview-4"]')
-      .should("have.attr", "srcdoc", afterHtml);
+      .should("have.attr", "srcdoc", isolateAuthoredPreviewHtml(afterHtml));
     cy.get('img[src="/cached-after.png"]').should("not.exist");
   });
 
@@ -134,5 +141,22 @@ describe("AuthoredSlidePreview", () => {
 
     cy.get('img[src="/cached-slide.png"]').should("exist");
     cy.get("iframe").should("not.exist");
+  });
+
+  it("never constructs raw authored DOM in Electron and uses the isolated PNG", () => {
+    (window as typeof window & { electron?: unknown }).electron = {};
+    mount(
+      <AuthoredSlidePreview
+        slideIndex={7}
+        html={'<script>window.electron.readFile("C:/canary")</script>'}
+        imageSrc="/isolated-worker.png"
+        preferHtml
+      />
+    );
+
+    cy.get('[data-testid="authored-slide-preview-7"]')
+      .should("have.attr", "data-authored-runtime", "electron");
+    cy.get("iframe").should("not.exist");
+    cy.get('img[src="/isolated-worker.png"]').should("exist");
   });
 });

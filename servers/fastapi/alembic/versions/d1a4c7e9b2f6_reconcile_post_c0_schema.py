@@ -167,6 +167,8 @@ def _validate_receipt_columns(
 
 
 def _validate_receipt_rows(connection) -> None:
+    quote = connection.dialect.identifier_preparer.quote_identifier
+    receipt_table = quote(RECEIPTS)
     required = (
         "id",
         "owner_scope",
@@ -178,28 +180,29 @@ def _validate_receipt_rows(connection) -> None:
         "created_at",
         "updated_at",
     )
-    null_predicate = " OR ".join(f"{name} IS NULL" for name in required)
+    null_predicate = " OR ".join(f"{quote(name)} IS NULL" for name in required)
     if connection.execute(
-        sa.text(f"SELECT 1 FROM {RECEIPTS} WHERE {null_predicate} LIMIT 1")
+        sa.text(f"SELECT 1 FROM {receipt_table} WHERE {null_predicate} LIMIT 1")
     ).first():
         raise RuntimeError("Asset Gateway idempotency rows contain required NULLs")
     if connection.execute(
         sa.text(
-            f"SELECT 1 FROM {RECEIPTS} "
-            "WHERE state NOT IN ('pending', 'complete') LIMIT 1"
+            f"SELECT 1 FROM {receipt_table} "
+            f"WHERE {quote('state')} NOT IN ('pending', 'complete') LIMIT 1"
         )
     ).first():
         raise RuntimeError("Asset Gateway idempotency rows contain an invalid state")
     if connection.execute(
         sa.text(
-            f"SELECT 1 FROM {RECEIPTS} GROUP BY id "
+            f"SELECT 1 FROM {receipt_table} GROUP BY {quote('id')} "
             "HAVING COUNT(*) > 1 LIMIT 1"
         )
     ).first():
         raise RuntimeError("Asset Gateway idempotency rows contain duplicate identities")
     if connection.execute(
         sa.text(
-            f"SELECT 1 FROM {RECEIPTS} GROUP BY owner_scope, operation, key_hash "
+            f"SELECT 1 FROM {receipt_table} GROUP BY "
+            f"{quote('owner_scope')}, {quote('operation')}, {quote('key_hash')} "
             "HAVING COUNT(*) > 1 LIMIT 1"
         )
     ).first():
@@ -209,11 +212,16 @@ def _validate_receipt_rows(connection) -> None:
         ("asset_id", "workspace_assets"),
         ("snapshot_id", "reference_snapshots"),
     ):
+        local_column = quote(local)
+        target_table = quote(target)
+        target_id = quote("id")
         orphan = connection.execute(
             sa.text(
-                f"SELECT receipts.{local} FROM {RECEIPTS} AS receipts "
-                f"LEFT JOIN {target} AS target ON target.id = receipts.{local} "
-                f"WHERE receipts.{local} IS NOT NULL AND target.id IS NULL LIMIT 1"
+                f"SELECT receipts.{local_column} FROM {receipt_table} AS receipts "
+                f"LEFT JOIN {target_table} AS target "
+                f"ON target.{target_id} = receipts.{local_column} "
+                f"WHERE receipts.{local_column} IS NOT NULL "
+                f"AND target.{target_id} IS NULL LIMIT 1"
             )
         ).first()
         if orphan is not None:
@@ -249,11 +257,21 @@ def _receipt_contract_state(inspector) -> dict[str, set[str]]:
         raise RuntimeError("Asset Gateway idempotency uniqueness is incompatible")
 
     check_state: set[str] = set()
-    expected_check_sql = _normalized_sql("state IN ('pending', 'complete')")
+    expected_check_sql = {
+        _normalized_sql("state IN ('pending', 'complete')"),
+        # PostgreSQL rewrites ``IN`` to this semantically equivalent ``ANY``
+        # expression when SQLAlchemy reflects the frozen c0 constraint.  Keep
+        # the accepted forms migration-local instead of consulting live ORM
+        # metadata, which can drift independently of migration history.
+        _normalized_sql(
+            "state::text = ANY (ARRAY['pending'::character varying, "
+            "'complete'::character varying]::text[])"
+        ),
+    }
     for constraint in inspector.get_check_constraints(RECEIPTS):
         name = str(constraint.get("name") or "")
         sqltext = _normalized_sql(constraint.get("sqltext"))
-        if name == "ck_asset_gateway_receipts_state" and sqltext == expected_check_sql:
+        if name == "ck_asset_gateway_receipts_state" and sqltext in expected_check_sql:
             check_state.add(name)
             continue
         raise RuntimeError("Asset Gateway idempotency state check is incompatible")

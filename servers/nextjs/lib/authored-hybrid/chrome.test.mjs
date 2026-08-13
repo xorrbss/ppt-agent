@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
@@ -270,14 +269,7 @@ test("Chrome extracts direct labels beside nested flex children", async (t) => {
   assert.ok(number, "the nested number remains independently editable");
 });
 
-test("Chrome backplate capture is not blocked by a pending image decode", async (t) => {
-  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
-  if (!chromeExecutable) {
-    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
-    t.skip("Chrome/Chromium is unavailable");
-    return;
-  }
-
+test("authored scripts cannot replace image decode at the product boundary", async () => {
   const html = `<!doctype html><html><head><style>
     html,body{width:1280px;height:720px;margin:0;overflow:hidden;background:transparent}
     img{position:absolute;left:40px;top:40px;width:120px;height:80px}
@@ -285,47 +277,23 @@ test("Chrome backplate capture is not blocked by a pending image decode", async 
     <img alt="pending decode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4oKDwHwAFZAIwtYA8zQAAAABJRU5ErkJggg==">
     <script>HTMLImageElement.prototype.decode=function(){return new Promise(function(){})}</script>
   </body></html>`;
-  const options = { chromeExecutable, timeoutMs: 30_000 };
-  const slide = await extractAuthoredSlideDom(html, options);
-  const image = slide.elements.find(
-    (element) => "image" in element && element.image.alt === "pending decode"
+  await assert.rejects(
+    extractAuthoredSlideDom(html),
+    /preflight rejected HTML: active-or-external-html/
   );
-  assert.ok(image);
-  assert.equal(image.classification.mode, "native");
-
-  const result = await renderAuthoredBackplate(html, slide, [image.id], options);
-  assert.deepEqual(result.appliedPromotedElementIds, [image.id]);
-  assert.deepEqual(result.fallbackElementIds, []);
-  assert.deepEqual(await rgbaAt(result.backplatePng, 100, 80), [0, 0, 0, 0]);
 });
 
-test("Chrome rejects changed element identity without failing the whole backplate", async (t) => {
-  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
-  if (!chromeExecutable) {
-    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
-    t.skip("Chrome/Chromium is unavailable");
-    return;
-  }
-
+test("authored scripts cannot mutate element identity at the product boundary", async () => {
   const html = `<!doctype html><html><head><style>
     html,body{width:1280px;height:720px;margin:0;overflow:hidden}
     p{position:absolute;left:80px;top:80px;font:32px/40px Arial;color:rgb(20,30,40)}
   </style></head><body><p data-ppt-role="body"></p><script>
     document.querySelector("p").textContent = location.pathname;
   </script></body></html>`;
-  const options = { chromeExecutable, timeoutMs: 30_000 };
-  const slide = await extractAuthoredSlideDom(html, options);
-  const text = slide.elements.find(
-    (element) =>
-      element.classification.mode === "native" &&
-      element.classification.kind === "text"
+  await assert.rejects(
+    extractAuthoredSlideDom(html),
+    /preflight rejected HTML: active-or-external-html/
   );
-  assert.ok(text);
-
-  const result = await renderAuthoredBackplate(html, slide, [text.id], options);
-  assert.deepEqual(result.appliedPromotedElementIds, []);
-  assert.deepEqual(result.fallbackElementIds, [text.id]);
-  assert.equal((await sharp(result.backplatePng).metadata()).width, 1280);
 });
 
 test("Chrome fails closed for SVG occlusion, wide-gamut color, and ambiguous stacking", async (t) => {
@@ -693,40 +661,15 @@ test("Chrome closes pseudo, external-paint, radius, and rotated-geometry regress
   assert.equal(rotatedImage.image.crop.bottom, 0.316667);
 });
 
-test("backplate capture rejects style-only identity drift", async (t) => {
-  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
-  if (!chromeExecutable) {
-    if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
-    t.skip("Chrome/Chromium is unavailable");
-    return;
-  }
-
-  const stylesheetDirectory = await fs.mkdtemp(
-    path.join(os.tmpdir(), "authored-hybrid-style-")
-  );
-  t.after(() => fs.rm(stylesheetDirectory, { recursive: true, force: true }));
-  const stylesheetPath = path.join(stylesheetDirectory, "style.css");
-  await fs.writeFile(stylesheetPath, "p{color:rgb(255,0,0)}", "utf8");
-  const baseUrl = pathToFileURL(`${stylesheetDirectory}${path.sep}`).href;
+test("external stylesheets cannot enter backplate capture", async () => {
   const html = `<!doctype html><html><head>
     <link rel="stylesheet" href="style.css">
     <style>html,body{width:1280px;height:720px;margin:0;overflow:hidden}p{position:absolute;left:80px;top:80px;margin:0;font:32px/40px Arial}</style>
   </head><body><p data-ppt-role="body">stable text</p></body></html>`;
-  const options = { chromeExecutable, timeoutMs: 30_000, baseUrl };
-  const slide = await extractAuthoredSlideDom(html, options);
-  const text = textElement(slide, "stable text");
-  assert.ok(text);
-  assert.equal(text.text.style.color.hex, "FF0000");
-
-  await fs.writeFile(stylesheetPath, "p{color:rgb(0,0,255)}", "utf8");
-  const result = await renderAuthoredBackplate(
-    html,
-    slide,
-    [text.id],
-    options
+  await assert.rejects(
+    extractAuthoredSlideDom(html),
+    /preflight rejected HTML: active-or-external-html/
   );
-  assert.deepEqual(result.appliedPromotedElementIds, []);
-  assert.deepEqual(result.fallbackElementIds, [text.id]);
 });
 
 test("vertical text anchor honors flex-direction", async (t) => {

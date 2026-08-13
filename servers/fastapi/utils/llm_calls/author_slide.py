@@ -12,18 +12,33 @@ import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Optional, Protocol, Sequence
 from weakref import WeakKeyDictionary
+
+from utils.llm_calls.author_slide_admission import (
+    AuthorRateState as _AuthorRateState,
+    AuthorRateStates,
+    rate_state,
+    register_rate_limit,
+    retry_after_seconds,
+    wait_for_rate_slot,
+)
+from utils.llm_calls import author_slide_prompt
 
 from llmai import get_client
 from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
 
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.llm_client_error_handler import handle_llm_client_exceptions
-from utils.llm_config import get_llm_config
-from utils.llm_provider import get_model, is_codex_selected
+from utils.llm_config import enforce_llm_egress_policy, get_llm_config
+from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
+from services.provider_usage_instrumentation import (
+    ProviderCallTimer,
+    provider_call_admission,
+    record_provider_call,
+)
 from utils.llm_utils import extract_text, get_generate_kwargs
 
 logger = logging.getLogger(__name__)
@@ -81,86 +96,28 @@ AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS = _env_nonnegative_float(
 )
 
 
-@dataclass
-class _AuthorRateState:
-    lock: asyncio.Lock
-    next_allowed: float = 0.0
-
-
-_AUTHOR_RATE_STATES: WeakKeyDictionary[
-    asyncio.AbstractEventLoop, _AuthorRateState
-] = WeakKeyDictionary()
+_AUTHOR_RATE_STATES: AuthorRateStates = WeakKeyDictionary()
 
 
 def _author_rate_state() -> _AuthorRateState:
-    loop = asyncio.get_running_loop()
-    state = _AUTHOR_RATE_STATES.get(loop)
-    if state is None:
-        state = _AuthorRateState(lock=asyncio.Lock())
-        _AUTHOR_RATE_STATES[loop] = state
-    return state
+    return rate_state(_AUTHOR_RATE_STATES)
 
 
 async def _wait_for_author_rate_slot() -> None:
-    """Space provider call starts and honor a process-wide 429 cooldown."""
-    state = _author_rate_state()
-    interval = (
-        60.0 / AUTHOR_REQUESTS_PER_MINUTE
-        if AUTHOR_REQUESTS_PER_MINUTE > 0
-        else 0.0
-    )
-    async with state.lock:
-        loop = asyncio.get_running_loop()
-        now = loop.time()
-        delay = max(0.0, state.next_allowed - now)
-        if delay:
-            await asyncio.sleep(delay)
-            now = max(loop.time(), state.next_allowed)
-        state.next_allowed = max(now, state.next_allowed) + interval
+    await wait_for_rate_slot(_AUTHOR_RATE_STATES, AUTHOR_REQUESTS_PER_MINUTE)
 
 
 def _retry_after_seconds(error: BaseException) -> float | None:
-    headers = getattr(error, "headers", None)
-    response = getattr(error, "response", None)
-    if headers is None and response is not None:
-        headers = getattr(response, "headers", None)
-    if headers is not None:
-        try:
-            raw = headers.get("retry-after") or headers.get("Retry-After")
-            if raw is not None:
-                return max(0.0, float(raw))
-        except (AttributeError, TypeError, ValueError):
-            pass
-    match = re.search(
-        r"(?:retry|try)\s+again\s+(?:in|after)\s+([\d.]+)\s*s",
-        str(error),
-        re.IGNORECASE,
-    )
-    if match:
-        try:
-            return max(0.0, float(match.group(1)))
-        except ValueError:
-            return None
-    return None
+    return retry_after_seconds(error)
 
 
 def _register_author_rate_limit(error: BaseException) -> None:
-    status_code = getattr(error, "status_code", None)
-    response = getattr(error, "response", None)
-    if status_code is None and response is not None:
-        status_code = getattr(response, "status_code", None)
-    if status_code != 429 and "429" not in str(error):
-        return
-    retry_after = _retry_after_seconds(error)
-    cooldown = (
-        retry_after
-        if retry_after is not None
-        else AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS
+    register_rate_limit(
+        error,
+        _AUTHOR_RATE_STATES,
+        AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS,
+        AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS,
     )
-    cooldown = min(cooldown, AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS)
-    loop = asyncio.get_running_loop()
-    state = _author_rate_state()
-    state.next_allowed = max(state.next_allowed, loop.time() + cooldown)
 
 # Appendix A — design-system brief (the crux IP). The non-negotiable rendering,
 # fit, language and output constraints stay in this common template. The visual
@@ -252,17 +209,6 @@ class Brand:
     fonts_are_explicit: bool = False
 
 
-_LOCAL_FONT_FALLBACKS = {
-    "noto sans kr": ("Noto Sans KR", "Malgun Gothic", "sans-serif"),
-    "pretendard": ("Pretendard", "Malgun Gothic", "sans-serif"),
-    "noto serif kr": ("Noto Serif KR", "Batang", "serif"),
-    "inter": ("Inter", "Aptos", "sans-serif"),
-    "roboto": ("Roboto", "Aptos", "sans-serif"),
-    "dm sans": ("DM Sans", "Aptos", "sans-serif"),
-    "source serif 4": ("Source Serif 4", "Cambria", "serif"),
-    "ibm plex mono": ("IBM Plex Mono", "Consolas", "monospace"),
-}
-
 _FALLBACK_SLIDE_MARKER = 'data-presenton-authored-fallback="true"'
 
 
@@ -278,14 +224,7 @@ def _css_font_stack(value: str) -> str:
     rewriting and native OOXML. This prompt-side mirror prevents new HTML from
     requesting external font resources in the first place.
     """
-    family = (value or "Noto Sans KR").split(",", 1)[0].strip().strip("\"'")
-    logical, local, generic = _LOCAL_FONT_FALLBACKS.get(
-        " ".join(family.lower().split()),
-        (family, "Aptos", "sans-serif"),
-    )
-    logical = logical.replace("\\", "\\\\").replace('"', '\\"')
-    local = local.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{logical}","{local}",{generic}'
+    return author_slide_prompt.css_font_stack(value)
 
 
 class AuthoredStyleLike(Protocol):
@@ -330,23 +269,7 @@ def apply_style_defaults(brand: Brand, style: Optional[AuthoredStyleLike]) -> Br
     with the style's palette instead of leaving the generic brand blue, which would
     contradict the brief the model is authoring from.
     """
-    if style is None or style.id == "default":
-        return brand
-    primary = brand.primary
-    fonts = brand.fonts
-    if not brand.primary_is_explicit:
-        primary = (
-            getattr(style, "primary_color", None)
-            or getattr(style, "preview_accent", None)
-            or primary
-        )
-    if not brand.fonts_are_explicit:
-        fonts = (
-            getattr(style, "body_font", None)
-            or getattr(style, "heading_font", None)
-            or fonts
-        )
-    return replace(brand, primary=primary, fonts=fonts)
+    return author_slide_prompt.apply_style_defaults(brand, style)
 
 
 def build_design_system(
@@ -359,42 +282,15 @@ def build_design_system(
     Custom style briefs are already validated plain text from the A1 loader and
     are inserted verbatim apart from surrounding whitespace.
     """
-    if style is None or style.id == "default":
-        style_brief = _DEFAULT_STYLE_BRIEF.format(
-            primary=brand.primary or "#2563EB",
-            font_stack=_css_font_stack(brand.fonts or "Noto Sans KR"),
-        )
-    else:
-        style_brief = style.brief.strip()
-        token_lines = []
-        background = getattr(style, "background_color", None)
-        heading_font = getattr(style, "heading_font", None)
-        body_font = getattr(style, "body_font", None)
-        mono_font = getattr(style, "mono_font", None)
-        if background:
-            token_lines.append(f"- Default canvas background: {background}.")
-        if heading_font or body_font or mono_font:
-            token_lines.append(
-                "- Typography roles: "
-                f"headings {heading_font or brand.fonts}; "
-                f"body {body_font or brand.fonts}; "
-                f"labels/data {mono_font or body_font or brand.fonts}."
-            )
-        if token_lines:
-            style_brief = f"{style_brief}\n" + "\n".join(token_lines)
-        reference_mode = normalize_reference_mode(
-            getattr(style, "reference_mode", STYLE_REFERENCE)
-        )
-        if (
-            reference_mode != EXACT_RECONSTRUCTION
-            and getattr(style, "illustration_prompt", None)
-        ):
-            style_brief = f"{style_brief}\n{_ILLUSTRATION_SLOT_RULES}"
-    return _DESIGN_SYSTEM_RULES.format(
-        primary=brand.primary or "#2563EB",
-        fonts=brand.fonts or "Noto Sans KR",
-        language=brand.language or "Korean",
-        style_brief=style_brief,
+    return author_slide_prompt.build_design_system(
+        brand,
+        style,
+        default_style_brief=_DEFAULT_STYLE_BRIEF,
+        design_system_rules=_DESIGN_SYSTEM_RULES,
+        illustration_slot_rules=_ILLUSTRATION_SLOT_RULES,
+        normalize_reference_mode=normalize_reference_mode,
+        exact_reconstruction=EXACT_RECONSTRUCTION,
+        style_reference=STYLE_REFERENCE,
     )
 
 
@@ -407,26 +303,8 @@ _SYSTEM = (
 def _author_prompt(
     content: str, design_system: str, brand: Brand, role: str, index: int, n: int
 ) -> str:
-    if role == "COVER":
-        page_marker = (
-            "PAGE MARKER FOR THIS SLIDE: OMIT IT. This is the cover; render no page number "
-            "and no footer text."
-        )
-    else:
-        page_marker = (
-            f'PAGE MARKER FOR THIS SLIDE: render exactly "{index:02d}" once, as the only '
-            "footer text, using the fixed bottom-center page-number system."
-        )
-    wordmark = (
-        f" Brand wordmark: {brand.wordmark}. If used, keep it outside the reserved footer zone."
-        if brand.wordmark
-        else ""
-    )
-    return (
-        f"Author slide {index + 1} of {n}. Deck topic: {brand.topic}. This slide's ROLE: "
-        f"{role}. CONTENT: {content}.{wordmark}\n\n{page_marker}\n\n{design_system}\n\n"
-        "Design THIS slide bespoke and premium within the shared system, vary the layout to "
-        "suit the role, output ONLY the complete self-contained HTML document."
+    return author_slide_prompt.author_prompt(
+        content, design_system, brand, role, index, n
     )
 
 
@@ -674,31 +552,55 @@ async def author_slide_html(
         # codex-only; get_extra_body() populates extra_body only for the (mutually
         # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
         kwargs["extra_body"] = reasoning
+    try:
+        provider = str(get_llm_provider().value)
+    except Exception:
+        # Keep test/offline clients and legacy no-provider paths behaviorally
+        # identical. With no durable scope this is never persisted.
+        provider = "unknown"
+    provider_attempt = 0
+
     async def generate(generate_kwargs: dict):
         # Run the blocking call on the dedicated authoring pool (bounds concurrency to
         # AUTHOR_CONCURRENCY and keeps long authoring threads off the shared default
         # executor used by other LLM calls / exports).
         await _wait_for_author_rate_slot()
         loop = asyncio.get_running_loop()
+        nonlocal provider_attempt
+        provider_attempt += 1
+        timer = ProviderCallTimer()
+        response = None
         try:
-            return await loop.run_in_executor(
-                _AUTHOR_EXECUTOR, functools.partial(client.generate, **generate_kwargs)
-            )
+            async with provider_call_admission(is_retry=provider_attempt > 1):
+                enforce_llm_egress_policy()
+                response = await loop.run_in_executor(
+                    _AUTHOR_EXECUTOR,
+                    functools.partial(client.generate, **generate_kwargs),
+                )
+            return response
         except Exception as error:
             # A provider-declared cooldown is shared by all subsequent authored
             # calls in this process, including multimodal -> text-only fallback.
             _register_author_rate_limit(error)
             raise
+        finally:
+            # The receipt deliberately includes no prompt/reference/response body.
+            await record_provider_call(
+                provider=provider,
+                model=str(model),
+                response=response,
+                latency_ms=timer.elapsed_ms,
+                retry_class="initial" if provider_attempt == 1 else "retry",
+            )
 
     try:
         response = await generate(kwargs)
-    except Exception as e:
+    except Exception as error:
         if not image_parts or mode == EXACT_RECONSTRUCTION:
-            raise handle_llm_client_exceptions(e)
+            raise handle_llm_client_exceptions(error)
         logger.warning(
-            "Multimodal authored generation failed for slide %d; retrying text-only: %s",
+            "Multimodal authored generation failed for slide %d; retrying text-only",
             index + 1,
-            e,
         )
         fallback_messages = [
             SystemMessage(content=_SYSTEM),

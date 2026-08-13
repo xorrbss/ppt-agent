@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -22,12 +23,13 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { notify } from "@/components/ui/sonner";
+import { AuthoredQualityOpsDashboard } from "./AuthoredQualityOpsDashboard";
+import { formatQualityDuration, slideNumbers } from "./authoredQualityReviewUtils";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import {
   normalizeAuthoredQualityReviewResult,
   type AuthoredQualityReviewOcrCheck,
   type AuthoredQualityReviewOcrOmissions,
-  type AuthoredQualityReviewMetrics,
   type AuthoredQualityReviewResult,
   type AuthoredReviewRepairPath,
 } from "../../services/api/authored";
@@ -38,11 +40,6 @@ const MAX_POLL_ERRORS = 4;
 const REVIEW_TASK_STORAGE_PREFIX = "presenton:authored-quality-review:task:";
 
 type ReviewScope = "all" | "current";
-
-function slideNumbers(indices?: number[]) {
-  if (!indices?.length) return "";
-  return indices.map((index) => index + 1).join(", ");
-}
 
 function reviewPathLabel(path: AuthoredReviewRepairPath) {
   if (path === "pattern") return "패턴 레시피 재사용";
@@ -198,109 +195,8 @@ function lifecycleSlides(result: AuthoredQualityReviewResult) {
   ];
 }
 
-function OpsDashboard({ metrics }: { metrics: AuthoredQualityReviewMetrics }) {
-  const latency = metrics.latency_percentiles;
-  const usage = metrics.stage_usage;
-  const latencyStages = [
-    ...new Set([
-      ...Object.keys(latency?.cold ?? {}),
-      ...Object.keys(latency?.warm ?? {}),
-    ]),
-  ];
-  const usageStages = Object.keys(usage ?? {});
-  if (!latencyStages.length && !usageStages.length) return null;
 
-  const formatPercentile = (value?: number) =>
-    value === undefined ? "—" : formatDuration(value) ?? "—";
-  const formatUsage = (value?: number) =>
-    value === undefined ? "—" : value.toLocaleString("en-US");
-  const formatCost = (value?: number) =>
-    value === undefined ? "—" : `$${value.toFixed(4)}`;
-
-  return (
-    <section
-      data-testid="quality-operations-dashboard"
-      className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-700"
-    >
-      <div>
-        <p className="font-semibold text-slate-900">Operations dashboard</p>
-        <p className="mt-1 text-slate-600">
-          Percentiles are shown only when the backend supplies measured replay samples.
-        </p>
-      </div>
-      {latencyStages.length > 0 && (
-        <div className="overflow-x-auto">
-          <p className="mb-2 font-medium text-slate-900">Cold / warm latency</p>
-          <table className="w-full min-w-[620px] text-left">
-            <thead className="border-b text-slate-500">
-              <tr>
-                <th className="pb-1 pr-3">Stage</th>
-                <th className="pb-1 pr-3">Cold p50</th>
-                <th className="pb-1 pr-3">Cold p95</th>
-                <th className="pb-1 pr-3">Cold p99</th>
-                <th className="pb-1 pr-3">Warm p50</th>
-                <th className="pb-1 pr-3">Warm p95</th>
-                <th className="pb-1">Warm p99</th>
-              </tr>
-            </thead>
-            <tbody>
-              {latencyStages.map((stage) => (
-                <tr key={stage} className="border-b last:border-0">
-                  <td className="py-1.5 pr-3 font-medium">{stage}</td>
-                  <td className="py-1.5 pr-3">{formatPercentile(latency?.cold?.[stage]?.p50_ms)}</td>
-                  <td className="py-1.5 pr-3">{formatPercentile(latency?.cold?.[stage]?.p95_ms)}</td>
-                  <td className="py-1.5 pr-3">{formatPercentile(latency?.cold?.[stage]?.p99_ms)}</td>
-                  <td className="py-1.5 pr-3">{formatPercentile(latency?.warm?.[stage]?.p50_ms)}</td>
-                  <td className="py-1.5 pr-3">{formatPercentile(latency?.warm?.[stage]?.p95_ms)}</td>
-                  <td className="py-1.5">{formatPercentile(latency?.warm?.[stage]?.p99_ms)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {usageStages.length > 0 && (
-        <div className="overflow-x-auto">
-          <p className="mb-2 font-medium text-slate-900">LLM / Chrome / acceptance / post-verify usage</p>
-          <table className="w-full min-w-[620px] text-left">
-            <thead className="border-b text-slate-500">
-              <tr>
-                <th className="pb-1 pr-3">Stage</th>
-                <th className="pb-1 pr-3">Input tokens</th>
-                <th className="pb-1 pr-3">Output tokens</th>
-                <th className="pb-1 pr-3">Total tokens</th>
-                <th className="pb-1 pr-3">Cost</th>
-                <th className="pb-1">Cache hits / misses</th>
-              </tr>
-            </thead>
-            <tbody>
-              {usageStages.map((stage) => {
-                const row = usage?.[stage];
-                return (
-                  <tr key={stage} className="border-b last:border-0">
-                    <td className="py-1.5 pr-3 font-medium">{stage}</td>
-                    <td className="py-1.5 pr-3">{formatUsage(row?.input_tokens)}</td>
-                    <td className="py-1.5 pr-3">{formatUsage(row?.output_tokens)}</td>
-                    <td className="py-1.5 pr-3">{formatUsage(row?.total_tokens)}</td>
-                    <td className="py-1.5 pr-3">{formatCost(row?.cost_usd)}</td>
-                    <td className="py-1.5">{formatUsage(row?.cache_hits)} / {formatUsage(row?.cache_misses)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function formatDuration(milliseconds?: number) {
-  if (milliseconds === undefined) return null;
-  return milliseconds >= 1_000
-    ? `${(milliseconds / 1_000).toFixed(1)}초`
-    : `${Math.round(milliseconds)}ms`;
-}
+const formatDuration = formatQualityDuration;
 
 function reviewTaskStorageKey(presentationId: string) {
   return `${REVIEW_TASK_STORAGE_PREFIX}${presentationId}`;
@@ -319,6 +215,7 @@ export default function AuthoredQualityReview({
   disabled?: boolean;
   onReload?: () => void;
 }) {
+  const t = useTranslations("qualityReview");
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<ReviewScope>("all");
   const [isReviewing, setIsReviewing] = useState(false);
@@ -509,7 +406,7 @@ export default function AuthoredQualityReview({
                       ` ${result.fixed_count}개를 자동 수정했습니다.`}
                   </p>
                   <p className="mt-1 text-xs">
-                    문제 슬라이드 {result.issue_slide_count}장 · 상세 이슈 {result.detailed_issue_count}개 · 수정 슬라이드 {result.fixed_count}장 · 해결 이슈 {result.resolved_issue_count}개 · 잔여 이슈 {result.remaining_issue_count}개
+                    {t("issueSummary", { issueSlides: result.issue_slide_count, detailedIssues: result.detailed_issue_count, fixedSlides: result.fixed_count, resolvedIssues: result.resolved_issue_count, remainingIssues: result.remaining_issue_count })}
                   </p>
                 </div>
               </div>
@@ -526,8 +423,7 @@ export default function AuthoredQualityReview({
                 <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>
-                    재검증 후 잔여 상세 이슈 {result.remaining_issue_count}개가{" "}
-                    {result.remaining_slide_count}개 슬라이드에 남았습니다
+                    {t("remainingIssues", { issues: result.remaining_issue_count, slides: result.remaining_slide_count })}
                     {result.remaining_slide_indices?.length
                       ? `: ${slideNumbers(result.remaining_slide_indices)}`
                       : "."}
@@ -612,16 +508,16 @@ export default function AuthoredQualityReview({
                   data-testid="quality-review-metrics"
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700"
                 >
-                  <p className="font-semibold text-slate-900">검수 처리 내역</p>
+                  <p className="font-semibold text-slate-900">{t("metricsTitle")}</p>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                     {(result.metrics.wall_time_ms ?? result.metrics.total_ms) !== undefined && (
                       <span data-testid="quality-wall-time">
-                        실제 경과 {formatDuration(result.metrics.wall_time_ms ?? result.metrics.total_ms!) }
+                        {t("wallTime", { duration: formatDuration(result.metrics.wall_time_ms ?? result.metrics.total_ms!) ?? "—" })}
                       </span>
                     )}
                     {result.metrics.aggregate_stage_time_ms !== undefined && (
                       <span data-testid="quality-stage-aggregate-time">
-                        단계 누적 {formatDuration(result.metrics.aggregate_stage_time_ms)} (병렬 합산)
+                        {t("aggregateStageTime", { duration: formatDuration(result.metrics.aggregate_stage_time_ms) ?? "—" })}
                       </span>
                     )}
                     {result.metrics.cache_hits !== undefined && (
@@ -631,43 +527,43 @@ export default function AuthoredQualityReview({
                       <span>캐시 미스 {result.metrics.cache_misses}</span>
                     )}
                     {result.metrics.llm_eligible !== undefined && (
-                      <span data-testid="quality-llm-eligible">LLM 대상 {result.metrics.llm_eligible}</span>
+                      <span data-testid="quality-llm-eligible">{t("metric.llmEligible", { count: result.metrics.llm_eligible })}</span>
                     )}
                     {result.metrics.llm_calls !== undefined && (
                       <span data-testid="quality-llm-calls">LLM 호출 {result.metrics.llm_calls}</span>
                     )}
                     {result.metrics.llm_responses !== undefined && (
-                      <span data-testid="quality-llm-responses">LLM 응답 {result.metrics.llm_responses}</span>
+                      <span data-testid="quality-llm-responses">{t("metric.llmResponses", { count: result.metrics.llm_responses })}</span>
                     )}
                     {result.metrics.llm_valid_plans !== undefined && (
-                      <span data-testid="quality-llm-valid-plans">유효 RepairPlan {result.metrics.llm_valid_plans}</span>
+                      <span data-testid="quality-llm-valid-plans">{t("metric.llmValidPlans", { count: result.metrics.llm_valid_plans })}</span>
                     )}
                     {result.metrics.llm_schema_passes !== undefined && (
-                      <span data-testid="quality-llm-schema-passes">LLM schema 통과 {result.metrics.llm_schema_passes}</span>
+                      <span data-testid="quality-llm-schema-passes">{t("metric.llmSchemaPasses", { count: result.metrics.llm_schema_passes })}</span>
                     )}
                     {result.metrics.llm_provider_failures !== undefined && (
-                      <span data-testid="quality-llm-provider-failures">LLM provider 실패 {result.metrics.llm_provider_failures}</span>
+                      <span data-testid="quality-llm-provider-failures">{t("metric.llmProviderFailures", { count: result.metrics.llm_provider_failures })}</span>
                     )}
                     {result.metrics.llm_empty !== undefined && (
-                      <span data-testid="quality-llm-empty">LLM 빈 응답 {result.metrics.llm_empty}</span>
+                      <span data-testid="quality-llm-empty">{t("metric.llmEmpty", { count: result.metrics.llm_empty })}</span>
                     )}
                     {result.metrics.llm_schema_rejected !== undefined && (
-                      <span data-testid="quality-llm-schema-rejected">LLM schema 거부 {result.metrics.llm_schema_rejected}</span>
+                      <span data-testid="quality-llm-schema-rejected">{t("metric.llmSchemaRejected", { count: result.metrics.llm_schema_rejected })}</span>
                     )}
                     {result.metrics.proposal_preflight_unprojectable !== undefined && (
-                      <span data-testid="quality-llm-preflight-unprojectable">투영 preflight 차단 {result.metrics.proposal_preflight_unprojectable}</span>
+                      <span data-testid="quality-llm-preflight-unprojectable">{t("metric.preflightBlocked", { count: result.metrics.proposal_preflight_unprojectable })}</span>
                     )}
                     {result.metrics.llm_preflight_passes !== undefined && (
-                      <span data-testid="quality-llm-preflight-passes">투영 preflight 통과 {result.metrics.llm_preflight_passes}</span>
+                      <span data-testid="quality-llm-preflight-passes">{t("metric.preflightPassed", { count: result.metrics.llm_preflight_passes })}</span>
                     )}
                     {result.metrics.llm_rendered !== undefined && (
-                      <span data-testid="quality-llm-rendered">LLM 후보 렌더 {result.metrics.llm_rendered}</span>
+                      <span data-testid="quality-llm-rendered">{t("metric.llmRendered", { count: result.metrics.llm_rendered })}</span>
                     )}
                     {result.metrics.llm_negative_cache_hits !== undefined && (
-                      <span data-testid="quality-llm-negative-cache-hits">LLM negative cache {result.metrics.llm_negative_cache_hits}</span>
+                      <span data-testid="quality-llm-negative-cache-hits">{t("metric.llmNegativeCache", { count: result.metrics.llm_negative_cache_hits })}</span>
                     )}
                     {result.metrics.llm_circuit_open !== undefined && (
-                      <span data-testid="quality-llm-circuit-open">LLM circuit open {result.metrics.llm_circuit_open}</span>
+                      <span data-testid="quality-llm-circuit-open">{t("metric.llmCircuitOpen", { count: result.metrics.llm_circuit_open })}</span>
                     )}
                     {result.metrics.deterministic_resolved !== undefined && (
                       <span>
@@ -698,54 +594,54 @@ export default function AuthoredQualityReview({
                     )}
                     {result.metrics.fallback_attempted !== undefined && (
                       <span>
-                        개별 fallback 시도 {result.metrics.fallback_attempted}
+                        {t("metric.fallbackAttempted", { count: result.metrics.fallback_attempted })}
                       </span>
                     )}
                     {result.metrics.fallback_succeeded !== undefined && (
                       <span>
-                        개별 fallback 후보 생성 {result.metrics.fallback_succeeded}
+                        {t("metric.fallbackSucceeded", { count: result.metrics.fallback_succeeded })}
                       </span>
                     )}
                     {result.metrics.fallback_failed !== undefined && (
                       <span>
-                        개별 fallback 실패 {result.metrics.fallback_failed}
+                        {t("metric.fallbackFailed", { count: result.metrics.fallback_failed })}
                       </span>
                     )}
                     {result.metrics.pattern_cluster_count !== undefined && (
-                      <span>패턴 군집 {result.metrics.pattern_cluster_count}</span>
+                      <span>{t("metric.patternClusters", { count: result.metrics.pattern_cluster_count })}</span>
                     )}
                     {result.metrics.pattern_representative_count !== undefined && (
-                      <span>대표 표본 {result.metrics.pattern_representative_count}</span>
+                      <span>{t("metric.patternRepresentatives", { count: result.metrics.pattern_representative_count })}</span>
                     )}
                     {result.metrics.pattern_recipe_count !== undefined && (
-                      <span>레시피 {result.metrics.pattern_recipe_count}</span>
+                      <span>{t("metric.patternRecipes", { count: result.metrics.pattern_recipe_count })}</span>
                     )}
                     {result.metrics.pattern_reuse_attempts !== undefined && (
-                      <span>패턴 재사용 시도 {result.metrics.pattern_reuse_attempts}</span>
+                      <span>{t("metric.patternReuseAttempts", { count: result.metrics.pattern_reuse_attempts })}</span>
                     )}
                     {result.metrics.pattern_reuse_hits !== undefined && (
-                      <span>패턴 재사용 적중 {result.metrics.pattern_reuse_hits}</span>
+                      <span>{t("metric.patternReuseHits", { count: result.metrics.pattern_reuse_hits })}</span>
                     )}
                     {result.metrics.pattern_reuse_applied !== undefined && (
-                      <span>패턴 재사용 적용 {result.metrics.pattern_reuse_applied}</span>
+                      <span>{t("metric.patternReuseApplied", { count: result.metrics.pattern_reuse_applied })}</span>
                     )}
                     {result.metrics.composite_plan_count !== undefined && (
-                      <span>복합 RepairPlan {result.metrics.composite_plan_count}</span>
+                      <span>{t("metric.compositePlans", { count: result.metrics.composite_plan_count })}</span>
                     )}
                     {result.metrics.composite_operations_merged !== undefined && (
-                      <span>병합 연산 {result.metrics.composite_operations_merged}</span>
+                      <span>{t("metric.mergedOperations", { count: result.metrics.composite_operations_merged })}</span>
                     )}
                     {result.metrics.render_candidates_rejected_early !== undefined && (
-                      <span>조기 렌더 거부 {result.metrics.render_candidates_rejected_early}</span>
+                      <span>{t("metric.earlyRenderRejected", { count: result.metrics.render_candidates_rejected_early })}</span>
                     )}
                     {result.metrics.full_render_count !== undefined && (
-                      <span>전체 렌더 {result.metrics.full_render_count}</span>
+                      <span>{t("metric.fullRenders", { count: result.metrics.full_render_count })}</span>
                     )}
                     {result.metrics.llm_pattern_call_count !== undefined && (
-                      <span>LLM RepairPlan {result.metrics.llm_pattern_call_count}</span>
+                      <span>{t("metric.llmRepairPlans", { count: result.metrics.llm_pattern_call_count })}</span>
                     )}
                     {result.metrics.individual_fallback_count !== undefined && (
-                      <span>개별 경로 전환 {result.metrics.individual_fallback_count}</span>
+                      <span>{t("metric.individualFallbacks", { count: result.metrics.individual_fallback_count })}</span>
                     )}
                     {result.metrics.candidate_proposed !== undefined && (
                       <span data-testid="quality-candidate-count">
@@ -866,7 +762,7 @@ export default function AuthoredQualityReview({
                   </div>
                   {result.metrics.llm_no_candidate_reasons && result.metrics.llm_no_candidate_reasons.length > 0 && (
                     <p data-testid="quality-llm-no-candidate-reasons" className="mt-2 text-amber-800">
-                      LLM 후보 미생성 사유: {result.metrics.llm_no_candidate_reasons.join(", ")}
+                      {t("llmNoCandidateReasons", { reasons: result.metrics.llm_no_candidate_reasons.join(", ") })}
                     </p>
                   )}
                   {Object.keys(result.metrics.stage_timings_ms).length > 0 && (
@@ -882,15 +778,15 @@ export default function AuthoredQualityReview({
                   )}
                 </section>
               )}
-              <OpsDashboard metrics={result.metrics} />
+              <AuthoredQualityOpsDashboard metrics={result.metrics} formatDuration={formatDuration} />
               {result.unattributed_issues.length > 0 && (
                 <section
                   data-testid="quality-review-unattributed-issues"
                   className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950"
                 >
-                  <p className="font-semibold">슬라이드 미지정 상세 이슈</p>
+                  <p className="font-semibold">{t("unattributedTitle")}</p>
                   <p className="mt-1 text-amber-800">
-                    측정 불완전과 별개입니다. 슬라이드 인덱스가 없어 이동이나 자동 수정 대상으로 추정하지 않았습니다.
+                    {t("unattributedDescription")}
                   </p>
                   <ul className="mt-2 list-disc space-y-1 pl-4">
                     {result.unattributed_issues.map((issue) => (

@@ -13,6 +13,7 @@ import asyncio
 import os
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -182,7 +183,20 @@ def _service_factory(*, edits: bool):
     return FakeChatService
 
 
-def test_a_question_turn_answers_without_moving_the_revision(tmp_path: Path):
+def _admit_legacy_transaction_fixture(monkeypatch) -> None:
+    async def allow_fixture(_session, _presentation):
+        return SimpleNamespace(driver_id="standard")
+
+    monkeypatch.setattr(
+        "services.workspace_chat_operation_handler.require_authored_mutation_evidence",
+        allow_fixture,
+    )
+
+
+def test_a_question_turn_answers_without_moving_the_revision(
+    tmp_path: Path, monkeypatch
+):
+    _admit_legacy_transaction_fixture(monkeypatch)
     asyncio.run(_a_question_turn_answers_without_moving_the_revision(tmp_path))
 
 
@@ -233,7 +247,8 @@ async def _a_question_turn_answers_without_moving_the_revision(tmp_path: Path):
         await engine.dispose()
 
 
-def test_an_editing_turn_still_advances_the_revision(tmp_path: Path):
+def test_an_editing_turn_still_advances_the_revision(tmp_path: Path, monkeypatch):
+    _admit_legacy_transaction_fixture(monkeypatch)
     asyncio.run(_an_editing_turn_still_advances_the_revision(tmp_path))
 
 

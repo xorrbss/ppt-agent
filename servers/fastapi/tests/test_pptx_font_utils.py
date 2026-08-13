@@ -100,38 +100,6 @@ def test_build_google_fonts_stylesheet_url_supports_italic_variants():
     )
 
 
-class _FakeGoogleFontsResponse:
-    def __init__(self, status, css):
-        self.status = status
-        self._css = css
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def text(self):
-        return self._css
-
-
-class _FakeGoogleFontsSession:
-    def __init__(self, status, css, requested_urls):
-        self._status = status
-        self._css = css
-        self._requested_urls = requested_urls
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    def get(self, url, timeout=None):
-        self._requested_urls.append(url)
-        return _FakeGoogleFontsResponse(self._status, self._css)
-
-
 def test_check_google_font_availability_rejects_compatibility_font_kit(monkeypatch):
     css = """\
 @font-face {
@@ -139,11 +107,10 @@ def test_check_google_font_availability_rejects_compatibility_font_kit(monkeypat
   src: url(https://fonts.gstatic.com/l/font?kit=J7afnpV-BGlaFfdAhLEY6w) format('woff2');
 }
 """
-    monkeypatch.setattr(
-        pptx_font_utils.aiohttp,
-        "ClientSession",
-        lambda: _FakeGoogleFontsSession(200, css, []),
-    )
+    async def fake_stylesheet(_url):
+        return css
+
+    monkeypatch.setattr(pptx_font_utils, "fetch_google_fonts_stylesheet", fake_stylesheet)
 
     assert asyncio.run(pptx_font_utils.check_google_font_availability("Calibri")) is False
 
@@ -156,11 +123,11 @@ def test_check_google_font_availability_checks_requested_variant_url(monkeypatch
   src: url(https://fonts.gstatic.com/s/montserrat/v31/font.woff2) format('woff2');
 }
 """
-    monkeypatch.setattr(
-        pptx_font_utils.aiohttp,
-        "ClientSession",
-        lambda: _FakeGoogleFontsSession(200, css, requested_urls),
-    )
+    async def fake_stylesheet(url):
+        requested_urls.append(url)
+        return css
+
+    monkeypatch.setattr(pptx_font_utils, "fetch_google_fonts_stylesheet", fake_stylesheet)
 
     assert (
         asyncio.run(

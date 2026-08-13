@@ -164,6 +164,12 @@ try {
   validateCopiedLinks(tempOutDir)
   validateLinkFreeTree(tempOutDir)
   atomicReplaceDirectory(tempOutDir, outDir)
+  require("./scripts/resource-provenance.cjs").writeResourceProvenance({
+    kind: "nextjs",
+    sourceRoot: nextjsDir,
+    resourceRoot: outDir,
+    workspaceRoot: path.join(electronRoot, ".."),
+  })
 } catch (error) {
   rm(tempOutDir)
   throw error

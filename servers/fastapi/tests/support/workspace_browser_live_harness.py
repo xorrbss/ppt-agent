@@ -29,6 +29,7 @@ import uvicorn
 
 
 PRESENTATION_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
+AUTHORED_OWNER_ID = uuid.UUID("22222222-2222-4222-8222-222222222222")
 FIRST_PROMPT = "첨부한 기획서를 바탕으로 경영진용 발표를 만들어 줘"
 SUCCESS_MARKER = "[live-success]"
 BACKFILL_MARKER = "[live-backfill]"
@@ -78,6 +79,11 @@ def _configure_production_environment(
             "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE": "sqlite-local",
             "CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT": "100",
             "CHAT_FIRST_WORKSPACE_SHADOW_ENABLED": "false",
+            "AUTHORED_VNEXT_MASTER_ENABLED": "true",
+            "AUTHORED_VNEXT_GENERATION_ENABLED": "true",
+            "AUTHORED_VNEXT_EXPORT_ENABLED": "true",
+            "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED": "true",
+            "AUTHORED_VNEXT_REPOSITORY_MODE": "sql",
             "WORKSPACE_ASSET_MALWARE_SCAN_MODE": "disabled",
             "WORKSPACE_OPERATION_WORKER_MODE": "embedded",
             "WORKSPACE_OPERATION_POLL_SECONDS": "0.05",
@@ -113,6 +119,7 @@ def create_app(database_path: Path | None = None):
     from alembic.script import ScriptDirectory
     from api.main import app
     from models.sql.presentation import PresentationModel
+    from models.sql.user import User
     from models.sql.workspace import WorkspaceAsset
     from models.workspace import (
         WorkspaceAssetTransitionRequest,
@@ -131,6 +138,7 @@ def create_app(database_path: Path | None = None):
     from services.workspace_asset_maintenance import stop_workspace_asset_maintenance
     from services.workspace_asset_service import transition_workspace_asset
     from services.workspace_service import bootstrap_workspace
+    from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
     alembic_config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
     alembic_config.set_main_option(
@@ -298,8 +306,23 @@ def create_app(database_path: Path | None = None):
 
                 async with async_session_maker() as session, session.begin():
                     session.add(
+                        User(
+                            id=AUTHORED_OWNER_ID,
+                            username="authored-browser-owner",
+                            hashed_password="browser-harness-no-login",
+                            is_active=True,
+                            is_superuser=False,
+                            is_verified=True,
+                        )
+                    )
+                    # PresentationModel intentionally omits its production FK
+                    # from partial-fixture ORM metadata, so flush the real
+                    # owner before inserting the owner-bound presentation.
+                    await session.flush()
+                    session.add(
                         PresentationModel(
                             id=PRESENTATION_ID,
+                            owner_id=AUTHORED_OWNER_ID,
                             content="Live browser workspace fixture",
                             n_slides=5,
                             language="ko",
@@ -310,6 +333,7 @@ def create_app(database_path: Path | None = None):
 
                 async with async_session_maker() as session:
                     browser_asset = WorkspaceAsset(
+                        owner_id=AUTHORED_OWNER_ID,
                         state="uploaded",
                         original_name="strategy-brief.pdf",
                         media_type="application/pdf",
@@ -333,12 +357,16 @@ def create_app(database_path: Path | None = None):
                     # stays durable without consuming the edit runner.
                     asset_ids=[browser_asset.id],
                 )
-                async with async_session_maker() as session:
-                    _, _, generation_operation, duplicate = await bootstrap_workspace(
-                        session,
-                        presentation_id=PRESENTATION_ID,
-                        request=bootstrap_request,
-                    )
+                owner_token = set_current_owner_id(AUTHORED_OWNER_ID)
+                try:
+                    async with async_session_maker() as session:
+                        _, _, generation_operation, duplicate = await bootstrap_workspace(
+                            session,
+                            presentation_id=PRESENTATION_ID,
+                            request=bootstrap_request,
+                        )
+                finally:
+                    reset_current_owner_id(owner_token)
                 if duplicate or generation_operation.state != "waiting_for_assets":
                     raise RuntimeError("browser production fixture was not created")
 
@@ -361,6 +389,16 @@ def create_app(database_path: Path | None = None):
                 temporary_directory.cleanup()
 
     app.router.lifespan_context = browser_test_lifespan
+
+    @app.middleware("http")
+    async def bind_authored_owner_context(request: Request, call_next):
+        """Bind one seeded owner only inside this disposable browser process."""
+
+        token = set_current_owner_id(AUTHORED_OWNER_ID)
+        try:
+            return await call_next(request)
+        finally:
+            reset_current_owner_id(token)
 
     @app.middleware("http")
     async def identify_live_harness(request: Request, call_next):

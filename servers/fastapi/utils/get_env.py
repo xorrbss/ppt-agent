@@ -4,6 +4,7 @@ import os
 from collections.abc import Callable
 
 from constants.settings_registry import get_settings_by_key
+from services.provider_settings_values import SECRET_SETTING_KEYS
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 
 
@@ -25,8 +26,18 @@ def get_setting_env(
     """
     entry = get_settings_by_key().get(key)
     if entry is not None and "fastapi.runtime" in entry["targets"]:
-        return resolve_runtime_settings(settings).get_env(key)
-    return os.getenv(key)
+        value = resolve_runtime_settings(settings).get_env(key)
+    else:
+        value = os.getenv(key)
+    if key in SECRET_SETTING_KEYS:
+        # Lazy import avoids the database URL helper's dependency on this module.
+        from services.provider_secure_runtime import (
+            resolve_provider_secret,
+            setting_credential_id,
+        )
+
+        return resolve_provider_secret(setting_credential_id(key), value)
+    return value
 
 
 def _make_getter(key: str) -> Callable[[RuntimeSettings | None], str | None]:

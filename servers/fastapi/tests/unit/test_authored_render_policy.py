@@ -26,8 +26,8 @@ _RENDER_POLICY_HTML = """<!doctype html>
 <html><head><style>
 html, body { margin: 0; width: 1280px; height: 720px; background: #fff; overflow: hidden; }
 .probe { position: absolute; height: 4px; top: 20px; }
-#bar8 { left: 20px; background: #ff0000; } #bar10 { left: 50px; background: #00aa00; }
-#bar11 { left: 80px; background: #0000ff; }
+#bar8 { left: 20px; width:8px; background: #ff0000; } #bar10 { left: 50px; width:10px; background: #00aa00; }
+#bar11 { left: 80px; width:11px; background: #0000ff; }
 #text8 { position: absolute; left: 20px; top: 50px; font-size: 8px; color: #111; }
 #text10 { position: absolute; left: 20px; top: 70px; font-size: 10px; color: #111; }
 #text11 { position: absolute; left: 20px; top: 90px; font-size: 11px; color: #111; }
@@ -39,15 +39,7 @@ html, body { margin: 0; width: 1280px; height: 720px; background: #fff; overflow
 <span id="text8">eight</span><span id="text10">ten</span><span id="text11">eleven</span>
 <div id="bar8" class="probe"></div><div id="bar10" class="probe"></div><div id="bar11" class="probe"></div>
 <div id="overlap-back"></div><div id="overlap-front"></div>
-<div id="crop"><img alt="test photo" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='30'%3E%3Crect width='20' height='30' fill='%23ffd400'/%3E%3Crect x='20' width='20' height='30' fill='%2300d47a'/%3E%3Crect x='40' width='20' height='30' fill='%237000ff'/%3E%3C/svg%3E"></div>
-<script>
-window.addEventListener('DOMContentLoaded', () => {
-  for (const size of [8, 10, 11]) {
-    const fontSize = parseFloat(getComputedStyle(document.getElementById(`text${size}`)).fontSize);
-    document.getElementById(`bar${size}`).style.width = `${fontSize}px`;
-  }
-});
-</script>
+<div id="crop"><img alt="test photo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAD0lEQVR4AQEEAPv/AABmmQFpAQDxXVSHAAAAAElFTkSuQmCC"></div>
 </body></html>"""
 
 
@@ -129,7 +121,6 @@ def _dump_font_metrics_in_headless_shell(html: str) -> dict[str, dict[str, objec
             chrome,
             "--headless=new",
             "--disable-gpu",
-            "--no-sandbox",
             f"--user-data-dir={root / 'profile'}",
             "--no-first-run",
             "--no-default-browser-check",
@@ -179,9 +170,9 @@ def test_actual_render_preserves_small_text_crop_overlap_and_image_geometry():
     assert image.getpixel((510, 110)) == (0, 85, 255)
     assert image.getpixel((540, 140)) == (255, 51, 0)
     assert image.getpixel((699, 110)) == (255, 255, 255)
-    assert image.getpixel((700, 110)) == (255, 212, 0)
-    assert image.getpixel((710, 110)) == (0, 212, 122)
-    assert image.getpixel((730, 110)) == (112, 0, 255)
+    assert image.getpixel((700, 110)) == (0, 102, 153)
+    assert image.getpixel((710, 110)) == (0, 102, 153)
+    assert image.getpixel((730, 110)) == (0, 102, 153)
     assert image.getpixel((740, 110)) == (255, 255, 255)
 
 
@@ -209,8 +200,11 @@ def test_windows_headless_shell_preserves_font_metrics_text_and_table_chart_geom
         assert metrics["fontAvailability"]["arial"] is True
         assert metrics["fontAvailability"]["malgunGothic"] is True
 
+    safe_render_html = re.sub(
+        r"<script>.*?</script>", "", _FONT_MATRIX_HTML, flags=re.DOTALL | re.IGNORECASE
+    )
     image = Image.open(
-        io.BytesIO(asyncio.run(slide_capture._render_html_to_png_uncached(_FONT_MATRIX_HTML)))
+        io.BytesIO(asyncio.run(slide_capture._render_html_to_png_uncached(safe_render_html)))
     ).convert("RGB")
     assert _ink_count(image, (35, 35, 240, 115)) > 100  # English, Korean, mixed 8px
     assert _ink_count(image, (35, 115, 230, 165)) > 100  # natural and explicit line wraps

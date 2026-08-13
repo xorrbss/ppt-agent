@@ -6,6 +6,7 @@
  */
 
 import { BrowserWindow, ipcMain } from "electron";
+import { getAppWebPreferences } from "./authored-renderer-policy";
 import * as path from "path";
 import { baseDir } from "./constants";
 import { isLibreOfficeInstalled } from "./libreoffice-check";
@@ -86,13 +87,9 @@ function showSetupInstallerWindow(): Promise<void> {
         baseDir,
         "resources/ui/assets/images/presenton_short_filled.png"
       ),
-      webPreferences: {
-        webSecurity: false,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: false,
-        preload: path.join(__dirname, "../preloads/setup-installer.js"),
-      },
+      webPreferences: getAppWebPreferences(
+        path.join(__dirname, "../preloads/setup-installer.js"),
+      ),
     });
 
     win.setMenuBarVisibility(false);

@@ -661,6 +661,24 @@
       "retryable": false
     },
     {
+      "code": "workspace_export_pptx_mode_invalid",
+      "status_code": 422,
+      "safe_message": "Choose a supported PowerPoint export mode.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_font_embedding_invalid",
+      "status_code": 422,
+      "safe_message": "Choose a valid font embedding option.",
+      "retryable": false
+    },
+    {
+      "code": "workspace_export_font_embedding_requires_hybrid",
+      "status_code": 422,
+      "safe_message": "Font embedding requires Hybrid PowerPoint export.",
+      "retryable": false
+    },
+    {
       "code": "version_not_found",
       "status_code": 404,
       "safe_message": "The selected presentation version no longer exists.",

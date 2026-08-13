@@ -20,13 +20,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
-import SmartHtmlEditor from "./SmartHtmlEditor";
 import {
     shouldRenderTemplateV2HtmlPreview,
     TemplateV2HtmlSlidePreview,
 } from "./TemplateV2HtmlSlidePreview";
 import type { RootState } from "@/store/store";
-import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 
 
 
@@ -36,10 +34,6 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
     const dispatch = useDispatch();
     const presentationData = useSelector(
         (state: RootState) => state.presentationGeneration.presentationData
-    );
-    const presentationRuntime = useMemo(
-        () => tryResolveServerIssuedPresentationProfile(presentationData),
-        [presentationData]
     );
     const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -138,20 +132,6 @@ export const V1ContentRender = ({ slide, isEditMode, theme, preferAuthoredHtml =
         const imageRef = slide?.content?.image || slide?.properties?.image;
         const src = resolveAuthoredImageUrl(imageRef);
         if (preferAuthoredHtml) {
-            if (presentationRuntime?.profile.driver_id === "smart") {
-                return (
-                    <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
-                        <div ref={containerRef} className="h-full w-full">
-                            <SmartHtmlEditor
-                                slide={slide}
-                                renderIndex={slide.index}
-                                fonts={presentationData?.fonts}
-                                title={t("slideTitle", { title: "", index: slide.index + 1 }).trim()}
-                            />
-                        </div>
-                    </SlideErrorBoundary>
-                );
-            }
             return (
                 <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
                     <div ref={containerRef} className="h-full w-full">

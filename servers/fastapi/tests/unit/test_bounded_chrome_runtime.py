@@ -41,6 +41,8 @@ def test_one_shot_fallback_is_process_wide_bounded(monkeypatch) -> None:
     monkeypatch.setattr(slide_capture, "_get_render_sem", lambda: tracker)
     monkeypatch.setattr(slide_capture, "find_chrome", lambda: "synthetic-chrome")
     monkeypatch.setattr(slide_capture, "_run_chrome_screenshot", fake_run)
+    monkeypatch.setenv("AUTHORED_RENDERER_MODE", "legacy")
+    monkeypatch.setenv("AUTHORED_RENDERER_LEGACY_ENABLED", "true")
 
     results = asyncio.run(
         slide_capture.render_html_list_to_pngs(

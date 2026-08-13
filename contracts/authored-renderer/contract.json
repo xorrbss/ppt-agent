@@ -1,0 +1,97 @@
+{
+  "schema_version": "authored-renderer-deployment-contract/v1",
+  "worker": {
+    "service": "authored-render-worker",
+    "module": "utils.authored_renderer_worker",
+    "transport": "newline-delimited-json-over-stdin-stdout",
+    "browser_control_transport": "chromium-cdp-pipe",
+    "request": {
+      "schema_version": "authored-render-request/v1",
+      "required": ["schema_version", "html", "timeout"],
+      "additional_properties": false,
+      "max_html_bytes": 2097152,
+      "max_wire_bytes": 12587008,
+      "timeout_type": "integer",
+      "max_timeout_seconds": 120
+    },
+    "response": {
+      "schema_version": "authored-render-response/v1",
+      "success_required": ["schema_version", "ok", "png_base64"],
+      "failure_required": ["schema_version", "ok", "error"],
+      "artifact_transport": "stdout-base64",
+      "host_artifact_mount": false
+    }
+  },
+  "product_flags": {
+    "mode": {
+      "name": "AUTHORED_RENDERER_MODE",
+      "production_value": "isolated"
+    },
+    "kill_switch": {
+      "name": "AUTHORED_RENDERER_KILL_SWITCH",
+      "fail_closed_value": "true"
+    },
+    "legacy": {
+      "name": "AUTHORED_RENDERER_LEGACY_ENABLED",
+      "default": false,
+      "requires_mode": "legacy"
+    },
+    "command": {
+      "name": "AUTHORED_RENDERER_WORKER_COMMAND_JSON",
+      "format": "json-argv-array",
+      "shell": false,
+      "required_in_production": true
+    },
+    "image": {
+      "name": "AUTHORED_RENDERER_IMAGE_REF",
+      "production_format": "immutable-sha256-reference",
+      "source_revision_name": "AUTHORED_RENDERER_SOURCE_REVISION",
+      "source_tree_digest_name": "AUTHORED_RENDERER_SOURCE_TREE_DIGEST",
+      "contract_digest_name": "AUTHORED_RENDERER_CONTRACT_DIGEST",
+      "deployment_attestation_name": "AUTHORED_RENDERER_DEPLOYMENT_ATTESTATION"
+    },
+    "os_isolation_attestation": {
+      "name": "AUTHORED_RENDERER_OS_ISOLATION",
+      "production_value": "nonroot-readonly-tmpfs-network-none",
+      "required_by_next_production_boundary": true
+    },
+    "next_execution_boundary": {
+      "name": "AUTHORED_RENDERER_EXECUTION_BOUNDARY",
+      "production_value": "external-worker",
+      "direct_local_chrome": false
+    }
+  },
+  "failure_policy": {
+    "automatic_legacy_downgrade": false,
+    "retain_last_known_good_artifact": true,
+    "new_work_after_kill_switch": "reject"
+  },
+  "isolation": {
+    "network": "none",
+    "uid_gid": "65532:65532",
+    "read_only_root": true,
+    "writable_filesystems": ["tmpfs:/tmp", "tmpfs:/dev/shm"],
+    "host_mounts": false,
+    "provider_environment": false,
+    "provider_secrets": false,
+    "preload": false,
+    "privileged_ipc": false,
+    "browser_sandbox": true,
+    "seccomp_profile": "contracts/authored-renderer/chromium-seccomp.json",
+    "capabilities": [],
+    "no_new_privileges": true,
+    "pids_limit": 128,
+    "memory_limit_bytes": 536870912,
+    "memory_swap_limit_bytes": 536870912,
+    "cpus": 1.0,
+    "nofile": 256,
+    "wall_clock_limit_seconds": 135
+  },
+  "evidence_policy": {
+    "static_contract_is_ga_evidence": false,
+    "docker_or_vm_required_for_dynamic_containment": true,
+    "unobserved_boundaries": "INCONCLUSIVE",
+    "gate": "docs/experiments/authored-vnext/04-renderer-security/ci/security_gate.py",
+    "hostile_corpus_verifier": "docs/experiments/authored-vnext/04-renderer-security/tests/verify-corpus.mjs"
+  }
+}

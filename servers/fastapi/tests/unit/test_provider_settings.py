@@ -1,5 +1,6 @@
 import asyncio
 import threading
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -232,7 +233,19 @@ def test_admin_get_redacts_secret_values(monkeypatch):
     assert "provider-key" not in repr(response)
 
 
-def test_admin_custom_model_check_uses_stored_key_without_exposing_it(monkeypatch):
+@pytest.fixture
+def allow_test_custom_model_egress(monkeypatch):
+    monkeypatch.setattr(
+        admin_router,
+        "validate_configured_provider_endpoint",
+        lambda url, **_kwargs: SimpleNamespace(url=url),
+    )
+
+
+def test_admin_custom_model_check_uses_stored_key_without_exposing_it(
+    monkeypatch, allow_test_custom_model_egress
+):
+    del allow_test_custom_model_egress
     stored_key = "stored-custom-key"
     provider_call = {}
 
@@ -268,8 +281,9 @@ def test_admin_custom_model_check_uses_stored_key_without_exposing_it(monkeypatc
 
 
 def test_admin_custom_model_check_works_when_provider_mutations_are_disabled(
-    monkeypatch,
+    monkeypatch, allow_test_custom_model_egress,
 ):
+    del allow_test_custom_model_egress
     stored = {
         "LLM": "custom",
         "CUSTOM_LLM_URL": "https://custom.example.test/v1",
@@ -300,7 +314,10 @@ def test_admin_custom_model_check_works_when_provider_mutations_are_disabled(
     assert response == {"available": True}
 
 
-def test_admin_custom_model_check_reports_model_absence(monkeypatch):
+def test_admin_custom_model_check_reports_model_absence(
+    monkeypatch, allow_test_custom_model_egress
+):
+    del allow_test_custom_model_egress
     async def get_settings(_session):
         return {
             "CUSTOM_LLM_URL": "https://custom.example.test/v1",
@@ -350,7 +367,10 @@ def test_admin_custom_model_check_never_sends_a_stored_placeholder(monkeypatch):
     assert REDACTED_SECRET_PLACEHOLDER not in str(error.value.detail)
 
 
-def test_admin_custom_model_check_redacts_provider_error_details(monkeypatch):
+def test_admin_custom_model_check_redacts_provider_error_details(
+    monkeypatch, allow_test_custom_model_egress
+):
+    del allow_test_custom_model_egress
     stored_key = "stored-custom-key"
 
     async def get_settings(_session):

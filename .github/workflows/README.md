@@ -241,3 +241,17 @@ npx tsc --noEmit -p tsconfig.json
 npm run lint
 npm run build
 ```
+# Required authored renderer release check
+
+Branch protection for `main` must require the exact check context:
+
+`Authored renderer security / disposable isolation release gate`
+
+The job always exists for `push` and `pull_request`; it is not path-filtered. It
+runs the actual Electron PID/security probe on the disposable GitHub-hosted VM,
+then the no-volume, network-none Docker harness. JSON, JUnit, SARIF, raw
+observations, and redacted container inspect evidence are uploaded even when the
+gate fails. Only `status=PASS` with `promotion_allowed=true` exits successfully.
+
+Repository branch protection is external state and must be configured separately;
+the workflow cannot declare itself required.

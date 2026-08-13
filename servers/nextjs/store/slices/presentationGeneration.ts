@@ -15,22 +15,7 @@ import type {
   PresentationProfile,
 } from "@/lib/presentation-profile";
 import { setNestedMediaValue } from "./presentationGenerationMedia";
-
-/** Object/array container addressed by a dotted+indexed content data path. */
-type PathContainer = Record<string | number, unknown>;
-
-/** Chart object stored at `slide.content.chart`. Structural mirror of the
- *  in-tree editor's ChartData (kept local so the store does not depend on a
- *  component module). */
-interface SlideChart {
-  type?: "bar" | "line" | "area";
-  data: Array<{ name?: string; value?: number }>;
-}
-
-/** A stored slide as the editor keeps it. The concrete shape depends on the
- *  template family (classic `content.*`, adaptive `content.blocks[]`,
- *  template-v2), so re-indexing only relies on it being an object. */
-type SlideRecord = Record<string, unknown>;
+import type { PathContainer, SlideChart, SlideRecord } from "./presentationGenerationTypes";
 
 export interface PresentationData {
   id: string;
@@ -49,6 +34,7 @@ export interface PresentationData {
   theme: Theme | null;
   profile?: PresentationProfile;
   capabilities?: PresentationCapabilities;
+  version?: string;
   revision?: number;
   lifecycle_status?: string;
   source_sha256?: string;

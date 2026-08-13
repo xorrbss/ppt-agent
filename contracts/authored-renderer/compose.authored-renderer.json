@@ -1,0 +1,68 @@
+{
+  "name": "presenton-authored-renderer",
+  "services": {
+    "authored-render-worker": {
+      "image": "${AUTHORED_RENDERER_IMAGE_REF:-presenton-authored-render-worker:local}",
+      "pull_policy": "never",
+      "build": {
+        "context": "../..",
+        "dockerfile": "Dockerfile",
+        "target": "authored-renderer-runtime",
+        "args": {
+          "SOURCE_REVISION": "${AUTHORED_RENDERER_SOURCE_REVISION:-unknown}",
+          "SOURCE_TREE_DIGEST": "${AUTHORED_RENDERER_SOURCE_TREE_DIGEST:-unknown}",
+          "CONTRACT_DIGEST": "${AUTHORED_RENDERER_CONTRACT_DIGEST:-unknown}"
+        }
+      },
+      "entrypoint": [
+        "/opt/venv/bin/python",
+        "-m",
+        "utils.authored_renderer_worker"
+      ],
+      "working_dir": "/app/servers/fastapi",
+      "user": "65532:65532",
+      "network_mode": "none",
+      "ipc": "private",
+      "read_only": true,
+      "stdin_open": true,
+      "tty": false,
+      "init": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,nodev,size=96m,mode=1777",
+        "/dev/shm:rw,noexec,nosuid,nodev,size=64m,mode=1777"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true",
+        "seccomp=chromium-seccomp.json"
+      ],
+      "pids_limit": 128,
+      "mem_limit": "512m",
+      "memswap_limit": "512m",
+      "cpus": 1.0,
+      "ulimits": {
+        "nofile": {
+          "soft": 256,
+          "hard": 256
+        }
+      },
+      "stop_grace_period": "5s",
+      "environment": {
+        "AUTHORED_RENDERER_WORKER": "1",
+        "AUTHORED_RENDERER_MODE": "isolated",
+        "AUTHORED_RENDERER_OS_ISOLATION": "nonroot-readonly-tmpfs-network-none",
+        "AUTHORED_RENDERER_KILL_SWITCH": "false",
+        "AUTHORED_RENDERER_LEGACY_ENABLED": "false",
+        "HOME": "/tmp/home",
+        "XDG_RUNTIME_DIR": "/tmp/runtime",
+        "LANG": "C.UTF-8",
+        "PATH": "/opt/venv/bin:/usr/bin:/bin",
+        "CHROME_PATH": "/usr/bin/chromium",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}

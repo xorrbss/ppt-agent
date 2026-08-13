@@ -1,0 +1,38 @@
+{
+  "build_elapsed_ms": 32763.141,
+  "harness_attestation": {
+    "image_id": "sha256:d8016f6ffb23af354da999597e023ee4591322ce829bb56711b677c3959bf8af",
+    "runtime_sha256": "sha256:28840ae6756cc824f7db0f6c6755b843a7eb847a968ff0f1cb5b75f9d9f67ffc"
+  },
+  "harness_elapsed_ms": 7911.186,
+  "harness_exit": {
+    "error": "",
+    "exit_code": 0,
+    "oom_killed": false
+  },
+  "harness_start_monotonic": 48.408668717,
+  "harness_started_after_product_ready": true,
+  "product_readiness": {
+    "criterion": "worker-process-blocked-on-request-pipe",
+    "elapsed_ms": 1770.638,
+    "ready": true,
+    "samples": [
+      {
+        "container_running": true,
+        "elapsed_ms": 773.273,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 folio_wait_bit_common"
+      },
+      {
+        "container_running": true,
+        "elapsed_ms": 1770.638,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 anon_pipe_read"
+      }
+    ]
+  },
+  "schema_version": "authored-renderer-lifecycle/v1",
+  "started_monotonic": 9.853452887
+}

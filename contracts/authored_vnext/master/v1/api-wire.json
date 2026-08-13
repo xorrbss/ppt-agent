@@ -1,0 +1,100 @@
+{
+  "endpoints": [
+    {
+      "method": "POST",
+      "operation": "upload_master_logo",
+      "path": "/authored-vnext/master/assets/logo",
+      "requestModel": "UploadFile",
+      "responseModel": "MasterAssetReceipt",
+      "successStatus": 201
+    },
+    {
+      "method": "POST",
+      "operation": "create_deck",
+      "path": "/authored-vnext/master/decks",
+      "requestModel": "CreateDeckRequest",
+      "responseModel": "DeckSnapshot",
+      "successStatus": 201
+    },
+    {
+      "method": "POST",
+      "operation": "regenerate_body",
+      "path": "/authored-vnext/master/decks/{deck_id}/slides/{slide_id}/regenerate-body",
+      "requestModel": "RegenerateBodyRequest",
+      "responseModel": "RegenerateResponse",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "create_draft",
+      "path": "/authored-vnext/master/drafts",
+      "requestModel": "CreateDraftRequest",
+      "responseModel": "MasterRevisionResponse",
+      "successStatus": 201
+    },
+    {
+      "method": "POST",
+      "operation": "publish_draft",
+      "path": "/authored-vnext/master/drafts/{master_id}/publish",
+      "requestModel": "MasterCasRequest",
+      "responseModel": "MasterRevisionResponse",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "validate_draft",
+      "path": "/authored-vnext/master/drafts/{master_id}/validate",
+      "requestModel": "MasterCasRequest",
+      "responseModel": "ValidationSummary",
+      "successStatus": 200
+    },
+    {
+      "method": "GET",
+      "operation": "get_master_revision",
+      "path": "/authored-vnext/master/masters/{master_id}/revisions/{revision}",
+      "requestModel": null,
+      "responseModel": "MasterRevisionResponse",
+      "successStatus": 200
+    },
+    {
+      "method": "POST",
+      "operation": "preview",
+      "path": "/authored-vnext/master/preview",
+      "requestModel": "PreviewRequest",
+      "responseModel": "PreviewResponse",
+      "successStatus": 200
+    },
+    {
+      "method": "GET",
+      "operation": "master_status",
+      "path": "/authored-vnext/master/status",
+      "requestModel": null,
+      "responseModel": "StatusResponse",
+      "successStatus": 200
+    }
+  ],
+  "featureFlag": {
+    "default": false,
+    "disabledResponse": {
+      "detail": "authored_vnext_master_disabled",
+      "status": 404
+    },
+    "name": "AUTHORED_VNEXT_MASTER_ENABLED"
+  },
+  "router": {
+    "mountPrefix": "/api/v1/ppt",
+    "prefix": "/authored-vnext/master",
+    "publicPrefix": "/api/v1/ppt/authored-vnext/master",
+    "symbol": "AUTHORED_VNEXT_MASTER_ROUTER"
+  },
+  "schemaVersion": "authored-vnext-master-api-wire/v1",
+  "versions": {
+    "compilerPort": "OoxmlMasterCompilerPort",
+    "deckMasterContract": "deckmaster-contract/v1",
+    "slideSpec": "slidespec/v2"
+  },
+  "wireFormat": {
+    "additionalProperties": "forbidden",
+    "fieldNames": "camelCase"
+  }
+}

@@ -1,0 +1,129 @@
+{
+    "schemaVersion":  "ooxml-vnext/office-compatibility-matrix/v1",
+    "startedAtUtc":  "2026-08-13T19:44:20.6306921Z",
+    "completedAtUtc":  "2026-08-13T19:44:35.7769650Z",
+    "overallStatus":  "completed",
+    "input":  {
+                  "fileName":  "existing-style-90.pptx",
+                  "sha256Before":  "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
+                  "package":  {
+                                  "readable":  true,
+                                  "partCount":  200,
+                                  "slideCount":  90,
+                                  "error":  null
+                              },
+                  "sha256After":  "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
+                  "unchanged":  true
+              },
+    "matrix":  {
+                   "powerPointDesktop":  {
+                                             "available":  true,
+                                             "path":  "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
+                                             "fileVersion":  "16.0.20228.20158",
+                                             "productVersion":  "16.0.20228.20158",
+                                             "processDetected":  false,
+                                             "automationStatus":  "not-run",
+                                             "reason":  "This matrix never attaches to, launches, saves through, or terminates PowerPoint.",
+                                             "repairDialog":  {
+                                                                  "status":  "not-observed",
+                                                                  "zeroClaimSupported":  false,
+                                                                  "requiredEvidence":  "visible human open of the generated disposable copy, without save"
+                                                              }
+                                         },
+                   "openXmlSdk":  {
+                                      "available":  true,
+                                      "implementation":  "Microsoft Open XML SDK",
+                                      "package":  "DocumentFormat.OpenXml",
+                                      "exactVersionPin":  "3.5.1",
+                                      "target":  "Microsoft365",
+                                      "status":  "passed",
+                                      "result":  {
+                                                     "status":  "passed",
+                                                     "exitCode":  0,
+                                                     "receipt":  {
+                                                                     "schemaVersion":  "ooxml-vnext/openxml-sdk-validator/v1",
+                                                                     "status":  "passed",
+                                                                     "validator":  {
+                                                                                       "implementation":  "Microsoft Open XML SDK",
+                                                                                       "package":  "DocumentFormat.OpenXml",
+                                                                                       "packageVersionPin":  "3.5.1",
+                                                                                       "loadedAssemblyVersion":  "3.5.1+Branch.main.Sha.3139fdfd27414548a41555f7848d5728f6e71a42.3139fdfd27414548a41555f7848d5728f6e71a42",
+                                                                                       "target":  "Microsoft365"
+                                                                                   },
+                                                                     "input":  {
+                                                                                   "fileName":  "existing-style-90.pptx",
+                                                                                   "byteLength":  146327,
+                                                                                   "sha256Before":  "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
+                                                                                   "sha256After":  "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
+                                                                                   "unchanged":  true,
+                                                                                   "openedReadOnly":  true
+                                                                               },
+                                                                     "validation":  {
+                                                                                        "errorCount":  0,
+                                                                                        "reportedErrorCount":  0,
+                                                                                        "truncated":  false,
+                                                                                        "errors":  [
+
+                                                                                                   ]
+                                                                                    },
+                                                                     "limitations":  [
+                                                                                         "Schema validation is not a PowerPoint reopen or rendering test.",
+                                                                                         "A zero-error result does not establish that PowerPoint displayed no repair dialog."
+                                                                                     ]
+                                                                 }
+                                                 }
+                                  },
+                   "libreOffice":  {
+                                       "available":  true,
+                                       "path":  "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                                       "fileVersion":  "26.2.5.2",
+                                       "productVersion":  "26.2.5.2",
+                                       "status":  "passed",
+                                       "role":  "isolated headless conversion/read-back signal",
+                                       "result":  {
+                                                      "status":  "passed",
+                                                      "exitCode":  0,
+                                                      "disposableCopyOnly":  true,
+                                                      "isolatedUserProfile":  true,
+                                                      "convertedPackage":  {
+                                                                               "readable":  true,
+                                                                               "partCount":  200,
+                                                                               "slideCount":  90,
+                                                                               "error":  null
+                                                                           },
+                                                      "sourceUnchanged":  true,
+                                                      "performance":  {
+                                                                          "wallClockMs":  12929,
+                                                                          "peakWorkingSetBytes":  319709184,
+                                                                          "peakPrivateMemoryBytes":  395259904,
+                                                                          "peakObservedTotalCpuMs":  968.75,
+                                                                          "observedProcessIds":  [
+                                                                                                     20428,
+                                                                                                     26480,
+                                                                                                     28572
+                                                                                                 ],
+                                                                          "sampleIntervalMs":  100,
+                                                                          "measurementScope":  "new LibreOffice process family; preexisting process ids excluded"
+                                                                      },
+                                                      "limitation":  "LibreOffice conversion is not byte-preservation evidence and says nothing about a PowerPoint repair dialog."
+                                                  }
+                                   },
+                   "visibleRepairDialogWitness":  {
+                                                      "status":  "not-created"
+                                                  }
+               },
+    "claims":  {
+                   "openXmlSdkSchemaValidity":  "supported",
+                   "libreOfficeReadBack":  "supported",
+                   "powerPointReadBack":  "not-established",
+                   "powerPointRepairDialogZero":  "not-established"
+               },
+    "safety":  {
+                   "sourceOpenedReadOnly":  true,
+                   "sourceDigestChecked":  true,
+                   "powerPointAutomationCalls":  0,
+                   "powerPointSaveCalls":  0,
+                   "existingPowerPointProcessAttachOrTermination":  false,
+                   "networkProviderCalls":  0
+               }
+}

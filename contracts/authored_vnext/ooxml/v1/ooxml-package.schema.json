@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://presenton.local/contracts/authored-vnext/ooxml-package/v1",
+  "title": "Authored vNext OOXML package API",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "PackageInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "partCount", "slideCount", "masterCount", "layoutCount", "externalRelationshipCount", "externalRelationshipWarnings", "packageDigest", "relationshipDigest", "closureDigest", "macroDetected", "quarantineReasons"],
+      "properties": {
+        "classification": {"enum": ["PRESERVE_EXACT", "PATCH_SLICE", "GENERATED", "QUARANTINED"]},
+        "partCount": {"type": "integer", "minimum": 1},
+        "slideCount": {"type": "integer", "minimum": 0},
+        "masterCount": {"type": "integer", "minimum": 0},
+        "layoutCount": {"type": "integer", "minimum": 0},
+        "externalRelationshipCount": {"type": "integer", "minimum": 0},
+        "externalRelationshipWarnings": {"type": "array", "items": {"type": "string"}, "maxItems": 4096},
+        "packageDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "relationshipDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "closureDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "macroDetected": {"type": "boolean"},
+        "quarantineReasons": {"type": "array", "items": {"type": "string"}, "maxItems": 4096}
+      }
+    },
+    "PackageVersionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "packageId", "sourcePackageId", "ownerId", "state", "mode", "origin", "revision", "artifactDigest", "archiveByteLength", "inspection", "createdAt"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-package/v1"},
+        "packageId": {"type": "string", "pattern": "^package:[a-f0-9]{32}$"},
+        "sourcePackageId": {"oneOf": [{"type": "string", "pattern": "^package:[a-f0-9]{32}$"}, {"type": "null"}]},
+        "ownerId": {"type": "string", "minLength": 1, "maxLength": 200},
+        "state": {"enum": ["imported", "quarantined", "editable", "archived"]},
+        "mode": {"enum": ["PRESERVE_EXACT", "CORPORATE_NORMALIZE"]},
+        "origin": {"enum": ["IMPORTED", "GENERATED"]},
+        "revision": {"type": "integer", "minimum": 1},
+        "artifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "archiveByteLength": {"type": "integer", "minimum": 1},
+        "inspection": {"$ref": "#/$defs/PackageInspection"},
+        "createdAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "ImportPackageReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "replayed", "editable", "sourceArchived", "package"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-import/v1"},
+        "replayed": {"type": "boolean"},
+        "editable": {"type": "boolean"},
+        "sourceArchived": {"const": true},
+        "package": {"$ref": "#/$defs/PackageVersionReceipt"}
+      }
+    },
+    "EditableForkRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "mode", "expectedRevision", "expectedArtifactDigest", "idempotencyKey", "expectedAccountGeneration"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-fork-command/v1"},
+        "mode": {"enum": ["PRESERVE_EXACT", "CORPORATE_NORMALIZE"]},
+        "expectedRevision": {"type": "integer", "minimum": 1},
+        "expectedArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "idempotencyKey": {"type": "string", "minLength": 1, "maxLength": 200},
+        "expectedAccountGeneration": {"type": "integer", "minimum": 0},
+        "masterContract": {"type": "object"},
+        "slides": {"type": "array", "items": {"type": "object"}, "maxItems": 500}
+      }
+    },
+    "TextSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["placeholder", "element"]},
+        "idx": {"type": "integer", "minimum": 0},
+        "role": {"type": "string", "minLength": 1, "maxLength": 128},
+        "id": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "minLength": 1, "maxLength": 128}]},
+        "occurrence": {"type": "integer", "minimum": 0}
+      }
+    },
+    "PackageOperationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operation", "expectedRevision", "expectedArtifactDigest", "idempotencyKey", "expectedAccountGeneration"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-operation-command/v1"},
+        "operation": {"enum": ["NOOP_SAVE", "PATCH_TEXT_SLICE", "CREATE_MASTER", "UPDATE_MASTER", "DELETE_MASTER", "CREATE_LAYOUT", "UPDATE_LAYOUT", "DELETE_LAYOUT", "SAVE_EXPORT", "ARCHIVE"]},
+        "expectedRevision": {"type": "integer", "minimum": 1},
+        "expectedArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "idempotencyKey": {"type": "string", "minLength": 1, "maxLength": 200},
+        "expectedAccountGeneration": {"type": "integer", "minimum": 0},
+        "partName": {"type": "string", "pattern": "^ppt/(slides|slideLayouts|slideMasters)/[A-Za-z0-9._/-]+\\.xml$", "maxLength": 512},
+        "selector": {"$ref": "#/$defs/TextSelector"},
+        "expectedText": {"type": "string", "maxLength": 100000},
+        "replacementText": {"type": "string", "maxLength": 100000},
+        "masterContract": {"type": "object"},
+        "slides": {"type": "array", "items": {"type": "object"}, "maxItems": 500}
+      }
+    },
+    "PackageOperationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operationId", "packageId", "operation", "state", "attemptCount", "fencingToken", "resumable", "replayed", "expectedRevision", "expectedArtifactDigest", "resultRevision", "resultArtifactDigest", "changedParts", "preservedExactPartCount", "silentLossCount", "errorCode", "createdAt", "updatedAt"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-operation/v1"},
+        "operationId": {"type": "string", "pattern": "^operation:[a-f0-9]{32}$"},
+        "packageId": {"type": "string", "pattern": "^package:[a-f0-9]{32}$"},
+        "operation": {"enum": ["NOOP_SAVE", "PATCH_TEXT_SLICE", "CREATE_MASTER", "UPDATE_MASTER", "DELETE_MASTER", "CREATE_LAYOUT", "UPDATE_LAYOUT", "DELETE_LAYOUT", "SAVE_EXPORT", "ARCHIVE"]},
+        "state": {"enum": ["queued", "running", "succeeded", "failed", "cancelled"]},
+        "attemptCount": {"type": "integer", "minimum": 0},
+        "fencingToken": {"type": "integer", "minimum": 1},
+        "resumable": {"type": "boolean"},
+        "replayed": {"type": "boolean"},
+        "expectedRevision": {"type": "integer", "minimum": 1},
+        "expectedArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "resultRevision": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+        "resultArtifactDigest": {"oneOf": [{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, {"type": "null"}]},
+        "changedParts": {"type": "array", "items": {"type": "string"}, "maxItems": 8192},
+        "preservedExactPartCount": {"type": "integer", "minimum": 0},
+        "silentLossCount": {"type": "integer", "minimum": 0},
+        "errorCode": {"oneOf": [{"type": "string", "maxLength": 200}, {"type": "null"}]},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "updatedAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "PackageReceiptReadBack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "package", "sourceArtifactDigest", "sourceArchiveRetained", "unsupportedPartsPassthrough", "untouchedPartsVerified", "preservedExactPartCount", "patchSlicePartCount", "generatedPartCount", "silentLossCount", "changedParts"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-readback/v1"},
+        "package": {"$ref": "#/$defs/PackageVersionReceipt"},
+        "sourceArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceArchiveRetained": {"const": true},
+        "unsupportedPartsPassthrough": {"type": "boolean"},
+        "untouchedPartsVerified": {"type": "boolean"},
+        "preservedExactPartCount": {"type": "integer", "minimum": 0},
+        "patchSlicePartCount": {"type": "integer", "minimum": 0},
+        "generatedPartCount": {"type": "integer", "minimum": 0},
+        "silentLossCount": {"type": "integer", "minimum": 0},
+        "changedParts": {"type": "array", "items": {"type": "string"}, "maxItems": 8192}
+      }
+    },
+    "PackageRollbackRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "targetRevision", "expectedRevision", "expectedArtifactDigest", "idempotencyKey", "expectedAccountGeneration"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-rollback-command/v1"},
+        "targetRevision": {"type": "integer", "minimum": 1},
+        "expectedRevision": {"type": "integer", "minimum": 1},
+        "expectedArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "idempotencyKey": {"type": "string", "minLength": 1, "maxLength": 200},
+        "expectedAccountGeneration": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

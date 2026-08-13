@@ -54,6 +54,13 @@ from models.sql.asset_gateway_idempotency_receipt import (
     AssetGatewayIdempotencyReceipt,
 )
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.provider_usage_receipt import ProviderUsageReceipt
+from models.sql.provider_runtime_reservation import (
+    ProviderRuntimeBudget,
+    ProviderRuntimeCircuit,
+    ProviderRuntimeReservation,
+)
+from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
 from templates.v2.catalog import get_template_v2_default_template_id
 from services.presentation_profile_persistence import stamp_presentation_profile
 from utils.owner_context import get_current_owner_id
@@ -270,6 +277,11 @@ async def create_db_and_tables():
                         ProviderSettings.__table__,
                         ReferenceSnapshot.__table__,
                         AssetGatewayIdempotencyReceipt.__table__,
+                        ProviderUsageReceipt.__table__,
+                        ProviderRuntimeBudget.__table__,
+                        ProviderRuntimeReservation.__table__,
+                        ProviderRuntimeCircuit.__table__,
+                        *AUTHORED_VNEXT_SQL_TABLES,
                     ],
                 )
             )

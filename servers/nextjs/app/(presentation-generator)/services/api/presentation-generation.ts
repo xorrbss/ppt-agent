@@ -13,6 +13,12 @@ import {
   forgetCanonicalAdmission,
   rememberCanonicalAdmission,
 } from "./canonical-document-admission";
+import type {
+  GenerationPreferences,
+  PresentationThemePayload,
+} from "./presentation-generation-options";
+
+export type { GenerationPreferences, PresentationThemePayload } from "./presentation-generation-options";
 
 export type BlankPresentationResponse = {
   id: string;
@@ -183,42 +189,7 @@ function waitForDecomposePoll(delayMs: number, signal?: AbortSignal) {
   });
 }
 
-export type PresentationThemePayload = {
-  id: string;
-  name: string;
-  description: string;
-  user: string;
-  logo: string | null;
-  logo_url: string | null;
-  company_name: string | null;
-  data: Record<string, unknown>;
-};
-
-type GenerationPreferences = {
-  language?: string | null;
-  tone?: string;
-  verbosity?: string;
-  instructions?: string | null;
-  include_table_of_contents?: boolean;
-  include_title_slide?: boolean;
-  web_search?: boolean;
-};
-
-const generationPreferencesPayload = (body: GenerationPreferences) => ({
-  language: body.language ?? null,
-  ...(body.tone ? { tone: body.tone } : {}),
-  ...(body.verbosity ? { verbosity: body.verbosity } : {}),
-  ...(body.instructions !== undefined
-    ? { instructions: body.instructions }
-    : {}),
-  ...(body.include_table_of_contents !== undefined
-    ? { include_table_of_contents: body.include_table_of_contents }
-    : {}),
-  ...(body.include_title_slide !== undefined
-    ? { include_title_slide: body.include_title_slide }
-    : {}),
-  ...(body.web_search !== undefined ? { web_search: body.web_search } : {}),
-});
+const generationPreferencesPayload = (body: GenerationPreferences) => ({ language: body.language ?? null, ...(body.tone ? { tone: body.tone } : {}), ...(body.verbosity ? { verbosity: body.verbosity } : {}), ...(body.instructions !== undefined ? { instructions: body.instructions } : {}), ...(body.include_table_of_contents !== undefined ? { include_table_of_contents: body.include_table_of_contents } : {}), ...(body.include_title_slide !== undefined ? { include_title_slide: body.include_title_slide } : {}), ...(body.web_search !== undefined ? { web_search: body.web_search } : {}) });
 
 export class PresentationGenerationApi {
   static async uploadDoc(

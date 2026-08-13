@@ -1,0 +1,305 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.generate_presentation_request import GeneratePresentationRequest
+from models.presentation_and_path import PresentationPathAndEditPath
+from models.presentation_outline_model import PresentationOutlineModel
+from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+from models.sql.authored_exact_provenance import AuthoredExactProvenance
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_PUBLISHED,
+    PRESENTATION_LIFECYCLE_STAGING,
+    PresentationModel,
+)
+from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.slide import SlideModel
+from services.authored_checkpoint_service import (
+    AuthoredStageError,
+    begin_publish,
+    complete_publish,
+    fail_stage,
+)
+from services.authored_presentation_artifacts import (
+    _remove_partial_slide_pngs,
+    _save_slide_pngs,
+)
+from services.authored_presentation_contracts import AUTHORED_TEMPLATE
+from services.workspace_artifact_publication_service import (
+    WorkspaceArtifactPublicationError,
+    compensate_workspace_artifact,
+    prepare_workspace_generation_artifact,
+    publish_workspace_generation_artifact,
+)
+from utils.llm_calls.author_slide import Brand
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+async def publish_authored_presentation(
+    *,
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    outline: PresentationOutlineModel,
+    language: str | None,
+    sql_session: AsyncSession,
+    generation_job: PresentationGenerationJob | None,
+    existing: PresentationModel | None,
+    title: str,
+    brand: Brand,
+    style,
+    roles: list[str],
+    exact_provenance,
+    htmls: list[str],
+    pngs: list[bytes],
+    out_path: str,
+    attempt_token: str | None,
+) -> tuple[str, float]:
+    persist_started = time.monotonic()
+    images_ready = False
+    images_started = False
+    published_path = out_path
+    workspace_artifact = None
+    artifact_handed_to_publish = False
+    image_publication_token = (
+        f"{generation_job.workspace_operation_id}:{attempt_token}"
+        if generation_job is not None
+        and generation_job.workspace_operation_id is not None
+        and attempt_token
+        else None
+    )
+    presentation = existing or PresentationModel(
+        id=presentation_id,
+        content=request.content,
+        n_slides=len(htmls),
+        language=language or brand.language,
+        lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+    )
+    expected_revision = presentation.revision
+    try:
+        # Reserve and materialize every external artifact before acquiring the
+        # caller transaction's publication fence.  In particular, the durable
+        # artifact intent uses an independent session; opening it after
+        # begin_publish would deadlock SQLite's single writer and could commit
+        # unrelated caller UoW state.
+        if (
+            generation_job is not None
+            and generation_job.workspace_operation_id is not None
+        ):
+            workspace_artifact = await prepare_workspace_generation_artifact(
+                sql_session,
+                source_path=out_path,
+                operation_id=generation_job.workspace_operation_id,
+                presentation_id=presentation_id,
+                source_revision=expected_revision + 1,
+            )
+            published_path = workspace_artifact.public_path
+
+        images_started = True
+        if image_publication_token is None:
+            # Preserve the two-argument helper contract used by the legacy path
+            # and its narrow test doubles.
+            image_refs = _save_slide_pngs(presentation_id, pngs)
+        else:
+            image_refs = _save_slide_pngs(
+                presentation_id,
+                pngs,
+                image_publication_token,
+            )
+        images_ready = True
+
+        if generation_job is not None and attempt_token:
+            await begin_publish(
+                sql_session,
+                job_id=generation_job.id,
+                attempt_token=attempt_token,
+            )
+
+        presentation.content = request.content
+        presentation.n_slides = len(htmls)
+        presentation.language = language or brand.language
+        presentation.title = title
+        presentation.file_paths = request.files
+        presentation.reference_snapshot_ids = [
+            str(snapshot_id) for snapshot_id in request.reference_snapshot_ids
+        ] or None
+        presentation.outlines = outline.model_dump()
+        presentation.layout = None
+        presentation.structure = None
+        presentation.tone = request.tone.value
+        presentation.verbosity = request.verbosity.value
+        presentation.instructions = request.instructions
+        presentation.include_table_of_contents = request.include_table_of_contents
+        presentation.include_title_slide = request.include_title_slide
+        presentation.web_search = request.web_search
+        presentation.mode = AUTHORED_TEMPLATE
+        presentation.lifecycle_status = PRESENTATION_LIFECYCLE_STAGING
+        presentation.theme = {
+            "mode": AUTHORED_TEMPLATE,
+            "style": style.id,
+            "primary": brand.primary,
+            "fonts": brand.fonts,
+            "language": brand.language,
+        }
+        slides = [
+            SlideModel(
+                presentation=presentation_id,
+                layout_group=AUTHORED_TEMPLATE,
+                layout=f"{AUTHORED_TEMPLATE}:{roles[i]}",
+                index=i,
+                content={
+                    "__authored__": True,
+                    "image": image_refs[i],
+                    "role": roles[i],
+                },
+                html_content=htmls[i],
+                properties={"image": image_refs[i]},
+            )
+            for i in range(len(htmls))
+        ]
+        sql_session.add(presentation)
+        sql_session.add_all(slides)
+        if exact_provenance is not None:
+            sql_session.add(
+                AuthoredExactProvenance(
+                    presentation_id=presentation_id,
+                    provenance=exact_provenance,
+                )
+            )
+        if workspace_artifact is None:
+            publication = await sql_session.execute(
+                update(PresentationModel)
+                .where(
+                    PresentationModel.id == presentation_id,
+                    PresentationModel.lifecycle_status
+                    == PRESENTATION_LIFECYCLE_STAGING,
+                    PresentationModel.revision == expected_revision,
+                )
+                .values(
+                    lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
+                    revision=PresentationModel.revision + 1,
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+            if publication.rowcount != 1:
+                raise AuthoredStageError(
+                    slide_index=max(0, len(pngs) - 1),
+                    stage="persist",
+                    code="authored_attempt_lost",
+                )
+        if generation_job is not None and attempt_token:
+            response = PresentationPathAndEditPath(
+                presentation_id=presentation_id,
+                path=published_path,
+                edit_path=f"/presentation?id={presentation_id}",
+            )
+            async_status = await sql_session.get(
+                AsyncPresentationGenerationTaskModel,
+                generation_job.task_id,
+            )
+            if async_status is None:
+                raise RuntimeError("presentation_generation_task_missing")
+            async_status.status = "completed"
+            async_status.message = "Presentation generation completed"
+            async_status.data = response.model_dump(mode="json")
+            async_status.error = None
+            async_status.updated_at = datetime.now(timezone.utc)
+            sql_session.add(async_status)
+            if workspace_artifact is None:
+                await complete_publish(
+                    sql_session,
+                    job_id=generation_job.id,
+                    attempt_token=attempt_token,
+                )
+        if workspace_artifact is not None:
+            try:
+                # From here the publication helper owns reconciliation and
+                # compensation.  A returned revision means the complete tuple
+                # committed, including after an ambiguous commit ACK.
+                artifact_handed_to_publish = True
+                await publish_workspace_generation_artifact(
+                    sql_session,
+                    artifact=workspace_artifact,
+                    expected_revision=expected_revision,
+                    attempt_token=attempt_token or "",
+                )
+            except WorkspaceArtifactPublicationError as error:
+                raise AuthoredStageError(
+                    slide_index=max(0, len(pngs) - 1),
+                    stage="persist",
+                    code=(
+                        "authored_attempt_lost"
+                        if error.code in {"operation_lease_lost", "revision_conflict"}
+                        else error.code
+                    ),
+                    retryable=True,
+                    cause=error,
+                ) from error
+        else:
+            await sql_session.commit()
+    except BaseException as exc:
+        await sql_session.rollback()
+        if workspace_artifact is not None and not artifact_handed_to_publish:
+            try:
+                await compensate_workspace_artifact(sql_session, workspace_artifact)
+            except Exception:
+                # The artifact service durably records cleanup_pending before
+                # raising.  Never hide the original generation failure.
+                LOGGER.warning(
+                    "Unable to compensate unpublished workspace artifact %s",
+                    workspace_artifact.artifact_id,
+                    exc_info=True,
+                )
+
+        # Workspace publication reconciles an ambiguous commit before raising,
+        # so any raised outcome is unpublished and this attempt-scoped image set
+        # is safe to remove.  The legacy path keeps a complete immutable set on
+        # ambiguous commit, but removes a partial copy.
+        if images_started and (workspace_artifact is not None or not images_ready):
+            try:
+                _remove_partial_slide_pngs(
+                    presentation_id,
+                    pngs,
+                    image_publication_token,
+                )
+            except OSError:
+                LOGGER.warning(
+                    "Unable to remove partial authored slide images for %s",
+                    presentation_id,
+                    exc_info=True,
+                )
+
+        if isinstance(exc, asyncio.CancelledError):
+            raise
+        if not isinstance(exc, Exception):
+            raise
+        if isinstance(exc, AuthoredStageError):
+            # In particular, preserve authored_attempt_lost so a stale worker
+            # cannot relabel lease loss as a retryable slide failure or mutate
+            # the newer owner's durable status in the outer handler.
+            raise
+        error = AuthoredStageError(
+            slide_index=max(0, len(pngs) - 1),
+            stage="persist",
+            code="authored_slide_persist_failed",
+            cause=exc,
+        )
+        if generation_job is not None and attempt_token:
+            await fail_stage(
+                job_id=generation_job.id,
+                slide_index=error.slide_index,
+                stage="persist",
+                attempt_token=attempt_token,
+                error=error,
+                request_id=generation_job.request_id,
+            )
+        raise error from exc
+    return published_path, time.monotonic() - persist_started

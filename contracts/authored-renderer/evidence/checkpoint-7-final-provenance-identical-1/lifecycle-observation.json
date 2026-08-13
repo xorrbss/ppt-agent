@@ -1,0 +1,46 @@
+{
+  "build_elapsed_ms": 0.002,
+  "electron_package_provenance": {
+    "executable_sha256": "c304ce81fa38e6ca80e3884dfe656f6f5e0cc48f53d5ab99560e7a88f33302dc",
+    "policy_compiled_sha256": "3d36d5f812e9bb7cbac917639f52982a9bac4d98d3d05981f61767773fb6ab05",
+    "policy_provenance_manifest_sha256": "e8731b30f3687114ecd2887e52e52a08fe8fd288fe35232a9b9830120eefd180",
+    "policy_source_sha256": "f5f85a08c74c4a24143e90bb4f36376b59acd554c38ae259737e33b2141b1caf",
+    "probe_source_sha256": "652e10ec0856e8eaf99a1a6f69392d1641454d88a26e0623b08cc80944d8de57",
+    "schema_version": "authored-electron-probe-package/v2"
+  },
+  "harness_attestation": {
+    "image_id": "sha256:192c1d944b4b5300095b3290d7da62c3643a304f04fa67c157941a3f52a01c1b",
+    "runtime_sha256": "sha256:5f618ca1373acfde01bb91be6ee3a244e081dc2736b19fa555c849a119177465"
+  },
+  "harness_elapsed_ms": 6192.496,
+  "harness_exit": {
+    "error": "",
+    "exit_code": 0,
+    "oom_killed": false
+  },
+  "harness_start_monotonic": 244.287483923,
+  "harness_started_after_product_ready": true,
+  "product_readiness": {
+    "criterion": "worker-process-blocked-on-request-pipe",
+    "elapsed_ms": 1361.832,
+    "ready": true,
+    "samples": [
+      {
+        "container_running": true,
+        "elapsed_ms": 630.302,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 0"
+      },
+      {
+        "container_running": true,
+        "elapsed_ms": 1361.832,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 anon_pipe_read"
+      }
+    ]
+  },
+  "schema_version": "authored-renderer-lifecycle/v1",
+  "started_monotonic": 237.17860287
+}

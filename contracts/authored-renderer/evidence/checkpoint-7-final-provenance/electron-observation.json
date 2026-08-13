@@ -1,0 +1,46 @@
+{
+  "schema_version": "authored-electron-security-observation/v1",
+  "run_id": "electron-1786650059413",
+  "electron_version": "43.2.0",
+  "platform": "win32",
+  "executable_sha256": "c304ce81fa38e6ca80e3884dfe656f6f5e0cc48f53d5ab99560e7a88f33302dc",
+  "policy_provenance_manifest_sha256": "e8731b30f3687114ecd2887e52e52a08fe8fd288fe35232a9b9830120eefd180",
+  "policy_provenance": {
+    "schema": "presenton.authored-renderer-policy-provenance/v1",
+    "generatedBy": "npm run build:ts",
+    "bindings": {
+      "source": {
+        "path": "app/utils/authored-renderer-policy.ts",
+        "sha256": "f5f85a08c74c4a24143e90bb4f36376b59acd554c38ae259737e33b2141b1caf"
+      },
+      "compiled": {
+        "path": "app_dist/utils/authored-renderer-policy.js",
+        "sha256": "3d36d5f812e9bb7cbac917639f52982a9bac4d98d3d05981f61767773fb6ab05"
+      },
+      "tsconfig": {
+        "path": "tsconfig.json",
+        "sha256": "6da98983d0268e61d3cdec36030bb14dcdf7a5c69c8e89b5470d6d8df5f10218"
+      }
+    }
+  },
+  "controls": {
+    "renderer_pid_observed": true,
+    "renderer_process_metric_observed": true,
+    "packaged_runtime_observed": true,
+    "os_sandboxed": true,
+    "actual_web_preferences_observed": true,
+    "sandbox_preference": true,
+    "web_security": true,
+    "context_isolation": true,
+    "node_integration_disabled": true,
+    "subframe_node_integration_disabled": true,
+    "worker_node_integration_disabled": true,
+    "preload_absent": true,
+    "configured_preferences_match_actual": true,
+    "ipc_negative_probe_blocked": true,
+    "privileged_bridge_absent": true,
+    "ephemeral_session": true,
+    "compiled_policy_matches_build_provenance": true
+  },
+  "observer_errors": []
+}

@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "./**/*.ts",
+    "../../../app/(presentation-generator)/authored-vnext/master-setup/**/*.tsx",
+    "../../../next-env.d.ts",
+    "../../../types/global.d.ts"
+  ]
+}

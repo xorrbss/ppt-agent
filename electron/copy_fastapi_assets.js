@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { writeResourceProvenance } = require("./scripts/resource-provenance.cjs");
 
 const fastapiDir = path.join(__dirname, "..", "servers", "fastapi");
 const resourcesFastapiDir = path.join(__dirname, "resources", "fastapi");
@@ -36,6 +37,13 @@ function main() {
   } else {
     console.warn(`[fastapi-assets] tessdata not found at ${tessdataSrc}; OCR will fall back to CDN`);
   }
+
+  writeResourceProvenance({
+    kind: "fastapi",
+    sourceRoot: fastapiDir,
+    resourceRoot: resourcesFastapiDir,
+    workspaceRoot: path.join(__dirname, ".."),
+  });
 }
 
 try {

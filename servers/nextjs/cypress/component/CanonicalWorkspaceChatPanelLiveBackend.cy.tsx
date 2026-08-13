@@ -43,6 +43,7 @@ describe("CanonicalWorkspaceChatPanel with live FastAPI", () => {
   it("creates the canonical conversation and persists a default presentation.edit turn", () => {
     const root = `${backend}/api/v1/ppt/conversations`;
     let dispatcher: WorkspaceCommandDispatcher | null = null;
+    let conversationId = "";
     cy.intercept("POST", root).as("createConversation");
     cy.intercept("POST", `${root}/*/messages`).as("sendMessage");
     cy.intercept("GET", `${root}/*/timeline*`).as("timeline");
@@ -57,7 +58,11 @@ describe("CanonicalWorkspaceChatPanel with live FastAPI", () => {
         </div>
       </NextIntlClientProvider>,
     );
-    cy.wait(["@createConversation", "@timeline"]);
+    cy.wait("@createConversation").then(({ response }) => {
+      expect(response?.statusCode).to.equal(200);
+      conversationId = String(response?.body.id ?? "");
+      expect(conversationId).to.match(/^[0-9a-f-]{36}$/u);
+    });
     cy.get('[data-testid="conversation-composer"]').type(command);
     cy.contains("button", "Send").click();
     cy.wait("@sendMessage").then(({ request, response }) => {
@@ -66,6 +71,15 @@ describe("CanonicalWorkspaceChatPanel with live FastAPI", () => {
       expect(response?.statusCode).to.equal(200);
     });
     cy.contains(command).should("be.visible");
+    cy.then(() => cy.request(`${root}/${conversationId}/timeline`)).then(({ body }) => {
+      expect(body.conversation_id).to.equal(conversationId);
+      expect(
+        body.items.some(
+          (item: { item_type?: string; content?: string }) =>
+            item.item_type === "message" && item.content === command,
+        ),
+      ).to.equal(true);
+    });
     cy.then(() => {
       expect(dispatcher).to.be.a("function");
       return dispatcher!("Delete this slide [canonical-approval]", {

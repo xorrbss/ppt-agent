@@ -1,8 +1,13 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { type BrowserWindow, ipcMain } from "electron";
 import fs from 'fs';
 import path from 'path';
 import { getTempDir } from "../utils/constants";
 import { hasLiveWebContents, safeCloseWindow } from "../utils/lifecycle";
+import {
+  assertTrustedIpcSender,
+  assertTrustedMetadataUrl,
+  createTrustedMetadataWindow,
+} from "../utils/authored-renderer-isolation";
 
 
 interface Position {
@@ -85,8 +90,15 @@ type SlideElement = TextElement | PictureElement | BoxElement | LineElement | Gr
 
 
 
-export function setupSlideMetadataHandlers() {
-  ipcMain.handle("get-slide-metadata", async (_, url: string, theme: string, customColors?: any) => {
+export function setupSlideMetadataHandlers({
+  getTrustedAppOrigin,
+}: {
+  getTrustedAppOrigin: () => string | undefined;
+}) {
+  ipcMain.handle("get-slide-metadata", async (event, url: string, theme: string, customColors?: any) => {
+    const trustedAppOrigin = getTrustedAppOrigin();
+    assertTrustedIpcSender(event, trustedAppOrigin);
+    const trustedMetadataUrl = assertTrustedMetadataUrl(url, trustedAppOrigin);
     let win: BrowserWindow | null = null;
 
     const getLiveWebContents = () => {
@@ -108,20 +120,13 @@ export function setupSlideMetadataHandlers() {
     };
 
     try {
-      win = new BrowserWindow({
-        width: 1920,
-        height: 1080,
-        webPreferences: {
-          webSecurity: false,
-          preload: path.join(__dirname, '../preloads/index.js'),
-        },
-        show: false,
-      });
+      win = createTrustedMetadataWindow(trustedMetadataUrl.origin);
+      win.setSize(1920, 1080);
       win.once("closed", () => {
         win = null;
       });
 
-      await win.loadURL(url, { userAgent: 'electron' });
+      await win.loadURL(trustedMetadataUrl.toString(), { userAgent: 'electron' });
 
 
       await executeInMetadataWindow(`

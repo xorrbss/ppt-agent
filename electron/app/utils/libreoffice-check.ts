@@ -10,6 +10,7 @@
  */
 
 import { BrowserWindow, ipcMain, app } from "electron";
+import { getAppWebPreferences } from "./authored-renderer-policy";
 import { exec } from "child_process";
 import * as util from "util";
 import * as fs from "fs";
@@ -380,13 +381,9 @@ async function showLibreOfficeInstallerWindow(): Promise<void> {
       center: true,
       title: "Presenton – Install LibreOffice",
       icon: path.join(baseDir, "resources/ui/assets/images/presenton_short_filled.png"),
-      webPreferences: {
-        webSecurity: false,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: false,
-        preload: path.join(__dirname, "../preloads/libreoffice-installer.js"),
-      },
+      webPreferences: getAppWebPreferences(
+        path.join(__dirname, "../preloads/libreoffice-installer.js"),
+      ),
     });
 
     win.setMenuBarVisibility(false);

@@ -18,6 +18,7 @@ from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.slide import SlideModel
 from models.sql.template_v2 import TemplateV2
 from models.sql.user import User
 from models.sql.workspace import (
@@ -54,6 +55,7 @@ TABLES = [
     User.__table__,
     ImageAsset.__table__,
     PresentationModel.__table__,
+    SlideModel.__table__,
     TemplateV2.__table__,
     ChatHistoryMessageModel.__table__,
     WorkspaceConversation.__table__,
@@ -95,7 +97,9 @@ async def _seed(maker, *, presentation_revision: int, expected_revision: int):
             content="before",
             n_slides=1,
             language="en",
-            layout={"name": "test"},
+            layout=None,
+            mode="authored",
+            theme={"mode": "authored"},
             revision=presentation_revision,
         )
         session.add(presentation)
@@ -765,7 +769,7 @@ def _capturing_runtime_factory(captured: list[object]):
     return CapturingRuntime
 
 
-def test_handler_passes_only_db_vetted_smart_context_and_publishes_one_message(
+def test_handler_passes_only_db_vetted_authored_context_and_publishes_one_message(
     tmp_path: Path,
 ):
     asyncio.run(_handler_passes_only_db_vetted_smart_context(tmp_path))
@@ -799,8 +803,6 @@ async def _handler_passes_only_db_vetted_smart_context(tmp_path: Path):
             "attachments": [{"name": "spoofed.exe", "content": "secret"}],
         }
         async with maker() as session, session.begin():
-            presentation = await session.get(PresentationModel, presentation_id)
-            presentation.generation_mode = "smart"
             operation = await session.get(WorkspaceOperation, operation_id)
             operation.request_payload = request_payload
             session.add_all(
@@ -837,10 +839,10 @@ async def _handler_passes_only_db_vetted_smart_context(tmp_path: Path):
         assert result.result_revision == 5
         assert len(captured) == 1
         context = captured[0]
-        assert context.generation_mode == "smart"
+        assert context.generation_mode == "standard"
         assert context.history == ()  # current canonical user is not duplicated
         assert context.viewport.slide_index == 2
-        assert context.smart_selection.selected_text == "Selected"
+        assert context.smart_selection is None
         assert [asset.name for asset in context.assets] == ["authoritative.pdf"]
         assert all(asset.name != "spoofed.exe" for asset in context.assets)
 

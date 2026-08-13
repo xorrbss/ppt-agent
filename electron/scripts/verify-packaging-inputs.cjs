@@ -2,11 +2,14 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { requireReadinessOverlay } = require("./export-readiness-verifier.cjs");
+const { validateReleaseCompliance } = require("./release-compliance.cjs");
+const { verifyResourceProvenance } = require("./resource-provenance.cjs");
 
 const EXPECTED_EXPORT_VERSION = "v0.4.3";
 const DEFAULT_MAX_STANDALONE_FILES = 150000;
 const DEFAULT_MAX_STANDALONE_BYTES = 3 * 1024 * 1024 * 1024;
 const ALLOWED_STANDALONE_ROOTS = new Set([
+  ".source-provenance.json",
   ".next-build",
   "node_modules",
   "package.json",
@@ -323,10 +326,39 @@ function validatePackagingInputs(options = {}) {
   }
 
   const resourcesRoot = path.join(electronRoot, "resources");
+  const electronSourceRoot = path.join(electronRoot, "app");
+  const electronBundleRoot = path.join(electronRoot, "app_dist");
+  const nextSourceRoot = path.join(workspaceRoot, "servers", "nextjs");
+  const fastapiSourceRoot = path.join(workspaceRoot, "servers", "fastapi");
   const nextRoot = path.join(resourcesRoot, "nextjs");
   const exportRoot = path.join(resourcesRoot, "export");
   const fastapiRoot = path.join(resourcesRoot, "fastapi");
   const standalone = resolveNextStandalone(nextRoot);
+
+  const provenanceCheck = options.provenanceCheck || verifyResourceProvenance;
+  const compliance = (options.complianceCheck || validateReleaseCompliance)(
+    workspaceRoot
+  );
+  const provenance = {
+    electron: provenanceCheck({
+      kind: "electron",
+      sourceRoot: electronSourceRoot,
+      resourceRoot: electronBundleRoot,
+      workspaceRoot,
+    }),
+    nextjs: provenanceCheck({
+      kind: "nextjs",
+      sourceRoot: nextSourceRoot,
+      resourceRoot: nextRoot,
+      workspaceRoot,
+    }),
+    fastapi: provenanceCheck({
+      kind: "fastapi",
+      sourceRoot: fastapiSourceRoot,
+      resourceRoot: fastapiRoot,
+      workspaceRoot,
+    }),
+  };
 
   requireFile(standalone.serverScript, "Next.js standalone server");
   requirePopulatedDirectory(
@@ -392,6 +424,8 @@ function validatePackagingInputs(options = {}) {
     fastapiBinary,
     nextLayout: standalone.layout,
     nextServer: standalone.serverScript,
+    provenance,
+    compliance,
     ...standaloneStats,
   };
 }

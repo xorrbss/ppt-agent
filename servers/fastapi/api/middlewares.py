@@ -20,6 +20,7 @@ from api.v1.auth.users import get_jwt_strategy
 from models.sql.user import User
 from services.database import async_session_maker
 from services.provider_settings import import_legacy_file_to_provider_settings
+from services.provider_settings import save_provider_settings_record
 from utils.get_env import is_disable_auth_enabled
 from utils.runtime_settings import (
     get_process_runtime_settings,
@@ -72,7 +73,16 @@ async def _refresh_runtime_settings(request: Request) -> Response:
     # this control request.
     try:
         async with async_session_maker() as session:
-            committed = await import_legacy_file_to_provider_settings(session)
+            body = await request.body()
+            if len(body) > 1024 * 1024:
+                return Response(status_code=413)
+            if body:
+                value = await request.json()
+                if not isinstance(value, dict):
+                    return Response(status_code=422)
+                committed = await save_provider_settings_record(session, value)
+            else:
+                committed = await import_legacy_file_to_provider_settings(session)
         refresh_process_runtime_settings(
             persisted_config=committed.config,
             revision=committed.revision,

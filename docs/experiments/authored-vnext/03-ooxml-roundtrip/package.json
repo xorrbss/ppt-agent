@@ -1,0 +1,23 @@
+{
+  "name": "presenton-genoffice-pptx-engine-roundtrip-poc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated GenOffice pptx-engine adapter and OOXML round-trip evidence harness.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "check:boundary": "node compliance/check-compliance.mjs",
+    "test:ooxml": "node --test tools/ooxml-audit.test.mjs",
+    "test:facade": "node --experimental-strip-types --experimental-loader ./tools/ts-extension-loader.mjs --test tests/facade.test.mjs",
+    "experiment": "node --experimental-strip-types --experimental-loader ./tools/ts-extension-loader.mjs scripts/run-experiment.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.10.1",
+    "jszip": "3.10.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

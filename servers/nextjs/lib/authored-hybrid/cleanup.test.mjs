@@ -13,6 +13,7 @@ import {
   __testOnlyAssertWindowsProfileGone,
   __testOnlyRunWindowsHelper,
   runAuthoredHybridChrome,
+  runTrustedSelfContainedAuthoredHybridChrome,
 } from "./chrome-runner.ts";
 import { instrumentAuthoredHtml } from "./html-instrumentation.ts";
 
@@ -166,7 +167,7 @@ test(
     const completionToken = "windows-launcher-handoff-token";
     process.env.TEMP_DIRECTORY = root;
     try {
-      const capture = await runAuthoredHybridChrome({
+      const capture = await runTrustedSelfContainedAuthoredHybridChrome({
         chromeExecutable,
         timeoutMs: 30_000,
         dumpDom: true,
@@ -207,7 +208,7 @@ test(
       const captures = await Promise.all(
         Array.from({ length: 8 }, (_, index) => {
           const completionToken = `windows-concurrent-${process.pid}-${index}`;
-          return runAuthoredHybridChrome({
+          return runTrustedSelfContainedAuthoredHybridChrome({
             chromeExecutable,
             timeoutMs: 30_000,
             dumpDom: true,

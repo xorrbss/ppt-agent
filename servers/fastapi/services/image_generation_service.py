@@ -1,13 +1,14 @@
 import asyncio
 import base64
 import json
+import logging
 import os
 import re
 import secrets
 from weakref import WeakKeyDictionary
 
 import aiohttp
-from fastapi import HTTPException
+import httpx
 from google import genai
 from google.genai import types
 from openai import NOT_GIVEN, AsyncOpenAI, RateLimitError
@@ -30,6 +31,7 @@ from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
 from utils.get_env import get_comfyui_workflow_env
 from utils.image_provider import (
+    get_selected_image_provider,
     is_gpt_image_1_5_selected,
     is_gpt_image_2_selected,
     is_image_generation_disabled,
@@ -42,6 +44,23 @@ from utils.image_provider import (
     is_open_webui_selected,
     is_openai_compatible_selected,
 )
+from services.provider_usage_instrumentation import (
+    ProviderCallTimer,
+    provider_call_admission,
+    record_provider_call,
+)
+from services.provider_egress_policy import (
+    EgressCategory,
+    ProviderEgressPolicy,
+    validate_builtin_provider_endpoint,
+    validate_configured_provider_endpoint,
+)
+from services.provider_transport_security import require_pinned_transport
+from services.image_generation_google_adapter import generate_google_image
+from services.image_generation_stock_adapter import (
+    fetch_pexels_images,
+    fetch_pixabay_images,
+)
 from utils.asset_directory_utils import absolute_fastapi_asset_url
 import uuid
 
@@ -51,6 +70,7 @@ COMFYUI_SEED_SOURCE_VALUE_KEYS = {"value", "int", "integer", "number"}
 _IMAGE_GENERATION_LOCKS: WeakKeyDictionary[
     asyncio.AbstractEventLoop, asyncio.Lock
 ] = WeakKeyDictionary()
+LOGGER = logging.getLogger(__name__)
 
 
 def _get_image_generation_lock() -> asyncio.Lock:
@@ -135,13 +155,22 @@ class ImageGenerationService:
         image_prompt = prompt.get_image_prompt(
             with_theme=not self.is_stock_provider_selected()
         )
-        print(f"Request - Generating Image for {image_prompt}")
+        # Never log a user/model-authored image prompt. Receipt telemetry carries
+        # only safe provider/model/timing scalars at the call boundary below.
+        LOGGER.info("Starting image generation request")
+        timer = ProviderCallTimer()
+        provider_response: object | None = None
         try:
             if is_parallel_image_generation_enabled(self.settings):
-                image_path = await self._call_image_provider(image_prompt)
+                async with provider_call_admission():
+                    image_path = await self._call_image_provider(image_prompt)
             else:
                 async with _get_image_generation_lock():
-                    image_path = await self._call_image_provider(image_prompt)
+                    async with provider_call_admission():
+                        image_path = await self._call_image_provider(image_prompt)
+            # Image providers currently expose no portable usage envelope.  The
+            # successful path remains explicit as unavailable, never zero.
+            provider_response = None
             if image_path:
                 if image_path.startswith("http"):
                     return image_path
@@ -159,9 +188,32 @@ class ImageGenerationService:
                 ):
                     return absolute_fastapi_asset_url(image_path)
             raise Exception(f"Image not found at {image_path}")
-        except Exception as e:
-            print(f"Error generating image: {e}")
+        except Exception:
+            # Provider failures can embed request bodies, URLs or credentials;
+            # keep this user-visible fallback content-free.
+            LOGGER.warning("Image generation request failed")
             return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
+        finally:
+            try:
+                selected = get_selected_image_provider(self.settings)
+                provider = str(selected.value) if selected is not None else "local"
+            except Exception:
+                # Provider selection errors must retain the legacy placeholder
+                # outcome and must not leak configuration details into telemetry.
+                provider = "local"
+            model_by_provider = {
+                "dall-e-3": "dall-e-3",
+                "gpt-image-1.5": "gpt-image-1.5",
+                "gpt-image-2": "gpt-image-2",
+                "gemini-flash": "gemini-2.5-flash-image",
+                "nanobanana-pro": "gemini-3-pro-image-preview",
+            }
+            await record_provider_call(
+                provider=provider,
+                model=model_by_provider.get(provider, "provider-default"),
+                response=provider_response,
+                latency_ms=timer.elapsed_ms,
+            )
 
     async def _call_image_provider(self, image_prompt: str) -> str:
         if self.is_stock_provider_selected():
@@ -315,58 +367,14 @@ class ImageGenerationService:
         self, prompt: str, output_directory: str, model: str
     ) -> str:
         """Base method for Google image generation models."""
-        if not (api_key := get_google_api_key_env(self.settings)):
-            raise ValueError("GOOGLE_API_KEY is not configured")
-        client = genai.Client(api_key=api_key)
-        response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"],
-            ),
+        return await generate_google_image(
+            prompt,
+            output_directory,
+            model,
+            api_key=get_google_api_key_env(self.settings),
+            client_factory=genai.Client,
+            config_factory=types.GenerateContentConfig,
         )
-
-        # Latest SDK docs expose images in response.parts.
-        response_parts = getattr(response, "parts", None)
-        if not response_parts and getattr(response, "candidates", None):
-            first_candidate = response.candidates[0] if response.candidates else None
-            content = (
-                getattr(first_candidate, "content", None) if first_candidate else None
-            )
-            response_parts = getattr(content, "parts", None) if content else None
-
-        image_path = None
-        for part in response_parts or []:
-            if part.inline_data is not None:
-                mime_type = getattr(part.inline_data, "mime_type", "") or ""
-                ext = (
-                    mime_type.split("/")[-1]
-                    if mime_type.startswith("image/")
-                    else "png"
-                )
-                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.{ext}")
-                if hasattr(part, "as_image"):
-                    part.as_image().save(image_path)
-                else:
-                    # Backward-compatible fallback if helper method is unavailable.
-                    image_data = getattr(part.inline_data, "data", None)
-                    if image_data is None:
-                        continue
-                    image_bytes = (
-                        base64.b64decode(image_data)
-                        if isinstance(image_data, str)
-                        else image_data
-                    )
-                    with open(image_path, "wb") as image_file:
-                        image_file.write(image_bytes)
-
-        if not image_path:
-            raise HTTPException(
-                status_code=500, detail=f"No image generated by google {model}"
-            )
-
-        return image_path
 
     async def generate_image_gemini_flash(
         self, prompt: str, output_directory: str
@@ -387,89 +395,30 @@ class ImageGenerationService:
     async def get_image_from_pexels(
         self, prompt: str, api_key: str | None = None, limit: int = 1
     ) -> str | list[str]:
-        per_page = max(1, min(limit, 80))
         resolved_api_key = (api_key or get_pexels_api_key_env(self.settings) or "").strip()
-
-        async with aiohttp.ClientSession(trust_env=True) as session:
-            response = await session.get(
-                "https://api.pexels.com/v1/search",
-                params={"query": prompt, "per_page": per_page},
-                headers={"Authorization": resolved_api_key} if resolved_api_key else {},
-                timeout=aiohttp.ClientTimeout(total=20),
-            )
-
-            if response.status in {401, 403}:
-                raise HTTPException(status_code=401, detail="Invalid Pexels API key")
-            if response.status != 200:
-                error_text = await response.text()
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Pexels request failed: {error_text}",
-                )
-
-            data = await response.json()
-            photos = data.get("photos", [])
-            image_urls = [
-                photo.get("src", {}).get("large")
-                for photo in photos
-                if photo.get("src", {}).get("large")
-            ]
-
-            if limit <= 1:
-                return image_urls[0] if image_urls else ""
-            return image_urls[:limit]
+        return await fetch_pexels_images(
+            prompt,
+            resolved_api_key,
+            limit,
+            endpoint_validator=validate_builtin_provider_endpoint,
+            connected_ip_validator=ProviderEgressPolicy.validate_connected_ip,
+            redirect_rejector=ProviderEgressPolicy.reject_redirect,
+            category=EgressCategory.SEARCH,
+        )
 
     async def get_image_from_pixabay(
         self, prompt: str, api_key: str | None = None, limit: int = 1
     ) -> str | list[str]:
-        per_page = max(3, min(limit, 200))
         resolved_api_key = (api_key or get_pixabay_api_key_env(self.settings) or "").strip()
-
-        async with aiohttp.ClientSession(trust_env=True) as session:
-            response = await session.get(
-                "https://pixabay.com/api/",
-                params={
-                    "key": resolved_api_key,
-                    "q": prompt[:99],
-                    "image_type": "photo",
-                    "per_page": per_page,
-                },
-                timeout=aiohttp.ClientTimeout(total=20),
-            )
-
-            if response.status in {401, 403}:
-                error_text = await response.text()
-                raise HTTPException(
-                    status_code=401,
-                    detail=f"Invalid Pixabay API key: {error_text}",
-                )
-            if response.status == 400:
-                error_text = await response.text()
-                if "api key" in error_text.lower():
-                    raise HTTPException(
-                        status_code=401,
-                        detail=f"Invalid Pixabay API key: {error_text}",
-                    )
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Pixabay request invalid: {error_text}",
-                )
-            if response.status != 200:
-                error_text = await response.text()
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Pixabay request failed: {error_text}",
-                )
-
-            data = await response.json()
-            hits = data.get("hits", [])
-            image_urls = [
-                hit.get("largeImageURL") for hit in hits if hit.get("largeImageURL")
-            ]
-
-            if limit <= 1:
-                return image_urls[0] if image_urls else ""
-            return image_urls[:limit]
+        return await fetch_pixabay_images(
+            prompt,
+            resolved_api_key,
+            limit,
+            endpoint_validator=validate_builtin_provider_endpoint,
+            connected_ip_validator=ProviderEgressPolicy.validate_connected_ip,
+            redirect_rejector=ProviderEgressPolicy.reject_redirect,
+            category=EgressCategory.SEARCH,
+        )
 
     async def generate_image_comfyui(self, prompt: str, output_directory: str) -> str:
         """
@@ -782,7 +731,7 @@ class ImageGenerationService:
         if not prompt_id:
             raise Exception("No prompt_id returned from ComfyUI")
 
-        print(f"ComfyUI workflow submitted. Prompt ID: {prompt_id}")
+        LOGGER.info("ComfyUI workflow submitted")
         return prompt_id
 
     async def _wait_for_comfyui_completion(
@@ -823,17 +772,17 @@ class ImageGenerationService:
                 if "status" in execution_data:
                     status = execution_data["status"]
                     if status.get("completed", False):
-                        print("ComfyUI workflow completed successfully")
+                        LOGGER.info("ComfyUI workflow completed")
                         return status_data
                     if "error" in status:
                         raise Exception(f"ComfyUI workflow error: {status['error']}")
 
                 # Also check if outputs exist (alternative completion check)
                 if "outputs" in execution_data and execution_data["outputs"]:
-                    print("ComfyUI workflow completed (outputs found)")
+                    LOGGER.info("ComfyUI workflow completed with outputs")
                     return status_data
 
-            print(f"Waiting for ComfyUI workflow... ({int(elapsed)}s)")
+            LOGGER.info("Waiting for ComfyUI workflow completion")
 
     async def _download_comfyui_image(
         self,
@@ -883,7 +832,7 @@ class ImageGenerationService:
                         with open(image_path, "wb") as f:
                             f.write(image_data)
 
-                        print(f"Downloaded image from ComfyUI: {image_path}")
+                        LOGGER.info("Downloaded generated image from ComfyUI")
                         return image_path
                     else:
                         raise Exception(f"Failed to download image: {response.status}")
@@ -902,17 +851,36 @@ class ImageGenerationService:
 
         from urllib.parse import urlparse
 
-        parsed = urlparse(base_url)
+        validated_endpoint = validate_configured_provider_endpoint(
+            base_url,
+            category=EgressCategory.IMAGE,
+            service_id="openai-compatible-image",
+            allowlist_env="PROVIDER_OPENAI_COMPAT_IMAGE_EGRESS_ALLOWLIST",
+        )
+        # The OpenAI SDK accepts an httpx client but exposes neither a pinned
+        # resolver nor the connected peer IP. Disable this custom boundary in
+        # secure mode instead of mistaking DNS preflight for connection pinning.
+        require_pinned_transport(
+            validated_endpoint,
+            transport_pins_connected_ip=False,
+        )
+        parsed = urlparse(validated_endpoint.url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
 
-        client = AsyncOpenAI(base_url=base_url, api_key=api_key)
-
-        response = await client.images.generate(
-            model=model,
-            prompt=prompt,
-            n=1,
-            size="1024x1024",
-        )
+        async with httpx.AsyncClient(
+            follow_redirects=False, trust_env=False
+        ) as http_client:
+            client = AsyncOpenAI(
+                base_url=validated_endpoint.url,
+                api_key=api_key,
+                http_client=http_client,
+            )
+            response = await client.images.generate(
+                model=model,
+                prompt=prompt,
+                n=1,
+                size="1024x1024",
+            )
 
         item = response.data[0]
         image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
@@ -924,13 +892,21 @@ class ImageGenerationService:
             image_url = item.url
             if image_url.startswith("/"):
                 image_url = origin + image_url
+            downloaded_endpoint = validate_configured_provider_endpoint(
+                image_url,
+                category=EgressCategory.IMAGE,
+                service_id="openai-compatible-image",
+                allowlist_env="PROVIDER_OPENAI_COMPAT_IMAGE_EGRESS_ALLOWLIST",
+            )
             headers = {"Authorization": f"Bearer {api_key}"}
-            async with aiohttp.ClientSession(trust_env=True) as session:
+            async with aiohttp.ClientSession(trust_env=False) as session:
                 dl_resp = await session.get(
-                    image_url,
+                    downloaded_endpoint.url,
                     headers=headers,
                     timeout=aiohttp.ClientTimeout(total=120),
+                    allow_redirects=False,
                 )
+                ProviderEgressPolicy.reject_redirect(dl_resp.status)
                 if dl_resp.status != 200:
                     raise Exception(
                         f"Failed to download image from OpenAI-compatible provider: {dl_resp.status}"

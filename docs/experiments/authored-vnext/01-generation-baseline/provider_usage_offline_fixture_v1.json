@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "synthetic_provider_usage_receipts",
+  "slide_count": 90,
+  "runs": 3,
+  "timeout_policy": {
+    "ui_poll_timeout_seconds": 1800,
+    "server_deadline_seconds": 1800
+  },
+  "author": {
+    "operation": "authored_author_slide",
+    "stage": "author",
+    "provider": "offline-local",
+    "model": "fixture-author-v1",
+    "latency_ms": 75000,
+    "input_tokens": 2400,
+    "output_tokens": 5000,
+    "estimated_cost_microunits": 15000,
+    "pricing_version": "offline-fixture-v1",
+    "retry_slide": 45
+  }
+}

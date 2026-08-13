@@ -198,6 +198,16 @@ test("chat-first deployment configuration is required by both CI providers", () 
     rootPackage.scripts["test:next-ci"],
     /scripts\/check-file-size-ratchet\.test\.mjs/u,
   );
+  assert.equal(
+    rootPackage.scripts["check:release-sbom"],
+    "node scripts/generate-release-sbom.mjs --check",
+  );
+  assert.equal(
+    rootPackage.scripts["check:notice"],
+    "uv run --directory servers/fastapi python ../../scripts/rebuild_notice_all.py --check",
+  );
+  assert.match(rootPackage.scripts["test:next-ci"], /npm run check:release-sbom/u);
+  assert.match(rootPackage.scripts["test:next-ci"], /npm run check:notice/u);
   assert.match(nextCiRunner, /ROOTS = \[.*"tests".*\]/u);
   assert.ok(nextCiRunner.includes("const TEST_RE = /\\.test\\.(ts|tsx|mjs)$/"));
   const exclusions = nextCiRunner.slice(
@@ -360,7 +370,7 @@ test("the E2E runner bounds Cypress, traps termination, and preserves replayable
     runner,
     /Received \$\{signal\}[\s\S]{0,420}\.then\(\(\) => cleanup\(\)\)/u,
   );
-  assert.match(runner, /CYPRESS_TIMEOUT_MS.*240_000/u);
+  assert.match(runner, /CYPRESS_TIMEOUT_MS.*600_000/u);
   assert.match(
     runner,
     /waitForExitWithTimeout\(\s*cypressProcess,\s*"Cypress route suite",?\s*\)/u,

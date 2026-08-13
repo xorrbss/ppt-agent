@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
-import http from "node:http";
 import test from "node:test";
 
 import {
-  resolveAuthoredHybridChromeExecutable,
   runAuthoredHybridChrome,
 } from "./chrome-runner.ts";
 import {
@@ -65,48 +63,18 @@ test("active, network-bearing, local-file, and vector data content fail closed",
   }
 });
 
-test("Chrome blocks network requests even when markup bypasses preflight", async (t) => {
-  const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
-  if (!chromeExecutable) {
-    if (process.env.CI === "true") {
-      assert.fail("CI must provide Chrome/Chromium for hybrid network isolation");
-    }
-    t.skip("Chrome/Chromium is unavailable");
-    return;
-  }
-
-  const requests = [];
-  const server = http.createServer((request, response) => {
-    requests.push(request.url);
-    response.writeHead(204).end();
-  });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      server.off("error", reject);
-      resolve();
-    });
-  });
-  try {
-    const address = server.address();
-    assert.ok(address && typeof address !== "string");
-    const origin = `http://127.0.0.1:${address.port}`;
-    await runAuthoredHybridChrome({
-      chromeExecutable,
-      timeoutMs: 30_000,
+test("public Chrome runner cannot bypass authored network preflight", async () => {
+  await assert.rejects(
+    runAuthoredHybridChrome({
+      chromeExecutable: "C:\\definitely-not-invoked\\chrome.exe",
+      timeoutMs: 1_000,
       dumpDom: true,
       screenshot: false,
-      html: `<!doctype html><img srcset="${origin}/srcset 1x">
-        <style>
-          .a{background-image:u\\72 l(${origin}/escaped)}
-          .b{background-image:image-set("${origin}/set" 1x)}
-        </style><div class="a b">network isolation</div>`,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.deepEqual(requests, []);
-  } finally {
-    await new Promise((resolve) => server.close(() => resolve()));
-  }
+      html: `<!doctype html><img srcset="http://127.0.0.1:9/srcset 1x">
+        <style>.a{background-image:url(http://127.0.0.1:9/loopback)}</style>`,
+    }),
+    /preflight rejected/
+  );
 });
 
 test("data image MIME, base64, and magic bytes must agree", () => {

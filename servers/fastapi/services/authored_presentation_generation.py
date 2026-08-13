@@ -1,0 +1,310 @@
+from __future__ import annotations
+
+# The publication admission path performs one local existence check.
+# ruff: noqa: ASYNC240
+
+import logging
+import os
+import time
+import traceback
+import uuid
+from typing import Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.generate_presentation_request import GeneratePresentationRequest
+from models.presentation_and_path import PresentationPathAndEditPath
+from models.presentation_outline_model import PresentationOutlineModel
+from models.sql.presentation import (
+    PRESENTATION_LIFECYCLE_PUBLISHED,
+    PRESENTATION_LIFECYCLE_STAGING,
+    PresentationModel,
+)
+from models.sql.presentation_generation_job import PresentationGenerationJob
+from services.authored_checkpoint_service import AuthoredStageError, fail_stage
+from services.authored_exact_provenance import build_exact_provenance
+from services.authored_exact_source_snapshot import (
+    ExactSourceSnapshotError,
+    materialize_exact_source_style,
+)
+from services.authored_presentation_artifacts import (
+    _authored_export_path,
+    _build_authored_export,
+    _cleanup_published_checkpoints,
+    _complete_stage_after_external_success,
+    authored_title,
+    resolve_brand,
+)
+from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
+from services.authored_presentation_publication import publish_authored_presentation
+from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
+from utils.authored_dom_quality import ensure_authored_qids
+from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
+from utils.llm_calls.author_deck import plan_deck_roles, prepare_authored_deck
+from utils.llm_calls.author_slide import (
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
+    apply_style_defaults,
+    normalize_reference_mode,
+)
+from utils.llm_calls.author_vision_qa import revise_authored_deck
+from utils.slide_capture import _placeholder_png, find_chrome
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+async def _generate_authored_presentation(
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    outline: PresentationOutlineModel,
+    language: Optional[str],
+    sql_session: AsyncSession,
+    generation_job: PresentationGenerationJob | None,
+) -> PresentationPathAndEditPath:
+    """Author -> render -> (optional vision-QA) -> assemble image PPTX/PDF -> persist.
+    Returns the path to the produced file plus the editor path."""
+    started = time.monotonic()
+    title = authored_title(request, outline)
+    style = resolve_authored_style(request.authored_style)
+    roles = plan_deck_roles(outline)
+    exact_snapshot_id = request._authored_exact_snapshot_id
+    if exact_snapshot_id is not None:
+        if normalize_reference_mode(style.reference_mode) != EXACT_RECONSTRUCTION:
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="author",
+                code="authored_exact_source_snapshot_invalid",
+                retryable=False,
+                message="Exact reconstruction source snapshot is invalid",
+            )
+        try:
+            style = await materialize_exact_source_style(
+                style,
+                exact_snapshot_id,
+                expected_slide_count=len(outline.slides),
+            )
+        except ExactSourceSnapshotError as error:
+            raise AuthoredStageError(
+                slide_index=0,
+                stage="author",
+                code="authored_exact_source_snapshot_invalid",
+                cause=error,
+                retryable=False,
+                message="Exact reconstruction source snapshot is unavailable",
+            ) from error
+    validate_exact_reconstruction_style(
+        style,
+        slide_count=len(outline.slides),
+        roles=roles,
+    )
+    exact_provenance = None
+    if normalize_reference_mode(
+        getattr(style, "reference_mode", STYLE_REFERENCE)
+    ) == EXACT_RECONSTRUCTION:
+        exact_provenance, _ = build_exact_provenance(
+            style,
+            source_snapshot_id=exact_snapshot_id,
+        )
+    brand = apply_style_defaults(resolve_brand(request, outline, language), style)
+
+    # Render needs a headless Chrome. Without it every slide silently degrades to a
+    # blank placeholder (resilience by design) ??so warn loudly to surface deploy
+    # misconfiguration instead of shipping a deck of blank slides. (No secrets logged.)
+    if not find_chrome():
+        LOGGER.warning(
+            "[authored] No Chrome/Chromium found for rendering (set CHROME_PATH); "
+            "%s",
+            (
+                "durable authored generation will fail before publication."
+                if generation_job is not None
+                else "non-durable authored slides may render as blank placeholders."
+            ),
+        )
+
+    existing = await sql_session.get(PresentationModel, presentation_id)
+    if (
+        existing is not None
+        and existing.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
+        and os.path.isfile(
+            existing_export := _authored_export_path(request, presentation_id, title)
+        )
+    ):
+        if generation_job is not None:
+            await _cleanup_published_checkpoints(generation_job.id)
+        return PresentationPathAndEditPath(
+            presentation_id=presentation_id,
+            path=existing_export,
+            edit_path=f"/presentation?id={presentation_id}",
+        )
+
+    # Chat-first admission creates a hidden shell in the same transaction as
+    # the durable operation/job.  It is the only non-published row this writer
+    # may reuse; unrelated staging rows remain hard conflicts.
+    admitted_shell = (
+        existing is not None
+        and existing.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING
+        and generation_job is not None
+        and generation_job.workspace_operation_id is not None
+        and generation_job.presentation_id == presentation_id
+    )
+    if existing is not None and not admitted_shell:
+        raise AuthoredStageError(
+            slide_index=0,
+            stage="persist",
+            code="authored_slide_persist_failed",
+            retryable=False,
+            message="A conflicting presentation record prevented final publication",
+        )
+
+    # Release the admission read transaction before any long-running external
+    # work or independently durable artifact intent.  At this point the caller
+
+    # has no authored publication mutations; the generation endpoint commits
+    # its outline/status checkpoints before entering this service.  Keeping a
+    # SQLite read transaction open here would otherwise block the independent
+    # artifact-intent writer at finalization.
+    await sql_session.commit()
+
+    if generation_job is None:
+        pipeline = await _author_illustrate_render_pipeline(outline, brand, style)
+    else:
+        pipeline = await _author_illustrate_render_pipeline(
+            outline, brand, style, generation_job=generation_job
+        )
+    authored_deck = pipeline.deck
+    # Persist stable edit targets for future local quality-review patches. Attribute
+    # insertion is deterministic and has no visual effect on the already-rendered PNG.
+    htmls = [ensure_authored_qids(html) for html in authored_deck.htmls]
+    pngs = pipeline.pngs
+
+    fixed_count = 0
+    vision_elapsed = 0.0
+    if getattr(request, "vision_qa", False):
+        vision_started = time.monotonic()
+        with provider_usage_scope(
+            job_id=generation_job.id if generation_job is not None else None,
+            operation="authored_generation",
+            stage="vqa",
+            attempt_number=(generation_job.attempt_number if generation_job else 0),
+        ):
+            try:
+                contents = [s.content for s in outline.slides]
+                vision_qa_kwargs = {}
+                if normalize_reference_mode(
+                    getattr(style, "reference_mode", STYLE_REFERENCE)
+                ) == EXACT_RECONSTRUCTION:
+                    exact_plan = prepare_authored_deck(outline, brand, style)
+                    vision_qa_kwargs["reference_images_by_slide"] = (
+                        exact_plan.reference_images
+                    )
+                htmls, pngs, fixed = await revise_authored_deck(
+                    htmls,
+                    pngs,
+                    contents,
+                    roles,
+                    brand,
+                    authored_deck.design_system,
+                    max_cycles=1,
+                    style=style,
+                    **vision_qa_kwargs,
+                )
+                fixed_count = len(fixed)
+                if generation_job is not None and generation_job.attempt_token:
+                    for index in fixed:
+                        await _complete_stage_after_external_success(
+                            job_id=generation_job.id,
+                            slide_index=index,
+                            stage="render",
+                            attempt_token=generation_job.attempt_token,
+                            png=pngs[index],
+                        )
+            except Exception:
+                traceback.print_exc()
+            finally:
+                vision_elapsed = time.monotonic() - vision_started
+                await record_local_stage(latency_ms=vision_elapsed * 1000)
+
+    # Observability: one structured summary (counts/timing/model only ??no secrets).
+    placeholder = _placeholder_png()
+    blank_renders = sum(1 for p in pngs if p == placeholder)
+    from utils.llm_provider import get_llm_provider, get_model
+
+    export_started = time.monotonic()
+    attempt_token = generation_job.attempt_token if generation_job is not None else None
+    try:
+        if generation_job is not None:
+            if not attempt_token:
+                raise AuthoredStageError(
+                    slide_index=0,
+                    stage="persist",
+                    code="authored_attempt_lost",
+                )
+        out_path = _build_authored_export(request, presentation_id, pngs, title)
+    except Exception as exc:
+        await sql_session.rollback()
+        if isinstance(exc, AuthoredStageError):
+            raise
+        error = AuthoredStageError(
+            slide_index=max(0, len(pngs) - 1),
+            stage="persist",
+            code="authored_slide_persist_failed",
+            cause=exc,
+        )
+        if generation_job is not None and attempt_token:
+            await fail_stage(
+                job_id=generation_job.id,
+                slide_index=error.slide_index,
+                stage="persist",
+                attempt_token=attempt_token,
+                error=error,
+                request_id=generation_job.request_id,
+            )
+        raise error from exc
+    export_elapsed = time.monotonic() - export_started
+    published_path, persist_elapsed = await publish_authored_presentation(
+        request=request,
+        presentation_id=presentation_id,
+        outline=outline,
+        language=language,
+        sql_session=sql_session,
+        generation_job=generation_job,
+        existing=existing,
+        title=title,
+        brand=brand,
+        style=style,
+        roles=roles,
+        exact_provenance=exact_provenance,
+        htmls=htmls,
+        pngs=pngs,
+        out_path=out_path,
+        attempt_token=attempt_token,
+    )
+    if generation_job is not None:
+        await _cleanup_published_checkpoints(generation_job.id)
+    LOGGER.info(
+        "[authored] done id=%s slides=%d provider=%s model=%s vision_qa=%s "
+        "vqa_fixed=%d blank_renders=%d total=%.1fs author=%.1fs "
+        "illustrations=%.1fs render=%.1fs pipeline=%.1fs vision=%.1fs "
+        "persist=%.1fs export=%.1fs",
+        presentation_id,
+        len(htmls),
+        get_llm_provider().value,
+        get_model(),
+        bool(getattr(request, "vision_qa", False)),
+        fixed_count,
+        blank_renders,
+        time.monotonic() - started,
+        pipeline.author_work,
+        pipeline.illustration_work,
+        pipeline.render_work,
+        pipeline.elapsed,
+        vision_elapsed,
+        persist_elapsed,
+        export_elapsed,
+    )
+    return PresentationPathAndEditPath(
+        presentation_id=presentation_id,
+        path=published_path,
+        edit_path=f"/presentation?id={presentation_id}",
+    )

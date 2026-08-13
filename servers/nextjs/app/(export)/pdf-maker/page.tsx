@@ -12,6 +12,7 @@ import {
 } from "@/lib/fastapi-internal";
 import { UiLocaleSwitcher } from "@/components/i18n/UiLocaleSwitcher";
 import { getServerI18n } from "@/i18n/server";
+import { createTranslator } from "next-intl";
 
 type PdfMakerRouteProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -93,7 +94,8 @@ async function fetchInitialPresentation(
 
 export default async function PdfMakerRoute({ searchParams }: PdfMakerRouteProps) {
   const params = await searchParams;
-  const { t } = await getServerI18n();
+  const { locale, messages, t } = await getServerI18n();
+  const pdfMaker = createTranslator({ locale, messages, namespace: "pdfMaker" });
   const queryId = firstQueryValue(params.id);
   const expectedSha256 = normalizeExpectedPresentationSha256(
     firstQueryValue(params.source_sha256)
@@ -130,8 +132,8 @@ export default async function PdfMakerRoute({ searchParams }: PdfMakerRouteProps
     return (
       <div className="flex h-screen flex-col items-center justify-center">
         <UiLocaleSwitcher className="mb-6" />
-        <h1 className="text-2xl font-bold">{t("pdfMaker.missingIdTitle")}</h1>
-        <p className="pb-4 text-gray-500">{t("pdfMaker.missingIdDescription")}</p>
+        <h1 className="text-2xl font-bold">{pdfMaker("missingIdTitle")}</h1>
+        <p className="pb-4 text-gray-500">{pdfMaker("missingIdDescription")}</p>
         <a className="rounded bg-blue-600 px-4 py-2 text-white" href="/dashboard">
           {t("common.home")}
         </a>

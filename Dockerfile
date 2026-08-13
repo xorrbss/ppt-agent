@@ -29,6 +29,65 @@ ENV HF_HOME=/root/.cache/huggingface \
 RUN /opt/venv/bin/python scripts/warm_fastembed_cache.py
 
 
+FROM python:3.11-slim-trixie AS authored-renderer-builder
+
+WORKDIR /app/servers/fastapi
+
+# Keep the security boundary independent from the network authoring/provider
+# dependency graph. Only the modules imported by the one-shot worker are copied.
+RUN python -m venv --without-pip /opt/venv \
+    && pip install --no-cache-dir uv==0.11.17
+COPY contracts/authored-renderer/requirements.lock /tmp/authored-renderer-requirements.lock
+RUN uv pip install --python /opt/venv/bin/python --require-hashes \
+      -r /tmp/authored-renderer-requirements.lock
+
+
+FROM python:3.11-slim-trixie AS authored-renderer-runtime
+
+ARG SOURCE_REVISION=unknown
+ARG SOURCE_TREE_DIGEST=unknown
+ARG CONTRACT_DIGEST=unknown
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION} \
+      io.presenton.authored-renderer.source-tree-digest=${SOURCE_TREE_DIGEST} \
+      io.presenton.authored-renderer.contract-digest=${CONTRACT_DIGEST} \
+      org.opencontainers.image.title="Presenton authored renderer worker"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      ca-certificates chromium chromium-sandbox fonts-liberation fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 65532 authored \
+    && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /tmp/home authored
+
+COPY --from=authored-renderer-builder /opt/venv /opt/venv
+COPY servers/fastapi/utils/authored_renderer_worker.py /app/servers/fastapi/utils/authored_renderer_worker.py
+COPY servers/fastapi/utils/renderer_isolation.py /app/servers/fastapi/utils/renderer_isolation.py
+COPY servers/fastapi/utils/renderer_worker_policy.py /app/servers/fastapi/utils/renderer_worker_policy.py
+COPY servers/fastapi/utils/renderer_static_policy.py /app/servers/fastapi/utils/renderer_static_policy.py
+COPY servers/fastapi/utils/renderer_internal_capability.py /app/servers/fastapi/utils/renderer_internal_capability.py
+COPY servers/fastapi/utils/authored_dom_quality.py /app/servers/fastapi/utils/authored_dom_quality.py
+COPY servers/fastapi/utils/slide_capture.py /app/servers/fastapi/utils/slide_capture.py
+COPY servers/fastapi/utils/slide_capture_batch.py /app/servers/fastapi/utils/slide_capture_batch.py
+COPY servers/fastapi/utils/slide_capture_chrome_discovery.py /app/servers/fastapi/utils/slide_capture_chrome_discovery.py
+COPY servers/fastapi/utils/slide_capture_pipe.py /app/servers/fastapi/utils/slide_capture_pipe.py
+COPY servers/fastapi/utils/slide_capture_pipe_render.py /app/servers/fastapi/utils/slide_capture_pipe_render.py
+COPY servers/fastapi/utils/slide_capture_pixel_probe.py /app/servers/fastapi/utils/slide_capture_pixel_probe.py
+COPY servers/fastapi/utils/slide_capture_reusable_render.py /app/servers/fastapi/utils/slide_capture_reusable_render.py
+COPY servers/fastapi/utils/slide_capture_worker_client.py /app/servers/fastapi/utils/slide_capture_worker_client.py
+
+ENV HOME=/tmp/home \
+    XDG_RUNTIME_DIR=/tmp/runtime \
+    LANG=C.UTF-8 \
+    PATH=/opt/venv/bin:/usr/bin:/bin \
+    CHROME_PATH=/usr/bin/chromium \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+USER 65532:65532
+WORKDIR /app/servers/fastapi
+ENTRYPOINT ["/opt/venv/bin/python", "-m", "utils.authored_renderer_worker"]
+
+
 FROM node:20-bookworm-slim AS nextjs-builder
 
 WORKDIR /app/servers/nextjs

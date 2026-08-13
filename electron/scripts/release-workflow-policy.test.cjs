@@ -135,3 +135,46 @@ test("cross-platform packages are dependency-gated before build", () => {
     );
   }
 });
+
+test("authored renderer release gate is dynamic, fail closed, and uploads evidence", () => {
+  const source = readWorkflow("authored-renderer-security.yml");
+  for (const required of [
+    "disposable isolation release gate",
+    "node electron/scripts/authored-renderer-runtime-probe.cjs",
+    "--build-packaged",
+    "--package-output",
+    "--manifest",
+    "electron-package.json",
+    "xvfb-run",
+    '"$executable"',
+    "--output",
+    "electron-observation.json",
+    "--electron-package-manifest",
+    "contracts/authored-renderer/run_dynamic_gate.py",
+    "gate-result.json",
+    "Upload JSON JUnit SARIF and raw observations",
+    "${{ runner.temp }}/authored-renderer-security",
+    "promotion_allowed",
+  ]) {
+    assert.ok(source.includes(required), `authored renderer workflow is missing ${required}`);
+  }
+  const buildProbe = source.indexOf("--build-packaged");
+  const executePackagedProbe = source.indexOf('"$executable"');
+  const dynamicGate = source.indexOf("contracts/authored-renderer/run_dynamic_gate.py");
+  const packageManifestGate = source.indexOf("--electron-package-manifest");
+  const uploadEvidence = source.indexOf("Upload JSON JUnit SARIF and raw observations");
+  const enforcePromotion = source.indexOf("Enforce fail-closed promotion result");
+  assert.ok(buildProbe < executePackagedProbe, "the packaged probe must be built before execution");
+  assert.ok(
+    executePackagedProbe < dynamicGate,
+    "the real Electron observation must precede the combined OCI gate"
+  );
+  assert.ok(packageManifestGate > dynamicGate, "the OCI gate must bind the packaged probe manifest");
+  assert.ok(dynamicGate < uploadEvidence, "dynamic gate evidence must exist before upload");
+  assert.ok(uploadEvidence < enforcePromotion, "evidence must upload even when promotion fails");
+  assert.match(source, /pull_request:/);
+  assert.match(source, /workflow_dispatch:/);
+  assert.match(source, /AUTHORED_VNEXT_RENDERER_ENABLED:\s*"true"/);
+  assert.match(source, /test "\$\(cat "\$code_file"\)" = "0"/);
+  assert.doesNotMatch(source, /paths-ignore:|--no-sandbox|disable-web-security/i);
+});

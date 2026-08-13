@@ -1,0 +1,24 @@
+{
+  "policy_version": "authored-staging-guardrails-v1",
+  "mode": "approval-required-live-staging",
+  "prompt_corpus": "staging_prompt_corpus_v1.json",
+  "receipt_export_rule": "Allow only the ProviderUsageReceipt scalar schema; reject prompts, HTML, OCR text, source URLs/paths, headers, request IDs, exception bodies, and credentials.",
+  "provider_hostname_allowlist": [
+    "api.openai.com",
+    "api.anthropic.com",
+    "generativelanguage.googleapis.com"
+  ],
+  "selection_rule": "Before a live run, choose exactly the hostname that belongs to the explicitly approved configured provider; block all others.",
+  "cost_ceiling": {
+    "per_90_slide_job_usd": 2.0,
+    "three_run_total_usd": 6.0,
+    "action_when_dry_run_estimate_exceeds_ceiling": "do_not_start"
+  },
+  "kill_conditions": [
+    "Immediately cancel if a receipt reports cost at or above 80 percent of the per-job ceiling.",
+    "Immediately cancel if a job's critical-path observation approaches either configured timeout without terminal progress.",
+    "Immediately cancel on hostname-allowlist violation, receipt privacy validation failure, or repeated retry amplification above 1.25.",
+    "After cancellation, preserve only safe aggregate receipts and terminal state; do not capture request/response bodies."
+  ],
+  "dry_run_command": "cd servers/fastapi; uv run python scripts/provider_usage_benchmark.py --synthetic-fixture ../../docs/experiments/authored-vnext/01-generation-baseline/provider_usage_offline_fixture_v1.json --output ../../docs/experiments/authored-vnext/01-generation-baseline/runs/provider-usage-offline-90x3.json"
+}

@@ -15,7 +15,6 @@ from services.provider_settings_values import (
     merge_provider_settings as merge_provider_settings,
     redact_provider_settings as redact_provider_settings,
     sanitize_provider_settings as sanitize_provider_settings,
-    sanitize_provider_settings_for_storage,
 )
 from services.provider_settings_retry import (
     PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS,
@@ -27,6 +26,15 @@ from services.provider_settings_legacy import (
     legacy_pending_refresh_token as _legacy_pending_refresh_token,
     legacy_provider_settings_revision as _legacy_revision,
     mirror_provider_settings_to_legacy_file as _mirror_to_legacy_file,
+)
+from services.provider_secure_runtime import (
+    superseded_provider_setting_references,
+)
+from services.provider_credential_vault import CredentialRef
+from services.provider_settings_storage import (
+    delete_setting_references_best_effort as _delete_setting_references_best_effort,
+    prepare_for_storage as _prepare_for_storage,
+    sanitize_for_storage as _sanitize_for_storage,
 )
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_user_config_path_env
@@ -68,10 +76,6 @@ def get_provider_settings_update_lock() -> asyncio.Lock:
         lock = asyncio.Lock()
         _UPDATE_LOCKS[loop] = lock
     return lock
-
-
-def _sanitize_for_storage(config: dict[str, Any]) -> dict[str, Any]:
-    return sanitize_provider_settings_for_storage(config)
 
 
 async def _read_provider_settings_record(
@@ -174,7 +178,7 @@ async def migrate_provider_settings_from_file_record(
     legacy_config = (
         await asyncio.to_thread(read_user_config_file, path) if path else {}
     )
-    initial_config = _sanitize_for_storage(legacy_config)
+    initial_config = _prepare_for_storage(legacy_config)
     initial_pending_token = _legacy_pending_refresh_token(legacy_config)
     table = ProviderSettings.__table__
     created = False
@@ -210,7 +214,7 @@ async def migrate_provider_settings_from_file_record(
                     legacy_config,
                     record,
                 )
-                cleaned = _sanitize_for_storage(record.config)
+                cleaned = _prepare_for_storage(record.config)
                 if cleaned != record.config:
                     record = await save_provider_settings_record(
                         session,
@@ -251,7 +255,7 @@ async def get_provider_settings_record(
     record = await _read_provider_settings_record(session)
     if record is None:
         return await migrate_provider_settings_from_file_record(session)
-    cleaned = _sanitize_for_storage(record.config)
+    cleaned = _prepare_for_storage(record.config)
     if cleaned != record.config:
         return await save_provider_settings_record(
             session,
@@ -284,11 +288,12 @@ async def save_provider_settings_record(
     expected_revision: int | None = None,
 ) -> ProviderSettingsRecord:
     """Merge and commit provider settings with bounded optimistic CAS retries."""
-    sanitized_incoming = _sanitize_for_storage(incoming)
+    sanitized_source = _sanitize_for_storage(incoming)
     table = ProviderSettings.__table__
 
     for attempt in range(PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS):
         retry_error_class = ProviderSettingsConcurrencyError.__name__
+        created_references: list[CredentialRef] = []
         try:
             seen = await _read_provider_settings_record(session)
             if expected_revision is not None and (
@@ -317,13 +322,20 @@ async def save_provider_settings_record(
                 await _retry_pause(attempt)
                 continue
 
-            existing = _sanitize_for_storage(seen.config)
+            sanitized_incoming = _prepare_for_storage(
+                sanitized_source,
+                created_references=created_references,
+            )
+            existing = _prepare_for_storage(
+                seen.config,
+                created_references=created_references,
+            )
             merged = (
                 sanitized_incoming
                 if replace
-                else merge_provider_settings(existing, incoming)
+                else merge_provider_settings(existing, sanitized_incoming)
             )
-            merged = _sanitize_for_storage(merged)
+            merged = _prepare_for_storage(merged)
             if merged == existing and seen.config == existing:
                 result = await session.execute(
                     update(table)
@@ -339,6 +351,10 @@ async def save_provider_settings_record(
                     await _mirror_to_legacy_file_best_effort(committed)
                     return committed
                 await session.rollback()
+                await _delete_setting_references_best_effort(
+                    created_references,
+                    outcome="cas_retry",
+                )
                 if expected_revision is not None:
                     raise ProviderSettingsConcurrencyError() from None
                 if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
@@ -365,13 +381,32 @@ async def save_provider_settings_record(
                 await session.commit()
                 committed = ProviderSettingsRecord(seen.revision + 1, merged)
                 await _mirror_to_legacy_file_best_effort(committed)
+                await _delete_setting_references_best_effort(
+                    superseded_provider_setting_references(existing, merged),
+                    outcome="superseded",
+                )
                 return committed
             await session.rollback()
+            await _delete_setting_references_best_effort(
+                created_references,
+                outcome="cas_retry",
+            )
             if expected_revision is not None:
                 raise ProviderSettingsConcurrencyError() from None
         except OperationalError:
             await session.rollback()
+            await _delete_setting_references_best_effort(
+                created_references,
+                outcome="operational_error",
+            )
             retry_error_class = "OperationalError"
+        except BaseException:
+            await session.rollback()
+            await _delete_setting_references_best_effort(
+                created_references,
+                outcome="aborted",
+            )
+            raise
 
         if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
             _raise_concurrency_exhausted(

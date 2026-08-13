@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const crypto = require("node:crypto");
+const { writeResourceProvenance } = require("./resource-provenance.cjs");
 
 const {
   EXPECTED_EXPORT_VERSION,
@@ -18,6 +20,10 @@ function binaryHeader(platform) {
 function writeFile(filePath, contents = "fixture") {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, contents);
+}
+
+function sha256(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
 function readinessOverlayFixture() {
@@ -39,6 +45,10 @@ function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}
     : nextRoot;
   const exportRoot = path.join(electronRoot, "resources", "export");
   const fastapiRoot = path.join(electronRoot, "resources", "fastapi");
+  const electronSourceRoot = path.join(electronRoot, "app");
+  const electronBundleRoot = path.join(electronRoot, "app_dist");
+  const nextSourceRoot = path.join(workspaceRoot, "servers", "nextjs");
+  const fastapiSourceRoot = path.join(workspaceRoot, "servers", "fastapi");
   const converterName =
     platform === "win32"
       ? `convert-${platform}-${arch}.exe`
@@ -60,6 +70,60 @@ function createFixture({ nested = false, platform = "win32", arch = "x64" } = {}
     path.join(exportRoot, "py", converterName),
     binaryHeader(platform)
   );
+  writeFile(path.join(electronSourceRoot, "main.ts"), "export const fixture = true;");
+  writeFile(path.join(electronBundleRoot, "main.js"), "exports.fixture = true;");
+  writeFile(path.join(nextSourceRoot, "app", "page.tsx"), "export default function Page() {}");
+  writeFile(path.join(fastapiSourceRoot, "main.py"), "app = object()\n");
+  writeFile(path.join(workspaceRoot, "LICENSE"), "L".repeat(1000));
+  writeFile(path.join(workspaceRoot, "NOTICE"), "N".repeat(1000));
+  writeFile(
+    path.join(workspaceRoot, "compliance", "release-license-policy.json"),
+    JSON.stringify({ schema: "presenton.release-license-policy/v1", padding: "P".repeat(100) }),
+  );
+  writeFile(
+    path.join(workspaceRoot, "compliance", "copyleft-source-offer.md"),
+    "S".repeat(100),
+  );
+  writeFile(path.join(workspaceRoot, "compliance", "fonts", "OFL-1.1.txt"), "O".repeat(1000));
+  writeFile(path.join(workspaceRoot, "compliance", "fonts", "README.md"), "F".repeat(100));
+  writeFile(
+    path.join(workspaceRoot, "docs", "experiments", "authored-vnext", "03-ooxml-roundtrip", "compliance", "LICENSE.genoffice.txt"),
+    "G".repeat(1000)
+  );
+  writeFile(
+    path.join(workspaceRoot, "docs", "experiments", "authored-vnext", "03-ooxml-roundtrip", "compliance", "NOTICE.genoffice.txt"),
+    "G".repeat(100)
+  );
+  writeFile(
+    path.join(workspaceRoot, "compliance", "release-sbom.spdx.json"),
+    JSON.stringify({
+      spdxVersion: "SPDX-2.3",
+      dataLicense: "CC0-1.0",
+      packages: [{
+        SPDXID: "SPDXRef-fixture",
+        name: "fixture",
+        licenseDeclared: "MIT",
+        licenseConcluded: "MIT",
+      }],
+      annotations: [{
+        annotator: "Tool: scripts/generate-release-sbom.mjs",
+        comment: JSON.stringify({
+          schema: "presenton.release-license-attestation/v1",
+          policySha256: sha256(path.join(workspaceRoot, "compliance", "release-license-policy.json")),
+          noticeSha256: sha256(path.join(workspaceRoot, "NOTICE")),
+          sourceOfferSha256: sha256(path.join(workspaceRoot, "compliance", "copyleft-source-offer.md")),
+        }),
+      }],
+      padding: "S".repeat(1000),
+    })
+  );
+  for (const [kind, sourceRoot, resourceRoot] of [
+    ["electron", electronSourceRoot, electronBundleRoot],
+    ["nextjs", nextSourceRoot, nextRoot],
+    ["fastapi", fastapiSourceRoot, fastapiRoot],
+  ]) {
+    writeResourceProvenance({ kind, sourceRoot, resourceRoot, workspaceRoot });
+  }
   writeFile(
     path.join(
       fastapiRoot,
@@ -115,6 +179,66 @@ test("accepts nested standalone only when assets sit beside nested server", () =
   } finally {
     fixture.cleanup();
   }
+});
+
+test("rejects stale and missing source provenance", async (t) => {
+  await t.test("stale", () => {
+    const fixture = createFixture();
+    try {
+      writeFile(
+        path.join(fixture.workspaceRoot, "servers", "nextjs", "app", "page.tsx"),
+        "export default function Changed() {}"
+      );
+      assert.throws(() => validate(fixture), /Packaged nextjs resource is stale/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  await t.test("missing", () => {
+    const fixture = createFixture();
+    try {
+      fs.rmSync(path.join(fixture.electronRoot, "app_dist", ".source-provenance.json"));
+      assert.throws(() => validate(fixture), /Resource provenance is missing or invalid for electron/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
+test("rejects incomplete release compliance inputs", () => {
+  const fixture = createFixture();
+  try {
+    fs.rmSync(path.join(fixture.workspaceRoot, "compliance", "fonts", "OFL-1.1.txt"));
+    assert.throws(() => validate(fixture), /Bundled font OFL text is missing/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects unknown licenses and stale license attestation", async (t) => {
+  await t.test("unknown", () => {
+    const fixture = createFixture();
+    try {
+      const sbomPath = path.join(fixture.workspaceRoot, "compliance", "release-sbom.spdx.json");
+      const document = JSON.parse(fs.readFileSync(sbomPath, "utf8"));
+      document.packages[0].licenseConcluded = "NOASSERTION";
+      writeFile(sbomPath, JSON.stringify(document));
+      assert.throws(() => validate(fixture), /Release SBOM has an unknown license/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  await t.test("stale notice", () => {
+    const fixture = createFixture();
+    try {
+      writeFile(path.join(fixture.workspaceRoot, "NOTICE"), "changed".repeat(200));
+      assert.throws(() => validate(fixture), /Release SBOM license attestation is stale/);
+    } finally {
+      fixture.cleanup();
+    }
+  });
 });
 
 test("rejects missing static or public assets", async (t) => {

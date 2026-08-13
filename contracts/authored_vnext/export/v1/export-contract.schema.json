@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:presenton:authored-vnext:export-contract:v1",
+  "title": "Authored vNext durable export contract",
+  "description": "Closed public and internal wire contracts for fenced, immutable PPTX export publication.",
+  "x-contractVersion": "authored-vnext-export/v1",
+  "x-generatedTypes": [
+    "generated/export_contract.py",
+    "generated/export-contract.ts"
+  ],
+  "$defs": {
+    "OwnerScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenantId", "ownerId"],
+      "properties": {
+        "tenantId": {"type": "string", "minLength": 1, "maxLength": 200},
+        "ownerId": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "SlideSpecDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slideId", "revision", "digest"],
+      "properties": {
+        "slideId": {"type": "string", "pattern": "^slide:[a-z0-9][a-z0-9._-]*$"},
+        "revision": {"type": "integer", "minimum": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "AssetDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "digest"],
+      "properties": {
+        "assetId": {"type": "string", "pattern": "^asset:[a-z0-9][a-z0-9._-]*$"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "QualityIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "path", "message"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 120},
+        "path": {"type": "string", "minLength": 1, "maxLength": 500},
+        "message": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "QualityDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "decisionDigest", "checkedAt", "issues"],
+      "properties": {
+        "decision": {"type": "string", "enum": ["approved", "rejected"]},
+        "decisionDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "checkedAt": {"type": "string", "format": "date-time"},
+        "issues": {"type": "array", "items": {"$ref": "#/$defs/QualityIssue"}, "maxItems": 1000}
+      }
+    },
+    "ArtifactReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "artifactId", "artifactRevision", "sha256", "byteLength",
+        "mediaType", "createdAt", "downloadUrl", "packageReadbackDigest", "slideCount",
+        "sourceDeckDigest", "sourceMasterDigest", "sourceSpecManifestDigest",
+        "sourceAssetManifestDigest", "sourceFontDigest", "qualityDecision"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-artifact-receipt/v1"},
+        "artifactId": {"type": "string", "pattern": "^artifact:[a-z0-9][a-z0-9._-]*$"},
+        "artifactRevision": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "byteLength": {"type": "integer", "minimum": 1},
+        "mediaType": {"const": "application/vnd.openxmlformats-officedocument.presentationml.presentation"},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "downloadUrl": {"type": "string", "pattern": "^/api/v1/ppt/authored-vnext/export/artifacts/[A-Za-z0-9._~%-]+/download$"},
+        "packageReadbackDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "slideCount": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "sourceDeckDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceMasterDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceSpecManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceAssetManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceFontDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourcePackageDigest": {
+          "oneOf": [
+            {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            {"type": "null"}
+          ]
+        },
+        "qualityDecision": {"$ref": "#/$defs/QualityDecision"}
+      }
+    },
+    "CreateExportJobRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "ownerScope", "deckId", "expectedDeckRevision", "expectedDeckDigest",
+        "masterId", "expectedMasterRevision", "expectedMasterDigest",
+        "expectedActiveArtifactRevision", "expectedActiveArtifactDigest", "slideSpecDigests",
+        "assetDigests", "fontDigest", "packageDigest", "idempotencyKey", "operationFence",
+        "timeoutMs", "maxAttempts"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-export/v1"},
+        "ownerScope": {"$ref": "#/$defs/OwnerScope"},
+        "deckId": {"type": "string", "pattern": "^deck:[a-z0-9][a-z0-9._-]*$"},
+        "expectedDeckRevision": {"type": "integer", "minimum": 1},
+        "expectedDeckDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "masterId": {"type": "string", "pattern": "^master:[a-z0-9][a-z0-9._-]*$"},
+        "expectedMasterRevision": {"type": "integer", "minimum": 1},
+        "expectedMasterDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "expectedActiveArtifactRevision": {"oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]},
+        "expectedActiveArtifactDigest": {"oneOf": [{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, {"type": "null"}]},
+        "slideSpecDigests": {"type": "array", "items": {"$ref": "#/$defs/SlideSpecDigest"}, "minItems": 1, "maxItems": 1000, "uniqueItems": true},
+        "assetDigests": {"type": "array", "items": {"$ref": "#/$defs/AssetDigest"}, "maxItems": 10000, "uniqueItems": true},
+        "fontDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "packageDigest": {"oneOf": [{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, {"type": "null"}]},
+        "idempotencyKey": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$"},
+        "operationFence": {"type": "integer", "minimum": 1},
+        "timeoutMs": {"type": "integer", "minimum": 1000, "maximum": 3600000},
+        "maxAttempts": {"type": "integer", "minimum": 1, "maximum": 10}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"expectedActiveArtifactRevision": {"type": "null"}}},
+          "then": {"properties": {"expectedActiveArtifactDigest": {"type": "null"}}},
+          "else": {"properties": {"expectedActiveArtifactDigest": {"type": "string"}}}
+        }
+      ]
+    },
+    "CreateExportJobResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "jobId", "state", "idempotencyKey", "operationFence", "createdAt", "statusUrl"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-export/v1"},
+        "jobId": {"type": "string", "pattern": "^export-job:[a-z0-9][a-z0-9._-]*$"},
+        "state": {"const": "queued"},
+        "idempotencyKey": {"type": "string"},
+        "operationFence": {"type": "integer", "minimum": 1},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "statusUrl": {"type": "string", "pattern": "^/api/v1/ppt/authored-vnext/export/jobs/[A-Za-z0-9._~%-]+$"}
+      }
+    },
+    "ExportError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable", "failedClosed"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 120},
+        "message": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "retryable": {"type": "boolean"},
+        "failedClosed": {"const": true}
+      }
+    },
+    "ExportJobStatusResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "jobId", "state", "operationFence", "attemptCount", "maxAttempts",
+        "resumable", "cancelRequested", "createdAt", "updatedAt", "artifact", "error"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-export/v1"},
+        "jobId": {"type": "string", "pattern": "^export-job:[a-z0-9][a-z0-9._-]*$"},
+        "state": {"type": "string", "enum": ["queued", "running", "retry_wait", "succeeded", "failed", "cancelled"]},
+        "operationFence": {"type": "integer", "minimum": 1},
+        "attemptCount": {"type": "integer", "minimum": 0, "maximum": 10},
+        "maxAttempts": {"type": "integer", "minimum": 1, "maximum": 10},
+        "resumable": {"type": "boolean"},
+        "cancelRequested": {"type": "boolean"},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "updatedAt": {"type": "string", "format": "date-time"},
+        "nextAttemptAt": {"oneOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]},
+        "artifact": {"oneOf": [{"$ref": "#/$defs/ArtifactReceipt"}, {"type": "null"}]},
+        "error": {"oneOf": [{"$ref": "#/$defs/ExportError"}, {"type": "null"}]}
+      }
+    },
+    "CancelExportJobRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "ownerScope", "expectedOperationFence"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-export/v1"},
+        "ownerScope": {"$ref": "#/$defs/OwnerScope"},
+        "expectedOperationFence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "RollbackArtifactPublicationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "ownerScope", "expectedActiveArtifactRevision", "expectedActiveArtifactDigest", "targetArtifactId", "targetArtifactRevision", "targetArtifactDigest", "idempotencyKey", "operationFence"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-export/v1"},
+        "ownerScope": {"$ref": "#/$defs/OwnerScope"},
+        "expectedActiveArtifactRevision": {"type": "integer", "minimum": 1},
+        "expectedActiveArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "targetArtifactId": {"type": "string", "pattern": "^artifact:[a-z0-9][a-z0-9._-]*$"},
+        "targetArtifactRevision": {"type": "integer", "minimum": 1},
+        "targetArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "idempotencyKey": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$"},
+        "operationFence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "WorkerSlide": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slideId", "layoutId", "values"],
+      "properties": {
+        "slideId": {"type": "string", "pattern": "^slide:[a-z0-9][a-z0-9._-]*$"},
+        "layoutId": {"type": "string", "pattern": "^layout:[a-z0-9][a-z0-9._-]*$"},
+        "values": {"type": "object"}
+      }
+    },
+    "WorkerAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "mediaType", "bytesBase64", "sha256"],
+      "properties": {
+        "assetId": {"type": "string", "pattern": "^asset:[a-z0-9][a-z0-9._-]*$"},
+        "mediaType": {"type": "string", "minLength": 1, "maxLength": 200},
+        "bytesBase64": {"type": "string", "contentEncoding": "base64", "maxLength": 268435456},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "WorkerDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["masterSha256", "specSha256", "assetManifestSha256", "fontManifestSha256", "packageSha256"],
+      "properties": {
+        "masterSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "specSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "assetManifestSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "fontManifestSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "packageSha256": {"oneOf": [{"type": "string", "pattern": "^[0-9a-f]{64}$"}, {"type": "null"}]}
+      }
+    },
+    "WorkerPackageReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packageDigest", "relationshipDigest", "closureDigest", "slideCount", "masterCount", "layoutCount", "macroDetected", "quarantineReasons"],
+      "properties": {
+        "packageDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "relationshipDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "closureDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "slideCount": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "masterCount": {"type": "integer", "minimum": 1},
+        "layoutCount": {"type": "integer", "minimum": 1},
+        "macroDetected": {"type": "boolean"},
+        "quarantineReasons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "WorkerPreservationReceipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["silentLossCount", "missingParts", "unexpectedChangedParts"],
+      "properties": {
+        "silentLossCount": {"type": "integer", "minimum": 0},
+        "missingParts": {"type": "array", "items": {"type": "string"}},
+        "unexpectedChangedParts": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "WorkerSlideReceipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["partName", "slideId", "layoutId", "masterDigest"],
+      "properties": {
+        "partName": {"type": "string", "minLength": 1},
+        "slideId": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+        "layoutId": {"oneOf": [{"type": "string"}, {"type": "null"}]},
+        "masterDigest": {"oneOf": [{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, {"type": "null"}]}
+      }
+    },
+    "WorkerMasterReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractDigest", "semanticDigest", "furnitureCount", "logoCount",
+        "pageNumberCount", "fontFileCount", "duplicateFurnitureCount",
+        "fontFilesMode"
+      ],
+      "properties": {
+        "contractDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "semanticDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "furnitureCount": {"type": "integer", "minimum": 0},
+        "logoCount": {"type": "integer", "minimum": 0},
+        "pageNumberCount": {"type": "integer", "minimum": 0},
+        "fontFileCount": {"type": "integer", "minimum": 0},
+        "duplicateFurnitureCount": {"const": 0},
+        "fontFilesMode": {"const": "REFERENCE_METADATA_VERIFIED"}
+      }
+    },
+    "WorkerReadBackReceipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["adapterRevision", "validation", "candidateDigestVerified", "package", "preservation", "master", "slides"],
+      "properties": {
+        "adapterRevision": {"type": "integer", "minimum": 1},
+        "validation": {"const": "candidate-reopened"},
+        "candidateDigestVerified": {"const": true},
+        "package": {"$ref": "#/$defs/WorkerPackageReceipt"},
+        "preservation": {"$ref": "#/$defs/WorkerPreservationReceipt"},
+        "master": {"$ref": "#/$defs/WorkerMasterReceipt"},
+        "slides": {"type": "array", "items": {"$ref": "#/$defs/WorkerSlideReceipt"}, "minItems": 1}
+      }
+    },
+    "WorkerResumeReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt", "checkpointDigest"],
+      "properties": {
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 10},
+        "checkpointDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "WorkerRequestEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operation", "operationId", "fencingToken", "master", "slides", "assets", "digests"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-worker/v1"},
+        "operation": {"const": "EXPORT_PPTX"},
+        "operationId": {"type": "string", "minLength": 8, "maxLength": 200},
+        "jobId": {"type": "string", "pattern": "^export-job:[a-z0-9][a-z0-9._-]*$"},
+        "fencingToken": {"type": "integer", "minimum": 1},
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 10},
+        "timeoutMs": {"type": "integer", "minimum": 1000, "maximum": 3600000},
+        "deadline": {"type": "string", "format": "date-time"},
+        "master": {"type": "object"},
+        "slides": {"type": "array", "items": {"$ref": "#/$defs/WorkerSlide"}, "minItems": 1, "maxItems": 1000},
+        "assets": {"type": "array", "items": {"$ref": "#/$defs/WorkerAsset"}, "maxItems": 10000},
+        "digests": {"$ref": "#/$defs/WorkerDigests"},
+        "resumeFromReceipt": {"oneOf": [{"$ref": "#/$defs/WorkerResumeReceipt"}, {"type": "null"}]}
+      }
+    },
+    "BufferedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contentBase64", "sha256", "byteLength", "mediaType", "filenameExtension"],
+      "properties": {
+        "contentBase64": {"type": "string", "contentEncoding": "base64", "maxLength": 536870912},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "byteLength": {"type": "integer", "minimum": 1, "maximum": 402653184},
+        "mediaType": {"const": "application/vnd.openxmlformats-officedocument.presentationml.presentation"},
+        "filenameExtension": {"const": ".pptx"}
+      }
+    },
+    "WorkerResponseEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operation", "operationId", "fencingToken", "status", "artifact", "receipt"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-worker/v1"},
+        "operation": {"const": "EXPORT_PPTX"},
+        "operationId": {"type": "string", "minLength": 8, "maxLength": 200},
+        "fencingToken": {"type": "integer", "minimum": 1},
+        "status": {"const": "SUCCEEDED"},
+        "artifact": {"$ref": "#/$defs/BufferedArtifact"},
+        "receipt": {"$ref": "#/$defs/WorkerReadBackReceipt"}
+      }
+    },
+    "WorkerError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable", "failedClosed"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,119}$"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "retryable": {"type": "boolean"},
+        "failedClosed": {"const": true}
+      }
+    },
+    "WorkerErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "status", "error"],
+      "properties": {
+        "schemaVersion": {"const": "authored-vnext-ooxml-worker/v1"},
+        "status": {"const": "FAILED"},
+        "error": {"$ref": "#/$defs/WorkerError"}
+      }
+    }
+  }
+}

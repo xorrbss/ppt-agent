@@ -99,6 +99,7 @@ test("excludes tests, generated files, vendor files, and migrations", async () =
     "src/provider_registry_generated.py": lines(501),
     "servers/nextjs/public/vendor/library.js": lines(501),
     "servers/fastapi/alembic/versions/0001_initial.py": lines(501),
+    "docs/experiments/probe.mjs": lines(501),
   }, {});
   assert.deepEqual(await checkRatchet(root, baselinePath), []);
 });

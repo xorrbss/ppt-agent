@@ -4,19 +4,11 @@ Split out of the presentation god-file. These are the plain persistence
 operations on a PresentationModel (no generation or export pipeline).
 """
 
-import json
 import uuid
-from pathlib import PurePosixPath
-from typing import Annotated, Any, List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    ValidationError,
-    field_validator,
-)
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +16,10 @@ from sqlalchemy.orm import defer
 from sqlmodel import select
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
+from api.v1.ppt.endpoints.presentation_create_contracts import (
+    attachment_file_name as _attachment_file_name,
+    normalize_presentation_create_theme as _normalize_presentation_create_theme,
+)
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
     MAX_NUMBER_OF_SLIDES,
@@ -48,6 +44,9 @@ from models.sql.workspace import (
 )
 from models.workspace import WorkspaceBootstrapRequest
 from services.database import get_async_session, sql_engine
+from services.compatibility_migration.admission import (
+    stamp_new_authored_presentation,
+)
 from services.presentation_deletion_service import (
     PresentationDeleteConflictError,
     PresentationDeleteRetryableError,
@@ -80,56 +79,6 @@ from utils.document_path_security import validate_document_paths
 from utils.owner_context import get_current_owner_id
 
 PRESENTATION_CRUD_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
-MAX_PRESENTATION_THEME_BYTES = 256 * 1024
-
-
-class _PresentationCreateTheme(BaseModel):
-    """Allowlisted presentation theme persisted by chat-first admission."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    id: str = Field(min_length=1, max_length=256)
-    name: str = Field(min_length=1, max_length=256)
-    description: str = Field(max_length=2048)
-    user: str = Field(min_length=1, max_length=256)
-    logo: Optional[str] = Field(default=None, max_length=512)
-    logo_url: Optional[str] = Field(default=None, max_length=4096)
-    company_name: Optional[str] = Field(default=None, max_length=256)
-    data: dict[str, Any]
-
-    @field_validator("id", "name", "user")
-    @classmethod
-    def reject_blank_identifiers(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("must not be blank")
-        return value
-
-
-def _normalize_presentation_create_theme(theme: Optional[dict]) -> Optional[dict]:
-    if theme is None:
-        return None
-    try:
-        normalized = _PresentationCreateTheme.model_validate(theme).model_dump()
-        encoded = json.dumps(
-            normalized,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    except (TypeError, ValueError, ValidationError) as error:
-        raise HTTPException(
-            status_code=422,
-            detail="invalid_presentation_theme",
-        ) from error
-    if len(encoded) > MAX_PRESENTATION_THEME_BYTES:
-        raise HTTPException(status_code=422, detail="presentation_theme_too_large")
-    return normalized
-
-
-def _attachment_file_name(file_path: str) -> str:
-    """Return only the final path component, regardless of source OS."""
-    return PurePosixPath(file_path.replace("\\", "/")).name
-
-
 def _chat_first_create_enabled() -> bool:
     """Fail closed when the SQL runtime cannot host the operation store."""
 
@@ -549,6 +498,10 @@ async def create_presentation(
             else PRESENTATION_LIFECYCLE_PUBLISHED
         ),
     )
+    stamp_new_authored_presentation(presentation)
+    # Idempotency comparisons and workspace settings must use the same
+    # server-issued theme identity that will be persisted.
+    resolved_theme = presentation.theme
 
     if chat_first_enabled:
         settings = {

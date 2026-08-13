@@ -8,12 +8,15 @@ import tempfile
 import urllib
 import zipfile
 from functools import lru_cache
-import aiohttp
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 from pydantic import BaseModel
 from pptx import Presentation
 from fontTools.ttLib import TTFont
+from services.provider_font_runtime import (
+    fetch_google_fonts_stylesheet,
+    get_google_font_file_urls as _get_google_font_file_urls,
+)
 
 DEFAULT_GOOGLE_FONT_WEIGHTS = (400, 700)
 PPT_NS = {
@@ -270,33 +273,7 @@ def extract_fonts_from_oxml(xml_content: str) -> List[str]:
 
 # Helper: Fetch TTF/OTF file URLs for a Google Fonts family via Webfonts Developer API
 async def get_google_font_file_urls(family_name: str, api_key: str) -> List[str]:
-    encoded_family = urllib.parse.quote_plus(family_name)
-    api_url = f"https://www.googleapis.com/webfonts/v1/webfonts?family={encoded_family}&key={api_key}"
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                api_url, timeout=aiohttp.ClientTimeout(total=20)
-            ) as resp:
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
-                items = data.get("items", []) or []
-                if not items:
-                    return []
-                urls: List[str] = []
-                # Take first matching family
-                files = (items[0] or {}).get("files", {}) or {}
-                for _variant, url in files.items():
-                    if not url:
-                        continue
-                    # Prefer TTF/OTF for LibreOffice; upgrade to https
-                    fixed_url = url.replace("http://", "https://")
-                    lower = fixed_url.lower()
-                    if lower.endswith(".ttf") or lower.endswith(".otf"):
-                        urls.append(fixed_url)
-                return urls
-    except Exception:
-        return []
+    return await _get_google_font_file_urls(family_name, api_key)
 
 
 async def check_google_font_availability(
@@ -305,16 +282,10 @@ async def check_google_font_availability(
     """Return True when Google Fonts serves the requested family/variants."""
     try:
         url = build_google_fonts_stylesheet_url(font_name, variants=variants)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status != 200:
-                    return False
-                css = await response.text()
-                if "@font-face" not in css:
-                    return False
-                return "fonts.gstatic.com/l/font?kit=" not in css
+        css = await fetch_google_fonts_stylesheet(url)
+        if css is None or "@font-face" not in css:
+            return False
+        return "fonts.gstatic.com/l/font?kit=" not in css
     except Exception as exc:
         print(f"Error checking Google Font availability for {font_name}: {exc}")
         return False

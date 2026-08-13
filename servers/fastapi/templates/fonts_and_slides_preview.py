@@ -10,6 +10,7 @@ from fastapi import HTTPException, UploadFile
 from pydantic import BaseModel
 
 from services.documents_loader import DocumentsLoader
+from services.provider_font_runtime import download_google_font_file
 from templates.pptx_convert import convert_pptx_to_pdf
 from templates.pptx_font_utils import (
     FontDetail,
@@ -31,7 +32,6 @@ from templates.pptx_font_utils import (
 )
 from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
 from utils.asset_directory_utils import absolute_fastapi_asset_url
-from utils.download_helpers import download_file
 from utils.get_env import get_app_data_directory_env
 from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file
 
@@ -917,7 +917,7 @@ async def _download_available_google_fonts(
             )
             dest_path = os.path.join(extract_dir, filename)
             try:
-                downloaded_path = await download_file(file_url, extract_dir)
+                downloaded_path = await download_google_font_file(file_url, extract_dir)
                 if not downloaded_path or not os.path.exists(downloaded_path):
                     raise RuntimeError(
                         f"download_file returned invalid path for {file_url}"

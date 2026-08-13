@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -11,7 +11,12 @@ function resolveFileUrl(baseUrl) {
     ...EXTENSIONS.map((extension) => `${filePath}${extension}`),
     ...EXTENSIONS.map((extension) => path.join(filePath, `index${extension}`)),
   ];
-  const match = candidates.find((candidate) => existsSync(candidate));
+  // A bare alias may name a directory with an index module. Returning that
+  // directory URL makes Node try to read it as a source file (EISDIR), rather
+  // than continuing to the index candidates below.
+  const match = candidates.find(
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
   return match ? pathToFileURL(match).href : null;
 }
 

@@ -1,0 +1,358 @@
+from __future__ import annotations
+
+# The Node bridge performs deliberately bounded blocking file hand-offs.
+# ruff: noqa: ASYNC109, ASYNC230, ASYNC240
+
+import asyncio
+import json
+import logging
+import os
+import shutil
+import tempfile
+from typing import Mapping
+from urllib.parse import unquote, urlparse
+
+from fastapi import HTTPException
+
+from services.export_task_contracts import (
+    EXPORT_DIRECTORY_MODE,
+    EXPORT_FILE_MODE,
+    sys_arch,
+    sys_platform,
+    windows_hidden_subprocess_kwargs,
+)
+from services.liteparse_service import _command_str, _snippet
+from utils.asset_directory_utils import resolve_app_path_to_filesystem
+from utils.get_env import get_app_data_directory_env, get_temp_directory_env
+from utils.owner_context import get_current_owner_id
+from utils.runtime_limits import BoundedTextBuffer, log_memory
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+class ExportTaskRuntimeMixin:
+    @staticmethod
+    def _resolve_export_dir() -> str:
+        configured = (os.getenv("EXPORT_RUNTIME_DIR") or "").strip()
+        if configured:
+            return configured
+
+        package_root = (os.getenv("EXPORT_PACKAGE_ROOT") or "").strip()
+        if package_root:
+            return package_root
+
+        cwd = os.path.abspath(".")
+        service_dir = os.path.dirname(__file__)
+        candidates = [
+            os.path.abspath(os.path.join(cwd, "..", "..", "presentation-export")),
+            os.path.abspath(os.path.join(cwd, "..", "presentation-export")),
+            os.path.abspath(os.path.join(service_dir, "..", "..", "..", "presentation-export")),
+            os.path.abspath(os.path.join(service_dir, "..", "..", "..", "..", "presentation-export")),
+        ]
+
+        for candidate in candidates:
+            if os.path.isfile(os.path.join(candidate, "index.cjs")) or os.path.isfile(
+                os.path.join(candidate, "index.js")
+            ):
+                return candidate
+
+        return candidates[0]
+
+    @staticmethod
+    def _resolve_entrypoint_path(export_dir: str) -> str:
+        index_cjs = os.path.join(export_dir, "index.cjs")
+        if os.path.isfile(index_cjs):
+            return index_cjs
+
+        index_js = os.path.join(export_dir, "index.js")
+        if os.path.isfile(index_js):
+            # Packaged app resource directories can be read-only (e.g. /opt installs).
+            # Try to create index.cjs for compatibility, but fall back to index.js
+            # when writing is not permitted.
+            try:
+                shutil.copyfile(index_js, index_cjs)
+                return index_cjs
+            except OSError:
+                return index_js
+
+        return index_cjs
+
+    @staticmethod
+    def _resolve_converter_path(export_dir: str) -> str:
+        py_dir = os.path.join(export_dir, "py")
+        extension = ".exe" if os.name == "nt" else ""
+        platform_name = sys_platform()
+        arch_name = sys_arch()
+        names = [
+            f"convert-{platform_name}-{arch_name}{extension}",
+            f"convert-{platform_name}{extension}",
+            f"convert{extension}",
+            "convert",
+        ]
+        # The converter location moved between releases: v0.2.x ships it under
+        # `py/`, v0.3.x at the archive root. Check both (matches the sync script).
+        candidates = [os.path.join(py_dir, n) for n in names] + [
+            os.path.join(export_dir, n) for n in names
+        ]
+        for candidate in candidates:
+            if candidate and os.path.isfile(candidate):
+                return candidate
+        return candidates[0]
+
+    def _build_node_env(self) -> Mapping[str, str]:
+        env = os.environ.copy()
+
+        app_data_directory = get_app_data_directory_env()
+        if not app_data_directory:
+            raise HTTPException(
+                status_code=500,
+                detail="APP_DATA_DIRECTORY must be set for PPTX-to-HTML export",
+            )
+        # The Node runtime is launched with ``presentation-export`` as its
+        # working directory.  Passing through a relative APP_DATA_DIRECTORY
+        # therefore makes Python and Node resolve the same setting against two
+        # different directories.  The renderer succeeds, but Python rejects
+        # the returned file URL because it is outside Python's app-data root.
+        app_data_directory = os.path.realpath(os.path.abspath(app_data_directory))
+        env["APP_DATA_DIRECTORY"] = app_data_directory
+
+        temp_directory = get_temp_directory_env() or os.path.join(
+            tempfile.gettempdir(), "presenton"
+        )
+        temp_directory = os.path.realpath(os.path.abspath(temp_directory))
+        owner_id = get_current_owner_id()
+        if owner_id is not None:
+            temp_directory = os.path.join(temp_directory, str(owner_id))
+        os.makedirs(temp_directory, exist_ok=True)
+        env["TEMP_DIRECTORY"] = temp_directory
+
+        fastapi_base = (os.getenv("NEXT_PUBLIC_FAST_API") or "").strip()
+        if not fastapi_base:
+            raise HTTPException(
+                status_code=500,
+                detail="NEXT_PUBLIC_FAST_API must be set for PPTX-to-HTML export",
+            )
+        env["ASSETS_BASE_URL"] = f"{fastapi_base.rstrip('/')}/app_data"
+        env["BUILT_PYTHON_MODULE_PATH"] = self.converter_path
+
+        # The export runtime renders /pdf-maker via puppeteer. When the deploy hasn't
+        # pinned a browser (Docker sets PUPPETEER_EXECUTABLE_PATH to its bundled
+        # chromium), fall back to the same Chrome the authored renderer auto-detects,
+        # so byte-PPTX export works on a desktop instead of puppeteer trying to
+        # download its own Chrome (which also fails offline / behind a proxy).
+        if not env.get("PUPPETEER_EXECUTABLE_PATH"):
+            from utils.slide_capture import find_chrome
+
+            chrome = find_chrome()
+            if chrome:
+                env["PUPPETEER_EXECUTABLE_PATH"] = chrome
+
+        return env
+
+    def _ensure_runtime_ready(self) -> None:
+        if not os.path.isfile(self.entrypoint_path):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export runtime not found at {self.entrypoint_path}",
+            )
+        if not os.path.isfile(self.converter_path):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export converter binary not found at {self.converter_path}",
+            )
+
+    @staticmethod
+    def _resolve_output_path(response_data: dict) -> str:
+        path_value = response_data.get("path")
+        if isinstance(path_value, str):
+            resolved = resolve_app_path_to_filesystem(path_value) or path_value
+            if os.path.isfile(resolved):
+                return resolved
+
+        url_value = response_data.get("url")
+        if isinstance(url_value, str):
+            resolved = ExportTaskRuntimeMixin._resolve_trusted_runtime_path(url_value)
+            if resolved:
+                return resolved
+
+        raise HTTPException(
+            status_code=500,
+            detail="PPTX-to-HTML task completed without a valid output path",
+        )
+
+    @staticmethod
+    def _resolve_trusted_runtime_path(path_or_url: str) -> str | None:
+        parsed = urlparse(path_or_url)
+        candidate = unquote(parsed.path) if parsed.scheme else path_or_url
+        if parsed.scheme == "file" and os.name == "nt" and candidate.startswith("/"):
+            candidate = candidate[1:]
+
+        allowed_roots = [
+            get_app_data_directory_env(),
+            get_temp_directory_env() or os.path.join(tempfile.gettempdir(), "presenton"),
+        ]
+        try:
+            resolved = os.path.realpath(os.path.abspath(candidate))
+            for root in allowed_roots:
+                if not root:
+                    continue
+                resolved_root = os.path.realpath(os.path.abspath(root))
+                if (
+                    os.path.commonpath([resolved, resolved_root]) == resolved_root
+                    and os.path.isfile(resolved)
+                ):
+                    return resolved
+        except (OSError, ValueError):
+            return None
+        return None
+
+    @staticmethod
+    def _ensure_output_readable(output_path: str) -> None:
+        try:
+            os.chmod(os.path.dirname(output_path), EXPORT_DIRECTORY_MODE)
+            os.chmod(output_path, EXPORT_FILE_MODE)
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export completed but output permissions could not be updated: {exc}",
+            ) from exc
+
+    @staticmethod
+    def _create_task_paths() -> tuple[str, str, str]:
+        temp_root = get_temp_directory_env() or os.path.join(
+            tempfile.gettempdir(), "presenton"
+        )
+        owner_id = get_current_owner_id()
+        if owner_id is not None:
+            temp_root = os.path.join(temp_root, str(owner_id))
+        os.makedirs(temp_root, exist_ok=True)
+        temp_dir = tempfile.mkdtemp(prefix="export-task-", dir=temp_root)
+        task_path = os.path.join(temp_dir, "export_task.json")
+        response_path = os.path.join(temp_dir, "export_task.response.json")
+        return temp_dir, task_path, response_path
+
+    async def _run_task(self, task_payload: dict, response_error_detail: str) -> dict:
+        return await self._run_task_locked(task_payload, response_error_detail)
+
+    async def _run_task_locked(self, task_payload: dict, response_error_detail: str) -> dict:
+        self._ensure_runtime_ready()
+        temp_dir, task_path, response_path = self._create_task_paths()
+
+        try:
+            with open(task_path, "w", encoding="utf-8") as task_file:
+                json.dump(task_payload, task_file)
+
+            log_memory(
+                LOGGER,
+                "export_task.spawn",
+                task_type=task_payload.get("type"),
+            )
+            result = await self._run_bounded_child(
+                [self.node_binary, self.entrypoint_path, task_path],
+                cwd=self.export_dir,
+                timeout=self.timeout_seconds,
+                env=dict(self._build_node_env()),
+            )
+            log_memory(
+                LOGGER,
+                "export_task.exit",
+                task_type=task_payload.get("type"),
+                returncode=result["returncode"],
+            )
+
+            if result["returncode"] != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Export task failed. "
+                        f"stderr={_snippet(result['stderr'])} stdout={_snippet(result['stdout'])}"
+                    ),
+                )
+
+            if not os.path.isfile(response_path):
+                raise HTTPException(
+                    status_code=500,
+                    detail=response_error_detail,
+                )
+
+            with open(response_path, "r", encoding="utf-8") as response_file:
+                return json.load(response_file)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="Export task produced invalid JSON output",
+            ) from exc
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to run export task: {exc}",
+            ) from exc
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    async def _run_bounded_child(
+        self,
+        command: list[str],
+        *,
+        cwd: str,
+        env: dict[str, str],
+        timeout: int,
+    ) -> dict[str, str | int]:
+        stdout_tail = BoundedTextBuffer()
+        stderr_tail = BoundedTextBuffer()
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            **windows_hidden_subprocess_kwargs(),
+        )
+
+        LOGGER.info(
+            "[export_runtime] child started pid=%s command=%s",
+            process.pid,
+            _command_str(command),
+        )
+
+        async def drain(
+            stream: asyncio.StreamReader | None,
+            tail: BoundedTextBuffer,
+            label: str,
+        ) -> None:
+            if stream is None:
+                return
+            while True:
+                chunk = await stream.read(65536)
+                if not chunk:
+                    break
+                tail.append(chunk)
+                LOGGER.debug("[export_runtime] %s chunk=%s bytes", label, len(chunk))
+
+        stdout_task = asyncio.create_task(drain(process.stdout, stdout_tail, "stdout"))
+        stderr_task = asyncio.create_task(drain(process.stderr, stderr_tail, "stderr"))
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(process.wait(), stdout_task, stderr_task),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError as exc:
+            process.kill()
+            await process.wait()
+            await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export task timed out after {timeout} seconds",
+            ) from exc
+
+        LOGGER.info(
+            "[export_runtime] child exited pid=%s returncode=%s",
+            process.pid,
+            process.returncode,
+        )
+        return {
+            "returncode": process.returncode if process.returncode is not None else -1,
+            "stdout": stdout_tail.get(),
+            "stderr": stderr_tail.get(),
+        }

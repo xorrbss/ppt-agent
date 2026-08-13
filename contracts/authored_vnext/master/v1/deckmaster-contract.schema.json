@@ -1,0 +1,983 @@
+{
+  "$defs": {
+    "AssetReference": {
+      "additionalProperties": false,
+      "properties": {
+        "altText": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Alttext",
+          "type": "string"
+        },
+        "assetId": {
+          "pattern": "^asset:[a-z0-9][a-z0-9._-]*$",
+          "title": "Assetid",
+          "type": "string"
+        },
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assetId",
+        "digest",
+        "altText"
+      ],
+      "title": "AssetReference",
+      "type": "object"
+    },
+    "BrandAssets": {
+      "additionalProperties": false,
+      "properties": {
+        "logo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "wordmark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "BrandAssets",
+      "type": "object"
+    },
+    "CanvasContract": {
+      "additionalProperties": false,
+      "properties": {
+        "heightPx": {
+          "default": 720,
+          "maximum": 4320,
+          "minimum": 180,
+          "title": "Heightpx",
+          "type": "integer"
+        },
+        "locale": {
+          "default": "ko-KR",
+          "maxLength": 32,
+          "minLength": 2,
+          "title": "Locale",
+          "type": "string"
+        },
+        "safeArea": {
+          "$ref": "#/$defs/Rect"
+        },
+        "widthPx": {
+          "default": 1280,
+          "maximum": 7680,
+          "minimum": 320,
+          "title": "Widthpx",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "safeArea"
+      ],
+      "title": "CanvasContract",
+      "type": "object"
+    },
+    "ColorTokens": {
+      "additionalProperties": false,
+      "properties": {
+        "accent": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Accent",
+          "type": "string"
+        },
+        "background": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Background",
+          "type": "string"
+        },
+        "divider": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Divider",
+          "type": "string"
+        },
+        "surface": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Surface",
+          "type": "string"
+        },
+        "textPrimary": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Textprimary",
+          "type": "string"
+        },
+        "textSecondary": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Textsecondary",
+          "type": "string"
+        },
+        "warning": {
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Warning",
+          "type": "string"
+        }
+      },
+      "required": [
+        "background",
+        "surface",
+        "textPrimary",
+        "textSecondary",
+        "accent",
+        "divider",
+        "warning"
+      ],
+      "title": "ColorTokens",
+      "type": "object"
+    },
+    "DesignTokens": {
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "$ref": "#/$defs/ColorTokens"
+        },
+        "fonts": {
+          "$ref": "#/$defs/FontTokens"
+        }
+      },
+      "required": [
+        "fonts",
+        "colors"
+      ],
+      "title": "DesignTokens",
+      "type": "object"
+    },
+    "FontFileManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "exclusiveMinimum": 0,
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "style": {
+          "enum": [
+            "regular",
+            "bold",
+            "semilight"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "style",
+        "path",
+        "version",
+        "sizeBytes",
+        "sha256"
+      ],
+      "title": "FontFileManifest",
+      "type": "object"
+    },
+    "FontManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "fallbacks": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Fallbacks",
+          "type": "array"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/FontFileManifest"
+          },
+          "maxItems": 12,
+          "title": "Files",
+          "type": "array"
+        },
+        "primary": {
+          "minLength": 1,
+          "title": "Primary",
+          "type": "string"
+        },
+        "themeScripts": {
+          "$ref": "#/$defs/ThemeScripts"
+        },
+        "windowsFallback": {
+          "minLength": 1,
+          "title": "Windowsfallback",
+          "type": "string"
+        }
+      },
+      "required": [
+        "primary",
+        "fallbacks",
+        "windowsFallback",
+        "themeScripts"
+      ],
+      "title": "FontManifest",
+      "type": "object"
+    },
+    "FontTokens": {
+      "additionalProperties": false,
+      "properties": {
+        "complexScript": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Complexscript",
+          "type": "string"
+        },
+        "eastAsian": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Eastasian",
+          "type": "string"
+        },
+        "fallbacks": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Fallbacks",
+          "type": "array"
+        },
+        "latin": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Latin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "latin",
+        "eastAsian",
+        "complexScript",
+        "fallbacks"
+      ],
+      "title": "FontTokens",
+      "type": "object"
+    },
+    "FurnitureElement": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "anyOf": [
+            {
+              "pattern": "^asset:[a-z0-9][a-z0-9._-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assetid"
+        },
+        "bounds": {
+          "$ref": "#/$defs/Rect"
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill"
+        },
+        "id": {
+          "pattern": "^furniture:[a-z0-9][a-z0-9._-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "logo",
+            "text",
+            "line",
+            "rect",
+            "pageNumber"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ownership": {
+          "$ref": "#/$defs/Ownership"
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stroke"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "visibility": {
+          "default": "always",
+          "enum": [
+            "always",
+            "exceptCover",
+            "coverOnly"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "bounds",
+        "ownership"
+      ],
+      "title": "FurnitureElement",
+      "type": "object"
+    },
+    "FurnitureRegistry": {
+      "additionalProperties": false,
+      "properties": {
+        "divider": {
+          "$ref": "#/$defs/FurnitureElement"
+        },
+        "footer": {
+          "$ref": "#/$defs/FurnitureElement"
+        },
+        "header": {
+          "$ref": "#/$defs/FurnitureElement"
+        },
+        "logo": {
+          "$ref": "#/$defs/FurnitureElement"
+        },
+        "pageNumber": {
+          "$ref": "#/$defs/FurnitureElement"
+        }
+      },
+      "required": [
+        "logo",
+        "header",
+        "footer",
+        "divider",
+        "pageNumber"
+      ],
+      "title": "FurnitureRegistry",
+      "type": "object"
+    },
+    "LayoutRegistry": {
+      "additionalProperties": false,
+      "properties": {
+        "cover": {
+          "$ref": "#/$defs/MasterLayout"
+        },
+        "longTitle": {
+          "$ref": "#/$defs/MasterLayout"
+        },
+        "section": {
+          "$ref": "#/$defs/MasterLayout"
+        },
+        "standard": {
+          "$ref": "#/$defs/MasterLayout"
+        }
+      },
+      "required": [
+        "cover",
+        "section",
+        "standard",
+        "longTitle"
+      ],
+      "title": "LayoutRegistry",
+      "type": "object"
+    },
+    "LayoutSlot": {
+      "additionalProperties": false,
+      "properties": {
+        "bounds": {
+          "$ref": "#/$defs/Rect"
+        },
+        "id": {
+          "pattern": "^slot:[a-z0-9][a-z0-9._-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "ownership": {
+          "$ref": "#/$defs/Ownership"
+        },
+        "placeholderIndex": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Placeholderindex",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "title",
+            "body",
+            "content"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "style": {
+          "enum": [
+            "title",
+            "body",
+            "note",
+            "rightCallout"
+          ],
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "placeholderIndex",
+        "bounds",
+        "ownership",
+        "style"
+      ],
+      "title": "LayoutSlot",
+      "type": "object"
+    },
+    "MasterLayout": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^layout:[a-z0-9][a-z0-9._-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "cover",
+            "section",
+            "standard",
+            "longTitle"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "slots": {
+          "items": {
+            "$ref": "#/$defs/LayoutSlot"
+          },
+          "maxItems": 16,
+          "minItems": 2,
+          "title": "Slots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "slots"
+      ],
+      "title": "MasterLayout",
+      "type": "object"
+    },
+    "Ownership": {
+      "additionalProperties": false,
+      "properties": {
+        "locked": {
+          "title": "Locked",
+          "type": "boolean"
+        },
+        "modelWritable": {
+          "title": "Modelwritable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "locked",
+        "modelWritable"
+      ],
+      "title": "Ownership",
+      "type": "object"
+    },
+    "PowerPointMargins": {
+      "additionalProperties": false,
+      "properties": {
+        "bottomPt": {
+          "default": 3.6,
+          "maximum": 72,
+          "minimum": 0,
+          "title": "Bottompt",
+          "type": "number"
+        },
+        "leftPt": {
+          "default": 7.2,
+          "maximum": 72,
+          "minimum": 0,
+          "title": "Leftpt",
+          "type": "number"
+        },
+        "rightPt": {
+          "default": 7.2,
+          "maximum": 72,
+          "minimum": 0,
+          "title": "Rightpt",
+          "type": "number"
+        },
+        "topPt": {
+          "default": 3.6,
+          "maximum": 72,
+          "minimum": 0,
+          "title": "Toppt",
+          "type": "number"
+        }
+      },
+      "title": "PowerPointMargins",
+      "type": "object"
+    },
+    "Rect": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "number"
+        },
+        "x": {
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "Rect",
+      "type": "object"
+    },
+    "SemanticStyles": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "caption": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "eyebrow": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "note": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "rightCallout": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "source": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "title": {
+          "$ref": "#/$defs/TextStyle"
+        },
+        "warning": {
+          "$ref": "#/$defs/TextStyle"
+        }
+      },
+      "required": [
+        "eyebrow",
+        "title",
+        "body",
+        "note",
+        "rightCallout",
+        "warning",
+        "caption",
+        "source"
+      ],
+      "title": "SemanticStyles",
+      "type": "object"
+    },
+    "TextStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "colorToken": {
+          "enum": [
+            "textPrimary",
+            "textSecondary",
+            "accent",
+            "warning"
+          ],
+          "title": "Colortoken",
+          "type": "string"
+        },
+        "fontPt": {
+          "maximum": 96,
+          "minimum": 8,
+          "title": "Fontpt",
+          "type": "number"
+        },
+        "fontToken": {
+          "enum": [
+            "latin",
+            "eastAsian",
+            "complexScript"
+          ],
+          "title": "Fonttoken",
+          "type": "string"
+        },
+        "fontWeight": {
+          "maximum": 900,
+          "minimum": 100,
+          "multipleOf": 100,
+          "title": "Fontweight",
+          "type": "integer"
+        },
+        "lineHeight": {
+          "maximum": 2,
+          "minimum": 0.8,
+          "title": "Lineheight",
+          "type": "number"
+        },
+        "margins": {
+          "$ref": "#/$defs/PowerPointMargins"
+        },
+        "maxLines": {
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Maxlines",
+          "type": "integer"
+        },
+        "minFontPt": {
+          "maximum": 96,
+          "minimum": 8,
+          "title": "Minfontpt",
+          "type": "number"
+        }
+      },
+      "required": [
+        "fontToken",
+        "colorToken",
+        "fontPt",
+        "minFontPt",
+        "lineHeight",
+        "fontWeight",
+        "maxLines"
+      ],
+      "title": "TextStyle",
+      "type": "object"
+    },
+    "ThemeScripts": {
+      "additionalProperties": false,
+      "properties": {
+        "hang": {
+          "minLength": 1,
+          "title": "Hang",
+          "type": "string"
+        },
+        "hans": {
+          "minLength": 1,
+          "title": "Hans",
+          "type": "string"
+        },
+        "hant": {
+          "minLength": 1,
+          "title": "Hant",
+          "type": "string"
+        },
+        "jpan": {
+          "minLength": 1,
+          "title": "Jpan",
+          "type": "string"
+        },
+        "latin": {
+          "minLength": 1,
+          "title": "Latin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "latin",
+        "hang",
+        "jpan",
+        "hans",
+        "hant"
+      ],
+      "title": "ThemeScripts",
+      "type": "object"
+    },
+    "TitleFitPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "explicitLineBreaks": {
+          "const": true,
+          "default": true,
+          "title": "Explicitlinebreaks",
+          "type": "boolean"
+        },
+        "kinsokuPolicy": {
+          "const": "cjk-no-leading-closing-no-trailing-opening",
+          "default": "cjk-no-leading-closing-no-trailing-opening",
+          "title": "Kinsokupolicy",
+          "type": "string"
+        },
+        "longTitleMaxLines": {
+          "default": 3,
+          "maximum": 4,
+          "minimum": 2,
+          "title": "Longtitlemaxlines",
+          "type": "integer"
+        },
+        "minimumFontPt": {
+          "default": 28,
+          "maximum": 72,
+          "minimum": 12,
+          "title": "Minimumfontpt",
+          "type": "number"
+        },
+        "preferredFontPt": {
+          "default": 38,
+          "maximum": 72,
+          "minimum": 16,
+          "title": "Preferredfontpt",
+          "type": "number"
+        },
+        "promotionLayoutId": {
+          "pattern": "^layout:[a-z0-9][a-z0-9._-]*$",
+          "title": "Promotionlayoutid",
+          "type": "string"
+        },
+        "standardMaxLines": {
+          "default": 2,
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Standardmaxlines",
+          "type": "integer"
+        },
+        "tailoring": {
+          "const": "ko-space-first-with-id-fallback-v1",
+          "default": "ko-space-first-with-id-fallback-v1",
+          "title": "Tailoring",
+          "type": "string"
+        },
+        "uax14Version": {
+          "const": "17.0.0",
+          "default": "17.0.0",
+          "title": "Uax14Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "promotionLayoutId"
+      ],
+      "title": "TitleFitPolicy",
+      "type": "object"
+    },
+    "TitleStressCase": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "ko",
+            "en",
+            "mixed",
+            "numericParenthetical"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "expectedLines": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Expectedlines",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^stress:[a-z0-9][a-z0-9._-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "text",
+        "expectedLines"
+      ],
+      "title": "TitleStressCase",
+      "type": "object"
+    }
+  },
+  "$id": "urn:presenton:authored-vnext:deck-master-contract:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "brandAssets": {
+      "$ref": "#/$defs/BrandAssets"
+    },
+    "canvas": {
+      "$ref": "#/$defs/CanvasContract"
+    },
+    "contractVersion": {
+      "const": "deckmaster-contract/v1",
+      "default": "deckmaster-contract/v1",
+      "title": "Contractversion",
+      "type": "string"
+    },
+    "digest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Digest"
+    },
+    "fitPolicy": {
+      "$ref": "#/$defs/TitleFitPolicy"
+    },
+    "fontManifest": {
+      "$ref": "#/$defs/FontManifest"
+    },
+    "furniture": {
+      "$ref": "#/$defs/FurnitureRegistry"
+    },
+    "layouts": {
+      "$ref": "#/$defs/LayoutRegistry"
+    },
+    "masterId": {
+      "pattern": "^master:[a-z0-9][a-z0-9._-]*$",
+      "title": "Masterid",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "semanticStyles": {
+      "$ref": "#/$defs/SemanticStyles"
+    },
+    "semanticVersion": {
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "title": "Semanticversion",
+      "type": "string"
+    },
+    "titleStressCorpus": {
+      "items": {
+        "$ref": "#/$defs/TitleStressCase"
+      },
+      "maxItems": 100,
+      "minItems": 4,
+      "title": "Titlestresscorpus",
+      "type": "array"
+    },
+    "tokens": {
+      "$ref": "#/$defs/DesignTokens"
+    }
+  },
+  "required": [
+    "masterId",
+    "semanticVersion",
+    "name",
+    "canvas",
+    "brandAssets",
+    "tokens",
+    "fontManifest",
+    "furniture",
+    "semanticStyles",
+    "layouts",
+    "fitPolicy",
+    "titleStressCorpus"
+  ],
+  "title": "DeckMasterContract",
+  "type": "object",
+  "x-pydantic-strict": true
+}

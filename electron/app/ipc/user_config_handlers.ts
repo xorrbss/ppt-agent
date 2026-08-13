@@ -1,9 +1,9 @@
 import { ipcMain } from "electron";
-import { getUserConfig, setUserConfigAndMarkRuntimeRefresh } from "../utils";
+import { getUserConfig } from "../utils";
 import { saveUserConfigAndRefresh } from "./user_config_runtime";
 
 export function setupUserConfigHandlers(
-  refreshRuntimeSettings: () => Promise<void>,
+  refreshRuntimeSettings: (userConfig?: UserConfig) => Promise<void>,
 ) {
   ipcMain.handle("get-user-config", async (_, __) => {
     return getUserConfig();
@@ -11,7 +11,6 @@ export function setupUserConfigHandlers(
 
   ipcMain.handle("set-user-config", async (_, userConfig: UserConfig) => {
     await saveUserConfigAndRefresh(userConfig, {
-      persistUserConfig: setUserConfigAndMarkRuntimeRefresh,
       refreshRuntimeSettings,
     });
   });

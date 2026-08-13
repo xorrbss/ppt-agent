@@ -6,7 +6,7 @@ import path from "path";
 // servers/nextjs/app/api/read-file/route.ts. Without this, ANY renderer JS (a
 // malicious custom-template compiled+run in the renderer, or any DOM-XSS) could
 // call window.electron.readFile('C:\\...') to read arbitrary local files and
-// exfiltrate them (this app relaxes webSecurity). realpath defeats symlink/`..`
+// exfiltrate them. realpath defeats symlink/`..`
 // escapes; legit callers only ever read upload/decompose temp paths.
 function allowedBaseDirs(): string[] {
   return [

@@ -266,7 +266,7 @@ def test_style_reference_all_scope_reuses_initial_critiques_and_reviews_each_can
             session.add(task)
             await session.commit()
 
-            await quality_service.run_authored_quality_review(
+            await quality_service._run_legacy_authored_quality_review_unlocked(
                 presentation.id,
                 AuthoredQualityReviewRequest(scope="all", mode="analyze_and_fix"),
                 task,
@@ -339,7 +339,7 @@ def test_style_reference_current_nonzero_scope_keeps_absolute_position_and_final
             session.add(task)
             await session.commit()
 
-            await quality_service.run_authored_quality_review(
+            await quality_service._run_legacy_authored_quality_review_unlocked(
                 presentation.id,
                 AuthoredQualityReviewRequest(
                     scope="current", slide_indices=[1], mode="analyze_and_fix"

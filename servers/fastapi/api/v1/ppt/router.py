@@ -27,6 +27,18 @@ from api.v1.ppt.endpoints.pptx_slides import PPTX_FONTS_ROUTER
 from api.v1.ppt.endpoints.theme import THEMES_ROUTER
 from api.v1.ppt.endpoints.theme_generate import THEME_ROUTER
 from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
+from api.v1.ppt.endpoints.authored_vnext.master import (
+    AUTHORED_VNEXT_MASTER_ROUTER,
+)
+from api.v1.ppt.endpoints.authored_vnext.export import (
+    AUTHORED_VNEXT_EXPORT_ROUTER,
+)
+from api.v1.ppt.endpoints.authored_vnext.generation import (
+    AUTHORED_VNEXT_GENERATION_ROUTER,
+)
+from api.v1.ppt.endpoints.authored_vnext.package import (
+    AUTHORED_VNEXT_PACKAGE_ROUTER,
+)
 from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER
 from api.v1.ppt.endpoints.conversations import CONVERSATION_ROUTER
 from api.v1.ppt.endpoints.structured_templates import (
@@ -37,6 +49,9 @@ from api.v1.ppt.endpoints.structured_template_imports import (
 )
 from api.v1.ppt.endpoints.template_v2_compat import (
     TEMPLATE_V2_COMPAT_ROUTER,
+)
+from api.v1.ppt.endpoints.compatibility_migration import (
+    COMPATIBILITY_MIGRATION_ROUTER,
 )
 from templates.router import TEMPLATE_ROUTER
 
@@ -70,6 +85,26 @@ PPT_FEATURE_MODULES = (
     FeatureModule("themes", THEMES_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("theme-generate", THEME_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("authored", AUTHORED_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule(
+        "authored-vnext-master",
+        AUTHORED_VNEXT_MASTER_ROUTER,
+        frozenset({"ppt-api", "presentation"}),
+    ),
+    FeatureModule(
+        "authored-vnext-export",
+        AUTHORED_VNEXT_EXPORT_ROUTER,
+        frozenset({"ppt-api", "presentation", "export"}),
+    ),
+    FeatureModule(
+        "authored-vnext-generation",
+        AUTHORED_VNEXT_GENERATION_ROUTER,
+        frozenset({"ppt-api", "presentation", "export"}),
+    ),
+    FeatureModule(
+        "authored-vnext-package",
+        AUTHORED_VNEXT_PACKAGE_ROUTER,
+        frozenset({"ppt-api", "presentation", "export"}),
+    ),
     FeatureModule("workspace", WORKSPACE_ROUTER, frozenset({"ppt-api", "workspace"})),
     FeatureModule("conversations", CONVERSATION_ROUTER, frozenset({"ppt-api", "workspace"})),
     FeatureModule(
@@ -80,6 +115,11 @@ PPT_FEATURE_MODULES = (
     FeatureModule("structured-templates", STRUCTURED_TEMPLATES_ROUTER, frozenset({"ppt-api", "templates"})),
     FeatureModule(
         "template-v2-compat", TEMPLATE_V2_COMPAT_ROUTER, frozenset({"ppt-api", "templates"})
+    ),
+    FeatureModule(
+        "compatibility-migration",
+        COMPATIBILITY_MIGRATION_ROUTER,
+        frozenset({"ppt-api", "presentation"}),
     ),
     FeatureModule("templates", TEMPLATE_ROUTER, frozenset({"ppt-api", "templates"})),
     FeatureModule("community", COMMUNITY_ROUTER, frozenset({"ppt-api", "community"})),

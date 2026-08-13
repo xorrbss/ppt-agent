@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "authored-vnext-ooxml-existing-fixture/v1",
+  "name": "existing-style-90-with-opaque-passthrough",
+  "slideCount": 90,
+  "layoutCycle": [
+    "layout:cover",
+    "layout:section",
+    "layout:standard",
+    "layout:long-title"
+  ],
+  "longTitleLineCounts": [1, 2, 3],
+  "textCoverage": [
+    "Korean",
+    "Japanese",
+    "Simplified Chinese",
+    "emoji with skin tone and ZWJ",
+    "combining marks",
+    "astral CJK fallback"
+  ],
+  "embeddedAssets": [
+    {
+      "assetId": "asset:presenton-logo",
+      "partName": "ppt/media/logo-689976b88fc161e4.png",
+      "mediaType": "image/png",
+      "sha256": "689976b88fc161e4cfa9733b4bf9be5f4a8443569586256360581e584f9cb76e"
+    }
+  ],
+  "opaqueParts": [
+    "customXml/item1.xml",
+    "ppt/embeddings/oleObject1.bin"
+  ],
+  "externalRelationships": [
+    {
+      "type": "hyperlink",
+      "target": "mailto:fixture@example.invalid",
+      "expectedDisposition": "WARN_PRESERVE"
+    }
+  ],
+  "expectedArchiveSha256": "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
+  "expectedPackageDigest": "28c836438e267a11f172f93be421b3942fd8f07e75a55c6057268102bb05e9e1"
+}

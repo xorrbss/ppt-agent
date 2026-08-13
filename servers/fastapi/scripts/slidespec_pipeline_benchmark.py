@@ -8,12 +8,7 @@ reported total percentile is deck wall-clock time, not a sum of per-slide timing
 
 from __future__ import annotations
 
-import argparse
-import asyncio
-import json
 import os
-from pathlib import Path
-import statistics
 import time
 from typing import Any, Mapping
 import uuid
@@ -22,98 +17,13 @@ import uuid
 DEFAULT_PRESENTATION_ID = "15f91f1d-66d7-491d-abbb-c02481358b96"
 
 
-def _percentile(values: list[float], percentile: float) -> float:
-    ordered = sorted(values)
-    if not ordered:
-        return 0.0
-    if len(ordered) == 1:
-        return ordered[0]
-    position = (len(ordered) - 1) * percentile
-    lower = int(position)
-    upper = min(len(ordered) - 1, lower + 1)
-    fraction = position - lower
-    return ordered[lower] * (1 - fraction) + ordered[upper] * fraction
+from scripts.slidespec_benchmark_metrics import (
+    _clear_review_caches,
+    _funnel_metric,
+    _stage_usage,
+    _summary,
+)
 
-
-def _summary(values: list[float]) -> dict[str, float]:
-    return {
-        "p50": round(_percentile(values, 0.50), 3),
-        "p95": round(_percentile(values, 0.95), 3),
-        "p99": round(_percentile(values, 0.99), 3),
-        "min": round(min(values), 3) if values else 0.0,
-        "max": round(max(values), 3) if values else 0.0,
-        "mean": round(statistics.fmean(values), 3) if values else 0.0,
-    }
-
-
-def _funnel_metric(
-    metrics: Mapping[str, Any], public_name: str, executor_name: str
-) -> int:
-    """Read the executor funnel while preserving benchmark output field names."""
-
-    return int(metrics.get(executor_name, metrics.get(public_name, 0)))
-
-
-def _optional_number(*values: object) -> float | None:
-    for value in values:
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return float(value)
-    return None
-
-
-def _stage_usage(metrics: Mapping[str, Any]) -> dict[str, dict[str, float]]:
-    """Normalize cache/token/cost counters without inventing unavailable usage."""
-
-    raw = metrics.get("stage_usage", {})
-    raw = raw if isinstance(raw, Mapping) else {}
-    normalized: dict[str, dict[str, float]] = {}
-    for stage in ("llm", "chrome", "acceptance", "postverify"):
-        stage_raw = raw.get(stage, {})
-        stage_raw = stage_raw if isinstance(stage_raw, Mapping) else {}
-        values = {
-            str(key): float(value)
-            for key, value in stage_raw.items()
-            if isinstance(value, (int, float)) and not isinstance(value, bool)
-        }
-        if stage == "llm":
-            aliases = {
-                "input_tokens": (
-                    metrics.get("llm_input_tokens"),
-                    metrics.get("prompt_tokens"),
-                ),
-                "output_tokens": (
-                    metrics.get("llm_output_tokens"),
-                    metrics.get("completion_tokens"),
-                ),
-                "total_tokens": (metrics.get("llm_total_tokens"),),
-                "cost_usd": (metrics.get("llm_cost_usd"), metrics.get("cost_usd")),
-            }
-            for name, candidates in aliases.items():
-                candidate = _optional_number(values.get(name), *candidates)
-                if candidate is not None:
-                    values[name] = candidate
-        normalized[stage] = values
-    return normalized
-
-
-def _clear_review_caches() -> None:
-    from services.slidespec_authored_executor import _BASELINE_INSPECTION_CACHE
-    from services.slidespec_pipeline_performance import (
-        DEFAULT_EVIDENCE_ATOM_CACHE,
-        DEFAULT_NEGATIVE_PROPOSAL_CACHE,
-    )
-    from utils import slide_capture
-    from utils.authored_ocr_quality import DEFAULT_CACHE
-    from utils.llm_calls import author_vision_qa
-
-    _BASELINE_INSPECTION_CACHE.clear()
-    DEFAULT_EVIDENCE_ATOM_CACHE.clear()
-    DEFAULT_NEGATIVE_PROPOSAL_CACHE.clear()
-    slide_capture.reset_render_runtime(clear_caches=True, retire_session=True)
-    DEFAULT_CACHE.entries.clear()
-    author_vision_qa._style_comparison_vqa_cache.clear()
-    author_vision_qa._style_comparison_vqa_failures.clear()
-    author_vision_qa._vqa_cache.clear()
 
 
 def _slide_fingerprint(slides: list[Any]) -> str:
@@ -563,46 +473,15 @@ async def run_benchmark(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--presentation-id", default=DEFAULT_PRESENTATION_ID)
-    parser.add_argument("--cold-runs", type=int, default=10)
-    parser.add_argument("--warm-runs", type=int, default=10)
-    parser.add_argument("--expected-slides", type=int, default=90)
-    parser.add_argument(
-        "--positions",
-        help="Comma-separated zero-based slide positions for a bounded diagnostic replay",
-    )
-    parser.add_argument("--output", type=Path)
-    parser.add_argument(
-        "--summary-only",
-        action="store_true",
-        help="Omit per-candidate run diagnostics from stdout/output JSON",
-    )
-    args = parser.parse_args()
-    if args.cold_runs < 0 or args.warm_runs < 0 or args.cold_runs + args.warm_runs < 1:
-        parser.error("run counts must be non-negative with at least one replay")
+    from scripts.slidespec_benchmark_cli import benchmark_main
 
-    positions = (
-        tuple(int(value.strip()) for value in args.positions.split(",") if value.strip())
-        if args.positions
-        else None
+    benchmark_main(
+        run_benchmark=run_benchmark,
+        summary_only=_summary_only,
+        default_presentation_id=DEFAULT_PRESENTATION_ID,
     )
-    result = asyncio.run(
-        run_benchmark(
-            presentation_id=uuid.UUID(args.presentation_id),
-            cold_runs=args.cold_runs,
-            warm_runs=args.warm_runs,
-            expected_slides=args.expected_slides,
-            positions=positions,
-        )
-    )
-    payload = _summary_only(result) if args.summary_only else result
-    encoded = json.dumps(payload, ensure_ascii=False, indent=2)
-    if args.output is not None:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(encoded + "\n", encoding="utf-8")
-    print(encoded)
 
 
 if __name__ == "__main__":
     main()
+# ruff: noqa: E402, F401

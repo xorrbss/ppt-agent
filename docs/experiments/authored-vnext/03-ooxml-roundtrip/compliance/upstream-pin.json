@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/genspark-ai/genoffice.git",
+  "expectedCommit": "dc4d7e5927864498913b7ba42d0da06cc7cf628e",
+  "verifiedRemoteHead": "dc4d7e5927864498913b7ba42d0da06cc7cf628e",
+  "verifiedAt": "2026-08-13T15:44:46.6165083+09:00",
+  "package": {
+    "path": "packages/pptx-engine",
+    "name": "@genoffice/pptx-engine",
+    "version": "0.1.0",
+    "license": "Apache-2.0"
+  },
+  "artifactHashes": {
+    "LICENSE.genoffice.txt": "68e32334df324ef4fc79fad3a26487e5abac36055a484bb6c8d7ecf9d8350885",
+    "NOTICE.genoffice.txt": "ff1ad79ed52b0f5c1d0e10a9370c22c0c0e6ee83074b6a9b644b25ab7b129f94"
+  },
+  "allowedSparsePaths": [
+    "/LICENSE",
+    "/NOTICE",
+    "/LICENSE-UNICODE.txt",
+    "/package.json",
+    "/package-lock.json",
+    "/tsconfig.base.json",
+    "/vitest.config.ts",
+    "/packages/pptx-engine/"
+  ],
+  "allowedRuntimeDependencies": [
+    "fast-xml-parser",
+    "jszip"
+  ],
+  "deniedRoots": [
+    "apps",
+    "ee"
+  ],
+  "deniedPackagePrefixes": [
+    "@genoffice/"
+  ]
+}

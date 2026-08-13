@@ -58,6 +58,50 @@ test("runtime refresh sends only an authenticated empty loopback POST", async (t
   });
 });
 
+test("secure runtime refresh sends settings directly without a plaintext file", async (t) => {
+  const token = "runtime-control-token";
+  const userConfig = {
+    LLM: "openai",
+    OPENAI_API_KEY: "provider-api-key",
+  };
+  let observed;
+  const server = await startServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      observed = {
+        token: request.headers["x-presenton-runtime-settings-token"],
+        contentType: request.headers["content-type"],
+        body: JSON.parse(Buffer.concat(chunks).toString("utf8")),
+      };
+      response.writeHead(204);
+      response.end();
+    });
+  });
+  t.after(server.close);
+
+  await requestRuntimeSettingsRefresh(server.port, token, userConfig);
+
+  assert.deepEqual(observed, {
+    token,
+    contentType: "application/json",
+    body: userConfig,
+  });
+});
+
+test("secure IPC save forwards in memory and performs no compatibility write", async () => {
+  const userConfig = { LLM: "google", GOOGLE_API_KEY: "provider-api-key" };
+  const calls = [];
+
+  await saveUserConfigAndRefresh(userConfig, {
+    async refreshRuntimeSettings(config) {
+      calls.push(config);
+    },
+  });
+
+  assert.deepEqual(calls, [userConfig]);
+});
+
 test("runtime refresh errors never reflect backend bodies or the control token", async (t) => {
   const token = "do-not-reflect-this-token";
   const server = await startServer((_request, response) => {

@@ -1,0 +1,27 @@
+{
+  "schema_version": "authored-electron-probe-package/v2",
+  "executable": "C:\\Users\\ibiz\\AppData\\Local\\Temp\\authored-renderer-probe-v2-f0b89e34d8694fea827c6c7c98abd019\\win-unpacked\\authored-renderer-probe.exe",
+  "executable_sha256": "c304ce81fa38e6ca80e3884dfe656f6f5e0cc48f53d5ab99560e7a88f33302dc",
+  "platform": "win32",
+  "probe_source_sha256": "652e10ec0856e8eaf99a1a6f69392d1641454d88a26e0623b08cc80944d8de57",
+  "policy_sha256": "3d36d5f812e9bb7cbac917639f52982a9bac4d98d3d05981f61767773fb6ab05",
+  "policy_provenance_manifest_sha256": "e8731b30f3687114ecd2887e52e52a08fe8fd288fe35232a9b9830120eefd180",
+  "policy_provenance": {
+    "schema": "presenton.authored-renderer-policy-provenance/v1",
+    "generatedBy": "npm run build:ts",
+    "bindings": {
+      "source": {
+        "path": "app/utils/authored-renderer-policy.ts",
+        "sha256": "f5f85a08c74c4a24143e90bb4f36376b59acd554c38ae259737e33b2141b1caf"
+      },
+      "compiled": {
+        "path": "app_dist/utils/authored-renderer-policy.js",
+        "sha256": "3d36d5f812e9bb7cbac917639f52982a9bac4d98d3d05981f61767773fb6ab05"
+      },
+      "tsconfig": {
+        "path": "tsconfig.json",
+        "sha256": "6da98983d0268e61d3cdec36030bb14dcdf7a5c69c8e89b5470d6d8df5f10218"
+      }
+    }
+  }
+}

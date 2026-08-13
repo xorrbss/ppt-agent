@@ -1,0 +1,200 @@
+{
+  "contractVersion": "deckmaster-contract/v1",
+  "deckMaster": {
+    "id": "master:authored-vnext",
+    "name": "Authored vNext Master",
+    "slideSizePx": { "x": 0, "y": 0, "width": 1280, "height": 720 },
+    "theme": {
+      "name": "Authored vNext Navy",
+      "colors": {
+        "accent1": "#1463FF",
+        "accent2": "#19B5A5",
+        "accent3": "#F4B740",
+        "accent4": "#E85D75",
+        "accent5": "#7257D9",
+        "accent6": "#37A65A",
+        "bg1": "#F7F9FC",
+        "bg2": "#EAF0F8",
+        "tx1": "#0B1830",
+        "tx2": "#486078",
+        "dk1": "#07101F",
+        "dk2": "#22344C",
+        "lt1": "#FFFFFF",
+        "lt2": "#D9E2EF",
+        "hlink": "#1463FF",
+        "folHlink": "#7257D9"
+      }
+    },
+    "fontManifest": {
+      "primary": "Malgun Gothic",
+      "fallbacks": ["Noto Sans CJK KR", "Noto Sans KR", "Arial Unicode MS", "Arial", "sans-serif"],
+      "windowsFallback": "Malgun Gothic",
+      "themeScripts": {
+        "latin": "Malgun Gothic",
+        "Hang": "Malgun Gothic",
+        "Jpan": "Malgun Gothic",
+        "Hans": "Malgun Gothic",
+        "Hant": "Malgun Gothic"
+      },
+      "windowsResolved": {
+        "state": "installed-system",
+        "cloud": false,
+        "embedded": false,
+        "files": [
+          {
+            "style": "regular",
+            "path": "C:/Windows/Fonts/malgun.ttf",
+            "version": "6.68",
+            "sizeBytes": 13457164,
+            "sha256": "0086c19e81d293a542e7d75564c645fb58070cc850aefebf8fa1c397858e510c"
+          },
+          {
+            "style": "bold",
+            "path": "C:/Windows/Fonts/malgunbd.ttf",
+            "version": "6.68",
+            "sizeBytes": 12598360,
+            "sha256": "a541834fb9cdde9bd6d2c3ff1565cb0bb5ccf7a15e4e9daf2cb58d9b1cf282aa"
+          },
+          {
+            "style": "semilight",
+            "path": "C:/Windows/Fonts/malgunsl.ttf",
+            "version": "6.68",
+            "sizeBytes": 5083156,
+            "sha256": "a7217a2e590c86141bddadc74a2bcdff2efe210db48469a77a749e0446d91ea9"
+          }
+        ]
+      },
+      "digest": "sha256:3ae3e8136bc80ba43c9fa2f1800bd9abe587a18773ee06e2d26488489b0c182c"
+    },
+    "furniture": [
+      {
+        "id": "furniture:top-rail",
+        "kind": "rect",
+        "bounds": { "x": 0, "y": 0, "width": 1280, "height": 10 },
+        "fill": "#1463FF",
+        "ownership": { "locked": true, "modelWritable": false }
+      },
+      {
+        "id": "furniture:brand",
+        "kind": "text",
+        "text": "PRESENTON · AUTHORED vNEXT",
+        "bounds": { "x": 76, "y": 35, "width": 420, "height": 28 },
+        "fill": "#486078",
+        "ownership": { "locked": true, "modelWritable": false }
+      },
+      {
+        "id": "furniture:footer-rule",
+        "kind": "line",
+        "bounds": { "x": 76, "y": 672, "width": 1128, "height": 1 },
+        "stroke": "#C9D5E6",
+        "ownership": { "locked": true, "modelWritable": false }
+      },
+      {
+        "id": "furniture:title-accent",
+        "kind": "rect",
+        "bounds": { "x": 76, "y": 386, "width": 88, "height": 5 },
+        "fill": "#1463FF",
+        "ownership": { "locked": true, "modelWritable": false }
+      },
+      {
+        "id": "furniture:footer",
+        "kind": "text",
+        "text": "DeckMasterContract · SlideSpec v2 · vertical slice",
+        "bounds": { "x": 76, "y": 684, "width": 650, "height": 22 },
+        "fill": "#6B7F96",
+        "ownership": { "locked": true, "modelWritable": false }
+      }
+    ],
+    "layouts": [
+      {
+        "id": "layout:standard-title",
+        "name": "Standard Title",
+        "kind": "standard",
+        "placeholders": [
+          {
+            "id": "placeholder:standard-title",
+            "type": "title",
+            "index": 0,
+            "bounds": { "x": 76, "y": 104, "width": 1128, "height": 126 },
+            "ownership": { "locked": false, "modelWritable": true },
+            "textStyle": { "fontPt": 38, "lineHeight": 1.12, "maxLines": 2, "marginsPx": { "top": 4.8, "right": 9.6, "bottom": 4.8, "left": 9.6 } }
+          },
+          {
+            "id": "placeholder:standard-body",
+            "type": "body",
+            "index": 1,
+            "bounds": { "x": 86, "y": 270, "width": 1090, "height": 240 },
+            "ownership": { "locked": false, "modelWritable": true },
+            "textStyle": { "fontPt": 20, "lineHeight": 1.25, "maxLines": 3, "marginsPx": { "top": 4.8, "right": 9.6, "bottom": 4.8, "left": 9.6 } }
+          }
+        ]
+      },
+      {
+        "id": "layout:long-title",
+        "name": "Long Title",
+        "kind": "long-title",
+        "placeholders": [
+          {
+            "id": "placeholder:long-title",
+            "type": "title",
+            "index": 0,
+            "bounds": { "x": 76, "y": 104, "width": 1140, "height": 250 },
+            "ownership": { "locked": false, "modelWritable": true },
+            "textStyle": { "fontPt": 35, "lineHeight": 1.12, "maxLines": 3, "marginsPx": { "top": 4.8, "right": 9.6, "bottom": 4.8, "left": 9.6 } }
+          },
+          {
+            "id": "placeholder:long-body",
+            "type": "body",
+            "index": 1,
+            "bounds": { "x": 86, "y": 404, "width": 1090, "height": 114 },
+            "ownership": { "locked": false, "modelWritable": true },
+            "textStyle": { "fontPt": 18, "lineHeight": 1.3, "maxLines": 3, "marginsPx": { "top": 4.8, "right": 9.6, "bottom": 4.8, "left": 9.6 } }
+          }
+        ]
+      }
+    ],
+    "digest": "sha256:3a65441ef16c0ba450fa9552c0e1f29cbb1c8f52e259891d2aa96960db7e5fe5"
+  },
+  "slides": [
+    {
+      "schemaVersion": "slidespec/v2",
+      "id": "slide:long-title-vertical-slice",
+      "layoutId": "layout:long-title",
+      "title": {
+        "text": "생성형 AI 저작물의 출처·권리·품질을 audit-ready provenance로 연결하는 실행 계약 (DeckMasterContract + SlideSpec v2, 2026)",
+        "lines": [
+          "생성형 AI 저작물의 출처·권리·품질을",
+          "audit-ready provenance로 연결하는 실행 계약",
+          "(DeckMasterContract + SlideSpec v2, 2026)"
+        ],
+        "lineBreakPolicy": "canonical-explicit-uax14-v1",
+        "uax14Version": "17.0.0",
+        "tailoring": "ko-space-first-with-id-fallback-v1",
+        "kinsokuPolicy": "cjk-no-leading-closing-no-trailing-opening"
+      },
+      "body": "한 canonical input이 HTML·PNG·PowerPoint placeholder를 함께 구동합니다. 공통 frame은 master에만 존재하고, 제목은 Windows 기본 여백과 CJK fallback을 고정합니다.",
+      "ownership": { "locked": false, "modelWritable": true },
+      "digests": {
+        "content": "sha256:95ae58d6d2b0a62f9d350d0b8d0383f8080b5a403c4bac0bd7ab4c38f56f08b5",
+        "spec": "sha256:d15a9c882657825ebd9cf60b0e79e56040b7a588f0275cc6ee7bb976f50f2d85"
+      }
+    }
+  ],
+  "stressCorpus": [
+    { "id": "stress:ko-1", "category": "ko", "text": "품질 검증이 배포 속도를 높인다", "expectedLines": ["품질 검증이 배포 속도를 높인다"] },
+    { "id": "stress:en-1", "category": "en", "text": "Evidence makes creative automation trustworthy", "expectedLines": ["Evidence makes creative automation trustworthy"] },
+    { "id": "stress:mixed-1", "category": "mixed", "text": "AI 저작물 provenance를 한 번에 검증한다", "expectedLines": ["AI 저작물 provenance를 한 번에 검증한다"] },
+    { "id": "stress:numeric-1", "category": "numeric-parenthetical", "text": "검증 기준 3개(출처·권리·품질)", "expectedLines": ["검증 기준 3개(출처·권리·품질)"] },
+    { "id": "stress:ko-2", "category": "ko", "text": "출처와 권리를 연결하고\n품질을 배포 전에 확인한다", "expectedLines": ["출처와 권리를 연결하고", "품질을 배포 전에 확인한다"] },
+    { "id": "stress:en-2", "category": "en", "text": "One contract for authoring\nand PowerPoint delivery", "expectedLines": ["One contract for authoring", "and PowerPoint delivery"] },
+    { "id": "stress:mixed-2", "category": "mixed", "text": "Windows fallback을 고정해\nCJK 줄바꿈 편차를 줄인다", "expectedLines": ["Windows fallback을 고정해", "CJK 줄바꿈 편차를 줄인다"] },
+    { "id": "stress:numeric-2", "category": "numeric-parenthetical", "text": "2026 실행안(Phase 1)\nrepair 0건을 목표로 한다", "expectedLines": ["2026 실행안(Phase 1)", "repair 0건을 목표로 한다"] },
+    { "id": "stress:ko-3", "category": "ko", "text": "제목의 의미를 보존하고\n금칙 문자를 줄 머리에서 막으며\n세 줄 안에서 읽기 흐름을 유지한다", "expectedLines": ["제목의 의미를 보존하고", "금칙 문자를 줄 머리에서 막으며", "세 줄 안에서 읽기 흐름을 유지한다"] },
+    { "id": "stress:en-3", "category": "en", "text": "Canonical input drives HTML\nPreview geometry stays measurable\nPowerPoint inherits the master", "expectedLines": ["Canonical input drives HTML", "Preview geometry stays measurable", "PowerPoint inherits the master"] },
+    { "id": "stress:mixed-3", "category": "mixed", "text": "DeckMasterContract가 frame을 잠그고\nSlideSpec v2가 title을 채우며\nPowerPoint layout이 관계를 보존한다", "expectedLines": ["DeckMasterContract가 frame을 잠그고", "SlideSpec v2가 title을 채우며", "PowerPoint layout이 관계를 보존한다"] },
+    { "id": "stress:numeric-3", "category": "numeric-parenthetical", "text": "3개 출력(HTML·PNG·PPTX)을\n1개 digest로 추적하고\n0건 repair 구조를 확인한다", "expectedLines": ["3개 출력(HTML·PNG·PPTX)을", "1개 digest로 추적하고", "0건 repair 구조를 확인한다"] },
+    { "id": "stress:numeric-bracket", "category": "numeric-parenthetical", "text": "검증(출처·권리·품질)과\n99.9% (P95 1.2초)를\n한 제목 안에서 유지한다", "expectedLines": ["검증(출처·권리·품질)과", "99.9% (P95 1.2초)를", "한 제목 안에서 유지한다"] },
+    { "id": "stress:mixed-kinsoku", "category": "mixed", "text": "「AI 저작물」 기준을 지키고\n괄호(권리·출처) 앞뒤를\n금칙 규칙으로 보호한다", "expectedLines": ["「AI 저작물」 기준을 지키고", "괄호(권리·출처) 앞뒤를", "금칙 규칙으로 보호한다"] },
+    { "id": "stress:mixed-emoji", "category": "mixed", "text": "팀 👩‍💻 협업과 provenance를\n하나의 evidence chain으로\n안전하게 연결한다", "expectedLines": ["팀 👩‍💻 협업과 provenance를", "하나의 evidence chain으로", "안전하게 연결한다"] }
+  ]
+}

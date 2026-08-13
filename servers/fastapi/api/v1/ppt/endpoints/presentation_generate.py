@@ -18,7 +18,7 @@ import os
 import re
 import traceback
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 from time import perf_counter
@@ -40,6 +40,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
+from api.v1.ppt.endpoints import presentation_generation_staging as generation_staging
+from api.v1.ppt.endpoints.presentation_generation_staging import (
+    _durable_request_payload,
+    _uses_isolated_render_staging,
+    _render_staging_id,
+    _replace_workspace_image_paths,
+    _workspace_operation_fencing_token,
+    _discard_render_staging,
+    _record_generation_export_failure,
+    _request_from_durable_payload,
+)
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
     DEFAULT_TEMPLATES,
@@ -82,6 +93,9 @@ from services.concurrent_service import CONCURRENT_SERVICE
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
 from services.generation_provider_admission import generation_provider_admitted
+from services.compatibility_migration.admission import (
+    require_authored_generation_admission,
+)
 from services.generation_pipeline import build_template_structure
 from services.image_generation_service import ImageGenerationService
 from services.mem0_presentation_memory_service import (
@@ -99,14 +113,6 @@ from services.presentation_generation_job_service import (
     release_generation_job,
     request_sha256,
 )
-from services.presentation_generation_export_orchestration import (
-    execute_generation_export,
-    publish_staged_presentation,
-    record_generation_export_failure,
-)
-from services.presentation_export_attempt_service import (
-    terminalize_export_attempt_failed,
-)
 from services.presentation_export_router import (
     PresentationExportExecution,
     execute_presentation_export,
@@ -123,7 +129,6 @@ from services.template_v2_generation_observability import (
 )
 from services.template_v2_generation_service import (
     TemplateV2GenerationError,
-    TemplateV2GenerationTarget,
     build_template_v2_slides,
     load_template_v2_generation_target,
     preflight_template_v2_native_pptx,
@@ -132,16 +137,15 @@ from services.template_v2_generation_service import (
 )
 from services.webhook_service import WebhookService
 from services.workspace_artifact_publication_service import (
-    PreparedWorkspaceArtifact,
     PreparedWorkspaceChatArtifactStaging,
     PromotedWorkspaceChatArtifacts,
     WorkspaceArtifactPublicationError,
     compensate_workspace_artifact,
+    prepare_workspace_generation_artifact,
+    publish_workspace_generation_artifact,
     compensate_workspace_chat_artifact_staging,
     prepare_workspace_chat_artifact_staging,
-    prepare_workspace_generation_artifact,
     promote_workspace_chat_image_artifacts,
-    publish_workspace_generation_artifact,
     stage_workspace_chat_artifacts_for_publication,
     workspace_chat_artifacts_were_published,
 )
@@ -211,153 +215,11 @@ _INTERNAL_ADMISSION_RETRY_KEY = "_internal_admission_retry_required"
 _STABLE_ADMISSION_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{1,127}$")
 CHAT_FIRST_WORKSPACE_PROJECTED_HEADER = "X-Chat-First-Workspace-Projected"
 
-PRESENTATION_GENERATE_ROUTER = APIRouter(
-    prefix="/presentation", tags=["Presentation"]
-)
 
-
-def _durable_request_payload(request: GeneratePresentationRequest) -> dict:
-    """Persist canonical identities only, never admission-time raw paths."""
-
-    payload = request.model_dump(mode="json")
-    # ``files`` is a compatibility-only admission field. Validation has already
-    # converted it to an immutable uploaded-document snapshot. Preserve the
-    # optional field's wire shape for old workers while ensuring its value can
-    # never contain a locator.
-    payload["files"] = None
-    if request._authored_exact_snapshot_id is not None:
-        payload[_INTERNAL_EXACT_SNAPSHOT_KEY] = request._authored_exact_snapshot_id
-    return payload
-
-
-def _chat_first_generation_enabled() -> bool:
-    """Fail closed when the SQL runtime cannot host the operation store."""
-
-    try:
-        require_supported_workspace_runtime(sql_engine.url)
-    except UnsupportedWorkspaceRuntimeError as error:
-        raise HTTPException(status_code=501, detail=error.code) from error
-    return True
-
-
-def _uses_isolated_render_staging(
-    generation_job: PresentationGenerationJob | None,
-) -> bool:
-    """Keep exporter checkpoints away from the durable/public deck row."""
-
-    return bool(
-        generation_job is not None
-        and generation_job.workspace_operation_id is not None
-        and generation_job.attempt_token
-    )
-
-
-def _render_staging_id(generation_job: PresentationGenerationJob) -> uuid.UUID:
-    """Return an attempt-fenced, unguessable-enough internal render identity."""
-
-    if generation_job.workspace_operation_id is None or not generation_job.attempt_token:
-        raise RuntimeError("workspace_render_staging_requires_attempt")
-    return uuid.uuid5(
-        generation_job.workspace_operation_id,
-        f"adaptive-template-render:{generation_job.attempt_token}",
-    )
-
-
-def _replace_workspace_image_paths(
-    value: Any,
-    replacements: Mapping[str, str],
-) -> Any:
-    """Replace provider staging paths throughout persisted JSON values."""
-
-    if isinstance(value, str):
-        old_paths = sorted(replacements, key=len, reverse=True)
-        if not old_paths:
-            return value
-        pattern = re.compile("|".join(re.escape(path) for path in old_paths))
-        return pattern.sub(lambda match: replacements[match.group(0)], value)
-    if isinstance(value, list):
-        return [_replace_workspace_image_paths(item, replacements) for item in value]
-    if isinstance(value, tuple):
-        return tuple(
-            _replace_workspace_image_paths(item, replacements) for item in value
-        )
-    if isinstance(value, dict):
-        return {
-            key: _replace_workspace_image_paths(item, replacements)
-            for key, item in value.items()
-        }
-    return value
-
-
-async def _workspace_operation_fencing_token(
-    sql_session: AsyncSession,
-    *,
-    generation_job: PresentationGenerationJob,
-    presentation_id: uuid.UUID,
-) -> int:
-    """Read the exact running attempt fence before allowing provider writes."""
-
-    operation_id = generation_job.workspace_operation_id
-    attempt_token = generation_job.attempt_token
-    if operation_id is None or not attempt_token:
-        raise WorkspaceArtifactPublicationError("operation_lease_lost")
-    fencing_token = await sql_session.scalar(
-        select(WorkspaceOperation.fencing_token).where(
-            WorkspaceOperation.id == operation_id,
-            WorkspaceOperation.presentation_id == presentation_id,
-            WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
-            WorkspaceOperation.state == "running",
-            WorkspaceOperation.attempt_token == attempt_token,
-        )
-    )
-    if fencing_token is None:
-        raise WorkspaceArtifactPublicationError("operation_lease_lost")
-    return int(fencing_token)
-
-
-async def _discard_render_staging(
-    sql_session: AsyncSession,
-    render_presentation_id: uuid.UUID | None,
-    *,
-    target_presentation_id: uuid.UUID,
-) -> None:
-    """Best-effort compensation for an isolated exporter snapshot."""
-
-    if render_presentation_id is None or render_presentation_id == target_presentation_id:
-        return
-    await sql_session.rollback()
-    await sql_session.execute(
-        delete(SlideModel).where(SlideModel.presentation == render_presentation_id)
-    )
-    await sql_session.execute(
-        delete(PresentationModel).where(PresentationModel.id == render_presentation_id)
-    )
-    await sql_session.commit()
-
-
-async def _publish_staged_presentation(
-    sql_session: AsyncSession,
-    presentation: PresentationModel,
-    export_path: str,
-    generation_job: PresentationGenerationJob | None = None,
-    async_status: AsyncPresentationGenerationTaskModel | None = None,
-    render_presentation: PresentationModel | None = None,
-    generated_assets: tuple[ImageAsset, ...] = (),
-    image_staging: PreparedWorkspaceChatArtifactStaging | None = None,
-    image_artifacts: tuple[PreparedWorkspaceArtifact, ...] = (),
-    export_execution: PresentationExportExecution | None = None,
-) -> str:
-    return await publish_staged_presentation(
-        sql_session,
-        presentation,
-        export_path,
-        generation_job,
-        async_status,
-        render_presentation,
-        generated_assets,
-        image_staging,
-        image_artifacts,
-        export_execution,
+async def _publish_staged_presentation(*args: Any, **kwargs: Any) -> str:
+    return await generation_staging._publish_staged_presentation(
+        *args,
+        **kwargs,
         prepare_artifact=prepare_workspace_generation_artifact,
         publish_artifact=publish_workspace_generation_artifact,
         compensate_artifact=compensate_workspace_artifact,
@@ -365,54 +227,24 @@ async def _publish_staged_presentation(
     )
 
 
-async def _execute_generation_export(
-    sql_session: AsyncSession,
-    *,
-    publication_target: PresentationModel,
-    render_presentation: PresentationModel,
-    request: GeneratePresentationRequest,
-    export_cookie_header: str | None,
-    generation_job: PresentationGenerationJob | None,
-    template_target: TemplateV2GenerationTarget | None = None,
-) -> PresentationExportExecution:
-    return await execute_generation_export(
-        sql_session,
-        publication_target=publication_target,
-        render_presentation=render_presentation,
-        request=request,
-        export_cookie_header=export_cookie_header,
-        generation_job=generation_job,
-        template_target=template_target,
-        execute_export=execute_presentation_export,
+async def _execute_generation_export(*args: Any, **kwargs: Any) -> PresentationExportExecution:
+    return await generation_staging._execute_generation_export(
+        *args, **kwargs, execute_export=execute_presentation_export
     )
 
 
-async def _record_generation_export_failure(
-    sql_session: AsyncSession,
-    execution: PresentationExportExecution | None,
-    error: BaseException,
-) -> None:
-    await record_generation_export_failure(
-        sql_session,
-        execution,
-        error,
-        terminalize_failure=terminalize_export_attempt_failed,
-    )
+def _chat_first_generation_enabled() -> bool:
+    """Keep runtime admission injectable at the endpoint boundary."""
 
+    try:
+        require_supported_workspace_runtime(sql_engine.url)
+    except UnsupportedWorkspaceRuntimeError as error:
+        raise HTTPException(status_code=501, detail=error.code) from error
+    return True
 
-def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
-    """Restore private worker state from an internal durable-job payload."""
-
-    values = dict(payload)
-    snapshot_id = values.pop(_INTERNAL_EXACT_SNAPSHOT_KEY, None)
-    # Internal runner metadata is deliberately outside the public request
-    # schema. It remains on the durable job across operation rebinds, but must
-    # never be passed to Pydantic as caller input.
-    values.pop(_INTERNAL_ADMISSION_RETRY_KEY, None)
-    request = GeneratePresentationRequest.model_validate(values)
-    if snapshot_id is not None:
-        request._authored_exact_snapshot_id = str(snapshot_id)
-    return request
+PRESENTATION_GENERATE_ROUTER = APIRouter(
+    prefix="/presentation", tags=["Presentation"]
+)
 
 
 class AsyncPresentationGenerationTaskResponse(BaseModel):
@@ -499,6 +331,10 @@ async def check_if_api_request_is_valid(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ) -> Tuple[uuid.UUID,]:
+    # Fail before canonicalizing uploads or allocating any durable identity.
+    # Existing legacy decks remain readable through the frozen compatibility
+    # runtime; this boundary controls new generation only.
+    require_authored_generation_admission(request)
     presentation_id = uuid.uuid4()
     print(f"Presentation ID: {presentation_id}")
 

@@ -50,7 +50,11 @@ export async function compileRuntimeTailwindCss(
     // compilation is utilities-only and must not read or duplicate preflight.
     corePlugins: { preflight: false },
   };
-  const result = await postcss([tailwindcss(runtimeConfig)]).process(
+  // Tailwind and the application can resolve different patch releases of
+  // PostCSS under pnpm. Their runtime plugin protocol is stable, but their
+  // recursive nominal TypeScript types are not assignable across instances.
+  const runtimePlugin = tailwindcss(runtimeConfig) as any;
+  const result = await postcss([runtimePlugin]).process(
     RUNTIME_TAILWIND_INPUT,
     { from: undefined }
   );

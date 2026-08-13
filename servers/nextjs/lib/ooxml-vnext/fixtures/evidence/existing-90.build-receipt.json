@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "authored-vnext-ooxml-existing-fixture-build/v1",
+  "artifactPath": "servers/nextjs/.tmp/ooxml-vnext-checkpoint4-existing-90/existing-style-90.pptx",
+  "archiveSha256": "76236ccfaed176966dabcfb8d91b4541b17e8f6907606240d1e09a82bb78afa3",
+  "archiveByteLength": 146327,
+  "packageDigest": "28c836438e267a11f172f93be421b3942fd8f07e75a55c6057268102bb05e9e1",
+  "relationshipDigest": "e05ca2e382c99a58753104845626a4e5cfe6b11f2758fa271fcddeebbcdec4f2",
+  "closureDigest": "0e6a9def9c713cd6cc3c58aba5a2fb6272f24dfad759561afabf5a790f5ee0ed",
+  "slideCount": 90,
+  "layoutCount": 4,
+  "partCount": 200,
+  "logoSha256": "689976b88fc161e4cfa9733b4bf9be5f4a8443569586256360581e584f9cb76e",
+  "layoutIds": [
+    "layout:cover",
+    "layout:section",
+    "layout:standard",
+    "layout:long-title"
+  ],
+  "externalRelationshipWarnings": [
+    "warn_preserve:hyperlink:ppt/slides/_rels/slide1.xml.rels#rIdFixtureMail"
+  ],
+  "quarantined": false,
+  "powerPointLaunched": false
+}

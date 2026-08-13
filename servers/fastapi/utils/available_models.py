@@ -1,5 +1,4 @@
 import aiohttp
-from openai import AsyncOpenAI
 from google import genai
 
 
@@ -53,8 +52,10 @@ async def list_together_models(url: str, api_key: str) -> list[str]:
     models_url = f"{base_url.rstrip('/')}/models"
     headers = {"Authorization": f"Bearer {(api_key or '').strip()}"}
 
-    async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(models_url) as response:
+    async with aiohttp.ClientSession(headers=headers, trust_env=False) as session:
+        async with session.get(models_url, allow_redirects=False) as response:
+            if 300 <= response.status < 400:
+                raise RuntimeError("provider_model_list_redirect_denied")
             response.raise_for_status()
             data = await response.json()
 
@@ -68,11 +69,14 @@ async def list_available_openai_compatible_models(url: str, api_key: str) -> lis
 
     # Local LiteLLM / OpenAI-compatible proxies often omit auth; SDK rejects a blank key.
     effective_key = (api_key or "").strip() or "EMPTY"
-    client = AsyncOpenAI(api_key=effective_key, base_url=url)
-    models = (await client.models.list()).data
-    if models:
-        return [m.id for m in models if m.id]
-    return []
+    headers = {"Authorization": f"Bearer {effective_key}"}
+    models_url = f"{url.rstrip('/')}/models"
+    async with aiohttp.ClientSession(headers=headers, trust_env=False) as session:
+        async with session.get(models_url, allow_redirects=False) as response:
+            if 300 <= response.status < 400:
+                raise RuntimeError("provider_model_list_redirect_denied")
+            response.raise_for_status()
+            return _model_ids_from_openai_compatible_payload(await response.json())
 
 
 async def list_available_anthropic_models(api_key: str) -> list[str]:

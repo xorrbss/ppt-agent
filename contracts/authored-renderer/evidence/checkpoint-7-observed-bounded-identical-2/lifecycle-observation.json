@@ -1,0 +1,31 @@
+{
+  "build_elapsed_ms": 12253.486,
+  "harness_attestation": {
+    "image_id": "sha256:559615caa1dd30c112d740970cfdf0a63c4e2a76ef9a6d62af0b3f00aba7528b",
+    "runtime_sha256": "sha256:7cba155c673746c20be007c8f2fe256b83f4bb2b23eaaac8ea6f7b14de417946"
+  },
+  "harness_elapsed_ms": 8083.935,
+  "harness_exit": {
+    "error": "",
+    "exit_code": 0,
+    "oom_killed": false
+  },
+  "harness_start_monotonic": 447.553019561,
+  "harness_started_after_product_ready": true,
+  "product_readiness": {
+    "criterion": "worker-process-blocked-on-request-pipe",
+    "elapsed_ms": 890.754,
+    "ready": true,
+    "samples": [
+      {
+        "container_running": true,
+        "elapsed_ms": 890.754,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 anon_pipe_read"
+      }
+    ]
+  },
+  "schema_version": "authored-renderer-lifecycle/v1",
+  "started_monotonic": 430.658612835
+}

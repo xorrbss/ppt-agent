@@ -1,0 +1,132 @@
+{
+  "schema": "presenton.release-license-policy/v1",
+  "notice": "NOTICE",
+  "correspondingSourceOffer": "compliance/copyleft-source-offer.md",
+  "allowedLicenseIds": [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BlueOak-1.0.0",
+    "CC-BY-4.0",
+    "CC0-1.0",
+    "CNRI-Python",
+    "ISC",
+    "LicenseRef-Docutils-Public-Domain",
+    "LicenseRef-Public-Domain",
+    "MIT",
+    "MIT-0",
+    "MIT-CMU",
+    "PSF-2.0",
+    "Python-2.0",
+    "Unlicense",
+    "Zlib"
+  ],
+  "preferredAlternatives": {
+    "(MPL-2.0 OR Apache-2.0)": "Apache-2.0",
+    "Apache-2.0 OR BSD-2-Clause": "Apache-2.0",
+    "Apache-2.0 OR BSD-3-Clause": "Apache-2.0",
+    "MIT OR Apache-2.0": "MIT"
+  },
+  "metadataLicenseMappings": {
+    "3-Clause BSD License": "BSD-3-Clause",
+    "Apache 2.0": "Apache-2.0",
+    "Apache License": "Apache-2.0",
+    "Apache License 2.0": "Apache-2.0",
+    "Apache License, Version 2.0": "Apache-2.0",
+    "BSD": "BSD-3-Clause",
+    "BSD 3-Clause": "BSD-3-Clause",
+    "BSD-3-Clause, Apache-2.0, dependency licenses": "BSD-3-Clause AND Apache-2.0 AND CC-BY-4.0",
+    "Dual License": "BSD-3-Clause OR Apache-2.0",
+    "ISC License": "ISC",
+    "MIT License": "MIT",
+    "MIT license": "MIT",
+    "MPL-2.0 AND MIT": "MPL-2.0 AND MIT",
+    "PSF": "PSF-2.0",
+    "PSFL": "PSF-2.0"
+  },
+  "classifierMappings": {
+    "License :: OSI Approved :: Apache Software License": "Apache-2.0",
+    "License :: OSI Approved :: BSD License": "BSD-3-Clause",
+    "License :: OSI Approved :: MIT License": "MIT",
+    "License :: Public Domain": "LicenseRef-Public-Domain"
+  },
+  "exactMetadataResolutions": [
+    {
+      "name": "caio",
+      "version": "0.9.25",
+      "licenseConcluded": "Apache-2.0",
+      "licenseFileSha256": "07653d6263b500be511a40cc3b50663265acf24a3688ebc9644a50eb0898849e"
+    },
+    {
+      "name": "docutils",
+      "version": "0.22.4",
+      "licenseConcluded": "LicenseRef-Docutils-Public-Domain AND BSD-2-Clause",
+      "licenseFileSha256": "6ab4f27c76c74f96e5e692da5944a6f82968f3bddaac5660a4aa723e70eb5d8f"
+    },
+    {
+      "name": "py-rust-stemmers",
+      "version": "0.1.5",
+      "licenseConcluded": "MIT",
+      "licenseFileSha256": "9449057776c984e88e29ea1ee135caeba2347756d0c74480f7afc4f16f636f68"
+    }
+  ],
+  "exactNpmMetadataResolutions": [
+    {
+      "name": "khroma",
+      "version": "2.1.0",
+      "licenseConcluded": "MIT",
+      "licenseFileSha256": "66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49"
+    }
+  ],
+  "exactPlatformMetadataResolutions": [
+    {
+      "name": "jeepney",
+      "version": "0.9.0",
+      "licenseConcluded": "MIT",
+      "metadataSource": "https://pypi.org/pypi/jeepney/0.9.0/json"
+    },
+    {
+      "name": "secretstorage",
+      "version": "3.5.0",
+      "licenseConcluded": "BSD-3-Clause",
+      "metadataSource": "https://pypi.org/pypi/secretstorage/3.5.0/json"
+    },
+    {
+      "name": "uvloop",
+      "version": "0.22.1",
+      "licenseConcluded": "MIT",
+      "metadataSource": "https://pypi.org/pypi/uvloop/0.22.1/json"
+    }
+  ],
+  "conditionalCopyleftRules": [
+    {
+      "id": "sharp-libvips-lgpl",
+      "licenseId": "LGPL-3.0-or-later",
+      "packageNamePattern": "^@img/sharp-(?:libvips-.+|wasm32|win32-.+)$",
+      "versions": ["0.35.3", "1.3.2"],
+      "offerMarker": "sharp 0.35.3 / libvips 8.18.3"
+    },
+    {
+      "id": "python-lgpl",
+      "licenseId": "LGPL-3.0-only",
+      "packageNamePattern": "^psycopg(?:-binary)?$",
+      "versions": ["3.3.4"],
+      "offerMarker": "psycopg / psycopg-binary 3.3.4"
+    },
+    {
+      "id": "lightningcss-mpl",
+      "licenseId": "MPL-2.0",
+      "packageNamePattern": "^lightningcss(?:-.+)?$",
+      "versions": ["1.30.2"],
+      "offerMarker": "lightningcss 1.30.2"
+    },
+    {
+      "id": "python-mpl",
+      "licenseId": "MPL-2.0",
+      "packageNamePattern": "^(?:certifi|tqdm)$",
+      "versions": ["2026.2.25", "4.67.3"],
+      "offerMarker": "certifi 2026.2.25 / tqdm 4.67.3"
+    }
+  ]
+}

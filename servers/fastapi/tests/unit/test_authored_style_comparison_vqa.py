@@ -106,6 +106,11 @@ def test_low_level_style_comparison_makes_one_structured_model_call(monkeypatch)
     monkeypatch.setattr(critique_slide_mod, "get_model", lambda: "review-model")
     monkeypatch.setattr(
         critique_slide_mod,
+        "enforce_llm_egress_policy",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        critique_slide_mod,
         "generate_structured_with_schema_retries",
         fake_generate,
     )

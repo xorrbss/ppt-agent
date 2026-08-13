@@ -11,10 +11,11 @@ import { initializeUserConfigRuntime } from "./user_config_runtime";
 
 export function setupIpcHandlers(
   refreshRuntimeSettings: () => Promise<void>,
+  getTrustedAppOrigin: () => string | undefined,
 ) {
   setupExportHandlers();
   setupUserConfigHandlers(refreshRuntimeSettings);
-  setupSlideMetadataHandlers();
+  setupSlideMetadataHandlers({ getTrustedAppOrigin });
   setupReadFile();
   setupFooterHandlers();
   setupThemeHandlers();
@@ -23,6 +24,13 @@ export function setupIpcHandlers(
   setupApiHandlers();
 }
 
-export function setupUserConfigRuntime(fastApiPort: number): FastApiEnv {
-  return initializeUserConfigRuntime(fastApiPort, setupIpcHandlers);
+export function setupUserConfigRuntime(
+  fastApiPort: number,
+  getTrustedAppOrigin: () => string | undefined,
+): FastApiEnv {
+  return initializeUserConfigRuntime(
+    fastApiPort,
+    (refreshRuntimeSettings) =>
+      setupIpcHandlers(refreshRuntimeSettings, getTrustedAppOrigin),
+  );
 }

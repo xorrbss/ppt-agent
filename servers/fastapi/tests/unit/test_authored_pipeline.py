@@ -402,6 +402,7 @@ def _capture_author_requests(monkeypatch, responses):
     monkeypatch.setattr(author_slide_mod, "get_model", lambda: "fake-model")
     monkeypatch.setattr(author_slide_mod, "get_generate_kwargs", lambda **kwargs: kwargs)
     monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: False)
+    monkeypatch.setattr(author_slide_mod, "enforce_llm_egress_policy", lambda: None)
     monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_limit)
     return calls
 

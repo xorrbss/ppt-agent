@@ -75,6 +75,29 @@ from models.sql.asset_gateway_idempotency_receipt import (  # noqa: F401, E402
 from models.sql.presentation_export_attempt import (  # noqa: F401, E402
     PresentationExportAttempt,
 )
+from models.sql.provider_usage_receipt import ProviderUsageReceipt  # noqa: F401, E402
+from models.sql.authored_vnext_repository import (  # noqa: F401, E402
+    AuthoredVNextCandidate,
+    AuthoredVNextDeckRevision,
+    AuthoredVNextEntityHead,
+    AuthoredVNextExportArtifactReceipt,
+    AuthoredVNextExportJob,
+    AuthoredVNextMasterRevision,
+    AuthoredVNextPublicationPointer,
+    AuthoredVNextQualityDecision,
+    AuthoredVNextSlideRevision,
+)
+from models.sql.provider_credential_reference import (  # noqa: F401, E402
+    ProviderCredentialReference,
+)
+from models.sql.authored_vnext_generation_operation import (  # noqa: F401, E402
+    AuthoredVNextGenerationOperation,
+)
+from models.sql.provider_runtime_reservation import (  # noqa: F401, E402
+    ProviderRuntimeBudget,
+    ProviderRuntimeCircuit,
+    ProviderRuntimeReservation,
+)
 
 alembic_config = context.config
 

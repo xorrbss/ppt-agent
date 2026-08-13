@@ -1,0 +1,38 @@
+{
+  "build_elapsed_ms": 204903.765,
+  "harness_attestation": {
+    "image_id": "sha256:e6b590de0737e580017ac9612bf1a86e7ea627c08d1f9f3d7f1d328845d6b23d",
+    "runtime_sha256": "sha256:ea097eb6deb7f7c39d39fc92415889dd3c82554d047bf743f39aa61accf25392"
+  },
+  "harness_elapsed_ms": 9054.923,
+  "harness_exit": {
+    "error": "",
+    "exit_code": 0,
+    "oom_killed": false
+  },
+  "harness_start_monotonic": 270.981339844,
+  "harness_started_after_product_ready": true,
+  "product_readiness": {
+    "criterion": "worker-process-blocked-on-request-pipe",
+    "elapsed_ms": 6216.876,
+    "ready": true,
+    "samples": [
+      {
+        "container_running": true,
+        "elapsed_ms": 1594.663,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 0"
+      },
+      {
+        "container_running": true,
+        "elapsed_ms": 6216.876,
+        "oom_killed": false,
+        "probe_exit_code": 0,
+        "worker_wait": "7 anon_pipe_read"
+      }
+    ]
+  },
+  "schema_version": "authored-renderer-lifecycle/v1",
+  "started_monotonic": 51.99449184
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "synthetic_timing_only",
+  "privacy": {
+    "contains_prompts": false,
+    "contains_customer_data": false,
+    "contains_credentials": false
+  },
+  "slide_count": 90,
+  "defaults": {
+    "job_concurrency": 1,
+    "slide_workers": 8,
+    "author_concurrency": 5,
+    "render_concurrency": 4,
+    "vqa_concurrency": 5,
+    "ocr_concurrency": 2,
+    "deck_timeout_seconds": 1800
+  },
+  "assumptions": {
+    "author_ms": 75000,
+    "illustrate_ms": 0,
+    "render_ms": 1800,
+    "ocr_ms": 0,
+    "vqa_ms": 0,
+    "persist_ms": 3500,
+    "export_ms": 12000,
+    "author_input_tokens": 2400,
+    "author_output_tokens": 5000,
+    "author_attempts_per_slide": 1.0,
+    "vqa_fraction": 0.0,
+    "vqa_input_tokens": 0,
+    "vqa_output_tokens": 0,
+    "model_pricing_usd_per_million": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  },
+  "notes": [
+    "All timing and token values are explicit planning assumptions, not provider measurements.",
+    "Initial authored generation does not invoke OCR; its value is zero unless a separate quality-review experiment is run.",
+    "Set non-zero prices from a dated provider manifest before treating cost as an estimate."
+  ]
+}

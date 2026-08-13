@@ -1,12 +1,43 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 interface AuthoredSlidePreviewProps {
   slideIndex: number;
   html?: unknown;
   imageSrc?: string;
   preferHtml?: boolean;
+}
+
+const AUTHORED_PREVIEW_CSP = [
+  "default-src 'none'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-src 'none'",
+  "connect-src 'none'",
+  "media-src 'none'",
+  "form-action 'none'",
+  "img-src data:",
+  "font-src data:",
+  "style-src 'unsafe-inline'",
+  "script-src 'none'",
+].join("; ");
+
+export function isolateAuthoredPreviewHtml(html: string): string {
+  const csp = `<meta http-equiv="Content-Security-Policy" content="${AUTHORED_PREVIEW_CSP}">`;
+  const withoutBaseOrCsp = html
+    .replace(/<base\b[^>]*>/gi, "")
+    .replace(
+      /<meta\b(?=[^>]*http-equiv\s*=\s*["']?content-security-policy["']?)[^>]*>/gi,
+      ""
+    );
+  if (/<head(?:\s[^>]*)?>/i.test(withoutBaseOrCsp)) {
+    return withoutBaseOrCsp.replace(
+      /<head(?:\s[^>]*)?>/i,
+      (opening) => `${opening}${csp}`
+    );
+  }
+  return `<head>${csp}</head>${withoutBaseOrCsp}`;
 }
 
 /**
@@ -25,18 +56,33 @@ export function AuthoredSlidePreview({
   imageSrc,
   preferHtml = false,
 }: AuthoredSlidePreviewProps) {
+  // Fail closed during SSR/hydration. Only a confirmed ordinary web runtime
+  // may construct authored srcDoc; Electron always consumes the isolated
+  // backend worker's PNG artifact and therefore exposes zero authored DOM to
+  // the privileged application window/preload.
+  const [runtime, setRuntime] = useState<"unknown" | "web" | "electron">(
+    "unknown"
+  );
+  useEffect(() => {
+    setRuntime(window.electron ? "electron" : "web");
+  }, []);
   const htmlSource = typeof html === "string" ? html.trim() : "";
-  const canRenderHtml = preferHtml && htmlSource.length > 0;
+  const canRenderHtml =
+    runtime === "web" && preferHtml && htmlSource.length > 0;
+  const isolatedHtmlSource = canRenderHtml
+    ? isolateAuthoredPreviewHtml(htmlSource)
+    : "";
 
   return (
     <div
       data-testid={`authored-slide-preview-${slideIndex}`}
+      data-authored-runtime={runtime}
       className="aspect-video h-full w-full overflow-hidden bg-white"
     >
       {canRenderHtml ? (
         <iframe
           data-testid={`authored-html-preview-${slideIndex}`}
-          srcDoc={htmlSource}
+          srcDoc={isolatedHtmlSource}
           title={`Slide ${slideIndex + 1}`}
           sandbox=""
           loading="lazy"

@@ -1,0 +1,292 @@
+{
+  "boundaries": {
+    "child_process": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:814d9ae41ba9e4bfb35ced4684b2991c4c07032ed9bda3a57d2c78d1d47733aa"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "external_egress": {
+      "attempts": 2,
+      "blocked": 2,
+      "evidence": [
+        "sha256:77a01ffdef45595689186626147026585abc4ae9ecbccccfa6ba350f2ffac638"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "host_read": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:e65e5418d1b9e8b2f8c70ab53bb9cf77998de76ec41296ee68154143e3c7babe"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "ipc": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:9cc712b7dd78f08419481c26555dee0af66539deabadf4cd432376d74afcf80e"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "loopback_egress": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:7b14ee16b094ffa9e2225868f68542846e984ab8bb2b0189b6afd1becebd14b9"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "metadata_egress": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:0f0399deb499451941bffe8556549e30b26e3da7b6e6a5c698f9df7c88064940"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "resource_escape": {
+      "attempts": 4,
+      "blocked": 4,
+      "evidence": [
+        "sha256:66b272545cfa44e12374ea801a8bf9d0caba9c15c9f67af1953cbe79b932edca"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "secret_log": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:beda03e12f423b207e29a4f22a72d85c268ea0a7e7de14ae49d23542b189d425"
+      ],
+      "observed": true,
+      "violations": 0
+    }
+  },
+  "containment": {
+    "browser_sandbox": true,
+    "crash_cleanup": true,
+    "csp_enforced": true,
+    "dom_allowlist": true,
+    "file_url_disabled": true,
+    "ipc_disabled": true,
+    "non_root": true,
+    "os_egress_deny": true,
+    "preload_disabled": true,
+    "read_only_root": true,
+    "resource_limits": true,
+    "timeout_cleanup": true,
+    "tmpfs_writable_only": true
+  },
+  "deployment": {
+    "cap_drop_all": true,
+    "chromium_seccomp_profile": true,
+    "contract_digest_observed": true,
+    "image_id_observed": true,
+    "init_process": true,
+    "network_none": true,
+    "no_devices": true,
+    "no_host_mounts": true,
+    "no_new_privileges": true,
+    "no_preload": true,
+    "no_privileged_ipc": true,
+    "no_provider_secrets": true,
+    "no_published_ports": true,
+    "non_root": true,
+    "product_worker_smoke": true,
+    "read_only_root": true,
+    "resource_limits": true,
+    "source_revision_observed": true,
+    "source_tree_digest_observed": true,
+    "tmpfs_exact": true
+  },
+  "diagnostics": {
+    "observer_readiness": {
+      "browser_timeout_ms": 20000,
+      "close_monotonic_ms": 276404,
+      "pre_observer_ready": true,
+      "product_readiness_required": true,
+      "snapshots": [
+        {
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 5,
+            "nr_throttled": 1,
+            "system_usec": 91646,
+            "throttled_usec": 9019,
+            "usage_usec": 291602,
+            "user_usec": 199956
+          },
+          "label": "pre-observer-ready",
+          "loadavg": "2.10 1.38 0.64 2/465 11",
+          "memory_current": 15097856,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "monotonic_ms": 272427,
+          "pids_current": 6,
+          "process_count": 2,
+          "processes": [
+            {
+              "name": "docker-init",
+              "pid": 1,
+              "rss_kb": 768,
+              "state": "S (sleeping)",
+              "threads": 1,
+              "wait_channel": "do_sigtimedwait.isra.0"
+            },
+            {
+              "name": "MainThread",
+              "pid": 7,
+              "rss_kb": 82460,
+              "state": "S (sleeping)",
+              "threads": 5,
+              "wait_channel": "0"
+            }
+          ]
+        },
+        {
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 5,
+            "nr_throttled": 1,
+            "system_usec": 113093,
+            "throttled_usec": 9019,
+            "usage_usec": 343468,
+            "user_usec": 230374
+          },
+          "label": "browser-spawn",
+          "loadavg": "2.10 1.38 0.64 3/467 18",
+          "memory_current": 17428480,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "monotonic_ms": 272487,
+          "pids_current": 8,
+          "process_count": 3,
+          "processes": [
+            {
+              "name": "docker-init",
+              "pid": 1,
+              "rss_kb": 768,
+              "state": "S (sleeping)",
+              "threads": 1,
+              "wait_channel": "do_sigtimedwait.isra.0"
+            },
+            {
+              "name": "MainThread",
+              "pid": 7,
+              "rss_kb": 83468,
+              "state": "R (running)",
+              "threads": 5,
+              "wait_channel": "do_epoll_wait"
+            },
+            {
+              "name": "chromium",
+              "pid": 12,
+              "rss_kb": 1856,
+              "state": "R (running)",
+              "threads": 1,
+              "wait_channel": "do_wait"
+            }
+          ]
+        },
+        {
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 45,
+            "nr_throttled": 41,
+            "system_usec": 1722367,
+            "throttled_usec": 14250630,
+            "usage_usec": 4315908,
+            "user_usec": 2593541
+          },
+          "label": "post-browser",
+          "loadavg": "2.01 1.38 0.64 2/465 159",
+          "memory_current": 24154112,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "monotonic_ms": 276417,
+          "pids_current": 6,
+          "process_count": 2,
+          "processes": [
+            {
+              "name": "docker-init",
+              "pid": 1,
+              "rss_kb": 768,
+              "state": "S (sleeping)",
+              "threads": 1,
+              "wait_channel": "do_sigtimedwait.isra.0"
+            },
+            {
+              "name": "MainThread",
+              "pid": 7,
+              "rss_kb": 83764,
+              "state": "S (sleeping)",
+              "threads": 5,
+              "wait_channel": "do_epoll_wait"
+            }
+          ]
+        }
+      ],
+      "spawn_monotonic_ms": 272466,
+      "stderr_bytes": 4908,
+      "stderr_sha256": "sha256:9c52b989d096d8996281c959ecb1206246ca1065cc6c31434dc4888d158e9d8d",
+      "stderr_tail": "es of valid types are \"tcp\" and on UNIX \"unix\")\n[12:44:0813/172500.767179:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:44:0813/172501.061396:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/172501.643616:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:12:0813/172501.643812:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:44:0813/172501.643880:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:44:0813/172501.643975:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/172501.644532:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:12:0813/172501.738113:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:44:0813/172501.847155:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory\n[12:12:0813/172501.847176:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:44:0813/172501.847289:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory\n[12:12:0813/172501.847817:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:44:0813/172501.848190:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/172502.042888:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.Properties.GetAll: object_path= /org/freedesktop/UPower/devices/DisplayDevice: unknown error type: \n[12:12:0813/172502.044610:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:44:0813/172502.045030:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/172502.155605:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:44:0813/172502.155861:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/172502.263347:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[105:1:0813/172502.850499:ERROR:base/threading/platform_thread_posix.cc:162] pthread_create: Resource temporarily unavailable (11)\n[105:11:0813/172503.248339:ERROR:base/threading/platform_thread_posix.cc:162] pthread_create: Resource temporarily unavailable (11)\n[138:4:0813/172503.447227:ERROR:base/threading/platform_thread_posix.cc:162] pthread_create: Resource temporarily unavailable (11)\n[138:6:0813/172503.447251:ERROR:base/threading/platform_thread_posix.cc:162] pthread_create: Resource temporarily unavailable (11)\n[138:4:0813/172503.447876:ERROR:base/threading/platform_thread_posix.cc:162] pthread_create: Resource temporarily unavailable (11)\n",
+      "stdout_bytes": 564,
+      "timeout_observed": false
+    }
+  },
+  "execution": {
+    "completed": true,
+    "crashed": false,
+    "host_stability_risk_cases_executed": [],
+    "isolation_intact": true,
+    "monitor_healthy": true,
+    "observer_errors": [],
+    "reported_kill_switch_events": [],
+    "timed_out": false,
+    "unsafe_launch_options": []
+  },
+  "resilience": {
+    "candidate_unpublished": true,
+    "crash_cleanup": true,
+    "kill_switch_rejects_new_work": true,
+    "lkg_preserved": true,
+    "timeout_cleanup": true
+  },
+  "run_id": "zero-egress-1786641907774",
+  "schema_version": "authored-security-observation/v1"
+}

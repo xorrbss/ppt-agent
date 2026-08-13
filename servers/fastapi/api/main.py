@@ -16,45 +16,16 @@ from api.v1.mock.router import API_V1_MOCK_ROUTER
 from api.v1.ppt.router import API_V1_PPT_ROUTER
 from api.v1.webhook.router import API_V1_WEBHOOK_ROUTER
 from services.workspace_metrics import WORKSPACE_METRICS
+from services.provider_telemetry_runtime import maybe_init_sentry
 from utils.get_env import (
     get_app_data_directory_env,
     get_enable_mock_endpoints_env,
-    get_sentry_dsn_env,
-    get_sentry_send_default_pii_env,
-    get_sentry_traces_sample_rate_env,
 )
 from utils.path_helpers import get_resource_path
 
 
 def _maybe_init_sentry() -> None:
-    sentry_dsn = get_sentry_dsn_env()
-    if not sentry_dsn:
-        return
-
-    try:
-        import sentry_sdk
-    except Exception:
-        # Sentry SDK is optional in some runtime targets.
-        return
-
-    traces_sample_rate = get_sentry_traces_sample_rate_env()
-    send_default_pii = get_sentry_send_default_pii_env()
-    try:
-        parsed_sample_rate = (
-            float(traces_sample_rate) if traces_sample_rate is not None else 1.0
-        )
-    except ValueError:
-        parsed_sample_rate = 1.0
-
-    parsed_send_default_pii = (
-        send_default_pii.lower() == "true" if send_default_pii is not None else True
-    )
-
-    sentry_sdk.init(
-        dsn=sentry_dsn,
-        send_default_pii=parsed_send_default_pii,
-        traces_sample_rate=parsed_sample_rate,
-    )
+    maybe_init_sentry()
 
 
 _maybe_init_sentry()

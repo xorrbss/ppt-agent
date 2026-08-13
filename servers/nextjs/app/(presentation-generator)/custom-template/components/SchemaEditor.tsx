@@ -250,9 +250,9 @@ function updateConstraintsInCode(code: string, changes: FieldChange[]): string {
         // Track which changes we've applied
         const appliedChanges = new Set<string>();
 
-        // Traverse the AST
-        traverse(ast, {
-            ObjectProperty(path) {
+        // Keep the parser/traversal visitor boundary structural; runtime guards narrow nodes before mutation.
+        traverse(ast as any, {
+            ObjectProperty(path: any) {
                 const key = path.node.key;
                 let fieldName: string | null = null;
 
@@ -353,7 +353,7 @@ function updateConstraintsInCode(code: string, changes: FieldChange[]): string {
         });
 
         // Generate code from the modified AST
-        const output = generate(ast, {
+        const output = generate(ast as any, {
             retainLines: true,
             retainFunctionParens: true,
         }, code);
@@ -393,8 +393,8 @@ function updateTypeInCode(code: string, typeChanges: TypeChange[]): string {
 
         const appliedChanges = new Set<string>();
 
-        traverse(ast, {
-            ObjectProperty(path) {
+        traverse(ast as any, {
+            ObjectProperty(path: any) {
                 const key = path.node.key;
                 let fieldName: string | null = null;
 
@@ -468,7 +468,7 @@ function updateTypeInCode(code: string, typeChanges: TypeChange[]): string {
             },
         });
 
-        const output = generate(ast, {
+        const output = generate(ast as any, {
             retainLines: true,
             retainFunctionParens: true,
         }, code);

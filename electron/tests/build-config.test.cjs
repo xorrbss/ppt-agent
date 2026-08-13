@@ -35,6 +35,37 @@ test("electron packaging never publishes as a build side effect", () => {
   assert.equal(receivedOptions.config.mac.hardenedRuntime, true)
   assert.equal(receivedOptions.config.mac.entitlements, "build/entitlements.mac.plist")
   assert.equal(receivedOptions.config.afterSign, "scripts/notarize-macos.cjs")
+  assert.deepEqual(
+    Array.from(receivedOptions.config.extraResources, (entry) => ({
+      from: entry.from,
+      to: entry.to,
+    })),
+    [
+      { from: "../LICENSE", to: "LICENSE" },
+      { from: "../NOTICE", to: "NOTICE" },
+      { from: "../compliance/fonts", to: "font-licenses" },
+      {
+        from: "../docs/experiments/authored-vnext/03-ooxml-roundtrip/compliance/LICENSE.genoffice.txt",
+        to: "third-party/genoffice/LICENSE",
+      },
+      {
+        from: "../docs/experiments/authored-vnext/03-ooxml-roundtrip/compliance/NOTICE.genoffice.txt",
+        to: "third-party/genoffice/NOTICE",
+      },
+      {
+        from: "../compliance/release-sbom.spdx.json",
+        to: "release-sbom.spdx.json",
+      },
+      {
+        from: "../compliance/release-license-policy.json",
+        to: "release-license-policy.json",
+      },
+      {
+        from: "../compliance/copyleft-source-offer.md",
+        to: "copyleft-source-offer.md",
+      },
+    ],
+  )
 })
 
 test("packaged FastAPI keeps standard streams available for Uvicorn", () => {

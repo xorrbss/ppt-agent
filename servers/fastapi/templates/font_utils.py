@@ -3,7 +3,9 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Iterable
 
-import aiohttp
+from services.provider_font_runtime import (
+    check_google_font_availability as _check_google_font_availability,
+)
 
 _STYLE_TOKENS = {
     "italic",
@@ -126,15 +128,7 @@ def get_google_font_css_url(font_name: str) -> str:
 
 
 async def check_google_font_availability(font_name: str) -> bool:
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.head(
-                get_google_font_css_url(font_name),
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
-                return response.status == 200
-    except Exception:
-        return False
+    return await _check_google_font_availability(font_name)
 
 
 def collect_normalized_fonts_from_xmls(slide_xmls: Iterable[str]) -> list[str]:

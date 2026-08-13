@@ -11,6 +11,7 @@ from sqlalchemy import DateTime, Integer, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from alembic import command
+import migration_revision_contract as revision_contract
 from migration_runtime_settings_schema import (
     SLIDESPEC_ARTIFACT_BUNDLE_COLUMNS,
     SLIDESPEC_PUBLICATION_ATTEMPT_COLUMNS,
@@ -76,7 +77,9 @@ REVISION_PRESENTATION_REFERENCE_SNAPSHOTS = "b9d2e4f6a8c1"
 REVISION_ASSET_GATEWAY_IDEMPOTENCY = "c0e3f5a7b9d1"
 REVISION_POST_C0_SCHEMA_RECONCILIATION = "d1a4c7e9b2f6"
 REVISION_PRESENTATION_EXPORT_ATTEMPTS = "d2b5e8f0a3c6"
-HEAD_REVISION = REVISION_PRESENTATION_EXPORT_ATTEMPTS
+REVISION_AUTHORED_VNEXT_OWNERSHIP = revision_contract.REVISION_AUTHORED_VNEXT_OWNERSHIP
+REVISION_PROVIDER_RUNTIME_RESERVATIONS = revision_contract.REVISION_PROVIDER_RUNTIME_RESERVATIONS
+HEAD_REVISION = revision_contract.HEAD_REVISION
 ASYNC_PRESENTATION_TASK_TABLE = "async_presentation_generation_tasks"
 ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS = ("created_at", "updated_at")
 WORKSPACE_TABLE_COLUMNS = {
@@ -1219,15 +1222,12 @@ async def migrate_database_on_startup() -> None:
 
 
 def _run_migrations() -> None:
-    # migrations.py lives at servers/fastapi/migrations.py
-    # so parents[0] = servers/fastapi/, where alembic/ lives alongside it.
     base_dir = Path(__file__).resolve().parents[0]
     config = Config()
     config.set_main_option("script_location", str(base_dir / "alembic"))
 
     database_url, _ = get_database_url_and_connect_args()
 
-    # Alembic uses synchronous engines; strip async driver prefixes.
     database_url = to_sync_sqlalchemy_url(database_url)
 
     config.set_main_option("sqlalchemy.url", database_url)

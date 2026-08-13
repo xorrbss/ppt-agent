@@ -6,6 +6,7 @@ binary) + a deterministic PIL crop: the /pdf-maker page stacks slides at exactly
 import asyncio
 import atexit
 import base64
+import binascii
 import hashlib
 import html as html_lib
 import io
@@ -27,10 +28,35 @@ from typing import Any, Dict, List, Mapping, Optional
 import aiohttp
 
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.renderer_internal_capability import issue_internal_render_capability
+from utils.renderer_isolation import (
+    MAX_RESPONSE_BYTES,
+    AdmittedHtml,
+    RendererDisabledError,
+    RendererPolicyError,
+    admit_authored_html,
+    admit_internal_instrumented_html,
+    admit_static_output_html,
+    build_worker_environment,
+    encode_request,
+    ensure_renderer_enabled,
+    env_enabled,
+    renderer_mode,
+    renderer_requires_external_worker,
+    worker_command,
+)
 
 SLIDE_W = 1280
 SLIDE_H = 720
 LOGGER = logging.getLogger(__name__)
+_BLOCKED_RENDERER_URL_PATTERNS = [
+    "http://*",
+    "https://*",
+    "file://*",
+    "ftp://*",
+    "ws://*",
+    "wss://*",
+]
 
 def _kill_process_tree(proc: "subprocess.Popen") -> None:
     """Kill a chrome process AND its renderer/gpu children. `subprocess` timeout only
@@ -78,6 +104,33 @@ _METRICS_PATTERN = re.compile(
     rf'[^>]*\bcontent\s*=\s*(["\'])(.*?)\1[^>]*>',
     re.IGNORECASE,
 )
+_internal_capability_lock = threading.Lock()
+_internal_capabilities: "OrderedDict[str, str]" = OrderedDict()
+_INTERNAL_CAPABILITY_LIMIT = 64
+
+
+def _register_internal_render_source(source: str) -> None:
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    token = issue_internal_render_capability(source)
+    with _internal_capability_lock:
+        _internal_capabilities[digest] = token
+        _internal_capabilities.move_to_end(digest)
+        while len(_internal_capabilities) > _INTERNAL_CAPABILITY_LIMIT:
+            _internal_capabilities.popitem(last=False)
+
+
+def _admit_render_source(source: str) -> AdmittedHtml:
+    """Select a fail-closed admission profile for the exact in-memory source."""
+
+    try:
+        return admit_authored_html(source)
+    except RendererPolicyError:
+        digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+        with _internal_capability_lock:
+            capability = _internal_capabilities.pop(digest, None)
+        if capability is not None:
+            return admit_internal_instrumented_html(source, capability)
+        return admit_static_output_html(source)
 
 
 def _source_render_digests(html: str) -> tuple[str, str]:
@@ -128,15 +181,25 @@ def _metrics_cache_key(html: str) -> str:
     return _metric_evidence_cache_key(html)
 
 
-def _instrument_authored_html(html: str) -> tuple[str, str]:
+def _instrument_authored_html(
+    html: str,
+    *,
+    script_nonce: str | None = None,
+    issue_capability: bool = True,
+) -> tuple[str, str]:
     """Add stable edit ids and an invisible, same-render browser probe."""
     enriched = ensure_authored_qids(html)
     source_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
     render_digest = "sha256:" + hashlib.sha256(enriched.encode("utf-8")).hexdigest()
     key = _metric_evidence_cache_key_from_digests(source_digest, render_digest)
     if _METRICS_ELEMENT_ID in enriched:
+        if issue_capability:
+            _register_internal_render_source(enriched)
         return enriched, key
-    script = rf"""<script data-codex-dom-probe>
+    nonce_attribute = (
+        f' nonce="{html_lib.escape(script_nonce, quote=True)}"' if script_nonce else ""
+    )
+    script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
   const done = () => {{
     const px = (value) => {{ const parsed = parseFloat(value || '0'); return Number.isFinite(parsed) ? parsed : 0; }};
@@ -691,6 +754,8 @@ def _instrument_authored_html(html: str) -> tuple[str, str]:
         enriched = enriched[: closing.start()] + script + enriched[closing.start() :]
     else:
         enriched += script
+    if issue_capability:
+        _register_internal_render_source(enriched)
     return enriched, key
 
 
@@ -709,177 +774,14 @@ def _extract_browser_metrics(dumped_dom: bytes) -> Mapping[str, Any] | None:
     return value if isinstance(value, Mapping) else None
 
 
-def _append_probe_style(html: str, css: str) -> str:
-    style = f"<style data-codex-pixel-probe>{css}</style>"
-    closing = re.search(r"</head\s*>", html, flags=re.IGNORECASE)
-    if closing:
-        return html[: closing.start()] + style + html[closing.start() :]
-    return style + html
+from utils.slide_capture_pixel_probe import (
+    _append_probe_style,
+    _enrich_pixel_contrast,
+    _pixel_probe_document,
+    _pixel_ratio,
+    _relative_luminance,
+)
 
-
-def _pixel_probe_document(html: str) -> str:
-    """Build paired 1280x720 Chrome frames for background and glyph evidence.
-
-    The first frame preserves every painted layer but removes text ink.  The
-    second preserves layout/transforms/filters/masks while rendering text as a
-    white coverage mask on black.  Keeping both frames in one Chrome screenshot
-    avoids cross-process font and animation skew.
-    """
-    enriched = ensure_authored_qids(html)
-    background = _append_probe_style(
-        enriched,
-        """
-        [data-qid], [data-qid] *, [data-qid]::before, [data-qid]::after {
-          color: transparent !important;
-          -webkit-text-fill-color: transparent !important;
-          text-shadow: none !important;
-        }
-        """,
-    )
-    mask = _append_probe_style(
-        enriched,
-        """
-        html, body { background: #000 !important; }
-        *:not(html):not(body) {
-          background-color: transparent !important;
-          background-image: none !important;
-          border-color: transparent !important;
-          box-shadow: none !important;
-          outline-color: transparent !important;
-          color: transparent !important;
-          -webkit-text-fill-color: transparent !important;
-          text-shadow: none !important;
-        }
-        img, video, canvas { visibility: hidden !important; }
-        svg * { fill: transparent !important; stroke: transparent !important; }
-        [data-qid], [data-qid] * {
-          color: #fff !important;
-          -webkit-text-fill-color: #fff !important;
-        }
-        [data-qid] text { fill: #fff !important; }
-        """,
-    )
-    first = html_lib.escape(background, quote=True)
-    second = html_lib.escape(mask, quote=True)
-    return f"""<!doctype html><html><head><meta charset=\"utf-8\"><style>
-      html,body{{margin:0;width:{SLIDE_W}px;height:{SLIDE_H * 2}px;overflow:hidden;background:#000}}
-      iframe{{display:block;border:0;width:{SLIDE_W}px;height:{SLIDE_H}px}}
-    </style></head><body><iframe srcdoc=\"{first}\"></iframe><iframe srcdoc=\"{second}\"></iframe></body></html>"""
-
-
-def _relative_luminance(pixel: tuple[int, int, int]) -> float:
-    channels = []
-    for component in pixel:
-        value = component / 255.0
-        channels.append(
-            value / 12.92
-            if value <= 0.04045
-            else ((value + 0.055) / 1.055) ** 2.4
-        )
-    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-
-
-def _pixel_ratio(first: tuple[int, int, int], second: tuple[int, int, int]) -> float:
-    one, two = _relative_luminance(first), _relative_luminance(second)
-    return (max(one, two) + 0.05) / (min(one, two) + 0.05)
-
-
-def _enrich_pixel_contrast(
-    metrics: Mapping[str, Any], rendered: "Any", probe: "Any"
-) -> Mapping[str, Any]:
-    """Attach conservative per-glyph contrast from paired Chrome pixels.
-
-    Only high-coverage mask pixels are used, avoiding anti-aliased edge pixels
-    that would make every glyph appear to have a 1:1 contrast edge.  The 5th
-    percentile across glyph cores intentionally represents the worst sustained
-    background region, so a title spanning a light and dark gradient cannot pass
-    based on its best-looking letters.
-    """
-    result = json.loads(json.dumps(metrics))
-    background = probe.crop((0, 0, SLIDE_W, SLIDE_H)).convert("RGB")
-    glyph_mask = probe.crop((0, SLIDE_H, SLIDE_W, SLIDE_H * 2)).convert("L")
-    foreground = rendered.convert("RGB")
-    elements = result.get("elements")
-    if not isinstance(elements, list):
-        return result
-    for item in elements:
-        if not isinstance(item, dict):
-            continue
-        measurement = item.get("measurement")
-        if not isinstance(measurement, dict):
-            measurement = {}
-            item["measurement"] = measurement
-        effects = item.get("visual_effects")
-        has_complex_effect = isinstance(effects, Mapping) and any(
-            value and str(value) not in {"none", "normal"}
-            for value in effects.values()
-        )
-        if has_complex_effect:
-            measurement["visual_effects"] = True
-        if not item.get("requires_pixel_contrast"):
-            continue
-        fragments = item.get("text_fragments")
-        if not isinstance(fragments, list):
-            item["contrast_ratio"] = None
-            measurement["contrast"] = False
-            item["contrast_measurement_error"] = "text-fragments-unavailable"
-            continue
-        samples: list[tuple[int, float]] = []
-        for fragment in fragments:
-            if not isinstance(fragment, Mapping):
-                continue
-            try:
-                left = max(0, math.floor(float(fragment.get("x", 0))))
-                top = max(0, math.floor(float(fragment.get("y", 0))))
-                right = min(
-                    SLIDE_W,
-                    math.ceil(
-                        float(fragment.get("x", 0))
-                        + float(fragment.get("width", 0))
-                    ),
-                )
-                bottom = min(
-                    SLIDE_H,
-                    math.ceil(
-                        float(fragment.get("y", 0))
-                        + float(fragment.get("height", 0))
-                    ),
-                )
-            except (TypeError, ValueError):
-                continue
-            for y in range(top, bottom):
-                for x in range(left, right):
-                    coverage = glyph_mask.getpixel((x, y))
-                    if coverage >= 16:
-                        samples.append(
-                            (
-                                coverage,
-                                _pixel_ratio(
-                                    foreground.getpixel((x, y)),
-                                    background.getpixel((x, y)),
-                                ),
-                            )
-                        )
-        if len(samples) < 4:
-            item["contrast_ratio"] = None
-            measurement["contrast"] = False
-            item["contrast_measurement_error"] = "glyph-mask-insufficient"
-            continue
-        strongest = max(value for value, _ in samples)
-        threshold = max(64, int(strongest * 0.72))
-        core = sorted(ratio for value, ratio in samples if value >= threshold)
-        if len(core) < 4:
-            item["contrast_ratio"] = None
-            measurement["contrast"] = False
-            item["contrast_measurement_error"] = "glyph-core-insufficient"
-            continue
-        percentile_index = min(len(core) - 1, max(0, int(len(core) * 0.05)))
-        item["contrast_ratio"] = round(core[percentile_index], 6)
-        item["contrast_sample_count"] = len(core)
-        item["contrast_measurement_method"] = "chrome-paired-pixel-glyph-v1"
-        item.pop("contrast_measurement_error", None)
-        measurement["contrast"] = True
-    return result
 
 
 def _peek_cached_browser_metrics(html: str) -> Mapping[str, Any] | None:
@@ -977,81 +879,8 @@ async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
     return os.path.isfile(out) and os.path.getsize(out) > 0
 
 
-def _playwright_headless_shell_candidates() -> List[pathlib.Path]:
-    """Return installed Playwright headless-shell executables, newest first.
+from utils.slide_capture_chrome_discovery import _playwright_headless_shell_candidates, find_chrome
 
-    Desktop Chrome can hand a headless request to an already-running browser and
-    exit successfully without writing a screenshot. Playwright's standalone
-    headless shell does not share the user's browser profile/process, so it is the
-    most reliable automatic choice for server-side slide rendering.
-    """
-    roots: List[pathlib.Path] = []
-    configured_root = os.getenv("PLAYWRIGHT_BROWSERS_PATH")
-    if configured_root and configured_root != "0":
-        roots.append(pathlib.Path(configured_root).expanduser())
-
-    local_app_data = os.getenv("LOCALAPPDATA")
-    if local_app_data:
-        roots.append(pathlib.Path(local_app_data) / "ms-playwright")
-    roots.extend(
-        [
-            pathlib.Path.home() / ".cache" / "ms-playwright",
-            pathlib.Path.home() / "Library" / "Caches" / "ms-playwright",
-        ]
-    )
-
-    found: List[pathlib.Path] = []
-    seen = set()
-    for root in roots:
-        try:
-            resolved_root = root.resolve()
-        except OSError:
-            resolved_root = root
-        if resolved_root in seen or not root.is_dir():
-            continue
-        seen.add(resolved_root)
-        for candidate in root.glob(
-            "chromium_headless_shell-*/*/chrome-headless-shell*"
-        ):
-            if candidate.name not in {
-                "chrome-headless-shell",
-                "chrome-headless-shell.exe",
-            }:
-                continue
-            if candidate.is_file():
-                found.append(candidate)
-
-    def revision(candidate: pathlib.Path) -> int:
-        for part in candidate.parts:
-            prefix = "chromium_headless_shell-"
-            if part.startswith(prefix):
-                try:
-                    return int(part[len(prefix) :])
-                except ValueError:
-                    return -1
-        return -1
-
-    return sorted(found, key=revision, reverse=True)
-
-
-def find_chrome() -> Optional[str]:
-    for env in ("CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH", "CHROMIUM_PATH"):
-        p = os.getenv(env)
-        if p and os.path.isfile(p):
-            return p
-    headless_shells = _playwright_headless_shell_candidates()
-    if headless_shells:
-        return str(headless_shells[0])
-    for cand in (
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        "/usr/bin/chromium",
-        "/usr/bin/chromium-browser",
-        "/usr/bin/google-chrome",
-    ):
-        if os.path.isfile(cand):
-            return cand
-    return None
 
 
 _runtime_counter_lock = threading.Lock()
@@ -1153,6 +982,10 @@ _reusable_chrome: _ReusableChromeRuntime | None = None
 
 
 def _launch_reusable_chrome() -> _ReusableChromeRuntime:
+    if renderer_requires_external_worker():
+        raise RendererPolicyError(
+            "production renderer cannot launch in-process reusable Chrome"
+        )
     chrome = find_chrome()
     if not chrome:
         raise RuntimeError(
@@ -1164,9 +997,14 @@ def _launch_reusable_chrome() -> _ReusableChromeRuntime:
         chrome,
         "--headless=new",
         "--disable-gpu",
-        "--no-sandbox",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-domain-reliability",
+        "--disable-sync",
+        "--metrics-recording-only",
+        "--no-pings",
         "--remote-debugging-port=0",
-        "--remote-allow-origins=*",
+        "--remote-debugging-address=127.0.0.1",
         f"--user-data-dir={profile_path}",
         "--no-first-run",
         "--no-default-browser-check",
@@ -1243,58 +1081,19 @@ async def capture_slides(
     n_slides: int,
     base_url: str = "http://127.0.0.1:5000",
     timeout: int = 90,
-) -> List[bytes]:
-    """Capture the deck via headless chrome and slice it into per-slide PNG bytes.
-    Raises RuntimeError if no chrome is found or the screenshot fails."""
-    from PIL import Image
+) -> List[bytes]:  # noqa: ASYNC109
+    from utils.slide_capture_batch import capture_slides_impl
 
-    chrome = find_chrome()
-    if not chrome:
-        raise RuntimeError(
-            "No chrome/chromium found for slide capture (set CHROME_PATH)."
-        )
-    n = max(1, int(n_slides))
-    height = n * SLIDE_H
-    url = f"{base_url}/pdf-maker?id={presentation_id}"
-    # ignore_cleanup_errors: the detached headless-chrome child can outlive the
-    # screenshot and keep the --user-data-dir profile locked; on Windows that turns
-    # temp-dir teardown into a PermissionError. The PNG is already captured by then,
-    # so leave the locked profile files for the OS to reap instead of crashing.
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
-        out = os.path.join(td, "deck.png")
-        args = [
-            chrome,
-            "--headless=new",
-            "--disable-gpu",
-            "--no-sandbox",
-            # Isolated profile so the invocation always spawns its OWN headless
-            # instance. Without it, on a desktop where the user already has Chrome
-            # open, chrome.exe hands the request to the running instance and returns
-            # immediately (exit 0, NO screenshot) → every slide degrades to a blank
-            # placeholder. --no-first-run/--no-default-browser-check keep the fresh
-            # profile from doing first-run setup that stalls under concurrency.
-            f"--user-data-dir={os.path.join(td, 'profile')}",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--hide-scrollbars",
-            "--force-device-scale-factor=1",
-            f"--window-size={SLIDE_W},{height}",
-            f"--screenshot={out}",
-            "--virtual-time-budget=20000",
-            url,
-        ]
-        await asyncio.to_thread(_run_chrome_screenshot, args, timeout)
-        if not await _wait_for_output(out):
-            raise RuntimeError("chrome screenshot produced no output file")
-        img = Image.open(out).convert("RGB")
-        slides: List[bytes] = []
-        for i in range(n):
-            top = i * SLIDE_H
-            crop = img.crop((0, top, SLIDE_W, top + SLIDE_H))
-            buf = io.BytesIO()
-            crop.save(buf, format="PNG")
-            slides.append(buf.getvalue())
-        return slides
+    return await capture_slides_impl(
+        presentation_id,
+        n_slides,
+        base_url=base_url,
+        timeout=timeout,
+        env_enabled=env_enabled,
+        find_chrome=find_chrome,
+        run_chrome_screenshot=_run_chrome_screenshot,
+        wait_for_output=_wait_for_output,
+    )
 
 
 async def _cdp_command(
@@ -1319,186 +1118,59 @@ async def _cdp_command(
         return result if isinstance(result, Mapping) else {}
 
 
-def _runtime_value(result: Mapping[str, Any]) -> Any:
-    remote = result.get("result", {})
-    return remote.get("value") if isinstance(remote, Mapping) else None
+from utils.slide_capture_pipe import (
+    _ChromePipe,
+    _runtime_value,
+    _SpawnedProcess,
+    _spawn_chrome_pipe_posix,
+)
+
+
+
+def _render_admitted_html_over_pipe(
+    admitted: AdmittedHtml, timeout: int
+) -> tuple[bytes, Mapping[str, Any] | None]:
+    from utils.slide_capture_pipe_render import render_admitted_html_over_pipe
+
+    return render_admitted_html_over_pipe(
+        admitted, timeout,
+        blocked_urls=_BLOCKED_RENDERER_URL_PATTERNS,
+        chrome_pipe=_ChromePipe,
+        find_chrome=find_chrome,
+        instrument_html=_instrument_authored_html,
+        runtime_value=_runtime_value,
+    )
 
 
 async def _render_html_in_reusable_chrome(
-    html: str, timeout: int
+    html: str, timeout: int, *, script_nonce: str | None = None,
+    cache_html: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
-    """Render through a disposable CDP page in the shared isolated process."""
+    from utils.slide_capture_reusable_render import render_html_in_reusable_chrome
 
-    from PIL import Image
-
-    runtime = await asyncio.to_thread(_get_reusable_chrome_sync)
-    timeout_config = aiohttp.ClientTimeout(total=max(5, timeout))
-    target_id = ""
-    page_closed = False
-    try:
-        async with aiohttp.ClientSession(timeout=timeout_config) as session:
-            create_url = f"{runtime.base_url}/json/new?{urllib.parse.quote('about:blank', safe='')}"
-            async with session.put(create_url) as response:
-                if response.status != 200:
-                    raise RuntimeError(
-                        f"Chrome DevTools target creation failed: HTTP {response.status}"
-                    )
-                target = await response.json()
-            target_id = str(target.get("id") or "")
-            websocket_url = str(target.get("webSocketDebuggerUrl") or "")
-            if not target_id or not websocket_url:
-                raise RuntimeError("Chrome DevTools target metadata is incomplete")
-            _count_runtime("page_sessions_opened")
-            async with session.ws_connect(websocket_url, max_msg_size=16 * 1024 * 1024) as ws:
-                command_id = 0
-
-                async def command(
-                    method: str, params: Mapping[str, Any] | None = None
-                ) -> Mapping[str, Any]:
-                    nonlocal command_id
-                    command_id += 1
-                    return await _cdp_command(ws, command_id, method, params)
-
-                await command("Page.enable")
-                await command("Runtime.enable")
-                await command(
-                    "Emulation.setDeviceMetricsOverride",
-                    {
-                        "width": SLIDE_W,
-                        "height": SLIDE_H,
-                        "deviceScaleFactor": 1,
-                        "mobile": False,
-                    },
-                )
-                frame_tree = await command("Page.getFrameTree")
-                frame = frame_tree.get("frameTree", {})
-                frame = frame.get("frame", {}) if isinstance(frame, Mapping) else {}
-                frame_id = str(frame.get("id") or "")
-                if not frame_id:
-                    raise RuntimeError("Chrome DevTools frame id is missing")
-                instrumented, _ = _instrument_authored_html(html)
-                await command(
-                    "Page.setDocumentContent", {"frameId": frame_id, "html": instrumented}
-                )
-                metrics_result = await command(
-                    "Runtime.evaluate",
-                    {
-                        "expression": f"""(async () => {{
-                          if (document.fonts && document.fonts.ready) await document.fonts.ready;
-                          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-                          const marker = document.getElementById('{_METRICS_ELEMENT_ID}');
-                          return marker ? marker.getAttribute('content') : null;
-                        }})()""",
-                        "awaitPromise": True,
-                        "returnByValue": True,
-                    },
-                )
-                encoded_metrics = _runtime_value(metrics_result)
-                metrics: Mapping[str, Any] | None = None
-                if isinstance(encoded_metrics, str) and encoded_metrics:
-                    try:
-                        decoded = urllib.parse.unquote(html_lib.unescape(encoded_metrics))
-                        parsed = json.loads(decoded)
-                        metrics = parsed if isinstance(parsed, Mapping) else None
-                    except (TypeError, ValueError):
-                        metrics = None
-                screenshot = await command(
-                    "Page.captureScreenshot",
-                    {
-                        "format": "png",
-                        "fromSurface": True,
-                        "captureBeyondViewport": False,
-                    },
-                )
-                image_bytes = base64.b64decode(str(screenshot.get("data") or ""))
-                if not image_bytes:
-                    raise RuntimeError("Chrome DevTools screenshot is empty")
-                image = Image.open(io.BytesIO(image_bytes)).convert("RGB").crop(
-                    (0, 0, SLIDE_W, SLIDE_H)
-                )
-
-                if metrics is not None and any(
-                    isinstance(item, Mapping)
-                    and bool(item.get("requires_pixel_contrast"))
-                    for item in metrics.get("elements", ())
-                ):
-                    await command(
-                        "Emulation.setDeviceMetricsOverride",
-                        {
-                            "width": SLIDE_W,
-                            "height": SLIDE_H * 2,
-                            "deviceScaleFactor": 1,
-                            "mobile": False,
-                        },
-                    )
-                    await command(
-                        "Page.setDocumentContent",
-                        {
-                            "frameId": frame_id,
-                            "html": _pixel_probe_document(html),
-                        },
-                    )
-                    await command(
-                        "Runtime.evaluate",
-                        {
-                            "expression": """(async () => {
-                              const frames = Array.from(document.querySelectorAll('iframe'));
-                              await Promise.all(frames.map(frame => new Promise(resolve => {
-                                if (frame.contentDocument?.readyState === 'complete') resolve();
-                                else frame.addEventListener('load', resolve, {once:true});
-                              })));
-                              await Promise.all(frames.map(frame => frame.contentDocument?.fonts?.ready || Promise.resolve()));
-                              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-                              return frames.length;
-                            })()""",
-                            "awaitPromise": True,
-                            "returnByValue": True,
-                        },
-                    )
-                    probe_shot = await command(
-                        "Page.captureScreenshot",
-                        {
-                            "format": "png",
-                            "fromSurface": True,
-                            "captureBeyondViewport": False,
-                        },
-                    )
-                    probe_bytes = base64.b64decode(
-                        str(probe_shot.get("data") or "")
-                    )
-                    probe_image = Image.open(io.BytesIO(probe_bytes)).convert("RGB")
-                    if probe_image.size[0] < SLIDE_W or probe_image.size[1] < SLIDE_H * 2:
-                        raise RuntimeError(
-                            f"Chrome pixel probe has unexpected size {probe_image.size}"
-                        )
-                    metrics = _enrich_pixel_contrast(metrics, image, probe_image)
-                if metrics is not None:
-                    _cache_browser_metrics(html, metrics)
-                output = io.BytesIO()
-                image.save(output, format="PNG")
-
-            close_url = f"{runtime.base_url}/json/close/{target_id}"
-            for _attempt in range(2):
-                try:
-                    async with session.get(close_url) as response:
-                        if response.status == 200:
-                            page_closed = True
-                            break
-                except aiohttp.ClientError:
-                    await asyncio.sleep(0)
-            if not page_closed:
-                raise RuntimeError("Chrome DevTools page cleanup failed")
-            _count_runtime("page_sessions_closed")
-            return output.getvalue(), metrics
-    except Exception:
-        # A protocol failure can leave state behind.  Retire the shared process;
-        # the caller falls back to the proven one-shot renderer and the next
-        # request starts a fresh isolated runtime.
-        await asyncio.to_thread(_discard_reusable_chrome_sync, runtime)
-        raise
+    return await render_html_in_reusable_chrome(
+        html, timeout, script_nonce=script_nonce, cache_html=cache_html,
+        blocked_urls=_BLOCKED_RENDERER_URL_PATTERNS,
+        cache_metrics=_cache_browser_metrics,
+        cdp_command=_cdp_command,
+        count_runtime=_count_runtime,
+        discard_runtime=_discard_reusable_chrome_sync,
+        enrich_contrast=_enrich_pixel_contrast,
+        get_runtime=_get_reusable_chrome_sync,
+        instrument_html=_instrument_authored_html,
+        metrics_element_id=_METRICS_ELEMENT_ID,
+        pixel_probe_document=_pixel_probe_document,
+        runtime_value=_runtime_value,
+    )
 
 
-async def _render_html_to_png_subprocess(html: str, timeout: int = 60) -> bytes:
+async def _render_html_to_png_subprocess(
+    html: str,
+    timeout: int = 60,
+    *,
+    admitted_source: bool = False,
+    cache_html: str | None = None,
+) -> bytes:
     """Render a self-contained HTML document to an exact 1280x720 PNG via headless
     chrome. Used by the authored-mode pipeline (the HTML is authored in-memory, not
     served from /pdf-maker). Raises RuntimeError if no chrome is found or the
@@ -1509,6 +1181,8 @@ async def _render_html_to_png_subprocess(html: str, timeout: int = 60) -> bytes:
     headless-chrome subprocesses (the M×N hang cascade guard)."""
     from PIL import Image
 
+    if not admitted_source and not env_enabled("AUTHORED_RENDERER_LEGACY_ENABLED"):
+        raise RendererPolicyError("legacy file renderer is disabled")
     chrome = find_chrome()
     if not chrome:
         raise RuntimeError(
@@ -1521,14 +1195,21 @@ async def _render_html_to_png_subprocess(html: str, timeout: int = 60) -> bytes:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             html_path = os.path.join(td, "slide.html")
             out = os.path.join(td, "slide.png")
-            instrumented_html, _ = _instrument_authored_html(html)
+            instrumented_html, _ = _instrument_authored_html(
+                html, issue_capability=False
+            )
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(instrumented_html)
             args = [
-                chrome,
-                "--headless=new",
-                "--disable-gpu",
-                "--no-sandbox",
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--disable-background-networking",
+            "--disable-component-update",
+            "--disable-domain-reliability",
+            "--disable-sync",
+            "--metrics-recording-only",
+            "--no-pings",
                 # Isolated profile — see capture_slides: without it chrome.exe hands
                 # off to a user's already-running Chrome and writes no screenshot,
                 # silently blanking every authored slide.
@@ -1564,7 +1245,12 @@ async def _render_html_to_png_subprocess(html: str, timeout: int = 60) -> bytes:
                         chrome,
                         "--headless=new",
                         "--disable-gpu",
-                        "--no-sandbox",
+                        "--disable-background-networking",
+                        "--disable-component-update",
+                        "--disable-domain-reliability",
+                        "--disable-sync",
+                        "--metrics-recording-only",
+                        "--no-pings",
                         f"--user-data-dir={os.path.join(td, 'pixel-profile')}",
                         "--no-first-run",
                         "--no-default-browser-check",
@@ -1595,28 +1281,77 @@ async def _render_html_to_png_subprocess(html: str, timeout: int = 60) -> bytes:
                         # the measurement flag false so hard readability checks are
                         # unknown/fail-closed rather than accepting guessed pixels.
                         LOGGER.warning("authored pixel contrast probe failed: %s", error)
-                _cache_browser_metrics(html, metrics)
+                _cache_browser_metrics(cache_html or html, metrics)
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             return buf.getvalue()
 
 
-async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
-    """Prefer a reusable isolated Chrome process, preserving one-shot fallback."""
+from utils.slide_capture_worker_client import (
+    RendererIsolationError,
+    _decode_worker_response,
+    _render_html_in_isolated_worker,
+)
 
-    if CHROME_REUSE_ENABLED:
+
+
+async def _render_admitted_html_in_worker(
+    admitted: AdmittedHtml, *, timeout: int
+) -> tuple[bytes, Mapping[str, Any] | None]:
+    """Low-level worker-only CDP entry; never starts another worker or file render."""
+
+    if os.getenv("AUTHORED_RENDERER_WORKER") != "1":
+        raise RendererIsolationError("worker-only renderer called outside isolation boundary")
+    # This worker owns no author/network work and handles one request.  Keeping
+    # POSIX FD inheritance on its main thread avoids threaded spawn hazards.
+    return _render_admitted_html_over_pipe(admitted, timeout)
+
+
+async def _render_html_to_png_uncached(html: str, timeout: int = 60) -> bytes:
+    """Render through isolation by default; legacy file input requires two opt-ins."""
+
+    ensure_renderer_enabled()
+    mode = renderer_mode()
+    admitted = _admit_render_source(html)
+    if mode == "legacy":
+        # Kept only for legacy read/export migrations.  New authored requests use
+        # isolated mode and never auto-downgrade here after a worker failure.
+        return await _render_html_to_png_subprocess(html, timeout=timeout)
+
+    # A production renderer never enters the in-process Chrome branch. It must
+    # cross the external non-root/read-only/network-none worker boundary, and a
+    # worker failure is returned without a local downgrade.
+    if renderer_requires_external_worker() or env_enabled(
+        "AUTHORED_RENDERER_LEGACY_ENABLED"
+    ):
         async with _get_render_sem():
-            try:
-                rendered, _metrics = await _render_html_in_reusable_chrome(
-                    html, timeout
+            rendered, _metrics = await _render_html_in_isolated_worker(html, timeout)
+        return rendered
+
+    # Development uses one isolated Chrome process with disposable page sessions.
+    # Each attempted browser boundary independently acquires the process-wide
+    # limiter, so a failed reusable session cannot overlap its one-shot fallback.
+    if CHROME_REUSE_ENABLED:
+        try:
+            async with _get_render_sem():
+                rendered, metrics = await _render_html_in_reusable_chrome(
+                    admitted.html,
+                    timeout,
+                    script_nonce=admitted.nonce,
+                    cache_html=html,
                 )
-                return rendered
-            except Exception as error:
-                LOGGER.warning(
-                    "reusable Chrome session failed; using one-shot renderer: %s",
-                    error,
-                )
-    return await _render_html_to_png_subprocess(html, timeout=timeout)
+            if metrics is not None:
+                _cache_browser_metrics(html, metrics)
+            return rendered
+        except Exception as error:
+            LOGGER.warning("reusable authored Chrome failed; using one-shot: %s", error)
+
+    return await _render_html_to_png_subprocess(
+        admitted.html,
+        timeout=timeout,
+        admitted_source=True,
+        cache_html=html,
+    )
 
 
 async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
@@ -1626,6 +1361,7 @@ async def render_html_to_png(html: str, timeout: int = 60) -> bytes:
     A small memory-bounded LRU avoids relaunching Chrome, while the in-flight table
     prevents concurrent duplicate requests from doing the same work twice.
     """
+    ensure_renderer_enabled()
     _count_runtime("requests")
     if RENDER_CACHE_SIZE <= 0:
         return await _render_html_to_png_uncached(html, timeout=timeout)
@@ -1720,6 +1456,8 @@ def reset_render_runtime(
     if clear_caches:
         _render_cache.clear()
         _browser_metrics_cache.clear()
+        with _internal_capability_lock:
+            _internal_capabilities.clear()
 
 
 def _get_render_sem() -> asyncio.Semaphore:
@@ -1749,6 +1487,11 @@ async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[
     async def render_one(index: int, html: str) -> tuple[bytes, bool]:
         try:
             return await render_html_to_png(html, timeout=timeout), False
+        except (RendererDisabledError, RendererPolicyError, RendererIsolationError):
+            # Security/isolation failures are deck-level failures.  Publishing a
+            # fresh neutral placeholder would replace the last-known-good artifact
+            # and make a failed isolation attempt look successful.
+            raise
         except Exception as exc:
             LOGGER.warning(
                 "Authored slide render failed at index %d: %s", index, exc
@@ -1764,3 +1507,4 @@ async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[
             "headless shell or set CHROME_PATH to a working headless browser."
         )
     return [png for png, _ in results]
+# ruff: noqa: E402, F401

@@ -1,0 +1,1272 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "zero-egress-1786640619311-electron-1786634633426"
+      },
+      "properties": {
+        "failClosed": true,
+        "gateStatus": "FAIL",
+        "promotionAllowed": false
+      },
+      "results": [
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "execution.completed"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "execution.timed_out"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "execution.monitor_healthy"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: 4 forbidden event(s) reported"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "execution.observer_errors"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "containment.browser_sandbox"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "containment.file_url_disabled"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "containment.csp_enforced"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "containment.timeout_cleanup"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "containment.crash_cleanup"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "INCONCLUSIVE: boundary was not observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "INCONCLUSIVE",
+            "promotionAllowed": false
+          },
+          "ruleId": "boundary.secret_log"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "resilience.crash_cleanup"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "security-observation.json"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "FAIL: unsafe state observed"
+          },
+          "properties": {
+            "evidenceCount": 0,
+            "gateStatus": "FAIL",
+            "promotionAllowed": false
+          },
+          "ruleId": "resilience.timeout_cleanup"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/presenton/presenton",
+          "name": "authored-renderer-security-gate",
+          "rules": [
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.completed",
+              "name": "execution_completed",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The isolated corpus run completed"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.timed_out",
+              "name": "execution_timed_out",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The isolated corpus run did not time out"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.crashed",
+              "name": "execution_crashed",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The isolated corpus run did not crash"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.monitor_healthy",
+              "name": "execution_monitor_healthy",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "All boundary monitors stayed healthy"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.isolation_intact",
+              "name": "execution_isolation_intact",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The isolation boundary stayed intact"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.unsafe_launch_options",
+              "name": "execution_unsafe_launch_options",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "No unsafe browser or Electron launch options"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.host_stability_risk_cases_executed",
+              "name": "execution_host_stability_risk_cases_executed",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "No host-stability-risk cases ran on the host"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.observer_errors",
+              "name": "execution_observer_errors",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "No observer errors occurred"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "execution.reported_kill_switch_events",
+              "name": "execution_reported_kill_switch_events",
+              "properties": {
+                "category": "execution",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The harness reported no prior kill-switch event"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.non_root",
+              "name": "containment_non_root",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Renderer ran without root/administrator privilege"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.read_only_root",
+              "name": "containment_read_only_root",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Renderer root filesystem was read-only"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.tmpfs_writable_only",
+              "name": "containment_tmpfs_writable_only",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Writable scratch space was isolated tmpfs"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.resource_limits",
+              "name": "containment_resource_limits",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "CPU, memory, PID, and wall-clock limits were active"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.browser_sandbox",
+              "name": "containment_browser_sandbox",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Browser sandbox was enabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.file_url_disabled",
+              "name": "containment_file_url_disabled",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "file: navigation and file access were disabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.preload_disabled",
+              "name": "containment_preload_disabled",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron preload capability was absent"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.ipc_disabled",
+              "name": "containment_ipc_disabled",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Privileged Electron IPC was absent"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.os_egress_deny",
+              "name": "containment_os_egress_deny",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "OS-level egress deny was active"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.csp_enforced",
+              "name": "containment_csp_enforced",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Restrictive CSP was enforced"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.dom_allowlist",
+              "name": "containment_dom_allowlist",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "AST/DOM allowlist validation was enforced"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.timeout_cleanup",
+              "name": "containment_timeout_cleanup",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "A timed-out renderer was killed and reaped"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "containment.crash_cleanup",
+              "name": "containment_crash_cleanup",
+              "properties": {
+                "category": "containment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "A crashed renderer was reaped without a surviving process"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.host_read",
+              "name": "boundary_host_read",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Successful host filesystem reads"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.external_egress",
+              "name": "boundary_external_egress",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Successful external network egress"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.loopback_egress",
+              "name": "boundary_loopback_egress",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Successful loopback network egress"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.metadata_egress",
+              "name": "boundary_metadata_egress",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Successful metadata-address egress"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.child_process",
+              "name": "boundary_child_process",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Successful child-process starts"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.ipc",
+              "name": "boundary_ipc",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Successful privileged IPC calls"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.secret_log",
+              "name": "boundary_secret_log",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Secrets detected in renderer or gate logs"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "boundary.resource_escape",
+              "name": "boundary_resource_escape",
+              "properties": {
+                "category": "boundary",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Resource-limit or containment escapes"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.renderer_pid_observed",
+              "name": "electron_renderer_pid_observed",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron reported a real renderer OS PID"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.renderer_process_metric_observed",
+              "name": "electron_renderer_process_metric_observed",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron process metrics matched the renderer PID"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.packaged_runtime_observed",
+              "name": "electron_packaged_runtime_observed",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The observation came from a packaged Electron executable"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.os_sandboxed",
+              "name": "electron_os_sandboxed",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron reported the renderer as OS-sandboxed"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.actual_web_preferences_observed",
+              "name": "electron_actual_web_preferences_observed",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron reported the applied renderer webPreferences"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.sandbox_preference",
+              "name": "electron_sandbox_preference",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron's configured sandbox preference was enabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.web_security",
+              "name": "electron_web_security",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron's configured webSecurity preference was enabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.context_isolation",
+              "name": "electron_context_isolation",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron's configured contextIsolation preference was enabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.node_integration_disabled",
+              "name": "electron_node_integration_disabled",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron's configured Node integration preference was disabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.subframe_node_integration_disabled",
+              "name": "electron_subframe_node_integration_disabled",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron subframe Node integration was disabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.worker_node_integration_disabled",
+              "name": "electron_worker_node_integration_disabled",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Electron worker Node integration was disabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.preload_absent",
+              "name": "electron_preload_absent",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The disposable authored renderer had no preload"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.configured_preferences_match_actual",
+              "name": "electron_configured_preferences_match_actual",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Configured and applied security preferences matched"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.ipc_negative_probe_blocked",
+              "name": "electron_ipc_negative_probe_blocked",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Active privileged IPC attempts from the renderer were blocked"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.privileged_bridge_absent",
+              "name": "electron_privileged_bridge_absent",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The renderer exposed no require/process/Electron bridge"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "electron.ephemeral_session",
+              "name": "electron_ephemeral_session",
+              "properties": {
+                "category": "electron",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The renderer used an ephemeral in-memory session"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.product_worker_smoke",
+              "name": "deployment_product_worker_smoke",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The exact isolated product worker rendered a safe PNG"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.image_id_observed",
+              "name": "deployment_image_id_observed",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The executed immutable image ID was observed"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.source_revision_observed",
+              "name": "deployment_source_revision_observed",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The image source revision matched the requested revision"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.source_tree_digest_observed",
+              "name": "deployment_source_tree_digest_observed",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The image source bundle digest matched the request"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.contract_digest_observed",
+              "name": "deployment_contract_digest_observed",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The launcher/compose contract digest matched the image"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.no_host_mounts",
+              "name": "deployment_no_host_mounts",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The container had zero bind or host-volume mounts"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.tmpfs_exact",
+              "name": "deployment_tmpfs_exact",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Only the approved tmpfs scratch mounts were configured"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.no_devices",
+              "name": "deployment_no_devices",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The container received no host devices"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.no_provider_secrets",
+              "name": "deployment_no_provider_secrets",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The container received no provider secret variables"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.no_preload",
+              "name": "deployment_no_preload",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The container received no preload injection"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.no_privileged_ipc",
+              "name": "deployment_no_privileged_ipc",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The container used private non-privileged IPC"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.init_process",
+              "name": "deployment_init_process",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The container used an init process for descendant reaping"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.non_root",
+              "name": "deployment_non_root",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The resolved container user was non-root 65532:65532"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.read_only_root",
+              "name": "deployment_read_only_root",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The resolved container root filesystem was read-only"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.network_none",
+              "name": "deployment_network_none",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The resolved container network mode was none"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.cap_drop_all",
+              "name": "deployment_cap_drop_all",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "All Linux capabilities were dropped"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.no_new_privileges",
+              "name": "deployment_no_new_privileges",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "No-new-privileges was enabled"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.chromium_seccomp_profile",
+              "name": "deployment_chromium_seccomp_profile",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The fail-closed Chromium namespace seccomp profile was active"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.resource_limits",
+              "name": "deployment_resource_limits",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "Resolved PID, CPU, RAM, swap, and nofile limits matched policy"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "deployment.no_published_ports",
+              "name": "deployment_no_published_ports",
+              "properties": {
+                "category": "deployment",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The container exposed no published port"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "resilience.crash_cleanup",
+              "name": "resilience_crash_cleanup",
+              "properties": {
+                "category": "resilience",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "A crashed renderer was cleaned up"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "resilience.timeout_cleanup",
+              "name": "resilience_timeout_cleanup",
+              "properties": {
+                "category": "resilience",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "A timed-out renderer was cleaned up"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "resilience.lkg_preserved",
+              "name": "resilience_lkg_preserved",
+              "properties": {
+                "category": "resilience",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The last-known-good artifact remained unchanged"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "resilience.candidate_unpublished",
+              "name": "resilience_candidate_unpublished",
+              "properties": {
+                "category": "resilience",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "A failed candidate was not published"
+              }
+            },
+            {
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "id": "resilience.kill_switch_rejects_new_work",
+              "name": "resilience_kill_switch_rejects_new_work",
+              "properties": {
+                "category": "resilience",
+                "failClosed": true
+              },
+              "shortDescription": {
+                "text": "The product kill switch rejected new work"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

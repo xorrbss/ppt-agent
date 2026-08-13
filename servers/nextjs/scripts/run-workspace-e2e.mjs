@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 import { spawn, spawnSync } from "node:child_process";
 import {
   closeSync,
@@ -24,7 +23,7 @@ import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { authoredLiveEnvironment, runAuthoredLiveE2e } from "./run-authored-live-e2e.mjs";
 const LOOPBACK = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 120_000;
 // The first request to the presentation route causes Next dev/Turbopack to
@@ -303,7 +302,7 @@ public static class WorkspaceJobSupervisor
 }
 `;
 const CYPRESS_TIMEOUT_MS = Number(
-  process.env.WORKSPACE_E2E_CYPRESS_TIMEOUT_MS ?? 240_000,
+  process.env.WORKSPACE_E2E_CYPRESS_TIMEOUT_MS ?? 600_000,
 );
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const appDirectory = path.resolve(scriptDirectory, "..");
@@ -3153,7 +3152,7 @@ async function main() {
     // Next dev rewrites these generated TypeScript entry points for a custom
     // distDir. Restore their exact pre-run bytes after the disposable app stops.
     const childEnvironment = {
-      ...process.env,
+      ...process.env, ...authoredLiveEnvironment(),
       NEXT_TELEMETRY_DISABLED: "1",
       NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: "true",
       DISABLE_AUTH: "true",
@@ -3163,7 +3162,6 @@ async function main() {
       NEXT_PUBLIC_FAST_API: "",
       PRESENTON_TEST_NEXT_DIST_DIR: relativeRunDirectory,
     };
-
     console.log(`[workspace-e2e] Starting an isolated Next app at ${baseUrl}.`);
     console.log(
       "[workspace-e2e] Canonical route suite uses Cypress HTTP fixtures; live suite starts FastAPI+SQLite separately.",
@@ -3246,7 +3244,7 @@ async function main() {
       ],
       {
         cwd: fastApiDirectory,
-        env: { ...childEnvironment, PYTHONUNBUFFERED: "1" },
+        env: { ...childEnvironment, NEXT_INTERNAL_URL: baseUrl, PYTHONUNBUFFERED: "1" },
         name: "fastapi-live-harness",
       },
     );
@@ -3286,6 +3284,8 @@ async function main() {
       error.exitCode = liveResult.code || 1;
       throw error;
     }
+
+    throwIfInterrupted(); await runAuthoredLiveE2e({ artifactArguments: cypressArtifactArguments, artifactDirectory, baseUrl, childEnvironment, cypressCli, liveBackendUrl, onProcess: (process) => { cypressProcess = process; }, runDirectory, spawnNode, waitForExit: waitForExitWithTimeout });
   } catch (error) {
     await writeFailureDiagnostics(error).catch((diagnosticError) => {
       console.error(

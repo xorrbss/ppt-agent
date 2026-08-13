@@ -1,0 +1,1020 @@
+{
+  "boundaries": {
+    "child_process": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:814d9ae41ba9e4bfb35ced4684b2991c4c07032ed9bda3a57d2c78d1d47733aa"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "external_egress": {
+      "attempts": 2,
+      "blocked": 2,
+      "evidence": [
+        "sha256:77a01ffdef45595689186626147026585abc4ae9ecbccccfa6ba350f2ffac638"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "host_read": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:e65e5418d1b9e8b2f8c70ab53bb9cf77998de76ec41296ee68154143e3c7babe"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "ipc": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:9cc712b7dd78f08419481c26555dee0af66539deabadf4cd432376d74afcf80e"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "loopback_egress": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:7b14ee16b094ffa9e2225868f68542846e984ab8bb2b0189b6afd1becebd14b9"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "metadata_egress": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:0f0399deb499451941bffe8556549e30b26e3da7b6e6a5c698f9df7c88064940"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "resource_escape": {
+      "attempts": 4,
+      "blocked": 4,
+      "evidence": [
+        "sha256:66b272545cfa44e12374ea801a8bf9d0caba9c15c9f67af1953cbe79b932edca"
+      ],
+      "observed": true,
+      "violations": 0
+    },
+    "secret_log": {
+      "attempts": 1,
+      "blocked": 1,
+      "evidence": [
+        "sha256:beda03e12f423b207e29a4f22a72d85c268ea0a7e7de14ae49d23542b189d425"
+      ],
+      "observed": true,
+      "violations": 0
+    }
+  },
+  "containment": {
+    "browser_sandbox": true,
+    "crash_cleanup": true,
+    "csp_enforced": true,
+    "dom_allowlist": true,
+    "file_url_disabled": true,
+    "ipc_disabled": true,
+    "non_root": true,
+    "os_egress_deny": true,
+    "preload_disabled": true,
+    "read_only_root": true,
+    "resource_limits": true,
+    "timeout_cleanup": true,
+    "tmpfs_writable_only": true
+  },
+  "deployment": {
+    "cap_drop_all": true,
+    "chromium_seccomp_profile": true,
+    "contract_digest_observed": true,
+    "image_id_observed": true,
+    "init_process": true,
+    "network_none": true,
+    "no_devices": true,
+    "no_host_mounts": true,
+    "no_new_privileges": true,
+    "no_preload": true,
+    "no_privileged_ipc": true,
+    "no_provider_secrets": true,
+    "no_published_ports": true,
+    "non_root": true,
+    "product_worker_smoke": true,
+    "read_only_root": true,
+    "resource_limits": true,
+    "source_revision_observed": true,
+    "source_tree_digest_observed": true,
+    "tmpfs_exact": true
+  },
+  "diagnostics": {
+    "observer_readiness": {
+      "browser_timeout_ms": 20000,
+      "close_monotonic_ms": 303195,
+      "pre_observer_ready": true,
+      "pressure_peaks": {
+        "chromium_process_count": 13,
+        "chromium_task_count": 109,
+        "cpu_stat": {
+          "burst_usec": 0,
+          "nice_usec": 0,
+          "nr_bursts": 0,
+          "nr_periods": 33,
+          "nr_throttled": 31,
+          "system_usec": 1228790,
+          "throttled_usec": 14119583,
+          "usage_usec": 3268059,
+          "user_usec": 2039269
+        },
+        "interval_ms": 100,
+        "memory_current": 177807360,
+        "memory_events": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0
+        },
+        "memory_peak": 180375552,
+        "pids_current": 115,
+        "pids_events": {
+          "max": 0
+        },
+        "pids_peak": 115,
+        "process_count": 15,
+        "samples": 15,
+        "task_count": 115
+      },
+      "pressure_samples": [
+        {
+          "chromium_process_count": 1,
+          "chromium_states": {
+            "S": 1
+          },
+          "chromium_task_count": 1,
+          "chromium_wait_channels": {
+            "0": 1
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 2,
+            "nr_throttled": 0,
+            "system_usec": 66156,
+            "throttled_usec": 0,
+            "usage_usec": 179010,
+            "user_usec": 112854
+          },
+          "memory_current": 16932864,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 17203200,
+          "monotonic_ms": 299989,
+          "pids_current": 8,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 8,
+          "process_count": 3,
+          "task_count": 7
+        },
+        {
+          "chromium_process_count": 5,
+          "chromium_states": {
+            "R": 2,
+            "S": 3
+          },
+          "chromium_task_count": 7,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 3,
+            "nr_throttled": 1,
+            "system_usec": 126151,
+            "throttled_usec": 15053,
+            "usage_usec": 295667,
+            "user_usec": 169516
+          },
+          "memory_current": 38682624,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 39481344,
+          "monotonic_ms": 300096,
+          "pids_current": 13,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 13,
+          "process_count": 7,
+          "task_count": 13
+        },
+        {
+          "chromium_process_count": 6,
+          "chromium_states": {
+            "R": 1,
+            "S": 5
+          },
+          "chromium_task_count": 29,
+          "chromium_wait_channels": {
+            "0": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 4,
+            "nr_throttled": 2,
+            "system_usec": 187087,
+            "throttled_usec": 109326,
+            "usage_usec": 411593,
+            "user_usec": 224505
+          },
+          "memory_current": 69849088,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 69849088,
+          "monotonic_ms": 300258,
+          "pids_current": 33,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 33,
+          "process_count": 8,
+          "task_count": 35
+        },
+        {
+          "chromium_process_count": 9,
+          "chromium_states": {
+            "R": 2,
+            "S": 7
+          },
+          "chromium_task_count": 39,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 1,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 5,
+            "nr_throttled": 3,
+            "system_usec": 234480,
+            "throttled_usec": 278729,
+            "usage_usec": 525560,
+            "user_usec": 291079
+          },
+          "memory_current": 78573568,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 79880192,
+          "monotonic_ms": 300458,
+          "pids_current": 45,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 45,
+          "process_count": 11,
+          "task_count": 45
+        },
+        {
+          "chromium_process_count": 10,
+          "chromium_states": {
+            "R": 1,
+            "S": 9
+          },
+          "chromium_task_count": 58,
+          "chromium_wait_channels": {
+            "0": 1,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 3,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 8,
+            "nr_throttled": 6,
+            "system_usec": 323503,
+            "throttled_usec": 1314655,
+            "usage_usec": 745635,
+            "user_usec": 422132
+          },
+          "memory_current": 102641664,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 102666240,
+          "monotonic_ms": 300566,
+          "pids_current": 64,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 64,
+          "process_count": 12,
+          "task_count": 64
+        },
+        {
+          "chromium_process_count": 11,
+          "chromium_states": {
+            "R": 1,
+            "S": 10
+          },
+          "chromium_task_count": 68,
+          "chromium_wait_channels": {
+            "0": 1,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 4,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 9,
+            "nr_throttled": 7,
+            "system_usec": 369151,
+            "throttled_usec": 1476885,
+            "usage_usec": 852189,
+            "user_usec": 483038
+          },
+          "memory_current": 115728384,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 115728384,
+          "monotonic_ms": 300675,
+          "pids_current": 74,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 74,
+          "process_count": 13,
+          "task_count": 74
+        },
+        {
+          "chromium_process_count": 12,
+          "chromium_states": {
+            "R": 3,
+            "S": 9
+          },
+          "chromium_task_count": 77,
+          "chromium_wait_channels": {
+            "0": 3,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 3,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 10,
+            "nr_throttled": 8,
+            "system_usec": 420360,
+            "throttled_usec": 1753541,
+            "usage_usec": 952559,
+            "user_usec": 532199
+          },
+          "memory_current": 120586240,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 120586240,
+          "monotonic_ms": 300959,
+          "pids_current": 75,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 75,
+          "process_count": 14,
+          "task_count": 83
+        },
+        {
+          "chromium_process_count": 12,
+          "chromium_states": {
+            "R": 2,
+            "S": 10
+          },
+          "chromium_task_count": 89,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 4,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 13,
+            "nr_throttled": 11,
+            "system_usec": 567786,
+            "throttled_usec": 3371824,
+            "usage_usec": 1269845,
+            "user_usec": 702059
+          },
+          "memory_current": 133611520,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 133611520,
+          "monotonic_ms": 301257,
+          "pids_current": 86,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 86,
+          "process_count": 14,
+          "task_count": 95
+        },
+        {
+          "chromium_process_count": 12,
+          "chromium_states": {
+            "R": 2,
+            "S": 10
+          },
+          "chromium_task_count": 89,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 4,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 16,
+            "nr_throttled": 14,
+            "system_usec": 667093,
+            "throttled_usec": 5563685,
+            "usage_usec": 1554023,
+            "user_usec": 886930
+          },
+          "memory_current": 141836288,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 141836288,
+          "monotonic_ms": 301458,
+          "pids_current": 95,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 95,
+          "process_count": 14,
+          "task_count": 95
+        },
+        {
+          "chromium_process_count": 13,
+          "chromium_states": {
+            "R": 3,
+            "S": 10
+          },
+          "chromium_task_count": 98,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 5,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 18,
+            "nr_throttled": 16,
+            "system_usec": 723217,
+            "throttled_usec": 6378318,
+            "usage_usec": 1754753,
+            "user_usec": 1031536
+          },
+          "memory_current": 152973312,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 153341952,
+          "monotonic_ms": 301760,
+          "pids_current": 101,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 101,
+          "process_count": 15,
+          "task_count": 104
+        },
+        {
+          "chromium_process_count": 13,
+          "chromium_states": {
+            "R": 3,
+            "S": 10
+          },
+          "chromium_task_count": 106,
+          "chromium_wait_channels": {
+            "0": 3,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 4,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 21,
+            "nr_throttled": 19,
+            "system_usec": 820479,
+            "throttled_usec": 7853737,
+            "usage_usec": 2066115,
+            "user_usec": 1245636
+          },
+          "memory_current": 170045440,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 170045440,
+          "monotonic_ms": 302154,
+          "pids_current": 112,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 112,
+          "process_count": 15,
+          "task_count": 112
+        },
+        {
+          "chromium_process_count": 13,
+          "chromium_states": {
+            "R": 3,
+            "S": 10
+          },
+          "chromium_task_count": 106,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 5,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 25,
+            "nr_throttled": 23,
+            "system_usec": 949777,
+            "throttled_usec": 11167495,
+            "usage_usec": 2488941,
+            "user_usec": 1539164
+          },
+          "memory_current": 175050752,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 176005120,
+          "monotonic_ms": 302461,
+          "pids_current": 112,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 112,
+          "process_count": 15,
+          "task_count": 112
+        },
+        {
+          "chromium_process_count": 13,
+          "chromium_states": {
+            "R": 2,
+            "S": 11
+          },
+          "chromium_task_count": 109,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 5,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 28,
+            "nr_throttled": 26,
+            "system_usec": 1024817,
+            "throttled_usec": 12296703,
+            "usage_usec": 2765145,
+            "user_usec": 1740327
+          },
+          "memory_current": 177807360,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 178073600,
+          "monotonic_ms": 302761,
+          "pids_current": 115,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 115,
+          "process_count": 15,
+          "task_count": 115
+        },
+        {
+          "chromium_process_count": 11,
+          "chromium_states": {
+            "R": 1,
+            "S": 9,
+            "Z": 1
+          },
+          "chromium_task_count": 61,
+          "chromium_wait_channels": {
+            "0": 2,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 3,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 31,
+            "nr_throttled": 29,
+            "system_usec": 1150528,
+            "throttled_usec": 13575257,
+            "usage_usec": 3073023,
+            "user_usec": 1922495
+          },
+          "memory_current": 176222208,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 180375552,
+          "monotonic_ms": 302974,
+          "pids_current": 103,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 115,
+          "process_count": 13,
+          "task_count": 67
+        },
+        {
+          "chromium_process_count": 10,
+          "chromium_states": {
+            "R": 1,
+            "S": 7,
+            "Z": 2
+          },
+          "chromium_task_count": 46,
+          "chromium_wait_channels": {
+            "0": 3,
+            "__skb_wait_for_more_packets": 1,
+            "do_epoll_wait": 2,
+            "do_wait": 1,
+            "futex_do_wait": 1,
+            "poll_schedule_timeout.constprop.0": 2
+          },
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 33,
+            "nr_throttled": 31,
+            "system_usec": 1228790,
+            "throttled_usec": 14119583,
+            "usage_usec": 3268059,
+            "user_usec": 2039269
+          },
+          "memory_current": 124592128,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "memory_peak": 180375552,
+          "monotonic_ms": 303165,
+          "pids_current": 69,
+          "pids_events": {
+            "max": 0
+          },
+          "pids_peak": 115,
+          "process_count": 12,
+          "task_count": 52
+        }
+      ],
+      "product_readiness_required": true,
+      "snapshots": [
+        {
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 2,
+            "nr_throttled": 0,
+            "system_usec": 58955,
+            "throttled_usec": 0,
+            "usage_usec": 149355,
+            "user_usec": 90399
+          },
+          "label": "pre-observer-ready",
+          "loadavg": "0.93 0.54 0.24 1/457 11",
+          "memory_current": 15630336,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "monotonic_ms": 299961,
+          "pids_current": 6,
+          "process_count": 2,
+          "processes": [
+            {
+              "name": "docker-init",
+              "pid": 1,
+              "rss_kb": 772,
+              "state": "S (sleeping)",
+              "threads": 1,
+              "wait_channel": "do_sigtimedwait.isra.0"
+            },
+            {
+              "name": "MainThread",
+              "pid": 7,
+              "rss_kb": 82480,
+              "state": "S (sleeping)",
+              "threads": 5,
+              "wait_channel": "0"
+            }
+          ]
+        },
+        {
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 2,
+            "nr_throttled": 0,
+            "system_usec": 66156,
+            "throttled_usec": 0,
+            "usage_usec": 179010,
+            "user_usec": 112854
+          },
+          "label": "browser-spawn",
+          "loadavg": "0.93 0.54 0.24 2/459 18",
+          "memory_current": 18259968,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "monotonic_ms": 299992,
+          "pids_current": 8,
+          "process_count": 4,
+          "processes": [
+            {
+              "name": "docker-init",
+              "pid": 1,
+              "rss_kb": 772,
+              "state": "S (sleeping)",
+              "threads": 1,
+              "wait_channel": "do_sigtimedwait.isra.0"
+            },
+            {
+              "name": "MainThread",
+              "pid": 7,
+              "rss_kb": 83600,
+              "state": "S (sleeping)",
+              "threads": 5,
+              "wait_channel": "0"
+            },
+            {
+              "name": "chromium",
+              "pid": 12,
+              "rss_kb": 1972,
+              "state": "R (running)",
+              "threads": 1,
+              "wait_channel": "do_wait"
+            },
+            {
+              "name": "unknown",
+              "pid": 14,
+              "rss_kb": 0,
+              "state": "unknown",
+              "threads": 0,
+              "wait_channel": ""
+            }
+          ]
+        },
+        {
+          "cpu_stat": {
+            "burst_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "nr_periods": 34,
+            "nr_throttled": 32,
+            "system_usec": 1358674,
+            "throttled_usec": 14439876,
+            "usage_usec": 3430096,
+            "user_usec": 2071421
+          },
+          "label": "post-browser",
+          "loadavg": "0.85 0.53 0.23 1/457 145",
+          "memory_current": 22265856,
+          "memory_events": {
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "oom_kill": 0
+          },
+          "monotonic_ms": 303255,
+          "pids_current": 6,
+          "process_count": 2,
+          "processes": [
+            {
+              "name": "docker-init",
+              "pid": 1,
+              "rss_kb": 772,
+              "state": "S (sleeping)",
+              "threads": 1,
+              "wait_channel": "do_sigtimedwait.isra.0"
+            },
+            {
+              "name": "MainThread",
+              "pid": 7,
+              "rss_kb": 84756,
+              "state": "S (sleeping)",
+              "threads": 5,
+              "wait_channel": "do_epoll_wait"
+            }
+          ]
+        }
+      ],
+      "spawn_monotonic_ms": 299983,
+      "stderr_bytes": 4252,
+      "stderr_sha256": "sha256:d55564d0c25b1f32dc4b0583fab5f3dcc738b81b4e8e48709c04b3f45a483cc6",
+      "stderr_tail": "ctory\n[12:43:0813/175048.979161:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:43:0813/175048.980001:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory\n[12:43:0813/175048.980077:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory\n[12:43:0813/175048.980104:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:43:0813/175049.058249:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:43:0813/175049.150659:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/175049.474502:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:43:0813/175049.474668:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/175049.474684:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:43:0813/175049.474783:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/175049.475628:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:12:0813/175049.548540:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:12:0813/175049.648413:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:43:0813/175049.648435:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory\n[12:43:0813/175049.648481:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory\n[12:12:0813/175049.648809:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:43:0813/175049.649007:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/175049.754904:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.Properties.GetAll: object_path= /org/freedesktop/UPower/devices/DisplayDevice: unknown error type: \n[12:12:0813/175049.756044:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:43:0813/175049.756650:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/175049.944628:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n[12:43:0813/175049.944966:ERROR:dbus/bus.cc:405] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are \"tcp\" and on UNIX \"unix\")\n[12:12:0813/175050.059620:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: \n",
+      "stdout_bytes": 564,
+      "timeout_observed": false
+    }
+  },
+  "electron": {
+    "actual_web_preferences_observed": true,
+    "configured_preferences_match_actual": true,
+    "context_isolation": true,
+    "ephemeral_session": true,
+    "ipc_negative_probe_blocked": true,
+    "node_integration_disabled": true,
+    "os_sandboxed": true,
+    "packaged_runtime_observed": true,
+    "preload_absent": true,
+    "privileged_bridge_absent": true,
+    "renderer_pid_observed": true,
+    "renderer_process_metric_observed": true,
+    "sandbox_preference": true,
+    "subframe_node_integration_disabled": true,
+    "web_security": true,
+    "worker_node_integration_disabled": true
+  },
+  "execution": {
+    "completed": true,
+    "crashed": false,
+    "host_stability_risk_cases_executed": [],
+    "isolation_intact": true,
+    "monitor_healthy": true,
+    "observer_errors": [],
+    "reported_kill_switch_events": [],
+    "timed_out": false,
+    "unsafe_launch_options": []
+  },
+  "resilience": {
+    "candidate_unpublished": true,
+    "crash_cleanup": true,
+    "kill_switch_rejects_new_work": true,
+    "lkg_preserved": true,
+    "timeout_cleanup": true
+  },
+  "run_id": "zero-egress-1786643455670-electron-1786634633426",
+  "schema_version": "authored-security-observation/v1"
+}

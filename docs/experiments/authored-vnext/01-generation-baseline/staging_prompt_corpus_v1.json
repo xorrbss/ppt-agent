@@ -1,0 +1,6 @@
+{
+  "corpus_version": "authored-staging-demo-90-v1",
+  "classification": "public-synthetic-only",
+  "prompt": "Create a 90-slide demonstration presentation about a fictional municipal library's digital-literacy program. Use only invented names, neutral placeholder numbers, and public-domain-style illustrations. Do not include personal data, customer data, URLs, uploaded files, or confidential business information.",
+  "receipt_rule": "This prompt is execution input only. Receipts, telemetry logs, benchmark exports, and error records must contain its corpus_version and SHA-256 only, never this text."
+}

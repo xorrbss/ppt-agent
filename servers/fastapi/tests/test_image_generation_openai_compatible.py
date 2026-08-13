@@ -15,6 +15,47 @@ class TestImageGenerationOpenAICompatible:
         images_dir.mkdir()
         return str(images_dir)
 
+    @pytest.fixture(autouse=True)
+    def validated_test_endpoint(self):
+        """Keep SDK unit tests offline; egress-policy behavior has focused tests."""
+
+        with patch(
+            "services.image_generation_service.validate_configured_provider_endpoint",
+            side_effect=lambda endpoint, **_kwargs: MagicMock(url=endpoint),
+        ), patch(
+            "services.image_generation_service.require_pinned_transport"
+        ):
+            yield
+
+    @pytest.mark.anyio
+    async def test_secure_mode_fails_before_openai_sdk_request(
+        self, mock_images_directory, monkeypatch
+    ):
+        service = ImageGenerationService(mock_images_directory)
+        monkeypatch.setenv("PROVIDER_SECURE_MODE", "true")
+
+        with patch.multiple(
+            "services.image_generation_service",
+            get_openai_compat_image_base_url_env=Mock(
+                return_value="https://api.example.com/v1"
+            ),
+            get_openai_compat_image_api_key_env=Mock(return_value="sk-test-key"),
+            get_openai_compat_image_model_env=Mock(return_value="custom-model"),
+        ), patch(
+            "services.image_generation_service.require_pinned_transport",
+            side_effect=__import__(
+                "services.provider_transport_security",
+                fromlist=["require_pinned_transport"],
+            ).require_pinned_transport,
+        ), patch("services.image_generation_service.AsyncOpenAI") as sdk:
+            with pytest.raises(
+                RuntimeError, match="egress_connected_ip_pin_unavailable"
+            ):
+                await service.generate_image_openai_compatible(
+                    "test prompt", mock_images_directory
+                )
+        sdk.assert_not_called()
+
     def test_get_image_gen_func_openai_compatible_selected(self, mock_images_directory):
         # get_image_gen_func first short-circuits on is_image_generation_disabled,
         # then checks every provider selector in order before reaching
@@ -84,9 +125,11 @@ class TestImageGenerationOpenAICompatible:
                         )
 
                         # Verify client initialization
-                        MockClient.assert_called_with(
-                            base_url="https://api.example.com/v1", api_key="sk-test-key"
-                        )
+                        call_kwargs = MockClient.call_args.kwargs
+                        assert call_kwargs["base_url"] == "https://api.example.com/v1"
+                        assert call_kwargs["api_key"] == "sk-test-key"
+                        assert call_kwargs["http_client"].follow_redirects is False
+                        assert call_kwargs["http_client"].trust_env is False
 
                         # Verify generate call (no response_format sent)
                         mock_client_instance.images.generate.assert_called_with(

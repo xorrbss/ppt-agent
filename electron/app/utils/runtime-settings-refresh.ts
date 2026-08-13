@@ -11,6 +11,7 @@ const RUNTIME_SETTINGS_REFRESH_TIMEOUT_MS = 60000;
 export function requestRuntimeSettingsRefresh(
   fastApiPort: number,
   token: string,
+  userConfig?: UserConfig,
 ): Promise<void> {
   if (!Number.isInteger(fastApiPort) || fastApiPort < 1 || fastApiPort > 65535) {
     return Promise.reject(new Error("Invalid backend runtime settings refresh port"));
@@ -30,6 +31,7 @@ export function requestRuntimeSettingsRefresh(
     };
     const fail = (message: string) => finish(() => reject(new Error(message)));
 
+    const body = userConfig === undefined ? "" : JSON.stringify(userConfig);
     const request = http.request(
       {
         hostname: "127.0.0.1",
@@ -38,7 +40,8 @@ export function requestRuntimeSettingsRefresh(
         method: "POST",
         headers: {
           [RUNTIME_SETTINGS_REFRESH_TOKEN_HEADER]: token,
-          "content-length": "0",
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
         },
       },
       (response) => {
@@ -65,6 +68,6 @@ export function requestRuntimeSettingsRefresh(
       request.destroy();
       fail("Backend runtime settings refresh request timed out");
     });
-    request.end();
+    request.end(body);
   });
 }

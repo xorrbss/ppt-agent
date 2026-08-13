@@ -19,7 +19,6 @@ from typing import Any, cast
 from fastapi import HTTPException
 from sqlalchemy import inspect as sqlalchemy_inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.sql.expression import UpdateBase
 
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.presentation import PresentationModel
@@ -37,6 +36,10 @@ from services.agent_runtime import (
 )
 from services.chat import PresentationChatService
 from services.chat.service import ChatTurnResult
+from services.compatibility_migration.runtime import (
+    FrozenCompatibilityError,
+    require_authored_mutation_evidence,
+)
 from services.database import async_session_maker
 from services.presentation_publication_service import (
     PresentationPublicationConflict,
@@ -46,7 +49,6 @@ from services.presentation_version_service import list_versions, restore_version
 from services.workspace_chat_memory_outbox import (
     enqueue_workspace_chat_memory_delivery,
 )
-from services.presentation_profiles import resolve_presentation_profile
 from services.workspace_db_adapter import reserve_conversation_positions
 from services.workspace_artifact_publication_service import (
     PromotedWorkspaceChatArtifacts,
@@ -66,6 +68,9 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationResult,
     workspace_operation_handler_registry,
 )
+from services.workspace_buffered_session import (
+    BufferedAsyncSession as BufferedAsyncSession,
+)
 
 
 # `slide.regenerate` is deliberately absent: it belongs to the authored page
@@ -80,79 +85,6 @@ CHAT_MUTATION_OPERATION_KINDS = (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-class BufferedAsyncSession:
-    """Delegate an ``AsyncSession`` while emitting no SQL of its own.
-
-    Tool mutations must land atomically with the revision bump, so the session
-    cannot commit until the model turn ends.  It must not *flush* either: the
-    first flush acquires SQLite's single writer lock and holds it for the whole
-    provider call, blocking every other writer - including the runner's
-    independent lease heartbeat, which then kills the operation.
-
-    So inner commits and flushes become pure buffering, and the unit of work is
-    written once, in one short transaction, after the provider responds.  Reads
-    stay consistent because :mod:`services.chat.pending_slides` reconciles slide
-    queries against this pending state.
-
-    A real rollback is deliberately retained.  An inner mutation failure must
-    invalidate the whole operation transaction rather than leave a partially
-    buffered unit of work available for publication.
-    """
-
-    def __init__(self, delegate: AsyncSession) -> None:
-        self._delegate = delegate
-        self.defer_external_chat_memory = True
-        self.defer_canonical_chat_persistence = True
-
-    def _retain(self, instance: object) -> None:
-        retained = self._delegate.info.setdefault(
-            "workspace_chat_provisional_instances", {}
-        )
-        retained[id(instance)] = instance
-
-    def add(self, instance: object, *, _warn: bool = True) -> None:
-        # AsyncSession's identity map uses weak references after a flush. Keep
-        # provider-created rows alive until hash promotion can rewrite UUID
-        # staging paths in the same transaction.
-        self._retain(instance)
-        self._delegate.add(instance, _warn=_warn)
-
-    def add_all(self, instances: list[object]) -> None:
-        for instance in instances:
-            self._retain(instance)
-        self._delegate.add_all(instances)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._delegate, name)
-
-    async def commit(self) -> None:
-        retained = self._delegate.info.setdefault(
-            "workspace_chat_provisional_instances", {}
-        )
-        for instance in self._delegate.new.union(self._delegate.dirty):
-            retained[id(instance)] = instance
-
-    async def flush(self) -> None:
-        """Buffer instead of writing; see the class docstring."""
-
-    async def refresh(self, *_args: Any, **_kwargs: Any) -> None:
-        """A reload would force a flush; buffered state is already authoritative."""
-
-    async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> Any:
-        # INSERT/UPDATE/DELETE statements bypass the unit of work and reach the
-        # connection immediately, reopening the long writer lock this class
-        # exists to prevent.  Fail loudly rather than silently regress.
-        if isinstance(statement, UpdateBase):
-            raise RuntimeError(
-                "workspace_chat_turn_immediate_dml: route this write through "
-                "the ORM unit of work (session.add/session.delete)"
-            )
-        return await self._delegate.execute(statement, *args, **kwargs)
-
-    async def rollback(self) -> None:
-        await self._delegate.rollback()
 
 
 def _turn_changed_the_deck(session: AsyncSession) -> bool:
@@ -185,24 +117,14 @@ def _error_code(detail: Any, fallback: str) -> str:
     else:
         candidate = detail
     normalized = str(candidate or fallback).strip().lower().replace(" ", "_")
-    safe = "".join(
-        character
-        for character in normalized
-        if character in "abcdefghijklmnopqrstuvwxyz0123456789_.-"
-    )
+    safe = "".join(character for character in normalized if character in "abcdefghijklmnopqrstuvwxyz0123456789_.-")
     return (safe or fallback)[:128]
 
 
-def chat_turn_result_payload(
-    turn: ChatTurnResult | AgentRunResult, replacements: Mapping[str, str]
-) -> dict[str, Any]:
+def chat_turn_result_payload(turn: ChatTurnResult | AgentRunResult, replacements: Mapping[str, str]) -> dict[str, Any]:
     """Describe a finished chat turn for the workspace client."""
 
-    response_text = (
-        turn.assistant_output
-        if isinstance(turn, AgentRunResult)
-        else turn.response_text
-    )
+    response_text = turn.assistant_output if isinstance(turn, AgentRunResult) else turn.response_text
     payload: dict[str, Any] = {
         "conversation_id": str(turn.conversation_id),
         "summary": _replace_paths(response_text, replacements),
@@ -230,9 +152,7 @@ def chat_turn_result_payload(
 def _replace_paths(value: Any, replacements: Mapping[str, str]) -> Any:
     if isinstance(value, str):
         updated = value
-        for old, new in sorted(
-            replacements.items(), key=lambda item: len(item[0]), reverse=True
-        ):
+        for old, new in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
             updated = updated.replace(old, new)
         return updated
     if isinstance(value, list):
@@ -240,28 +160,19 @@ def _replace_paths(value: Any, replacements: Mapping[str, str]) -> Any:
     if isinstance(value, tuple):
         return tuple(_replace_paths(item, replacements) for item in value)
     if isinstance(value, dict):
-        return {
-            key: _replace_paths(item, replacements)
-            for key, item in value.items()
-        }
+        return {key: _replace_paths(item, replacements) for key, item in value.items()}
     return value
 
 
-def _rewrite_pending_artifact_paths(
-    session: AsyncSession, replacements: Mapping[str, str]
-) -> None:
+def _rewrite_pending_artifact_paths(session: AsyncSession, replacements: Mapping[str, str]) -> None:
     """Rewrite provider UUID paths before any SQL mutation is published."""
 
     if not replacements:
         return
-    instances: dict[int, object] = {
-        id(instance): instance for instance in session.identity_map.values()
-    }
+    instances: dict[int, object] = {id(instance): instance for instance in session.identity_map.values()}
     instances.update({id(instance): instance for instance in session.new})
     instances.update({id(instance): instance for instance in session.dirty})
-    instances.update(
-        session.info.get("workspace_chat_provisional_instances", {})
-    )
+    instances.update(session.info.get("workspace_chat_provisional_instances", {}))
     for instance in instances.values():
         state = sqlalchemy_inspect(instance)
         for attribute in state.mapper.column_attrs:
@@ -322,26 +233,18 @@ def _run_viewport(raw_context: Mapping[str, Any]) -> RunViewport | None:
         else None
     )
     slide_index = (
-        raw_index
-        if isinstance(raw_index, int)
-        and not isinstance(raw_index, bool)
-        and raw_index >= 0
-        else None
+        raw_index if isinstance(raw_index, int) and not isinstance(raw_index, bool) and raw_index >= 0 else None
     )
     return RunViewport(
         width=width,
         height=height,
         zoom=float(zoom),
-        slide_id=_optional_uuid(
-            slide.get("slide_id", slide.get("slideId")) if slide else None
-        ),
+        slide_id=_optional_uuid(slide.get("slide_id", slide.get("slideId")) if slide else None),
         slide_index=slide_index,
     )
 
 
-def _smart_selection(
-    raw_context: Mapping[str, Any], *, generation_mode: str
-) -> SmartSelection | None:
+def _smart_selection(raw_context: Mapping[str, Any], *, generation_mode: str) -> SmartSelection | None:
     if generation_mode != "smart":
         return None
     raw = raw_context.get("smart_selection", raw_context.get("smartSelection"))
@@ -351,11 +254,7 @@ def _smart_selection(
         return None
     raw_index = selection.get("slide_index", selection.get("slideIndex"))
     slide_index = (
-        raw_index
-        if isinstance(raw_index, int)
-        and not isinstance(raw_index, bool)
-        and raw_index >= 0
-        else None
+        raw_index if isinstance(raw_index, int) and not isinstance(raw_index, bool) and raw_index >= 0 else None
     )
     return SmartSelection(
         html=html,
@@ -363,9 +262,7 @@ def _smart_selection(
             selection.get("selected_text", selection.get("selectedText")),
             50_000,
         ),
-        slide_id=_optional_uuid(
-            selection.get("slide_id", selection.get("slideId"))
-        ),
+        slide_id=_optional_uuid(selection.get("slide_id", selection.get("slideId"))),
         slide_index=slide_index,
     )
 
@@ -388,9 +285,7 @@ async def _load_canonical_history(
     return tuple(
         RunMessage(role=cast(Any, row.role), content=row.content)
         for row in rows
-        if row.id != current_user_message_id
-        and row.role in {"user", "assistant", "system", "tool"}
-        and row.content
+        if row.id != current_user_message_id and row.role in {"user", "assistant", "system", "tool"} and row.content
     )
 
 
@@ -420,9 +315,7 @@ async def _load_ready_run_assets(
         WorkspaceAsset.sha256.is_not(None),
     )
     statement = statement.where(
-        WorkspaceAsset.owner_id == owner_id
-        if owner_id is not None
-        else WorkspaceAsset.owner_id.is_(None)
+        WorkspaceAsset.owner_id == owner_id if owner_id is not None else WorkspaceAsset.owner_id.is_(None)
     )
     rows = list((await session.scalars(statement)).all())
     by_id = {row.id: row for row in rows}
@@ -453,13 +346,14 @@ async def _build_run_context(
     presentation = await session.get(PresentationModel, claim.presentation_id)
     if presentation is None:
         raise NonRetryableWorkspaceOperationError("presentation_not_found")
-    profile = resolve_presentation_profile(presentation)
+    try:
+        profile = await require_authored_mutation_evidence(session, presentation)
+    except FrozenCompatibilityError as error:
+        raise NonRetryableWorkspaceOperationError(error.code) from error
     generation_mode = "smart" if profile.driver_id == "smart" else "standard"
     raw_context = claim.request_payload.get("context")
     structured = raw_context if isinstance(raw_context, Mapping) else {}
-    current_user_message_id = _optional_uuid(
-        claim.request_payload.get("user_message_id")
-    )
+    current_user_message_id = _optional_uuid(claim.request_payload.get("user_message_id"))
     return RunContext(
         run_id=claim.operation_id,
         presentation_id=claim.presentation_id,
@@ -473,9 +367,7 @@ async def _build_run_context(
             current_user_message_id=current_user_message_id,
         ),
         viewport=_run_viewport(structured),
-        smart_selection=_smart_selection(
-            structured, generation_mode=generation_mode
-        ),
+        smart_selection=_smart_selection(structured, generation_mode=generation_mode),
         assets=await _load_ready_run_assets(
             session,
             raw_asset_ids=claim.request_payload.get("asset_ids", []),
@@ -503,9 +395,7 @@ async def _append_canonical_assistant_message(
             raise RuntimeError("assistant_message_publication_conflict")
         return existing
 
-    reservation = await reserve_conversation_positions(
-        session, context.conversation_id, 1
-    )
+    reservation = await reserve_conversation_positions(session, context.conversation_id, 1)
     message = WorkspaceMessage(
         id=context.assistant_message_id,
         conversation_id=context.conversation_id,
@@ -534,19 +424,13 @@ class PresentationChatOperationHandler:
         self._session_factory = session_factory
         self._service_factory = service_factory
 
-    async def execute(
-        self, context: WorkspaceOperationExecutionContext
-    ) -> WorkspaceOperationResult:
+    async def execute(self, context: WorkspaceOperationExecutionContext) -> WorkspaceOperationResult:
         claim = context.claim
         command = claim.request_payload.get("command")
         if not isinstance(command, str) or not command.strip():
-            raise NonRetryableWorkspaceOperationError(
-                "workspace_command_missing"
-            )
+            raise NonRetryableWorkspaceOperationError("workspace_command_missing")
         if claim.expected_revision is None:
-            raise NonRetryableWorkspaceOperationError(
-                "workspace_expected_revision_required"
-            )
+            raise NonRetryableWorkspaceOperationError("workspace_expected_revision_required")
 
         await context.raise_if_cancelled()
         await context.progress(stage="reading_presentation", percent=5)
@@ -572,23 +456,17 @@ class PresentationChatOperationHandler:
                     deferred,
                     claim=claim,
                     command=command.strip(),
-                    artifact_scope=OperationArtifactScope(
-                        staging.staging_directory
-                    ),
+                    artifact_scope=OperationArtifactScope(staging.staging_directory),
                     cancellation_check=context.raise_if_cancelled,
                 )
 
-                async def durable_writer(
-                    event_type: str, payload: dict[str, object]
-                ) -> bool:
+                async def durable_writer(event_type: str, payload: dict[str, object]) -> bool:
                     emit = getattr(context, "emit_durable_event", None)
                     if not callable(emit):
                         # Compatibility for deterministic unit contexts. The
                         # real runner always supplies the fenced writer.
                         return True
-                    return bool(
-                        await emit(event_type=event_type, payload=payload)
-                    )
+                    return bool(await emit(event_type=event_type, payload=payload))
 
                 event_sink = BoundedCheckpointEventSink(
                     conversation_id=claim.conversation_id,
@@ -626,17 +504,13 @@ class PresentationChatOperationHandler:
                 # from "advance the publication token" inside the one fence, so
                 # a turn that only answered reports it without invalidating
                 # every other client's expected_revision.
-                result_payload = chat_turn_result_payload(
-                    turn, promoted.replacements
-                )
+                result_payload = chat_turn_result_payload(turn, promoted.replacements)
                 assistant_message = await _append_canonical_assistant_message(
                     session,
                     context=run_context,
                     result=turn,
                 )
-                result_payload["assistant_message_id"] = str(
-                    assistant_message.id
-                )
+                result_payload["assistant_message_id"] = str(assistant_message.id)
                 revision = await publish_presentation_revision(
                     session,
                     presentation_id=claim.presentation_id,
@@ -686,9 +560,7 @@ class PresentationChatOperationHandler:
 
                 if staging is not None:
                     try:
-                        await compensate_workspace_chat_artifact_staging(
-                            session, staging
-                        )
+                        await compensate_workspace_chat_artifact_staging(session, staging)
                     except BaseException:
                         # Preserve cancellation/control flow and the primary
                         # provider/CAS failure. The durable cleanup_pending or
@@ -700,13 +572,9 @@ class PresentationChatOperationHandler:
                         )
 
                 if isinstance(error, PresentationPublicationConflict):
-                    raise NonRetryableWorkspaceOperationError(
-                        "stale_presentation_revision"
-                    ) from error
+                    raise NonRetryableWorkspaceOperationError("stale_presentation_revision") from error
                 if isinstance(error, HTTPException):
-                    code = _error_code(
-                        error.detail, "presentation_edit_failed"
-                    )
+                    code = _error_code(error.detail, "presentation_edit_failed")
                     error_type = (
                         RetryableWorkspaceOperationError
                         if error.status_code == 429 or error.status_code >= 500
@@ -749,9 +617,7 @@ class PresentationChatOperationHandler:
                     error,
                     exc_info=True,
                 )
-                raise RetryableWorkspaceOperationError(
-                    "presentation_edit_failed"
-                ) from error
+                raise RetryableWorkspaceOperationError("presentation_edit_failed") from error
 
         assert result_payload is not None and revision is not None
         return WorkspaceOperationResult(
@@ -790,9 +656,7 @@ class VersionRestoreOperationHandler:
             try:
                 return uuid.UUID(str(raw_version_id))
             except (TypeError, ValueError, AttributeError) as error:
-                raise NonRetryableWorkspaceOperationError(
-                    "version_restore_target_invalid"
-                ) from error
+                raise NonRetryableWorkspaceOperationError("version_restore_target_invalid") from error
 
         if context.get("strategy") == "previous":
             versions = await list_versions(session, presentation_id)
@@ -800,18 +664,12 @@ class VersionRestoreOperationHandler:
                 return versions[0].id
             raise NonRetryableWorkspaceOperationError("version_not_found")
 
-        raise NonRetryableWorkspaceOperationError(
-            "version_restore_target_invalid"
-        )
+        raise NonRetryableWorkspaceOperationError("version_restore_target_invalid")
 
-    async def execute(
-        self, context: WorkspaceOperationExecutionContext
-    ) -> WorkspaceOperationResult:
+    async def execute(self, context: WorkspaceOperationExecutionContext) -> WorkspaceOperationResult:
         claim = context.claim
         if claim.expected_revision is None:
-            raise NonRetryableWorkspaceOperationError(
-                "workspace_expected_revision_required"
-            )
+            raise NonRetryableWorkspaceOperationError("workspace_expected_revision_required")
 
         await context.raise_if_cancelled()
         await context.progress(stage="reading_version", percent=10)
@@ -839,9 +697,7 @@ class VersionRestoreOperationHandler:
                     target_version_id,
                 )
                 if restored is None:
-                    raise NonRetryableWorkspaceOperationError(
-                        "version_not_found"
-                    )
+                    raise NonRetryableWorkspaceOperationError("version_not_found")
 
                 result_payload: dict[str, object] = {
                     "kind": "version.restore",
@@ -863,9 +719,7 @@ class VersionRestoreOperationHandler:
             except BaseException as error:
                 await session.rollback()
                 if isinstance(error, PresentationPublicationConflict):
-                    raise NonRetryableWorkspaceOperationError(
-                        "stale_presentation_revision"
-                    ) from error
+                    raise NonRetryableWorkspaceOperationError("stale_presentation_revision") from error
                 if isinstance(
                     error,
                     (
@@ -879,12 +733,8 @@ class VersionRestoreOperationHandler:
                 ):
                     raise
                 if isinstance(error, (TypeError, ValueError)):
-                    raise NonRetryableWorkspaceOperationError(
-                        "version_snapshot_invalid"
-                    ) from error
-                raise RetryableWorkspaceOperationError(
-                    "version_restore_failed"
-                ) from error
+                    raise NonRetryableWorkspaceOperationError("version_snapshot_invalid") from error
+                raise RetryableWorkspaceOperationError("version_restore_failed") from error
 
         return WorkspaceOperationResult(
             payload=result_payload,

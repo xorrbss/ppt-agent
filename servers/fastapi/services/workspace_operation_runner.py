@@ -12,6 +12,16 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from services.workspace_quality_review_payload import (
+    _normalize_quality_review_payload,
+    _quality_review_count,
+    _quality_review_issue_message,
+    _quality_review_number,
+    _sanitize_quality_review_issues,
+    _sanitize_quality_review_reason_codes,
+    _sanitize_quality_review_slide_results,
+    _sanitize_quality_review_stage_timings,
+)
 import inspect
 import json
 import logging
@@ -77,9 +87,7 @@ WORKSPACE_OPERATION_POLL_SECONDS = 1.0
 WORKSPACE_OPERATION_MAX_CONCURRENCY = 2
 _MAX_OBSERVATION_DURATION_MS = 30 * 24 * 60 * 60 * 1000
 
-_TERMINAL_STATES = frozenset(
-    {"succeeded", "failed", "cancelled", "dead_letter"}
-)
+_TERMINAL_STATES = frozenset({"succeeded", "failed", "cancelled", "dead_letter"})
 _RUNNING_STATES = frozenset({"running", "cancelling"})
 # Only one mutating operation may execute for a presentation at a time.  Wait
 # states do not hold this execution lock: they must not indefinitely block a
@@ -278,292 +286,6 @@ _QUALITY_REVIEW_COUNT_KEYS = frozenset(
 )
 
 
-def _quality_review_number(value: Any) -> int | float | None:
-    """Keep bounded finite counters/timings out of an untrusted task payload."""
-
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if not math.isfinite(value) or value < 0:
-        return None
-    return min(value, _MAX_QUALITY_REVIEW_TIMING_MS)
-
-
-def _quality_review_count(value: Any) -> int | None:
-    """Counters are integral; timings use the broader finite-number helper."""
-
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        return None
-    return min(value, _MAX_QUALITY_REVIEW_METRIC_VALUE)
-
-
-def _sanitize_quality_review_stage_timings(value: Any) -> dict[str, float]:
-    if not isinstance(value, Mapping):
-        return {}
-    safe: dict[str, float] = {}
-    for raw_stage, raw_duration in value.items():
-        stage = str(raw_stage).strip()
-        duration = _quality_review_number(raw_duration)
-        if not stage or duration is None:
-            continue
-        safe[stage[:128]] = float(duration)
-        if len(safe) >= _MAX_QUALITY_REVIEW_STAGE_TIMINGS:
-            break
-    return safe
-
-
-def _sanitize_quality_review_reason_codes(value: Any) -> list[str]:
-    """Keep only bounded, low-cardinality LLM no-candidate reason codes."""
-
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
-        return []
-    safe: list[str] = []
-    for raw_reason in value:
-        if not isinstance(raw_reason, str):
-            continue
-        reason = raw_reason.strip()
-        if not reason or reason in safe:
-            continue
-        safe.append(reason[:_MAX_QUALITY_REVIEW_REASON_CODE_LENGTH])
-        if len(safe) >= _MAX_QUALITY_REVIEW_REASON_CODES:
-            break
-    return safe
-
-
-def _normalize_quality_review_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Project approved review telemetry to stable top-level result fields.
-
-    The executor can evolve its nested ``metrics`` layout without making the
-    workspace event contract depend on it.  Only aggregate counters and bounded
-    timings are promoted; candidate diagnostics, source content and model output
-    remain private to the review task.
-    """
-
-    normalized = dict(payload)
-    raw_metrics = payload.get("metrics")
-    metrics = raw_metrics if isinstance(raw_metrics, Mapping) else {}
-    for key in _QUALITY_REVIEW_COUNT_KEYS:
-        value = payload.get(key, metrics.get(key))
-        count = _quality_review_count(value)
-        if count is not None:
-            normalized[key] = count
-        else:
-            normalized.pop(key, None)
-    total_ms = _quality_review_number(payload.get("total_ms", metrics.get("total_ms")))
-    if total_ms is not None:
-        normalized["total_ms"] = total_ms
-    else:
-        normalized.pop("total_ms", None)
-    wall_time_ms = _quality_review_number(
-        payload.get("wall_time_ms", metrics.get("deck_wall_ms"))
-    )
-    if wall_time_ms is not None:
-        normalized["wall_time_ms"] = wall_time_ms
-    else:
-        normalized.pop("wall_time_ms", None)
-    # ``confirmed_issue_count`` is the established executor name.  Keep it as
-    # a compatibility alias while making the UI-facing unit explicit.
-    detailed = _quality_review_count(
-        payload.get(
-            "detailed_issue_count",
-            payload.get("confirmed_issue_count", metrics.get("confirmed_issue_count")),
-        )
-    )
-    if detailed is not None:
-        normalized["detailed_issue_count"] = detailed
-        normalized["confirmed_issue_count"] = detailed
-    raw_timings = payload.get("stage_timings_ms", metrics.get("stage_timings_ms"))
-    timings = _sanitize_quality_review_stage_timings(raw_timings)
-    if timings:
-        normalized["stage_timings_ms"] = timings
-        aggregate_stage_time_ms = _quality_review_number(
-            payload.get(
-                "aggregate_stage_time_ms",
-                metrics.get("aggregate_stage_time_ms", sum(timings.values())),
-            )
-        )
-        if aggregate_stage_time_ms is not None:
-            normalized["aggregate_stage_time_ms"] = aggregate_stage_time_ms
-        else:
-            normalized.pop("aggregate_stage_time_ms", None)
-    else:
-        normalized.pop("stage_timings_ms", None)
-        normalized.pop("aggregate_stage_time_ms", None)
-    reason_codes = _sanitize_quality_review_reason_codes(
-        payload.get("no_candidate_reasons", metrics.get("no_candidate_reasons"))
-    )
-    if reason_codes:
-        normalized["no_candidate_reasons"] = reason_codes
-    else:
-        normalized.pop("no_candidate_reasons", None)
-    return normalized
-
-
-def _quality_review_issue_message(value: Mapping[str, Any]) -> str | None:
-    for key in ("message", "detail", "title", "code", "reason"):
-        candidate = value.get(key)
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
-    return None
-
-
-def _sanitize_quality_review_issues(value: Any) -> list[dict[str, Any]]:
-    """Flatten findings while retaining only user-visible review history."""
-
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
-        return []
-    safe: list[dict[str, Any]] = []
-    for raw_issue in value:
-        if not isinstance(raw_issue, Mapping):
-            continue
-        raw_slide_index = raw_issue.get("slide_index")
-        slide_index = (
-            raw_slide_index
-            if isinstance(raw_slide_index, int)
-            and not isinstance(raw_slide_index, bool)
-            and raw_slide_index >= 0
-            else None
-        )
-        nested = raw_issue.get("issues")
-        candidates = (
-            nested
-            if isinstance(nested, Sequence)
-            and not isinstance(nested, (str, bytes, bytearray))
-            else (raw_issue,)
-        )
-        for candidate in candidates:
-            if not isinstance(candidate, Mapping):
-                continue
-            message = _quality_review_issue_message(candidate)
-            issue_type = next(
-                (
-                    candidate.get(key).strip()[:100]
-                    for key in ("type", "category", "code")
-                    if isinstance(candidate.get(key), str)
-                    and candidate.get(key).strip()
-                ),
-                None,
-            )
-            severity = candidate.get("severity")
-            severity = (
-                severity.strip()[:50]
-                if isinstance(severity, str) and severity.strip()
-                else None
-            )
-            fix_action = next(
-                (
-                    candidate.get(key).strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
-                    for key in ("fix_action", "action", "resolution")
-                    if isinstance(candidate.get(key), str)
-                    and candidate.get(key).strip()
-                ),
-                None,
-            )
-            applied = candidate.get("applied")
-            if message is None and issue_type is None and severity is None:
-                continue
-            item: dict[str, Any] = {}
-            if slide_index is not None:
-                item["slide_index"] = slide_index
-            if issue_type is not None:
-                item["type"] = issue_type
-            if severity is not None:
-                item["severity"] = severity
-            if message is not None:
-                # ``message`` remains for older result-card clients; the
-                # explicit description key is the page-history contract.
-                item["message"] = message
-                item["description"] = message
-            if fix_action is not None:
-                item["fix_action"] = fix_action
-            if isinstance(applied, bool):
-                item["applied"] = applied
-            safe.append(item)
-            if len(safe) >= _MAX_QUALITY_REVIEW_ISSUES:
-                return safe
-    return safe
-
-
-def _sanitize_quality_review_slide_results(value: Any) -> list[dict[str, Any]]:
-    """Keep page-level fix outcomes without DOM/HTML or before/after content."""
-
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
-        return []
-    safe: list[dict[str, Any]] = []
-    for raw_result in value:
-        if not isinstance(raw_result, Mapping):
-            continue
-        raw_slide_index = raw_result.get("slide_index")
-        if (
-            not isinstance(raw_slide_index, int)
-            or isinstance(raw_slide_index, bool)
-            or raw_slide_index < 0
-        ):
-            continue
-        item: dict[str, Any] = {"slide_index": raw_slide_index}
-        for key in ("attempted", "applied"):
-            if isinstance(raw_result.get(key), bool):
-                item[key] = raw_result[key]
-        raw_action = raw_result.get("fix_action", raw_result.get("path"))
-        if isinstance(raw_action, str) and raw_action.strip():
-            item["fix_action"] = raw_action.strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
-        rejection_reason = raw_result.get("rejection_reason")
-        if isinstance(rejection_reason, str) and rejection_reason.strip():
-            item["rejection_reason"] = rejection_reason.strip()[
-                :_MAX_QUALITY_REVIEW_MESSAGE_LENGTH
-            ]
-        raw_rejections = raw_result.get("candidate_rejections")
-        if isinstance(raw_rejections, Sequence) and not isinstance(
-            raw_rejections, (str, bytes, bytearray)
-        ):
-            candidate_rejections: list[dict[str, Any]] = []
-            for raw_rejection in raw_rejections[:16]:
-                if not isinstance(raw_rejection, Mapping):
-                    continue
-                rejection: dict[str, Any] = {}
-                for key in (
-                    "plan_id",
-                    "source",
-                    "render_status",
-                    "validation_status",
-                ):
-                    candidate = raw_rejection.get(key)
-                    if isinstance(candidate, str) and candidate.strip():
-                        rejection[key] = candidate.strip()[:128]
-                reason_codes = raw_rejection.get("reason_codes")
-                if isinstance(reason_codes, Sequence) and not isinstance(
-                    reason_codes, (str, bytes, bytearray)
-                ):
-                    rejection["reason_codes"] = [
-                        code.strip()[:128]
-                        for code in reason_codes
-                        if isinstance(code, str) and code.strip()
-                    ][:16]
-                if rejection:
-                    candidate_rejections.append(rejection)
-            if candidate_rejections:
-                item["candidate_rejections"] = candidate_rejections
-        for key in (
-            "resolved_issues",
-            "remaining_issues",
-            "slide_level_resolved_issues",
-            "slide_level_remaining_issues",
-        ):
-            raw_items = raw_result.get(key)
-            if not isinstance(raw_items, Sequence) or isinstance(
-                raw_items, (str, bytes, bytearray)
-            ):
-                continue
-            item[key] = [
-                issue.strip()[:_MAX_QUALITY_REVIEW_MESSAGE_LENGTH]
-                for issue in raw_items
-                if isinstance(issue, str) and issue.strip()
-            ][:_MAX_QUALITY_REVIEW_ISSUES]
-        safe.append(item)
-        if len(safe) >= 500:
-            break
-    return safe
-
-
 def _positive_int_env(name: str, default: int) -> int:
     try:
         return max(1, int(os.getenv(name, str(default))))
@@ -649,9 +371,7 @@ def sanitize_workspace_event_payload(
         return {}
     if operation_kind == "quality.review":
         payload = _normalize_quality_review_payload(payload)
-    allowed_keys = _SAFE_PAYLOAD_KEYS | _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND.get(
-        operation_kind or "", frozenset()
-    )
+    allowed_keys = _SAFE_PAYLOAD_KEYS | _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND.get(operation_kind or "", frozenset())
     if operation_kind in {"presentation.edit", "slide.edit", "slide.delete"}:
         allowed_keys |= _PUBLIC_RUNTIME_PAYLOAD_KEYS
     safe: dict[str, Any] = {}
@@ -670,32 +390,18 @@ def sanitize_workspace_event_payload(
             and not isinstance(value, (str, bytes, bytearray))
         ):
             safe[normalized] = [
-                item
-                for item in value
-                if isinstance(item, int)
-                and not isinstance(item, bool)
-                and item >= 0
+                item for item in value if isinstance(item, int) and not isinstance(item, bool) and item >= 0
             ][:500]
-        elif (
-            operation_kind == "quality.review"
-            and normalized in _QUALITY_REVIEW_ISSUE_LIST_KEYS
-        ):
+        elif operation_kind == "quality.review" and normalized in _QUALITY_REVIEW_ISSUE_LIST_KEYS:
             safe[normalized] = _sanitize_quality_review_issues(value)
-        elif (
-            operation_kind == "quality.review"
-            and normalized in _QUALITY_REVIEW_REASON_LIST_KEYS
-        ):
+        elif operation_kind == "quality.review" and normalized in _QUALITY_REVIEW_REASON_LIST_KEYS:
             safe[normalized] = _sanitize_quality_review_reason_codes(value)
         elif operation_kind == "quality.review" and normalized == "slide_results":
             safe[normalized] = _sanitize_quality_review_slide_results(value)
         elif operation_kind == "quality.review" and normalized == "stage_timings_ms":
             # This was normalized from approved aggregate telemetry above.
             safe[normalized] = _sanitize_quality_review_stage_timings(value)
-        elif (
-            operation_kind == "quality.review"
-            and normalized == "result"
-            and isinstance(value, Mapping)
-        ):
+        elif operation_kind == "quality.review" and normalized == "result" and isinstance(value, Mapping):
             # A nested result is emitted for live timeline projection.  Strip
             # another nested result to keep recursion bounded for hostile data.
             safe[normalized] = sanitize_workspace_event_payload(
@@ -719,9 +425,7 @@ def sanitize_workspace_event_payload(
 def _linked_generation_job_id(operation: WorkspaceOperation) -> uuid.UUID | None:
     """Return the durable compatibility job id only for admitted generation."""
 
-    if operation.kind != "presentation.generate" or not isinstance(
-        operation.request_payload, Mapping
-    ):
+    if operation.kind != "presentation.generate" or not isinstance(operation.request_payload, Mapping):
         return None
     raw_job_id = operation.request_payload.get("job_id")
     if raw_job_id is None:
@@ -837,13 +541,9 @@ async def append_operation_event(
     values.update(dict(projection_values or {}))
     if increment_version or projection_values:
         values["version"] = WorkspaceOperation.version + 1
-    statement = update(WorkspaceOperation).where(
-        WorkspaceOperation.id == operation_id
-    )
+    statement = update(WorkspaceOperation).where(WorkspaceOperation.id == operation_id)
     if attempt_token is not None:
-        statement = statement.where(
-            WorkspaceOperation.attempt_token == attempt_token
-        )
+        statement = statement.where(WorkspaceOperation.attempt_token == attempt_token)
     if allowed_states:
         statement = statement.where(WorkspaceOperation.state.in_(tuple(allowed_states)))
     if expected_version is not None:
@@ -942,11 +642,8 @@ async def claim_next_workspace_operation(
             .where(
                 ~exists(
                     select(executing.id).where(
-                        executing.presentation_id
-                        == WorkspaceOperation.presentation_id,
-                        executing.state.in_(
-                            tuple(_PRESENTATION_EXECUTING_STATES)
-                        ),
+                        executing.presentation_id == WorkspaceOperation.presentation_id,
+                        executing.state.in_(tuple(_PRESENTATION_EXECUTING_STATES)),
                     )
                 )
             )
@@ -978,11 +675,7 @@ async def claim_next_workspace_operation(
             select(WorkspaceOperation.id)
             .where(WorkspaceOperation.presentation_id == candidate.presentation_id)
             .where(WorkspaceOperation.id != candidate.id)
-            .where(
-                WorkspaceOperation.state.in_(
-                    tuple(_PRESENTATION_EXECUTING_STATES)
-                )
-            )
+            .where(WorkspaceOperation.state.in_(tuple(_PRESENTATION_EXECUTING_STATES)))
             .limit(1)
             .execution_options(skip_owner_scope=True)
         )
@@ -1115,11 +808,7 @@ async def _operation_cancel_requested(
         return True
     if row.state in _TERMINAL_STATES:
         return row.state == "cancelled"
-    return (
-        row.attempt_token != attempt_token
-        or row.state == "cancelling"
-        or row.cancel_requested_at is not None
-    )
+    return row.attempt_token != attempt_token or row.state == "cancelling" or row.cancel_requested_at is not None
 
 
 async def _transition_claim_failure(
@@ -1178,9 +867,7 @@ async def _transition_claim_failure(
                 "heartbeat_at": now,
                 "error_code": code,
                 "error_detail": error_detail,
-                "completed_at": now
-                if decision.state in {"failed", "dead_letter"}
-                else None,
+                "completed_at": now if decision.state in {"failed", "dead_letter"} else None,
             },
         )
         if event is None:
@@ -1208,8 +895,7 @@ async def _transition_claim_failure(
             duration_ms=_elapsed_ms(operation.created_at, now),
             error_code=code,
             retry_count=decision.retry_count,
-            revision_conflict=code
-            in {"revision_conflict", "stale_presentation_revision"},
+            revision_conflict=code in {"revision_conflict", "stale_presentation_revision"},
             fence_outcome="transition_committed",
         )
         return True
@@ -1333,16 +1019,10 @@ async def finalize_workspace_operation_success(
                 name="succeeded",
                 result_status="succeeded",
                 duration_ms=_elapsed_ms(
-                    operation_before.created_at
-                    if operation_before is not None
-                    else None,
+                    operation_before.created_at if operation_before is not None else None,
                     now,
                 ),
-                retry_count=(
-                    operation_before.retry_count
-                    if operation_before is not None
-                    else None
-                ),
+                retry_count=(operation_before.retry_count if operation_before is not None else None),
                 result_revision=result.result_revision,
                 revision_conflict=False,
                 fence_outcome="publish_committed",
@@ -1422,28 +1102,21 @@ async def _fence_workspace_claim(
                 expected_generation=_claim_account_generation(claim),
             )
         except AccountDeletionFenceConflict as error:
-            raise NonRetryableWorkspaceOperationError(
-                "account_deletion_in_progress"
-            ) from error
+            raise NonRetryableWorkspaceOperationError("account_deletion_in_progress") from error
 
     owner_predicate = (
-        PresentationModel.owner_id.is_(None)
-        if claim.owner_id is None
-        else PresentationModel.owner_id == claim.owner_id
+        PresentationModel.owner_id.is_(None) if claim.owner_id is None else PresentationModel.owner_id == claim.owner_id
     )
     lifecycle_predicate = (
         or_(
-            PresentationModel.lifecycle_status
-            != PRESENTATION_LIFECYCLE_DELETED,
+            PresentationModel.lifecycle_status != PRESENTATION_LIFECYCLE_DELETED,
             and_(
-                PresentationModel.lifecycle_status
-                == PRESENTATION_LIFECYCLE_DELETED,
+                PresentationModel.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED,
                 PresentationModel.deletion_operation_id == claim.operation_id,
             ),
         )
         if claim.kind == "presentation.delete"
-        else PresentationModel.lifecycle_status
-        != PRESENTATION_LIFECYCLE_DELETED
+        else PresentationModel.lifecycle_status != PRESENTATION_LIFECYCLE_DELETED
     )
     row = (
         await session.execute(
@@ -1474,16 +1147,10 @@ async def _fence_workspace_claim(
             raise NonRetryableWorkspaceOperationError("presentation_not_found")
         if lifecycle == PRESENTATION_LIFECYCLE_DELETED:
             raise NonRetryableWorkspaceOperationError("presentation_deleted")
-        raise NonRetryableWorkspaceOperationError(
-            "workspace_mutation_admission_conflict"
-        )
+        raise NonRetryableWorkspaceOperationError("workspace_mutation_admission_conflict")
 
     revision = int(row.revision)
-    if (
-        check_revision
-        and claim.expected_revision is not None
-        and revision != claim.expected_revision
-    ):
+    if check_revision and claim.expected_revision is not None and revision != claim.expected_revision:
         raise NonRetryableWorkspaceOperationError(
             "revision_conflict",
             detail={
@@ -1550,25 +1217,29 @@ async def reconcile_succeeded_workspace_operation_events(
         )
         async with session_factory() as session:
             candidates = (
-                await session.execute(
-                    select(
-                        WorkspaceOperation.id,
-                        WorkspaceOperation.presentation_id,
-                        WorkspaceOperation.conversation_id,
-                        WorkspaceOperation.kind,
-                        WorkspaceOperation.result,
-                        WorkspaceOperation.result_revision,
-                        WorkspaceOperation.version,
-                        WorkspaceOperation.attempt_number,
-                        WorkspaceOperation.retry_count,
-                        WorkspaceOperation.fencing_token,
+                (
+                    await session.execute(
+                        select(
+                            WorkspaceOperation.id,
+                            WorkspaceOperation.presentation_id,
+                            WorkspaceOperation.conversation_id,
+                            WorkspaceOperation.kind,
+                            WorkspaceOperation.result,
+                            WorkspaceOperation.result_revision,
+                            WorkspaceOperation.version,
+                            WorkspaceOperation.attempt_number,
+                            WorkspaceOperation.retry_count,
+                            WorkspaceOperation.fencing_token,
+                        )
+                        .where(WorkspaceOperation.state == "succeeded")
+                        .where(~terminal_event_exists)
+                        .order_by(WorkspaceOperation.updated_at, WorkspaceOperation.id)
+                        .limit(bounded_batch_size)
                     )
-                    .where(WorkspaceOperation.state == "succeeded")
-                    .where(~terminal_event_exists)
-                    .order_by(WorkspaceOperation.updated_at, WorkspaceOperation.id)
-                    .limit(bounded_batch_size)
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
 
         if not candidates:
             break
@@ -1694,9 +1365,7 @@ async def release_workspace_operation_claim(
             return False
         if operation.cancel_requested_at is not None or operation.state == "cancelling":
             await session.rollback()
-            return await finalize_workspace_operation_cancelled(
-                claim, session_factory=session_factory
-            )
+            return await finalize_workspace_operation_cancelled(claim, session_factory=session_factory)
         event = await append_operation_event(
             session,
             operation_id=claim.operation_id,
@@ -1828,37 +1497,41 @@ async def recover_expired_workspace_operations(
     recovered = 0
     async with session_factory() as session:
         rows = (
-            await session.execute(
-                select(
-                    WorkspaceOperation.id,
-                    WorkspaceOperation.presentation_id,
-                    WorkspaceOperation.conversation_id,
-                    WorkspaceOperation.kind,
-                    WorkspaceOperation.request_payload,
-                    WorkspaceOperation.state,
-                    WorkspaceOperation.attempt_token,
-                    WorkspaceOperation.lease_expires_at,
-                    WorkspaceOperation.cancel_requested_at,
-                    WorkspaceOperation.retry_count,
-                    WorkspaceOperation.max_attempts,
-                    WorkspaceOperation.attempt_number,
-                    WorkspaceOperation.fencing_token,
-                    WorkspaceOperation.expected_revision,
-                    WorkspaceOperation.result_revision,
-                    WorkspaceOperation.version,
-                    WorkspaceOperation.created_at,
-                    WorkspaceOperation.updated_at,
-                )
-                .where(WorkspaceOperation.state.in_(tuple(_RUNNING_STATES)))
-                .where(
-                    or_(
-                        WorkspaceOperation.lease_expires_at.is_(None),
-                        WorkspaceOperation.lease_expires_at <= now,
+            (
+                await session.execute(
+                    select(
+                        WorkspaceOperation.id,
+                        WorkspaceOperation.presentation_id,
+                        WorkspaceOperation.conversation_id,
+                        WorkspaceOperation.kind,
+                        WorkspaceOperation.request_payload,
+                        WorkspaceOperation.state,
+                        WorkspaceOperation.attempt_token,
+                        WorkspaceOperation.lease_expires_at,
+                        WorkspaceOperation.cancel_requested_at,
+                        WorkspaceOperation.retry_count,
+                        WorkspaceOperation.max_attempts,
+                        WorkspaceOperation.attempt_number,
+                        WorkspaceOperation.fencing_token,
+                        WorkspaceOperation.expected_revision,
+                        WorkspaceOperation.result_revision,
+                        WorkspaceOperation.version,
+                        WorkspaceOperation.created_at,
+                        WorkspaceOperation.updated_at,
                     )
+                    .where(WorkspaceOperation.state.in_(tuple(_RUNNING_STATES)))
+                    .where(
+                        or_(
+                            WorkspaceOperation.lease_expires_at.is_(None),
+                            WorkspaceOperation.lease_expires_at <= now,
+                        )
+                    )
+                    .order_by(WorkspaceOperation.updated_at)
                 )
-                .order_by(WorkspaceOperation.updated_at)
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
     for stale in rows:
         async with session_factory() as session:
@@ -1866,8 +1539,7 @@ async def recover_expired_workspace_operations(
                 WorkspaceOperation.lease_expires_at.is_(None)
                 if stale["lease_expires_at"] is None
                 else and_(
-                    WorkspaceOperation.lease_expires_at
-                    == stale["lease_expires_at"],
+                    WorkspaceOperation.lease_expires_at == stale["lease_expires_at"],
                     WorkspaceOperation.lease_expires_at <= now,
                 )
             )
@@ -1882,8 +1554,7 @@ async def recover_expired_workspace_operations(
                     select(PresentationModel.deletion_operation_id)
                     .where(
                         PresentationModel.id == stale["presentation_id"],
-                        PresentationModel.lifecycle_status
-                        == PRESENTATION_LIFECYCLE_DELETED,
+                        PresentationModel.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED,
                     )
                     .execution_options(skip_owner_scope=True)
                 )
@@ -1893,11 +1564,8 @@ async def recover_expired_workspace_operations(
                             select(func.count())
                             .select_from(WorkspaceCleanupJournal)
                             .where(
-                                WorkspaceCleanupJournal.presentation_id_snapshot
-                                == stale["presentation_id"],
-                                WorkspaceCleanupJournal.status.not_in(
-                                    ("succeeded", "dead_letter")
-                                ),
+                                WorkspaceCleanupJournal.presentation_id_snapshot == stale["presentation_id"],
+                                WorkspaceCleanupJournal.status.not_in(("succeeded", "dead_letter")),
                             )
                         )
                         or 0
@@ -1933,10 +1601,7 @@ async def recover_expired_workspace_operations(
                     "completed_at": now,
                 }
                 observed_retry_count = stale["retry_count"]
-            elif (
-                stale["state"] == "cancelling"
-                or stale["cancel_requested_at"] is not None
-            ):
+            elif stale["state"] == "cancelling" or stale["cancel_requested_at"] is not None:
                 next_state = "cancelled"
                 event_type = "operation.cancelled"
                 payload = {
@@ -1984,9 +1649,7 @@ async def recover_expired_workspace_operations(
                         "error_code": "operation_recovery_required",
                         "retryable": True,
                     },
-                    "completed_at": now
-                    if next_state in {"failed", "dead_letter"}
-                    else None,
+                    "completed_at": now if next_state in {"failed", "dead_letter"} else None,
                 }
                 observed_retry_count = decision.retry_count
             else:
@@ -2042,11 +1705,7 @@ async def recover_expired_workspace_operations(
                     session,
                     operation,
                     state=next_state,
-                    error_code=(
-                        None
-                        if next_state == "cancelled"
-                        else "operation_recovery_required"
-                    ),
+                    error_code=(None if next_state == "cancelled" else "operation_recovery_required"),
                 ):
                     await session.rollback()
                     continue
@@ -2067,21 +1726,13 @@ async def recover_expired_workspace_operations(
                 conversation_id=stale["conversation_id"],
                 command_type=stale["kind"],
                 result_status=next_state,
-                error_code=(
-                    None
-                    if next_state in {"cancelled", "succeeded"}
-                    else "operation_recovery_required"
-                ),
+                error_code=(None if next_state in {"cancelled", "succeeded"} else "operation_recovery_required"),
                 duration_ms=_elapsed_ms(stale["created_at"], now),
                 attempt_number=stale["attempt_number"],
                 retry_count=observed_retry_count,
                 recovery_count=1,
                 expected_revision=stale["expected_revision"],
-                result_revision=(
-                    stale["expected_revision"]
-                    if next_state == "succeeded"
-                    else stale["result_revision"]
-                ),
+                result_revision=(stale["expected_revision"] if next_state == "succeeded" else stale["result_revision"]),
                 fencing_token=stale["fencing_token"],
                 fence_outcome="recovery_committed",
             )
@@ -2127,9 +1778,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                     payload=event_payload,
                     attempt_token=self.claim.attempt_token,
                     allowed_states=("running",),
-                    projection_values={
-                        "progress": sanitize_workspace_event_payload(progress)
-                    },
+                    projection_values={"progress": sanitize_workspace_event_payload(progress)},
                 )
                 if event is None:
                     await session.rollback()
@@ -2247,9 +1896,7 @@ class WorkspaceOperationRunner:
             session_factory=self.session_factory,
             registry=self.registry,
         )
-        self._loop_task = asyncio.create_task(
-            self._run_loop(), name="workspace-operation-runner"
-        )
+        self._loop_task = asyncio.create_task(self._run_loop(), name="workspace-operation-runner")
 
     async def stop(self) -> None:
         self._stopping = True
@@ -2291,9 +1938,7 @@ class WorkspaceOperationRunner:
             )
             self._active[claim.operation_id] = task
 
-            def _discard(
-                done: asyncio.Task[None], operation_id: uuid.UUID = claim.operation_id
-            ) -> None:
+            def _discard(done: asyncio.Task[None], operation_id: uuid.UUID = claim.operation_id) -> None:
                 if self._active.get(operation_id) is done:
                     self._active.pop(operation_id, None)
                 self._wake.set()
@@ -2355,9 +2000,7 @@ class WorkspaceOperationRunner:
                 claim.attempt_token,
                 session_factory=self.session_factory,
             ):
-                raise WorkspaceOperationCancelled(
-                    "workspace_operation_cancelled"
-                )
+                raise WorkspaceOperationCancelled("workspace_operation_cancelled")
             if loop.time() < next_heartbeat_at:
                 continue
             alive = await heartbeat_workspace_operation(
@@ -2387,9 +2030,7 @@ class WorkspaceOperationRunner:
             return WorkspaceOperationResult(payload=dict(value))
         raise NonRetryableWorkspaceOperationError("invalid_operation_handler_result")
 
-    async def _validate_claim_revision(
-        self, claim: WorkspaceOperationClaim
-    ) -> None:
+    async def _validate_claim_revision(self, claim: WorkspaceOperationClaim) -> None:
         """Recheck deck/account deletion fences immediately before execution."""
         async with self.session_factory() as session:
             await _fence_workspace_claim(
@@ -2431,9 +2072,7 @@ class WorkspaceOperationRunner:
 
             heartbeat = asyncio.create_task(self._heartbeat_loop(claim))
             handler_task = create_runtime_settings_task(self._call_handler(handler, context))
-            done, _ = await asyncio.wait(
-                (handler_task, heartbeat), return_when=asyncio.FIRST_COMPLETED
-            )
+            done, _ = await asyncio.wait((handler_task, heartbeat), return_when=asyncio.FIRST_COMPLETED)
             if heartbeat in done:
                 try:
                     heartbeat.result()
@@ -2443,9 +2082,7 @@ class WorkspaceOperationRunner:
                     # cleanup.  A handler that delays or swallows task
                     # cancellation must not keep the operation in
                     # `cancelling` or later publish a false success.
-                    await finalize_workspace_operation_cancelled(
-                        claim, session_factory=self.session_factory
-                    )
+                    await finalize_workspace_operation_cancelled(claim, session_factory=self.session_factory)
                     await asyncio.gather(handler_task, return_exceptions=True)
                     return
                 except WorkspaceOperationLeaseLost:
@@ -2460,25 +2097,15 @@ class WorkspaceOperationRunner:
                         )
                         return
                     raise
-                raise WorkspaceOperationLeaseLost(
-                    "workspace_operation_heartbeat_stopped"
-                )
+                raise WorkspaceOperationLeaseLost("workspace_operation_heartbeat_stopped")
             result = handler_task.result()
-            finalized = await finalize_workspace_operation_success(
-                claim, result, session_factory=self.session_factory
-            )
+            finalized = await finalize_workspace_operation_success(claim, result, session_factory=self.session_factory)
             if not finalized and await context.cancellation_requested():
-                await finalize_workspace_operation_cancelled(
-                    claim, session_factory=self.session_factory
-                )
+                await finalize_workspace_operation_cancelled(claim, session_factory=self.session_factory)
         except WorkspaceOperationBlocked as error:
-            await _transition_claim_blocked(
-                claim, error, session_factory=self.session_factory
-            )
+            await _transition_claim_blocked(claim, error, session_factory=self.session_factory)
         except WorkspaceOperationCancelled:
-            await finalize_workspace_operation_cancelled(
-                claim, session_factory=self.session_factory
-            )
+            await finalize_workspace_operation_cancelled(claim, session_factory=self.session_factory)
         except WorkspaceOperationLeaseLost:
             if handler_task is not None:
                 handler_task.cancel()
@@ -2512,9 +2139,7 @@ class WorkspaceOperationRunner:
                 # the durable attempt before waiting for handler cleanup for
                 # the same reason as the cross-process heartbeat path.
                 await asyncio.shield(
-                    finalize_workspace_operation_cancelled(
-                        claim, session_factory=self.session_factory
-                    )
+                    finalize_workspace_operation_cancelled(claim, session_factory=self.session_factory)
                 )
                 if handler_task is not None:
                     await asyncio.gather(handler_task, return_exceptions=True)
@@ -2523,11 +2148,7 @@ class WorkspaceOperationRunner:
                 # handler work before making the claim available for replay.
                 if handler_task is not None:
                     await asyncio.gather(handler_task, return_exceptions=True)
-                await asyncio.shield(
-                    release_workspace_operation_claim(
-                        claim, session_factory=self.session_factory
-                    )
-                )
+                await asyncio.shield(release_workspace_operation_claim(claim, session_factory=self.session_factory))
             raise
         except Exception:
             await _transition_claim_failure(

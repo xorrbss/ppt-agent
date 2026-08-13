@@ -66,6 +66,12 @@ from utils.available_models import normalize_openai_compatible_base_url
 from utils.llm_provider import get_llm_provider
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+from services.provider_egress_policy import (
+    EgressCategory,
+    EgressPolicyError,
+    validate_configured_provider_endpoint,
+)
+from services.provider_transport_security import require_pinned_transport
 
 
 def enable_web_grounding(settings: RuntimeSettings | None = None) -> bool:
@@ -74,6 +80,49 @@ def enable_web_grounding(settings: RuntimeSettings | None = None) -> bool:
 
 def disable_thinking(settings: RuntimeSettings | None = None) -> bool:
     return parse_bool_or_none(get_disable_thinking_env(settings)) or False
+
+
+def _provider_key(provider: LLMProvider, value: str | None) -> str | None:
+    del provider
+    # Secret getters resolve vault references at the common runtime-settings
+    # boundary. Keeping this helper preserves provider config call sites without
+    # accepting a second plaintext fallback here.
+    return value
+
+
+def enforce_llm_egress_policy(
+    settings: RuntimeSettings | None = None,
+) -> None:
+    """Fail closed for operator-configured provider URLs immediately before I/O.
+
+    Configuration parsing remains side-effect free. Call sites invoke this guard
+    at the SDK boundary, after the client is built but before any request leaves
+    the process.
+    """
+
+    snapshot = resolve_runtime_settings(settings)
+    provider = get_llm_provider(snapshot)
+    if provider is not LLMProvider.CUSTOM:
+        return
+    endpoint = get_custom_llm_url_env(snapshot)
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="Custom LLM URL is not set")
+    try:
+        validated = validate_configured_provider_endpoint(
+            endpoint,
+            category=EgressCategory.PROVIDER,
+            service_id="custom-llm",
+            allowlist_env="PROVIDER_CUSTOM_EGRESS_ALLOWLIST",
+        )
+        # llmai constructs the OpenAI SDK internally and offers no hook for a
+        # pinned resolver or post-connect peer-IP verification. DNS admission
+        # alone is insufficient against rebinding in secure mode.
+        require_pinned_transport(
+            validated,
+            transport_pins_connected_ip=False,
+        )
+    except EgressPolicyError as error:
+        raise HTTPException(status_code=400, detail=error.code) from error
 
 
 def _get_codex_access_token(settings: RuntimeSettings) -> str:
@@ -96,7 +145,9 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
 
     match llm_provider:
         case LLMProvider.OPENAI:
-            api_key = get_openai_api_key_env(snapshot)
+            api_key = _provider_key(
+                LLMProvider.OPENAI, get_openai_api_key_env(snapshot)
+            )
             if not api_key:
                 raise HTTPException(status_code=400, detail="OpenAI API Key is not set")
             return OpenAIClientConfig(
@@ -104,12 +155,16 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 api_type=OpenAIApiType.COMPLETIONS,
             )
         case LLMProvider.GOOGLE:
-            api_key = get_google_api_key_env(snapshot)
+            api_key = _provider_key(
+                LLMProvider.GOOGLE, get_google_api_key_env(snapshot)
+            )
             if not api_key:
                 raise HTTPException(status_code=400, detail="Google API Key is not set")
             return GoogleClientConfig(api_key=api_key)
         case LLMProvider.VERTEX:
-            api_key = get_vertex_api_key_env(snapshot)
+            api_key = _provider_key(
+                LLMProvider.VERTEX, get_vertex_api_key_env(snapshot)
+            )
             project = get_vertex_project_env(snapshot)
             location = get_vertex_location_env(snapshot)
             base_url = get_vertex_base_url_env(snapshot)
@@ -144,7 +199,9 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 base_url=base_url or None,
             )
         case LLMProvider.AZURE:
-            api_key = get_azure_openai_api_key_env(snapshot)
+            api_key = _provider_key(
+                LLMProvider.AZURE, get_azure_openai_api_key_env(snapshot)
+            )
             api_version = get_azure_openai_api_version_env(snapshot)
             endpoint = get_azure_openai_endpoint_env(snapshot)
             base_url = get_azure_openai_base_url_env(snapshot)
@@ -179,7 +236,10 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
             )
         case LLMProvider.BEDROCK:
             region = (get_bedrock_region_env(snapshot) or "us-east-1").strip()
-            api_key = (get_bedrock_api_key_env(snapshot) or "").strip()
+            api_key = (
+                _provider_key(LLMProvider.BEDROCK, get_bedrock_api_key_env(snapshot))
+                or ""
+            ).strip()
             aws_access_key_id = (get_bedrock_aws_access_key_id_env(snapshot) or "").strip()
             aws_secret_access_key = (
                 get_bedrock_aws_secret_access_key_env(snapshot) or ""
@@ -210,7 +270,9 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 )
             return BedrockClientConfig(**kwargs)
         case LLMProvider.ANTHROPIC:
-            api_key = get_anthropic_api_key_env(snapshot)
+            api_key = _provider_key(
+                LLMProvider.ANTHROPIC, get_anthropic_api_key_env(snapshot)
+            )
             if not api_key:
                 raise HTTPException(
                     status_code=400,
@@ -218,7 +280,9 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 )
             return AnthropicClientConfig(api_key=api_key)
         case LLMProvider.OPENROUTER:
-            api_key = get_openrouter_api_key_env(snapshot)
+            api_key = _provider_key(
+                LLMProvider.OPENROUTER, get_openrouter_api_key_env(snapshot)
+            )
             if not api_key:
                 raise HTTPException(
                     status_code=400,
@@ -230,7 +294,12 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 base_url=base_url or None,
             )
         case LLMProvider.FIREWORKS:
-            api_key = (get_fireworks_api_key_env(snapshot) or "").strip()
+            api_key = (
+                _provider_key(
+                    LLMProvider.FIREWORKS, get_fireworks_api_key_env(snapshot)
+                )
+                or ""
+            ).strip()
             if not api_key:
                 raise HTTPException(
                     status_code=400,
@@ -242,7 +311,12 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 base_url=base_url or None,
             )
         case LLMProvider.TOGETHER:
-            api_key = (get_together_api_key_env(snapshot) or "").strip()
+            api_key = (
+                _provider_key(
+                    LLMProvider.TOGETHER, get_together_api_key_env(snapshot)
+                )
+                or ""
+            ).strip()
             if not api_key:
                 raise HTTPException(
                     status_code=400,
@@ -254,7 +328,9 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 base_url=base_url or None,
             )
         case LLMProvider.CEREBRAS:
-            api_key = get_cerebras_api_key_env(snapshot)
+            api_key = _provider_key(
+                LLMProvider.CEREBRAS, get_cerebras_api_key_env(snapshot)
+            )
             if not api_key:
                 raise HTTPException(
                     status_code=400,
@@ -274,14 +350,22 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                     status_code=400,
                     detail="LiteLLM base URL is not set (LITELLM_BASE_URL).",
                 )
-            lk = (get_litellm_api_key_env(snapshot) or "").strip()
+            lk = (
+                _provider_key(LLMProvider.LITELLM, get_litellm_api_key_env(snapshot))
+                or ""
+            ).strip()
             return LiteLLMClientConfig(
                 base_url=base_url,
                 api_key=lk if lk else None,
             )
         case LLMProvider.LMSTUDIO:
             base_url = (get_lmstudio_base_url_env(snapshot) or "").strip()
-            lk = (get_lmstudio_api_key_env(snapshot) or "").strip()
+            lk = (
+                _provider_key(
+                    LLMProvider.LMSTUDIO, get_lmstudio_api_key_env(snapshot)
+                )
+                or ""
+            ).strip()
             kwargs: dict = {"base_url": base_url or None}
             if lk:
                 kwargs["api_key"] = lk
@@ -301,7 +385,12 @@ def get_llm_config(settings: RuntimeSettings | None = None) -> ClientConfig:
                 )
             return OpenAIClientConfig(
                 base_url=base_url,
-                api_key=get_custom_llm_api_key_env(snapshot) or "null",
+                api_key=(
+                    _provider_key(
+                        LLMProvider.CUSTOM, get_custom_llm_api_key_env(snapshot)
+                    )
+                    or "null"
+                ),
             )
         case LLMProvider.CODEX:
             return ChatGPTClientConfig(

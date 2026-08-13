@@ -1,0 +1,26 @@
+{
+  "schema_version": "authored-electron-security-observation/v1",
+  "run_id": "electron-1786634633426",
+  "electron_version": "43.2.0",
+  "platform": "win32",
+  "executable_sha256": "79970ed6cf3dc7687dd62a0877f675a46fafe07b4cd003fb9e513b0a0ff8f9f3",
+  "controls": {
+    "renderer_pid_observed": true,
+    "renderer_process_metric_observed": true,
+    "packaged_runtime_observed": true,
+    "os_sandboxed": true,
+    "actual_web_preferences_observed": true,
+    "sandbox_preference": true,
+    "web_security": true,
+    "context_isolation": true,
+    "node_integration_disabled": true,
+    "subframe_node_integration_disabled": true,
+    "worker_node_integration_disabled": true,
+    "preload_absent": true,
+    "configured_preferences_match_actual": true,
+    "ipc_negative_probe_blocked": true,
+    "privileged_bridge_absent": true,
+    "ephemeral_session": true
+  },
+  "observer_errors": []
+}

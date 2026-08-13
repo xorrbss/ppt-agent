@@ -213,6 +213,83 @@ def test_explicit_loopback_refresh_publishes_saved_user_config_for_next_request(
     assert observed == [published]
 
 
+def test_secure_loopback_refresh_writes_in_memory_settings_without_legacy_file(
+    monkeypatch,
+):
+    refresh_token = "electron-control-token"
+    monkeypatch.setenv("PRESENTON_RUNTIME_SETTINGS_REFRESH_TOKEN", refresh_token)
+    saved = []
+
+    class SessionContext:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    async def save_record(_session, config):
+        saved.append(config)
+        return ProviderSettingsRecord(revision=7, config={"LLM": "openai"})
+
+    monkeypatch.setattr("api.middlewares.async_session_maker", SessionContext)
+    monkeypatch.setattr("api.middlewares.save_provider_settings_record", save_record)
+    monkeypatch.setattr(
+        "api.middlewares.import_legacy_file_to_provider_settings",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("secure refresh read the compatibility file")
+        ),
+    )
+    middleware = RuntimeSettingsContextMiddleware(
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("private refresh reached the application")
+        )
+    )
+    body = json.dumps(
+        {"LLM": "openai", "OPENAI_API_KEY": "provider-secret"}
+    ).encode()
+    messages = []
+    received = False
+
+    async def receive():
+        nonlocal received
+        if received:
+            return {"type": "http.disconnect"}
+        received = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def send(message):
+        messages.append(message)
+
+    asyncio.run(
+        middleware(
+            {
+                "type": "http",
+                "asgi": {"version": "3.0"},
+                "http_version": "1.1",
+                "method": "POST",
+                "scheme": "http",
+                "path": RUNTIME_SETTINGS_REFRESH_PATH,
+                "raw_path": RUNTIME_SETTINGS_REFRESH_PATH.encode(),
+                "query_string": b"",
+                "headers": [
+                    (
+                        b"x-presenton-runtime-settings-token",
+                        refresh_token.encode(),
+                    ),
+                    (b"content-type", b"application/json"),
+                ],
+                "client": ("127.0.0.1", 1),
+                "server": ("test", 80),
+            },
+            receive,
+            send,
+        )
+    )
+
+    assert messages[0]["status"] == 204
+    assert saved == [{"LLM": "openai", "OPENAI_API_KEY": "provider-secret"}]
+
+
 @pytest.mark.parametrize(
     ("configured_token", "provided_token", "method", "client"),
     [

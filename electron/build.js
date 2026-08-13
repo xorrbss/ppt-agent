@@ -69,8 +69,32 @@ const config = {
   files: [
     "resources",
     "app_dist",
-    "node_modules",
-    "NOTICE"
+    "node_modules"
+  ],
+  extraResources: [
+    { from: "../LICENSE", to: "LICENSE" },
+    { from: "../NOTICE", to: "NOTICE" },
+    { from: "../compliance/fonts", to: "font-licenses" },
+    {
+      from: "../docs/experiments/authored-vnext/03-ooxml-roundtrip/compliance/LICENSE.genoffice.txt",
+      to: "third-party/genoffice/LICENSE"
+    },
+    {
+      from: "../docs/experiments/authored-vnext/03-ooxml-roundtrip/compliance/NOTICE.genoffice.txt",
+      to: "third-party/genoffice/NOTICE"
+    },
+    {
+      from: "../compliance/release-sbom.spdx.json",
+      to: "release-sbom.spdx.json"
+    },
+    {
+      from: "../compliance/release-license-policy.json",
+      to: "release-license-policy.json"
+    },
+    {
+      from: "../compliance/copyleft-source-offer.md",
+      to: "copyleft-source-offer.md"
+    }
   ],
   afterPack,
   mac: {

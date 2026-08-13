@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "authored-outline/v1",
+  "sourceDigest": "sha256:9df0d57b5513dd36f34877118c6f6bba7ae8d6ee47bc7d412513804225f8b635",
+  "deckTitle": "Published master 기반 authored vNext 검증",
+  "items": [
+    {
+      "itemId": "outline:01-cover",
+      "index": 0,
+      "title": "Published Master로 시작하는 생성 파이프라인",
+      "summary": "불변 master digest와 body-only 모델 입력을 검증합니다.",
+      "roleHint": "cover"
+    },
+    {
+      "itemId": "outline:02-section",
+      "index": 1,
+      "title": "생성 계약과 품질 기준",
+      "summary": "생성 단계와 검증 기준을 구분합니다.",
+      "roleHint": "section"
+    },
+    {
+      "itemId": "outline:03-standard",
+      "index": 2,
+      "title": "모델은 본문 슬롯만 작성합니다",
+      "summary": "로고, 헤더, 푸터, 구분선, 페이지 번호는 master furniture가 소유합니다."
+    },
+    {
+      "itemId": "outline:04-source",
+      "index": 3,
+      "title": "출처 digest가 모든 슬라이드를 연결합니다",
+      "summary": "단일 source digest를 시각 계획, SlideSpec, deck gate에 고정합니다."
+    },
+    {
+      "itemId": "outline:05-cjk",
+      "index": 4,
+      "title": "한글·日本語·中文 제목도 줄 시작에 닫는 괄호가 오지 않습니다",
+      "summary": "UAX #14와 CJK 금칙 처리를 로컬 결정 규칙으로 적용합니다."
+    },
+    {
+      "itemId": "outline:06-long-title",
+      "index": 5,
+      "roleHint": "longTitle",
+      "title": "운영자가 PowerPoint 여백과 Windows 글꼴 대체를 바꾸지 않아도 매우 긴 혼합 언어 제목을 안전하게 배치하는 방법",
+      "summary": "standard title-fit 실패 시 long-title layout으로 승격하고 clipping은 허용하지 않습니다."
+    },
+    {
+      "itemId": "outline:07-regenerate",
+      "index": 6,
+      "title": "한 장 재생성은 detached candidate에서 시작합니다",
+      "summary": "DOM, OCR, title-fit, deck consistency를 모두 통과한 후보만 CAS publish합니다."
+    },
+    {
+      "itemId": "outline:08-conflict",
+      "index": 7,
+      "title": "동시 수정 충돌은 기존 deck을 보존합니다",
+      "summary": "stale revision 또는 digest가 오면 새 revision을 만들지 않습니다."
+    },
+    {
+      "itemId": "outline:09-resume",
+      "index": 8,
+      "title": "재시도와 재개 중에도 master hash는 고정됩니다",
+      "summary": "checkpoint와 현재 published master가 다르면 fail-closed로 중단합니다."
+    },
+    {
+      "itemId": "outline:10-rollback",
+      "index": 9,
+      "title": "Rollback은 검증된 이전 revision을 새 head로 복원합니다",
+      "summary": "감사 가능한 이력과 현재 head를 모두 유지합니다."
+    }
+  ]
+}
