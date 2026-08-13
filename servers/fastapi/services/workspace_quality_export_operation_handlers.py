@@ -64,6 +64,38 @@ def _context(claim_payload: Mapping[str, Any]) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _resolve_workspace_export_options(
+    claim_payload: Mapping[str, Any],
+    *,
+    export_format: str,
+) -> tuple[Literal["fidelity", "hybrid"], bool]:
+    """Resolve existing workspace wire values without implicit Hybrid opt-in."""
+
+    command_context = _context(claim_payload)
+    raw_mode = command_context.get("pptx_mode")
+    if raw_mode is None:
+        pptx_mode: Literal["fidelity", "hybrid"] = "fidelity"
+    elif raw_mode in {"fidelity", "hybrid"}:
+        pptx_mode = cast(Literal["fidelity", "hybrid"], raw_mode)
+    else:
+        raise NonRetryableWorkspaceOperationError(
+            "workspace_export_pptx_mode_invalid"
+        )
+
+    font_embedding = command_context.get("font_embedding", False)
+    if not isinstance(font_embedding, bool):
+        raise NonRetryableWorkspaceOperationError(
+            "workspace_export_font_embedding_invalid"
+        )
+    if font_embedding and (
+        export_format != "pptx" or pptx_mode != "hybrid"
+    ):
+        raise NonRetryableWorkspaceOperationError(
+            "workspace_export_font_embedding_requires_hybrid"
+        )
+    return pptx_mode, font_embedding
+
+
 class WorkspaceQualityReviewOperationHandler:
     """Run authored review and publish a new revision only when fixes are saved."""
 
@@ -376,6 +408,10 @@ class WorkspaceExportOperationHandler:
             raise NonRetryableWorkspaceOperationError(
                 "workspace_expected_revision_required"
             )
+        pptx_mode, font_embedding = _resolve_workspace_export_options(
+            claim.request_payload,
+            export_format=export_format,
+        )
 
         await context.raise_if_cancelled()
         async with self._session_factory() as session:
@@ -420,6 +456,8 @@ class WorkspaceExportOperationHandler:
                     workspace_operation_id=claim.operation_id,
                     request_hash=operation.request_hash,
                     idempotency_key_hash=operation.idempotency_key_hash,
+                    pptx_mode=pptx_mode,
+                    font_embedding=font_embedding,
                 )
             exported = execution.presentation
             exported_source = Path(exported.path)

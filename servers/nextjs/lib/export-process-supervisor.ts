@@ -127,12 +127,15 @@ export function superviseExportProcess(
     let timedOut = false;
     let forceTimer: NodeJS.Timeout | undefined;
     let forceExitTimer: NodeJS.Timeout | undefined;
+    let exitCloseTimer: NodeJS.Timeout | undefined;
 
     const cleanup = () => {
       clearTimeout(deadlineTimer);
       if (forceTimer) clearTimeout(forceTimer);
       if (forceExitTimer) clearTimeout(forceExitTimer);
+      if (exitCloseTimer) clearTimeout(exitCloseTimer);
       child.removeListener("error", onError);
+      child.removeListener("exit", onExit);
       child.removeListener("close", onClose);
     };
     const finish = (callback: () => void) => {
@@ -148,6 +151,23 @@ export function superviseExportProcess(
     const onError = (error: Error) => {
       if (timedOut) rejectTimeout();
       else finish(() => reject(error));
+    };
+    const onExit = (
+      code: number | null,
+      signal: NodeJS.Signals | null
+    ) => {
+      if (timedOut) {
+        rejectTimeout();
+        return;
+      }
+      // `close` waits for inherited stdio handles. Chrome descendants can keep
+      // those handles open after the supervised exporter itself has exited,
+      // leaving the request pending despite a known terminal process status.
+      clearTimeout(deadlineTimer);
+      exitCloseTimer = setTimeout(
+        () => finish(() => resolve({ code, signal })),
+        FORCE_EXIT_WAIT_MS
+      );
     };
     const onClose = (
       code: number | null,
@@ -167,6 +187,7 @@ export function superviseExportProcess(
     }, options.deadlineMs);
 
     child.once("error", onError);
+    child.once("exit", onExit);
     child.once("close", onClose);
   });
 }

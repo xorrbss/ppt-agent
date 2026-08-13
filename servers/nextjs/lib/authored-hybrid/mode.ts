@@ -4,9 +4,9 @@ export type PptxModeResolution =
   | { ok: true; value: PptxMode }
   | { ok: false };
 
-/** Missing mode uses the structured export; fidelity remains explicit-only. */
+/** Missing mode preserves the fast historical fidelity export. */
 export function resolvePptxMode(value: unknown): PptxModeResolution {
-  if (value === undefined) return { ok: true, value: "hybrid" };
+  if (value === undefined) return { ok: true, value: "fidelity" };
   if (value === "fidelity" || value === "hybrid") {
     return { ok: true, value };
   }

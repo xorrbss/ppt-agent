@@ -35,7 +35,6 @@ import {
   usePresentationData,
   usePresentationNavigation,
   useAutoSave,
-  useHybridExportWarmup,
 } from "../hooks";
 import { PresentationPageProps } from "../types";
 import LoadingState from "./LoadingState";
@@ -206,17 +205,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     slidesLength > 0
       ? presentationData?.slides?.[slidesLength - 1]?.index
       : undefined;
-  const scheduleHybridExportWarmup = useHybridExportWarmup({
-    presentationId: presentation_id,
-    title: presentationData?.title,
-    presentationData,
-    isAuthoredDeck,
-    isStreaming,
-  });
   const { isSaving, saveFailed } = useAutoSave({
     debounceMs: 2000,
     enabled: INLINE_MUTATIONS_ENABLED && !!presentationData && !isStreaming,
-    onSaveSuccess: scheduleHybridExportWarmup,
   });
   const { fetchUserSlides } = usePresentationData(
     presentation_id,

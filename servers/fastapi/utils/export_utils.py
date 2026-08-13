@@ -169,6 +169,7 @@ async def export_authored_hybrid_presentation(
                 "title": title,
                 "pptxMode": "hybrid",
                 "fontEmbedding": font_embedding,
+                "expectedPresentationRevision": expected_revision,
             },
         )
         response.raise_for_status()

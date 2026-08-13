@@ -18,6 +18,7 @@ export interface ExportPresentationRouteBody {
   title?: unknown;
   pptxMode?: unknown;
   fontEmbedding?: unknown;
+  expectedPresentationRevision?: unknown;
 }
 
 export interface ExportPresentationRouteDependencies<
@@ -234,6 +235,16 @@ export async function executeExportPresentationRouteRequest<
       400
     );
   }
+  if (
+    body.expectedPresentationRevision !== undefined &&
+    (!Number.isSafeInteger(body.expectedPresentationRevision) ||
+      (body.expectedPresentationRevision as number) < 0)
+  ) {
+    throw new ExportPresentationRequestError(
+      "Invalid expected presentation revision",
+      400
+    );
+  }
   if (!(await dependencies.packageAvailable())) {
     throw new Error(
       "presentation-export runtime is not available. Run scripts/sync-presentation-export.cjs to install it."
@@ -248,6 +259,8 @@ export async function executeExportPresentationRouteRequest<
       cookieHeader,
       pptxMode: resolvedPptxMode.value,
       fontEmbedding,
+      expectedPresentationRevision:
+        body.expectedPresentationRevision as number | undefined,
     },
     dependencies
   );

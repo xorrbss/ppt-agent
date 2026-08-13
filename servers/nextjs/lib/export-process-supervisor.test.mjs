@@ -47,6 +47,17 @@ test("returns a normal child exit before the deadline", async () => {
   assert.deepEqual(await resultPromise, { code: 0, signal: null });
 });
 
+test("returns a failed exit when inherited pipes delay close", async () => {
+  const child = new FakeChild();
+  const resultPromise = superviseExportProcess(child, {
+    deadlineMs: 20,
+    terminationGraceMs: 20,
+  });
+  child.emit("exit", 7, null);
+
+  assert.deepEqual(await resultPromise, { code: 7, signal: null });
+});
+
 test("deadline requests graceful termination before forced termination", async () => {
   const child = new FakeChild();
   const terminationModes = [];

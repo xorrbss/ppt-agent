@@ -244,6 +244,8 @@ async def execute_presentation_export(
     idempotency_key_hash: str,
     requested_adapter: str = "auto",
     template_target: TemplateV2GenerationTarget | None = None,
+    pptx_mode: Literal["fidelity", "hybrid"] = "fidelity",
+    font_embedding: bool = False,
 ) -> PresentationExportExecution:
     """Analyze a persisted snapshot, record intent, then execute one route.
 
@@ -344,6 +346,8 @@ async def execute_presentation_export(
                 expected_revision=expected_render_revision,
                 cookie_header=cookie_header,
                 profile_driver_id=presentation.profile_driver_id,
+                pptx_mode=pptx_mode,
+                font_embedding=font_embedding,
                 slides=slide_inputs,
                 template_target=template_target,
             ),

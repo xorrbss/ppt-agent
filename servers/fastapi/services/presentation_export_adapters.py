@@ -85,6 +85,8 @@ class PresentationExportAdapterRequest:
     expected_revision: int
     cookie_header: str | None
     profile_driver_id: str | None = None
+    pptx_mode: Literal["fidelity", "hybrid"] = "fidelity"
+    font_embedding: bool = False
     slides: tuple[PresentationExportSlideInput, ...] = ()
     template_target: TemplateV2GenerationTarget | None = None
 
@@ -264,6 +266,7 @@ async def run_general_adapter(
     authored_hybrid = (
         request.export_format == "pptx"
         and request.profile_driver_id == "authored"
+        and request.pptx_mode == "hybrid"
     )
     if authored_hybrid:
         exported = await export_authored_hybrid_presentation(
@@ -271,6 +274,7 @@ async def run_general_adapter(
             request.title,
             cookie_header=request.cookie_header,
             expected_revision=request.expected_revision,
+            font_embedding=request.font_embedding,
         )
     else:
         exported = await export_presentation(

@@ -167,7 +167,52 @@ def _result(
     )
 
 
-def test_authored_general_adapter_uses_hybrid_exporter(
+def test_authored_general_adapter_defaults_to_chromium_dom_exporter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    presentation_id = uuid.uuid4()
+    artifact = tmp_path / "authored-general.pptx"
+    artifact.write_bytes(b"fast-pptx")
+    calls: dict = {}
+
+    async def general(*args, **kwargs):
+        calls["general"] = (args, kwargs)
+        return PresentationAndPath(
+            presentation_id=presentation_id,
+            path=str(artifact),
+        )
+
+    async def hybrid(*_args, **_kwargs):
+        raise AssertionError("default authored PPTX must not use Hybrid")
+
+    monkeypatch.setattr(
+        adapter_module,
+        "export_authored_hybrid_presentation",
+        hybrid,
+    )
+    monkeypatch.setattr(adapter_module, "export_presentation", general)
+
+    result = asyncio.run(
+        adapter_module.run_general_adapter(
+            PresentationExportAdapterRequest(
+                presentation_id=presentation_id,
+                title="Authored",
+                export_format="pptx",
+                expected_revision=2,
+                cookie_header="session=test",
+                profile_driver_id="authored",
+            )
+        )
+    )
+
+    assert result.compiler == "presentation-export"
+    assert result.runtime == "chromium-dom-export"
+    assert calls["general"][0][2] == "pptx"
+    assert calls["general"][1]["expected_revision"] == 2
+
+
+def test_authored_general_adapter_uses_hybrid_only_when_explicit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -183,15 +228,15 @@ def test_authored_general_adapter_uses_hybrid_exporter(
             path=str(artifact),
         )
 
-    async def raster(*_args, **_kwargs):
-        raise AssertionError("authored PPTX must not use the raster exporter")
+    async def general(*_args, **_kwargs):
+        raise AssertionError("explicit Hybrid PPTX must not use general export")
 
     monkeypatch.setattr(
         adapter_module,
         "export_authored_hybrid_presentation",
         hybrid,
     )
-    monkeypatch.setattr(adapter_module, "export_presentation", raster)
+    monkeypatch.setattr(adapter_module, "export_presentation", general)
 
     result = asyncio.run(
         adapter_module.run_general_adapter(
@@ -202,6 +247,8 @@ def test_authored_general_adapter_uses_hybrid_exporter(
                 expected_revision=2,
                 cookie_header="session=test",
                 profile_driver_id="authored",
+                pptx_mode="hybrid",
+                font_embedding=True,
             )
         )
     )
@@ -209,6 +256,7 @@ def test_authored_general_adapter_uses_hybrid_exporter(
     assert result.compiler == "authored-hybrid"
     assert result.runtime == "chromium-native-layer-export"
     assert calls["hybrid"][1]["expected_revision"] == 2
+    assert calls["hybrid"][1]["font_embedding"] is True
 
 
 def test_router_falls_back_only_after_explicit_unsupported(
@@ -347,7 +395,8 @@ def test_general_execution_analyzes_real_persisted_slide_assets(
         captured["begin"] = kwargs
         return SimpleNamespace(id=attempt_id)
 
-    async def route(_request, analysis, *, asset_digests_verified=False):
+    async def route(export_request, analysis, *, asset_digests_verified=False):
+        captured["request"] = export_request
         captured["analysis"] = analysis
         captured["asset_digests_verified"] = asset_digests_verified
         return route_result
@@ -375,6 +424,8 @@ def test_general_execution_analyzes_real_persisted_slide_assets(
     )
 
     assert execution.route is route_result
+    assert captured["request"].pptx_mode == "fidelity"
+    assert captured["request"].font_embedding is False
     assert captured["analysis"].candidate_chain == ("general",)
     assert captured["analysis"].asset_digests == {asset_id: digest}
     assert captured["verified_assets"] == {asset_id: digest}

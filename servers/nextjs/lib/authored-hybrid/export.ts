@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -77,10 +78,13 @@ const HYBRID_EXPORT_CONCURRENCY = parseBoundedPositiveInt(
   12
 );
 
-const completedHybridExports = new Map<
-  string,
-  BundledPresentationExportResult
->();
+interface CompletedHybridExport {
+  result: BundledPresentationExportResult;
+  artifactSha256: string;
+  artifactSizeBytes: number;
+}
+
+const completedHybridExports = new Map<string, CompletedHybridExport>();
 const inFlightHybridExports = new Map<
   string,
   Promise<BundledPresentationExportResult>
@@ -97,6 +101,7 @@ interface StoredPresentation {
   mode?: unknown;
   theme?: unknown;
   slides?: unknown;
+  revision?: unknown;
 }
 
 interface AuthoredHybridExportParams {
@@ -829,7 +834,7 @@ async function runUncachedAuthoredHybridExport(
     );
     const assemblyMs = elapsedMs(assemblyStartedAt);
     const result = await attachQualityReport({ path: hybridPath }, quality);
-    rememberCompletedHybridExport(cacheKey, result);
+    await rememberCompletedHybridExport(cacheKey, result);
     console.info(
       `[authored-hybrid] complete total=${elapsedMs(requestStartedAt)}ms ` +
         `fidelity=${fidelityMs}ms slides=${slidesMs}ms assembly=${assemblyMs}ms ` +
@@ -888,16 +893,24 @@ export async function runAuthoredHybridPresentationExport(
       presentationId: params.presentationId,
       title: params.title,
       cookieHeader: params.cookieHeader,
+      expectedPresentationRevision: params.expectedPresentationRevision,
     });
   }
 
   const { presentation } = fetched;
+  if (
+    params.expectedPresentationRevision !== undefined &&
+    presentation.revision !== params.expectedPresentationRevision
+  ) {
+    throw new Error("stale_render_revision");
+  }
   if (!isAuthoredPresentation(presentation) || !Array.isArray(presentation.slides)) {
     return runBundledPresentationExport({
       format: "pptx",
       presentationId: params.presentationId,
       title: params.title,
       cookieHeader: params.cookieHeader,
+      expectedPresentationRevision: params.expectedPresentationRevision,
     });
   }
   if (
@@ -909,6 +922,7 @@ export async function runAuthoredHybridPresentationExport(
       presentationId: params.presentationId,
       title: params.title,
       cookieHeader: params.cookieHeader,
+      expectedPresentationRevision: params.expectedPresentationRevision,
     });
   }
 
@@ -923,6 +937,9 @@ export async function runAuthoredHybridPresentationExport(
   const cacheKey = createHybridCacheKey(
     params.presentationId,
     fetched.sourceSha256,
+    Number.isSafeInteger(presentation.revision)
+      ? (presentation.revision as number)
+      : params.expectedPresentationRevision,
     fontEmbeddingPlan.cacheDiscriminator
   );
   const cached = await readCompletedHybridExport(cacheKey);
@@ -958,6 +975,7 @@ export async function runAuthoredHybridPresentationExport(
 function createHybridCacheKey(
   presentationId: string,
   sourceSha256: string,
+  sourceRevision: number | undefined,
   fontEmbeddingDiscriminator: string
 ): string {
   return createHash("sha256")
@@ -967,16 +985,35 @@ function createHybridCacheKey(
     .update("\0")
     .update(sourceSha256)
     .update("\0")
+    .update(sourceRevision === undefined ? "unknown" : String(sourceRevision))
+    .update("\0")
     .update(fontEmbeddingDiscriminator)
     .digest("hex");
 }
 
-function rememberCompletedHybridExport(
+async function readHybridArtifactIdentity(
+  artifactPath: string
+): Promise<{ sha256: string; sizeBytes: number }> {
+  const safePath = await resolveSafeFidelityPptx(artifactPath);
+  const stats = await fs.stat(safePath);
+  const digest = createHash("sha256");
+  for await (const chunk of createReadStream(safePath)) {
+    digest.update(chunk);
+  }
+  return { sha256: digest.digest("hex"), sizeBytes: stats.size };
+}
+
+async function rememberCompletedHybridExport(
   cacheKey: string,
   result: BundledPresentationExportResult
-): void {
+): Promise<void> {
+  const identity = await readHybridArtifactIdentity(result.path);
   completedHybridExports.delete(cacheKey);
-  completedHybridExports.set(cacheKey, result);
+  completedHybridExports.set(cacheKey, {
+    result,
+    artifactSha256: identity.sha256,
+    artifactSizeBytes: identity.sizeBytes,
+  });
   while (completedHybridExports.size > HYBRID_RESULT_CACHE_LIMIT) {
     const oldestKey = completedHybridExports.keys().next().value;
     if (typeof oldestKey !== "string") break;
@@ -990,10 +1027,17 @@ async function readCompletedHybridExport(
   const cached = completedHybridExports.get(cacheKey);
   if (!cached) return null;
   try {
-    const safePath = await resolveSafeFidelityPptx(cached.path);
+    const safePath = await resolveSafeFidelityPptx(cached.result.path);
+    const identity = await readHybridArtifactIdentity(safePath);
+    if (
+      identity.sha256 !== cached.artifactSha256 ||
+      identity.sizeBytes !== cached.artifactSizeBytes
+    ) {
+      throw new Error("cached_hybrid_artifact_digest_mismatch");
+    }
     completedHybridExports.delete(cacheKey);
-    const safeResult = { ...cached, path: safePath };
-    completedHybridExports.set(cacheKey, safeResult);
+    const safeResult = { ...cached.result, path: safePath };
+    completedHybridExports.set(cacheKey, { ...cached, result: safeResult });
     return safeResult;
   } catch {
     completedHybridExports.delete(cacheKey);

@@ -228,6 +228,7 @@ test("route request sends authored to hybrid only for explicit hybrid", async ()
 
 test("route request forwards explicit font embedding only to authored hybrid", async () => {
   let receivedFontEmbedding: boolean | undefined;
+  let receivedExpectedRevision: number | undefined;
   const { dependencies } = boundarySpies({
     version: "v1-standard",
     mode: "authored",
@@ -237,6 +238,7 @@ test("route request forwards explicit font embedding only to authored hybrid", a
     params: PresentationExportExecutionParams
   ) => {
     receivedFontEmbedding = params.fontEmbedding;
+    receivedExpectedRevision = params.expectedPresentationRevision;
     return { path: "hybrid-embedded.pptx" };
   };
 
@@ -246,6 +248,7 @@ test("route request forwards explicit font embedding only to authored hybrid", a
       id: "persisted-id",
       pptxMode: "hybrid",
       fontEmbedding: true,
+      expectedPresentationRevision: 4,
     },
     "session=test",
     dependencies
@@ -253,6 +256,7 @@ test("route request forwards explicit font embedding only to authored hybrid", a
 
   assert.equal(result.path, "hybrid-embedded.pptx");
   assert.equal(receivedFontEmbedding, true);
+  assert.equal(receivedExpectedRevision, 4);
 });
 
 test("route request defaults font embedding off and rejects invalid values", async () => {
@@ -423,7 +427,7 @@ test("route request preserves additive authored-hybrid export metadata", async (
   );
 });
 
-test("route request uses the default hybrid mode for authored PPTX", async () => {
+test("route request uses the default general mode for authored PPTX", async () => {
   const { calls, dependencies } = boundarySpies({
     version: "v1-standard",
     mode: "authored",
@@ -436,8 +440,31 @@ test("route request uses the default hybrid mode for authored PPTX", async () =>
     dependencies
   );
 
-  assert.equal(result.path, "hybrid.pptx");
-  assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 1 });
+  assert.equal(result.path, "general.pptx");
+  assert.deepEqual(calls, { fetch: 1, general: 1, hybrid: 0 });
+});
+
+test("route request rejects an invalid expected revision", async () => {
+  const { calls, dependencies } = boundarySpies({
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
+  });
+
+  const error = await rejectedRequestError(
+    executeExportPresentationRouteRequest(
+      {
+        format: "pptx",
+        id: "persisted-id",
+        expectedPresentationRevision: -1,
+      },
+      "session=test",
+      dependencies
+    )
+  );
+
+  assert.equal(error.status, 400);
+  assert.deepEqual(calls, { fetch: 0, general: 0, hybrid: 0 });
 });
 
 for (const [format, pptxMode] of [

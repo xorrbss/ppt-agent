@@ -2,6 +2,7 @@ import React from "react";
 import { Provider } from "react-redux";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
+import { NextIntlClientProvider } from "next-intl";
 
 import PresentationHeader from "./PresentationHeader";
 import { notify } from "@/components/ui/sonner";
@@ -12,6 +13,7 @@ import {
   setStreaming,
 } from "@/store/slices/presentationGeneration";
 import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
+import enMessages from "@/i18n/messages/en.json";
 import type {
   WorkspaceCommandDispatcher,
   WorkspacePageRemakeRequester,
@@ -43,33 +45,35 @@ const mountHeader = (
   store.dispatch(setStreaming(false));
 
   cy.mount(
-    <AppRouterContext.Provider
-      value={{
-        back: cy.stub(),
-        forward: cy.stub(),
-        refresh: cy.stub(),
-        push: cy.stub(),
-        replace: cy.stub(),
-        prefetch: cy.stub(),
-        hmrRefresh: cy.stub(),
-      } as any}
-    >
-      <PathnameContext.Provider value="/presentation/deck-1">
-        <Provider store={store}>
-          <PresentationHeader
-            presentation_id="deck-1"
-            isPresentationSaving={false}
-            currentSlide={workspace?.pageRemake ? 0 : undefined}
-            isAuthoredDeck={isAuthoredDeck}
-            mutationsEnabled={mutationsEnabled}
-            workspaceCommandsEnabled={workspace?.enabled ?? false}
-            onWorkspaceCommand={workspace?.command}
-            onWorkspaceQualityReviewRequest={workspace?.qualityReview}
-            onWorkspacePageRemakeRequest={workspace?.pageRemake}
-          />
-        </Provider>
-      </PathnameContext.Provider>
-    </AppRouterContext.Provider>
+    <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+      <AppRouterContext.Provider
+        value={{
+          back: cy.stub(),
+          forward: cy.stub(),
+          refresh: cy.stub(),
+          push: cy.stub(),
+          replace: cy.stub(),
+          prefetch: cy.stub(),
+          hmrRefresh: cy.stub(),
+        } as any}
+      >
+        <PathnameContext.Provider value="/presentation/deck-1">
+          <Provider store={store}>
+            <PresentationHeader
+              presentation_id="deck-1"
+              isPresentationSaving={false}
+              currentSlide={workspace?.pageRemake ? 0 : undefined}
+              isAuthoredDeck={isAuthoredDeck}
+              mutationsEnabled={mutationsEnabled}
+              workspaceCommandsEnabled={workspace?.enabled ?? false}
+              onWorkspaceCommand={workspace?.command}
+              onWorkspaceQualityReviewRequest={workspace?.qualityReview}
+              onWorkspacePageRemakeRequest={workspace?.pageRemake}
+            />
+          </Provider>
+        </PathnameContext.Provider>
+      </AppRouterContext.Provider>
+    </NextIntlClientProvider>
   );
 };
 
@@ -106,6 +110,8 @@ describe("PresentationHeader workspace controls", () => {
     openExportOptions();
     cy.get('[data-testid="export-pdf"]').click({ force: true });
     openExportOptions();
+    cy.get('[data-testid="export-pptx"]').click({ force: true });
+    openExportOptions();
     cy.get('[data-testid="authored-export-hybrid"]').click({ force: true });
 
     cy.wrap(null).then(() => {
@@ -114,6 +120,10 @@ describe("PresentationHeader workspace controls", () => {
         { commandType: "export.pdf", context: { format: "pdf" } },
       ]);
       expect(workspaceCommand.getCall(1).args).to.deep.equal([
+        "PPTX로 내보내기",
+        { commandType: "export.pptx", context: { format: "pptx" } },
+      ]);
+      expect(workspaceCommand.getCall(2).args).to.deep.equal([
         "편집 가능한 요소를 분리해 PPTX로 내보내기",
         {
           commandType: "export.pptx",

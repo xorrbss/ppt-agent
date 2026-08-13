@@ -50,18 +50,40 @@ const ExportMenu = ({
               type="button"
               onClick={() => {
                 closeExportOptions();
+                void onExportPptx();
+              }}
+              disabled={exportDisabled}
+              data-testid="export-pptx"
+              variant="ghost"
+              className="h-auto min-h-[72px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl px-3 py-3 text-left text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed"
+              aria-label="PPTX로 빠르게 내보내기"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold leading-5">
+                  PPTX · 빠른 내보내기
+                </span>
+                <span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-[#5F5B66]">
+                  슬라이드 모양을 그대로 유지하는 기본 내보내기입니다.
+                </span>
+              </span>
+              <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                closeExportOptions();
                 void onExportPptx("hybrid");
               }}
               disabled={exportDisabled}
               data-testid="authored-export-hybrid"
               variant="ghost"
               className="h-auto min-h-[72px] w-full items-start justify-between gap-3 whitespace-normal rounded-xl px-3 py-3 text-left text-xs text-black hover:bg-[#F6F6F9] focus-visible:ring-[#B8B3F5] disabled:cursor-not-allowed"
-              aria-label="PPTX로 내보내기, 배경과 요소 분리"
+              aria-label="편집 가능한 PPTX로 내보내기"
             >
               <span className="min-w-0 flex-1">
-                <span className="block font-semibold leading-5">PPTX · 배경과 요소 분리</span>
+                <span className="block font-semibold leading-5">PPTX · 편집 가능</span>
                 <span className="mt-0.5 block text-[11px] font-normal leading-[1.45] text-[#5F5B66]">
-                  배경, 텍스트, 이미지와 도형을 가능한 범위에서 각각 분리합니다.
+                  배경과 요소를 가능한 범위에서 분리하며 처리 시간이 더 걸릴 수 있습니다.
                 </span>
               </span>
               <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
